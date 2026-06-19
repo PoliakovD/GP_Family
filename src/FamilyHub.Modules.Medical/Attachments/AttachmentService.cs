@@ -29,7 +29,7 @@ public class AttachmentService(
 
         var attachmentId = Guid.NewGuid();
         var storageKey = $"medical-records/{recordId}/{attachmentId}-{fileName}";
-        await storage.SaveAsync(storageKey, content, contentType, ct);
+        await storage.SaveAsync(storageKey, content, sizeBytes, contentType, ct);
 
         var attachment = new FileAttachment
         {

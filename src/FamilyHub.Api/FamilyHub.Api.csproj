@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FamilyHub.Domain\FamilyHub.Domain.csproj" />
     <ProjectReference Include="..\FamilyHub.Infrastructure\FamilyHub.Infrastructure.csproj" />
+    <ProjectReference Include="..\FamilyHub.Modules.Birthdays\FamilyHub.Modules.Birthdays.csproj" />
     <ProjectReference Include="..\FamilyHub.Modules.Medical\FamilyHub.Modules.Medical.csproj" />
   </ItemGroup>
 
@@ -13,6 +14,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- Сервер + дашборд Hangfire (этап 3 п.10); хранилище задач (Hangfire.PostgreSql) — в Infrastructure. -->
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
   </ItemGroup>
 
   <PropertyGroup>

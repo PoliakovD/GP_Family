@@ -17,6 +17,14 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Реальный объектный стор (этап 2 п.9), реализует тот же IFileStorage, что и LocalFileStorage. -->
+    <PackageReference Include="Minio" Version="7.0.0" />
+    <!-- Фоновые задачи оповещений (этап 3 п.10). Хранилище заданий — та же Postgres БД. -->
+    <PackageReference Include="Hangfire.Core" Version="1.8.23" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.21.1" />
+  </ItemGroup>
+
   <!-- Authorization/Authentication-абстракции (IAuthorizationHandler, ClaimsPrincipal-расширения и т.п.)
        поставляются с shared framework ASP.NET Core, а не отдельным NuGet-пакетом. -->
   <ItemGroup>

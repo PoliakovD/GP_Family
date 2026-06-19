@@ -11,8 +11,10 @@ namespace FamilyHub.Infrastructure.Storage;
 /// </summary>
 public class LocalFileStorage(IOptions<LocalFileStorageOptions> options) : IFileStorage
 {
-    public async Task<string> SaveAsync(string storageKey, Stream content, string contentType, CancellationToken ct = default)
+    public async Task<string> SaveAsync(string storageKey, Stream content, long size, string contentType, CancellationToken ct = default)
     {
+        // size не нужен для записи на диск (используется только реальным объектным стором,
+        // которому заранее требуется длина потока) — игнорируем.
         var fullPath = ResolvePath(storageKey);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 

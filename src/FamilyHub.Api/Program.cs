@@ -3,20 +3,29 @@ using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
 using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
+using FamilyHub.Modules.Birthdays;
 using FamilyHub.Modules.Medical;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Minio;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Конфигурация ---
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.Configure<LocalFileStorageOptions>(builder.Configuration.GetSection(LocalFileStorageOptions.SectionName));
+builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
+builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 
 // --- Persistence ---
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -31,9 +40,26 @@ builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 // --- Telegram auth ---
 builder.Services.AddScoped<ITelegramInitDataValidator, TelegramInitDataValidator>();
 
-// --- Хранилище файлов (временно локальное, заменяется на MinIO без изменений в вызывающем коде) ---
-builder.Services.AddSingleton<LocalFileStorage>();
-builder.Services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
+// --- Хранилище файлов: переключатель FileStorage:Provider = Local|Minio (этап 2 п.9) ---
+var fileStorageProvider = builder.Configuration["FileStorage:Provider"] ?? "Local";
+if (string.Equals(fileStorageProvider, "Minio", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IMinioClient>(sp =>
+    {
+        var minioOptions = sp.GetRequiredService<IOptions<MinioOptions>>().Value;
+        return (IMinioClient)new MinioClient()
+            .WithEndpoint(minioOptions.Endpoint)
+            .WithCredentials(minioOptions.AccessKey, minioOptions.SecretKey)
+            .WithSSL(minioOptions.UseSsl)
+            .Build();
+    });
+    builder.Services.AddSingleton<IFileStorage, MinioFileStorage>();
+}
+else
+{
+    builder.Services.AddSingleton<LocalFileStorage>();
+    builder.Services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
+}
 
 // --- Core-фичи: семьи, приглашения, участники ---
 builder.Services.AddScoped<FamilyService>();
@@ -77,8 +103,20 @@ if (isDevelopment)
     });
 }
 
+// --- Оповещения: Hangfire recurring job по срокам годности лекарств и дням рождения (этап 3 п.10) ---
+var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
+    ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.");
+builder.Services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(opt => opt.UseNpgsqlConnection(postgresConnectionString)));
+builder.Services.AddHangfireServer();
+builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+builder.Services.AddScoped<ReminderScanJob>();
+builder.Services.AddScoped<NotificationService>();
+
 // --- Medical-модуль ---
 builder.Services.AddMedicalModule();
+
+// --- Birthdays-модуль (этап 4 п.11) ---
+builder.Services.AddBirthdayModule();
 
 // --- Swagger (ручное тестирование) ---
 builder.Services.AddEndpointsApiExplorer();
@@ -95,19 +133,44 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-// --- Раздача файлов LocalFileStorage по подписанной ссылке (заглушка вместо MinIO presigned URL) ---
-app.MapGet("/local-files/{*key}", (string key, long expires, string sig, LocalFileStorage storage) =>
+// --- Раздача файлов LocalFileStorage по подписанной ссылке (только при FileStorage:Provider=Local) ---
+if (string.Equals(fileStorageProvider, "Minio", StringComparison.OrdinalIgnoreCase) is false)
 {
-    if (!storage.IsValidSignature(key, expires, sig))
-        return Results.Unauthorized();
+    app.MapGet("/local-files/{*key}", (string key, long expires, string sig, LocalFileStorage storage) =>
+    {
+        if (!storage.IsValidSignature(key, expires, sig))
+            return Results.Unauthorized();
 
-    var path = storage.ResolvePath(key);
-    return File.Exists(path) ? Results.File(path) : Results.NotFound();
-}).AllowAnonymous();
+        var path = storage.ResolvePath(key);
+        return File.Exists(path) ? Results.File(path) : Results.NotFound();
+    }).AllowAnonymous();
+}
 
 app.MapFamilyEndpoints();
 app.MapInviteEndpoints();
 app.MapMemberEndpoints();
 app.MapMedicalModule();
+app.MapBirthdayModule();
+app.MapNotificationEndpoints();
+
+// --- Дашборд Hangfire — только Development (в проде потребовался бы отдельный auth-фильтр) ---
+if (app.Environment.IsDevelopment())
+{
+    app.MapHangfireDashboard("/hangfire");
+
+    // Ручной запуск джобы оповещений без ожидания cron/UI дашборда — для локальной проверки.
+    app.MapPost("/dev/trigger-reminder-scan", async (ReminderScanJob job, CancellationToken ct) =>
+    {
+        await job.RunAsync(ct);
+        return Results.Ok();
+    });
+}
+
+// --- Регистрация ежедневной джобы оповещений (этап 3 п.10) ---
+var notificationOptions = app.Services.GetRequiredService<IOptions<NotificationOptions>>().Value;
+RecurringJob.AddOrUpdate<ReminderScanJob>(
+    "reminder-scan",
+    job => job.RunAsync(CancellationToken.None),
+    notificationOptions.Cron);
 
 app.Run();

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FamilyHub.Domain\FamilyHub.Domain.csproj" />
+    <ProjectReference Include="..\FamilyHub.Infrastructure\FamilyHub.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Явная версия EFCore, совпадающая с Infrastructure/Design, чтобы при транзитивном
+         разрешении не подтягивалась более старая версия из Npgsql.EntityFrameworkCore.PostgreSQL. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Это classlib (не Web SDK), поэтому неявные using-ы для ASP.NET Core (которые
+       Microsoft.NET.Sdk.Web генерирует автоматически) нужно добавить явно. -->
+  <ItemGroup>
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

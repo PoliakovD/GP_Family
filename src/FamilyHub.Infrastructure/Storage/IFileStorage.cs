@@ -9,7 +9,7 @@ namespace FamilyHub.Infrastructure.Storage;
 public interface IFileStorage
 {
     /// <summary>Сохраняет содержимое под заданным ключом. Возвращает фактический storageKey.</summary>
-    Task<string> SaveAsync(string storageKey, Stream content, string contentType, CancellationToken ct = default);
+    Task<string> SaveAsync(string storageKey, Stream content, long size, string contentType, CancellationToken ct = default);
 
     /// <summary>Короткоживущая ссылка на файл (минуты), действительная до истечения <paramref name="expiry"/>.</summary>
     Task<string> GetPresignedUrlAsync(string storageKey, TimeSpan expiry, CancellationToken ct = default);
