@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FamilyHub.Domain\FamilyHub.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Явная версия EFCore, совпадающая с Design, чтобы при транзитивном разрешении
+         в зависимых проектах (Modules.Medical, Api) не подтягивалась более старая версия
+         из Npgsql.EntityFrameworkCore.PostgreSQL (у него только нижняя граница диапазона). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+  </ItemGroup>
+
+  <!-- Authorization/Authentication-абстракции (IAuthorizationHandler, ClaimsPrincipal-расширения и т.п.)
+       поставляются с shared framework ASP.NET Core, а не отдельным NuGet-пакетом. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

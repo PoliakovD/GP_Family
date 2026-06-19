@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FamilyHub.Api/FamilyHub.Api.csproj" />
+    <Project Path="src/FamilyHub.Domain/FamilyHub.Domain.csproj" />
+    <Project Path="src/FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj" />
+    <Project Path="src/FamilyHub.Modules.Medical/FamilyHub.Modules.Medical.csproj" />
+    <Project Path="src/FamilyHub.TelegramBot/FamilyHub.TelegramBot.csproj" />
+  </Folder>
+</Solution>
