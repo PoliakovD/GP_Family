@@ -8,6 +8,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageReference Include="Serilog.Exceptions" Version="8.4.0" />
+    <PackageReference Include="Serilog.Sinks.Seq" Version="9.1.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.1" />
     <!-- Нужен в startup-проекте для инструментов dotnet-ef (design-time сборка). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">

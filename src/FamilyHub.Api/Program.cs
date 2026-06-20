@@ -17,11 +17,34 @@ using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Minio;
+using Serilog;
+using Serilog.Exceptions;
 using Telegram.Bot;
 
+// Bootstrap-логгер ловит ошибки, которые случаются до того, как builder.Build()
+// поднимет настоящий Serilog-логгер из конфигурации (например, сбой при чтении appsettings).
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
+    Log.Information("Запуск FamilyHub.Api...");
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithExceptionDetails()
+    .Enrich.WithEnvironmentName()
+    .Enrich.WithMachineName());
 
 // --- Конфигурация ---
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
@@ -143,6 +166,9 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// --- Структурированное логирование HTTP-запросов (метод, путь, статус, время) в Seq ---
+app.UseSerilogRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -210,6 +236,16 @@ app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<ReminderScan
     notificationOptions.Cron);
 
 app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
+{
+    // HostAbortedException прилетает от `dotnet ef` (design-time сборка хоста) — это не сбой.
+    Log.Fatal(ex, "FamilyHub.Api аварийно завершился при запуске");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 // Сгенерированный для top-level statements класс Program по умолчанию internal — для
 // WebApplicationFactory<Program> в интеграционных тестах нужен public.
