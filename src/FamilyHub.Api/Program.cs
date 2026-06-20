@@ -1,3 +1,4 @@
+using FamilyHub.Api.Features.Bot;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
@@ -18,6 +19,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Minio;
+using Telegram.Bot;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -108,9 +110,26 @@ var postgresConnectionString = builder.Configuration.GetConnectionString("Postgr
     ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.");
 builder.Services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(opt => opt.UseNpgsqlConnection(postgresConnectionString)));
 builder.Services.AddHangfireServer();
-builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
+
+// --- Telegram-бот: тонкий клиент + доставка оповещений (этап 4 п.12) ---
+// Всё, что зависит от ITelegramBotClient, регистрируем только если задан BotToken: без него
+// (локальный dev) бота не существует — нет смысла поднимать вебхук-эндпоинт и обработчик,
+// а доставка оповещений остаётся в LoggingNotificationSender, как и раньше.
+var telegramBotToken = builder.Configuration["Telegram:BotToken"];
+var telegramBotConfigured = !string.IsNullOrWhiteSpace(telegramBotToken);
+if (telegramBotConfigured)
+{
+    builder.Services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(telegramBotToken!));
+    builder.Services.AddScoped<INotificationSender, TelegramNotificationSender>();
+    builder.Services.AddScoped<TelegramUpdateHandler>();
+    builder.Services.AddHostedService<TelegramWebhookRegistrar>();
+}
+else
+{
+    builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+}
 
 // --- Medical-модуль ---
 builder.Services.AddMedicalModule();
@@ -129,6 +148,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// --- Раздача Telegram Mini App (React-сборка в wwwroot, этап 4 п.12) ---
+// До UseAuthorization: статика отдаётся без аутентификации, сам Mini App
+// аутентифицируется на уровне API-запросов через initData.
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -152,6 +177,15 @@ app.MapMemberEndpoints();
 app.MapMedicalModule();
 app.MapBirthdayModule();
 app.MapNotificationEndpoints();
+if (telegramBotConfigured)
+{
+    app.MapBotEndpoints();
+}
+
+// SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).
+// AllowAnonymous обязателен — иначе FallbackPolicy потребует аутентификацию и до React
+// дело не дойдёт даже для статических маршрутов приложения.
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 // --- Дашборд Hangfire — только Development (в проде потребовался бы отдельный auth-фильтр) ---
 if (app.Environment.IsDevelopment())
@@ -167,10 +201,16 @@ if (app.Environment.IsDevelopment())
 }
 
 // --- Регистрация ежедневной джобы оповещений (этап 3 п.10) ---
+// Через DI (IRecurringJobManager), а не статический RecurringJob.AddOrUpdate: последний
+// читает JobStorage.Current, который AddHangfire больше не выставляет автоматически.
 var notificationOptions = app.Services.GetRequiredService<IOptions<NotificationOptions>>().Value;
-RecurringJob.AddOrUpdate<ReminderScanJob>(
+app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<ReminderScanJob>(
     "reminder-scan",
     job => job.RunAsync(CancellationToken.None),
     notificationOptions.Cron);
 
 app.Run();
+
+// Сгенерированный для top-level statements класс Program по умолчанию internal — для
+// WebApplicationFactory<Program> в интеграционных тестах нужен public.
+public partial class Program { }

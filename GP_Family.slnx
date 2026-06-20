@@ -5,6 +5,10 @@
     <Project Path="src/FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj" />
     <Project Path="src/FamilyHub.Modules.Birthdays/FamilyHub.Modules.Birthdays.csproj" />
     <Project Path="src/FamilyHub.Modules.Medical/FamilyHub.Modules.Medical.csproj" />
-    <Project Path="src/FamilyHub.TelegramBot/FamilyHub.TelegramBot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FamilyHub.TestUtils/FamilyHub.TestUtils.csproj" />
+    <Project Path="tests/FamilyHub.UnitTests/FamilyHub.UnitTests.csproj" />
+    <Project Path="tests/FamilyHub.IntegrationTests/FamilyHub.IntegrationTests.csproj" />
   </Folder>
 </Solution>

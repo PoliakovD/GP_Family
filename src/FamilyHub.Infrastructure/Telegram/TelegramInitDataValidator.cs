@@ -82,6 +82,9 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options) : ITel
 
     private sealed class TelegramUserDto
     {
+        // Без явного имени System.Text.Json матчит регистро-зависимо ("Id" != "id" из реального
+        // Telegram-JSON) и Id всегда оставался бы 0, проваливая ЛЮБУЮ валидацию initData.
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
         public long Id { get; set; }
 
         [System.Text.Json.Serialization.JsonPropertyName("first_name")]
