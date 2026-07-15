@@ -3,11 +3,11 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: familyhub
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
@@ -16,11 +16,11 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "5433:9000"
-      - "5434:9001"
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio-data:/data
 
@@ -29,12 +29,24 @@ services:
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
-      # Локальная разработка: без авторизации, чтобы Serilog мог писать события без API-ключа.
-      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: ${SEQ_NO_AUTH:-true}
     ports:
-      - "5341:80"
+      - "${SEQ_PORT}:80"
     volumes:
       - seq-data:/data
+
+  web:
+    build:
+      context: ./src/FamilyHub.Web
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT}:5173"
+    volumes:
+      - ./src/FamilyHub.Web:/app
+      - /app/node_modules
+    environment:
+      API_URL: ${API_URL:-http://localhost:5000}
 
 volumes:
   postgres-data:

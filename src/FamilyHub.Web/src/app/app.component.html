@@ -1,0 +1,56 @@
+<div class="app-wrapper">
+  <header class="app-header">
+    <h1>FamilyHub</h1>
+    @if (activeFamilies.length > 0) {
+      <select class="form-select form-select-sm" [(ngModel)]="activeFamilyId">
+        @for (f of activeFamilies; track f.id) {
+          <option [value]="f.id">{{ f.name }}</option>
+        }
+      </select>
+    }
+  </header>
+
+  <main class="app-content">
+    @if (error) {
+      <div class="alert alert-danger py-2 mb-2">{{ error }}</div>
+    }
+    @if (loading) {
+      <p class="muted">Загрузка…</p>
+    }
+
+    @if (!loading && tab === 'families') {
+      <app-families-tab [families]="families" (changed)="refreshFamilies()" />
+    }
+
+    @if (!loading && needsFamily && activeFamilies.length === 0) {
+      <p class="muted">
+        Нет ни одной семьи, в которой вы состоите как активный участник.
+        Создайте семью или примите инвайт на вкладке «Семьи».
+      </p>
+    }
+
+    @if (!loading && tab === 'medications' && activeFamilyId) {
+      <app-medications-tab [familyId]="activeFamilyId" />
+    }
+
+    @if (!loading && tab === 'birthdays' && activeFamilyId) {
+      <app-birthdays-tab [familyId]="activeFamilyId" />
+    }
+
+    @if (!loading && tab === 'records') {
+      <app-medical-records-tab [activeFamilies]="activeFamilies" />
+    }
+
+    @if (!loading && tab === 'notifications') {
+      <app-notifications-tab />
+    }
+  </main>
+
+  <nav class="tab-bar">
+    @for (t of tabs; track t.id) {
+      <button [class.active]="tab === t.id" (click)="tab = t.id">
+        {{ t.label }}
+      </button>
+    }
+  </nav>
+</div>

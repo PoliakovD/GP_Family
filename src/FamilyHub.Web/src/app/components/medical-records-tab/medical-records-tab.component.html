@@ -1,0 +1,104 @@
+<div>
+  @if (error) {
+    <div class="alert alert-danger py-2 mb-2">{{ error }}</div>
+  }
+
+  <div class="card mb-3">
+    <div class="card-body p-3">
+      <div class="d-flex flex-column gap-2">
+        <input
+          class="form-control form-control-sm"
+          [(ngModel)]="form.personName"
+          placeholder="Пациент"
+        />
+        <input
+          class="form-control form-control-sm"
+          type="date"
+          [(ngModel)]="form.recordDate"
+        />
+        <input
+          class="form-control form-control-sm"
+          [(ngModel)]="form.doctor"
+          placeholder="Врач (необязательно)"
+        />
+        <textarea
+          class="form-control form-control-sm"
+          [(ngModel)]="form.description"
+          placeholder="Описание (необязательно)"
+          rows="2"
+        ></textarea>
+        <button class="btn btn-primary btn-sm" (click)="handleSubmit()">Добавить запись</button>
+      </div>
+    </div>
+  </div>
+
+  @for (item of items; track item.id) {
+    <div class="card mb-2">
+      <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <strong>{{ item.personName }}</strong>
+          <span class="muted">{{ item.recordDate }}</span>
+        </div>
+        @if (item.doctor) {
+          <p class="muted mb-1">Врач: {{ item.doctor }}</p>
+        }
+        @if (item.description) {
+          <p class="mb-2">{{ item.description }}</p>
+        }
+
+        <div class="mb-2">
+          <input
+            class="form-control form-control-sm"
+            type="file"
+            (change)="handleUpload(item.id, $event)"
+          />
+        </div>
+
+        @if (activeFamilies.length > 0) {
+          <div class="mb-1">
+            <select
+              class="form-select form-select-sm mb-2"
+              [value]="shareFamilyFor(item.id)"
+              (change)="setShareFamily(item.id, $any($event.target).value)"
+            >
+              <option value="">Выберите семью…</option>
+              @for (f of activeFamilies; track f.id) {
+                <option [value]="f.id">{{ f.name }}</option>
+              }
+            </select>
+            <div class="d-flex flex-wrap gap-1">
+              <button class="btn btn-outline-secondary btn-sm" (click)="handleShare(item.id, true)">
+                Поделиться
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" (click)="handleShare(item.id, false)">
+                Отменить доступ
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" (click)="handleHide(item.id, true)">
+                Скрыть
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" (click)="handleHide(item.id, false)">
+                Показать
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (attachmentsFor(item.id).length > 0) {
+          <ul class="list-unstyled mt-2 mb-0">
+            @for (a of attachmentsFor(item.id); track a.id) {
+              <li>
+                <button class="btn btn-link btn-sm p-0" (click)="handleOpenAttachment(a.id)">
+                  {{ a.fileName }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  }
+
+  @if (items.length === 0) {
+    <p class="muted">Записей нет.</p>
+  }
+</div>

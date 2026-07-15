@@ -481,6 +481,8 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 
+src/FamilyHub.Web/.angular
+
 # Windows shortcuts
 *.lnk
 

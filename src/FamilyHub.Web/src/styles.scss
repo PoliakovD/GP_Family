@@ -1,0 +1,118 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--tg-theme-bg-color, #f2f2f7);
+  color: var(--tg-theme-text-color, #000);
+  font-size: 14px;
+}
+
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  padding: 12px 16px;
+  background: var(--tg-theme-secondary-bg-color, #fff);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.app-content {
+  flex: 1;
+  padding: 12px 16px 80px;
+  overflow-y: auto;
+}
+
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--tg-theme-secondary-bg-color, #fff);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  z-index: 100;
+}
+
+.tab-bar button {
+  flex: 1;
+  padding: 10px 4px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #888);
+  cursor: pointer;
+
+  &.active {
+    color: var(--tg-theme-link-color, #2481cc);
+    font-weight: 600;
+  }
+}
+
+// Bootstrap overrides for Telegram theme
+.btn-primary {
+  --bs-btn-bg: var(--tg-theme-button-color, #2481cc);
+  --bs-btn-border-color: var(--tg-theme-button-color, #2481cc);
+  --bs-btn-color: var(--tg-theme-button-text-color, #fff);
+  --bs-btn-hover-bg: var(--tg-theme-button-color, #1a6ab8);
+  --bs-btn-hover-border-color: var(--tg-theme-button-color, #1a6ab8);
+  --bs-btn-active-bg: var(--tg-theme-button-color, #1a6ab8);
+}
+
+.form-control,
+.form-select {
+  background-color: var(--tg-theme-bg-color, #fff);
+  color: var(--tg-theme-text-color, #000);
+  border-color: rgba(0, 0, 0, 0.15);
+
+  &:focus {
+    background-color: var(--tg-theme-bg-color, #fff);
+    color: var(--tg-theme-text-color, #000);
+  }
+}
+
+.card {
+  background: var(--tg-theme-secondary-bg-color, #fff);
+  border-radius: 12px;
+  border: none;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.muted {
+  color: var(--tg-theme-hint-color, #888);
+  font-size: 12px;
+  margin: 0;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  margin-left: 4px;
+
+  &.unread {
+    background: var(--tg-theme-link-color, #2481cc);
+    color: #fff;
+  }
+}
