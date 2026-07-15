@@ -24,6 +24,13 @@ using Serilog;
 using Serilog.Exceptions;
 using Telegram.Bot;
 
+// Загружаем .env до создания builder-а, чтобы переменные попали в конфигурацию.
+// Системные переменные окружения имеют приоритет (NoClobber).
+var envFile = (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production")
+    .Equals("Development", StringComparison.OrdinalIgnoreCase) ? "dev.env" : "prod.env";
+if (File.Exists(envFile))
+    DotNetEnv.Env.NoClobber().Load(envFile);
+
 // Bootstrap-логгер ловит ошибки, которые случаются до того, как builder.Build()
 // поднимет настоящий Serilog-логгер из конфигурации (например, сбой при чтении appsettings).
 Log.Logger = new LoggerConfiguration()
