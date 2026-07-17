@@ -1,6 +1,7 @@
-import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { Component, inject, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
+import { FamilyStateService } from '../../services/family-state.service';
 import type { Medication } from '../../models/types';
 
 @Component({
@@ -9,9 +10,8 @@ import type { Medication } from '../../models/types';
   imports: [FormsModule],
   templateUrl: './medications-tab.component.html',
 })
-export class MedicationsTabComponent implements OnChanges {
-  @Input() familyId!: string;
-
+export class MedicationsTabComponent {
+  readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
 
   items: Medication[] = [];
@@ -19,16 +19,23 @@ export class MedicationsTabComponent implements OnChanges {
   editingId: string | null = null;
   error: string | null = null;
 
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['familyId']) {
+  constructor() {
+    effect(() => {
+      const id = this.state.activeFamilyId();
       this.resetForm();
-      await this.refresh();
-    }
+      if (id) {
+        void this.refresh();
+      } else {
+        this.items = [];
+      }
+    });
   }
 
   async refresh(): Promise<void> {
+    const id = this.state.activeFamilyId();
+    if (!id) return;
     try {
-      this.items = await this.api.getMedications(this.familyId);
+      this.items = await this.api.getMedications(id);
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить аптечку.';
@@ -36,7 +43,8 @@ export class MedicationsTabComponent implements OnChanges {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.name.trim()) return;
+    const id = this.state.activeFamilyId();
+    if (!id || !this.form.name.trim()) return;
     const input = {
       name: this.form.name.trim(),
       instructions: this.form.instructions.trim() || null,
@@ -47,7 +55,7 @@ export class MedicationsTabComponent implements OnChanges {
       if (this.editingId) {
         await this.api.updateMedication(this.editingId, input);
       } else {
-        await this.api.createMedication(this.familyId, input);
+        await this.api.createMedication(id, input);
       }
       this.resetForm();
       await this.refresh();

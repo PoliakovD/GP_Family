@@ -1,6 +1,7 @@
-import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { Component, inject, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
+import { FamilyStateService } from '../../services/family-state.service';
 import type { Birthday } from '../../models/types';
 
 @Component({
@@ -9,9 +10,8 @@ import type { Birthday } from '../../models/types';
   imports: [FormsModule],
   templateUrl: './birthdays-tab.component.html',
 })
-export class BirthdaysTabComponent implements OnChanges {
-  @Input() familyId!: string;
-
+export class BirthdaysTabComponent {
+  readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
 
   items: Birthday[] = [];
@@ -19,16 +19,23 @@ export class BirthdaysTabComponent implements OnChanges {
   editingId: string | null = null;
   error: string | null = null;
 
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['familyId']) {
+  constructor() {
+    effect(() => {
+      const id = this.state.activeFamilyId();
       this.resetForm();
-      await this.refresh();
-    }
+      if (id) {
+        void this.refresh();
+      } else {
+        this.items = [];
+      }
+    });
   }
 
   async refresh(): Promise<void> {
+    const id = this.state.activeFamilyId();
+    if (!id) return;
     try {
-      this.items = await this.api.getBirthdays(this.familyId);
+      this.items = await this.api.getBirthdays(id);
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить дни рождения.';
@@ -36,13 +43,14 @@ export class BirthdaysTabComponent implements OnChanges {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.personName.trim() || !this.form.date) return;
+    const id = this.state.activeFamilyId();
+    if (!id || !this.form.personName.trim() || !this.form.date) return;
     const input = { personName: this.form.personName.trim(), date: this.form.date };
     try {
       if (this.editingId) {
         await this.api.updateBirthday(this.editingId, input);
       } else {
-        await this.api.createBirthday(this.familyId, input);
+        await this.api.createBirthday(id, input);
       }
       this.resetForm();
       await this.refresh();

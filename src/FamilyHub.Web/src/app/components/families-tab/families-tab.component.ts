@@ -1,26 +1,24 @@
-import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
-import { FamilyRole, MemberStatus, type FamilySummary, type PendingMember } from '../../models/types';
+import { FamilyStateService } from '../../services/family-state.service';
+import { FamilyRole, MemberStatus } from '../../models/types';
 
 @Component({
   selector: 'app-families-tab',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './families-tab.component.html',
 })
 export class FamiliesTabComponent {
-  @Input() families: FamilySummary[] = [];
-  @Output() changed = new EventEmitter<void>();
-
+  readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
 
   newFamilyName = '';
   inviteCode = '';
   busy = false;
   message: string | null = null;
-  pendingByFamily: Record<string, PendingMember[]> = {};
-  createdInvite: { familyId: string; code: string } | null = null;
 
   readonly FamilyRole = FamilyRole;
   readonly MemberStatus = MemberStatus;
@@ -40,7 +38,7 @@ export class FamiliesTabComponent {
       await this.api.createFamily(this.newFamilyName.trim());
       this.newFamilyName = '';
       this.message = 'Семья создана.';
-      this.changed.emit();
+      await this.state.refresh();
     } catch (err) {
       this.message = err instanceof ApiError ? err.message : 'Не удалось создать семью.';
     } finally {
@@ -58,45 +56,11 @@ export class FamiliesTabComponent {
           ? 'Вы присоединились к семье.'
           : 'Заявка отправлена, ожидайте подтверждения администратором.';
       this.inviteCode = '';
-      this.changed.emit();
+      await this.state.refresh();
     } catch (err) {
       this.message = err instanceof ApiError ? err.message : 'Не удалось погасить инвайт.';
     } finally {
       this.busy = false;
     }
-  }
-
-  async loadPending(familyId: string): Promise<void> {
-    try {
-      const pending = await this.api.getPendingMembers(familyId);
-      this.pendingByFamily = { ...this.pendingByFamily, [familyId]: pending };
-    } catch (err) {
-      this.message = err instanceof ApiError ? err.message : 'Не удалось загрузить заявки.';
-    }
-  }
-
-  async handleApprove(familyId: string, userId: string): Promise<void> {
-    await this.api.approveMember(familyId, userId);
-    await this.loadPending(familyId);
-    this.changed.emit();
-  }
-
-  async handleReject(familyId: string, userId: string): Promise<void> {
-    await this.api.rejectMember(familyId, userId);
-    await this.loadPending(familyId);
-    this.changed.emit();
-  }
-
-  async handleCreateInvite(familyId: string): Promise<void> {
-    try {
-      const invite = await this.api.createInvite(familyId);
-      this.createdInvite = { familyId, code: invite.code };
-    } catch (err) {
-      this.message = err instanceof ApiError ? err.message : 'Не удалось создать инвайт.';
-    }
-  }
-
-  pendingFor(familyId: string): PendingMember[] | undefined {
-    return this.pendingByFamily[familyId];
   }
 }

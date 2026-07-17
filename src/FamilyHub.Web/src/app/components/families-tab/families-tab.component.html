@@ -35,8 +35,8 @@
     </div>
   </div>
 
-  @for (family of families; track family.id) {
-    <div class="card mb-2">
+  @for (family of state.families(); track family.id) {
+    <a class="card mb-2 text-decoration-none text-body" [routerLink]="['/families', family.id]">
       <div class="card-body p-3">
         <div class="d-flex justify-content-between align-items-center">
           <strong>{{ family.name }}</strong>
@@ -45,49 +45,11 @@
             <span class="tag">{{ statusLabel(family.myStatus) }}</span>
           </span>
         </div>
-
-        @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-          <div class="mt-2">
-            <div class="d-flex gap-2 mb-2">
-              <button class="btn btn-outline-secondary btn-sm" (click)="loadPending(family.id)">
-                Заявки
-              </button>
-              <button class="btn btn-outline-secondary btn-sm" (click)="handleCreateInvite(family.id)">
-                Создать инвайт
-              </button>
-            </div>
-
-            @if (createdInvite?.familyId === family.id) {
-              <p class="muted mb-2">
-                Код: <code>{{ createdInvite?.code }}</code> — отправьте боту:
-                <code>/start {{ createdInvite?.code }}</code>
-              </p>
-            }
-
-            @if (pendingFor(family.id)?.length === 0) {
-              <p class="muted">Заявок нет.</p>
-            }
-
-            @for (p of pendingFor(family.id); track p.userId) {
-              <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="muted">{{ p.userId }}</span>
-                <span class="d-flex gap-1">
-                  <button class="btn btn-outline-secondary btn-sm" (click)="handleApprove(family.id, p.userId)">
-                    Принять
-                  </button>
-                  <button class="btn btn-outline-danger btn-sm" (click)="handleReject(family.id, p.userId)">
-                    Отклонить
-                  </button>
-                </span>
-              </div>
-            }
-          </div>
-        }
       </div>
-    </div>
+    </a>
   }
 
-  @if (families.length === 0) {
+  @if (state.families().length === 0) {
     <p class="muted">Вы пока не состоите ни в одной семье.</p>
   }
 </div>

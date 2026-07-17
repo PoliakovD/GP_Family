@@ -1,8 +1,9 @@
-import { Component, Input, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
-import type { Attachment, FamilySummary, MedicalRecord } from '../../models/types';
+import { FamilyStateService } from '../../services/family-state.service';
+import type { Attachment, MedicalRecord } from '../../models/types';
 
 @Component({
   selector: 'app-medical-records-tab',
@@ -11,8 +12,7 @@ import type { Attachment, FamilySummary, MedicalRecord } from '../../models/type
   templateUrl: './medical-records-tab.component.html',
 })
 export class MedicalRecordsTabComponent implements OnInit {
-  @Input() activeFamilies: FamilySummary[] = [];
-
+  readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly tg = inject(TelegramService);
 
