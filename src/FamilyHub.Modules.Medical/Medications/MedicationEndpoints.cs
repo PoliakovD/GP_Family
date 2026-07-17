@@ -8,20 +8,28 @@ public static class MedicationEndpoints
     {
         var group = app.MapGroup("/api").RequireAuthorization();
 
-        group.MapGet("/families/{familyId:guid}/medications", async (
-            Guid familyId, MedicationService service, ICurrentUser currentUser, CancellationToken ct) =>
+        group.MapGet("/medkits/{medkitId:guid}/medications", async (
+            Guid medkitId, MedicationService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var (result, items) = await service.GetForFamilyAsync(familyId, currentUser.UserId, ct);
-            return result == MedicationAccessResult.Forbidden ? Results.Forbid() : Results.Ok(items);
+            var (result, items) = await service.GetForMedkitAsync(medkitId, currentUser.UserId, ct);
+            return result switch
+            {
+                MedicationAccessResult.NotFound => Results.NotFound(),
+                MedicationAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(items),
+            };
         });
 
-        group.MapPost("/families/{familyId:guid}/medications", async (
-            Guid familyId, CreateMedicationRequest request, MedicationService service, ICurrentUser currentUser, CancellationToken ct) =>
+        group.MapPost("/medkits/{medkitId:guid}/medications", async (
+            Guid medkitId, CreateMedicationRequest request, MedicationService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var (result, item) = await service.CreateAsync(familyId, currentUser.UserId, request, ct);
-            return result == MedicationAccessResult.Forbidden
-                ? Results.Forbid()
-                : Results.Created($"/api/medications/{item!.Id}", item);
+            var (result, item) = await service.CreateAsync(medkitId, currentUser.UserId, request, ct);
+            return result switch
+            {
+                MedicationAccessResult.NotFound => Results.NotFound(),
+                MedicationAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Created($"/api/medications/{item!.Id}", item),
+            };
         });
 
         group.MapPut("/medications/{medicationId:guid}", async (

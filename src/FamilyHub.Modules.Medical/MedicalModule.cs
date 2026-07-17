@@ -1,6 +1,7 @@
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
+using FamilyHub.Modules.Medical.Medkits;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FamilyHub.Modules.Medical;
@@ -13,6 +14,7 @@ public static class MedicalModule
 {
     public static IServiceCollection AddMedicalModule(this IServiceCollection services)
     {
+        services.AddScoped<MedkitService>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
@@ -21,6 +23,7 @@ public static class MedicalModule
 
     public static void MapMedicalModule(this IEndpointRouteBuilder app)
     {
+        app.MapMedkitEndpoints();
         app.MapMedicationEndpoints();
         app.MapMedicalRecordEndpoints();
         app.MapAttachmentEndpoints();

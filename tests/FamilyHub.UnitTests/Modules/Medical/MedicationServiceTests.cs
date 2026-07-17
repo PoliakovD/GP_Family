@@ -17,58 +17,92 @@ public class MedicationServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task GetForFamilyAsync_Member_SeesFamilyMedications()
+    public async Task GetForMedkitAsync_Member_SeesMedkitMedications()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        Db.Medications.Add(TestData.NewMedication(family.Id, admin.Id));
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id));
         await Db.SaveChangesAsync();
 
-        var (result, items) = await _sut.GetForFamilyAsync(family.Id, admin.Id);
+        var (result, items) = await _sut.GetForMedkitAsync(medkit.Id, admin.Id);
 
         result.Should().Be(MedicationAccessResult.Success);
         items.Should().ContainSingle();
     }
 
     [Fact]
-    public async Task GetForFamilyAsync_NonMemberOfFamily_Forbidden()
+    public async Task GetForMedkitAsync_NonMemberOfFamily_Forbidden()
     {
-        var (family, _) = Db.SeedFamilyWithAdmin();
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        await Db.SaveChangesAsync();
         var outsider = Db.AddUser();
 
-        var (result, items) = await _sut.GetForFamilyAsync(family.Id, outsider.Id);
+        var (result, items) = await _sut.GetForMedkitAsync(medkit.Id, outsider.Id);
 
         result.Should().Be(MedicationAccessResult.Forbidden);
         items.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task GetForFamilyAsync_PendingApprovalMember_Forbidden()
+    public async Task GetForMedkitAsync_PendingApprovalMember_Forbidden()
     {
-        var (family, _) = Db.SeedFamilyWithAdmin();
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        await Db.SaveChangesAsync();
         var pending = Db.AddMember(family.Id, FamilyRole.Member, MemberStatus.PendingApproval);
 
-        var (result, _) = await _sut.GetForFamilyAsync(family.Id, pending.Id);
+        var (result, _) = await _sut.GetForMedkitAsync(medkit.Id, pending.Id);
 
         result.Should().Be(MedicationAccessResult.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetForMedkitAsync_UnknownMedkitId_NotFound()
+    {
+        var (result, items) = await _sut.GetForMedkitAsync(Guid.NewGuid(), Guid.NewGuid());
+
+        result.Should().Be(MedicationAccessResult.NotFound);
+        items.Should().BeEmpty();
     }
 
     [Fact]
     public async Task CreateAsync_Member_CanAdd()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        await Db.SaveChangesAsync();
 
         var (result, item) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateMedicationRequest("Aspirin", null, null, 10));
+            medkit.Id, admin.Id, new CreateMedicationRequest("Aspirin", null, null, 10));
 
         result.Should().Be(MedicationAccessResult.Success);
         item!.Name.Should().Be("Aspirin");
+        item.MedkitId.Should().Be(medkit.Id);
+        item.FamilyId.Should().Be(family.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_UnknownMedkitId_NotFound()
+    {
+        var (result, item) = await _sut.CreateAsync(
+            Guid.NewGuid(), Guid.NewGuid(), new CreateMedicationRequest("Aspirin", null, null, 10));
+
+        result.Should().Be(MedicationAccessResult.NotFound);
+        item.Should().BeNull();
     }
 
     [Fact]
     public async Task UpdateAsync_LoadsByIdThenChecksRealFamilyId_OtherFamilyMember_Forbidden()
     {
         var (familyA, adminA) = Db.SeedFamilyWithAdmin("A");
-        var medication = TestData.NewMedication(familyA.Id, adminA.Id);
+        var medkitA = TestData.NewMedkit(familyA.Id, adminA.Id);
+        Db.Medkits.Add(medkitA);
+        var medication = TestData.NewMedication(medkitA.Id, familyA.Id, adminA.Id);
         Db.Medications.Add(medication);
         await Db.SaveChangesAsync();
 
@@ -92,7 +126,9 @@ public class MedicationServiceTests : SqliteTestBase
     public async Task DeleteAsync_Member_Removes()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        var medication = TestData.NewMedication(family.Id, admin.Id);
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        var medication = TestData.NewMedication(medkit.Id, family.Id, admin.Id);
         Db.Medications.Add(medication);
         await Db.SaveChangesAsync();
 
@@ -106,7 +142,9 @@ public class MedicationServiceTests : SqliteTestBase
     public async Task DeleteAsync_OutsiderOfFamily_Forbidden()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        var medication = TestData.NewMedication(family.Id, admin.Id);
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        var medication = TestData.NewMedication(medkit.Id, family.Id, admin.Id);
         Db.Medications.Add(medication);
         await Db.SaveChangesAsync();
         var outsider = Db.AddUser();

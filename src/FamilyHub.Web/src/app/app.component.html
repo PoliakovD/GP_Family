@@ -1,17 +1,6 @@
 <div class="app-wrapper">
   <header class="app-header">
     <h1>FamilyHub</h1>
-    @if (state.activeFamilies().length > 0) {
-      <select
-        class="form-select form-select-sm"
-        [ngModel]="state.activeFamilyId()"
-        (ngModelChange)="state.setActiveFamily($event)"
-      >
-        @for (f of state.activeFamilies(); track f.id) {
-          <option [value]="f.id">{{ f.name }}</option>
-        }
-      </select>
-    }
   </header>
 
   <main class="app-content">

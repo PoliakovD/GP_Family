@@ -32,8 +32,21 @@ export interface InviteCreated {
   telegramLink: string | null;
 }
 
+export interface Medkit {
+  id: string;
+  familyId: string;
+  name: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface MedkitInput {
+  name: string;
+}
+
 export interface Medication {
   id: string;
+  medkitId: string;
   familyId: string;
   name: string;
   instructions: string | null;

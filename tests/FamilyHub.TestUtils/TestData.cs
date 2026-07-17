@@ -52,9 +52,19 @@ public static class TestData
         CreatedAt = DateTime.UtcNow,
     };
 
-    public static Medication NewMedication(Guid familyId, Guid createdByUserId, DateOnly? expiryDate = null) => new()
+    public static Medkit NewMedkit(Guid familyId, Guid createdByUserId, string? name = null) => new()
     {
         Id = Guid.NewGuid(),
+        FamilyId = familyId,
+        Name = name ?? "Test Medkit",
+        CreatedByUserId = createdByUserId,
+        CreatedAt = DateTime.UtcNow,
+    };
+
+    public static Medication NewMedication(Guid medkitId, Guid familyId, Guid createdByUserId, DateOnly? expiryDate = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        MedkitId = medkitId,
         FamilyId = familyId,
         Name = "Test Medication",
         ExpiryDate = expiryDate,

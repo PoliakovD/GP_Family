@@ -106,7 +106,9 @@ public class AttachmentServiceTests : SqliteTestBase
     public async Task GetPresignedUrlAsync_MedicationAttachment_AccessFollowsFamilyRole()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        var medication = TestData.NewMedication(family.Id, admin.Id);
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        var medication = TestData.NewMedication(medkit.Id, family.Id, admin.Id);
         Db.Medications.Add(medication);
         var attachment = NewAttachment(FileOwnerType.Medication, medication.Id);
         Db.FileAttachments.Add(attachment);

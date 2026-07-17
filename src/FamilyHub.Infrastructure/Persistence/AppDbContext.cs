@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
     public DbSet<FamilyInvite> FamilyInvites => Set<FamilyInvite>();
     public DbSet<FamilyInviteRedemption> FamilyInviteRedemptions => Set<FamilyInviteRedemption>();
+    public DbSet<Medkit> Medkits => Set<Medkit>();
     public DbSet<Medication> Medications => Set<Medication>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
     public DbSet<FamilyMedicalShare> FamilyMedicalShares => Set<FamilyMedicalShare>();

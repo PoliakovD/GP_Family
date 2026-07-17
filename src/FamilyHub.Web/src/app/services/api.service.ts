@@ -12,6 +12,8 @@ import type {
   MedicalRecordInput,
   Medication,
   MedicationInput,
+  Medkit,
+  MedkitInput,
   PendingMember,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
@@ -108,10 +110,17 @@ export class ApiService {
     });
   redeemInvite = (code: string) => this.post<{ status: string }>(`/api/invites/${code}/redeem`);
 
-  // Аптечка
-  getMedications = (familyId: string) => this.get<Medication[]>(`/api/families/${familyId}/medications`);
-  createMedication = (familyId: string, input: MedicationInput) =>
-    this.post<Medication>(`/api/families/${familyId}/medications`, input);
+  // Аптечки
+  getMedkits = (familyId: string) => this.get<Medkit[]>(`/api/families/${familyId}/medkits`);
+  createMedkit = (familyId: string, input: MedkitInput) =>
+    this.post<Medkit>(`/api/families/${familyId}/medkits`, input);
+  updateMedkit = (id: string, input: MedkitInput) => this.put<void>(`/api/medkits/${id}`, input);
+  deleteMedkit = (id: string) => this.del<void>(`/api/medkits/${id}`);
+
+  // Медикаменты внутри аптечки
+  getMedications = (medkitId: string) => this.get<Medication[]>(`/api/medkits/${medkitId}/medications`);
+  createMedication = (medkitId: string, input: MedicationInput) =>
+    this.post<Medication>(`/api/medkits/${medkitId}/medications`, input);
   updateMedication = (id: string, input: MedicationInput) =>
     this.put<void>(`/api/medications/${id}`, input);
   deleteMedication = (id: string) => this.del<void>(`/api/medications/${id}`);

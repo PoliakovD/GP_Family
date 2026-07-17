@@ -1,56 +1,15 @@
 <div>
-  @if (!state.activeFamilyId() && !state.loading()) {
+  @if (state.activeFamilies().length === 0 && !state.loading()) {
     <p class="muted">
       Нет ни одной семьи, в которой вы состоите как активный участник.
       Создайте семью или примите инвайт на вкладке «Семьи».
     </p>
-  } @else if (state.activeFamilyId()) {
-    @if (error) {
-      <div class="alert alert-danger py-2 mb-2">{{ error }}</div>
-    }
+  }
 
-    <div class="card mb-3">
-      <div class="card-body p-3">
-        <div class="d-flex flex-column gap-2">
-          <input
-            class="form-control form-control-sm"
-            [(ngModel)]="form.personName"
-            placeholder="Имя"
-          />
-          <input
-            class="form-control form-control-sm"
-            type="date"
-            [(ngModel)]="form.date"
-          />
-          <div class="d-flex gap-2">
-            <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
-              {{ editingId ? 'Сохранить' : 'Добавить' }}
-            </button>
-            @if (editingId) {
-              <button class="btn btn-outline-secondary btn-sm" (click)="resetForm()">Отмена</button>
-            }
-          </div>
-        </div>
-      </div>
+  @for (f of state.activeFamilies(); track f.id) {
+    <div class="mb-4">
+      <h5 class="mb-2">{{ f.name }}</h5>
+      <app-birthdays-panel [familyId]="f.id" />
     </div>
-
-    @for (item of items; track item.id) {
-      <div class="card mb-2">
-        <div class="card-body p-3">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <strong>{{ item.personName }}</strong>
-            <span class="muted">{{ item.date }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
-            <button class="btn btn-outline-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
-          </div>
-        </div>
-      </div>
-    }
-
-    @if (items.length === 0) {
-      <p class="muted">Дни рождения не добавлены.</p>
-    }
   }
 </div>

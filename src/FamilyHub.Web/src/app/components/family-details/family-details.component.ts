@@ -9,11 +9,15 @@ import {
   type InviteCreated,
   type PendingMember,
 } from '../../models/types';
+import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component';
+import { BirthdaysPanelComponent } from '../birthdays-panel/birthdays-panel.component';
+
+type FamilySubTab = 'members' | 'medkits' | 'birthdays';
 
 @Component({
   selector: 'app-family-details',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent],
   templateUrl: './family-details.component.html',
 })
 export class FamilyDetailsComponent implements OnInit {
@@ -25,9 +29,16 @@ export class FamilyDetailsComponent implements OnInit {
   pendingMembers: PendingMember[] | undefined = undefined;
   createdInvite: WritableSignal<InviteCreated> | null = null;
   message: string | null = null;
+  activeSubTab: FamilySubTab = 'members';
 
   readonly FamilyRole = FamilyRole;
   readonly MemberStatus = MemberStatus;
+
+  readonly subTabs: { id: FamilySubTab; label: string }[] = [
+    { id: 'members', label: 'Участники' },
+    { id: 'medkits', label: 'Аптечки' },
+    { id: 'birthdays', label: 'Дни рождения' },
+  ];
 
   get family(): FamilySummary | undefined {
     return this.state.families().find((f) => f.id === this.id);

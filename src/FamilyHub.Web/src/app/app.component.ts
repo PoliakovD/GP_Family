@@ -1,5 +1,4 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationStart, NavigationEnd, NavigationError } from '@angular/router';
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
@@ -9,7 +8,7 @@ import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [FormsModule, RouterOutlet, RouterLink, RouterLinkActive, DevPanelComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, DevPanelComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent implements OnInit {

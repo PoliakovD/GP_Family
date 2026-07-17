@@ -20,7 +20,9 @@ public class ReminderScanJobTests : SqliteTestBase
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
         var pending = Db.AddMember(family.Id, FamilyRole.Member, MemberStatus.PendingApproval);
-        Db.Medications.Add(TestData.NewMedication(family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5)));
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5)));
         await Db.SaveChangesAsync();
 
         await CreateSut().RunAsync();
@@ -34,7 +36,9 @@ public class ReminderScanJobTests : SqliteTestBase
     public async Task RunAsync_MedicationAlreadyExpired_UsesExpiredTypeAndDedupPrefix()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        Db.Medications.Add(TestData.NewMedication(family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1)));
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1)));
         await Db.SaveChangesAsync();
 
         await CreateSut().RunAsync();
@@ -48,7 +52,9 @@ public class ReminderScanJobTests : SqliteTestBase
     public async Task RunAsync_CalledTwiceForSameMedication_DoesNotCreateDuplicateNotifications()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        Db.Medications.Add(TestData.NewMedication(family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5)));
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5)));
         await Db.SaveChangesAsync();
         var sut = CreateSut();
 
@@ -62,7 +68,9 @@ public class ReminderScanJobTests : SqliteTestBase
     public async Task RunAsync_MedicationFarFromExpiry_DoesNotNotify()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
-        Db.Medications.Add(TestData.NewMedication(family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(365)));
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(365)));
         await Db.SaveChangesAsync();
 
         await CreateSut().RunAsync();

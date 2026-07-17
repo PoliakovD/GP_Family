@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using FamilyHub.Modules.Medical.Medications;
+using FamilyHub.Modules.Medical.Medkits;
 using FluentAssertions;
 using Xunit;
 
@@ -15,18 +16,26 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         return body!["id"];
     }
 
+    private async Task<Guid> CreateMedkitAsync(HttpClient admin, Guid familyId)
+    {
+        var response = await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits", new CreateMedkitRequest("Аптечка"));
+        var body = await response.Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+        return body!.Id;
+    }
+
     [Fact]
     public async Task CreateAndList_AsFamilyMember_Succeeds()
     {
         var admin = ClientAs(FreshTelegramId());
         var familyId = await CreateFamilyAsync(admin);
+        var medkitId = await CreateMedkitAsync(admin, familyId);
 
-        var createResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/medications",
+        var createResponse = await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
             new CreateMedicationRequest("Аспирин", "По 1 таблетке", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(60)), 20));
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await createResponse.Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
 
-        var listResponse = await admin.GetAsync($"/api/families/{familyId}/medications");
+        var listResponse = await admin.GetAsync($"/api/medkits/{medkitId}/medications");
         var list = await listResponse.Content.ReadFromJsonAsync<List<MedicationDto>>(JsonOpts);
         list.Should().ContainSingle(m => m.Id == created!.Id && m.Name == "Аспирин");
     }
@@ -36,11 +45,22 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
     {
         var admin = ClientAs(FreshTelegramId());
         var familyId = await CreateFamilyAsync(admin);
+        var medkitId = await CreateMedkitAsync(admin, familyId);
         var outsider = ClientAs(FreshTelegramId());
 
-        var response = await outsider.GetAsync($"/api/families/{familyId}/medications");
+        var response = await outsider.GetAsync($"/api/medkits/{medkitId}/medications");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task List_UnknownMedkit_Returns404()
+    {
+        var admin = ClientAs(FreshTelegramId());
+
+        var response = await admin.GetAsync($"/api/medkits/{Guid.NewGuid()}/medications");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -48,7 +68,8 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
     {
         var admin = ClientAs(FreshTelegramId());
         var familyId = await CreateFamilyAsync(admin);
-        var created = await (await admin.PostAsJsonAsync($"/api/families/{familyId}/medications",
+        var medkitId = await CreateMedkitAsync(admin, familyId);
+        var created = await (await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
             new CreateMedicationRequest("Йод", null, null, 1))).Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
         var outsider = ClientAs(FreshTelegramId());
 
@@ -69,5 +90,27 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
 
         var okDelete = await admin.DeleteAsync($"/api/medications/{created.Id}");
         okDelete.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Family_CanHaveSeveralMedkits_WithIndependentMedications()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        var medkitA = await CreateMedkitAsync(admin, familyId);
+        var medkitB = await CreateMedkitAsync(admin, familyId);
+
+        await admin.PostAsJsonAsync($"/api/medkits/{medkitA}/medications",
+            new CreateMedicationRequest("Аспирин", null, null, 5));
+        await admin.PostAsJsonAsync($"/api/medkits/{medkitB}/medications",
+            new CreateMedicationRequest("Йод", null, null, 1));
+
+        var listA = await (await admin.GetAsync($"/api/medkits/{medkitA}/medications"))
+            .Content.ReadFromJsonAsync<List<MedicationDto>>(JsonOpts);
+        var listB = await (await admin.GetAsync($"/api/medkits/{medkitB}/medications"))
+            .Content.ReadFromJsonAsync<List<MedicationDto>>(JsonOpts);
+
+        listA.Should().ContainSingle(m => m.Name == "Аспирин");
+        listB.Should().ContainSingle(m => m.Name == "Йод");
     }
 }

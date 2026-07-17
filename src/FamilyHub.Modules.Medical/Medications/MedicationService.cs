@@ -7,20 +7,24 @@ using Microsoft.EntityFrameworkCore;
 namespace FamilyHub.Modules.Medical.Medications;
 
 /// <summary>
-/// Аптечка — семейный ресурс (раздел 4.1 брифа): принадлежит семье, видна всем активным
-/// членам по роли, Member может добавлять/править. Списки всегда фильтруются по FamilyId
-/// (инвариант 1) — никогда не грузим Medication по Id без проверки доступа к его семье.
+/// Медикаменты внутри аптечки — семейный ресурс (раздел 4.1 брифа): аптечка принадлежит
+/// семье, видна всем активным членам по роли, Member может добавлять/править. Списки всегда
+/// фильтруются по MedkitId (инвариант 1) — никогда не грузим Medication по Id без проверки
+/// доступа к его семье.
 /// </summary>
 public class MedicationService(AppDbContext db, IFamilyAccessService access)
 {
-    public async Task<(MedicationAccessResult Result, List<MedicationDto> Items)> GetForFamilyAsync(
-        Guid familyId, Guid userId, CancellationToken ct = default)
+    public async Task<(MedicationAccessResult Result, List<MedicationDto> Items)> GetForMedkitAsync(
+        Guid medkitId, Guid userId, CancellationToken ct = default)
     {
-        if (!await access.HasRoleAsync(userId, familyId, FamilyRole.Member, ct))
+        var medkit = await db.Medkits.AsNoTracking().FirstOrDefaultAsync(k => k.Id == medkitId, ct);
+        if (medkit is null) return (MedicationAccessResult.NotFound, []);
+
+        if (!await access.HasRoleAsync(userId, medkit.FamilyId, FamilyRole.Member, ct))
             return (MedicationAccessResult.Forbidden, []);
 
         var items = await db.Medications.AsNoTracking()
-            .Where(m => m.FamilyId == familyId)
+            .Where(m => m.MedkitId == medkitId)
             .Select(m => ToDto(m))
             .ToListAsync(ct);
 
@@ -28,15 +32,19 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access)
     }
 
     public async Task<(MedicationAccessResult Result, MedicationDto? Item)> CreateAsync(
-        Guid familyId, Guid userId, CreateMedicationRequest request, CancellationToken ct = default)
+        Guid medkitId, Guid userId, CreateMedicationRequest request, CancellationToken ct = default)
     {
-        if (!await access.HasRoleAsync(userId, familyId, FamilyRole.Member, ct))
+        var medkit = await db.Medkits.AsNoTracking().FirstOrDefaultAsync(k => k.Id == medkitId, ct);
+        if (medkit is null) return (MedicationAccessResult.NotFound, null);
+
+        if (!await access.HasRoleAsync(userId, medkit.FamilyId, FamilyRole.Member, ct))
             return (MedicationAccessResult.Forbidden, null);
 
         var medication = new Medication
         {
             Id = Guid.NewGuid(),
-            FamilyId = familyId,
+            MedkitId = medkitId,
+            FamilyId = medkit.FamilyId,
             Name = request.Name,
             Instructions = request.Instructions,
             ExpiryDate = request.ExpiryDate,
@@ -83,5 +91,5 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access)
     }
 
     private static MedicationDto ToDto(Medication m) =>
-        new(m.Id, m.FamilyId, m.Name, m.Instructions, m.ExpiryDate, m.Quantity, m.CreatedByUserId, m.CreatedAt);
+        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.Instructions, m.ExpiryDate, m.Quantity, m.CreatedByUserId, m.CreatedAt);
 }
