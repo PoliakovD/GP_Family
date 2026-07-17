@@ -1,0 +1,8 @@
+**/[Bb]in/
+**/[Oo]bj/
+**/node_modules/
+.git/
+.vs/
+.vscode/
+.claude/
+.angular/

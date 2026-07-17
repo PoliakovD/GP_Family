@@ -30,7 +30,7 @@ export class FamiliesTabComponent {
   }
 
   roleLabel(role: number): string {
-    return role === FamilyRole.Admin ? 'админ' : 'участник';
+    return role === FamilyRole.Admin ? 'вы админ' : 'вы участник';
   }
 
   async handleCreateFamily(): Promise<void> {

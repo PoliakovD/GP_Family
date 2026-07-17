@@ -12,8 +12,8 @@ export const NotificationType = {
 export interface FamilySummary {
   id: string;
   name: string;
-  myRole: number; // FamilyRole
-  myStatus: number; // MemberStatus
+  myRole: number; // FamilyRole admin or member
+  myStatus: number; // MemberStatus // active or pending to be active
 }
 
 export interface PendingMember {

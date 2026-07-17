@@ -1,4 +1,4 @@
-const target = process.env['API_URL'] || 'http://localhost:5000';
+const target = process.env['API_URL'] || 'http://localhost:5276';
 
 module.exports = {
   '/api': {

@@ -1,7 +1,10 @@
 FROM node:22-alpine
-RUN npm install -g @angular/cli
+
 WORKDIR /app
-COPY package*.json ./
+
+COPY package.json ./
 RUN npm install
+
 EXPOSE 5173
-CMD ["npm", "run", "dev"]
+
+CMD ["/app/node_modules/.bin/ng", "serve", "--host", "0.0.0.0", "--port", "5173", "--disable-host-check"]

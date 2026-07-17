@@ -1,0 +1,28 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY src/FamilyHub.Api/FamilyHub.Api.csproj                              FamilyHub.Api/
+COPY src/FamilyHub.Domain/FamilyHub.Domain.csproj                        FamilyHub.Domain/
+COPY src/FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj        FamilyHub.Infrastructure/
+COPY src/FamilyHub.Modules.Birthdays/FamilyHub.Modules.Birthdays.csproj  FamilyHub.Modules.Birthdays/
+COPY src/FamilyHub.Modules.Medical/FamilyHub.Modules.Medical.csproj      FamilyHub.Modules.Medical/
+
+RUN dotnet restore FamilyHub.Api/FamilyHub.Api.csproj
+
+COPY src/ .
+
+RUN dotnet publish FamilyHub.Api/FamilyHub.Api.csproj -c Release -o /app/publish --no-restore
+
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
+
+RUN apk add --no-cache krb5-libs
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+EXPOSE 5276
+
+ENTRYPOINT ["dotnet", "FamilyHub.Api.dll"]

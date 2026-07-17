@@ -10,6 +10,11 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   minio:
     image: minio/minio
@@ -35,6 +40,32 @@ services:
     volumes:
       - seq-data:/data
 
+  api:
+    build:
+      context: .
+      dockerfile: src/FamilyHub.Api/Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-5276}:5276"
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "5276"
+      # Переопределяем адреса из .env на имена Docker-сервисов
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Minio__Endpoint: "minio:9000"
+      Minio__AccessKey: "${MINIO_ROOT_USER}"
+      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      FileStorage__Provider: "Minio"
+      Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      seq:
+        condition: service_started
+
   web:
     build:
       context: ./src/FamilyHub.Web
@@ -42,13 +73,17 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT}:5173"
+    env_file: .env
+    environment:
+      API_URL: http://api:5276
     volumes:
       - ./src/FamilyHub.Web:/app
-      - /app/node_modules
-    environment:
-      API_URL: ${API_URL:-http://localhost:5000}
+      - web-node-modules:/app/node_modules
+    depends_on:
+      - api
 
 volumes:
   postgres-data:
   minio-data:
   seq-data:
+  web-node-modules:
