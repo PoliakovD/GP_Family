@@ -1,0 +1,48 @@
+@if (devMode) {
+  @if (open) {
+    <div class="dp-panel">
+      <div class="dp-header">
+        <span class="dp-title">DevLog&nbsp;<em>({{ logger.filteredEntries().length }})</em></span>
+        <div class="dp-actions">
+          <button class="dp-btn" (click)="toggleSettings($event)" title="Модули">⚙</button>
+          <button class="dp-btn" (click)="logger.clear()" title="Очистить">🗑</button>
+          <button class="dp-btn" (click)="toggle()" title="Закрыть">✕</button>
+        </div>
+      </div>
+
+      @if (showSettings) {
+        <div class="dp-settings">
+          @if (logger.modules().length === 0) {
+            <span class="dp-hint">Логи появятся после первых действий</span>
+          }
+          @for (mod of logger.modules(); track mod) {
+            <label class="dp-check">
+              <input
+                type="checkbox"
+                [checked]="logger.moduleEnabled()[mod]"
+                (change)="logger.toggleModule(mod)"
+              />
+              {{ mod }}
+            </label>
+          }
+        </div>
+      }
+
+      <div class="dp-body">
+        @for (entry of logger.filteredEntries(); track entry.id) {
+          <div class="dp-entry {{ levelClass(entry.level) }}">
+            <span class="dp-time">{{ formatTime(entry.ts) }}</span>
+            <span class="dp-mod">[{{ entry.module }}]</span>
+            <span class="dp-msg">{{ entry.message }}</span>
+          </div>
+        } @empty {
+          <span class="dp-hint">Нет записей</span>
+        }
+      </div>
+    </div>
+  }
+
+  <button class="dp-fab" (click)="toggle()" [class.dp-fab--active]="open">
+    {{ open ? '✕' : '🐛' }}
+  </button>
+}

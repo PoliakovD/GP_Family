@@ -9,6 +9,8 @@ namespace FamilyHub.Api.Features.Invites;
 
 public record CreateInviteRequest(Guid? TargetUserId, FamilyRole AssignedRole, int MaxUses, DateTime? ExpiresAt);
 
+public record PendingMemberDto(Guid UserId, string DisplayName, string? Username, FamilyRole Role, DateTime JoinedAt);
+
 /// <summary>
 /// Приглашения и одобрение заявок — дословно по разделу 8 брифа: гибридное одобрение
 /// (персональный инвайт → Active сразу, ссылка → PendingApproval до одобрения админа),
@@ -105,7 +107,7 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
     }
 
     /// <summary>Заявки семьи, ожидающие одобрения. Видит только Admin.</summary>
-    public async Task<(ApproveRejectResult Result, List<FamilyMember> Pending)> GetPendingMembersAsync(
+    public async Task<(ApproveRejectResult Result, List<PendingMemberDto> Pending)> GetPendingMembersAsync(
         Guid familyId, Guid requestingUserId, CancellationToken ct = default)
     {
         if (!await access.HasRoleAsync(requestingUserId, familyId, FamilyRole.Admin, ct))
@@ -113,6 +115,8 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
 
         var pending = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == familyId && m.Status == MemberStatus.PendingApproval)
+            .Select(m => new PendingMemberDto(
+                m.UserId, m.User.DisplayName, m.User.Username, m.Role, m.JoinedAt))
             .ToListAsync(ct);
 
         return (ApproveRejectResult.Success, pending);

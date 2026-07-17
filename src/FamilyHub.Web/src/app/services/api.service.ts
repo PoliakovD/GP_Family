@@ -15,6 +15,7 @@ import type {
   PendingMember,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
+import { DevLoggerService } from './dev-logger.service';
 
 export class ApiError extends Error {
   constructor(
@@ -28,39 +29,57 @@ export class ApiError extends Error {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
+  private readonly log = inject(DevLoggerService);
 
   private async get<T>(path: string): Promise<T> {
+    this.log.log('api', 'info', `GET ${path}`);
     try {
-      return await firstValueFrom(this.http.get<T>(path));
+      const result = await firstValueFrom(this.http.get<T>(path));
+      this.log.log('api', 'info', `GET ${path} ✓`);
+      return result;
     } catch (e) {
-      throw this.toApiError(e);
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `GET ${path} ✗ ${err.status}: ${err.message}`);
+      throw err;
     }
   }
 
   private async post<T>(path: string, body: unknown = null): Promise<T> {
+    this.log.log('api', 'info', `POST ${path}`);
     try {
       const result = await firstValueFrom(this.http.post<T>(path, body));
+      this.log.log('api', 'info', `POST ${path} ✓`);
       return result as T;
     } catch (e) {
-      throw this.toApiError(e);
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `POST ${path} ✗ ${err.status}: ${err.message}`);
+      throw err;
     }
   }
 
   private async put<T>(path: string, body: unknown = null): Promise<T> {
+    this.log.log('api', 'info', `PUT ${path}`);
     try {
       const result = await firstValueFrom(this.http.put<T>(path, body));
+      this.log.log('api', 'info', `PUT ${path} ✓`);
       return result as T;
     } catch (e) {
-      throw this.toApiError(e);
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `PUT ${path} ✗ ${err.status}: ${err.message}`);
+      throw err;
     }
   }
 
   private async del<T>(path: string): Promise<T> {
+    this.log.log('api', 'info', `DELETE ${path}`);
     try {
       const result = await firstValueFrom(this.http.delete<T>(path));
+      this.log.log('api', 'info', `DELETE ${path} ✓`);
       return result as T;
     } catch (e) {
-      throw this.toApiError(e);
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `DELETE ${path} ✗ ${err.status}: ${err.message}`);
+      throw err;
     }
   }
 
@@ -120,14 +139,19 @@ export class ApiService {
   getAttachmentUrl = (id: string) => this.get<{ url: string }>(`/api/attachments/${id}/url`);
 
   async uploadAttachment(recordId: string, file: File): Promise<Attachment> {
+    this.log.log('api', 'info', `POST /api/medical-records/${recordId}/attachments (${file.name})`);
     const formData = new FormData();
     formData.append('file', file);
     try {
-      return await firstValueFrom(
+      const result = await firstValueFrom(
         this.http.post<Attachment>(`/api/medical-records/${recordId}/attachments`, formData),
       );
+      this.log.log('api', 'info', `POST attachments ✓ id=${result.id}`);
+      return result;
     } catch (e) {
-      throw this.toApiError(e);
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `POST attachments ✗ ${err.status}: ${err.message}`);
+      throw err;
     }
   }
 

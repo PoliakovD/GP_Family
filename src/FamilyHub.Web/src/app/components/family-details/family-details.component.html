@@ -33,11 +33,22 @@
           </button>
         </div>
 
-        @if (createdInviteCode) {
+        @if (createdInvite != undefined) {
           <p class="muted mb-2">
-            Код: <code>{{ createdInviteCode }}</code> — отправьте боту:
-            <code>/start {{ createdInviteCode }}</code>
+            Код: <code>{{ createdInvite().code }}</code>
           </p>
+          @if (createdInvite().telegramLink) {
+            <button
+              class="btn btn-primary btn-sm mb-2"
+              (click)="shareInvite(createdInvite().telegramLink!)"
+            >
+              Поделиться / Отправить в Telegram
+            </button>
+          } @else {
+            <p class="muted mb-2">
+              Отправьте боту: <code>/start {{ createdInvite().code }}</code>
+            </p>
+          }
         }
 
         @if (pendingMembers !== undefined) {
@@ -46,7 +57,12 @@
           }
           @for (p of pendingMembers; track p.userId) {
             <div class="d-flex justify-content-between align-items-center mb-1">
-              <span class="muted">{{ p.userId }}</span>
+              <span class="muted">
+                {{ p.displayName }}
+                @if (p.username) {
+                  <span class="text-muted">&#64;{{ p.username }}</span>
+                }
+              </span>
               <span class="d-flex gap-1">
                 <button class="btn btn-outline-secondary btn-sm" (click)="handleApprove(p.userId)">
                   Принять

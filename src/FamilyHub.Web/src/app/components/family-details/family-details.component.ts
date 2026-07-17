@@ -1,8 +1,14 @@
-import { Component, Input, OnInit, inject } from '@angular/core';
+import { Component, Input, OnInit, inject, signal, WritableSignal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
-import { FamilyRole, MemberStatus, type FamilySummary, type PendingMember } from '../../models/types';
+import {
+  FamilyRole,
+  MemberStatus,
+  type FamilySummary,
+  type InviteCreated,
+  type PendingMember,
+} from '../../models/types';
 
 @Component({
   selector: 'app-family-details',
@@ -17,7 +23,7 @@ export class FamilyDetailsComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   pendingMembers: PendingMember[] | undefined = undefined;
-  createdInviteCode: string | null = null;
+  createdInvite: WritableSignal<InviteCreated> | null = null;
   message: string | null = null;
 
   readonly FamilyRole = FamilyRole;
@@ -74,10 +80,32 @@ export class FamilyDetailsComponent implements OnInit {
   async handleCreateInvite(): Promise<void> {
     try {
       const invite = await this.api.createInvite(this.id);
-      this.createdInviteCode = invite.code;
+      if (this.createdInvite) {
+        this.createdInvite.set(invite);
+      } else {
+        this.createdInvite = signal(invite);
+      }
       this.message = null;
     } catch (err) {
       this.message = err instanceof ApiError ? err.message : 'Не удалось создать инвайт.';
+    }
+  }
+
+  async shareInvite(link: string): Promise<void> {
+    const shareData = {
+      title: 'Приглашение в семью FamilyHub',
+      text: 'Присоединяйтесь к нашей семье в FamilyHub',
+      url: link,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch {
+        // пользователь отменил диалог — игнорируем
+      }
+    } else {
+      await navigator.clipboard.writeText(link);
+      this.message = 'Ссылка скопирована в буфер обмена.';
     }
   }
 }

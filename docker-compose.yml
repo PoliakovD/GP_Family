@@ -51,7 +51,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "5276"
-      # Переопределяем адреса из .env на имена Docker-сервисов
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Minio__Endpoint: "minio:9000"
       Minio__AccessKey: "${MINIO_ROOT_USER}"
@@ -77,8 +76,12 @@ services:
     environment:
       API_URL: http://api:5276
     volumes:
+      # Исходники с хоста (hot-reload работает через bind-mount)
       - ./src/FamilyHub.Web:/app
+      # node_modules — Linux-бинарники в named volume (несовместимы с Windows-хостом)
       - web-node-modules:/app/node_modules
+      # Angular-кэш — отдельный volume чтобы не конфликтовал с хостовым .angular/
+      - web-angular-cache:/app/.angular
     depends_on:
       - api
 
@@ -87,3 +90,4 @@ volumes:
   minio-data:
   seq-data:
   web-node-modules:
+  web-angular-cache:

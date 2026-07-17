@@ -33,7 +33,7 @@ public class TelegramMiniAppAuthenticationHandler(
             return AuthenticateResult.Fail("Telegram initData не прошла валидацию подписи.");
 
         var userId = await userProvisioning.GetOrCreateUserIdAsync(
-            result.TelegramId, result.DisplayName, Context.RequestAborted);
+            result.TelegramId, result.DisplayName, result.Username, Context.RequestAborted);
 
         var claims = new[]
         {

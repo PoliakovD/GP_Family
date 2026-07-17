@@ -1,0 +1,143 @@
+:host {
+  position: fixed;
+  bottom: 72px; // выше tab-bar (60px) + зазор
+  right: 12px;
+  z-index: 9999;
+  pointer-events: none; // не перекрываем клики под панелью
+}
+
+// ─── FAB-кнопка ───────────────────────────────────────────────────────────────
+.dp-fab {
+  pointer-events: all;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: background 0.15s;
+
+  &:hover { background: rgba(0, 0, 0, 0.85); }
+  &--active { background: #1d4ed8; }
+}
+
+// ─── Панель ───────────────────────────────────────────────────────────────────
+.dp-panel {
+  pointer-events: all;
+  position: absolute;
+  bottom: 44px;
+  right: 0;
+  width: min(360px, calc(100vw - 24px));
+  max-height: 48vh;
+  background: rgba(10, 10, 18, 0.94);
+  color: #dde1ec;
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+// ─── Шапка ────────────────────────────────────────────────────────────────────
+.dp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.dp-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #a5b4fc;
+
+  em { font-style: normal; color: #6b7280; font-weight: 400; }
+}
+
+.dp-actions { display: flex; gap: 2px; }
+
+.dp-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+
+  &:hover { background: rgba(255,255,255,0.08); color: #e5e7eb; }
+}
+
+// ─── Настройки модулей ────────────────────────────────────────────────────────
+.dp-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.03);
+}
+
+.dp-check {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #c7d2fe;
+  user-select: none;
+
+  input { cursor: pointer; accent-color: #818cf8; }
+}
+
+// ─── Список записей ───────────────────────────────────────────────────────────
+.dp-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 2px 0;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+}
+
+.dp-hint {
+  display: block;
+  padding: 8px;
+  color: #4b5563;
+  font-style: italic;
+}
+
+.dp-entry {
+  display: flex;
+  gap: 5px;
+  padding: 1.5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  word-break: break-all;
+
+  &.lvl-warn  { color: #fbbf24; }
+  &.lvl-error { color: #f87171; background: rgba(248, 113, 113, 0.06); }
+}
+
+.dp-time { color: #374151; flex-shrink: 0; }
+.dp-mod  { color: #60a5fa; flex-shrink: 0; font-weight: 700; }
+.dp-msg  { flex: 1; color: inherit; }

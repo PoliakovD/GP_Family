@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { DevLoggerService } from './dev-logger.service';
 
 interface TelegramWebApp {
   initData: string;
@@ -19,11 +20,15 @@ const DEV_TG_ID_KEY = 'familyhub:devTgId';
 
 @Injectable({ providedIn: 'root' })
 export class TelegramService {
+  private readonly log = inject(DevLoggerService);
+
   private get webApp(): TelegramWebApp | undefined {
     return window.Telegram?.WebApp;
   }
 
   init(): void {
+    const inside = this.isInsideTelegram();
+    this.log.log('tg', 'info', `init — inside=${inside}, colorScheme=${this.webApp?.colorScheme ?? 'n/a'}`);
     this.webApp?.ready();
     this.webApp?.expand();
   }
@@ -46,6 +51,7 @@ export class TelegramService {
   }
 
   openExternalLink(url: string): void {
+    this.log.log('tg', 'info', `openLink: ${url}`);
     if (this.webApp) {
       this.webApp.openLink(url);
     } else {

@@ -77,7 +77,10 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options) : ITel
         var displayName = string.Join(' ', new[] { user.FirstName, user.LastName }
             .Where(s => !string.IsNullOrWhiteSpace(s)));
 
-        return new TelegramInitDataResult(user.Id, string.IsNullOrWhiteSpace(displayName) ? null : displayName);
+        return new TelegramInitDataResult(
+            user.Id,
+            string.IsNullOrWhiteSpace(displayName) ? null : displayName,
+            string.IsNullOrWhiteSpace(user.Username) ? null : user.Username);
     }
 
     private sealed class TelegramUserDto

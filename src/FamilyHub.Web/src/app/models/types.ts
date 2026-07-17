@@ -18,6 +18,8 @@ export interface FamilySummary {
 
 export interface PendingMember {
   userId: string;
+  displayName: string;
+  username: string | null;
   role: number; // FamilyRole
   joinedAt: string;
 }
@@ -27,6 +29,7 @@ export interface InviteCreated {
   code: string;
   maxUses: number;
   expiresAt: string | null;
+  telegramLink: string | null;
 }
 
 export interface Medication {

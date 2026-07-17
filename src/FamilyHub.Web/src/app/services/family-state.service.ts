@@ -1,10 +1,12 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { ApiService, ApiError } from './api.service';
+import { DevLoggerService } from './dev-logger.service';
 import { MemberStatus, type FamilySummary } from '../models/types';
 
 @Injectable({ providedIn: 'root' })
 export class FamilyStateService {
   private readonly api = inject(ApiService);
+  private readonly log = inject(DevLoggerService);
 
   readonly families = signal<FamilySummary[]>([]);
   readonly activeFamilyId = signal<string | null>(null);
@@ -16,6 +18,7 @@ export class FamilyStateService {
   );
 
   async refresh(): Promise<void> {
+    this.log.log('state', 'info', 'refresh()');
     try {
       const result = await this.api.getFamilies();
       this.families.set(result);
@@ -23,16 +26,21 @@ export class FamilyStateService {
       if (!current || !result.some((f) => f.id === current)) {
         const firstActive = result.find((f) => f.myStatus === MemberStatus.Active);
         this.activeFamilyId.set(firstActive?.id ?? null);
+        this.log.log('state', 'info', `activeFamilyId → ${firstActive?.id ?? 'null'}`);
       }
       this.error.set(null);
+      this.log.log('state', 'info', `families loaded: ${result.length}`);
     } catch (err) {
-      this.error.set(err instanceof ApiError ? err.message : 'Не удалось загрузить семьи.');
+      const msg = err instanceof ApiError ? err.message : 'Не удалось загрузить семьи.';
+      this.error.set(msg);
+      this.log.log('state', 'error', `refresh failed: ${msg}`);
     } finally {
       this.loading.set(false);
     }
   }
 
   setActiveFamily(id: string): void {
+    this.log.log('state', 'info', `setActiveFamily → ${id}`);
     this.activeFamilyId.set(id);
   }
 }

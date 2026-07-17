@@ -21,4 +21,7 @@ public class TelegramOptions
 
     /// <summary>URL Telegram Mini App — для кнопок "Открыть FamilyHub" и menu-button бота.</summary>
     public string MiniAppUrl { get; set; } = string.Empty;
+
+    /// <summary>Username бота без символа '@' (напр. "FamilyHubBot") — для формирования Deep Link инвайтов.</summary>
+    public string BotUsername { get; set; } = string.Empty;
 }

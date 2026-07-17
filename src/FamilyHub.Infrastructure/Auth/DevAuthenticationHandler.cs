@@ -28,7 +28,7 @@ public class DevAuthenticationHandler(
             return AuthenticateResult.Fail("Отсутствует или некорректен заголовок X-Dev-TelegramId.");
 
         var userId = await userProvisioning.GetOrCreateUserIdAsync(
-            telegramId, displayName: null, Context.RequestAborted);
+            telegramId, displayName: null, username: null, Context.RequestAborted);
 
         var claims = new[]
         {

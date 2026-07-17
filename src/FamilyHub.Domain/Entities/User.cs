@@ -10,6 +10,9 @@ public class User
 
     public string DisplayName { get; set; } = string.Empty;
 
+    /// <summary>Telegram @username (без '@'), может отсутствовать у пользователя.</summary>
+    public string? Username { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public List<FamilyMember> Memberships { get; set; } = [];

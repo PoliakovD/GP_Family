@@ -12,4 +12,9 @@ module.exports = {
     secure: false,
     changeOrigin: true,
   },
+  '/bot': {
+    target,
+    secure: false,
+    changeOrigin: true,
+  },
 };

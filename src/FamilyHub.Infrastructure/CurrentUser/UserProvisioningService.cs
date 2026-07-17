@@ -6,21 +6,38 @@ namespace FamilyHub.Infrastructure.CurrentUser;
 
 public class UserProvisioningService(AppDbContext db) : IUserProvisioningService
 {
-    public async Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? displayName, CancellationToken ct = default)
+    public async Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? displayName, string? username = null, CancellationToken ct = default)
     {
-        var existingId = await db.Users.AsNoTracking()
+        var existing = await db.Users
             .Where(u => u.TelegramId == telegramId)
-            .Select(u => u.Id)
             .FirstOrDefaultAsync(ct);
 
-        if (existingId != Guid.Empty)
-            return existingId;
+        if (existing is not null)
+        {
+            // Имя и username в Telegram могут меняться — держим их свежими на каждый логин.
+            var changed = false;
+            if (!string.IsNullOrWhiteSpace(displayName) && existing.DisplayName != displayName)
+            {
+                existing.DisplayName = displayName;
+                changed = true;
+            }
+            if (existing.Username != username)
+            {
+                existing.Username = username;
+                changed = true;
+            }
+            if (changed)
+                await db.SaveChangesAsync(ct);
+
+            return existing.Id;
+        }
 
         var user = new User
         {
             Id = Guid.NewGuid(),
             TelegramId = telegramId,
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? $"User {telegramId}" : displayName,
+            Username = username,
             CreatedAt = DateTime.UtcNow,
         };
 

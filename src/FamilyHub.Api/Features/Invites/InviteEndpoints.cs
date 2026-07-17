@@ -1,5 +1,8 @@
+using FamilyHub.Api.Features.Bot;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.Telegram;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Api.Features.Invites;
 
@@ -10,14 +13,20 @@ public static class InviteEndpoints
         var group = app.MapGroup("/api").RequireAuthorization();
 
         group.MapPost("/families/{familyId:guid}/invites", async (
-            Guid familyId, CreateInviteRequest request, InviteService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Guid familyId, CreateInviteRequest request, InviteService service,
+            ICurrentUser currentUser, IOptions<TelegramOptions> telegramOptions, CancellationToken ct) =>
         {
             var (result, invite) = await service.CreateInviteAsync(currentUser.UserId, familyId, request, ct);
-            return result switch
-            {
-                CreateInviteResult.Forbidden => Results.Forbid(),
-                _ => Results.Created($"/api/invites/{invite!.Id}", new { invite.Id, invite.Code, invite.MaxUses, invite.ExpiresAt }),
-            };
+            if (result == CreateInviteResult.Forbidden)
+                return Results.Forbid();
+
+            var botUsername = telegramOptions.Value.BotUsername;
+            var telegramLink = string.IsNullOrWhiteSpace(botUsername)
+                ? (string?)null
+                : $"https://t.me/{botUsername}?start={TelegramUpdateHandler.InvitePrefix}{invite!.Code}";
+
+            return Results.Created($"/api/invites/{invite!.Id}",
+                new { invite.Id, invite.Code, invite.MaxUses, invite.ExpiresAt, TelegramLink = telegramLink });
         });
 
         group.MapPost("/invites/{code}/redeem", async (
@@ -57,7 +66,7 @@ public static class InviteEndpoints
             return result switch
             {
                 ApproveRejectResult.Forbidden => Results.Forbid(),
-                _ => Results.Ok(pending.Select(m => new { m.UserId, m.Role, m.JoinedAt })),
+                _ => Results.Ok(pending),
             };
         });
 

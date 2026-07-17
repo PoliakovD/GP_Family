@@ -20,8 +20,14 @@ public class TelegramUpdateHandler(
     InviteService invites,
     IOptions<TelegramOptions> options)
 {
+    /// <summary>
+    /// Префикс аргумента /start для инвайтов: t.me/bot?start=invite___&lt;hex-код&gt;.
+    /// Используется и в InviteEndpoints при генерации ссылки — единый источник истины.
+    /// </summary>
+    public const string InvitePrefix = "invite___";
+
     private const string HelpText =
-        "Команды:\n/start — открыть приложение\n/start <код> — принять приглашение в семью\n/help — эта справка";
+        "Команды:\n/start — открыть приложение\n/start <ссылка инвайта> — принять приглашение в семью\n/help — эта справка";
 
     public async Task HandleAsync(Update update, CancellationToken ct)
     {
@@ -53,11 +59,20 @@ public class TelegramUpdateHandler(
             .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var userId = await userProvisioning.GetOrCreateUserIdAsync(
-            from.Id, string.IsNullOrWhiteSpace(displayName) ? null : displayName, ct);
+            from.Id, string.IsNullOrWhiteSpace(displayName) ? null : displayName, from.Username, ct);
 
-        // "/start <код>" — deep-link приглашения (t.me/bot?start=<код>); без аргумента — просто приветствие.
+        // "/start <аргумент>" — deep-link (t.me/bot?start=<аргумент>); без аргумента — просто приветствие.
+        // Новый формат: аргумент начинается с InvitePrefix ("invite___<hex>").
+        // Старый формат (сырой hex-код) поддерживается для обратной совместимости.
         var parts = message.Text!.Split(' ', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var inviteCode = parts.Length > 1 ? parts[1] : null;
+        string? inviteCode = null;
+        if (parts.Length > 1)
+        {
+            var arg = parts[1];
+            inviteCode = arg.StartsWith(InvitePrefix, StringComparison.Ordinal)
+                ? arg[InvitePrefix.Length..]
+                : arg; // обратная совместимость: сырой код без префикса
+        }
 
         if (inviteCode is null)
         {
