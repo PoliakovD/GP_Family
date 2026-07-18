@@ -11,13 +11,14 @@ import {
 } from '../../models/types';
 import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component';
 import { BirthdaysPanelComponent } from '../birthdays-panel/birthdays-panel.component';
+import {DatePipe} from "@angular/common";
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays';
 
 @Component({
   selector: 'app-family-details',
   standalone: true,
-  imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent],
+  imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DatePipe],
   templateUrl: './family-details.component.html',
 })
 export class FamilyDetailsComponent implements OnInit {
@@ -56,7 +57,7 @@ export class FamilyDetailsComponent implements OnInit {
   }
 
   roleLabel(role: number): string {
-    return role === FamilyRole.Admin ? 'вы админ' : 'вы участник';
+    return role === FamilyRole.Admin ? 'админ' : 'участник';
   }
 
   async loadPending(): Promise<void> {
@@ -68,10 +69,12 @@ export class FamilyDetailsComponent implements OnInit {
     }
   }
 
+
   async handleApprove(userId: string): Promise<void> {
     try {
       await this.api.approveMember(this.id, userId);
       await this.loadPending();
+
       await this.state.refresh();
     } catch (err) {
       this.message = err instanceof ApiError ? err.message : 'Ошибка при подтверждении.';

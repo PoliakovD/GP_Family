@@ -1,4 +1,5 @@
 using FamilyHub.Api.Features.Bot;
+using FamilyHub.Api.Features.Families;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Telegram;
@@ -28,6 +29,14 @@ public static class InviteEndpoints
             return Results.Created($"/api/invites/{invite!.Id}",
                 new { invite.Id, invite.Code, invite.MaxUses, invite.ExpiresAt, TelegramLink = telegramLink });
         });
+        
+        group.MapGet("/families/{familyId:guid}/current",
+            async (Guid familyId, FamilyService service, CancellationToken ct) =>
+            {
+                var result = await service.GetFamilyMembersAsync(familyId, ct);
+                return Results.Ok(result);
+            }
+        );
 
         group.MapPost("/invites/{code}/redeem", async (
             string code, InviteService service, ICurrentUser currentUser, CancellationToken ct) =>

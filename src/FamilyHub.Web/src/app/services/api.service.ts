@@ -1,11 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import type {
+import {
   AppNotification,
   Attachment,
   Birthday,
-  BirthdayInput,
+  BirthdayInput, CurrentMember,
   FamilySummary,
   InviteCreated,
   MedicalRecord,
@@ -97,6 +97,7 @@ export class ApiService {
   getFamilies = () => this.get<FamilySummary[]>('/api/families');
   createFamily = (name: string) => this.post<{ id: string }>('/api/families', { name });
   getPendingMembers = (familyId: string) => this.get<PendingMember[]>(`/api/families/${familyId}/pending`);
+  getCurrentMembers = (familyId: string) => this.get<CurrentMember[]>(`/api/families/${familyId}/current`);
   approveMember = (familyId: string, userId: string) =>
     this.post<void>(`/api/families/${familyId}/members/${userId}/approve`);
   rejectMember = (familyId: string, userId: string) =>

@@ -1,84 +1,84 @@
 <div>
-  <div class="d-flex align-items-center gap-2 mb-3">
-    <a class="btn btn-outline-secondary btn-sm" [routerLink]="['/families']">← Назад</a>
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <a class="btn btn-outline-secondary btn-sm" [routerLink]="['/families']">← Назад</a>
 
-    @if (state.loading() && !family) {
-      <span class="muted">Загрузка…</span>
-    } @else if (family) {
-      <div>
-        <strong>{{ family.name }}</strong>
-        <span class="ms-2">
-          <span class="tag">{{ roleLabel(family.myRole) }}</span>
-          <span class="tag">{{ statusLabel(family.myStatus) }}</span>
-        </span>
-      </div>
-    } @else {
-      <span class="muted">Семья не найдена.</span>
-    }
-  </div>
-
-  @if (message) {
-    <div class="alert alert-info py-2 mb-3">{{ message }}</div>
-  }
-
-  @if (family) {
-    <nav class="d-flex gap-2 mb-3">
-      @for (t of subTabs; track t.id) {
-        <button
-          class="btn btn-sm"
-          [class.btn-primary]="activeSubTab === t.id"
-          [class.btn-outline-secondary]="activeSubTab !== t.id"
-          (click)="activeSubTab = t.id"
-        >
-          {{ t.label }}
-        </button>
-      }
-    </nav>
-
-    @if (activeSubTab === 'members') {
-      @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-        <div class="card mb-3">
-          <div class="card-body p-3">
-            <div class="d-flex gap-2 mb-2">
-              <button class="btn btn-outline-secondary btn-sm" (click)="loadPending()">
-                Заявки
-              </button>
-              <button class="btn btn-outline-secondary btn-sm" (click)="handleCreateInvite()">
-                Создать инвайт
-              </button>
+        @if (state.loading() && !family) {
+            <span class="muted">Загрузка…</span>
+        } @else if (family) {
+            <div>
+                <strong>{{ family.name }}</strong>
+                <span class="ms-2">
+                <span class="tag">{{ roleLabel(family.myRole) }}</span>
+                <span class="tag">{{ statusLabel(family.myStatus) }}</span>
+                </span>
             </div>
+        } @else {
+            <span class="muted">Семья не найдена.</span>
+        }
+    </div>
 
-            @if (createdInvite != undefined) {
-              <p class="muted mb-2">
-                Код: <code>{{ createdInvite().code }}</code>
-              </p>
-              @if (createdInvite().telegramLink) {
+    @if (message) {
+        <div class="alert alert-info py-2 mb-3">{{ message }}</div>
+    }
+
+    @if (family) {
+        <nav class="d-flex gap-2 mb-3">
+            @for (t of subTabs; track t.id) {
                 <button
-                  class="btn btn-primary btn-sm mb-2"
-                  (click)="shareInvite(createdInvite().telegramLink!)"
+                        class="btn btn-sm"
+                        [class.btn-primary]="activeSubTab === t.id"
+                        [class.btn-outline-secondary]="activeSubTab !== t.id"
+                        (click)="activeSubTab = t.id"
                 >
-                  Поделиться / Отправить в Telegram
+                    {{ t.label }}
                 </button>
-              } @else {
-                <p class="muted mb-2">
-                  Отправьте боту: <code>/start {{ createdInvite().code }}</code>
-                </p>
-              }
             }
+        </nav>
 
-            @if (pendingMembers !== undefined) {
-              @if (pendingMembers.length === 0) {
-                <p class="muted">Заявок нет.</p>
-              }
-              @for (p of pendingMembers; track p.userId) {
-                <div class="d-flex justify-content-between align-items-center mb-1">
+        @if (activeSubTab === 'members') {
+            @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
+                <div class="card mb-3">
+                    <div class="card-body p-3">
+                        <div class="d-flex gap-2 mb-2">
+                            <button class="btn btn-outline-secondary btn-sm" (click)="loadPending()">
+                                Заявки
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" (click)="handleCreateInvite()">
+                                Создать инвайт
+                            </button>
+                        </div>
+
+                        @if (createdInvite != undefined) {
+                            <p class="muted mb-2">
+                                Код: <code>{{ createdInvite().code }}</code>
+                            </p>
+                            @if (createdInvite().telegramLink) {
+                                <button
+                                        class="btn btn-primary btn-sm mb-2"
+                                        (click)="shareInvite(createdInvite().telegramLink!)"
+                                >
+                                    Поделиться / Отправить в Telegram
+                                </button>
+                            } @else {
+                                <p class="muted mb-2">
+                                    Отправьте боту: <code>/start {{ createdInvite().code }}</code>
+                                </p>
+                            }
+                        }
+
+                        @if (pendingMembers !== undefined) {
+                            @if (pendingMembers.length === 0) {
+                                <p class="muted">Заявок нет.</p>
+                            }
+                            @for (p of pendingMembers; track p.userId) {
+                                <div class="d-flex justify-content-between align-items-center mb-1">
                   <span class="muted">
                     {{ p.displayName }}
-                    @if (p.username) {
-                      <span class="text-muted">&#64;{{ p.username }}</span>
-                    }
+                      @if (p.username) {
+                          <span class="text-muted">&#64;{{ p.username }}</span>
+                      }
                   </span>
-                  <span class="d-flex gap-1">
+                                    <span class="d-flex gap-1">
                     <button class="btn btn-outline-secondary btn-sm" (click)="handleApprove(p.userId)">
                       Принять
                     </button>
@@ -86,20 +86,77 @@
                       Отклонить
                     </button>
                   </span>
+                                </div>
+                            }
+                        }
+                    </div>
                 </div>
-              }
             }
-          </div>
-        </div>
-      }
-    }
 
-    @if (activeSubTab === 'medkits') {
-      <app-medkits-panel [familyId]="id" />
-    }
+            <!--            @for (m of family.currentMembers; track m.id) {-->
+                    <!--                <div>-->
+                    <!--                    <strong>{{ m.username }}</strong>-->
+                    <!--                    <span class="ms-2">-->
+                    <!--                        <span class="tag">{{ roleLabel(m.role) }}</span>-->
+                    <!--                        <span class="tag">{{ m.displayName }}</span>-->
+                    <!--                        <span class="tag">{{ m.joinedAt| date: 'dd/MM/yyyy' }}</span>-->
+                    <!--                        </span>-->
+                    <!--                </div>-->
+            <div class="table-responsive mt-3">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                    <tr>
+                        <th scope="col">Имя (Display Name)</th>
+                        <th scope="col">Telegram Username</th>
+                        <th scope="col">Роль</th>
+                        <th scope="col">Дата вступления</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                        @for (m of family.currentMembers; track m.id) {
+                            <tr>
+                                <!-- Отображаемое имя -->
+                                <td>
+                                    <span class="fw-semibold">{{ m.displayName }}</span>
+                                </td>
 
-    @if (activeSubTab === 'birthdays') {
-      <app-birthdays-panel [familyId]="id" />
+                                <!-- Юзернейм (с проверкой на его наличие) -->
+                                <td>
+                                    @if (m.username) {
+                                        <span class="text-primary">{{ m.username }}</span>
+                                    } @else {
+                                        <span class="text-muted text-opacity-50">—</span>
+                                    }
+                                </td>
+
+                                <!-- Роль (оформленная в виде бейджа/тега) -->
+                                <td>
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1">
+                {{ roleLabel(m.role) }}
+                </span>
+                                </td>
+
+                                <!-- Дата -->
+                                <td class="text-muted">
+                                    {{ m.joinedAt | date: 'dd/MM/yyyy' }}
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!--            }-->
+
+
+        }
+
+        @if (activeSubTab === 'medkits') {
+            <app-medkits-panel [familyId]="id"/>
+        }
+
+        @if (activeSubTab === 'birthdays') {
+            <app-birthdays-panel [familyId]="id"/>
+        }
     }
-  }
 </div>

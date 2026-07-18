@@ -7,6 +7,8 @@ namespace FamilyHub.Api.Features.Families;
 
 public record FamilySummary(Guid Id, string Name, FamilyRole MyRole, MemberStatus MyStatus);
 
+public record CurrentFamilyMember(Guid Id, string DisplayName, string? Username, DateTime JoinedAt, FamilyRole Role);
+
 public class FamilyService(AppDbContext db)
 {
     /// <summary>Создатель семьи становится её первым админом, сразу Active.</summary>
@@ -41,4 +43,13 @@ public class FamilyService(AppDbContext db)
             .Where(m => m.UserId == userId)
             .Select(m => new FamilySummary(m.FamilyId, m.Family.Name, m.Role, m.Status))
             .ToListAsync(ct);
+
+    public async Task<List<CurrentFamilyMember>>  GetFamilyMembersAsync(Guid familyId, CancellationToken ct)
+    {
+        return await db.FamilyMembers.AsNoTracking()
+            .Where(m => m.FamilyId == familyId)
+            .Include(m => m.User)
+            .Select(m=>new CurrentFamilyMember(m.Id,m.User.DisplayName,m.User.Username,m.JoinedAt,m.Role))
+            .ToListAsync(ct);
+    }
 }

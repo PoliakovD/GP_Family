@@ -1,113 +1,124 @@
 // Типы зеркалят DTO бэкенда (System.Text.Json, минимальные API): свойства camelCase,
 // enum'ы без JsonStringEnumConverter сериализуются как целые числа — см. FamilyHub.Domain.Enums.*.
 
-export const FamilyRole = { Member: 0, Admin: 1 } as const;
-export const MemberStatus = { PendingApproval: 0, Active: 1 } as const;
+export const FamilyRole = {Member: 0, Admin: 1} as const;
+export const MemberStatus = {PendingApproval: 0, Active: 1} as const;
 export const NotificationType = {
-  MedicationExpiringSoon: 0,
-  MedicationExpired: 1,
-  BirthdayUpcoming: 2,
+    MedicationExpiringSoon: 0,
+    MedicationExpired: 1,
+    BirthdayUpcoming: 2,
 } as const;
 
 export interface FamilySummary {
-  id: string;
-  name: string;
-  myRole: number; // FamilyRole admin or member
-  myStatus: number; // MemberStatus // active or pending to be active
+    id: string;
+    name: string;
+    myRole: number; // FamilyRole admin or member
+    myStatus: number; // MemberStatus // active or pending to be active
+    currentMembers: CurrentMember[] | null;
 }
 
 export interface PendingMember {
-  userId: string;
-  displayName: string;
-  username: string | null;
-  role: number; // FamilyRole
-  joinedAt: string;
+    userId: string;
+    displayName: string;
+    username: string | null;
+    role: number; // FamilyRole
+    joinedAt: string;
 }
 
+
+export interface CurrentMember {
+    id: string;
+    displayName: string;
+    username: string | null;
+    role: number; // FamilyRole
+    joinedAt: string;
+}
+
+
 export interface InviteCreated {
-  id: string;
-  code: string;
-  maxUses: number;
-  expiresAt: string | null;
-  telegramLink: string | null;
+    id: string;
+    code: string;
+    maxUses: number;
+    expiresAt: string | null;
+    telegramLink: string | null;
 }
 
 export interface Medkit {
-  id: string;
-  familyId: string;
-  name: string;
-  createdByUserId: string;
-  createdAt: string;
+    id: string;
+    familyId: string;
+    name: string;
+    createdByUserId: string;
+    createdAt: string;
 }
 
 export interface MedkitInput {
-  name: string;
+    name: string;
 }
 
 export interface Medication {
-  id: string;
-  medkitId: string;
-  familyId: string;
-  name: string;
-  instructions: string | null;
-  expiryDate: string | null; // DateOnly "yyyy-MM-dd"
-  quantity: number;
-  createdByUserId: string;
-  createdAt: string;
+    id: string;
+    medkitId: string;
+    familyId: string;
+    name: string;
+    instructions: string | null;
+    expiryDate: string | null; // DateOnly "yyyy-MM-dd"
+    quantity: number;
+    createdByUserId: string;
+    createdAt: string;
 }
 
 export interface MedicationInput {
-  name: string;
-  instructions: string | null;
-  expiryDate: string | null;
-  quantity: number;
+    name: string;
+    instructions: string | null;
+    expiryDate: string | null;
+    quantity: number;
 }
 
 export interface Birthday {
-  id: string;
-  familyId: string;
-  personName: string;
-  date: string; // DateOnly "yyyy-MM-dd"
+    id: string;
+    familyId: string;
+    personName: string;
+    date: string; // DateOnly "yyyy-MM-dd"
 }
 
 export interface BirthdayInput {
-  personName: string;
-  date: string;
+    personName: string;
+    date: string;
 }
 
 export interface MedicalRecord {
-  id: string;
-  ownerUserId: string;
-  personName: string;
-  recordDate: string;
-  doctor: string | null;
-  description: string | null;
-  createdAt: string;
+    id: string;
+    ownerUserId: string;
+    personName: string;
+    recordDate: string;
+    doctor: string | null;
+    description: string | null;
+    createdAt: string;
 }
 
 export interface MedicalRecordInput {
-  personName: string;
-  recordDate: string;
-  doctor: string | null;
-  description: string | null;
-  hideFromFamilyIds: string[] | null;
+    personName: string;
+    recordDate: string;
+    doctor: string | null;
+    description: string | null;
+    hideFromFamilyIds: string[] | null;
 }
 
 export interface Attachment {
-  id: string;
-  fileName: string;
-  contentType: string;
-  sizeBytes: number;
-  uploadedAt: string;
+    id: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    uploadedAt: string;
 }
 
 export interface AppNotification {
-  id: string;
-  type: number; // NotificationType
-  title: string;
-  body: string;
-  relatedEntityId: string;
-  createdAt: string;
-  isRead: boolean;
-  readAt: string | null;
+    id: string;
+    type: number; // NotificationType
+    title: string;
+    body: string;
+    relatedEntityId: string;
+    createdAt: string;
+    isRead: boolean;
+    readAt: string | null;
 }
