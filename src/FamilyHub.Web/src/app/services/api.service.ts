@@ -12,6 +12,7 @@ import {
   MedicalRecordInput,
   Medication,
   MedicationInput,
+  MedicationOcrResponse,
   Medkit,
   MedkitInput,
   PendingMember, RemoveMemberResult,
@@ -160,6 +161,23 @@ export class ApiService {
     this.put<void>(`/api/medications/${id}`, input);
 
   deleteMedication = (id: string) => this.del<void>(`/api/medications/${id}`);
+
+  async ocrMedicationPhotos(files: Blob[]): Promise<MedicationOcrResponse> {
+    this.log.log('api', 'info', `POST /api/medications/ocr (${files.length} фото)`);
+    const formData = new FormData();
+    files.forEach((file, i) => formData.append('files', file, `photo-${i}.jpg`));
+    try {
+      const result = await firstValueFrom(
+        this.http.post<MedicationOcrResponse>('/api/medications/ocr', formData),
+      );
+      this.log.log('api', 'info', `POST /api/medications/ocr ✓ success=${result.success}`);
+      return result;
+    } catch (e) {
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `POST /api/medications/ocr ✗ ${err.status}: ${err.message}`);
+      throw err;
+    }
+  }
 
   // Дни рождения
   getBirthdays = (familyId: string) => this.get<Birthday[]>(`/api/families/${familyId}/birthdays`);

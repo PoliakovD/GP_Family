@@ -3,6 +3,7 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Modules.Medical;
@@ -13,7 +14,8 @@ public class MedicationServiceTests : SqliteTestBase
 
     public MedicationServiceTests()
     {
-        _sut = new MedicationService(Db, new FamilyAccessService(Db));
+        _sut = new MedicationService(
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<MedicationService>.Instance);
     }
 
     [Fact]
@@ -78,7 +80,7 @@ public class MedicationServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         var (result, item) = await _sut.CreateAsync(
-            medkit.Id, admin.Id, new CreateMedicationRequest("Aspirin", null, null, 10));
+            medkit.Id, admin.Id, new CreateMedicationRequest("Aspirin", null, new Dictionary<string, string> { ["quantity"] = "10" }));
 
         result.Should().Be(MedicationAccessResult.Success);
         item!.Name.Should().Be("Aspirin");
@@ -90,7 +92,7 @@ public class MedicationServiceTests : SqliteTestBase
     public async Task CreateAsync_UnknownMedkitId_NotFound()
     {
         var (result, item) = await _sut.CreateAsync(
-            Guid.NewGuid(), Guid.NewGuid(), new CreateMedicationRequest("Aspirin", null, null, 10));
+            Guid.NewGuid(), Guid.NewGuid(), new CreateMedicationRequest("Aspirin", null, null));
 
         result.Should().Be(MedicationAccessResult.NotFound);
         item.Should().BeNull();
@@ -109,7 +111,7 @@ public class MedicationServiceTests : SqliteTestBase
         var (familyB, adminB) = Db.SeedFamilyWithAdmin("B");
 
         var result = await _sut.UpdateAsync(
-            medication.Id, adminB.Id, new UpdateMedicationRequest("Renamed", null, null, 5));
+            medication.Id, adminB.Id, new UpdateMedicationRequest("Renamed", null, null));
 
         result.Should().Be(MedicationAccessResult.Forbidden);
     }
@@ -117,7 +119,7 @@ public class MedicationServiceTests : SqliteTestBase
     [Fact]
     public async Task UpdateAsync_UnknownId_NotFound()
     {
-        var result = await _sut.UpdateAsync(Guid.NewGuid(), Guid.NewGuid(), new UpdateMedicationRequest("X", null, null, 1));
+        var result = await _sut.UpdateAsync(Guid.NewGuid(), Guid.NewGuid(), new UpdateMedicationRequest("X", null, null));
 
         result.Should().Be(MedicationAccessResult.NotFound);
     }

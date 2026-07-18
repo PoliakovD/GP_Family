@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
@@ -33,10 +34,13 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access, ILo
             return (MedicationAccessResult.Forbidden, []);
         }
 
-        var items = await db.Medications.AsNoTracking()
+        var entities = await db.Medications.AsNoTracking()
             .Where(m => m.MedkitId == medkitId)
-            .Select(m => ToDto(m))
             .ToListAsync(ct);
+
+        // ToDto десериализует DataJson — это не транслируется в SQL, поэтому маппим в память
+        // уже после загрузки (список медикаментов аптечки — не тот объём, где это критично).
+        var items = entities.Select(ToDto).ToList();
 
         logger.LogDebug("Загружено {Count} медикаментов аптечки {MedkitId}", items.Count, medkitId);
         return (MedicationAccessResult.Success, items);
@@ -65,9 +69,8 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access, ILo
             MedkitId = medkitId,
             FamilyId = medkit.FamilyId,
             Name = request.Name,
-            Instructions = request.Instructions,
             ExpiryDate = request.ExpiryDate,
-            Quantity = request.Quantity,
+            DataJson = SerializeData(request.Data),
             CreatedByUserId = userId,
             CreatedAt = DateTime.UtcNow,
         };
@@ -100,9 +103,8 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access, ILo
         }
 
         medication.Name = request.Name;
-        medication.Instructions = request.Instructions;
         medication.ExpiryDate = request.ExpiryDate;
-        medication.Quantity = request.Quantity;
+        medication.DataJson = SerializeData(request.Data);
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Медикамент {MedicationId} обновлён пользователем {UserId}", medicationId, userId);
@@ -133,5 +135,13 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access, ILo
     }
 
     private static MedicationDto ToDto(Medication m) =>
-        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.Instructions, m.ExpiryDate, m.Quantity, m.CreatedByUserId, m.CreatedAt);
+        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.ExpiryDate, DeserializeData(m.DataJson), m.CreatedByUserId, m.CreatedAt);
+
+    private static string? SerializeData(Dictionary<string, string>? data) =>
+        data is null || data.Count == 0 ? null : JsonSerializer.Serialize(data);
+
+    private static Dictionary<string, string> DeserializeData(string? json) =>
+        string.IsNullOrWhiteSpace(json)
+            ? []
+            : JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? [];
 }

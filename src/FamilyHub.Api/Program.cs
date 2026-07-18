@@ -6,6 +6,7 @@ using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
@@ -52,6 +53,7 @@ builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(Tel
 builder.Services.Configure<LocalFileStorageOptions>(builder.Configuration.GetSection(LocalFileStorageOptions.SectionName));
 builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
+builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
 
 // --- Persistence ---
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -154,6 +156,14 @@ else
 {
     builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
 }
+
+// --- LM Studio: локальная vision-LLM для оцифровки медикаментов по фото (не хранит фото) ---
+builder.Services.AddHttpClient<ILmStudioVisionClient, LmStudioVisionClient>((sp, client) =>
+{
+    var lmStudioOptions = sp.GetRequiredService<IOptions<LmStudioOptions>>().Value;
+    client.BaseAddress = new Uri(lmStudioOptions.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(lmStudioOptions.TimeoutSeconds);
+});
 
 // --- Medical-модуль ---
 builder.Services.AddMedicalModule();

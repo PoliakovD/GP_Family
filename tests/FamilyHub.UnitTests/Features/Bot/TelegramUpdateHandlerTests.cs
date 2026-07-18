@@ -6,6 +6,7 @@ using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Telegram.Bot;
@@ -23,9 +24,9 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
     public TelegramUpdateHandlerTests()
     {
         _bot.SendRequest(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>()).Returns(new Message());
-        var access = new FamilyAccessService(Db);
-        IUserProvisioningService provisioning = new UserProvisioningService(Db);
-        var invites = new InviteService(Db, access);
+        var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
+        IUserProvisioningService provisioning = new UserProvisioningService(Db, NullLogger<UserProvisioningService>.Instance);
+        var invites = new InviteService(Db, access, NullLogger<InviteService>.Instance);
         _sut = new TelegramUpdateHandler(_bot, provisioning, invites, Options.Create(new TelegramOptions()));
     }
 

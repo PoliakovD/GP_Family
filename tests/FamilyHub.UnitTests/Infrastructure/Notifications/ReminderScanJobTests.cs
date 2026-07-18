@@ -2,6 +2,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
@@ -13,7 +14,7 @@ public class ReminderScanJobTests : SqliteTestBase
     private readonly INotificationSender _sender = Substitute.For<INotificationSender>();
 
     private ReminderScanJob CreateSut(NotificationOptions? options = null) =>
-        new(Db, _sender, Options.Create(options ?? new NotificationOptions()));
+        new(Db, _sender, Options.Create(options ?? new NotificationOptions()), NullLogger<ReminderScanJob>.Instance);
 
     [Fact]
     public async Task RunAsync_MedicationExpiringSoon_NotifiesOnlyActiveMembers()

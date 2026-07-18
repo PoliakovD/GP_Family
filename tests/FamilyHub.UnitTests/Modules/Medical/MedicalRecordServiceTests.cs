@@ -4,6 +4,7 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Modules.Medical;
@@ -14,7 +15,8 @@ public class MedicalRecordServiceTests : SqliteTestBase
 
     public MedicalRecordServiceTests()
     {
-        _sut = new MedicalRecordService(Db, new FamilyAccessService(Db));
+        _sut = new MedicalRecordService(
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<MedicalRecordService>.Instance);
     }
 
     [Fact]

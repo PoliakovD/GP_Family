@@ -68,7 +68,6 @@ public static class TestData
         FamilyId = familyId,
         Name = "Test Medication",
         ExpiryDate = expiryDate,
-        Quantity = 1,
         CreatedByUserId = createdByUserId,
         CreatedAt = DateTime.UtcNow,
     };

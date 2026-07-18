@@ -15,12 +15,17 @@ public class Medication : IFamilyOwned
 
     public string Name { get; set; } = string.Empty;
 
-    public string? Instructions { get; set; }
-
     /// <summary>Для оповещений о сроке годности (этап 3).</summary>
     public DateOnly? ExpiryDate { get; set; }
 
-    public int Quantity { get; set; }
+    /// <summary>
+    /// Всё остальное про медикамент — единым JSON (jsonb): инструкция, количество,
+    /// производитель, дозировка, действующее вещество, и любые доп. поля, найденные при
+    /// оцифровке по фото. Только Name/ExpiryDate вынесены отдельными колонками — по ним
+    /// джоба оповещений строит SQL-фильтр (см. ReminderScanJob.ScanMedicationsAsync).
+    /// Сериализуется/десериализуется на границе в MedicationService, здесь — сырой JSON.
+    /// </summary>
+    public string? DataJson { get; set; }
 
     public Guid CreatedByUserId { get; set; }
 

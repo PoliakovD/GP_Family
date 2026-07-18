@@ -7,6 +7,7 @@ using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
@@ -19,8 +20,9 @@ public class AttachmentServiceTests : SqliteTestBase
 
     public AttachmentServiceTests()
     {
-        var access = new FamilyAccessService(Db);
-        _sut = new AttachmentService(Db, _storage, new MedicalRecordService(Db, access), access);
+        var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
+        var medicalRecords = new MedicalRecordService(Db, access, NullLogger<MedicalRecordService>.Instance);
+        _sut = new AttachmentService(Db, _storage, medicalRecords, access, NullLogger<AttachmentService>.Instance);
     }
 
     private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("scan-bytes"));

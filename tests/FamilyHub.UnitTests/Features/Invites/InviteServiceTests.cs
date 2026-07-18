@@ -3,6 +3,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Features.Invites;
@@ -13,7 +14,8 @@ public class InviteServiceTests : SqliteTestBase
 
     public InviteServiceTests()
     {
-        _sut = new InviteService(Db, new FamilyAccessService(Db));
+        _sut = new InviteService(
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<InviteService>.Instance);
     }
 
     [Fact]

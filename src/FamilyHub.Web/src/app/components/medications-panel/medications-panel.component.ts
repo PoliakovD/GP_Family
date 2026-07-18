@@ -2,6 +2,16 @@ import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication } from '../../models/types';
+import { ToastService } from '../../shared/toast/toast.service';
+import { compressImage } from '../../shared/util/image-compression';
+
+const MAX_PHOTOS = 5;
+const KNOWN_KEYS = ['instructions', 'quantity'];
+
+interface DataRow {
+  key: string;
+  value: string;
+}
 
 @Component({
   selector: 'app-medications-panel',
@@ -13,11 +23,17 @@ export class MedicationsPanelComponent implements OnInit {
   readonly medkitId = input.required<string>();
 
   private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
 
   items: Medication[] = [];
-  form = { name: '', instructions: '', expiryDate: '', quantity: 1 };
+  form = { name: '', expiryDate: '', instructions: '', quantity: '1' };
+  extraRows: DataRow[] = [];
   editingId: string | null = null;
   error: string | null = null;
+
+  // Фото — только для распознавания, никуда не сохраняются и не загружаются как вложения.
+  photos: { file: File; previewUrl: string }[] = [];
+  recognizing = false;
 
   // undefined — ещё ни разу не загружали.
   private loadedMedkitId: string | undefined = undefined;
@@ -51,14 +67,116 @@ export class MedicationsPanelComponent implements OnInit {
     }
   }
 
+  dataEntries(item: Medication): DataRow[] {
+    return Object.entries(item.data ?? {})
+      .filter(([key]) => !KNOWN_KEYS.includes(key))
+      .map(([key, value]) => ({ key, value }));
+  }
+
+  instructionsOf(item: Medication): string | null {
+    return item.data?.['instructions'] || null;
+  }
+
+  quantityOf(item: Medication): string | null {
+    return item.data?.['quantity'] || null;
+  }
+
+  // --- Фото и распознавание ---
+
+  onPhotosSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = ''; // позволяет выбрать те же файлы повторно
+
+    if (files.length === 0) return;
+
+    const room = MAX_PHOTOS - this.photos.length;
+    if (room <= 0) {
+      this.toast.error(`Можно прикрепить не более ${MAX_PHOTOS} фото.`);
+      return;
+    }
+
+    const accepted = files.slice(0, room);
+    if (files.length > accepted.length) {
+      this.toast.error(`Можно прикрепить не более ${MAX_PHOTOS} фото — лишние не добавлены.`);
+    }
+
+    for (const file of accepted) {
+      this.photos.push({ file, previewUrl: URL.createObjectURL(file) });
+    }
+  }
+
+  removePhoto(index: number): void {
+    const [removed] = this.photos.splice(index, 1);
+    if (removed) URL.revokeObjectURL(removed.previewUrl);
+  }
+
+  async handleRecognize(): Promise<void> {
+    if (this.photos.length === 0) return;
+
+    this.recognizing = true;
+    try {
+      const compressed = await Promise.all(this.photos.map((p) => compressImage(p.file)));
+      const response = await this.api.ocrMedicationPhotos(compressed);
+
+      if (!response.success) {
+        this.toast.error(response.error ?? 'Не удалось распознать препарат по фото — заполните поля вручную.');
+        return;
+      }
+
+      if (response.name) this.form.name = response.name;
+      if (response.expiryDate) {
+        const iso = parseDdMmYyyyToIso(response.expiryDate);
+        if (iso) this.form.expiryDate = iso;
+      }
+      if (response.data) this.mergeExtraRows(response.data);
+
+      this.toast.success('Данные распознаны — проверьте перед сохранением.');
+    } catch (err) {
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось распознать препарат по фото.');
+    } finally {
+      this.recognizing = false;
+    }
+  }
+
+  private mergeExtraRows(data: Record<string, string>): void {
+    for (const [key, value] of Object.entries(data)) {
+      if (!value) continue;
+      const existing = this.extraRows.find((r) => r.key === key);
+      if (existing) {
+        existing.value = value;
+      } else {
+        this.extraRows.push({ key, value });
+      }
+    }
+  }
+
+  addExtraRow(): void {
+    this.extraRows.push({ key: '', value: '' });
+  }
+
+  removeExtraRow(index: number): void {
+    this.extraRows.splice(index, 1);
+  }
+
+  // --- CRUD ---
+
   async handleSubmit(): Promise<void> {
     if (!this.form.name.trim()) return;
+
+    const data: Record<string, string> = {};
+    if (this.form.instructions.trim()) data['instructions'] = this.form.instructions.trim();
+    if (this.form.quantity.trim()) data['quantity'] = this.form.quantity.trim();
+    for (const row of this.extraRows) {
+      if (row.key.trim()) data[row.key.trim()] = row.value.trim();
+    }
+
     const payload = {
       name: this.form.name.trim(),
-      instructions: this.form.instructions.trim() || null,
       expiryDate: this.form.expiryDate || null,
-      quantity: Number(this.form.quantity) || 0,
+      data,
     };
+
     try {
       if (this.editingId) {
         await this.api.updateMedication(this.editingId, payload);
@@ -76,10 +194,12 @@ export class MedicationsPanelComponent implements OnInit {
     this.editingId = item.id;
     this.form = {
       name: item.name,
-      instructions: item.instructions ?? '',
       expiryDate: item.expiryDate ?? '',
-      quantity: item.quantity,
+      instructions: item.data?.['instructions'] ?? '',
+      quantity: item.data?.['quantity'] ?? '1',
     };
+    this.extraRows = this.dataEntries(item);
+    this.clearPhotos();
   }
 
   async handleDelete(id: string): Promise<void> {
@@ -92,7 +212,22 @@ export class MedicationsPanelComponent implements OnInit {
   }
 
   resetForm(): void {
-    this.form = { name: '', instructions: '', expiryDate: '', quantity: 1 };
+    this.form = { name: '', expiryDate: '', instructions: '', quantity: '1' };
+    this.extraRows = [];
     this.editingId = null;
+    this.clearPhotos();
   }
+
+  private clearPhotos(): void {
+    this.photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    this.photos = [];
+  }
+}
+
+/** "dd/MM/yyyy" (как просим модель отдавать) -> "yyyy-MM-dd" для <input type="date">. null, если не распарсилось. */
+function parseDdMmYyyyToIso(value: string): string | null {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (!match) return null;
+  const [, day, month, year] = match;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }

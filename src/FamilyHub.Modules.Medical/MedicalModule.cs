@@ -2,6 +2,7 @@ using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
+using FamilyHub.Modules.Medical.Ocr;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FamilyHub.Modules.Medical;
@@ -18,6 +19,7 @@ public static class MedicalModule
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
+        services.AddScoped<MedicationOcrService>();
         return services;
     }
 
@@ -27,5 +29,6 @@ public static class MedicalModule
         app.MapMedicationEndpoints();
         app.MapMedicalRecordEndpoints();
         app.MapAttachmentEndpoints();
+        app.MapMedicationOcrEndpoints();
     }
 }

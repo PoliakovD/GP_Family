@@ -30,7 +30,8 @@ public class NotificationsApiTests(FamilyHubWebFactory factory) : IntegrationTes
         var admin = ClientAs(FreshTelegramId());
         var familyId = await CreateFamilyAsync(admin);
         await admin.PostAsJsonAsync($"/api/families/{familyId}/medications",
-            new CreateMedicationRequest("Скоро истекающее", null, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)), 5));
+            new CreateMedicationRequest("Скоро истекающее", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+                new Dictionary<string, string> { ["quantity"] = "5" }));
 
         await TriggerReminderScanAsync(admin);
 

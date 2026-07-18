@@ -1,7 +1,9 @@
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Features.Families;
@@ -12,7 +14,8 @@ public class FamilyServiceTests : SqliteTestBase
 
     public FamilyServiceTests()
     {
-        _sut = new FamilyService(Db);
+        _sut = new FamilyService(
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<FamilyService>.Instance);
     }
 
     [Fact]

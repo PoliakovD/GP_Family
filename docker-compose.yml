@@ -57,6 +57,9 @@ services:
       Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
       FileStorage__Provider: "Minio"
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
+      # api крутится в контейнере, LM Studio — на хосте разработчика; host.docker.internal
+      # резолвится в хост через Docker Desktop.
+      LmStudio__BaseUrl: "http://host.docker.internal:1234"
     depends_on:
       postgres:
         condition: service_healthy

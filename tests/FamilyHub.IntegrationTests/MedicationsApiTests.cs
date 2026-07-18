@@ -31,7 +31,8 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var medkitId = await CreateMedkitAsync(admin, familyId);
 
         var createResponse = await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
-            new CreateMedicationRequest("Аспирин", "По 1 таблетке", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(60)), 20));
+            new CreateMedicationRequest("Аспирин", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(60)),
+                new Dictionary<string, string> { ["instructions"] = "По 1 таблетке", ["quantity"] = "20" }));
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await createResponse.Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
 
@@ -70,22 +71,23 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var familyId = await CreateFamilyAsync(admin);
         var medkitId = await CreateMedkitAsync(admin, familyId);
         var created = await (await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
-            new CreateMedicationRequest("Йод", null, null, 1))).Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
+            new CreateMedicationRequest("Йод", null, new Dictionary<string, string> { ["quantity"] = "1" })))
+            .Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
         var outsider = ClientAs(FreshTelegramId());
 
         var forbiddenUpdate = await outsider.PutAsJsonAsync($"/api/medications/{created!.Id}",
-            new UpdateMedicationRequest("Хакнуто", null, null, 1));
+            new UpdateMedicationRequest("Хакнуто", null, new Dictionary<string, string> { ["quantity"] = "1" }));
         forbiddenUpdate.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
         var forbiddenDelete = await outsider.DeleteAsync($"/api/medications/{created.Id}");
         forbiddenDelete.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
         var notFoundUpdate = await admin.PutAsJsonAsync($"/api/medications/{Guid.NewGuid()}",
-            new UpdateMedicationRequest("X", null, null, 1));
+            new UpdateMedicationRequest("X", null, new Dictionary<string, string> { ["quantity"] = "1" }));
         notFoundUpdate.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         var okUpdate = await admin.PutAsJsonAsync($"/api/medications/{created.Id}",
-            new UpdateMedicationRequest("Йод (обновлено)", null, null, 2));
+            new UpdateMedicationRequest("Йод (обновлено)", null, new Dictionary<string, string> { ["quantity"] = "2" }));
         okUpdate.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var okDelete = await admin.DeleteAsync($"/api/medications/{created.Id}");
@@ -101,9 +103,9 @@ public class MedicationsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var medkitB = await CreateMedkitAsync(admin, familyId);
 
         await admin.PostAsJsonAsync($"/api/medkits/{medkitA}/medications",
-            new CreateMedicationRequest("Аспирин", null, null, 5));
+            new CreateMedicationRequest("Аспирин", null, new Dictionary<string, string> { ["quantity"] = "5" }));
         await admin.PostAsJsonAsync($"/api/medkits/{medkitB}/medications",
-            new CreateMedicationRequest("Йод", null, null, 1));
+            new CreateMedicationRequest("Йод", null, new Dictionary<string, string> { ["quantity"] = "1" }));
 
         var listA = await (await admin.GetAsync($"/api/medkits/{medkitA}/medications"))
             .Content.ReadFromJsonAsync<List<MedicationDto>>(JsonOpts);

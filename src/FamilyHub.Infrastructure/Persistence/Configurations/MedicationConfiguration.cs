@@ -11,6 +11,7 @@ public class MedicationConfiguration : IEntityTypeConfiguration<Medication>
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.Name).HasMaxLength(300).IsRequired();
+        builder.Property(m => m.DataJson).HasColumnType("jsonb");
 
         builder.HasIndex(m => m.FamilyId);
         builder.HasIndex(m => m.MedkitId);

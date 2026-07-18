@@ -68,18 +68,28 @@ export interface Medication {
     medkitId: string;
     familyId: string;
     name: string;
-    instructions: string | null;
     expiryDate: string | null; // DateOnly "yyyy-MM-dd"
-    quantity: number;
+    // Всё остальное про медикамент — единым JSON: instructions, quantity (известные ключи,
+    // под них в форме отдельные привычные инпуты) + что найдёт оцифровка по фото (manufacturer,
+    // type, dose, mainActingAgent, любые доп. находки).
+    data: Record<string, string>;
     createdByUserId: string;
     createdAt: string;
 }
 
 export interface MedicationInput {
     name: string;
-    instructions: string | null;
     expiryDate: string | null;
-    quantity: number;
+    data: Record<string, string>;
+}
+
+/** Ответ POST /api/medications/ocr — результат оцифровки медикамента по фото локальной LLM. */
+export interface MedicationOcrResponse {
+    success: boolean;
+    name: string | null;
+    expiryDate: string | null; // dd/MM/yyyy, как вернула модель — конвертируется на фронте
+    data: Record<string, string> | null;
+    error: string | null;
 }
 
 export interface Birthday {

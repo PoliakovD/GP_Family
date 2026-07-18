@@ -6,6 +6,48 @@
   <div class="card mb-3">
     <div class="card-body p-3">
       <div class="d-flex flex-column gap-2">
+        <label class="form-label fw-semibold mb-0">Фото упаковки/этикетки (до 5) — для распознавания</label>
+
+        @if (photos.length > 0) {
+          <div class="d-flex gap-2 flex-wrap">
+            @for (photo of photos; track photo.previewUrl; let i = $index) {
+              <div class="position-relative">
+                <img [src]="photo.previewUrl" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px" />
+                <button
+                  type="button"
+                  class="btn btn-sm btn-danger position-absolute top-0 end-0 p-0"
+                  style="width:20px;height:20px;line-height:1;border-radius:50%;transform:translate(40%,-40%)"
+                  (click)="removePhoto(i)"
+                >×</button>
+              </div>
+            }
+          </div>
+        }
+
+        <div class="d-flex gap-2">
+          <input
+            class="form-control form-control-sm"
+            type="file"
+            accept="image/*"
+            multiple
+            [disabled]="photos.length >= 5"
+            (change)="onPhotosSelected($event)"
+          />
+          <button
+            class="btn btn-outline-primary btn-sm text-nowrap"
+            [disabled]="photos.length === 0 || recognizing"
+            (click)="handleRecognize()"
+          >
+            {{ recognizing ? 'Распознаём…' : 'Распознать по фото' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body p-3">
+      <div class="d-flex flex-column gap-2">
         <input
           class="form-control form-control-sm"
           [(ngModel)]="form.name"
@@ -13,22 +55,38 @@
         />
         <input
           class="form-control form-control-sm"
-          [(ngModel)]="form.instructions"
-          placeholder="Инструкция (необязательно)"
-        />
-        <input
-          class="form-control form-control-sm"
           type="date"
           [(ngModel)]="form.expiryDate"
         />
+        <textarea
+          class="form-control form-control-sm"
+          [(ngModel)]="form.instructions"
+          placeholder="Инструкция (необязательно)"
+          rows="2"
+        ></textarea>
         <input
           class="form-control form-control-sm"
-          type="number"
-          min="0"
+          type="text"
+          inputmode="numeric"
           [(ngModel)]="form.quantity"
           placeholder="Количество"
         />
-        <div class="d-flex gap-2">
+
+        @if (extraRows.length > 0) {
+          <label class="form-label fw-semibold mb-0 mt-1">Дополнительные поля</label>
+          @for (row of extraRows; track $index; let i = $index) {
+            <div class="d-flex gap-2">
+              <input class="form-control form-control-sm" [(ngModel)]="row.key" placeholder="Поле" />
+              <input class="form-control form-control-sm" [(ngModel)]="row.value" placeholder="Значение" />
+              <button class="btn btn-outline-danger btn-sm" (click)="removeExtraRow(i)">✕</button>
+            </div>
+          }
+        }
+        <button class="btn btn-outline-secondary btn-sm align-self-start" (click)="addExtraRow()">
+          + Доп. поле
+        </button>
+
+        <div class="d-flex gap-2 mt-1">
           <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
             {{ editingId ? 'Сохранить' : 'Добавить' }}
           </button>
@@ -45,13 +103,22 @@
       <div class="card-body p-3">
         <div class="d-flex justify-content-between align-items-center mb-1">
           <strong>{{ item.name }}</strong>
-          <span class="muted">кол-во: {{ item.quantity }}</span>
+          @if (quantityOf(item)) {
+            <span class="muted">кол-во: {{ quantityOf(item) }}</span>
+          }
         </div>
-        @if (item.instructions) {
-          <p class="muted mb-1">{{ item.instructions }}</p>
+        @if (instructionsOf(item)) {
+          <p class="muted mb-1">{{ instructionsOf(item) }}</p>
         }
         @if (item.expiryDate) {
           <p class="muted mb-2">Срок годности: {{ item.expiryDate }}</p>
+        }
+        @if (dataEntries(item).length > 0) {
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            @for (row of dataEntries(item); track row.key) {
+              <span class="tag">{{ row.key }}: {{ row.value }}</span>
+            }
+          </div>
         }
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
