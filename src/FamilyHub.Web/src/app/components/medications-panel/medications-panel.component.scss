@@ -159,6 +159,37 @@
   }
 }
 
+// Доп. поля медикамента (см. dataEntries()) — компактная табличка ключ-значение вместо тегов,
+// т.к. значения (дозировка, состав и т.п.) бывают длиннее, чем помещается в тег.
+.data-table-wrap {
+  border: 1px solid rgba(127, 127, 127, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  tr + tr {
+    border-top: 1px solid rgba(127, 127, 127, 0.15);
+  }
+}
+
+.data-table-key,
+.data-table-value {
+  padding: 4px 8px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.data-table-key {
+  color: var(--tg-theme-hint-color, #888);
+  font-weight: 600;
+  width: 40%;
+}
+
 // Пояснение к цветовой индикации сроков годности — использует те же цвета, что и .medication-card.
 .expiry-legend {
   border-top: 1px solid rgba(127, 127, 127, 0.2);

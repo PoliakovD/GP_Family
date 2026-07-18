@@ -161,10 +161,17 @@
             <p class="muted mb-2">Срок годности не указан</p>
           }
           @if (dataEntries(item).length > 0) {
-            <div class="d-flex flex-wrap gap-1 mb-2">
-              @for (row of dataEntries(item); track row.key) {
-                <span class="tag">{{ row.key }}: {{ row.value }}</span>
-              }
+            <div class="data-table-wrap mb-2">
+              <table class="data-table">
+                <tbody>
+                  @for (row of dataEntries(item); track row.key) {
+                    <tr>
+                      <td class="data-table-key">{{ row.key }}</td>
+                      <td class="data-table-value">{{ row.value }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           }
           <div class="d-flex gap-2">
