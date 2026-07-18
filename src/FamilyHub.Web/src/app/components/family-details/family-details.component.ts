@@ -24,6 +24,7 @@ type FamilySubTab = 'members' | 'medkits' | 'birthdays';
     standalone: true,
     imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DatePipe, ModalComponent],
     templateUrl: './family-details.component.html',
+    styleUrl: './family-details.component.scss',
 })
 export class FamilyDetailsComponent implements OnInit {
     @Input() id!: string;

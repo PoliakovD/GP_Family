@@ -66,3 +66,147 @@
     font-weight: 600;
   }
 }
+
+// Цветовая индикация по сроку годности (см. MedicationsPanelComponent.expiryClass):
+// ≤1 мес — красный, 2-4 мес — жёлтый, дальше — зелёный, без даты — фиолетовый.
+.medication-card {
+  border-left: 4px solid transparent;
+
+  &.expiry-danger {
+    border-left-color: #e03131;
+    background: rgba(224, 49, 49, 0.08);
+  }
+
+  &.expiry-warning {
+    border-left-color: #f08c00;
+    background: rgba(240, 140, 0, 0.08);
+  }
+
+  &.expiry-ok {
+    border-left-color: #2f9e44;
+    background: rgba(47, 158, 68, 0.06);
+  }
+
+  &.expiry-none {
+    border-left-color: #9c36b5;
+    background: rgba(156, 54, 181, 0.08);
+  }
+}
+
+// Плитки фото для оцифровки — квадратные "мобильные" тайлы (как в мессенджерах), а не
+// нативная строка выбора файла в стиле десктопа.
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.photo-tile {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.photo-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  background: transparent;
+  color: var(--tg-theme-hint-color, #888);
+  cursor: pointer;
+  font-size: 10px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+
+  svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  &:active {
+    border-color: var(--tg-theme-link-color, #2481cc);
+    color: var(--tg-theme-link-color, #2481cc);
+  }
+}
+
+// Пояснение к цветовой индикации сроков годности — использует те же цвета, что и .medication-card.
+.expiry-legend {
+  border-top: 1px solid rgba(127, 127, 127, 0.2);
+  padding-top: 10px;
+}
+
+.expiry-legend-item {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--tg-theme-hint-color, #888);
+  white-space: nowrap;
+}
+
+.expiry-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  flex-shrink: 0;
+
+  &.expiry-danger {
+    background: #e03131;
+  }
+
+  &.expiry-warning {
+    background: #f08c00;
+  }
+
+  &.expiry-ok {
+    background: #2f9e44;
+  }
+
+  &.expiry-none {
+    background: #9c36b5;
+  }
+}
+
+// Скрывает нативный <input type="file"> визуально, но оставляет доступным для <label for>
+// и скринридеров (в отличие от display:none, который убрал бы его из accessibility-дерева).
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

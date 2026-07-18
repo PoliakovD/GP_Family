@@ -1,6 +1,6 @@
 namespace FamilyHub.Modules.Medical.Medkits;
 
-public record MedkitDto(Guid Id, Guid FamilyId, string Name, Guid CreatedByUserId, DateTime CreatedAt);
+public record MedkitDto(Guid Id, Guid FamilyId, string Name, Guid CreatedByUserId, DateTime CreatedAt, int MedicationCount);
 
 public record CreateMedkitRequest(string Name);
 

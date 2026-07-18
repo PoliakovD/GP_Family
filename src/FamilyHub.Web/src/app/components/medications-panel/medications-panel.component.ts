@@ -1,9 +1,10 @@
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, EventEmitter, OnInit, Output, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { compressImage } from '../../shared/util/image-compression';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 const MAX_PHOTOS = 5;
 const KNOWN_KEYS = ['instructions', 'quantity'];
@@ -17,24 +18,37 @@ export type RecognizeStep = 'idle' | 'compressing' | 'uploading' | 'recognizing'
 
 const RECOGNIZE_STEP_ORDER: RecognizeStep[] = ['compressing', 'uploading', 'recognizing', 'receiving'];
 
+let nextInstanceId = 0;
+
 @Component({
   selector: 'app-medications-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, LoadingSpinnerComponent],
   templateUrl: './medications-panel.component.html',
   styleUrl: './medications-panel.component.scss',
 })
 export class MedicationsPanelComponent implements OnInit {
   readonly medkitId = input.required<string>();
 
+  /** Сообщает родителю (карточке аптечки) актуальное число медикаментов — она показывает
+   * его в свёрнутом виде и иначе не узнала бы об изменениях, сделанных внутри этой панели. */
+  @Output() readonly countChanged = new EventEmitter<number>();
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
 
+  activeTab: 'list' | 'add' = 'list';
+
+  /** Уникален на инстанс — несколько панелей (по одной на аптечку) могут быть смонтированы одновременно (аккордеон),
+   * а <label for> должен указывать ровно на "свой" скрытый file input. */
+  readonly photoInputId = `medication-photo-input-${nextInstanceId++}`;
+
   items: Medication[] = [];
-  form = { name: '', expiryDate: '', instructions: '', quantity: '1' };
+  form = { name: '', expiryDate: '', instructions: '', quantity: '' };
   extraRows: DataRow[] = [];
   editingId: string | null = null;
   error: string | null = null;
+  loading = true;
 
   // Фото — только для распознавания, никуда не сохраняются и не загружаются как вложения.
   photos: { file: File; previewUrl: string }[] = [];
@@ -73,6 +87,7 @@ export class MedicationsPanelComponent implements OnInit {
       const id = this.medkitId();
       if (id === this.loadedMedkitId) return;
       this.resetForm();
+      this.activeTab = 'list';
       void this.refresh();
     });
   }
@@ -86,12 +101,28 @@ export class MedicationsPanelComponent implements OnInit {
   async refresh(): Promise<void> {
     const id = this.medkitId();
     this.loadedMedkitId = id;
+    this.loading = true;
     try {
       this.items = await this.api.getMedications(id);
       this.error = null;
+      this.countChanged.emit(this.items.length);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить аптечку.';
+    } finally {
+      this.loading = false;
     }
+  }
+
+  /** Цветовая индикация по сроку годности: ≤1 мес — красный, 2-4 мес — жёлтый, дальше — зелёный, без даты — фиолетовый. */
+  expiryClass(item: Medication): string {
+    if (!item.expiryDate) return 'expiry-none';
+
+    const daysLeft = Math.floor(
+      (new Date(item.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    );
+    if (daysLeft <= 30) return 'expiry-danger';
+    if (daysLeft <= 120) return 'expiry-warning';
+    return 'expiry-ok';
   }
 
   dataEntries(item: Medication): DataRow[] {
@@ -221,10 +252,16 @@ export class MedicationsPanelComponent implements OnInit {
         await this.api.createMedication(this.medkitId(), payload);
       }
       this.resetForm();
+      this.activeTab = 'list';
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
     }
+  }
+
+  openAddTab(): void {
+    this.resetForm();
+    this.activeTab = 'add';
   }
 
   startEdit(item: Medication): void {
@@ -237,6 +274,12 @@ export class MedicationsPanelComponent implements OnInit {
     };
     this.extraRows = this.dataEntries(item);
     this.clearPhotos();
+    this.activeTab = 'add';
+  }
+
+  cancelEdit(): void {
+    this.resetForm();
+    this.activeTab = 'list';
   }
 
   async handleDelete(id: string): Promise<void> {

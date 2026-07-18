@@ -28,22 +28,26 @@
     </div>
   </div>
 
-  @for (item of items; track item.id) {
-    <div class="card mb-2">
-      <div class="card-body p-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <strong>{{ item.personName }}</strong>
-          <span class="muted">{{ item.date }}</span>
-        </div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
-          <button class="btn btn-outline-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+  @if (loading) {
+    <app-loading-spinner />
+  } @else {
+    @for (item of items; track item.id) {
+      <div class="card mb-2">
+        <div class="card-body p-3">
+          <div class="name-with-tags mb-2">
+            <strong>{{ item.personName }}</strong>
+            <span class="muted text-nowrap">{{ item.date }}</span>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
+            <button class="btn btn-outline-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+          </div>
         </div>
       </div>
-    </div>
-  }
+    }
 
-  @if (items.length === 0) {
-    <p class="muted">Дни рождения не добавлены.</p>
+    @if (items.length === 0) {
+      <p class="muted">Дни рождения не добавлены.</p>
+    }
   }
 </div>

@@ -1,0 +1,76 @@
+.medkit-card {
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &.open {
+    border-color: rgba(127, 127, 127, 0.32);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.medkit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex-wrap: wrap;
+  row-gap: 8px;
+
+  // Кнопки действий поджимаются к правому краю (перед стрелкой), но переносятся на новую
+  // строку на узких экранах, если названию аптечки не хватает места.
+  > .d-flex {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+}
+
+.medkit-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.medkit-count {
+  flex-shrink: 0;
+  margin-left: 0;
+  font-weight: normal;
+}
+
+.medkit-chevron {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--tg-theme-hint-color, #888);
+  transition: transform 0.25s ease, color 0.25s ease;
+}
+
+.medkit-card.open .medkit-chevron {
+  transform: rotate(180deg);
+  color: var(--tg-theme-link-color, #2481cc);
+}
+
+// Аптечка и её содержимое — единая карточка: содержимое "выезжает" плавным ростом высоты
+// grid-трека (0fr -> 1fr), а не мгновенным появлением/исчезновением через @if.
+// grid-template-columns: minmax(0, 1fr) обязателен — без него неявная колонка считается по
+// max-content вложенного содержимого и может стать шире контейнера, раздвигая viewport страницы.
+.medkit-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.medkit-card.open .medkit-body {
+  grid-template-rows: 1fr;
+}
+
+.medkit-body-inner {
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  padding-top: 12px;
+}

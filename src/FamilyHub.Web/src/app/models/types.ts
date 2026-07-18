@@ -57,6 +57,7 @@ export interface Medkit {
     name: string;
     createdByUserId: string;
     createdAt: string;
+    medicationCount: number;
 }
 
 export interface MedkitInput {

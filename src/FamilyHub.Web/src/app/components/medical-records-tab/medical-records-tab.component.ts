@@ -4,11 +4,12 @@ import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import type { Attachment, MedicalRecord } from '../../models/types';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-medical-records-tab',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, LoadingSpinnerComponent],
   templateUrl: './medical-records-tab.component.html',
 })
 export class MedicalRecordsTabComponent implements OnInit {
@@ -19,6 +20,7 @@ export class MedicalRecordsTabComponent implements OnInit {
   items: MedicalRecord[] = [];
   form = { personName: '', recordDate: '', doctor: '', description: '' };
   error: string | null = null;
+  loading = true;
   shareFamilyByRecord: Record<string, string> = {};
   // Бэкенд не отдаёт список вложений отдельным эндпоинтом — храним то, что
   // загрузили в текущей сессии (ответ POST .../attachments содержит Attachment целиком).
@@ -29,11 +31,14 @@ export class MedicalRecordsTabComponent implements OnInit {
   }
 
   async refresh(): Promise<void> {
+    this.loading = true;
     try {
       this.items = await this.api.getMedicalRecords();
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить анализы.';
+    } finally {
+      this.loading = false;
     }
   }
 

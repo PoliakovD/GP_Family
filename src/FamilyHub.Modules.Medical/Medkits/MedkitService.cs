@@ -23,9 +23,12 @@ public class MedkitService(AppDbContext db, IFamilyAccessService access, ILogger
             return (MedkitAccessResult.Forbidden, []);
         }
 
+        // Инлайним конструктор DTO прямо в Select (не через ToDto) — так EF Core транслирует
+        // k.Medications.Count в коррелированный COUNT-подзапрос на уровне SQL, без лишнего
+        // круглого рейса и без подгрузки самих медикаментов (Medications навигация не грузится).
         var items = await db.Medkits.AsNoTracking()
             .Where(k => k.FamilyId == familyId)
-            .Select(k => ToDto(k))
+            .Select(k => new MedkitDto(k.Id, k.FamilyId, k.Name, k.CreatedByUserId, k.CreatedAt, k.Medications.Count))
             .ToListAsync(ct);
 
         logger.LogDebug("Загружено {Count} аптечек семьи {FamilyId}", items.Count, familyId);
@@ -107,6 +110,8 @@ public class MedkitService(AppDbContext db, IFamilyAccessService access, ILogger
         return MedkitAccessResult.Success;
     }
 
+    // Используется только для новосозданной аптечки (CreateAsync) — Medications = [] по
+    // умолчанию, Count = 0 корректен без обращения к БД.
     private static MedkitDto ToDto(Medkit k) =>
-        new(k.Id, k.FamilyId, k.Name, k.CreatedByUserId, k.CreatedAt);
+        new(k.Id, k.FamilyId, k.Name, k.CreatedByUserId, k.CreatedAt, k.Medications.Count);
 }

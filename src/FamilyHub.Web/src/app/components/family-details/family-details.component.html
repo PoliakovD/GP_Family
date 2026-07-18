@@ -1,32 +1,33 @@
 <div>
-    <div class="d-flex align-items-center gap-2 mb-3">
-        <a class="btn btn-outline-secondary btn-sm" [routerLink]="['/families']">← Назад</a>
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+        <a class="btn btn-outline-secondary btn-sm text-nowrap" [routerLink]="['/families']">← Назад</a>
 
+        @if (family && family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
+            <button class="btn btn-outline-danger btn-sm text-nowrap" (click)="handleDeleteFamily()">
+                Удалить семью
+            </button>
+        }
+    </div>
+
+    <div class="mb-3">
         @if (state.loading() && !family) {
             <span class="muted">Загрузка…</span>
         } @else if (family) {
-            <div class="flex-grow-1">
-                <strong>{{ family.name }}</strong>
-                <span class="ms-2">
-                <span class="tag">{{ roleLabel(family.myRole) }}</span>
-                <span class="tag">{{ statusLabel(family.myStatus) }}</span>
-                </span>
-            </div>
-            @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-                <button class="btn btn-outline-danger btn-sm text-nowrap" (click)="handleDeleteFamily()">
-                    Удалить семью
-                </button>
-            }
+            <strong class="family-name">{{ family.name }}</strong>
+            <span class="ms-2">
+            <span class="tag">{{ roleLabel(family.myRole) }}</span>
+            <span class="tag">{{ statusLabel(family.myStatus) }}</span>
+            </span>
         } @else {
             <span class="muted">Семья не найдена.</span>
         }
     </div>
 
     @if (family) {
-        <nav class="d-flex gap-2 mb-3">
+        <nav class="subtabs-nav d-flex gap-2 mb-3">
             @for (t of subTabs; track t.id) {
                 <button
-                        class="btn btn-sm"
+                        class="btn btn-sm text-nowrap"
                         [class.btn-primary]="activeSubTab === t.id"
                         [class.btn-outline-secondary]="activeSubTab !== t.id"
                         (click)="activeSubTab = t.id"
@@ -54,14 +55,14 @@
                                 <p class="muted">Заявок нет.</p>
                             }
                             @for (p of pendingMembers; track p.userId) {
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <span class="muted">
+                                <div class="pending-row d-flex justify-content-between align-items-center gap-2 mb-1">
+                  <span class="muted pending-name">
                     {{ p.displayName }}
                       @if (p.username) {
                           <span class="text-muted">&#64;{{ p.username }}</span>
                       }
                   </span>
-                                    <span class="d-flex gap-1">
+                                    <span class="d-flex gap-1 flex-shrink-0">
                     <button class="btn btn-outline-secondary btn-sm" (click)="handleApprove(p.userId)">
                       Принять
                     </button>

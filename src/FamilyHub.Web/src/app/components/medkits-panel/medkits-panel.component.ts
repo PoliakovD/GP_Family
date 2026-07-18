@@ -6,12 +6,14 @@ import { MedicationsPanelComponent } from '../medications-panel/medications-pane
 import { ToastService } from '../../shared/toast/toast.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-medkits-panel',
   standalone: true,
-  imports: [FormsModule, MedicationsPanelComponent, ModalComponent],
+  imports: [FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
   templateUrl: './medkits-panel.component.html',
+  styleUrl: './medkits-panel.component.scss',
 })
 export class MedkitsPanelComponent implements OnInit {
   readonly familyId = input.required<string>();
@@ -26,6 +28,12 @@ export class MedkitsPanelComponent implements OnInit {
   expandedId: string | null = null;
   error: string | null = null;
   showFormModal = false;
+  loading = true;
+
+  // Аптечки, которые открывали хотя бы раз — их содержимое остаётся смонтированным (не
+  // выгружается при сворачивании), иначе плавную CSS-анимацию сворачивания не на чем строить.
+  // Загрузка при этом всё равно ленивая: до первого клика ничего не монтируется и не запрашивается.
+  private readonly everOpenedIds = new Set<string>();
 
   // undefined — ещё ни разу не загружали.
   private loadedFamilyId: string | undefined = undefined;
@@ -39,6 +47,7 @@ export class MedkitsPanelComponent implements OnInit {
       if (id === this.loadedFamilyId) return;
       this.resetForm();
       this.expandedId = null;
+      this.everOpenedIds.clear();
       void this.refresh();
     });
   }
@@ -52,11 +61,14 @@ export class MedkitsPanelComponent implements OnInit {
   async refresh(): Promise<void> {
     const id = this.familyId();
     this.loadedFamilyId = id;
+    this.loading = true;
     try {
       this.items = await this.api.getMedkits(id);
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить аптечки.';
+    } finally {
+      this.loading = false;
     }
   }
 
@@ -115,7 +127,36 @@ export class MedkitsPanelComponent implements OnInit {
   }
 
   toggleExpanded(id: string): void {
-    this.expandedId = this.expandedId === id ? null : id;
+    if (this.expandedId === id) {
+      this.expandedId = null;
+      return;
+    }
+    this.expandedId = id;
+    this.everOpenedIds.add(id);
+  }
+
+  wasEverOpened(id: string): boolean {
+    return this.everOpenedIds.has(id);
+  }
+
+  /** Держит счётчик в свёрнутой карточке в актуальном состоянии после правок внутри вложенной панели. */
+  onMedicationCountChanged(item: Medkit, count: number): void {
+    item.medicationCount = count;
+  }
+
+  /** Склонение "N медикамент/медикамента/медикаментов" для счётчика в свёрнутой карточке. */
+  medicationCountLabel(count: number): string {
+    const mod100 = count % 100;
+    const mod10 = count % 10;
+    const word =
+      mod100 >= 11 && mod100 <= 14
+        ? 'медикаментов'
+        : mod10 === 1
+          ? 'медикамент'
+          : mod10 >= 2 && mod10 <= 4
+            ? 'медикамента'
+            : 'медикаментов';
+    return `${count} ${word}`;
   }
 
   resetForm(): void {

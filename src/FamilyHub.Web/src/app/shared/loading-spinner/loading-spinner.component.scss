@@ -1,0 +1,25 @@
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0;
+  color: var(--tg-theme-hint-color, #888);
+  font-size: 13px;
+}
+
+.loading-spinner-circle {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(127, 127, 127, 0.25);
+  border-top-color: var(--tg-theme-link-color, #2481cc);
+  animation: loading-spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes loading-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}

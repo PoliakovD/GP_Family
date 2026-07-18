@@ -3,154 +3,195 @@
     <div class="alert alert-danger py-2 mb-2">{{ error }}</div>
   }
 
-  <div class="card mb-3">
-    <div class="card-body p-3">
-      <div class="d-flex flex-column gap-2">
-        <label class="form-label fw-semibold mb-0">Фото упаковки/этикетки (до 5) — для распознавания</label>
+  <nav class="d-flex gap-2 mb-3">
+    <button
+      class="btn btn-sm"
+      [class.btn-primary]="activeTab === 'list'"
+      [class.btn-outline-secondary]="activeTab !== 'list'"
+      (click)="activeTab = 'list'"
+    >
+      Список{{ items.length ? ' (' + items.length + ')' : '' }}
+    </button>
+    <button
+      class="btn btn-sm"
+      [class.btn-primary]="activeTab === 'add'"
+      [class.btn-outline-secondary]="activeTab !== 'add'"
+      (click)="openAddTab()"
+    >
+      + Добавить
+    </button>
+  </nav>
 
-        @if (photos.length > 0) {
-          <div class="d-flex gap-2 flex-wrap">
+  @if (activeTab === 'add') {
+    <div class="card mb-3">
+      <div class="card-body p-3">
+        <div class="d-flex flex-column gap-2">
+          <label class="form-label fw-semibold mb-0">Фото упаковки/этикетки (до 5) — для распознавания</label>
+
+          <div class="photo-grid">
             @for (photo of photos; track photo.previewUrl; let i = $index) {
-              <div class="position-relative">
-                <img [src]="photo.previewUrl" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px" />
-                <button
-                  type="button"
-                  class="btn btn-sm btn-danger position-absolute top-0 end-0 p-0"
-                  style="width:20px;height:20px;line-height:1;border-radius:50%;transform:translate(40%,-40%)"
-                  (click)="removePhoto(i)"
-                >×</button>
+              <div class="photo-tile">
+                <img [src]="photo.previewUrl" alt="" />
+                <button type="button" class="photo-remove" aria-label="Удалить фото" (click)="removePhoto(i)">×</button>
               </div>
             }
+            @if (photos.length < 5 && !recognizing) {
+              <label class="photo-tile photo-add" [attr.for]="photoInputId">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                <span>Фото</span>
+              </label>
+            }
           </div>
-        }
 
-        <div class="d-flex gap-2">
           <input
-            class="form-control form-control-sm"
+            [id]="photoInputId"
+            class="visually-hidden-input"
             type="file"
             accept="image/*"
             multiple
             [disabled]="photos.length >= 5 || recognizing"
             (change)="onPhotosSelected($event)"
           />
+
           <button
-            class="btn btn-outline-primary btn-sm text-nowrap"
+            class="btn btn-outline-primary btn-sm w-100"
             [disabled]="photos.length === 0 || recognizing"
             (click)="handleRecognize()"
           >
             Распознать по фото
           </button>
-        </div>
 
-        @if (recognizing) {
-          <div class="recognize-steps d-flex justify-content-between gap-1 mt-1">
-            @for (step of recognizeSteps; track step.id) {
-              <div class="recognize-step flex-fill text-center" [class]="'step-' + stepState(step.id)">
-                <div class="recognize-step-dot mx-auto mb-1">
-                  @if (stepState(step.id) === 'done') {
-                    <span>✓</span>
-                  } @else if (stepState(step.id) === 'active') {
-                    <span class="spinner-border spinner-border-sm"></span>
-                  }
+          @if (recognizing) {
+            <div class="recognize-steps d-flex justify-content-between gap-1 mt-1">
+              @for (step of recognizeSteps; track step.id) {
+                <div class="recognize-step flex-fill text-center" [class]="'step-' + stepState(step.id)">
+                  <div class="recognize-step-dot mx-auto mb-1">
+                    @if (stepState(step.id) === 'done') {
+                      <span>✓</span>
+                    } @else if (stepState(step.id) === 'active') {
+                      <span class="spinner-border spinner-border-sm"></span>
+                    }
+                  </div>
+                  <span class="recognize-step-label">
+                    {{ step.label }}
+                    @if (step.id === 'uploading' && stepState('uploading') === 'active') {
+                      {{ uploadProgress }}%
+                    }
+                  </span>
                 </div>
-                <span class="recognize-step-label">
-                  {{ step.label }}
-                  @if (step.id === 'uploading' && stepState('uploading') === 'active') {
-                    {{ uploadProgress }}%
-                  }
-                </span>
-              </div>
-            }
-          </div>
-        }
-      </div>
-    </div>
-  </div>
-
-  <div class="card mb-3">
-    <div class="card-body p-3">
-      <div class="d-flex flex-column gap-2">
-        <input
-          class="form-control form-control-sm"
-          [(ngModel)]="form.name"
-          placeholder="Название препарата"
-        />
-        <input
-          class="form-control form-control-sm"
-          type="date"
-          [(ngModel)]="form.expiryDate"
-        />
-        <textarea
-          class="form-control form-control-sm"
-          [(ngModel)]="form.instructions"
-          placeholder="Инструкция (необязательно)"
-          rows="2"
-        ></textarea>
-        <input
-          class="form-control form-control-sm"
-          type="text"
-          inputmode="numeric"
-          [(ngModel)]="form.quantity"
-          placeholder="Количество"
-        />
-
-        @if (extraRows.length > 0) {
-          <label class="form-label fw-semibold mb-0 mt-1">Дополнительные поля</label>
-          @for (row of extraRows; track $index; let i = $index) {
-            <div class="d-flex gap-2">
-              <input class="form-control form-control-sm" [(ngModel)]="row.key" placeholder="Поле" />
-              <input class="form-control form-control-sm" [(ngModel)]="row.value" placeholder="Значение" />
-              <button class="btn btn-outline-danger btn-sm" (click)="removeExtraRow(i)">✕</button>
+              }
             </div>
           }
-        }
-        <button class="btn btn-outline-secondary btn-sm align-self-start" (click)="addExtraRow()">
-          + Доп. поле
-        </button>
-
-        <div class="d-flex gap-2 mt-1">
-          <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
-            {{ editingId ? 'Сохранить' : 'Добавить' }}
-          </button>
-          @if (editingId) {
-            <button class="btn btn-outline-secondary btn-sm" (click)="resetForm()">Отмена</button>
-          }
         </div>
       </div>
     </div>
-  </div>
 
-  @for (item of items; track item.id) {
-    <div class="card mb-2">
+    <div class="card mb-3">
       <div class="card-body p-3">
-        <div class="d-flex justify-content-between align-items-center mb-1">
-          <strong>{{ item.name }}</strong>
-          @if (quantityOf(item)) {
-            <span class="muted">кол-во: {{ quantityOf(item) }}</span>
+        <div class="d-flex flex-column gap-2">
+          <input
+            class="form-control form-control-sm"
+            [(ngModel)]="form.name"
+            placeholder="Название препарата"
+          />
+          <input
+            class="form-control form-control-sm"
+            type="date"
+            [(ngModel)]="form.expiryDate"
+          />
+          <textarea
+            class="form-control form-control-sm"
+            [(ngModel)]="form.instructions"
+            placeholder="Инструкция (необязательно)"
+            rows="2"
+          ></textarea>
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            inputmode="numeric"
+            [(ngModel)]="form.quantity"
+            placeholder="Количество"
+          />
+
+          @if (extraRows.length > 0) {
+            <label class="form-label fw-semibold mb-0 mt-1">Дополнительные поля</label>
+            @for (row of extraRows; track $index; let i = $index) {
+              <div class="d-flex gap-2">
+                <input class="form-control form-control-sm" [(ngModel)]="row.key" placeholder="Поле" />
+                <input class="form-control form-control-sm" [(ngModel)]="row.value" placeholder="Значение" />
+                <button class="btn btn-outline-danger btn-sm" (click)="removeExtraRow(i)">✕</button>
+              </div>
+            }
           }
-        </div>
-        @if (instructionsOf(item)) {
-          <p class="muted mb-1">{{ instructionsOf(item) }}</p>
-        }
-        @if (item.expiryDate) {
-          <p class="muted mb-2">Срок годности: {{ item.expiryDate }}</p>
-        }
-        @if (dataEntries(item).length > 0) {
-          <div class="d-flex flex-wrap gap-1 mb-2">
-            @for (row of dataEntries(item); track row.key) {
-              <span class="tag">{{ row.key }}: {{ row.value }}</span>
+          <button class="btn btn-outline-secondary btn-sm align-self-start" (click)="addExtraRow()">
+            + Доп. поле
+          </button>
+
+          <div class="d-flex gap-2 mt-1">
+            <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
+              {{ editingId ? 'Сохранить' : 'Добавить' }}
+            </button>
+            @if (editingId) {
+              <button class="btn btn-outline-secondary btn-sm" (click)="cancelEdit()">Отмена</button>
             }
           </div>
-        }
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
-          <button class="btn btn-outline-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
         </div>
       </div>
     </div>
-  }
+  } @else if (loading) {
+    <app-loading-spinner />
+  } @else {
+    @for (item of items; track item.id) {
+      <div class="card mb-2 medication-card" [class]="expiryClass(item)">
+        <div class="card-body p-3">
+          <div class="name-with-tags mb-1">
+            <strong>{{ item.name }}</strong>
+            @if (quantityOf(item)) {
+              <span class="muted text-nowrap">кол-во: {{ quantityOf(item) }}</span>
+            }
+          </div>
+          @if (instructionsOf(item)) {
+            <p class="muted mb-1">{{ instructionsOf(item) }}</p>
+          }
+          @if (item.expiryDate) {
+            <p class="muted mb-2">Срок годности: {{ item.expiryDate }}</p>
+          } @else {
+            <p class="muted mb-2">Срок годности не указан</p>
+          }
+          @if (dataEntries(item).length > 0) {
+            <div class="d-flex flex-wrap gap-1 mb-2">
+              @for (row of dataEntries(item); track row.key) {
+                <span class="tag">{{ row.key }}: {{ row.value }}</span>
+              }
+            </div>
+          }
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
+            <button class="btn btn-outline-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+          </div>
+        </div>
+      </div>
+    }
 
-  @if (items.length === 0) {
-    <p class="muted">Аптечка пуста.</p>
+    @if (items.length === 0) {
+      <p class="muted">Аптечка пуста.</p>
+    } @else {
+      <div class="expiry-legend d-flex flex-wrap gap-3 mt-2">
+        <span class="expiry-legend-item">
+          <span class="expiry-legend-dot expiry-ok"></span>Годен ещё &gt; 4 мес.
+        </span>
+        <span class="expiry-legend-item">
+          <span class="expiry-legend-dot expiry-warning"></span>Истекает через 1–4 мес.
+        </span>
+        <span class="expiry-legend-item">
+          <span class="expiry-legend-dot expiry-danger"></span>Истекает&nbsp;&lt;&nbsp;1 мес.
+        </span>
+        <span class="expiry-legend-item">
+          <span class="expiry-legend-dot expiry-none"></span>Срок не указан
+        </span>
+      </div>
+    }
   }
 </div>

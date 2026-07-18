@@ -6,11 +6,12 @@ import { FamilyStateService } from '../../services/family-state.service';
 import { FamilyRole, MemberStatus } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-families-tab',
   standalone: true,
-  imports: [FormsModule, RouterLink, ModalComponent],
+  imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent],
   templateUrl: './families-tab.component.html',
 })
 export class FamiliesTabComponent {

@@ -1,0 +1,25 @@
+.family-name {
+  word-break: break-word;
+}
+
+// На узких экранах вкладки прокручиваются горизонтально вместо переноса/сжатия.
+.subtabs-nav {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+
+  > button {
+    flex-shrink: 0;
+  }
+}
+
+.pending-row {
+  flex-wrap: nowrap;
+}
+
+.pending-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

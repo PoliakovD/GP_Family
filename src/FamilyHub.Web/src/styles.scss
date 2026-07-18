@@ -117,6 +117,26 @@ body {
   }
 }
 
+// Строка "название + теги" (списки семей и т.п.) — длинное название обрезается многоточием,
+// теги никогда не сжимаются и не уезжают за край экрана на узких Telegram-вьюпортах.
+.name-with-tags {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  > span:last-child {
+    flex-shrink: 0;
+  }
+}
+
 // Общий оверлей для модалок и диалогов подтверждения (shared/modal, shared/confirm).
 .overlay-backdrop {
   position: fixed;

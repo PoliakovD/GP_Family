@@ -2,11 +2,12 @@ import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Birthday } from '../../models/types';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-birthdays-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, LoadingSpinnerComponent],
   templateUrl: './birthdays-panel.component.html',
 })
 export class BirthdaysPanelComponent implements OnInit {
@@ -18,6 +19,7 @@ export class BirthdaysPanelComponent implements OnInit {
   form = { personName: '', date: '' };
   editingId: string | null = null;
   error: string | null = null;
+  loading = true;
 
   // undefined — ещё ни разу не загружали.
   private loadedFamilyId: string | undefined = undefined;
@@ -43,11 +45,14 @@ export class BirthdaysPanelComponent implements OnInit {
   async refresh(): Promise<void> {
     const id = this.familyId();
     this.loadedFamilyId = id;
+    this.loading = true;
     try {
       this.items = await this.api.getBirthdays(id);
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить дни рождения.';
+    } finally {
+      this.loading = false;
     }
   }
 
