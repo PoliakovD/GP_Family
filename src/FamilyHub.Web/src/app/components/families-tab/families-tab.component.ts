@@ -4,21 +4,24 @@ import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { FamilyRole, MemberStatus } from '../../models/types';
+import { ToastService } from '../../shared/toast/toast.service';
+import { ModalComponent } from '../../shared/modal/modal.component';
 
 @Component({
   selector: 'app-families-tab',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, ModalComponent],
   templateUrl: './families-tab.component.html',
 })
 export class FamiliesTabComponent {
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
 
   newFamilyName = '';
   inviteCode = '';
   busy = false;
-  message: string | null = null;
+  showCreateModal = false;
 
   readonly FamilyRole = FamilyRole;
   readonly MemberStatus = MemberStatus;
@@ -31,16 +34,25 @@ export class FamiliesTabComponent {
     return role === FamilyRole.Admin ? 'вы админ' : 'вы участник';
   }
 
+  openCreateModal(): void {
+    this.newFamilyName = '';
+    this.showCreateModal = true;
+  }
+
+  closeCreateModal(): void {
+    this.showCreateModal = false;
+  }
+
   async handleCreateFamily(): Promise<void> {
     if (!this.newFamilyName.trim()) return;
     this.busy = true;
     try {
       await this.api.createFamily(this.newFamilyName.trim());
-      this.newFamilyName = '';
-      this.message = 'Семья создана.';
+      this.showCreateModal = false;
+      this.toast.success('Семья создана.');
       await this.state.refresh();
     } catch (err) {
-      this.message = err instanceof ApiError ? err.message : 'Не удалось создать семью.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать семью.');
     } finally {
       this.busy = false;
     }
@@ -51,14 +63,15 @@ export class FamiliesTabComponent {
     this.busy = true;
     try {
       const result = await this.api.redeemInvite(this.inviteCode.trim());
-      this.message =
+      this.toast.success(
         result.status === 'joined'
           ? 'Вы присоединились к семье.'
-          : 'Заявка отправлена, ожидайте подтверждения администратором.';
+          : 'Заявка отправлена, ожидайте подтверждения администратором.',
+      );
       this.inviteCode = '';
       await this.state.refresh();
     } catch (err) {
-      this.message = err instanceof ApiError ? err.message : 'Не удалось погасить инвайт.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось погасить инвайт.');
     } finally {
       this.busy = false;
     }

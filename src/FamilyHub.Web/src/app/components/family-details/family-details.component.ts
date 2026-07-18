@@ -1,5 +1,5 @@
 import {Component, Input, OnInit, inject, signal, WritableSignal} from '@angular/core';
-import {RouterLink} from '@angular/router';
+import {Router, RouterLink} from '@angular/router';
 import {ApiService, ApiError} from '../../services/api.service';
 import {FamilyStateService} from '../../services/family-state.service';
 import {
@@ -12,6 +12,8 @@ import {
 import {MedkitsPanelComponent} from '../medkits-panel/medkits-panel.component';
 import {BirthdaysPanelComponent} from '../birthdays-panel/birthdays-panel.component';
 import {DatePipe} from "@angular/common";
+import {ToastService} from '../../shared/toast/toast.service';
+import {ConfirmService} from '../../shared/confirm/confirm.service';
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays';
 
@@ -26,10 +28,12 @@ export class FamilyDetailsComponent implements OnInit {
 
     readonly state = inject(FamilyStateService);
     private readonly api = inject(ApiService);
+    private readonly toast = inject(ToastService);
+    private readonly confirm = inject(ConfirmService);
+    private readonly router = inject(Router);
 
     pendingMembers: PendingMember[] | undefined = undefined;
     createdInvite: WritableSignal<InviteCreated> | null = null;
-    message: WritableSignal<string> | null = null;
     activeSubTab: FamilySubTab = 'members';
 
     readonly FamilyRole = FamilyRole;
@@ -63,9 +67,8 @@ export class FamilyDetailsComponent implements OnInit {
     async loadPending(): Promise<void> {
         try {
             this.pendingMembers = await this.api.getPendingMembers(this.id);
-            this.message = null;
         } catch (err) {
-            this.message?.set(err instanceof ApiError ? err.message : 'Не удалось загрузить заявки.');
+            this.toast.error(err instanceof ApiError ? err.message : 'Не удалось загрузить заявки.');
         }
     }
 
@@ -74,10 +77,10 @@ export class FamilyDetailsComponent implements OnInit {
         try {
             await this.api.approveMember(this.id, userId);
             await this.loadPending();
-
             await this.state.refresh();
+            this.toast.success('Заявка принята.');
         } catch (err) {
-            this.message?.set(err instanceof ApiError ? err.message : 'Ошибка при подтверждении.');
+            this.toast.error(err instanceof ApiError ? err.message : 'Ошибка при подтверждении.');
         }
     }
 
@@ -86,8 +89,9 @@ export class FamilyDetailsComponent implements OnInit {
             await this.api.rejectMember(this.id, userId);
             await this.loadPending();
             await this.state.refresh();
+            this.toast.success('Заявка отклонена.');
         } catch (err) {
-            this.message?.set(err instanceof ApiError ? err.message : 'Ошибка при отклонении.');
+            this.toast.error(err instanceof ApiError ? err.message : 'Ошибка при отклонении.');
         }
     }
 
@@ -99,9 +103,9 @@ export class FamilyDetailsComponent implements OnInit {
             } else {
                 this.createdInvite = signal(invite);
             }
-            this.message = null;
+            this.toast.success('Инвайт создан.');
         } catch (err) {
-            this.message?.set(err instanceof ApiError ? err.message : 'Не удалось создать инвайт.');
+            this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать инвайт.');
         }
     }
 
@@ -119,34 +123,61 @@ export class FamilyDetailsComponent implements OnInit {
             }
         } else {
             await navigator.clipboard.writeText(link);
-            this.message?.set('Ссылка скопирована в буфер обмена.');
+            this.toast.success('Ссылка скопирована в буфер обмена.');
         }
     }
 
     async removeMember(memberId: string): Promise<void> {
+        const confirmed = await this.confirm.confirm({
+            title: 'Выгнать участника?',
+            message: 'Участник потеряет доступ к семье и её данным.',
+            confirmText: 'Выгнать',
+            danger: true,
+        });
+        if (!confirmed) return;
+
         try {
             const result = await this.api.removeMember(this.id, memberId);
             switch (result) {
                 case RemoveMemberResult.Removed:
-                    this.message?.set('Пользователь успешно удален из семьи');
+                    this.toast.success('Пользователь успешно удален из семьи');
                     this.state.refresh();
                     break;
 
                 case RemoveMemberResult.LastAdmin:
-                    this.message?.set('Нельзя удалить единственного администратора!');
+                    this.toast.error('Нельзя удалить единственного администратора!');
                     break;
 
                 case RemoveMemberResult.Forbidden:
-                    this.message?.set('У вас недостаточно прав для этого действия');
+                    this.toast.error('У вас недостаточно прав для этого действия');
                     break;
 
                 case RemoveMemberResult.NotFound:
-                    this.message?.set('Пользователь или семья не найдены');
+                    this.toast.error('Пользователь или семья не найдены');
                     break;
             }
         } catch (err) {
             // Сюда упадут только критические ошибки (типа 500 Server Error или если лег интернет)
-            this.message?.set('Произошла непредвиденная ошибка на сервере');
+            this.toast.error('Произошла непредвиденная ошибка на сервере');
+        }
+    }
+
+    async handleDeleteFamily(): Promise<void> {
+        const confirmed = await this.confirm.confirm({
+            title: 'Удалить семью?',
+            message: 'Семья и все её данные (участники, аптечки, дни рождения, инвайты) будут удалены безвозвратно.',
+            confirmText: 'Удалить',
+            danger: true,
+        });
+        if (!confirmed) return;
+
+        try {
+            await this.api.deleteFamily(this.id);
+            this.toast.success('Семья удалена.');
+            await this.state.refresh();
+            await this.router.navigate(['/families']);
+        } catch (err) {
+            this.toast.error(err instanceof ApiError ? err.message : 'Не удалось удалить семью.');
         }
     }
 

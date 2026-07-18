@@ -99,6 +99,8 @@ export class ApiService {
 
   createFamily = (name: string) => this.post<{ id: string }>('/api/families', { name });
 
+  deleteFamily = (familyId: string) => this.del<void>(`/api/families/${familyId}`);
+
   getPendingMembers = (familyId: string) => this.get<PendingMember[]>(`/api/families/${familyId}/pending`);
 
   getCurrentMembers = (familyId: string) => this.get<CurrentMember[]>(`/api/families/${familyId}/current`);

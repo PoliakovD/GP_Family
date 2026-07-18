@@ -27,5 +27,17 @@ public static class FamilyEndpoints
 
         group.MapGet("/", async (FamilyService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.GetMyFamiliesAsync(currentUser.UserId, ct)));
+
+        group.MapDelete("/{familyId:guid}", async (
+            Guid familyId, FamilyService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var result = await service.DeleteFamilyAsync(familyId, currentUser.UserId, ct);
+            return result switch
+            {
+                DeleteFamilyResult.Forbidden => Results.Forbid(),
+                DeleteFamilyResult.NotFound => Results.NotFound(),
+                _ => Results.NoContent(),
+            };
+        });
     }
 }

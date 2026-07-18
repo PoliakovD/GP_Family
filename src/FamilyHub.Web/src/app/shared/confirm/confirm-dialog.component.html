@@ -1,0 +1,21 @@
+@if (confirm.request(); as req) {
+  <div class="overlay-backdrop" (click)="confirm.resolve(false)">
+    <div class="overlay-card" (click)="$event.stopPropagation()">
+      <h5 class="mb-2">{{ req.title }}</h5>
+      <p class="muted mb-3">{{ req.message }}</p>
+      <div class="d-flex justify-content-end gap-2">
+        <button class="btn btn-outline-secondary btn-sm" (click)="confirm.resolve(false)">
+          {{ req.cancelText || 'Отмена' }}
+        </button>
+        <button
+          class="btn btn-sm"
+          [class.btn-danger]="req.danger"
+          [class.btn-primary]="!req.danger"
+          (click)="confirm.resolve(true)"
+        >
+          {{ req.confirmText || 'Подтвердить' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,0 +1,5 @@
+// Базовые стили оверлея — в src/styles.scss (.overlay-backdrop, .overlay-card),
+// т.к. они переиспользуются модалкой (shared/modal).
+:host {
+  display: contents;
+}

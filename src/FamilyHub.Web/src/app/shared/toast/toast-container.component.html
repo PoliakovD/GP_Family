@@ -1,0 +1,8 @@
+<div class="toast-stack">
+  @for (t of toastService.toasts(); track t.id) {
+    <div class="toast-item" [class]="'toast-' + t.type" (click)="toastService.dismiss(t.id)">
+      <span class="toast-icon">{{ iconFor(t.type) }}</span>
+      <span class="toast-text">{{ t.text }}</span>
+    </div>
+  }
+</div>

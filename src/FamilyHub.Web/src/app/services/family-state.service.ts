@@ -27,7 +27,6 @@ export class FamilyStateService {
 
                 f.currentMembers = await this.api.getCurrentMembers(f.id);
                 f.currentMembers.forEach((m) => {
-                    console.log(m)
                     this.log.log('state', 'info',
                         `Id:${m.id}\n` +
                         `displayName:${m.displayName}\n` +

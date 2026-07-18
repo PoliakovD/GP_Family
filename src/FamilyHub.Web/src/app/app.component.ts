@@ -4,11 +4,13 @@ import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
 import { DevLoggerService } from './services/dev-logger.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
+import { ToastContainerComponent } from './shared/toast/toast-container.component';
+import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, DevPanelComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, DevPanelComponent, ToastContainerComponent, ConfirmDialogComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent implements OnInit {

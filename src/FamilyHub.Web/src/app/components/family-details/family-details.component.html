@@ -5,21 +5,22 @@
         @if (state.loading() && !family) {
             <span class="muted">Загрузка…</span>
         } @else if (family) {
-            <div>
+            <div class="flex-grow-1">
                 <strong>{{ family.name }}</strong>
                 <span class="ms-2">
                 <span class="tag">{{ roleLabel(family.myRole) }}</span>
                 <span class="tag">{{ statusLabel(family.myStatus) }}</span>
                 </span>
             </div>
+            @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
+                <button class="btn btn-outline-danger btn-sm text-nowrap" (click)="handleDeleteFamily()">
+                    Удалить семью
+                </button>
+            }
         } @else {
             <span class="muted">Семья не найдена.</span>
         }
     </div>
-
-    @if (message) {
-        <div class="alert alert-info py-2 mb-3">{{ message }}</div>
-    }
 
     @if (family) {
         <nav class="d-flex gap-2 mb-3">

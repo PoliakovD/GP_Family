@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,9 @@ public record FamilySummary(Guid Id, string Name, FamilyRole MyRole, MemberStatu
 
 public record CurrentFamilyMember(Guid Id, string DisplayName, string? Username, DateTime JoinedAt, FamilyRole Role);
 
-public class FamilyService(AppDbContext db, ILogger<FamilyService> logger)
+public enum DeleteFamilyResult { Deleted, Forbidden, NotFound }
+
+public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger<FamilyService> logger)
 {
     /// <summary>Создатель семьи становится её первым админом, сразу Active.</summary>
     public async Task<Guid> CreateFamilyAsync(Guid creatorUserId, string name, CancellationToken ct = default)
@@ -63,5 +66,38 @@ public class FamilyService(AppDbContext db, ILogger<FamilyService> logger)
 
         logger.LogDebug("Загружено {Count} участников семьи {FamilyId}", result.Count, familyId);
         return result;
+    }
+
+    /// <summary>
+    /// Удаляет семью целиком. Разрешено только активному Admin семьи.
+    /// Большинство дочерних сущностей (участники, аптечки, медикаменты, дни рождения,
+    /// инвайты и их погашения, оповещения) удаляются каскадом на уровне БД (см. конфигурации
+    /// в FamilyHub.Infrastructure.Persistence.Configurations). FamilyMedicalShare и
+    /// MedicalRecordHidden не связаны FK на Family — чистим их явно, как и при выгоне
+    /// участника (см. MembershipService.RemoveMembershipCoreAsync).
+    /// </summary>
+    public async Task<DeleteFamilyResult> DeleteFamilyAsync(Guid familyId, Guid requestingUserId, CancellationToken ct = default)
+    {
+        var family = await db.Families.FirstOrDefaultAsync(f => f.Id == familyId, ct);
+        if (family is null) return DeleteFamilyResult.NotFound;
+
+        if (!await access.HasRoleAsync(requestingUserId, familyId, FamilyRole.Admin, ct))
+        {
+            logger.LogWarning(
+                "Удаление семьи отклонено: {UserId} не админ семьи {FamilyId}", requestingUserId, familyId);
+            return DeleteFamilyResult.Forbidden;
+        }
+
+        var shares = db.FamilyMedicalShares.Where(s => s.FamilyId == familyId);
+        db.FamilyMedicalShares.RemoveRange(shares);
+
+        var hidden = db.MedicalRecordHiddens.Where(h => h.FamilyId == familyId);
+        db.MedicalRecordHiddens.RemoveRange(hidden);
+
+        db.Families.Remove(family);
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Семья {FamilyId} удалена пользователем {UserId}", familyId, requestingUserId);
+        return DeleteFamilyResult.Deleted;
     }
 }
