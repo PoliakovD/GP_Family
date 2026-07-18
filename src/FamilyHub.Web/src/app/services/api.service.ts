@@ -140,39 +140,54 @@ export class ApiService {
 
   // Аптечки
   getMedkits = (familyId: string) => this.get<Medkit[]>(`/api/families/${familyId}/medkits`);
+
   createMedkit = (familyId: string, input: MedkitInput) =>
     this.post<Medkit>(`/api/families/${familyId}/medkits`, input);
+
   updateMedkit = (id: string, input: MedkitInput) => this.put<void>(`/api/medkits/${id}`, input);
+
   deleteMedkit = (id: string) => this.del<void>(`/api/medkits/${id}`);
 
   // Медикаменты внутри аптечки
   getMedications = (medkitId: string) => this.get<Medication[]>(`/api/medkits/${medkitId}/medications`);
+
   createMedication = (medkitId: string, input: MedicationInput) =>
     this.post<Medication>(`/api/medkits/${medkitId}/medications`, input);
+
   updateMedication = (id: string, input: MedicationInput) =>
     this.put<void>(`/api/medications/${id}`, input);
+
   deleteMedication = (id: string) => this.del<void>(`/api/medications/${id}`);
 
   // Дни рождения
   getBirthdays = (familyId: string) => this.get<Birthday[]>(`/api/families/${familyId}/birthdays`);
+
   createBirthday = (familyId: string, input: BirthdayInput) =>
     this.post<Birthday>(`/api/families/${familyId}/birthdays`, input);
+
   updateBirthday = (id: string, input: BirthdayInput) =>
     this.put<void>(`/api/birthdays/${id}`, input);
+
   deleteBirthday = (id: string) => this.del<void>(`/api/birthdays/${id}`);
 
   // Анализы и вложения
   getMedicalRecords = () => this.get<MedicalRecord[]>('/api/medical-records');
+
   createMedicalRecord = (input: MedicalRecordInput) =>
     this.post<MedicalRecord>('/api/medical-records', input);
+
   shareMedicalRecord = (familyId: string) =>
     this.post<void>('/api/medical-records/share', { familyId });
+
   unshareMedicalRecord = (familyId: string) =>
     this.post<void>('/api/medical-records/unshare', { familyId });
+
   hideMedicalRecord = (recordId: string, familyIds: string[]) =>
     this.post<void>(`/api/medical-records/${recordId}/hide`, { familyIds });
+
   unhideMedicalRecord = (recordId: string, familyIds: string[]) =>
     this.post<void>(`/api/medical-records/${recordId}/unhide`, { familyIds });
+
   getAttachmentUrl = (id: string) => this.get<{ url: string }>(`/api/attachments/${id}/url`);
 
   async uploadAttachment(recordId: string, file: File): Promise<Attachment> {
