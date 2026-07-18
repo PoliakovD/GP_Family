@@ -1,0 +1,68 @@
+.recognize-steps {
+  position: relative;
+
+  // Соединительная линия между шагами — под точками, поверх фона карточки.
+  &::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 12.5%;
+    right: 12.5%;
+    height: 2px;
+    background: rgba(0, 0, 0, 0.1);
+    z-index: 0;
+  }
+}
+
+.recognize-step {
+  position: relative;
+  z-index: 1;
+}
+
+.recognize-step-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  background: var(--tg-theme-bg-color, #fff);
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  color: var(--tg-theme-hint-color, #888);
+
+  .spinner-border {
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+    color: var(--tg-theme-link-color, #2481cc);
+  }
+}
+
+.recognize-step-label {
+  font-size: 11px;
+  color: var(--tg-theme-hint-color, #888);
+}
+
+.step-done {
+  .recognize-step-dot {
+    background: #2f9e44;
+    border-color: #2f9e44;
+    color: #fff;
+  }
+
+  .recognize-step-label {
+    color: #2f9e44;
+  }
+}
+
+.step-active {
+  .recognize-step-dot {
+    border-color: var(--tg-theme-link-color, #2481cc);
+  }
+
+  .recognize-step-label {
+    color: var(--tg-theme-link-color, #2481cc);
+    font-weight: 600;
+  }
+}

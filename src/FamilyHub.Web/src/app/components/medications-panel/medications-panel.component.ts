@@ -13,11 +13,16 @@ interface DataRow {
   value: string;
 }
 
+export type RecognizeStep = 'idle' | 'compressing' | 'uploading' | 'recognizing' | 'receiving';
+
+const RECOGNIZE_STEP_ORDER: RecognizeStep[] = ['compressing', 'uploading', 'recognizing', 'receiving'];
+
 @Component({
   selector: 'app-medications-panel',
   standalone: true,
   imports: [FormsModule],
   templateUrl: './medications-panel.component.html',
+  styleUrl: './medications-panel.component.scss',
 })
 export class MedicationsPanelComponent implements OnInit {
   readonly medkitId = input.required<string>();
@@ -33,7 +38,29 @@ export class MedicationsPanelComponent implements OnInit {
 
   // Фото — только для распознавания, никуда не сохраняются и не загружаются как вложения.
   photos: { file: File; previewUrl: string }[] = [];
-  recognizing = false;
+  recognizeStep: RecognizeStep = 'idle';
+  uploadProgress = 0;
+
+  readonly recognizeSteps: { id: RecognizeStep; label: string }[] = [
+    { id: 'compressing', label: 'Сжимаем' },
+    { id: 'uploading', label: 'Отправляем' },
+    { id: 'recognizing', label: 'Распознаём' },
+    { id: 'receiving', label: 'Получаем' },
+  ];
+
+  get recognizing(): boolean {
+    return this.recognizeStep !== 'idle';
+  }
+
+  stepState(id: RecognizeStep): 'done' | 'active' | 'pending' {
+    const activeIndex = RECOGNIZE_STEP_ORDER.indexOf(this.recognizeStep);
+    if (activeIndex < 0) return 'pending';
+
+    const idIndex = RECOGNIZE_STEP_ORDER.indexOf(id);
+    if (idIndex < activeIndex) return 'done';
+    if (idIndex === activeIndex) return 'active';
+    return 'pending';
+  }
 
   // undefined — ещё ни разу не загружали.
   private loadedMedkitId: string | undefined = undefined;
@@ -114,10 +141,20 @@ export class MedicationsPanelComponent implements OnInit {
   async handleRecognize(): Promise<void> {
     if (this.photos.length === 0) return;
 
-    this.recognizing = true;
+    this.recognizeStep = 'compressing';
+    this.uploadProgress = 0;
     try {
       const compressed = await Promise.all(this.photos.map((p) => compressImage(p.file)));
-      const response = await this.api.ocrMedicationPhotos(compressed);
+
+      this.recognizeStep = 'uploading';
+      const response = await this.api.ocrMedicationPhotos(compressed, (percent) => {
+        this.uploadProgress = percent;
+        // Отправка файлов завершена (100%) — дальше клиент просто ждёт ответ модели.
+        if (percent >= 100) this.recognizeStep = 'recognizing';
+      });
+
+      this.recognizeStep = 'receiving';
+      await sleep(300); // без паузы шаг "Получаем" отрисовался бы на 0мс — весь код ниже синхронный
 
       if (!response.success) {
         this.toast.error(response.error ?? 'Не удалось распознать препарат по фото — заполните поля вручную.');
@@ -135,7 +172,7 @@ export class MedicationsPanelComponent implements OnInit {
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось распознать препарат по фото.');
     } finally {
-      this.recognizing = false;
+      this.recognizeStep = 'idle';
     }
   }
 
@@ -230,4 +267,8 @@ function parseDdMmYyyyToIso(value: string): string | null {
   if (!match) return null;
   const [, day, month, year] = match;
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

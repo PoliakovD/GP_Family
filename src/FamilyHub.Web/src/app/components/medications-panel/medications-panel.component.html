@@ -30,7 +30,7 @@
             type="file"
             accept="image/*"
             multiple
-            [disabled]="photos.length >= 5"
+            [disabled]="photos.length >= 5 || recognizing"
             (change)="onPhotosSelected($event)"
           />
           <button
@@ -38,9 +38,31 @@
             [disabled]="photos.length === 0 || recognizing"
             (click)="handleRecognize()"
           >
-            {{ recognizing ? 'Распознаём…' : 'Распознать по фото' }}
+            Распознать по фото
           </button>
         </div>
+
+        @if (recognizing) {
+          <div class="recognize-steps d-flex justify-content-between gap-1 mt-1">
+            @for (step of recognizeSteps; track step.id) {
+              <div class="recognize-step flex-fill text-center" [class]="'step-' + stepState(step.id)">
+                <div class="recognize-step-dot mx-auto mb-1">
+                  @if (stepState(step.id) === 'done') {
+                    <span>✓</span>
+                  } @else if (stepState(step.id) === 'active') {
+                    <span class="spinner-border spinner-border-sm"></span>
+                  }
+                </div>
+                <span class="recognize-step-label">
+                  {{ step.label }}
+                  @if (step.id === 'uploading' && stepState('uploading') === 'active') {
+                    {{ uploadProgress }}%
+                  }
+                </span>
+              </div>
+            }
+          </div>
+        }
       </div>
     </div>
   </div>

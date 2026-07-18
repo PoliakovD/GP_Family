@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {
   AppNotification,
@@ -162,21 +162,37 @@ export class ApiService {
 
   deleteMedication = (id: string) => this.del<void>(`/api/medications/${id}`);
 
-  async ocrMedicationPhotos(files: Blob[]): Promise<MedicationOcrResponse> {
+  /**
+   * onUploadProgress получает реальный процент отправки файлов (через HttpEventType.UploadProgress) —
+   * используется UI, чтобы отличить "отправляем" от "ждём ответа модели" вместо статичного спиннера.
+   */
+  ocrMedicationPhotos(files: Blob[], onUploadProgress?: (percent: number) => void): Promise<MedicationOcrResponse> {
     this.log.log('api', 'info', `POST /api/medications/ocr (${files.length} фото)`);
     const formData = new FormData();
     files.forEach((file, i) => formData.append('files', file, `photo-${i}.jpg`));
-    try {
-      const result = await firstValueFrom(
-        this.http.post<MedicationOcrResponse>('/api/medications/ocr', formData),
-      );
-      this.log.log('api', 'info', `POST /api/medications/ocr ✓ success=${result.success}`);
-      return result;
-    } catch (e) {
-      const err = this.toApiError(e);
-      this.log.log('api', 'error', `POST /api/medications/ocr ✗ ${err.status}: ${err.message}`);
-      throw err;
-    }
+
+    return new Promise<MedicationOcrResponse>((resolve, reject) => {
+      this.http
+        .post<MedicationOcrResponse>('/api/medications/ocr', formData, {
+          reportProgress: true,
+          observe: 'events',
+        })
+        .subscribe({
+          next: (event) => {
+            if (event.type === HttpEventType.UploadProgress && event.total) {
+              onUploadProgress?.(Math.round((100 * event.loaded) / event.total));
+            } else if (event.type === HttpEventType.Response && event.body) {
+              this.log.log('api', 'info', `POST /api/medications/ocr ✓ success=${event.body.success}`);
+              resolve(event.body);
+            }
+          },
+          error: (e) => {
+            const err = this.toApiError(e);
+            this.log.log('api', 'error', `POST /api/medications/ocr ✗ ${err.status}: ${err.message}`);
+            reject(err);
+          },
+        });
+    });
   }
 
   // Дни рождения
