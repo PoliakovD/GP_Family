@@ -250,7 +250,17 @@ app.MapFallbackToFile("index.html").AllowAnonymous();
 // --- Дашборд Hangfire — только Development (в проде потребовался бы отдельный auth-фильтр) ---
 if (app.Environment.IsDevelopment())
 {
-    app.MapHangfireDashboard("/hangfire");
+    // AllowAnonymous обязателен: FallbackPolicy выше требует аутентификации для всех
+    // эндпоинтов без явного исключения, а у браузера при заходе на /hangfire нет ни
+    // Telegram initData, ни dev-заголовка X-Dev-TelegramId.
+    // Authorization = [] отключает собственный фильтр Hangfire (по умолчанию
+    // LocalRequestsOnlyAuthorizationFilter, который 401-ит все запросы, где
+    // RemoteIpAddress не loopback — это ловит открытие дашборда через WSL/проброс портов
+    // или LAN-адрес хоста, даже когда ASP.NET Core-авторизация уже пропущена).
+    app.MapHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = Array.Empty<Hangfire.Dashboard.IDashboardAuthorizationFilter>(),
+    }).AllowAnonymous();
 
     // Ручной запуск джобы оповещений без ожидания cron/UI дашборда — для локальной проверки.
     app.MapPost("/dev/trigger-reminder-scan", async (ReminderScanJob job, CancellationToken ct) =>
