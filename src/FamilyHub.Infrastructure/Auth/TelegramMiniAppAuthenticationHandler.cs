@@ -26,14 +26,21 @@ public class TelegramMiniAppAuthenticationHandler(
     {
         var initData = ExtractInitData();
         if (initData is null)
+        {
+            Logger.LogWarning("Telegram Mini App аутентификация отклонена: отсутствует initData ({Path})", Request.Path);
             return AuthenticateResult.Fail("Отсутствует Telegram initData.");
+        }
 
         var result = validator.Validate(initData);
         if (result is null)
+        {
+            Logger.LogWarning("Telegram Mini App аутентификация отклонена: initData не прошла валидацию ({Path})", Request.Path);
             return AuthenticateResult.Fail("Telegram initData не прошла валидацию подписи.");
+        }
 
         var userId = await userProvisioning.GetOrCreateUserIdAsync(
             result.TelegramId, result.DisplayName, result.Username, Context.RequestAborted);
+        Logger.LogDebug("Telegram Mini App аутентификация: TelegramId={TelegramId} -> UserId={UserId}", result.TelegramId, userId);
 
         var claims = new[]
         {

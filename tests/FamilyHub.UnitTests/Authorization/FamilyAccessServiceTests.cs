@@ -2,6 +2,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Authorization;
@@ -12,7 +13,7 @@ public class FamilyAccessServiceTests : SqliteTestBase
 
     public FamilyAccessServiceTests()
     {
-        _sut = new FamilyAccessService(Db);
+        _sut = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
     }
 
     [Fact]

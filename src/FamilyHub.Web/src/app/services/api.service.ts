@@ -14,7 +14,7 @@ import {
   MedicationInput,
   Medkit,
   MedkitInput,
-  PendingMember,
+  PendingMember, RemoveMemberResult,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -32,6 +32,7 @@ export class ApiError extends Error {
 export class ApiService {
   private readonly http = inject(HttpClient);
   private readonly log = inject(DevLoggerService);
+
 
   private async get<T>(path: string): Promise<T> {
     this.log.log('api', 'info', `GET ${path}`);
@@ -95,13 +96,38 @@ export class ApiService {
 
   // Семьи
   getFamilies = () => this.get<FamilySummary[]>('/api/families');
+
   createFamily = (name: string) => this.post<{ id: string }>('/api/families', { name });
+
   getPendingMembers = (familyId: string) => this.get<PendingMember[]>(`/api/families/${familyId}/pending`);
+
   getCurrentMembers = (familyId: string) => this.get<CurrentMember[]>(`/api/families/${familyId}/current`);
+
   approveMember = (familyId: string, userId: string) =>
     this.post<void>(`/api/families/${familyId}/members/${userId}/approve`);
+
   rejectMember = (familyId: string, userId: string) =>
     this.post<void>(`/api/families/${familyId}/members/${userId}/reject`);
+
+  async removeMember(familyId: string, userId: string): Promise<RemoveMemberResult> {
+    try {
+      // Если бэкенд вернул Results.NoContent(), это статус 204. post() вернет null/undefined.
+      await this.post<void>(`/api/families/${familyId}/members/${userId}/remove`);
+      return RemoveMemberResult.Removed; // 0
+    } catch (e) {
+      // Ловим нашу кастомную ApiError
+      if (e instanceof ApiError) {
+        switch (e.status) {
+          case 403: return RemoveMemberResult.Forbidden; // 1
+          case 404: return RemoveMemberResult.NotFound;  // 2
+          case 409: return RemoveMemberResult.LastAdmin; // 3
+        }
+      }
+      // Если произошла сетевая ошибка или 500, пробрасываем её дальше
+      throw e;
+    }
+  }
+
   createInvite = (familyId: string) =>
     this.post<InviteCreated>(`/api/families/${familyId}/invites`, {
       targetUserId: null,
@@ -109,6 +135,7 @@ export class ApiService {
       maxUses: 1,
       expiresAt: null,
     });
+
   redeemInvite = (code: string) => this.post<{ status: string }>(`/api/invites/${code}/redeem`);
 
   // Аптечки

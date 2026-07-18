@@ -8,7 +8,8 @@ $ErrorActionPreference = "Stop"
 function Invoke-Help {
     Write-Host ""
     Write-Host "  .\dev.ps1 dev            Запустить все сервисы"
-    Write-Host "  .\dev.ps1 dev-restart    Перезапустить web (быстро, volumes не трогает)"
+    Write-Host "  .\dev.ps1 dev-restart-web    Перезапустить web (быстро, volumes не трогает)"
+    Write-Host "  .\dev.ps1 dev-rebuild-api    Пересобрать api"
     Write-Host "  .\dev.ps1 dev-npm        Пересобрать web после изменения package.json"
     Write-Host "  .\dev.ps1 dev-rebuild    Полный сброс: всё удалить + пересобрать"
     Write-Host "  .\dev.ps1 logs           Логи всех сервисов"
@@ -26,8 +27,12 @@ switch ($Command) {
         docker compose up -d
     }
 
-    "dev-restart" {
+    "dev-restart-web" {
         docker compose restart web
+    }
+    
+    "dev-restart-api" {
+        docker compose restart api
     }
 
     "dev-npm" {
@@ -50,6 +55,11 @@ switch ($Command) {
         docker compose down -v
         docker compose up --build -d
     }
+    "dev-rebuild-api" {
+            # Полный сброс: удаляет ВСЕ volumes включая БД
+            docker compose down api -v
+            docker compose up api --build -d
+        }
 
     "logs" {
         docker compose logs -f

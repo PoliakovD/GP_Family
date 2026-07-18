@@ -21,6 +21,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Minio;
 using Serilog;
+using Serilog.Events;
 using Serilog.Exceptions;
 using Telegram.Bot;
 
@@ -166,8 +167,31 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// --- Структурированное логирование HTTP-запросов (метод, путь, статус, время) в Seq ---
-app.UseSerilogRequestLogging();
+// --- Структурированное логирование HTTP-запросов (метод, путь, статус, время, пользователь) в Seq ---
+// Уровень поднимается на 4xx/5xx и падает на Debug для успешных запросов к статике/Hangfire —
+// иначе консоль в Development захлёстывает шумом от каждого ассета SPA.
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} -> {StatusCode} за {Elapsed:0.0}мс";
+
+    options.GetLevel = (httpContext, elapsed, ex) => ex is not null
+        ? LogEventLevel.Error
+        : httpContext.Response.StatusCode >= 500 ? LogEventLevel.Error
+        : httpContext.Response.StatusCode >= 400 ? LogEventLevel.Warning
+        : httpContext.Request.Path.StartsWithSegments("/hangfire") ? LogEventLevel.Debug
+        : LogEventLevel.Information;
+
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RemoteIp", httpContext.Connection.RemoteIpAddress?.ToString());
+        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
+        diagnosticContext.Set("QueryString", httpContext.Request.QueryString.Value);
+
+        var userId = httpContext.User.FindFirst(FamilyHubClaimTypes.UserId)?.Value;
+        if (userId is not null)
+            diagnosticContext.Set("UserId", userId);
+    };
+});
 
 if (app.Environment.IsDevelopment())
 {

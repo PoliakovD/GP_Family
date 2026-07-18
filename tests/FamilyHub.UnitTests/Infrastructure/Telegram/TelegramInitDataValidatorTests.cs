@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using FamilyHub.Infrastructure.Telegram;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -12,7 +13,8 @@ public class TelegramInitDataValidatorTests
     private const string BotToken = "123456:test-bot-token";
 
     private static TelegramInitDataValidator CreateSut(TimeSpan? maxAge = null) =>
-        new(Options.Create(new TelegramOptions { BotToken = BotToken, MaxInitDataAge = maxAge ?? TimeSpan.FromHours(24) }));
+        new(Options.Create(new TelegramOptions { BotToken = BotToken, MaxInitDataAge = maxAge ?? TimeSpan.FromHours(24) }),
+            NullLogger<TelegramInitDataValidator>.Instance);
 
     /// <summary>
     /// Воспроизводит официальный алгоритм подписи initData (см. докстрингу самого валидатора),
@@ -85,7 +87,8 @@ public class TelegramInitDataValidatorTests
     public void Validate_EmptyBotToken_ReturnsNull()
     {
         var initData = BuildSignedInitData(42, "Ada", "Lovelace", DateTimeOffset.UtcNow);
-        var sut = new TelegramInitDataValidator(Options.Create(new TelegramOptions { BotToken = "" }));
+        var sut = new TelegramInitDataValidator(
+            Options.Create(new TelegramOptions { BotToken = "" }), NullLogger<TelegramInitDataValidator>.Instance);
 
         var result = sut.Validate(initData);
 

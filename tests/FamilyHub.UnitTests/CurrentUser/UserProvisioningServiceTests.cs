@@ -2,6 +2,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.CurrentUser;
@@ -12,7 +13,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
 
     public UserProvisioningServiceTests()
     {
-        _sut = new UserProvisioningService(Db);
+        _sut = new UserProvisioningService(Db, NullLogger<UserProvisioningService>.Instance);
     }
 
     [Fact]

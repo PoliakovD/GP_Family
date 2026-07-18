@@ -4,6 +4,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Api.Features.Invites;
 
@@ -16,13 +17,17 @@ public record PendingMemberDto(Guid UserId, string DisplayName, string? Username
 /// (персональный инвайт → Active сразу, ссылка → PendingApproval до одобрения админа),
 /// инкремент UsedCount в одной транзакции с вступлением (защита от гонки на MaxUses).
 /// </summary>
-public class InviteService(AppDbContext db, IFamilyAccessService access)
+public class InviteService(AppDbContext db, IFamilyAccessService access, ILogger<InviteService> logger)
 {
     public async Task<(CreateInviteResult Result, FamilyInvite? Invite)> CreateInviteAsync(
         Guid creatorUserId, Guid familyId, CreateInviteRequest request, CancellationToken ct = default)
     {
         if (!await access.HasRoleAsync(creatorUserId, familyId, FamilyRole.Admin, ct))
+        {
+            logger.LogWarning(
+                "Отказ создания инвайта: пользователь {UserId} не админ семьи {FamilyId}", creatorUserId, familyId);
             return (CreateInviteResult.Forbidden, null);
+        }
 
         var invite = new FamilyInvite
         {
@@ -42,6 +47,10 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
         db.FamilyInvites.Add(invite);
         await db.SaveChangesAsync(ct);
 
+        logger.LogInformation(
+            "Инвайт {InviteId} создан для семьи {FamilyId} пользователем {UserId} (TargetUserId={TargetUserId}, MaxUses={MaxUses})",
+            invite.Id, familyId, creatorUserId, request.TargetUserId, invite.MaxUses);
+
         return (CreateInviteResult.Created, invite);
     }
 
@@ -49,15 +58,44 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
     {
         var invite = await db.FamilyInvites.FirstOrDefaultAsync(i => i.Code == code, ct);
 
-        if (invite is null) return RedeemResult.NotFound;
-        if (invite.IsRevoked) return RedeemResult.Revoked;
-        if (invite.ExpiresAt is { } exp && exp < DateTime.UtcNow) return RedeemResult.Expired;
-        if (invite.UsedCount >= invite.MaxUses) return RedeemResult.Exhausted;
-        if (invite.TargetUserId is { } target && target != userId) return RedeemResult.NotForYou;
+        if (invite is null)
+        {
+            logger.LogWarning("Погашение инвайта: код не найден (пользователь {UserId})", userId);
+            return RedeemResult.NotFound;
+        }
+        if (invite.IsRevoked)
+        {
+            logger.LogWarning("Погашение инвайта {InviteId} отклонено: отозван (пользователь {UserId})", invite.Id, userId);
+            return RedeemResult.Revoked;
+        }
+        if (invite.ExpiresAt is { } exp && exp < DateTime.UtcNow)
+        {
+            logger.LogWarning("Погашение инвайта {InviteId} отклонено: истёк {ExpiresAt} (пользователь {UserId})", invite.Id, exp, userId);
+            return RedeemResult.Expired;
+        }
+        if (invite.UsedCount >= invite.MaxUses)
+        {
+            logger.LogWarning(
+                "Погашение инвайта {InviteId} отклонено: исчерпан лимит {UsedCount}/{MaxUses} (пользователь {UserId})",
+                invite.Id, invite.UsedCount, invite.MaxUses, userId);
+            return RedeemResult.Exhausted;
+        }
+        if (invite.TargetUserId is { } target && target != userId)
+        {
+            logger.LogWarning(
+                "Погашение инвайта {InviteId} отклонено: предназначен другому пользователю (запросил {UserId})", invite.Id, userId);
+            return RedeemResult.NotForYou;
+        }
 
         var already = await db.FamilyMembers.AnyAsync(
             m => m.FamilyId == invite.FamilyId && m.UserId == userId, ct);
-        if (already) return RedeemResult.AlreadyMember;
+        if (already)
+        {
+            logger.LogDebug(
+                "Погашение инвайта {InviteId}: пользователь {UserId} уже состоит в семье {FamilyId}",
+                invite.Id, userId, invite.FamilyId);
+            return RedeemResult.AlreadyMember;
+        }
 
         // Гибрид: персональный инвайт → сразу Active; ссылка → PendingApproval.
         var status = invite.TargetUserId is not null
@@ -88,6 +126,10 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
+        logger.LogInformation(
+            "Инвайт {InviteId} погашен пользователем {UserId}, семья {FamilyId}, статус {Status}",
+            invite.Id, userId, invite.FamilyId, status);
+
         return status == MemberStatus.Active
             ? RedeemResult.Joined           // персональный — вступил сразу
             : RedeemResult.PendingApproval;  // ссылка — ждёт одобрения админа
@@ -96,13 +138,23 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
     public async Task<RevokeInviteResult> RevokeInviteAsync(Guid inviteId, Guid requestingUserId, CancellationToken ct = default)
     {
         var invite = await db.FamilyInvites.FirstOrDefaultAsync(i => i.Id == inviteId, ct);
-        if (invite is null) return RevokeInviteResult.NotFound;
+        if (invite is null)
+        {
+            logger.LogWarning("Отзыв инвайта {InviteId} отклонён: не найден (запросил {UserId})", inviteId, requestingUserId);
+            return RevokeInviteResult.NotFound;
+        }
 
         if (!await access.HasRoleAsync(requestingUserId, invite.FamilyId, FamilyRole.Admin, ct))
+        {
+            logger.LogWarning(
+                "Отзыв инвайта {InviteId} отклонён: пользователь {UserId} не админ семьи {FamilyId}",
+                inviteId, requestingUserId, invite.FamilyId);
             return RevokeInviteResult.Forbidden;
+        }
 
         invite.IsRevoked = true;
         await db.SaveChangesAsync(ct);
+        logger.LogInformation("Инвайт {InviteId} отозван пользователем {UserId}", inviteId, requestingUserId);
         return RevokeInviteResult.Revoked;
     }
 
@@ -126,14 +178,25 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
     public async Task<ApproveRejectResult> ApproveMemberAsync(Guid familyId, Guid targetUserId, Guid requestingUserId, CancellationToken ct = default)
     {
         if (!await access.HasRoleAsync(requestingUserId, familyId, FamilyRole.Admin, ct))
+        {
+            logger.LogWarning(
+                "Одобрение заявки отклонено: {UserId} не админ семьи {FamilyId}", requestingUserId, familyId);
             return ApproveRejectResult.Forbidden;
+        }
 
         var member = await db.FamilyMembers.FirstOrDefaultAsync(m =>
             m.FamilyId == familyId && m.UserId == targetUserId && m.Status == MemberStatus.PendingApproval, ct);
-        if (member is null) return ApproveRejectResult.NotFound;
+        if (member is null)
+        {
+            logger.LogWarning(
+                "Одобрение заявки: заявка пользователя {TargetUserId} в семье {FamilyId} не найдена", targetUserId, familyId);
+            return ApproveRejectResult.NotFound;
+        }
 
         member.Status = MemberStatus.Active;
         await db.SaveChangesAsync(ct);
+        logger.LogInformation(
+            "Заявка пользователя {TargetUserId} в семью {FamilyId} одобрена админом {UserId}", targetUserId, familyId, requestingUserId);
         return ApproveRejectResult.Success;
     }
 
@@ -142,14 +205,25 @@ public class InviteService(AppDbContext db, IFamilyAccessService access)
     public async Task<ApproveRejectResult> RejectMemberAsync(Guid familyId, Guid targetUserId, Guid requestingUserId, CancellationToken ct = default)
     {
         if (!await access.HasRoleAsync(requestingUserId, familyId, FamilyRole.Admin, ct))
+        {
+            logger.LogWarning(
+                "Отклонение заявки отклонено: {UserId} не админ семьи {FamilyId}", requestingUserId, familyId);
             return ApproveRejectResult.Forbidden;
+        }
 
         var member = await db.FamilyMembers.FirstOrDefaultAsync(m =>
             m.FamilyId == familyId && m.UserId == targetUserId && m.Status == MemberStatus.PendingApproval, ct);
-        if (member is null) return ApproveRejectResult.NotFound;
+        if (member is null)
+        {
+            logger.LogWarning(
+                "Отклонение заявки: заявка пользователя {TargetUserId} в семье {FamilyId} не найдена", targetUserId, familyId);
+            return ApproveRejectResult.NotFound;
+        }
 
         db.FamilyMembers.Remove(member);
         await db.SaveChangesAsync(ct);
+        logger.LogInformation(
+            "Заявка пользователя {TargetUserId} в семью {FamilyId} отклонена админом {UserId}", targetUserId, familyId, requestingUserId);
         return ApproveRejectResult.Success;
     }
 

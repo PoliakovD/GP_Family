@@ -5,6 +5,7 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Attachments;
 
@@ -17,18 +18,31 @@ public class AttachmentService(
     AppDbContext db,
     IFileStorage storage,
     MedicalRecordService medicalRecords,
-    IFamilyAccessService familyAccess)
+    IFamilyAccessService familyAccess,
+    ILogger<AttachmentService> logger)
 {
     /// <summary>Прикладывать сканы к анализу может только владелец записи — тот же барьер, что и для шаринга.</summary>
     public async Task<(AttachmentAccessResult Result, AttachmentDto? Item)> UploadForMedicalRecordAsync(
         Guid recordId, Guid ownerUserId, string fileName, string contentType, long sizeBytes, Stream content, CancellationToken ct = default)
     {
         var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);
-        if (record is null) return (AttachmentAccessResult.NotFound, null);
-        if (record.OwnerUserId != ownerUserId) return (AttachmentAccessResult.Forbidden, null);
+        if (record is null)
+        {
+            logger.LogWarning("Загрузка вложения: мед-запись {RecordId} не найдена (запросил {UserId})", recordId, ownerUserId);
+            return (AttachmentAccessResult.NotFound, null);
+        }
+        if (record.OwnerUserId != ownerUserId)
+        {
+            logger.LogWarning(
+                "Загрузка вложения к мед-записи {RecordId} отклонена: {UserId} не владелец", recordId, ownerUserId);
+            return (AttachmentAccessResult.Forbidden, null);
+        }
 
         var attachmentId = Guid.NewGuid();
         var storageKey = $"medical-records/{recordId}/{attachmentId}-{fileName}";
+        logger.LogDebug(
+            "Загрузка файла {FileName} ({SizeBytes} байт, {ContentType}) в хранилище: {StorageKey}",
+            fileName, sizeBytes, contentType, storageKey);
         await storage.SaveAsync(storageKey, content, sizeBytes, contentType, ct);
 
         var attachment = new FileAttachment
@@ -46,6 +60,9 @@ public class AttachmentService(
         db.FileAttachments.Add(attachment);
         await db.SaveChangesAsync(ct);
 
+        logger.LogInformation(
+            "Вложение {AttachmentId} ({FileName}) добавлено к мед-записи {RecordId} пользователем {UserId}",
+            attachmentId, fileName, recordId, ownerUserId);
         return (AttachmentAccessResult.Success, ToDto(attachment));
     }
 
@@ -54,7 +71,11 @@ public class AttachmentService(
         Guid attachmentId, Guid userId, CancellationToken ct = default)
     {
         var attachment = await db.FileAttachments.AsNoTracking().FirstOrDefaultAsync(a => a.Id == attachmentId, ct);
-        if (attachment is null) return (AttachmentAccessResult.NotFound, null);
+        if (attachment is null)
+        {
+            logger.LogWarning("Ссылка на вложение {AttachmentId}: не найдено (запросил {UserId})", attachmentId, userId);
+            return (AttachmentAccessResult.NotFound, null);
+        }
 
         var hasAccess = attachment.OwnerType switch
         {
@@ -62,9 +83,16 @@ public class AttachmentService(
             FileOwnerType.Medication => await HasMedicationAccessAsync(attachment.OwnerId, userId, ct),
             _ => false,
         };
-        if (!hasAccess) return (AttachmentAccessResult.Forbidden, null);
+        if (!hasAccess)
+        {
+            logger.LogWarning(
+                "Ссылка на вложение {AttachmentId} отклонена: {UserId} нет доступа к {OwnerType} {OwnerId}",
+                attachmentId, userId, attachment.OwnerType, attachment.OwnerId);
+            return (AttachmentAccessResult.Forbidden, null);
+        }
 
         var url = await storage.GetPresignedUrlAsync(attachment.StorageKey, TimeSpan.FromMinutes(5), ct);
+        logger.LogDebug("Выдана presigned-ссылка на вложение {AttachmentId} пользователю {UserId}", attachmentId, userId);
         return (AttachmentAccessResult.Success, url);
     }
 

@@ -3,6 +3,14 @@
 
 export const FamilyRole = {Member: 0, Admin: 1} as const;
 export const MemberStatus = {PendingApproval: 0, Active: 1} as const;
+export const RemoveMemberResult = {
+    Removed: 0,
+    Forbidden: 1,
+    NotFound: 2,
+    LastAdmin: 3
+} as const;
+export type RemoveMemberResult = typeof RemoveMemberResult[keyof typeof RemoveMemberResult];
+
 export const NotificationType = {
     MedicationExpiringSoon: 0,
     MedicationExpired: 1,

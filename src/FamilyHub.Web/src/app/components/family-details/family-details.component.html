@@ -92,16 +92,6 @@
                     </div>
                 </div>
             }
-
-            <!--            @for (m of family.currentMembers; track m.id) {-->
-                    <!--                <div>-->
-                    <!--                    <strong>{{ m.username }}</strong>-->
-                    <!--                    <span class="ms-2">-->
-                    <!--                        <span class="tag">{{ roleLabel(m.role) }}</span>-->
-                    <!--                        <span class="tag">{{ m.displayName }}</span>-->
-                    <!--                        <span class="tag">{{ m.joinedAt| date: 'dd/MM/yyyy' }}</span>-->
-                    <!--                        </span>-->
-                    <!--                </div>-->
             <div class="table-responsive mt-3">
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
@@ -110,6 +100,9 @@
                         <th scope="col">Telegram Username</th>
                         <th scope="col">Роль</th>
                         <th scope="col">Дата вступления</th>
+                        @if (family.myRole === FamilyRole.Admin) {
+                            <th scope="col">Управление</th>
+                        }
                     </tr>
                     </thead>
                     <tbody>
@@ -119,7 +112,6 @@
                                 <td>
                                     <span class="fw-semibold">{{ m.displayName }}</span>
                                 </td>
-
                                 <!-- Юзернейм (с проверкой на его наличие) -->
                                 <td>
                                     @if (m.username) {
@@ -128,27 +120,28 @@
                                         <span class="text-muted text-opacity-50">—</span>
                                     }
                                 </td>
-
                                 <!-- Роль (оформленная в виде бейджа/тега) -->
                                 <td>
-                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1">
-                {{ roleLabel(m.role) }}
-                </span>
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-2.5 py-1">
+                                {{ roleLabel(m.role) }}
+                                </span>
                                 </td>
 
                                 <!-- Дата -->
                                 <td class="text-muted">
                                     {{ m.joinedAt | date: 'dd/MM/yyyy' }}
                                 </td>
+                                @if (family.myRole === FamilyRole.Admin) {
+                                    <td class="text-muted">
+                                        <button (click)="removeMember(m.id)">Выгнать</button>
+
+                                    </td>
+                                }
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-
-            <!--            }-->
-
-
         }
 
         @if (activeSubTab === 'medkits') {

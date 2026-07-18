@@ -1,6 +1,7 @@
 using FamilyHub.Api.Features.Notifications;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Features.Notifications;
@@ -11,7 +12,7 @@ public class NotificationServiceTests : SqliteTestBase
 
     public NotificationServiceTests()
     {
-        _sut = new NotificationService(Db);
+        _sut = new NotificationService(Db, NullLogger<NotificationService>.Instance);
     }
 
     [Fact]

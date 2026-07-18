@@ -3,6 +3,7 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Modules.Birthdays.Birthdays;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Modules.Birthdays;
@@ -13,7 +14,8 @@ public class BirthdayServiceTests : SqliteTestBase
 
     public BirthdayServiceTests()
     {
-        _sut = new BirthdayService(Db, new FamilyAccessService(Db));
+        _sut = new BirthdayService(
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<BirthdayService>.Instance);
     }
 
     [Fact]

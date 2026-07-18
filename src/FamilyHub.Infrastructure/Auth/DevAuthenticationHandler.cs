@@ -25,10 +25,14 @@ public class DevAuthenticationHandler(
     {
         var header = Request.Headers["X-Dev-TelegramId"].ToString();
         if (!long.TryParse(header, out var telegramId) || telegramId <= 0)
+        {
+            Logger.LogWarning("Dev-аутентификация отклонена: некорректный заголовок X-Dev-TelegramId={Header}", header);
             return AuthenticateResult.Fail("Отсутствует или некорректен заголовок X-Dev-TelegramId.");
+        }
 
         var userId = await userProvisioning.GetOrCreateUserIdAsync(
             telegramId, displayName: null, username: null, Context.RequestAborted);
+        Logger.LogDebug("Dev-аутентификация: TelegramId={TelegramId} -> UserId={UserId}", telegramId, userId);
 
         var claims = new[]
         {

@@ -1,10 +1,11 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Infrastructure.CurrentUser;
 
-public class UserProvisioningService(AppDbContext db) : IUserProvisioningService
+public class UserProvisioningService(AppDbContext db, ILogger<UserProvisioningService> logger) : IUserProvisioningService
 {
     public async Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? displayName, string? username = null, CancellationToken ct = default)
     {
@@ -27,7 +28,12 @@ public class UserProvisioningService(AppDbContext db) : IUserProvisioningService
                 changed = true;
             }
             if (changed)
+            {
                 await db.SaveChangesAsync(ct);
+                logger.LogDebug(
+                    "Профиль пользователя {UserId} (TelegramId={TelegramId}) обновлён: DisplayName={DisplayName}, Username={Username}",
+                    existing.Id, telegramId, existing.DisplayName, existing.Username);
+            }
 
             return existing.Id;
         }
@@ -46,11 +52,15 @@ public class UserProvisioningService(AppDbContext db) : IUserProvisioningService
         try
         {
             await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "Создан новый пользователь {UserId} (TelegramId={TelegramId}, DisplayName={DisplayName})",
+                user.Id, telegramId, user.DisplayName);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             // Гонка: другой запрос того же TelegramId уже создал пользователя
             // между нашим SELECT и INSERT (UNIQUE-индекс на TelegramId это поймал).
+            logger.LogDebug(ex, "Гонка при создании пользователя TelegramId={TelegramId}, повторное чтение", telegramId);
             db.Entry(user).State = EntityState.Detached;
             var raceId = await db.Users.AsNoTracking()
                 .Where(u => u.TelegramId == telegramId)

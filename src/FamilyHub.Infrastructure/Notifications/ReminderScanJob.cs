@@ -2,6 +2,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Infrastructure.Notifications;
@@ -15,15 +16,19 @@ namespace FamilyHub.Infrastructure.Notifications;
 public class ReminderScanJob(
     AppDbContext db,
     INotificationSender sender,
-    IOptions<NotificationOptions> options)
+    IOptions<NotificationOptions> options,
+    ILogger<ReminderScanJob> logger)
 {
     public async Task RunAsync(CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        logger.LogInformation("Запуск ReminderScanJob за {Today}", today);
 
         await ScanMedicationsAsync(today, ct);
         await ScanBirthdaysAsync(today, ct);
         await SendPendingAsync(ct);
+
+        logger.LogInformation("ReminderScanJob завершён");
     }
 
     private async Task ScanMedicationsAsync(DateOnly today, CancellationToken ct)
@@ -36,6 +41,8 @@ public class ReminderScanJob(
             .Where(m => m.ExpiryDate != null && m.ExpiryDate <= warningCutoff)
             .Select(m => new { m.Id, m.FamilyId, m.Name, ExpiryDate = m.ExpiryDate!.Value })
             .ToListAsync(ct);
+
+        logger.LogDebug("Скан медикаментов: {Count} кандидатов до {WarningCutoff}", medications.Count, warningCutoff);
 
         foreach (var med in medications)
         {
@@ -60,6 +67,8 @@ public class ReminderScanJob(
         var birthdays = await db.Birthdays.AsNoTracking()
             .Select(b => new { b.Id, b.FamilyId, b.PersonName, b.Date })
             .ToListAsync(ct);
+
+        logger.LogDebug("Скан дней рождения: {Count} записей", birthdays.Count);
 
         foreach (var bday in birthdays)
         {
@@ -121,11 +130,15 @@ public class ReminderScanJob(
         try
         {
             await db.SaveChangesAsync(ct);
+            logger.LogDebug(
+                "Создано оповещение {Type} для пользователя {UserId} (семья {FamilyId}, DedupKey={DedupKey})",
+                type, userId, familyId, dedupKey);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             // Гонка двух прогонов джобы вставила тот же DedupKey раньше нас — UNIQUE-индекс
             // это и есть страховка идемпотентности, поэтому просто откатываем локальный трекинг.
+            logger.LogDebug(ex, "Гонка при создании оповещения DedupKey={DedupKey}, пропускаем", dedupKey);
             db.ChangeTracker.Clear();
         }
     }
@@ -137,10 +150,21 @@ public class ReminderScanJob(
         var pending = await db.Notifications.Where(n => n.SentAt == null).ToListAsync(ct);
         if (pending.Count == 0) return;
 
+        logger.LogDebug("Отправка {Count} неотправленных оповещений", pending.Count);
+
         foreach (var notification in pending)
         {
-            await sender.SendAsync(notification, ct);
-            notification.SentAt = DateTime.UtcNow;
+            try
+            {
+                await sender.SendAsync(notification, ct);
+                notification.SentAt = DateTime.UtcNow;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex, "Не удалось отправить оповещение {NotificationId} пользователю {UserId}",
+                    notification.Id, notification.UserId);
+            }
         }
 
         await db.SaveChangesAsync(ct);

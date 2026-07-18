@@ -3,6 +3,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.MedicalRecords;
 
@@ -11,7 +12,7 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 /// семье, приватны по умолчанию. Шарингом и скрытием управляет ТОЛЬКО владелец — даже
 /// админ семьи сюда не лезет (инвариант 2). Видимость — дословно по разделу 6 брифа.
 /// </summary>
-public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
+public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, ILogger<MedicalRecordService> logger)
 {
     /// <summary>
     /// Видно, если: владелец, ИЛИ (мои анализы расшарены этой семье И я в ней состою
@@ -71,6 +72,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
         }
 
         await db.SaveChangesAsync(ct);
+        logger.LogInformation("Мед-запись {RecordId} создана владельцем {OwnerUserId}", record.Id, ownerUserId);
         return ToDto(record);
     }
 
@@ -79,7 +81,11 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
     {
         // Расшарить можно только семье, в которой сам состоишь.
         if (!await access.HasRoleAsync(ownerUserId, familyId, FamilyRole.Member, ct))
+        {
+            logger.LogWarning(
+                "Шаринг мед-записей отклонён: {UserId} не состоит в семье {FamilyId}", ownerUserId, familyId);
             return MedicalRecordAccessResult.Forbidden;
+        }
 
         var exists = await db.FamilyMedicalShares.AnyAsync(
             s => s.OwnerUserId == ownerUserId && s.FamilyId == familyId, ct);
@@ -93,6 +99,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
                 SharedAt = DateTime.UtcNow,
             });
             await db.SaveChangesAsync(ct);
+            logger.LogInformation("Пользователь {OwnerUserId} расшарил мед-записи семье {FamilyId}", ownerUserId, familyId);
         }
 
         return MedicalRecordAccessResult.Success;
@@ -106,10 +113,16 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
     {
         var share = await db.FamilyMedicalShares.FirstOrDefaultAsync(
             s => s.OwnerUserId == ownerUserId && s.FamilyId == familyId, ct);
-        if (share is null) return MedicalRecordAccessResult.NotFound;
+        if (share is null)
+        {
+            logger.LogWarning(
+                "Отмена шаринга: шаринг {OwnerUserId} -> {FamilyId} не найден", ownerUserId, familyId);
+            return MedicalRecordAccessResult.NotFound;
+        }
 
         db.FamilyMedicalShares.Remove(share);
         await db.SaveChangesAsync(ct);
+        logger.LogInformation("Пользователь {OwnerUserId} отменил шаринг мед-записей семье {FamilyId}", ownerUserId, familyId);
         return MedicalRecordAccessResult.Success;
     }
 
@@ -118,10 +131,19 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
         Guid ownerUserId, Guid recordId, List<Guid> familyIds, CancellationToken ct = default)
     {
         var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);
-        if (record is null) return MedicalRecordAccessResult.NotFound;
+        if (record is null)
+        {
+            logger.LogWarning("Скрытие мед-записи {RecordId}: не найдена (запросил {UserId})", recordId, ownerUserId);
+            return MedicalRecordAccessResult.NotFound;
+        }
 
         // Инвариант 2: шарингом и скрытием управляет ТОЛЬКО владелец, даже админ семьи не может.
-        if (record.OwnerUserId != ownerUserId) return MedicalRecordAccessResult.Forbidden;
+        if (record.OwnerUserId != ownerUserId)
+        {
+            logger.LogWarning(
+                "Скрытие мед-записи {RecordId} отклонено: {UserId} не владелец", recordId, ownerUserId);
+            return MedicalRecordAccessResult.Forbidden;
+        }
 
         var sharedFamilyIds = await db.FamilyMedicalShares
             .Where(s => s.OwnerUserId == ownerUserId && familyIds.Contains(s.FamilyId))
@@ -143,6 +165,9 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
         }
 
         await db.SaveChangesAsync(ct);
+        logger.LogInformation(
+            "Мед-запись {RecordId} скрыта от семей [{FamilyIds}] владельцем {UserId}",
+            recordId, string.Join(',', sharedFamilyIds), ownerUserId);
         return MedicalRecordAccessResult.Success;
     }
 
@@ -150,12 +175,24 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access)
         Guid ownerUserId, Guid recordId, List<Guid> familyIds, CancellationToken ct = default)
     {
         var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);
-        if (record is null) return MedicalRecordAccessResult.NotFound;
-        if (record.OwnerUserId != ownerUserId) return MedicalRecordAccessResult.Forbidden;
+        if (record is null)
+        {
+            logger.LogWarning("Раскрытие мед-записи {RecordId}: не найдена (запросил {UserId})", recordId, ownerUserId);
+            return MedicalRecordAccessResult.NotFound;
+        }
+        if (record.OwnerUserId != ownerUserId)
+        {
+            logger.LogWarning(
+                "Раскрытие мед-записи {RecordId} отклонено: {UserId} не владелец", recordId, ownerUserId);
+            return MedicalRecordAccessResult.Forbidden;
+        }
 
         var hidden = db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == recordId && familyIds.Contains(h.FamilyId));
         db.MedicalRecordHiddens.RemoveRange(hidden);
         await db.SaveChangesAsync(ct);
+        logger.LogInformation(
+            "Мед-запись {RecordId} раскрыта семьям [{FamilyIds}] владельцем {UserId}",
+            recordId, string.Join(',', familyIds), ownerUserId);
         return MedicalRecordAccessResult.Success;
     }
 
