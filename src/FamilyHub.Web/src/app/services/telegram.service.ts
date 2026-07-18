@@ -7,6 +7,7 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   openLink: (url: string) => void;
+  openTelegramLink: (url: string) => void;
   close: () => void;
 }
 
@@ -54,6 +55,16 @@ export class TelegramService {
     this.log.log('tg', 'info', `openLink: ${url}`);
     if (this.webApp) {
       this.webApp.openLink(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  /** Открывает t.me-ссылку (например, share/url) нативным механизмом Telegram, не покидая приложение. */
+  openTelegramLink(url: string): void {
+    this.log.log('tg', 'info', `openTelegramLink: ${url}`);
+    if (this.webApp) {
+      this.webApp.openTelegramLink(url);
     } else {
       window.open(url, '_blank', 'noopener,noreferrer');
     }

@@ -44,28 +44,10 @@
                             <button class="btn btn-outline-secondary btn-sm" (click)="loadPending()">
                                 Заявки
                             </button>
-                            <button class="btn btn-outline-secondary btn-sm" (click)="handleCreateInvite()">
-                                Создать инвайт
+                            <button class="btn btn-primary btn-sm" (click)="openInviteModal()">
+                                + Пригласить
                             </button>
                         </div>
-
-                        @if (createdInvite != undefined) {
-                            <p class="muted mb-2">
-                                Код: <code>{{ createdInvite().code }}</code>
-                            </p>
-                            @if (createdInvite().telegramLink) {
-                                <button
-                                        class="btn btn-primary btn-sm mb-2"
-                                        (click)="shareInvite(createdInvite().telegramLink!)"
-                                >
-                                    Поделиться / Отправить в Telegram
-                                </button>
-                            } @else {
-                                <p class="muted mb-2">
-                                    Отправьте боту: <code>/start {{ createdInvite().code }}</code>
-                                </p>
-                            }
-                        }
 
                         @if (pendingMembers !== undefined) {
                             @if (pendingMembers.length === 0) {
@@ -92,6 +74,55 @@
                         }
                     </div>
                 </div>
+
+                <app-modal title="Пригласить в семью" [open]="showInviteModal" (closed)="closeInviteModal()">
+                    @if (createdInvite == undefined) {
+                        <p class="muted mb-3">
+                            Ссылка-приглашение будет действовать одноразово. Отправьте её тому, кого хотите
+                            позвать — после перехода по ней человек попадёт в список заявок на вступление.
+                        </p>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button class="btn btn-outline-secondary btn-sm" (click)="closeInviteModal()">
+                                Отмена
+                            </button>
+                            <button
+                                    class="btn btn-primary btn-sm"
+                                    [disabled]="creatingInvite"
+                                    (click)="handleCreateInvite()"
+                            >
+                                Создать ссылку
+                            </button>
+                        </div>
+                    } @else {
+                        <p class="muted mb-2">
+                            Код: <code>{{ createdInvite().code }}</code>
+                        </p>
+                        @if (createdInvite().telegramLink) {
+                            <button
+                                    class="btn btn-primary btn-sm w-100 mb-2"
+                                    (click)="shareInvite(createdInvite().telegramLink!)"
+                            >
+                                Поделиться / Отправить в Telegram
+                            </button>
+                        } @else {
+                            <p class="muted mb-2">
+                                Отправьте боту: <code>/start {{ createdInvite().code }}</code>
+                            </p>
+                        }
+                        <div class="d-flex justify-content-end gap-2">
+                            <button class="btn btn-outline-secondary btn-sm" (click)="closeInviteModal()">
+                                Закрыть
+                            </button>
+                            <button
+                                    class="btn btn-outline-secondary btn-sm"
+                                    [disabled]="creatingInvite"
+                                    (click)="handleCreateInvite()"
+                            >
+                                Создать ещё одну
+                            </button>
+                        </div>
+                    }
+                </app-modal>
             }
             <div class="table-responsive mt-3">
                 <table class="table table-hover align-middle">

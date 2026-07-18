@@ -14,13 +14,15 @@ import {BirthdaysPanelComponent} from '../birthdays-panel/birthdays-panel.compon
 import {DatePipe} from "@angular/common";
 import {ToastService} from '../../shared/toast/toast.service';
 import {ConfirmService} from '../../shared/confirm/confirm.service';
+import {ModalComponent} from '../../shared/modal/modal.component';
+import {TelegramService} from '../../services/telegram.service';
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays';
 
 @Component({
     selector: 'app-family-details',
     standalone: true,
-    imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DatePipe],
+    imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DatePipe, ModalComponent],
     templateUrl: './family-details.component.html',
 })
 export class FamilyDetailsComponent implements OnInit {
@@ -31,10 +33,13 @@ export class FamilyDetailsComponent implements OnInit {
     private readonly toast = inject(ToastService);
     private readonly confirm = inject(ConfirmService);
     private readonly router = inject(Router);
+    private readonly tg = inject(TelegramService);
 
     pendingMembers: PendingMember[] | undefined = undefined;
     createdInvite: WritableSignal<InviteCreated> | null = null;
     activeSubTab: FamilySubTab = 'members';
+    showInviteModal = false;
+    creatingInvite = false;
 
     readonly FamilyRole = FamilyRole;
     readonly MemberStatus = MemberStatus;
@@ -95,7 +100,16 @@ export class FamilyDetailsComponent implements OnInit {
         }
     }
 
+    openInviteModal(): void {
+        this.showInviteModal = true;
+    }
+
+    closeInviteModal(): void {
+        this.showInviteModal = false;
+    }
+
     async handleCreateInvite(): Promise<void> {
+        this.creatingInvite = true;
         try {
             const invite = await this.api.createInvite(this.id);
             if (this.createdInvite) {
@@ -106,18 +120,27 @@ export class FamilyDetailsComponent implements OnInit {
             this.toast.success('Инвайт создан.');
         } catch (err) {
             this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать инвайт.');
+        } finally {
+            this.creatingInvite = false;
         }
     }
 
     async shareInvite(link: string): Promise<void> {
-        const shareData = {
-            title: 'Приглашение в семью FamilyHub',
-            text: 'Присоединяйтесь к нашей семье в FamilyHub',
-            url: link,
-        };
+        // Внутри Telegram — открываем нативный шаринг (пользователь сам выбирает контакт/чат
+        // из списка Telegram; мы не запрашиваем и не храним чужие Telegram ID).
+        if (this.tg.isInsideTelegram()) {
+            const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Присоединяйтесь к нашей семье в FamilyHub')}`;
+            this.tg.openTelegramLink(shareUrl);
+            return;
+        }
+
         if (navigator.share) {
             try {
-                await navigator.share(shareData);
+                await navigator.share({
+                    title: 'Приглашение в семью FamilyHub',
+                    text: 'Присоединяйтесь к нашей семье в FamilyHub',
+                    url: link,
+                });
             } catch {
                 // пользователь отменил диалог — игнорируем
             }
