@@ -1,43 +1,51 @@
 <div>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Оповещения</h3>
+    <button class="btn btn-ghost" (click)="markAllRead()">Прочитать все</button>
+  </div>
+
   @if (error) {
-    <div class="alert alert-danger py-2 mb-2">{{ error }}</div>
+    <div class="alert-danger mb-2">{{ error }}</div>
   }
 
-  <div class="d-flex align-items-center gap-2 mb-3">
-    <div class="form-check form-switch mb-0">
-      <input
-        class="form-check-input"
-        type="checkbox"
-        role="switch"
-        id="unreadSwitch"
-        [(ngModel)]="unreadOnly"
-        (ngModelChange)="refresh()"
-      />
-      <label class="form-check-label" for="unreadSwitch">Только непрочитанные</label>
-    </div>
+  <div class="seg mb-3">
+    <label class="seg-opt">
+      <input type="radio" name="notifFilter" [checked]="unreadOnly" (change)="unreadOnly = true; refresh()" />
+      Непрочитанные
+    </label>
+    <label class="seg-opt">
+      <input type="radio" name="notifFilter" [checked]="!unreadOnly" (change)="unreadOnly = false; refresh()" />
+      Все
+    </label>
   </div>
 
   @if (loading) {
     <app-loading-spinner />
   } @else {
-    @for (n of items; track n.id) {
-      <div class="card mb-2">
-        <div class="card-body p-3">
-          <div class="name-with-tags mb-1">
-            <strong>{{ n.title }}</strong>
-            @if (!n.isRead) {
-              <span class="tag unread">новое</span>
-            }
+    @for (group of groupedByDate; track $index) {
+      <div class="card-kicker mb-2">{{ group.kicker }}</div>
+      @for (n of group.items; track n.id) {
+        <div class="card mb-2">
+          <div class="d-flex align-items-start gap-2">
+            <i [class]="typeIcon(n.type)" style="font-size:20px;color:var(--color-accent)" aria-hidden="true"></i>
+            <div class="flex-fill">
+              <div class="name-with-tags mb-1">
+                <strong class="card-title">{{ n.title }}</strong>
+                @if (!n.isRead) {
+                  <span class="tag tag-accent-2">новое</span>
+                }
+              </div>
+              <p class="muted mb-1">{{ typeLabel(n.type) }}</p>
+              <p class="mb-2">{{ n.body }}</p>
+              @if (!n.isRead) {
+                <button class="btn btn-ghost btn-sm" (click)="handleMarkRead(n.id)">
+                  Отметить прочитанным
+                </button>
+              }
+            </div>
           </div>
-          <p class="muted mb-1">{{ typeLabel(n.type) }}</p>
-          <p class="mb-2">{{ n.body }}</p>
-          @if (!n.isRead) {
-            <button class="btn btn-outline-secondary btn-sm" (click)="handleMarkRead(n.id)">
-              Отметить прочитанным
-            </button>
-          }
         </div>
-      </div>
+      }
     }
 
     @if (items.length === 0) {

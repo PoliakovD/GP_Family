@@ -34,7 +34,12 @@
               }
             ],
             "styles": [
-              "node_modules/bootstrap/dist/css/bootstrap.min.css",
+              "node_modules/@fontsource/source-serif-4/400.css",
+              "node_modules/@fontsource/source-serif-4/600.css",
+              "node_modules/@phosphor-icons/web/src/regular/style.css",
+              "node_modules/@phosphor-icons/web/src/bold/style.css",
+              "node_modules/@phosphor-icons/web/src/fill/style.css",
+              "node_modules/@phosphor-icons/web/src/duotone/style.css",
               "src/styles.scss"
             ],
             "scripts": []
@@ -44,13 +49,13 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kb",
-                  "maximumError": "1mb"
+                  "maximumWarning": "850kb",
+                  "maximumError": "1.5mb"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "2kb",
-                  "maximumError": "4kb"
+                  "maximumWarning": "4kb",
+                  "maximumError": "6kb"
                 }
               ],
               "outputHashing": "all"

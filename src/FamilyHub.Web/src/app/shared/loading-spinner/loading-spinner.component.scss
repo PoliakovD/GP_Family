@@ -4,7 +4,8 @@
   justify-content: center;
   gap: 8px;
   padding: 24px 0;
-  color: var(--tg-theme-hint-color, #888);
+  color: var(--color-neutral-600);
+  font-family: var(--font-body);
   font-size: 13px;
 }
 
@@ -13,8 +14,8 @@
   height: 18px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 2px solid rgba(127, 127, 127, 0.25);
-  border-top-color: var(--tg-theme-link-color, #2481cc);
+  border: 2px solid var(--color-divider);
+  border-top-color: var(--color-accent);
   animation: loading-spinner-rotate 0.7s linear infinite;
 }
 

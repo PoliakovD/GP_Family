@@ -209,6 +209,9 @@ export class ApiService {
   // Анализы и вложения
   getMedicalRecords = () => this.get<MedicalRecord[]>('/api/medical-records');
 
+  /** L1-семьи (расшарены глобально владельцем) — состояние для тумблеров в bottom-sheet «Доступ». */
+  getMedicalRecordShares = () => this.get<string[]>('/api/medical-records/shares');
+
   createMedicalRecord = (input: MedicalRecordInput) =>
     this.post<MedicalRecord>('/api/medical-records', input);
 

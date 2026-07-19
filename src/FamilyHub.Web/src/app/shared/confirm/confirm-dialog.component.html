@@ -4,7 +4,7 @@
       <h5 class="mb-2">{{ req.title }}</h5>
       <p class="muted mb-3">{{ req.message }}</p>
       <div class="d-flex justify-content-end gap-2">
-        <button class="btn btn-outline-secondary btn-sm" (click)="confirm.resolve(false)">
+        <button class="btn btn-secondary btn-sm" (click)="confirm.resolve(false)">
           {{ req.cancelText || 'Отмена' }}
         </button>
         <button

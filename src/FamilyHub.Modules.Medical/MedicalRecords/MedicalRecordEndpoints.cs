@@ -13,6 +13,11 @@ public static class MedicalRecordEndpoints
         group.MapGet("/", async (MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.GetVisibleRecordsAsync(currentUser.UserId, ct)));
 
+        // L1-семьи текущего пользователя (владельца) — нужны клиенту, чтобы отрисовать состояние
+        // тумблеров доступа в bottom-sheet «Доступ», не запрашивая его отдельно на каждую запись.
+        group.MapGet("/shares", async (MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.GetSharedFamilyIdsAsync(currentUser.UserId, ct)));
+
         group.MapPost("/", async (
             CreateMedicalRecordRequest request, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
         {

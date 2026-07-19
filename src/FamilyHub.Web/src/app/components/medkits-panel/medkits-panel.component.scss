@@ -1,11 +1,10 @@
 .medkit-card {
-  border: 1px solid rgba(127, 127, 127, 0.2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--color-divider);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 
   &.open {
-    border-color: rgba(127, 127, 127, 0.32);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow-sm);
   }
 }
 
@@ -26,6 +25,8 @@
 }
 
 .medkit-name {
+  font-family: var(--font-heading);
+  font-size: 16px;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -41,15 +42,14 @@
 
 .medkit-chevron {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  color: var(--tg-theme-hint-color, #888);
+  font-size: 18px;
+  color: var(--color-neutral-500);
   transition: transform 0.25s ease, color 0.25s ease;
 }
 
 .medkit-card.open .medkit-chevron {
   transform: rotate(180deg);
-  color: var(--tg-theme-link-color, #2481cc);
+  color: var(--color-accent);
 }
 
 // Аптечка и её содержимое — единая карточка: содержимое "выезжает" плавным ростом высоты

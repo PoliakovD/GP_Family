@@ -113,6 +113,8 @@ export interface MedicalRecord {
     doctor: string | null;
     description: string | null;
     createdAt: string;
+    /** L2: семьи, от которых точечно скрыта именно эта запись (отдаётся только владельцу). */
+    hiddenFamilyIds: string[];
 }
 
 export interface MedicalRecordInput {

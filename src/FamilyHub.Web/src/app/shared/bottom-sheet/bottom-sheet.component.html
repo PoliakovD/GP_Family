@@ -1,6 +1,7 @@
 @if (open) {
-  <div class="overlay-backdrop" (click)="requestClose()">
-    <div class="overlay-card" (click)="$event.stopPropagation()">
+  <div class="sheet-backdrop" (click)="requestClose()">
+    <div class="sheet-panel" (click)="$event.stopPropagation()">
+      <div class="sheet-grip" aria-hidden="true"></div>
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="mb-0">{{ title }}</h5>
         <button type="button" class="btn btn-icon btn-ghost" aria-label="Закрыть" (click)="requestClose()">

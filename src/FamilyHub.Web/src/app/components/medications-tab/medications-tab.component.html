@@ -1,4 +1,6 @@
 <div>
+  <h3 class="mb-3">Аптечка</h3>
+
   @if (state.activeFamilies().length === 0 && !state.loading()) {
     <p class="muted">
       Нет ни одной семьи, в которой вы состоите как активный участник.
@@ -8,7 +10,7 @@
 
   @for (f of state.activeFamilies(); track f.id) {
     <div class="mb-4">
-      <h5 class="mb-2">{{ f.name }}</h5>
+      <div class="card-kicker mb-2">{{ f.name }}</div>
       <app-medkits-panel [familyId]="f.id" />
     </div>
   }

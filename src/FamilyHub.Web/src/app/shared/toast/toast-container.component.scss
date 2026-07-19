@@ -21,24 +21,25 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-heading);
   font-size: 13px;
-  font-weight: 500;
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  color: var(--color-bg);
+  box-shadow: var(--shadow-lg);
   cursor: pointer;
   animation: toast-in 0.18s ease-out;
 
   &.toast-success {
-    background: #2f9e44;
+    background: var(--color-accent-700);
   }
 
   &.toast-error {
-    background: #d6336c;
+    background: var(--color-accent-2-700);
   }
 
   &.toast-info {
-    background: var(--tg-theme-link-color, #2481cc);
+    background: var(--color-neutral-800);
   }
 }
 

@@ -5,11 +5,12 @@ import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import type { Attachment, MedicalRecord } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 
 @Component({
   selector: 'app-medical-records-tab',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent],
+  imports: [FormsModule, LoadingSpinnerComponent, BottomSheetComponent],
   templateUrl: './medical-records-tab.component.html',
 })
 export class MedicalRecordsTabComponent implements OnInit {
@@ -21,10 +22,16 @@ export class MedicalRecordsTabComponent implements OnInit {
   form = { personName: '', recordDate: '', doctor: '', description: '' };
   error: string | null = null;
   loading = true;
-  shareFamilyByRecord: Record<string, string> = {};
+
   // Бэкенд не отдаёт список вложений отдельным эндпоинтом — храним то, что
   // загрузили в текущей сессии (ответ POST .../attachments содержит Attachment целиком).
   attachmentsByRecord: Record<string, Attachment[]> = {};
+
+  // L1: семьи, которым владелец глобально расшарил свои анализы (см. MedicalRecordService).
+  shares: string[] = [];
+
+  // Запись, для которой сейчас открыта шторка «Доступ» (null — шторка закрыта).
+  accessRecord: MedicalRecord | null = null;
 
   ngOnInit(): void {
     this.refresh();
@@ -33,7 +40,16 @@ export class MedicalRecordsTabComponent implements OnInit {
   async refresh(): Promise<void> {
     this.loading = true;
     try {
-      this.items = await this.api.getMedicalRecords();
+      const [items, shares] = await Promise.all([
+        this.api.getMedicalRecords(),
+        this.api.getMedicalRecordShares(),
+      ]);
+      this.items = items;
+      this.shares = shares;
+      // Открытая шторка должна остаться синхронной с перезагруженным состоянием записи.
+      if (this.accessRecord) {
+        this.accessRecord = this.items.find((r) => r.id === this.accessRecord!.id) ?? null;
+      }
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить анализы.';
@@ -84,47 +100,78 @@ export class MedicalRecordsTabComponent implements OnInit {
     }
   }
 
-  async handleShare(recordId: string, share: boolean): Promise<void> {
-    const familyId = this.shareFamilyByRecord[recordId];
-    if (!familyId) return;
-    try {
-      if (share) {
-        await this.api.shareMedicalRecord(familyId);
-      } else {
-        await this.api.unshareMedicalRecord(familyId);
-      }
-      this.error = null;
-    } catch (err) {
-      this.error =
-        err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
-    }
-  }
-
-  async handleHide(recordId: string, hide: boolean): Promise<void> {
-    const familyId = this.shareFamilyByRecord[recordId];
-    if (!familyId) return;
-    try {
-      if (hide) {
-        await this.api.hideMedicalRecord(recordId, [familyId]);
-      } else {
-        await this.api.unhideMedicalRecord(recordId, [familyId]);
-      }
-      this.error = null;
-    } catch (err) {
-      this.error =
-        err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
-    }
-  }
-
-  setShareFamily(recordId: string, familyId: string): void {
-    this.shareFamilyByRecord = { ...this.shareFamilyByRecord, [recordId]: familyId };
-  }
-
   attachmentsFor(recordId: string): Attachment[] {
     return this.attachmentsByRecord[recordId] ?? [];
   }
 
-  shareFamilyFor(recordId: string): string {
-    return this.shareFamilyByRecord[recordId] ?? '';
+  // --- Доступ (bottom-sheet «Доступ») ---
+
+  openAccessSheet(record: MedicalRecord): void {
+    this.accessRecord = record;
+  }
+
+  closeAccessSheet(): void {
+    this.accessRecord = null;
+  }
+
+  /** Видна ли КОНКРЕТНАЯ запись данной семье: (L1 share есть) И (L2 hide нет). */
+  isVisibleToFamily(record: MedicalRecord, familyId: string): boolean {
+    return this.shares.includes(familyId) && !record.hiddenFamilyIds.includes(familyId);
+  }
+
+  /** Видна ли запись хотя бы одной расшаренной семье — определяет активную опцию сегмента. */
+  private visibleToAny(record: MedicalRecord): boolean {
+    return this.shares.some((fid) => !record.hiddenFamilyIds.includes(fid));
+  }
+
+  isOnlyMe(record: MedicalRecord): boolean {
+    return this.shares.length === 0 || !this.visibleToAny(record);
+  }
+
+  /** Сводка для карточки: «Только вы» / «Все семьи» / «Все семьи, кроме N». */
+  accessSummary(record: MedicalRecord): string {
+    const total = this.shares.length;
+    if (total === 0) return 'Только вы';
+    const hiddenCount = this.shares.filter((fid) => record.hiddenFamilyIds.includes(fid)).length;
+    if (hiddenCount === total) return 'Только вы';
+    if (hiddenCount === 0) return 'Все семьи';
+    return `Все семьи, кроме ${hiddenCount}`;
+  }
+
+  /**
+   * Тумблер одной семьи в шторке. Включение автоматически создаёт L1-шаринг, если его ещё не
+   * было — иначе тумблер не мог бы включить видимость семье, которой владелец никогда явно не
+   * открывал анализы. Это осознанное поведение: оно делает шторку самодостаточной ценой того,
+   * что включение затрагивает базовую видимость всех остальных записей той же семье.
+   */
+  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean): Promise<void> {
+    try {
+      if (visible) {
+        if (!this.shares.includes(familyId)) {
+          await this.api.shareMedicalRecord(familyId);
+        }
+        await this.api.unhideMedicalRecord(record.id, [familyId]);
+      } else {
+        await this.api.hideMedicalRecord(record.id, [familyId]);
+      }
+      await this.refresh();
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
+    }
+  }
+
+  /** Сегмент «Только я / Все семьи» — bulk-скрытие/раскрытие записи для ВСЕХ уже расшаренных семей. */
+  async setAccessMode(record: MedicalRecord, onlyMe: boolean): Promise<void> {
+    if (this.shares.length === 0) return;
+    try {
+      if (onlyMe) {
+        await this.api.hideMedicalRecord(record.id, this.shares);
+      } else {
+        await this.api.unhideMedicalRecord(record.id, this.shares);
+      }
+      await this.refresh();
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
+    }
   }
 }

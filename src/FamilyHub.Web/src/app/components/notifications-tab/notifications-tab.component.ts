@@ -10,6 +10,17 @@ const TYPE_LABEL: Record<number, string> = {
   [NotificationType.BirthdayUpcoming]: 'Скоро день рождения',
 };
 
+const TYPE_ICON: Record<number, string> = {
+  [NotificationType.MedicationExpiringSoon]: 'ph-duotone ph-warning-circle',
+  [NotificationType.MedicationExpired]: 'ph-duotone ph-warning-circle',
+  [NotificationType.BirthdayUpcoming]: 'ph-duotone ph-cake',
+};
+
+const MONTHS_GEN = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
+
 @Component({
   selector: 'app-notifications-tab',
   standalone: true,
@@ -50,7 +61,48 @@ export class NotificationsTabComponent implements OnInit {
     }
   }
 
+  /** Бэкенд не отдаёт bulk-эндпоинт — отмечаем каждое непрочитанное существующим методом. */
+  async markAllRead(): Promise<void> {
+    const unread = this.items.filter((n) => !n.isRead);
+    if (unread.length === 0) return;
+    try {
+      await Promise.all(unread.map((n) => this.api.markNotificationRead(n.id)));
+      await this.refresh();
+    } catch (err) {
+      this.error =
+        err instanceof ApiError ? err.message : 'Не удалось отметить все как прочитанные.';
+    }
+  }
+
   typeLabel(type: number): string {
     return TYPE_LABEL[type] ?? 'Оповещение';
+  }
+
+  typeIcon(type: number): string {
+    return TYPE_ICON[type] ?? 'ph-duotone ph-bell';
+  }
+
+  /** "Сегодня" / "Вчера" / "18 июля" — кикер группы даты (см. дизайн-дэк). */
+  private dateKicker(dateStr: string): string {
+    const d = new Date(dateStr);
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = new Date();
+    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffDays = Math.round((todayDay.getTime() - day.getTime()) / 86_400_000);
+    if (diffDays === 0) return 'Сегодня';
+    if (diffDays === 1) return 'Вчера';
+    return `${day.getDate()} ${MONTHS_GEN[day.getMonth()]}`;
+  }
+
+  /** Группирует уже отсортированный бэкендом список по соседним записям одной даты. */
+  get groupedByDate(): { kicker: string; items: AppNotification[] }[] {
+    const groups: { kicker: string; items: AppNotification[] }[] = [];
+    for (const n of this.items) {
+      const kicker = this.dateKicker(n.createdAt);
+      const last = groups[groups.length - 1];
+      if (last && last.kicker === kicker) last.items.push(n);
+      else groups.push({ kicker, items: [n] });
+    }
+    return groups;
   }
 }

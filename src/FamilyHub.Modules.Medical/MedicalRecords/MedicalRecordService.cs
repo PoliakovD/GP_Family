@@ -31,11 +31,38 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
                        h.MedicalRecordId == r.Id &&
                        h.FamilyId == share.FamilyId)));
 
-    public Task<List<MedicalRecordDto>> GetVisibleRecordsAsync(Guid userId, CancellationToken ct = default) =>
-        VisibleRecordsQuery(userId).Select(r => ToDto(r)).ToListAsync(ct);
+    /// <summary>
+    /// HiddenFamilyIds (L2) отдаётся только владельцу записи — это его личная настройка доступа,
+    /// а не то, что должны видеть другие члены семьи, которым запись расшарена.
+    /// </summary>
+    public async Task<List<MedicalRecordDto>> GetVisibleRecordsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var records = await VisibleRecordsQuery(userId).ToListAsync(ct);
+
+        var ownRecordIds = records.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToList();
+        var hiddenRows = await db.MedicalRecordHiddens
+            .Where(h => ownRecordIds.Contains(h.MedicalRecordId))
+            .ToListAsync(ct);
+        var hiddenByRecord = hiddenRows
+            .GroupBy(h => h.MedicalRecordId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(h => h.FamilyId).ToList());
+
+        return records
+            .Select(r => ToDto(
+                r,
+                r.OwnerUserId == userId && hiddenByRecord.TryGetValue(r.Id, out var ids) ? ids : []))
+            .ToList();
+    }
 
     public Task<bool> IsVisibleToAsync(Guid recordId, Guid userId, CancellationToken ct = default) =>
         VisibleRecordsQuery(userId).AnyAsync(r => r.Id == recordId, ct);
+
+    /// <summary>УРОВЕНЬ 1 (чтение): семьи, которым владелец глобально расшарил свои записи.</summary>
+    public Task<List<Guid>> GetSharedFamilyIdsAsync(Guid ownerUserId, CancellationToken ct = default) =>
+        db.FamilyMedicalShares.AsNoTracking()
+            .Where(s => s.OwnerUserId == ownerUserId)
+            .Select(s => s.FamilyId)
+            .ToListAsync(ct);
 
     public async Task<MedicalRecordDto> CreateAsync(Guid ownerUserId, CreateMedicalRecordRequest request, CancellationToken ct = default)
     {
@@ -51,6 +78,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
         };
         db.MedicalRecords.Add(record);
 
+        List<Guid> hiddenFamilyIds = [];
         if (request.HideFromFamilyIds is { Count: > 0 })
         {
             // Инвариант 4: разрешены только семьи из пересечения «мои семьи» ∩ «расшаренные».
@@ -59,9 +87,9 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
                 .Select(s => s.FamilyId)
                 .ToListAsync(ct);
             var myFamilyIds = await access.GetActiveFamilyIdsAsync(ownerUserId, ct);
-            var allowed = request.HideFromFamilyIds.Intersect(sharedFamilyIds).Intersect(myFamilyIds);
+            hiddenFamilyIds = request.HideFromFamilyIds.Intersect(sharedFamilyIds).Intersect(myFamilyIds).ToList();
 
-            foreach (var familyId in allowed)
+            foreach (var familyId in hiddenFamilyIds)
                 db.MedicalRecordHiddens.Add(new MedicalRecordHidden
                 {
                     Id = Guid.NewGuid(),
@@ -73,7 +101,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Мед-запись {RecordId} создана владельцем {OwnerUserId}", record.Id, ownerUserId);
-        return ToDto(record);
+        return ToDto(record, hiddenFamilyIds);
     }
 
     /// <summary>УРОВЕНЬ 1: владелец открывает ВСЕ свои анализы выбранной семье одним действием.</summary>
@@ -196,6 +224,6 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
         return MedicalRecordAccessResult.Success;
     }
 
-    private static MedicalRecordDto ToDto(MedicalRecord r) =>
-        new(r.Id, r.OwnerUserId, r.PersonName, r.RecordDate, r.Doctor, r.Description, r.CreatedAt);
+    private static MedicalRecordDto ToDto(MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds) =>
+        new(r.Id, r.OwnerUserId, r.PersonName, r.RecordDate, r.Doctor, r.Description, r.CreatedAt, hiddenFamilyIds);
 }

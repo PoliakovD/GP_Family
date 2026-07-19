@@ -6,11 +6,20 @@ import { DevLoggerService } from './services/dev-logger.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 import { ToastContainerComponent } from './shared/toast/toast-container.component';
 import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.component';
+import { LoadingSpinnerComponent } from './shared/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, DevPanelComponent, ToastContainerComponent, ConfirmDialogComponent],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    DevPanelComponent,
+    ToastContainerComponent,
+    ConfirmDialogComponent,
+    LoadingSpinnerComponent,
+  ],
   templateUrl: './app.component.html',
 })
 export class AppComponent implements OnInit {
@@ -19,12 +28,12 @@ export class AppComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly log = inject(DevLoggerService);
 
-  readonly tabs: { id: string; label: string }[] = [
-    { id: 'families', label: 'Семьи' },
-    { id: 'medications', label: 'Аптечка' },
-    { id: 'birthdays', label: 'Дни рождения' },
-    { id: 'records', label: 'Анализы' },
-    { id: 'notifications', label: 'Оповещения' },
+  readonly tabs: { id: string; label: string; icon: string }[] = [
+    { id: 'families', label: 'Семьи', icon: 'ph-users-three' },
+    { id: 'medications', label: 'Аптечка', icon: 'ph-first-aid-kit' },
+    { id: 'birthdays', label: 'Дни р.', icon: 'ph-cake' },
+    { id: 'records', label: 'Анализы', icon: 'ph-heartbeat' },
+    { id: 'notifications', label: 'Оповещ.', icon: 'ph-bell' },
   ];
 
   ngOnInit(): void {

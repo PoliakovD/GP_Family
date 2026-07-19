@@ -5,10 +5,10 @@
 
   <main class="app-content">
     @if (state.error()) {
-      <div class="alert alert-danger py-2 mb-2">{{ state.error() }}</div>
+      <div class="alert-danger mb-2">{{ state.error() }}</div>
     }
     @if (state.loading()) {
-      <p class="muted">Загрузка…</p>
+      <app-loading-spinner />
     }
 
     <router-outlet></router-outlet>
@@ -16,8 +16,9 @@
 
   <nav class="tab-bar">
     @for (t of tabs; track t.id) {
-      <button [routerLink]="['/', t.id]" routerLinkActive="active">
-        {{ t.label }}
+      <button [routerLink]="['/', t.id]" routerLinkActive="active" #rla="routerLinkActive">
+        <i [class]="(rla.isActive ? 'ph-fill ' : 'ph ') + t.icon" aria-hidden="true"></i>
+        <span>{{ t.label }}</span>
       </button>
     }
   </nav>

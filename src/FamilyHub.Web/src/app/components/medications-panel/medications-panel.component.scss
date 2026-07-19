@@ -9,7 +9,7 @@
     left: 12.5%;
     right: 12.5%;
     height: 2px;
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--color-divider);
     z-index: 0;
   }
 }
@@ -27,69 +27,76 @@
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  background: var(--tg-theme-bg-color, #fff);
-  border: 2px solid rgba(0, 0, 0, 0.15);
-  color: var(--tg-theme-hint-color, #888);
+  background: var(--color-bg);
+  border: 2px solid var(--color-divider);
+  color: var(--color-neutral-600);
+}
 
-  .spinner-border {
-    width: 12px;
-    height: 12px;
-    border-width: 2px;
-    color: var(--tg-theme-link-color, #2481cc);
-  }
+.step-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--color-divider);
+  border-top-color: var(--color-accent);
+  animation: step-spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes step-spinner-rotate {
+  to { transform: rotate(360deg); }
 }
 
 .recognize-step-label {
   font-size: 11px;
-  color: var(--tg-theme-hint-color, #888);
+  color: var(--color-neutral-600);
 }
 
 .step-done {
   .recognize-step-dot {
-    background: #2f9e44;
-    border-color: #2f9e44;
-    color: #fff;
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-bg);
   }
 
   .recognize-step-label {
-    color: #2f9e44;
+    color: var(--color-accent);
   }
 }
 
 .step-active {
   .recognize-step-dot {
-    border-color: var(--tg-theme-link-color, #2481cc);
+    border-color: var(--color-accent);
   }
 
   .recognize-step-label {
-    color: var(--tg-theme-link-color, #2481cc);
+    color: var(--color-accent);
     font-weight: 600;
   }
 }
 
 // Цветовая индикация по сроку годности (см. MedicationsPanelComponent.expiryClass):
 // ≤1 мес — красный, 2-4 мес — жёлтый, дальше — зелёный, без даты — фиолетовый.
+// Семантические цвета срока годности — независимы от акцентных cyan/magenta бренда.
 .medication-card {
   border-left: 4px solid transparent;
 
   &.expiry-danger {
     border-left-color: #e03131;
-    background: rgba(224, 49, 49, 0.08);
+    background: color-mix(in srgb, #e03131 8%, var(--color-surface));
   }
 
   &.expiry-warning {
     border-left-color: #f08c00;
-    background: rgba(240, 140, 0, 0.08);
+    background: color-mix(in srgb, #f08c00 8%, var(--color-surface));
   }
 
   &.expiry-ok {
     border-left-color: #2f9e44;
-    background: rgba(47, 158, 68, 0.06);
+    background: color-mix(in srgb, #2f9e44 6%, var(--color-surface));
   }
 
   &.expiry-none {
     border-left-color: #9c36b5;
-    background: rgba(156, 54, 181, 0.08);
+    background: color-mix(in srgb, #9c36b5 8%, var(--color-surface));
   }
 }
 
@@ -105,7 +112,7 @@
   position: relative;
   width: 72px;
   height: 72px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   flex-shrink: 0;
 
@@ -126,9 +133,9 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.65);
+  background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -141,29 +148,29 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border: 2px dashed var(--color-divider);
+  border-radius: var(--radius-md);
   background: transparent;
-  color: var(--tg-theme-hint-color, #888);
+  color: var(--color-neutral-600);
   cursor: pointer;
   font-size: 10px;
   transition: border-color 0.15s ease, color 0.15s ease;
 
-  svg {
-    width: 22px;
-    height: 22px;
+  i {
+    font-size: 22px;
   }
 
   &:active {
-    border-color: var(--tg-theme-link-color, #2481cc);
-    color: var(--tg-theme-link-color, #2481cc);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
   }
 }
 
 // Доп. поля медикамента (см. dataEntries()) — компактная табличка ключ-значение вместо тегов,
 // т.к. значения (дозировка, состав и т.п.) бывают длиннее, чем помещается в тег.
 .data-table-wrap {
-  border: 1px solid rgba(127, 127, 127, 0.18);
-  border-radius: 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -173,7 +180,7 @@
   font-size: 12px;
 
   tr + tr {
-    border-top: 1px solid rgba(127, 127, 127, 0.15);
+    border-top: 1px solid var(--color-divider);
   }
 }
 
@@ -185,14 +192,14 @@
 }
 
 .data-table-key {
-  color: var(--tg-theme-hint-color, #888);
+  color: var(--color-neutral-600);
   font-weight: 600;
   width: 40%;
 }
 
 // Пояснение к цветовой индикации сроков годности — использует те же цвета, что и .medication-card.
 .expiry-legend {
-  border-top: 1px solid rgba(127, 127, 127, 0.2);
+  border-top: 1px solid var(--color-divider);
   padding-top: 10px;
 }
 
@@ -200,7 +207,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 11px;
-  color: var(--tg-theme-hint-color, #888);
+  color: var(--color-neutral-600);
   white-space: nowrap;
 }
 
@@ -211,21 +218,10 @@
   margin-right: 5px;
   flex-shrink: 0;
 
-  &.expiry-danger {
-    background: #e03131;
-  }
-
-  &.expiry-warning {
-    background: #f08c00;
-  }
-
-  &.expiry-ok {
-    background: #2f9e44;
-  }
-
-  &.expiry-none {
-    background: #9c36b5;
-  }
+  &.expiry-danger { background: #e03131; }
+  &.expiry-warning { background: #f08c00; }
+  &.expiry-ok { background: #2f9e44; }
+  &.expiry-none { background: #9c36b5; }
 }
 
 // Скрывает нативный <input type="file"> визуально, но оставляет доступным для <label for>

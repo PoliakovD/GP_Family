@@ -2,14 +2,15 @@
   word-break: break-word;
 }
 
-// На узких экранах вкладки прокручиваются горизонтально вместо переноса/сжатия.
-.subtabs-nav {
+// На узких экранах сегмент-контрол прокручивается горизонтально вместо переноса/сжатия.
+.seg {
+  max-width: 100%;
   overflow-x: auto;
-  flex-wrap: nowrap;
   -webkit-overflow-scrolling: touch;
 
-  > button {
+  .seg-opt {
     flex-shrink: 0;
+    white-space: nowrap;
   }
 }
 
