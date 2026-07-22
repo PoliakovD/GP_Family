@@ -16,7 +16,8 @@ public class MedicalRecordServiceTests : SqliteTestBase
     public MedicalRecordServiceTests()
     {
         _sut = new MedicalRecordService(
-            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<MedicalRecordService>.Instance);
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
+            new TestSupport.OutboxTestPipeline(Db).Writer, NullLogger<MedicalRecordService>.Instance);
     }
 
     [Fact]

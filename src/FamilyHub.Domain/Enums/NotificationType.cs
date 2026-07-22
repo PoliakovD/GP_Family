@@ -1,6 +1,6 @@
 namespace FamilyHub.Domain.Enums;
 
-/// <summary>Виды оповещений, формируемых фоновой джобой (этап 3 п.10 брифа).</summary>
+/// <summary>Виды оповещений: от фоновой джобы (этап 3 п.10 брифа) и доменных событий (этап 1 плана).</summary>
 public enum NotificationType
 {
     /// <summary>Срок годности лекарства приближается (в пределах окна предупреждения).</summary>
@@ -11,4 +11,13 @@ public enum NotificationType
 
     /// <summary>День рождения наступает в пределах окна предупреждения.</summary>
     BirthdayUpcoming = 2,
+
+    /// <summary>Участник покинул семью (сам или выгнан) — адресуется админам семьи.</summary>
+    MemberLeft = 3,
+
+    /// <summary>Заявка на вступление одобрена — адресуется остальным членам семьи.</summary>
+    MemberApproved = 4,
+
+    /// <summary>Участник открыл семье доступ к своим медицинским записям.</summary>
+    MedicalRecordShared = 5,
 }

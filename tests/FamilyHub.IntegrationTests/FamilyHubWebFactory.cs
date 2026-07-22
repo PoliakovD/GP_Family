@@ -60,8 +60,19 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // Без BotToken: вебхук-эндпоинт и ITelegramBotClient не регистрируются (см. Program.cs) —
         // достаточно для всего, кроме BotWebhookTests, у которых своя фабрика-наследник.
         builder.UseSetting("Telegram:BotToken", "");
+        // Ускоренный цикл outbox-диспетчера: тесты, проверяющие фоновую доставку, не ждут 5 секунд.
+        builder.UseSetting("Outbox:PollInterval", "00:00:00.500");
 
         builder.ConfigureServices(services => services.AddSingleton(_postgres));
+    }
+
+    protected override Microsoft.Extensions.Hosting.IHost CreateHost(Microsoft.Extensions.Hosting.IHostBuilder builder)
+    {
+        // См. HostCreationSync: параллельные коллекции не должны строить Program одновременно.
+        lock (HostCreationSync.Lock)
+        {
+            return base.CreateHost(builder);
+        }
     }
 
     /// <summary>HttpClient, аутентифицированный как dev-пользователь с данным TelegramId (см. DevAuthenticationHandler).</summary>

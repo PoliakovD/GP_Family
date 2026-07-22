@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.TestUtils;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -12,9 +13,23 @@ namespace FamilyHub.UnitTests.Infrastructure.Notifications;
 public class ReminderScanJobTests : SqliteTestBase
 {
     private readonly INotificationSender _sender = Substitute.For<INotificationSender>();
+    private readonly OutboxTestPipeline _pipeline;
+
+    public ReminderScanJobTests()
+    {
+        _pipeline = new OutboxTestPipeline(Db, _sender);
+    }
 
     private ReminderScanJob CreateSut(NotificationOptions? options = null) =>
-        new(Db, _sender, Options.Create(options ?? new NotificationOptions()), NullLogger<ReminderScanJob>.Instance);
+        new(Db, _pipeline.Writer, _pipeline.Notifications,
+            Options.Create(options ?? new NotificationOptions()), NullLogger<ReminderScanJob>.Instance);
+
+    /// <summary>Полный цикл «как в проде»: скан публикует события, диспетчер доставляет их хендлерам.</summary>
+    private async Task RunAndDispatchAsync(ReminderScanJob sut)
+    {
+        await sut.RunAsync();
+        await _pipeline.DispatchAsync();
+    }
 
     [Fact]
     public async Task RunAsync_MedicationExpiringSoon_NotifiesOnlyActiveMembers()
@@ -26,7 +41,7 @@ public class ReminderScanJobTests : SqliteTestBase
         Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5)));
         await Db.SaveChangesAsync();
 
-        await CreateSut().RunAsync();
+        await RunAndDispatchAsync(CreateSut());
 
         var notifications = Db.Notifications.Where(n => n.Type == NotificationType.MedicationExpiringSoon).ToList();
         notifications.Should().ContainSingle(n => n.UserId == admin.Id);
@@ -42,7 +57,7 @@ public class ReminderScanJobTests : SqliteTestBase
         Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1)));
         await Db.SaveChangesAsync();
 
-        await CreateSut().RunAsync();
+        await RunAndDispatchAsync(CreateSut());
 
         var notification = Db.Notifications.Single(n => n.UserId == admin.Id);
         notification.Type.Should().Be(NotificationType.MedicationExpired);
@@ -59,8 +74,8 @@ public class ReminderScanJobTests : SqliteTestBase
         await Db.SaveChangesAsync();
         var sut = CreateSut();
 
-        await sut.RunAsync();
-        await sut.RunAsync();
+        await RunAndDispatchAsync(sut);
+        await RunAndDispatchAsync(sut);
 
         Db.Notifications.Count(n => n.UserId == admin.Id && n.Type == NotificationType.MedicationExpiringSoon).Should().Be(1);
     }
@@ -74,7 +89,7 @@ public class ReminderScanJobTests : SqliteTestBase
         Db.Medications.Add(TestData.NewMedication(medkit.Id, family.Id, admin.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(365)));
         await Db.SaveChangesAsync();
 
-        await CreateSut().RunAsync();
+        await RunAndDispatchAsync(CreateSut());
 
         Db.Notifications.Any(n => n.UserId == admin.Id).Should().BeFalse();
     }
@@ -87,7 +102,7 @@ public class ReminderScanJobTests : SqliteTestBase
         Db.Birthdays.Add(TestData.NewBirthday(family.Id, new DateOnly(soon.Year - 10, soon.Month, soon.Day)));
         await Db.SaveChangesAsync();
 
-        await CreateSut().RunAsync();
+        await RunAndDispatchAsync(CreateSut());
 
         Db.Notifications.Should().ContainSingle(n => n.UserId == admin.Id && n.Type == NotificationType.BirthdayUpcoming);
     }
@@ -104,7 +119,7 @@ public class ReminderScanJobTests : SqliteTestBase
         // следующем году) попадёт в диапазон вне зависимости от текущей даты прогона теста.
         var sut = CreateSut(new NotificationOptions { BirthdayWarningDays = 400 });
 
-        var act = async () => await sut.RunAsync();
+        var act = async () => await RunAndDispatchAsync(sut);
 
         await act.Should().NotThrowAsync();
         Db.Notifications.Should().ContainSingle(n => n.UserId == admin.Id && n.Type == NotificationType.BirthdayUpcoming);

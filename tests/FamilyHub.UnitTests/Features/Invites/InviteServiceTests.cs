@@ -2,6 +2,7 @@ using FamilyHub.Api.Features.Invites;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.TestUtils;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -15,7 +16,8 @@ public class InviteServiceTests : SqliteTestBase
     public InviteServiceTests()
     {
         _sut = new InviteService(
-            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<InviteService>.Instance);
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
+            new OutboxTestPipeline(Db).Writer, NullLogger<InviteService>.Instance);
     }
 
     [Fact]

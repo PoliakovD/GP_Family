@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyHub.Infrastructure.Persistence;
@@ -18,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
     public DbSet<Birthday> Birthdays => Set<Birthday>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

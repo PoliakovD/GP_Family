@@ -2,6 +2,7 @@ using FamilyHub.Api.Features.Members;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.TestUtils;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -11,11 +12,14 @@ namespace FamilyHub.UnitTests.Features.Members;
 public class MembershipServiceTests : SqliteTestBase
 {
     private readonly MembershipService _sut;
+    private readonly OutboxTestPipeline _pipeline;
 
     public MembershipServiceTests()
     {
+        _pipeline = new OutboxTestPipeline(Db);
         _sut = new MembershipService(
-            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<MembershipService>.Instance);
+            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
+            _pipeline.Writer, NullLogger<MembershipService>.Instance);
     }
 
     [Fact]
@@ -79,6 +83,9 @@ public class MembershipServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         await _sut.RemoveMemberAsync(family.Id, member.Id, admin.Id);
+        // Чистка шар — event-driven (этап 1 плана): UserLeftFamilyEvent из outbox
+        // доставляется Medical-хендлеру, который и отзывает доступ.
+        await _pipeline.DispatchAsync();
 
         Db.FamilyMedicalShares.Any(s => s.OwnerUserId == member.Id && s.FamilyId == family.Id).Should().BeFalse();
     }

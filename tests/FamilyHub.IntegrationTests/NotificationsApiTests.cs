@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Modules.Medical.Medications;
+using FamilyHub.Modules.Medical.Medkits;
 using FluentAssertions;
 using Xunit;
 
@@ -17,10 +18,10 @@ public class NotificationsApiTests(FamilyHubWebFactory factory) : IntegrationTes
         return body!["id"];
     }
 
-    /// <summary>/dev/trigger-reminder-scan не имеет AllowAnonymous, поэтому требует FallbackPolicy-аутентификацию.</summary>
-    private async Task TriggerReminderScanAsync(HttpClient client)
+    /// <summary>Dev-эндпоинты не имеют AllowAnonymous, поэтому требуют FallbackPolicy-аутентификацию.</summary>
+    private static async Task TriggerAsync(HttpClient client, string path)
     {
-        var response = await client.PostAsync("/dev/trigger-reminder-scan", null);
+        var response = await client.PostAsync(path, null);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -29,11 +30,16 @@ public class NotificationsApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var admin = ClientAs(FreshTelegramId());
         var familyId = await CreateFamilyAsync(admin);
-        await admin.PostAsJsonAsync($"/api/families/{familyId}/medications",
-            new CreateMedicationRequest("Скоро истекающее", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
-                new Dictionary<string, string> { ["quantity"] = "5" }));
+        var medkit = await (await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits", new CreateMedkitRequest("Аптечка")))
+            .Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+        (await admin.PostAsJsonAsync($"/api/medkits/{medkit!.Id}/medications",
+                new CreateMedicationRequest("Скоро истекающее", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+                    new Dictionary<string, string> { ["quantity"] = "5" })))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
 
-        await TriggerReminderScanAsync(admin);
+        // Скан публикует событие в outbox; оповещения создаёт хендлер при доставке.
+        await TriggerAsync(admin, "/dev/trigger-reminder-scan");
+        await TriggerAsync(admin, "/dev/trigger-outbox-dispatch");
 
         var notifications = await (await admin.GetAsync("/api/notifications")).Content.ReadFromJsonAsync<List<NotificationDto>>(JsonOpts);
         notifications.Should().ContainSingle(n => n.Type == NotificationType.MedicationExpiringSoon);

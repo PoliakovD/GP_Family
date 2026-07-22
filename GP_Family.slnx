@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/FamilyHub.Api/FamilyHub.Api.csproj" />
+    <Project Path="src/FamilyHub.Contracts/FamilyHub.Contracts.csproj" />
     <Project Path="src/FamilyHub.Domain/FamilyHub.Domain.csproj" />
     <Project Path="src/FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj" />
     <Project Path="src/FamilyHub.Modules.Birthdays/FamilyHub.Modules.Birthdays.csproj" />

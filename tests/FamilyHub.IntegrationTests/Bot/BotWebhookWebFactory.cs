@@ -56,6 +56,15 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         await base.DisposeAsync();
     }
 
+    protected override Microsoft.Extensions.Hosting.IHost CreateHost(Microsoft.Extensions.Hosting.IHostBuilder builder)
+    {
+        // См. HostCreationSync: параллельные коллекции не должны строить Program одновременно.
+        lock (HostCreationSync.Lock)
+        {
+            return base.CreateHost(builder);
+        }
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");

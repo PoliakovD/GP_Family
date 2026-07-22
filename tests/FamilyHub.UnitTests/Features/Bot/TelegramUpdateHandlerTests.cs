@@ -26,7 +26,8 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
         _bot.SendRequest(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>()).Returns(new Message());
         var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
         IUserProvisioningService provisioning = new UserProvisioningService(Db, NullLogger<UserProvisioningService>.Instance);
-        var invites = new InviteService(Db, access, NullLogger<InviteService>.Instance);
+        var invites = new InviteService(
+            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, NullLogger<InviteService>.Instance);
         _sut = new TelegramUpdateHandler(_bot, provisioning, invites, Options.Create(new TelegramOptions()));
     }
 

@@ -8,6 +8,7 @@ using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Notifications;
+using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
@@ -54,11 +55,28 @@ builder.Services.Configure<LocalFileStorageOptions>(builder.Configuration.GetSec
 builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
+builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection(OutboxOptions.SectionName));
 
 // --- Persistence ---
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")
         ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.")));
+
+// --- Событийная шина: MediatR + транзакционный outbox (этап 1 плана) ---
+// Хендлеры ищутся сканом сборок Infrastructure (Notifications-хендлеры) и модулей;
+// кастомный publisher изолирует сбой отдельного хендлера от остальных.
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblies(
+        typeof(OutboxDispatcher).Assembly,
+        typeof(MedicalModule).Assembly,
+        typeof(BirthdayModule).Assembly);
+    cfg.NotificationPublisherType = typeof(IsolatingLoggingPublisher);
+});
+builder.Services.AddSingleton<EventTypeRegistry>();
+builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
+builder.Services.AddScoped<OutboxProcessor>();
+builder.Services.AddHostedService<OutboxDispatcher>();
 
 // --- Текущий пользователь / провижининг ---
 builder.Services.AddHttpContextAccessor();
@@ -138,6 +156,7 @@ builder.Services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(opt => opt.UseNpgsq
 builder.Services.AddHangfireServer();
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<NotificationSendingService>();
 
 // --- Telegram-бот: тонкий клиент + доставка оповещений (этап 4 п.12) ---
 // Всё, что зависит от ITelegramBotClient, регистрируем только если задан BotToken: без него
@@ -267,6 +286,14 @@ if (app.Environment.IsDevelopment())
     {
         await job.RunAsync(ct);
         return Results.Ok();
+    });
+
+    // Синхронный прогон outbox-доставки без ожидания фонового цикла — для локальной
+    // проверки и детерминизма интеграционных тестов.
+    app.MapPost("/dev/trigger-outbox-dispatch", async (OutboxProcessor processor, CancellationToken ct) =>
+    {
+        var processed = await processor.ProcessBatchAsync(ct);
+        return Results.Ok(new { processed });
     });
 }
 

@@ -21,7 +21,8 @@ public class AttachmentServiceTests : SqliteTestBase
     public AttachmentServiceTests()
     {
         var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
-        var medicalRecords = new MedicalRecordService(Db, access, NullLogger<MedicalRecordService>.Instance);
+        var medicalRecords = new MedicalRecordService(
+            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, NullLogger<MedicalRecordService>.Instance);
         _sut = new AttachmentService(Db, _storage, medicalRecords, access, NullLogger<AttachmentService>.Instance);
     }
 

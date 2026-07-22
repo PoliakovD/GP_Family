@@ -1,6 +1,8 @@
+using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -12,7 +14,7 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 /// семье, приватны по умолчанию. Шарингом и скрытием управляет ТОЛЬКО владелец — даже
 /// админ семьи сюда не лезет (инвариант 2). Видимость — дословно по разделу 6 брифа.
 /// </summary>
-public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, ILogger<MedicalRecordService> logger)
+public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, IOutboxWriter outbox, ILogger<MedicalRecordService> logger)
 {
     /// <summary>
     /// Видно, если: владелец, ИЛИ (мои анализы расшарены этой семье И я в ней состою
@@ -126,6 +128,8 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
                 FamilyId = familyId,
                 SharedAt = DateTime.UtcNow,
             });
+            // Только при реально созданной шаре (повторный вызов события не порождает).
+            outbox.Enqueue(new MedicalRecordSharedEvent(familyId, ownerUserId));
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Пользователь {OwnerUserId} расшарил мед-записи семье {FamilyId}", ownerUserId, familyId);
         }
