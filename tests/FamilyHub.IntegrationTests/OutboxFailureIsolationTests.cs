@@ -78,6 +78,12 @@ public class OutboxFailureIsolationTests(OutboxFailureWebFactory factory)
         var memberUserId = pending!.Single().UserId;
         await admin.PostAsync($"/api/families/{family.Id}/members/{memberUserId}/approve", null);
 
+        // Медицинские эндпоинты закрыты консент-фильтром (задача 2.3) — принимаем согласие.
+        var consent = await (await member.GetAsync("/api/consents/current"))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>(JsonOpts);
+        (await member.PostAsJsonAsync("/api/consents/accept", new { version = consent!["version"].GetString() }))
+            .EnsureSuccessStatusCode();
+
         await member.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest("Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
         (await member.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(family.Id)))

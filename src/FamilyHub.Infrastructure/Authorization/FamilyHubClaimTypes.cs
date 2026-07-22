@@ -6,6 +6,9 @@ public static class FamilyHubClaimTypes
     /// <summary>Внутренний Guid пользователя (User.Id) — резолвится get-or-create по TelegramId.</summary>
     public const string UserId = "familyhub:user_id";
 
-    /// <summary>Telegram user id, как пришёл из initData / dev-заголовка.</summary>
+    /// <summary>Telegram user id, как пришёл из initData / dev-заголовка. У PWA-сессий отсутствует.</summary>
     public const string TelegramId = "familyhub:telegram_id";
+
+    /// <summary>Провайдер аутентификации текущей сессии: "telegram" | "email" | "dev".</summary>
+    public const string AuthProvider = "familyhub:auth_provider";
 }

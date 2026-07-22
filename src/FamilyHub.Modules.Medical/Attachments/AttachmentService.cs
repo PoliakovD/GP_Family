@@ -1,7 +1,9 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using Microsoft.EntityFrameworkCore;
@@ -12,13 +14,18 @@ namespace FamilyHub.Modules.Medical.Attachments;
 /// <summary>
 /// Метаданные сканов в БД, файлы — в объектном хранилище (раздел 5/9 брифа).
 /// Вложение не имеет своей видимости — доступ наследуется от родительской записи
-/// (MedicalRecord или Medication).
+/// (MedicalRecord или Medication). С этапа 2 (152-ФЗ): блоб шифруется IFileCipher перед
+/// записью, ключ хранилища не содержит имени файла, имя файла не пишется в логи —
+/// в них только идентификаторы.
 /// </summary>
 public class AttachmentService(
     AppDbContext db,
     IFileStorage storage,
+    IFileCipher fileCipher,
+    DownloadTokenService downloadTokens,
     MedicalRecordService medicalRecords,
     IFamilyAccessService familyAccess,
+    IMedicalAuditWriter audit,
     ILogger<AttachmentService> logger)
 {
     /// <summary>Прикладывать сканы к анализу может только владелец записи — тот же барьер, что и для шаринга.</summary>
@@ -39,11 +46,19 @@ public class AttachmentService(
         }
 
         var attachmentId = Guid.NewGuid();
-        var storageKey = $"medical-records/{recordId}/{attachmentId}-{fileName}";
+        // Без имени файла в ключе: имя может содержать ФИО/диагноз, а ключи объектов
+        // видны администраторам хранилища и попадают в его служебные логи.
+        var storageKey = $"medical-records/{recordId}/{attachmentId}";
+
+        // Шифруем блоб целиком до записи: в хранилище попадает только шифротекст.
+        using var encrypted = new MemoryStream();
+        var encryptedSize = await fileCipher.EncryptAsync(content, encrypted, ct);
+        encrypted.Position = 0;
+
         logger.LogDebug(
-            "Загрузка файла {FileName} ({SizeBytes} байт, {ContentType}) в хранилище: {StorageKey}",
-            fileName, sizeBytes, contentType, storageKey);
-        await storage.SaveAsync(storageKey, content, sizeBytes, contentType, ct);
+            "Загрузка вложения {AttachmentId} ({SizeBytes} байт, {ContentType}) в хранилище: {StorageKey}",
+            attachmentId, sizeBytes, contentType, storageKey);
+        await storage.SaveAsync(storageKey, encrypted, encryptedSize, "application/octet-stream", ct);
 
         var attachment = new FileAttachment
         {
@@ -54,19 +69,22 @@ public class AttachmentService(
             FileName = fileName,
             ContentType = contentType,
             SizeBytes = sizeBytes,
-            IsEncrypted = false,
+            IsEncrypted = true,
             UploadedAt = DateTime.UtcNow,
         };
         db.FileAttachments.Add(attachment);
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation(
-            "Вложение {AttachmentId} ({FileName}) добавлено к мед-записи {RecordId} пользователем {UserId}",
-            attachmentId, fileName, recordId, ownerUserId);
+            "Вложение {AttachmentId} добавлено к мед-записи {RecordId} пользователем {UserId}",
+            attachmentId, recordId, ownerUserId);
         return (AttachmentAccessResult.Success, ToDto(attachment));
     }
 
-    /// <summary>Короткоживущая ссылка на скачивание, после проверки доступа к родительской записи.</summary>
+    /// <summary>
+    /// Короткоживущая ссылка на скачивание (наш API-эндпоинт с расшифровкой), после
+    /// проверки доступа к родительской записи. Авторизация — здесь, в момент выдачи.
+    /// </summary>
     public async Task<(AttachmentAccessResult Result, string? Url)> GetPresignedUrlAsync(
         Guid attachmentId, Guid userId, CancellationToken ct = default)
     {
@@ -91,9 +109,42 @@ public class AttachmentService(
             return (AttachmentAccessResult.Forbidden, null);
         }
 
-        var url = await storage.GetPresignedUrlAsync(attachment.StorageKey, TimeSpan.FromMinutes(5), ct);
-        logger.LogDebug("Выдана presigned-ссылка на вложение {AttachmentId} пользователю {UserId}", attachmentId, userId);
+        // Аудит (задача 2.7) — в момент выдачи ссылки: это и есть момент авторизации доступа
+        // к файлу (сам download-эндпоинт проверяет только подпись токена).
+        var ownerUserId = attachment.OwnerType == FileOwnerType.MedicalRecord
+            ? await db.MedicalRecords.AsNoTracking()
+                .Where(r => r.Id == attachment.OwnerId).Select(r => (Guid?)r.OwnerUserId).FirstOrDefaultAsync(ct)
+            : null;
+        await audit.WriteAsync(
+            userId, MedicalAccessAction.DownloadAttachment,
+            ownerUserId: ownerUserId,
+            medicalRecordId: attachment.OwnerType == FileOwnerType.MedicalRecord ? attachment.OwnerId : null,
+            attachmentId: attachmentId, ct: ct);
+
+        var url = downloadTokens.CreateUrl(attachmentId);
+        logger.LogDebug("Выдана ссылка на скачивание вложения {AttachmentId} пользователю {UserId}", attachmentId, userId);
         return (AttachmentAccessResult.Success, url);
+    }
+
+    /// <summary>
+    /// Отдаёт содержимое вложения (расшифрованное для IsEncrypted, как есть — для legacy).
+    /// Авторизация уже произошла при выдаче подписанной ссылки (см. GetPresignedUrlAsync).
+    /// </summary>
+    public async Task<(Stream Content, string ContentType, string FileName)?> GetDownloadAsync(
+        Guid attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await db.FileAttachments.AsNoTracking().FirstOrDefaultAsync(a => a.Id == attachmentId, ct);
+        if (attachment is null) return null;
+
+        var stored = await storage.OpenReadAsync(attachment.StorageKey, ct);
+        if (!attachment.IsEncrypted)
+            return (stored, attachment.ContentType, attachment.FileName);
+
+        await using (stored)
+        {
+            var plain = await fileCipher.DecryptAsync(stored, ct);
+            return (plain, attachment.ContentType, attachment.FileName);
+        }
     }
 
     private async Task<bool> HasMedicationAccessAsync(Guid medicationId, Guid userId, CancellationToken ct)

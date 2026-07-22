@@ -8,6 +8,8 @@ public class MedkitConfiguration : IEntityTypeConfiguration<Medkit>
 {
     public void Configure(EntityTypeBuilder<Medkit> builder)
     {
+        builder.ToTable("Medkits", "medical");
+
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.Name).HasMaxLength(300).IsRequired();

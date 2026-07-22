@@ -44,7 +44,7 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         await _postgres.StartAsync();
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_postgres.GetConnectionString());
-        await using var db = new AppDbContext(optionsBuilder.Options);
+        await using var db = new AppDbContext(optionsBuilder.Options, DesignTimeDbContextFactory.CreateDevCipher());
         await db.Database.MigrateAsync();
     }
 

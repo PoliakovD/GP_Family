@@ -8,6 +8,8 @@ public class BirthdayConfiguration : IEntityTypeConfiguration<Birthday>
 {
     public void Configure(EntityTypeBuilder<Birthday> builder)
     {
+        builder.ToTable("Birthdays", "identity");
+
         builder.HasKey(b => b.Id);
 
         builder.Property(b => b.PersonName).HasMaxLength(200).IsRequired();

@@ -8,6 +8,8 @@ public class FileAttachmentConfiguration : IEntityTypeConfiguration<FileAttachme
 {
     public void Configure(EntityTypeBuilder<FileAttachment> builder)
     {
+        builder.ToTable("FileAttachments", "medical");
+
         builder.HasKey(f => f.Id);
 
         builder.Property(f => f.OwnerType).HasConversion<int>();

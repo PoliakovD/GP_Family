@@ -13,12 +13,7 @@ public class LocalFileStorageTests : IDisposable
 
     public LocalFileStorageTests()
     {
-        _sut = new LocalFileStorage(Options.Create(new LocalFileStorageOptions
-        {
-            RootPath = _rootPath,
-            PublicBasePath = "/local-files",
-            SigningKey = "test-signing-key",
-        }));
+        _sut = new LocalFileStorage(Options.Create(new LocalFileStorageOptions { RootPath = _rootPath }));
     }
 
     public void Dispose()
@@ -31,58 +26,43 @@ public class LocalFileStorageTests : IDisposable
     {
         await using var content = new MemoryStream(Encoding.UTF8.GetBytes("hello"));
 
-        await _sut.SaveAsync("medical-records/abc/scan.pdf", content, content.Length, "application/pdf");
+        await _sut.SaveAsync("medical-records/abc/scan", content, content.Length, "application/pdf");
 
-        var path = _sut.ResolvePath("medical-records/abc/scan.pdf");
+        var path = _sut.ResolvePath("medical-records/abc/scan");
         File.Exists(path).Should().BeTrue();
         (await File.ReadAllTextAsync(path)).Should().Be("hello");
     }
 
     [Fact]
-    public async Task GetPresignedUrlAsync_ProducesUrlWithSignatureThatValidates()
+    public async Task OpenReadAsync_ReturnsSavedContent()
     {
-        var url = await _sut.GetPresignedUrlAsync("medical-records/abc/scan.pdf", TimeSpan.FromMinutes(5));
+        await using var content = new MemoryStream(Encoding.UTF8.GetBytes("payload"));
+        await _sut.SaveAsync("a/b", content, content.Length, "application/octet-stream");
 
-        url.Should().StartWith("/local-files/medical-records/abc/scan.pdf?expires=");
-        var (storageKey, expires, sig) = ParseUrl(url);
+        await using var stream = await _sut.OpenReadAsync("a/b");
+        using var reader = new StreamReader(stream);
 
-        _sut.IsValidSignature(storageKey, expires, sig).Should().BeTrue();
+        (await reader.ReadToEndAsync()).Should().Be("payload");
     }
 
     [Fact]
-    public async Task IsValidSignature_TamperedSignature_ReturnsFalse()
+    public async Task OpenReadAsync_UnknownKey_Throws()
     {
-        var url = await _sut.GetPresignedUrlAsync("medical-records/abc/scan.pdf", TimeSpan.FromMinutes(5));
-        var (storageKey, expires, sig) = ParseUrl(url);
+        var act = async () => await _sut.OpenReadAsync("no/such/key");
 
-        _sut.IsValidSignature(storageKey, expires, sig + "0").Should().BeFalse();
+        await act.Should().ThrowAsync<FileNotFoundException>();
     }
 
     [Fact]
-    public async Task IsValidSignature_DifferentStorageKeyThanSigned_ReturnsFalse()
+    public async Task DeleteAsync_RemovesFile_AndIsIdempotent()
     {
-        var url = await _sut.GetPresignedUrlAsync("medical-records/abc/scan.pdf", TimeSpan.FromMinutes(5));
-        var (_, expires, sig) = ParseUrl(url);
+        await using var content = new MemoryStream(Encoding.UTF8.GetBytes("bye"));
+        await _sut.SaveAsync("del/me", content, content.Length, "application/octet-stream");
 
-        _sut.IsValidSignature("medical-records/other/scan.pdf", expires, sig).Should().BeFalse();
-    }
+        await _sut.DeleteAsync("del/me");
+        File.Exists(_sut.ResolvePath("del/me")).Should().BeFalse();
 
-    [Fact]
-    public async Task IsValidSignature_ExpiredLink_ReturnsFalse()
-    {
-        var url = await _sut.GetPresignedUrlAsync("medical-records/abc/scan.pdf", TimeSpan.FromSeconds(-1));
-        var (storageKey, expires, sig) = ParseUrl(url);
-
-        _sut.IsValidSignature(storageKey, expires, sig).Should().BeFalse();
-    }
-
-    private static (string StorageKey, long Expires, string Signature) ParseUrl(string url)
-    {
-        // url: /local-files/{storageKey}?expires={unix}&sig={hex}
-        var withoutPrefix = url["/local-files/".Length..];
-        var queryIndex = withoutPrefix.IndexOf('?');
-        var storageKey = withoutPrefix[..queryIndex];
-        var query = System.Web.HttpUtility.ParseQueryString(withoutPrefix[(queryIndex + 1)..]);
-        return (storageKey, long.Parse(query["expires"]!), query["sig"]!);
+        var act = async () => await _sut.DeleteAsync("del/me");
+        await act.Should().NotThrowAsync();
     }
 }

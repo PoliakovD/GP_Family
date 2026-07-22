@@ -1,13 +1,14 @@
 namespace FamilyHub.Infrastructure.CurrentUser;
 
 /// <summary>
-/// Текущий аутентифицированный пользователь запроса. UserId резолвится
-/// get-or-create'ом по TelegramId в момент аутентификации (см. TelegramAuthenticationHandler
-/// и DevAuthenticationHandler) — здесь только чтение готовых claim'ов.
+/// Текущий аутентифицированный пользователь запроса. UserId резолвится в момент
+/// аутентификации (Telegram-хендлеры — get-or-create по TelegramId; PWA-cookie — из клейма
+/// сессии) — здесь только чтение готовых claim'ов.
 /// </summary>
 public interface ICurrentUser
 {
     Guid UserId { get; }
 
-    long TelegramId { get; }
+    /// <summary>null — сессия PWA (email/PIN), Telegram-клейма нет.</summary>
+    long? TelegramId { get; }
 }

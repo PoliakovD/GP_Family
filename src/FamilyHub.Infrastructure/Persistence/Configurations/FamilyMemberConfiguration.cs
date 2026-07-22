@@ -8,6 +8,8 @@ public class FamilyMemberConfiguration : IEntityTypeConfiguration<FamilyMember>
 {
     public void Configure(EntityTypeBuilder<FamilyMember> builder)
     {
+        builder.ToTable("FamilyMembers", "identity");
+
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.Role).HasConversion<int>();

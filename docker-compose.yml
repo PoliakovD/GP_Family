@@ -56,6 +56,8 @@ services:
       Minio__AccessKey: "${MINIO_ROOT_USER}"
       Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
       FileStorage__Provider: "Minio"
+      # Dev-ключ шифрования медданных (тот же, что в appsettings.Development.json).
+      Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
       # api крутится в контейнере, LM Studio — на хосте разработчика; host.docker.internal
       # резолвится в хост через Docker Desktop.

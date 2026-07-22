@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
 
@@ -19,8 +20,26 @@ public abstract class IntegrationTestBase(FamilyHubWebFactory factory)
     /// HTTP-клиент, аутентифицированный через Dev-схему (X-Dev-TelegramId) как пользователь
     /// с данным Telegram ID — настоящий конвейер аутентификации/авторизации, без подделки initData.
     /// Уникальный telegramId на тест = свой изолированный пользователь, без пересечений между тестами.
+    /// Пользователь сразу принимает актуальное согласие ПДн (задача 2.3) — почти всем тестам
+    /// нужен «согласившийся»; сценарии без согласия используют Factory.CreateClientAs напрямую.
     /// </summary>
-    protected HttpClient ClientAs(long telegramId) => Factory.CreateClientAs(telegramId);
+    protected HttpClient ClientAs(long telegramId)
+    {
+        var client = Factory.CreateClientAs(telegramId);
+        AcceptCurrentConsent(client);
+        return client;
+    }
+
+    /// <summary>Принимает актуальную версию согласия от имени клиента (синхронно — вызов из конструкторов хелперов).</summary>
+    protected static void AcceptCurrentConsent(HttpClient client)
+    {
+        var current = client.GetFromJsonAsync<ConsentVersionDto>("/api/consents/current", JsonOpts)
+            .GetAwaiter().GetResult();
+        client.PostAsJsonAsync("/api/consents/accept", new { version = current!.Version })
+            .GetAwaiter().GetResult().EnsureSuccessStatusCode();
+    }
+
+    private sealed record ConsentVersionDto(string Version);
 
     /// <summary>Неаутентифицированный клиент — без заголовка X-Dev-TelegramId.</summary>
     protected HttpClient AnonymousClient() => Factory.CreateClient();

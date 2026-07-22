@@ -8,6 +8,8 @@ public class FamilyMedicalShareConfiguration : IEntityTypeConfiguration<FamilyMe
 {
     public void Configure(EntityTypeBuilder<FamilyMedicalShare> builder)
     {
+        builder.ToTable("FamilyMedicalShares", "medical");
+
         builder.HasKey(s => s.Id);
 
         // УРОВЕНЬ 1: один владелец расшаривает свои анализы одной семье единожды.

@@ -1,6 +1,7 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
@@ -14,7 +15,12 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 /// семье, приватны по умолчанию. Шарингом и скрытием управляет ТОЛЬКО владелец — даже
 /// админ семьи сюда не лезет (инвариант 2). Видимость — дословно по разделу 6 брифа.
 /// </summary>
-public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, IOutboxWriter outbox, ILogger<MedicalRecordService> logger)
+public class MedicalRecordService(
+    AppDbContext db,
+    IFamilyAccessService access,
+    IOutboxWriter outbox,
+    IMedicalAuditWriter audit,
+    ILogger<MedicalRecordService> logger)
 {
     /// <summary>
     /// Видно, если: владелец, ИЛИ (мои анализы расшарены этой семье И я в ней состою
@@ -40,6 +46,15 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
     public async Task<List<MedicalRecordDto>> GetVisibleRecordsAsync(Guid userId, CancellationToken ct = default)
     {
         var records = await VisibleRecordsQuery(userId).ToListAsync(ct);
+
+        // Аудит (задача 2.7): факт просмотра ЧУЖИХ (расшаренных) записей — по владельцу.
+        var foreignOwnerIds = records.Select(r => r.OwnerUserId).Where(o => o != userId).Distinct().ToList();
+        if (foreignOwnerIds.Count > 0)
+        {
+            foreach (var ownerId in foreignOwnerIds)
+                audit.Enqueue(userId, MedicalAccessAction.ViewList, ownerUserId: ownerId);
+            await db.SaveChangesAsync(ct);
+        }
 
         var ownRecordIds = records.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToList();
         var hiddenRows = await db.MedicalRecordHiddens
@@ -130,6 +145,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
             });
             // Только при реально созданной шаре (повторный вызов события не порождает).
             outbox.Enqueue(new MedicalRecordSharedEvent(familyId, ownerUserId));
+            audit.Enqueue(ownerUserId, MedicalAccessAction.Share, ownerUserId: ownerUserId, familyId: familyId);
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Пользователь {OwnerUserId} расшарил мед-записи семье {FamilyId}", ownerUserId, familyId);
         }
@@ -153,6 +169,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
         }
 
         db.FamilyMedicalShares.Remove(share);
+        audit.Enqueue(ownerUserId, MedicalAccessAction.Unshare, ownerUserId: ownerUserId, familyId: familyId);
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Пользователь {OwnerUserId} отменил шаринг мед-записей семье {FamilyId}", ownerUserId, familyId);
         return MedicalRecordAccessResult.Success;
@@ -196,6 +213,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
                 });
         }
 
+        audit.Enqueue(ownerUserId, MedicalAccessAction.Hide, ownerUserId: ownerUserId, medicalRecordId: recordId);
         await db.SaveChangesAsync(ct);
         logger.LogInformation(
             "Мед-запись {RecordId} скрыта от семей [{FamilyIds}] владельцем {UserId}",
@@ -221,6 +239,7 @@ public class MedicalRecordService(AppDbContext db, IFamilyAccessService access, 
 
         var hidden = db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == recordId && familyIds.Contains(h.FamilyId));
         db.MedicalRecordHiddens.RemoveRange(hidden);
+        audit.Enqueue(ownerUserId, MedicalAccessAction.Unhide, ownerUserId: ownerUserId, medicalRecordId: recordId);
         await db.SaveChangesAsync(ct);
         logger.LogInformation(
             "Мед-запись {RecordId} раскрыта семьям [{FamilyIds}] владельцем {UserId}",

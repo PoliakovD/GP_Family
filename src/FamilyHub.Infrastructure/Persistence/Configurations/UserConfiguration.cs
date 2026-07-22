@@ -8,13 +8,19 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
+        builder.ToTable("Users", "identity");
+
         builder.HasKey(u => u.Id);
 
         builder.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(u => u.Username).HasMaxLength(32);
+        builder.Property(u => u.Email).HasMaxLength(320);
+        builder.Property(u => u.PinHash).HasMaxLength(200);
 
-        // Авторизация строится на TelegramId — должен быть уникален.
-        builder.HasIndex(u => u.TelegramId).IsUnique();
+        // Оба идентификатора входа уникальны среди заполненных (nullable с этапа 2:
+        // Telegram-only и PWA-only пользователи сосуществуют).
+        builder.HasIndex(u => u.TelegramId).IsUnique().HasFilter("\"TelegramId\" IS NOT NULL");
+        builder.HasIndex(u => u.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL");
 
         builder.HasMany(u => u.Memberships)
             .WithOne(m => m.User)

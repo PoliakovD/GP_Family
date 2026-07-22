@@ -8,6 +8,8 @@ public class FamilyInviteConfiguration : IEntityTypeConfiguration<FamilyInvite>
 {
     public void Configure(EntityTypeBuilder<FamilyInvite> builder)
     {
+        builder.ToTable("FamilyInvites", "identity");
+
         builder.HasKey(i => i.Id);
 
         builder.Property(i => i.Code).HasMaxLength(64).IsRequired();

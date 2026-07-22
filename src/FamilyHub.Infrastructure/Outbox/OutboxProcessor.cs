@@ -82,4 +82,20 @@ public class OutboxProcessor(
 
         return processed;
     }
+
+    /// <summary>
+    /// Удаляет обработанные строки старше ProcessedRetention: Payload содержит снимки
+    /// событий (в т.ч. ПДн) и не должен храниться бессрочно. Вызывается диспетчером.
+    /// </summary>
+    public async Task<int> PurgeProcessedAsync(CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow - options.Value.ProcessedRetention;
+        var purged = await db.OutboxMessages
+            .Where(m => m.ProcessedAt != null && m.ProcessedAt < cutoff)
+            .ExecuteDeleteAsync(ct);
+
+        if (purged > 0)
+            logger.LogInformation("Outbox: удалено {Count} обработанных строк старше {Cutoff}", purged, cutoff);
+        return purged;
+    }
 }

@@ -33,7 +33,7 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // Прогоняем реальные миграции один раз против поднятого контейнера — до первого запроса,
         // независимо от хоста (используем отдельный, временный AppDbContext).
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_postgres.GetConnectionString());
-        await using var db = new AppDbContext(optionsBuilder.Options);
+        await using var db = new AppDbContext(optionsBuilder.Options, DesignTimeDbContextFactory.CreateDevCipher());
         await db.Database.MigrateAsync();
     }
 
@@ -62,9 +62,23 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         builder.UseSetting("Telegram:BotToken", "");
         // Ускоренный цикл outbox-диспетчера: тесты, проверяющие фоновую доставку, не ждут 5 секунд.
         builder.UseSetting("Outbox:PollInterval", "00:00:00.500");
+        // Все тесты коллекции ходят с одного IP: штатные лимиты дали бы ложные 429.
+        // Тест брутфорс-защиты использует отдельную фабрику с заниженными лимитами.
+        builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");
+        builder.UseSetting("RateLimiting:CodePermitLimit", "100000");
 
-        builder.ConfigureServices(services => services.AddSingleton(_postgres));
+        builder.ConfigureServices(services =>
+        {
+            services.AddSingleton(_postgres);
+            // Перехват писем (коды PWA-регистрации): регистрация ПОСЛЕ Program.cs — выигрывает.
+            services.AddSingleton<CapturingEmailSender>();
+            services.AddSingleton<FamilyHub.Infrastructure.Email.IEmailSender>(
+                sp => sp.GetRequiredService<CapturingEmailSender>());
+        });
     }
+
+    /// <summary>Доступ к перехваченным письмам (коды подтверждения) для тестов.</summary>
+    public CapturingEmailSender Emails => Services.GetRequiredService<CapturingEmailSender>();
 
     protected override Microsoft.Extensions.Hosting.IHost CreateHost(Microsoft.Extensions.Hosting.IHostBuilder builder)
     {

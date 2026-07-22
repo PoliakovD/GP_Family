@@ -34,6 +34,7 @@ export class AppComponent implements OnInit {
     { id: 'birthdays', label: 'Дни р.', icon: 'ph-cake' },
     { id: 'records', label: 'Анализы', icon: 'ph-heartbeat' },
     { id: 'notifications', label: 'Оповещ.', icon: 'ph-bell' },
+    { id: 'settings', label: 'Ещё', icon: 'ph-gear' },
   ];
 
   ngOnInit(): void {

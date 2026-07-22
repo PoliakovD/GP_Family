@@ -1,0 +1,68 @@
+using System.Reflection;
+using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Consents;
+using FamilyHub.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
+
+namespace FamilyHub.Api.Features.Consents;
+
+public enum AcceptConsentResult { Accepted, StaleVersion }
+
+/// <summary>
+/// Согласия на обработку ПДн (задача 2.3): версионирование текста, идемпотентное принятие,
+/// статус для фронтенд-гейта. Тексты — embedded-ресурсы сборки (история версий — git).
+/// </summary>
+public class ConsentService(AppDbContext db, IMemoryCache cache, IOptions<ConsentOptions> options)
+{
+    public string CurrentVersion => options.Value.CurrentVersion;
+
+    public static string LoadLegalText(string resourceName)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var fullName = $"FamilyHub.Api.Legal.{resourceName}";
+        using var stream = assembly.GetManifestResourceStream(fullName)
+            ?? throw new InvalidOperationException($"Не найден embedded-ресурс {fullName}.");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    public Task<bool> HasAcceptedCurrentAsync(Guid userId, CancellationToken ct = default) =>
+        db.Set<UserConsent>().AnyAsync(
+            c => c.UserId == userId && c.Kind == ConsentKind.PdnConsent && c.Version == CurrentVersion, ct);
+
+    public async Task<AcceptConsentResult> AcceptAsync(Guid userId, string version, CancellationToken ct = default)
+    {
+        // Пользователь подтверждает ту версию, которую видел: расхождение с актуальной —
+        // признак устаревшего клиента, согласие не засчитывается.
+        if (version != CurrentVersion) return AcceptConsentResult.StaleVersion;
+
+        if (!await HasAcceptedCurrentAsync(userId, ct))
+        {
+            db.Set<UserConsent>().Add(new UserConsent
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Kind = ConsentKind.PdnConsent,
+                Version = version,
+                AcceptedAt = DateTime.UtcNow,
+            });
+
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Гонка двойного клика: UNIQUE(UserId, Kind, Version) — согласие уже записано.
+                db.ChangeTracker.Clear();
+            }
+        }
+
+        // Прогрев кэша ConsentRequiredFilter: принятие видно немедленно.
+        cache.Set(ConsentRequiredFilter.CacheKey(userId, version), true, TimeSpan.FromMinutes(5));
+        return AcceptConsentResult.Accepted;
+    }
+}

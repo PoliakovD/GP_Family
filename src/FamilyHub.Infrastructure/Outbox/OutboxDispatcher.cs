@@ -19,6 +19,8 @@ public class OutboxDispatcher(
     {
         logger.LogInformation("OutboxDispatcher запущен (poll {PollInterval})", options.Value.PollInterval);
 
+        var lastPurge = DateTime.MinValue;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             var processed = 0;
@@ -27,6 +29,13 @@ public class OutboxDispatcher(
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var processor = scope.ServiceProvider.GetRequiredService<OutboxProcessor>();
                 processed = await processor.ProcessBatchAsync(stoppingToken);
+
+                // Ретеншн ПДн в Payload: периодически чистим давно обработанные строки.
+                if (DateTime.UtcNow - lastPurge >= options.Value.PurgeInterval)
+                {
+                    await processor.PurgeProcessedAsync(stoppingToken);
+                    lastPurge = DateTime.UtcNow;
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

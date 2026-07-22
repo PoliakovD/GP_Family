@@ -3,9 +3,13 @@ using System.Net.Http.Json;
 using System.Text;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -97,7 +101,7 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
     }
 
     [Fact]
-    public async Task LocalFileLink_ServesContent_AndTamperedSignature_Returns401()
+    public async Task DownloadLink_ServesDecryptedContent_AndTamperedSignature_Returns401()
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateRecordAsync(owner);
@@ -115,5 +119,31 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var tamperedUrl = relativeUrl[..^1] + (relativeUrl[^1] == 'a' ? 'b' : 'a');
         var tamperedResponse = await anonymous.GetAsync(tamperedUrl);
         tamperedResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UploadedBlob_IsCiphertextInStorage_AndKeyHasNoFileName()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+        var attachment = await (await owner.PostAsync($"/api/medical-records/{record.Id}/attachments", BuildUpload("very-private-scan")))
+            .Content.ReadFromJsonAsync<AttachmentDto>(JsonOpts);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await db.FileAttachments.AsNoTracking().SingleAsync(a => a.Id == attachment!.Id);
+
+        row.IsEncrypted.Should().BeTrue();
+        row.StorageKey.Should().NotContain("scan.txt", "имя файла — ПДн и не должно попадать в ключ хранилища");
+        row.FileName.Should().Be("scan.txt", "EF-конвертер расшифровывает имя прозрачно");
+
+        var storage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
+        await using var blob = await storage.OpenReadAsync(row.StorageKey);
+        using var buffer = new MemoryStream();
+        await blob.CopyToAsync(buffer);
+
+        var rawText = Encoding.UTF8.GetString(buffer.ToArray());
+        rawText.Should().NotContain("very-private-scan", "в хранилище должен лежать только шифротекст");
+        rawText.Should().StartWith("FHE1");
     }
 }

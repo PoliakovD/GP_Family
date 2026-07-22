@@ -8,6 +8,8 @@ public class FamilyInviteRedemptionConfiguration : IEntityTypeConfiguration<Fami
 {
     public void Configure(EntityTypeBuilder<FamilyInviteRedemption> builder)
     {
+        builder.ToTable("FamilyInviteRedemptions", "identity");
+
         builder.HasKey(r => r.Id);
 
         builder.HasIndex(r => new { r.FamilyInviteId, r.UserId }).IsUnique();

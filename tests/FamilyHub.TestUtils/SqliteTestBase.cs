@@ -1,6 +1,8 @@
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.TestUtils;
 
@@ -16,6 +18,13 @@ namespace FamilyHub.TestUtils;
 /// </summary>
 public abstract class SqliteTestBase : IDisposable
 {
+    /// <summary>
+    /// Единый на весь тестовый процесс cipher: EF кэширует модель контекста с конвертером,
+    /// захватившим первый экземпляр, — ключ обязан быть стабильным между тестами.
+    /// </summary>
+    protected static readonly IFieldCipher TestFieldCipher = new AesGcmFieldCipher(
+        Options.Create(new EncryptionOptions { MasterKey = DesignTimeDbContextFactory.DevMasterKey }));
+
     private readonly SqliteConnection _connection;
     private readonly DbContextOptions<AppDbContext> _options;
 
@@ -33,7 +42,7 @@ public abstract class SqliteTestBase : IDisposable
             .UseSqlite(_connection)
             .Options;
 
-        Db = new AppDbContext(_options);
+        Db = new AppDbContext(_options, TestFieldCipher);
         Db.Database.EnsureCreated();
     }
 
@@ -42,7 +51,7 @@ public abstract class SqliteTestBase : IDisposable
     /// проверить персистентное состояние без change tracker первого контекста (например,
     /// after-the-fact проверка, что гонка не создала дубликат).
     /// </summary>
-    protected AppDbContext NewContext() => new(_options);
+    protected AppDbContext NewContext() => new(_options, TestFieldCipher);
 
     public void Dispose()
     {

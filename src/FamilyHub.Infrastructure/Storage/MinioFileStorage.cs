@@ -5,10 +5,9 @@ using Minio.DataModel.Args;
 namespace FamilyHub.Infrastructure.Storage;
 
 /// <summary>
-/// Реальная реализация IFileStorage на базе MinIO (этап 2 п.9 брифа). Заменяет LocalFileStorage
-/// без изменений в вызывающем коде (AttachmentService и т.п. работают только через абстракцию).
-/// Доступ к файлам — исключительно через короткоживущие presigned GET URL (раздел 9 брифа),
-/// постоянных прямых ссылок на бакет не существует.
+/// Реализация IFileStorage на базе MinIO (этап 2 п.9 брифа). С этапа 2 (152-ФЗ) в бакете
+/// лежит только шифротекст (IFileCipher), а скачивание идёт через API-эндпоинт с
+/// расшифровкой — presigned-ссылки на бакет упразднены (они отдавали бы шифротекст).
 /// </summary>
 public class MinioFileStorage(IMinioClient minioClient, IOptions<MinioOptions> options) : IFileStorage
 {
@@ -29,26 +28,26 @@ public class MinioFileStorage(IMinioClient minioClient, IOptions<MinioOptions> o
         return storageKey;
     }
 
-    public async Task<string> GetPresignedUrlAsync(string storageKey, TimeSpan expiry, CancellationToken ct = default)
+    public async Task<Stream> OpenReadAsync(string storageKey, CancellationToken ct = default)
     {
-        // PresignedGetObjectAsync не принимает CancellationToken — сам запрос к MinIO за подписью
-        // короткий (без сетевого обращения за данными файла), поэтому ct здесь не нужен.
-        var url = await minioClient.PresignedGetObjectAsync(new PresignedGetObjectArgs()
+        // Вложения ограничены лимитом загрузки — буферизация в памяти приемлема
+        // (расшифровка IFileCipher всё равно буферизует блоб целиком).
+        var buffer = new MemoryStream();
+        await minioClient.GetObjectAsync(new GetObjectArgs()
             .WithBucket(options.Value.Bucket)
             .WithObject(storageKey)
-            .WithExpiry((int)expiry.TotalSeconds));
+            .WithCallbackStream(async (stream, token) => await stream.CopyToAsync(buffer, token)), ct);
 
-        if (string.IsNullOrEmpty(options.Value.PublicEndpoint))
-            return url;
+        buffer.Position = 0;
+        return buffer;
+    }
 
-        // Подменяем хост на публично доступный (домашний ПК виден изнутри по одному адресу,
-        // клиентам — по другому, через туннель/прокси), сохраняя подписанные query-параметры.
-        var uri = new Uri(url);
-        var publicUri = new UriBuilder(uri)
-        {
-            Host = new Uri($"{(options.Value.UseSsl ? "https" : "http")}://{options.Value.PublicEndpoint}").Host,
-        };
-        return publicUri.Uri.ToString();
+    public async Task DeleteAsync(string storageKey, CancellationToken ct = default)
+    {
+        // RemoveObject у MinIO идемпотентен: удаление отсутствующего объекта не бросает.
+        await minioClient.RemoveObjectAsync(new RemoveObjectArgs()
+            .WithBucket(options.Value.Bucket)
+            .WithObject(storageKey), ct);
     }
 
     private async Task EnsureBucketAsync(CancellationToken ct)

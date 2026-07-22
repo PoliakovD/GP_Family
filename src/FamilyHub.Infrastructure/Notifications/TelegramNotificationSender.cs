@@ -28,10 +28,11 @@ public class TelegramNotificationSender(
             .Select(u => u.TelegramId)
             .FirstOrDefaultAsync(ct);
 
-        if (telegramId == 0)
+        if (telegramId is null or 0)
         {
-            logger.LogWarning(
-                "Не найден TelegramId для пользователя {UserId} — оповещение {NotificationId} не доставлено.",
+            // PWA-only пользователь (без Telegram) или пользователь не найден — TG-канала нет.
+            logger.LogDebug(
+                "Нет TelegramId у пользователя {UserId} — оповещение {NotificationId} не доставлено в TG.",
                 notification.UserId, notification.Id);
             return;
         }

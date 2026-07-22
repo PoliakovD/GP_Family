@@ -4,9 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FamilyHub</title>
+    <meta name="theme-color" content="#2f6f4f" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
     <app-root></app-root>
+    <script>
+      // PWA service worker (этап 2 п.2.4): только вне Telegram и только в проде (https).
+      if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Telegram?.WebApp?.initData) {
+        navigator.serviceWorker.register('/sw.js');
+      }
+    </script>
   </body>
 </html>

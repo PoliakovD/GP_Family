@@ -17,13 +17,15 @@ public class FileAttachment
     /// <summary>Ключ в объектном хранилище (MinIO).</summary>
     public string StorageKey { get; set; } = string.Empty;
 
+    /// <summary>Имя файла от пользователя — может содержать ФИО/диагноз, поэтому шифруется.</summary>
+    [Encrypted]
     public string FileName { get; set; } = string.Empty;
 
     public string ContentType { get; set; } = string.Empty;
 
     public long SizeBytes { get; set; }
 
-    /// <summary>Закладка под шифрование медданных (152-ФЗ).</summary>
+    /// <summary>Блоб в хранилище зашифрован IFileCipher (этап 2); false — legacy-файлы до шифрования.</summary>
     public bool IsEncrypted { get; set; }
 
     public DateTime UploadedAt { get; set; }

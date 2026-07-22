@@ -1,0 +1,54 @@
+<div class="card" style="max-width: 420px; margin: 2rem auto; padding: 1.5rem;">
+  <h2 class="mb-2">Вход в FamilyHub</h2>
+
+  @if (error()) {
+    <div class="alert-danger mb-2">{{ error() }}</div>
+  }
+
+  @switch (step()) {
+    @case ('login') {
+      <form (ngSubmit)="login()">
+        <label class="mb-1">Email
+          <input type="email" name="email" [(ngModel)]="email" required autocomplete="email" />
+        </label>
+        <label class="mb-2">PIN-код
+          <input type="password" name="pin" [(ngModel)]="pin" required inputmode="numeric"
+                 minlength="4" maxlength="8" autocomplete="current-password" />
+        </label>
+        <button type="submit" class="btn-primary" [disabled]="busy()">Войти</button>
+        <button type="button" class="btn-link" (click)="startRegistration()">Создать аккаунт</button>
+      </form>
+    }
+    @case ('register-email') {
+      <form (ngSubmit)="sendCode()">
+        <p class="mb-2">Укажите email — мы отправим код подтверждения.</p>
+        <label class="mb-2">Email
+          <input type="email" name="email" [(ngModel)]="email" required autocomplete="email" />
+        </label>
+        <button type="submit" class="btn-primary" [disabled]="busy()">Отправить код</button>
+        <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
+      </form>
+    }
+    @case ('register-code') {
+      <form (ngSubmit)="confirmRegistration()">
+        <p class="mb-2">Код отправлен на {{ email }}. Введите его и придумайте PIN.</p>
+        <label class="mb-1">Код из письма
+          <input type="text" name="code" [(ngModel)]="code" required inputmode="numeric" maxlength="6" />
+        </label>
+        <label class="mb-1">Имя (необязательно)
+          <input type="text" name="displayName" [(ngModel)]="displayName" autocomplete="name" />
+        </label>
+        <label class="mb-2">PIN-код (4–8 цифр)
+          <input type="password" name="pin" [(ngModel)]="pin" required inputmode="numeric"
+                 minlength="4" maxlength="8" autocomplete="new-password" />
+        </label>
+        <button type="submit" class="btn-primary" [disabled]="busy()">Создать аккаунт</button>
+        <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
+      </form>
+    }
+  }
+
+  <p class="mt-2" style="font-size: 0.85em;">
+    Продолжая, вы соглашаетесь с <a routerLink="/privacy">политикой конфиденциальности</a>.
+  </p>
+</div>

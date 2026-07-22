@@ -1,4 +1,5 @@
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http;
 
 namespace FamilyHub.Modules.Medical.Attachments;
@@ -35,5 +36,21 @@ public static class AttachmentEndpoints
                 _ => Results.Ok(new { url }),
             };
         });
+
+        // Скачивание по подписанной короткоживущей ссылке (выдаётся эндпоинтом /url после
+        // проверки доступа). AllowAnonymous: браузер открывает ссылку без auth-заголовков,
+        // как раньше открывал presigned URL хранилища; защита — HMAC-подпись + TTL.
+        app.MapGet("/api/attachments/{attachmentId:guid}/file", async (
+            Guid attachmentId, long expires, string sig,
+            AttachmentService service, DownloadTokenService tokens, CancellationToken ct) =>
+        {
+            if (!tokens.Validate(attachmentId, expires, sig))
+                return Results.Unauthorized();
+
+            var download = await service.GetDownloadAsync(attachmentId, ct);
+            return download is null
+                ? Results.NotFound()
+                : Results.Stream(download.Value.Content, download.Value.ContentType, download.Value.FileName);
+        }).AllowAnonymous();
     }
 }

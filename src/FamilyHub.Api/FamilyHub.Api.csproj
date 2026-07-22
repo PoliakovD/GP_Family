@@ -22,6 +22,11 @@
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Тексты согласия/политики — встроенные ресурсы: версия текста жёстко связана со сборкой. -->
+    <EmbeddedResource Include="Legal\*.html" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

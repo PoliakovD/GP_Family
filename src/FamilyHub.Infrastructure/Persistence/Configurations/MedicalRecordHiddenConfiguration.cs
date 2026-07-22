@@ -8,6 +8,8 @@ public class MedicalRecordHiddenConfiguration : IEntityTypeConfiguration<Medical
 {
     public void Configure(EntityTypeBuilder<MedicalRecordHidden> builder)
     {
+        builder.ToTable("MedicalRecordHiddens", "medical");
+
         builder.HasKey(h => h.Id);
 
         // УРОВЕНЬ 2: одна запись скрыта от одной семьи не более одного раза.

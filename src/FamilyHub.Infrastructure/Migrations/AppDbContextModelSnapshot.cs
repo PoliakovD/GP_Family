@@ -36,14 +36,54 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<string>("PersonName")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
                     b.HasIndex("FamilyId");
 
-                    b.ToTable("Birthdays");
+                    b.ToTable("Birthdays", "identity");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.EmailVerificationCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email", "Purpose");
+
+                    b.ToTable("EmailVerificationCodes", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Family", b =>
@@ -68,7 +108,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Families");
+                    b.ToTable("Families", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.FamilyInvite", b =>
@@ -116,7 +156,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("FamilyId");
 
-                    b.ToTable("FamilyInvites");
+                    b.ToTable("FamilyInvites", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.FamilyInviteRedemption", b =>
@@ -139,7 +179,7 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasIndex("FamilyInviteId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("FamilyInviteRedemptions");
+                    b.ToTable("FamilyInviteRedemptions", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.FamilyMedicalShare", b =>
@@ -162,7 +202,7 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasIndex("OwnerUserId", "FamilyId")
                         .IsUnique();
 
-                    b.ToTable("FamilyMedicalShares");
+                    b.ToTable("FamilyMedicalShares", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.FamilyMember", b =>
@@ -193,7 +233,7 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasIndex("FamilyId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("FamilyMembers");
+                    b.ToTable("FamilyMembers", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.FileAttachment", b =>
@@ -209,8 +249,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<string>("FileName")
                         .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("IsEncrypted")
                         .HasColumnType("boolean");
@@ -236,7 +275,86 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("OwnerType", "OwnerId");
 
-                    b.ToTable("FileAttachments");
+                    b.ToTable("FileAttachments", "medical");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.GlobalMedicationKb", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("global_medications_kb", "kb");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicalAccessAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Action")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AttachmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MedicalRecordId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("ActorUserId", "OccurredAt");
+
+                    b.HasIndex("OwnerUserId", "OccurredAt");
+
+                    b.ToTable("MedicalAccessAudits", "audit");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.MedicalRecord", b =>
@@ -259,8 +377,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<string>("PersonName")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.Property<DateOnly>("RecordDate")
                         .HasColumnType("date");
@@ -269,7 +386,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("OwnerUserId");
 
-                    b.ToTable("MedicalRecords");
+                    b.ToTable("MedicalRecords", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.MedicalRecordHidden", b =>
@@ -292,7 +409,7 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasIndex("MedicalRecordId", "FamilyId")
                         .IsUnique();
 
-                    b.ToTable("MedicalRecordHiddens");
+                    b.ToTable("MedicalRecordHiddens", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Medication", b =>
@@ -332,7 +449,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("MedkitId");
 
-                    b.ToTable("Medications");
+                    b.ToTable("Medications", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Medkit", b =>
@@ -359,7 +476,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("FamilyId");
 
-                    b.ToTable("Medkits");
+                    b.ToTable("Medkits", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Notification", b =>
@@ -416,7 +533,41 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("UserId", "IsRead");
 
-                    b.ToTable("Notifications");
+                    b.ToTable("Notifications", "identity");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.PersonalCompatibilityResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "InputHash")
+                        .IsUnique();
+
+                    b.ToTable("PersonalCompatibilityResults", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.User", b =>
@@ -433,7 +584,21 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<long>("TelegramId")
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<int>("FailedPinAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PinHash")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long?>("TelegramId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Username")
@@ -442,10 +607,43 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("\"Email\" IS NOT NULL");
+
                     b.HasIndex("TelegramId")
+                        .IsUnique()
+                        .HasFilter("\"TelegramId\" IS NOT NULL");
+
+                    b.ToTable("Users", "identity");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.UserConsent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Kind", "Version")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("UserConsents", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Infrastructure.Outbox.OutboxMessage", b =>

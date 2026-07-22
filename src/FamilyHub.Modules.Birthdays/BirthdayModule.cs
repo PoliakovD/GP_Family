@@ -1,4 +1,6 @@
+using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Birthdays.Birthdays;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FamilyHub.Modules.Birthdays;
@@ -17,6 +19,7 @@ public static class BirthdayModule
 
     public static void MapBirthdayModule(this IEndpointRouteBuilder app)
     {
-        app.MapBirthdayEndpoints();
+        // Дни рождения = ПДн (имя + дата) → та же консент-гарантия, что и у Medical (задача 2.3).
+        app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapBirthdayEndpoints();
     }
 }

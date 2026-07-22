@@ -2,12 +2,15 @@ using System.Text;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -16,35 +19,96 @@ namespace FamilyHub.UnitTests.Modules.Medical;
 public class AttachmentServiceTests : SqliteTestBase
 {
     private readonly IFileStorage _storage = Substitute.For<IFileStorage>();
+    private readonly IFileCipher _fileCipher = new AesGcmFileCipher(
+        Options.Create(new EncryptionOptions { MasterKey = DesignTimeDbContextFactory.DevMasterKey }));
     private readonly AttachmentService _sut;
+
+    /// <summary>Байты, реально ушедшие в storage.SaveAsync (по ключу) — для проверок шифротекста.</summary>
+    private readonly Dictionary<string, byte[]> _savedBlobs = [];
 
     public AttachmentServiceTests()
     {
+        _storage.SaveAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                using var copy = new MemoryStream();
+                callInfo.Arg<Stream>().CopyTo(copy);
+                _savedBlobs[callInfo.ArgAt<string>(0)] = copy.ToArray();
+                return Task.FromResult(callInfo.ArgAt<string>(0));
+            });
+        _storage.OpenReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => Task.FromResult<Stream>(new MemoryStream(_savedBlobs[callInfo.ArgAt<string>(0)])));
+
         var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
+        var auditWriter = new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db);
         var medicalRecords = new MedicalRecordService(
-            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, NullLogger<MedicalRecordService>.Instance);
-        _sut = new AttachmentService(Db, _storage, medicalRecords, access, NullLogger<AttachmentService>.Instance);
+            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, auditWriter, NullLogger<MedicalRecordService>.Instance);
+        var downloadTokens = new DownloadTokenService(
+            Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
+        _sut = new AttachmentService(
+            Db, _storage, _fileCipher, downloadTokens, medicalRecords, access, auditWriter, NullLogger<AttachmentService>.Instance);
     }
 
     private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("scan-bytes"));
 
     [Fact]
-    public async Task UploadForMedicalRecordAsync_Owner_SavesAndReturnsDto()
+    public async Task UploadForMedicalRecordAsync_Owner_SavesEncryptedBlobWithoutFileNameInKey()
     {
         var owner = Db.AddUser();
         var record = TestData.NewMedicalRecord(owner.Id);
         Db.MedicalRecords.Add(record);
         await Db.SaveChangesAsync();
-        _storage.SaveAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult("ignored"));
 
         var (result, item) = await _sut.UploadForMedicalRecordAsync(
             record.Id, owner.Id, "scan.pdf", "application/pdf", 10, Content());
 
         result.Should().Be(AttachmentAccessResult.Success);
         item!.FileName.Should().Be("scan.pdf");
-        await _storage.Received(1).SaveAsync(
-            Arg.Is<string>(k => k.Contains(record.Id.ToString())), Arg.Any<Stream>(), 10, "application/pdf", Arg.Any<CancellationToken>());
+
+        var storageKey = _savedBlobs.Keys.Single();
+        storageKey.Should().Contain(record.Id.ToString());
+        storageKey.Should().NotContain("scan.pdf", "имя файла — ПДн и не должно попадать в ключ хранилища");
+
+        // В хранилище лежит шифротекст, а не исходные байты.
+        _savedBlobs[storageKey].Should().NotBeEquivalentTo(Encoding.UTF8.GetBytes("scan-bytes"));
+        Encoding.UTF8.GetString(_savedBlobs[storageKey]).Should().NotContain("scan-bytes");
+        Db.FileAttachments.Single().IsEncrypted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetDownloadAsync_DecryptsBackToOriginalContent()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        await Db.SaveChangesAsync();
+        var (_, item) = await _sut.UploadForMedicalRecordAsync(
+            record.Id, owner.Id, "scan.pdf", "application/pdf", 10, Content());
+
+        var download = await _sut.GetDownloadAsync(item!.Id);
+
+        download.Should().NotBeNull();
+        download!.Value.ContentType.Should().Be("application/pdf");
+        download.Value.FileName.Should().Be("scan.pdf");
+        using var reader = new StreamReader(download.Value.Content);
+        (await reader.ReadToEndAsync()).Should().Be("scan-bytes");
+    }
+
+    [Fact]
+    public async Task GetDownloadAsync_LegacyPlaintextAttachment_IsReturnedAsIs()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        var attachment = NewAttachment(FileOwnerType.MedicalRecord, record.Id);
+        Db.FileAttachments.Add(attachment);
+        await Db.SaveChangesAsync();
+        _savedBlobs[attachment.StorageKey] = Encoding.UTF8.GetBytes("legacy-plain");
+
+        var download = await _sut.GetDownloadAsync(attachment.Id);
+
+        using var reader = new StreamReader(download!.Value.Content);
+        (await reader.ReadToEndAsync()).Should().Be("legacy-plain");
     }
 
     [Fact]
@@ -94,14 +158,12 @@ public class AttachmentServiceTests : SqliteTestBase
         Db.FileAttachments.Add(attachment);
         var outsider = Db.AddUser();
         await Db.SaveChangesAsync();
-        _storage.GetPresignedUrlAsync(attachment.StorageKey, Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult("https://signed.example/file"));
 
         var ownerResult = await _sut.GetPresignedUrlAsync(attachment.Id, owner.Id);
         var outsiderResult = await _sut.GetPresignedUrlAsync(attachment.Id, outsider.Id);
 
         ownerResult.Result.Should().Be(AttachmentAccessResult.Success);
-        ownerResult.Url.Should().Be("https://signed.example/file");
+        ownerResult.Url.Should().StartWith($"/api/attachments/{attachment.Id}/file?expires=");
         outsiderResult.Result.Should().Be(AttachmentAccessResult.Forbidden);
     }
 
@@ -117,8 +179,6 @@ public class AttachmentServiceTests : SqliteTestBase
         Db.FileAttachments.Add(attachment);
         var outsider = Db.AddUser();
         await Db.SaveChangesAsync();
-        _storage.GetPresignedUrlAsync(attachment.StorageKey, Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult("https://signed.example/file"));
 
         var memberResult = await _sut.GetPresignedUrlAsync(attachment.Id, admin.Id);
         var outsiderResult = await _sut.GetPresignedUrlAsync(attachment.Id, outsider.Id);

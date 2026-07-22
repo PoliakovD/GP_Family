@@ -8,6 +8,8 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 {
     public void Configure(EntityTypeBuilder<Notification> builder)
     {
+        builder.ToTable("Notifications", "identity");
+
         builder.HasKey(n => n.Id);
 
         builder.Property(n => n.Title).HasMaxLength(300).IsRequired();

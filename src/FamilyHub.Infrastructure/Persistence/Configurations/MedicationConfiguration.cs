@@ -8,6 +8,8 @@ public class MedicationConfiguration : IEntityTypeConfiguration<Medication>
 {
     public void Configure(EntityTypeBuilder<Medication> builder)
     {
+        builder.ToTable("Medications", "medical");
+
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.Name).HasMaxLength(300).IsRequired();

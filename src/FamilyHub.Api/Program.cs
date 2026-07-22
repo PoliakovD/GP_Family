@@ -1,15 +1,23 @@
+using System.Threading.RateLimiting;
+using FamilyHub.Api.Features.Auth;
+using FamilyHub.Api.Features.Account;
 using FamilyHub.Api.Features.Bot;
+using FamilyHub.Api.Features.Consents;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
+using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.Modules.Birthdays;
@@ -18,6 +26,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -56,6 +65,18 @@ builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioO
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
 builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection(OutboxOptions.SectionName));
+builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
+builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
+builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
+
+// --- At-rest шифрование (этап 2, 152-ФЗ): ключ вне БД, fail-fast при отсутствии ---
+// Синглтоны обязательны: EF кэширует модель с конвертером, захватившим первый cipher.
+if (string.IsNullOrWhiteSpace(builder.Configuration["Encryption:MasterKey"]))
+    throw new InvalidOperationException(
+        "Encryption:MasterKey не задан (env Encryption__MasterKey) — at-rest шифрование обязательно.");
+builder.Services.AddSingleton<IFieldCipher, AesGcmFieldCipher>();
+builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
+builder.Services.AddSingleton<DownloadTokenService>();
 
 // --- Persistence ---
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -121,33 +142,114 @@ builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = options.DefaultPolicy;
 });
 
-// --- Аутентификация: Telegram Mini App (прод) + Dev-заглушка (только Development) ---
+// --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-cookie, ---
+// --- плюс Dev-заглушка (только Development). Селектор "Smart" во всех средах:      ---
+// --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → cookie.       ---
 var isDevelopment = builder.Environment.IsDevelopment();
-var defaultScheme = isDevelopment ? "Smart" : AuthSchemes.TelegramMiniApp;
 
 var authBuilder = builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme = defaultScheme;
-    options.DefaultAuthenticateScheme = defaultScheme;
-    options.DefaultChallengeScheme = defaultScheme;
+    options.DefaultScheme = AuthSchemes.Smart;
+    options.DefaultAuthenticateScheme = AuthSchemes.Smart;
+    options.DefaultChallengeScheme = AuthSchemes.Smart;
 });
 
 authBuilder.AddScheme<AuthenticationSchemeOptions, TelegramMiniAppAuthenticationHandler>(AuthSchemes.TelegramMiniApp, null);
 
+authBuilder.AddCookie(AuthSchemes.PwaCookie, cookieOptions =>
+{
+    cookieOptions.Cookie.Name = "familyhub.auth";
+    cookieOptions.Cookie.HttpOnly = true;
+    cookieOptions.Cookie.SameSite = SameSiteMode.Lax;
+    // SameAsRequest: в проде TLS даёт Secure, локально работает по http.
+    cookieOptions.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    cookieOptions.SlidingExpiration = true;
+    cookieOptions.ExpireTimeSpan = TimeSpan.FromDays(14);
+    // SPA-API: вместо redirect'ов на страницы логина отдаём коды статуса.
+    cookieOptions.Events.OnRedirectToLogin = ctx =>
+    {
+        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+    cookieOptions.Events.OnRedirectToAccessDenied = ctx =>
+    {
+        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
+});
+
 if (isDevelopment)
 {
     authBuilder.AddScheme<AuthenticationSchemeOptions, DevAuthenticationHandler>(AuthSchemes.Dev, null);
-
-    // Выбор схемы по заголовку: если пришёл X-Dev-TelegramId — используем Dev,
-    // иначе обычную Telegram Mini App initData. Только для локальной разработки.
-    authBuilder.AddPolicyScheme("Smart", "Smart", policyOptions =>
-    {
-        policyOptions.ForwardDefaultSelector = httpContext =>
-            httpContext.Request.Headers.ContainsKey("X-Dev-TelegramId")
-                ? AuthSchemes.Dev
-                : AuthSchemes.TelegramMiniApp;
-    });
 }
+
+authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions =>
+{
+    policyOptions.ForwardDefaultSelector = httpContext =>
+    {
+        var request = httpContext.Request;
+        var hasInitData = request.Headers.Authorization.ToString().StartsWith("tma ", StringComparison.Ordinal)
+            || request.Headers.ContainsKey("X-Telegram-Init-Data");
+        if (hasInitData) return AuthSchemes.TelegramMiniApp;
+        if (isDevelopment && request.Headers.ContainsKey("X-Dev-TelegramId")) return AuthSchemes.Dev;
+        return AuthSchemes.PwaCookie;
+    };
+});
+
+// --- Rate limiting PWA-auth (брутфорс-защита, этап 2 п.2.4). Лимиты конфигурируемы —
+// --- интеграционные тесты поднимают их, чтобы не ловить 429 на обычных сценариях.
+var authRateLimits = builder.Configuration.GetSection(AuthRateLimitOptions.SectionName).Get<AuthRateLimitOptions>() ?? new AuthRateLimitOptions();
+builder.Services.AddRateLimiter(limiterOptions =>
+{
+    limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Партиция — по IP клиента: лимит общий для всех auth-эндпоинтов с этой политикой.
+    limiterOptions.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = authRateLimits.AuthPermitLimit,
+            Window = TimeSpan.FromSeconds(authRateLimits.AuthWindowSeconds),
+            QueueLimit = 0,
+        }));
+
+    // Жёстче для выдачи email-кодов: каждая выдача — реальное письмо.
+    limiterOptions.AddPolicy("auth-code", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = authRateLimits.CodePermitLimit,
+            Window = TimeSpan.FromSeconds(authRateLimits.CodeWindowSeconds),
+            QueueLimit = 0,
+        }));
+});
+
+// --- PWA-auth сервисы + email-отправка (задача 2.5) ---
+// Провайдеры заданы → MailKit с failover (российский SMTP задаётся конфигом),
+// иначе — log-заглушка (зеркало переключателя INotificationSender по BotToken).
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.AddScoped<PwaAuthService>();
+var emailProvidersConfigured = builder.Configuration.GetSection($"{EmailOptions.SectionName}:Providers").GetChildren().Any();
+if (emailProvidersConfigured)
+{
+    builder.Services.AddSingleton<ISmtpTransport, MailKitSmtpTransport>();
+    builder.Services.AddSingleton<IEmailSender, MailKitSmtpEmailSender>();
+}
+else
+{
+    builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+}
+
+// --- Согласия ПДн (задача 2.3): версия + принятие + кэш для ConsentRequiredFilter ---
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<ConsentService>();
+
+// --- Права субъекта ПДн (задача 2.3): удаление аккаунта + экспорт ---
+builder.Services.AddScoped<AccountService>();
+
+// --- Аудит доступа к медданным (задача 2.7): синхронная запись + ретеншн-джоба ---
+builder.Services.AddScoped<IMedicalAuditWriter, MedicalAuditWriter>();
+builder.Services.AddScoped<AuditRetentionJob>();
 
 // --- Оповещения: Hangfire recurring job по срокам годности лекарств и дням рождения (этап 3 п.10) ---
 var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
@@ -236,20 +338,11 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
-// --- Раздача файлов LocalFileStorage по подписанной ссылке (только при FileStorage:Provider=Local) ---
-if (string.Equals(fileStorageProvider, "Minio", StringComparison.OrdinalIgnoreCase) is false)
-{
-    app.MapGet("/local-files/{*key}", (string key, long expires, string sig, LocalFileStorage storage) =>
-    {
-        if (!storage.IsValidSignature(key, expires, sig))
-            return Results.Unauthorized();
-
-        var path = storage.ResolvePath(key);
-        return File.Exists(path) ? Results.File(path) : Results.NotFound();
-    }).AllowAnonymous();
-}
-
+app.MapAuthEndpoints();
+app.MapConsentEndpoints();
+app.MapAccountEndpoints();
 app.MapFamilyEndpoints();
 app.MapInviteEndpoints();
 app.MapMemberEndpoints();
@@ -305,6 +398,12 @@ app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<ReminderScan
     "reminder-scan",
     job => job.RunAsync(CancellationToken.None),
     notificationOptions.Cron);
+
+// Ретеншн аудита (задача 2.7): ежемесячно, 1-го числа в 03:00 — строки старше 12 месяцев.
+app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<AuditRetentionJob>(
+    "audit-retention",
+    job => job.RunAsync(CancellationToken.None),
+    "0 3 1 * *");
 
 
 // Применение миграций с retry для transient-ошибок при старте (race-condition нескольких реплик)

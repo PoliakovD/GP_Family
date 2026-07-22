@@ -16,4 +16,13 @@ public class OutboxOptions
 
     /// <summary>База экспоненциального backoff: задержка = 2^Attempts * RetryBaseDelaySeconds.</summary>
     public int RetryBaseDelaySeconds { get; set; } = 10;
+
+    /// <summary>
+    /// Сколько хранить обработанные строки. Payload — снимок события и может содержать ПДн
+    /// (например, PersonName), поэтому обработанное не живёт дольше срока диагностики (152-ФЗ).
+    /// </summary>
+    public TimeSpan ProcessedRetention { get; set; } = TimeSpan.FromDays(7);
+
+    /// <summary>Как часто запускать очистку обработанных строк.</summary>
+    public TimeSpan PurgeInterval { get; set; } = TimeSpan.FromHours(1);
 }

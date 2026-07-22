@@ -1,13 +1,11 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Infrastructure.Storage;
 
 /// <summary>
-/// Временная локальная реализация IFileStorage — пишет на диск и выдаёт подписанную
-/// короткоживущую ссылку (HMAC по storageKey+expiry), имитируя pre-signed URL MinIO.
-/// Заменяется на реальный MinIO-клиент в этапе 2 п.9 без изменений в вызывающем коде.
+/// Локальная реализация IFileStorage — блобы на диске. С этапа 2 содержимое приходит уже
+/// зашифрованным (IFileCipher в AttachmentService), отдача — только через API-эндпоинт
+/// с расшифровкой; presigned-ссылок и прямых маршрутов к файлам больше нет.
 /// </summary>
 public class LocalFileStorage(IOptions<LocalFileStorageOptions> options) : IFileStorage
 {
@@ -24,37 +22,23 @@ public class LocalFileStorage(IOptions<LocalFileStorageOptions> options) : IFile
         return storageKey;
     }
 
-    public Task<string> GetPresignedUrlAsync(string storageKey, TimeSpan expiry, CancellationToken ct = default)
+    public Task<Stream> OpenReadAsync(string storageKey, CancellationToken ct = default)
     {
-        var expiresAtUnix = DateTimeOffset.UtcNow.Add(expiry).ToUnixTimeSeconds();
-        var signature = Sign(storageKey, expiresAtUnix);
+        var fullPath = ResolvePath(storageKey);
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException($"Блоб {storageKey} отсутствует в локальном хранилище.", fullPath);
 
-        // storageKey управляется сервером (Guid + безопасные имена), поэтому не экранируем
-        // его целиком — иначе '/' превратится в %2F и не совпадёт с catch-all маршрутом.
-        var url = $"{options.Value.PublicBasePath}/{storageKey}" +
-                  $"?expires={expiresAtUnix}&sig={signature}";
-
-        return Task.FromResult(url);
+        return Task.FromResult<Stream>(File.OpenRead(fullPath));
     }
 
-    /// <summary>Проверка подписи и срока действия — используется эндпоинтом, отдающим файл.</summary>
-    public bool IsValidSignature(string storageKey, long expiresAtUnix, string signature)
+    public Task DeleteAsync(string storageKey, CancellationToken ct = default)
     {
-        if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresAtUnix)
-            return false;
-
-        var expected = Sign(storageKey, expiresAtUnix);
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(signature));
+        var fullPath = ResolvePath(storageKey);
+        if (File.Exists(fullPath))
+            File.Delete(fullPath);
+        return Task.CompletedTask;
     }
 
     public string ResolvePath(string storageKey) =>
         Path.Combine(Path.GetFullPath(options.Value.RootPath), storageKey.Replace('/', Path.DirectorySeparatorChar));
-
-    private string Sign(string storageKey, long expiresAtUnix)
-    {
-        var payload = $"{storageKey}:{expiresAtUnix}";
-        var hash = HMACSHA256.HashData(Encoding.UTF8.GetBytes(options.Value.SigningKey), Encoding.UTF8.GetBytes(payload));
-        return Convert.ToHexStringLower(hash);
-    }
 }

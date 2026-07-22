@@ -1,8 +1,10 @@
+using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
 using FamilyHub.Modules.Medical.Ocr;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FamilyHub.Modules.Medical;
@@ -25,10 +27,13 @@ public static class MedicalModule
 
     public static void MapMedicalModule(this IEndpointRouteBuilder app)
     {
-        app.MapMedkitEndpoints();
-        app.MapMedicationEndpoints();
-        app.MapMedicalRecordEndpoints();
-        app.MapAttachmentEndpoints();
-        app.MapMedicationOcrEndpoints();
+        // Обработка медданных доступна только принявшим актуальное согласие ПДн (задача 2.3):
+        // обёртка-группа навешивает ConsentRequiredFilter на все эндпоинты модуля.
+        var module = app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>();
+        module.MapMedkitEndpoints();
+        module.MapMedicationEndpoints();
+        module.MapMedicalRecordEndpoints();
+        module.MapAttachmentEndpoints();
+        module.MapMedicationOcrEndpoints();
     }
 }
