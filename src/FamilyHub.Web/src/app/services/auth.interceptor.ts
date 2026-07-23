@@ -23,6 +23,19 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     }
   }
 
+  // Дев/стейджинг часто пробрасывается через ngrok: бесплатный тариф может показать
+  // interstitial-страницу предупреждения для первых запросов сессии — этот заголовок
+  // официально отключает её; на проде/без ngrok бэкенд его просто игнорирует.
+  headers = headers.set('ngrok-skip-browser-warning', 'true');
+
+  // Явный запрет любого кэширования GET-запросов к API. Обнаружен случай, воспроизводимый
+  // только внутри реального Telegram-клиента (WebView) и не воспроизводимый прямыми HTTP-
+  // запросами к тому же бэкенду/прокси: /api/auth/me иногда возвращал закэшированный где-то
+  // на клиенте index.html вместо JSON от сервера. Раз бэкенд и dev-прокси при прямой проверке
+  // всегда отвечают корректно — источник вероятно в кэш-слое самого WebView. Явные
+  // no-store/no-cache — стандартная защита от именно такого класса проблем.
+  headers = headers.set('Cache-Control', 'no-cache, no-store, must-revalidate').set('Pragma', 'no-cache');
+
   // withCredentials: same-origin cookie и так уходит, но это переживёт split-origin dev-прокси.
   return next(req.clone({ headers, withCredentials: true })).pipe(
     catchError((error: unknown) => {

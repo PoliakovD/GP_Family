@@ -14,7 +14,9 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
 {
     private static string FreshEmail() => $"user-{Guid.NewGuid():N}@example.com";
 
-    private async Task<(HttpClient Client, string Email)> RegisterAsync(string pin = "1234")
+    private static string FreshUsername() => $"user{Guid.NewGuid():N}"[..20];
+
+    private async Task<(HttpClient Client, string Email)> RegisterAsync(string pin = "1234", string? username = null)
     {
         var client = AnonymousClient();
         var email = FreshEmail();
@@ -25,7 +27,7 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         code.Should().NotBeNullOrEmpty();
 
         var confirm = await client.PostAsJsonAsync("/api/auth/register/confirm",
-            new { email, code, pin, displayName = "PWA Пользователь" });
+            new { email, code, pin, username = username ?? FreshUsername(), displayName = "PWA Пользователь" });
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
 
         return (client, email);

@@ -4,6 +4,7 @@ WORKDIR /src
 
 COPY src/FamilyHub.Api/FamilyHub.Api.csproj                              FamilyHub.Api/
 COPY src/FamilyHub.Domain/FamilyHub.Domain.csproj                        FamilyHub.Domain/
+COPY src/FamilyHub.Contracts/FamilyHub.Contracts.csproj                  FamilyHub.Contracts/
 COPY src/FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj        FamilyHub.Infrastructure/
 COPY src/FamilyHub.Modules.Birthdays/FamilyHub.Modules.Birthdays.csproj  FamilyHub.Modules.Birthdays/
 COPY src/FamilyHub.Modules.Medical/FamilyHub.Modules.Medical.csproj      FamilyHub.Modules.Medical/

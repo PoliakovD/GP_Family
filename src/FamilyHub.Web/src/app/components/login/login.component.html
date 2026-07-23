@@ -1,54 +1,148 @@
-<div class="card" style="max-width: 420px; margin: 2rem auto; padding: 1.5rem;">
-  <h2 class="mb-2">Вход в FamilyHub</h2>
+<div class="auth-shell">
+  <div class="card auth-card elev-md">
+    <div class="auth-brand">
+      <div class="card-kicker">FamilyHub</div>
+      <h2 class="card-title mb-0">
+        @switch (step()) {
+          @case ('login') { Вход }
+          @case ('reset-pin-email') { Восстановление PIN }
+          @case ('reset-pin-code') { Восстановление PIN }
+          @default { Создание аккаунта }
+        }
+      </h2>
+    </div>
 
-  @if (error()) {
-    <div class="alert-danger mb-2">{{ error() }}</div>
-  }
+    @if (error()) {
+      <div class="alert-danger">{{ error() }}</div>
+    }
 
-  @switch (step()) {
-    @case ('login') {
-      <form (ngSubmit)="login()">
-        <label class="mb-1">Email
-          <input type="email" name="email" [(ngModel)]="email" required autocomplete="email" />
-        </label>
-        <label class="mb-2">PIN-код
-          <input type="password" name="pin" [(ngModel)]="pin" required inputmode="numeric"
-                 minlength="4" maxlength="8" autocomplete="current-password" />
-        </label>
-        <button type="submit" class="btn-primary" [disabled]="busy()">Войти</button>
-        <button type="button" class="btn-link" (click)="startRegistration()">Создать аккаунт</button>
-      </form>
+    @if (showCookieNotice()) {
+      <div class="alert-info">
+        Вход использует строго необходимый cookie сессии — без него войти нельзя.
+        <button type="button" class="btn-link" (click)="acceptCookies()">Понятно, принять</button>
+      </div>
     }
-    @case ('register-email') {
-      <form (ngSubmit)="sendCode()">
-        <p class="mb-2">Укажите email — мы отправим код подтверждения.</p>
-        <label class="mb-2">Email
-          <input type="email" name="email" [(ngModel)]="email" required autocomplete="email" />
-        </label>
-        <button type="submit" class="btn-primary" [disabled]="busy()">Отправить код</button>
-        <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
-      </form>
-    }
-    @case ('register-code') {
-      <form (ngSubmit)="confirmRegistration()">
-        <p class="mb-2">Код отправлен на {{ email }}. Введите его и придумайте PIN.</p>
-        <label class="mb-1">Код из письма
-          <input type="text" name="code" [(ngModel)]="code" required inputmode="numeric" maxlength="6" />
-        </label>
-        <label class="mb-1">Имя (необязательно)
-          <input type="text" name="displayName" [(ngModel)]="displayName" autocomplete="name" />
-        </label>
-        <label class="mb-2">PIN-код (4–8 цифр)
-          <input type="password" name="pin" [(ngModel)]="pin" required inputmode="numeric"
-                 minlength="4" maxlength="8" autocomplete="new-password" />
-        </label>
-        <button type="submit" class="btn-primary" [disabled]="busy()">Создать аккаунт</button>
-        <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
-      </form>
-    }
-  }
 
-  <p class="mt-2" style="font-size: 0.85em;">
-    Продолжая, вы соглашаетесь с <a routerLink="/privacy">политикой конфиденциальности</a>.
-  </p>
+    @switch (step()) {
+      @case ('login') {
+        <form (ngSubmit)="login()">
+          <label class="form-label" for="login-email">Email</label>
+          <input
+            id="login-email" class="input mb-2" type="email" name="email"
+            [(ngModel)]="email" required autocomplete="email" />
+
+          <label class="form-label" for="login-pin">PIN-код</label>
+          <input
+            id="login-pin" class="input mb-3" type="password" name="pin"
+            [(ngModel)]="pin" required inputmode="numeric" minlength="4" maxlength="8"
+            autocomplete="current-password" />
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
+          <button type="button" class="btn-link" (click)="startRegistration()">Создать аккаунт</button>
+          <button type="button" class="btn-link" (click)="startResetPin()">Забыли PIN?</button>
+        </form>
+      }
+      @case ('register-details') {
+        <form (ngSubmit)="submitDetails()">
+          <label class="form-label" for="reg-email">Email</label>
+          <input
+            id="reg-email" class="input mb-2" type="email" name="email"
+            [(ngModel)]="email" required autocomplete="email" />
+
+          <label class="form-label" for="reg-username">Username</label>
+          <input
+            id="reg-username" class="input" type="text" name="username"
+            [ngModel]="username" (ngModelChange)="onUsernameInput($event)"
+            required pattern="[a-z][a-z0-9_]{4,31}" autocomplete="off"
+            placeholder="например, ivan_petrov" />
+          @switch (usernameStatus()) {
+            @case ('checking') { <span class="field-hint field-hint-muted">Проверяем…</span> }
+            @case ('free') { <span class="field-hint field-hint-ok">Свободен</span> }
+            @case ('taken') { <span class="field-hint field-hint-error">Уже занят</span> }
+            @case ('invalid') {
+              <span class="field-hint field-hint-error">5–32 симв.: латиница, цифры, «_», с буквы</span>
+            }
+            @default { <span class="field-hint field-hint-muted">5–32 симв.: латиница, цифры, «_», с буквы</span> }
+          }
+
+          <label class="form-label mt-2" for="reg-display-name">Отображаемое имя (необязательно)</label>
+          <input
+            id="reg-display-name" class="input mb-2" type="text" name="displayName"
+            [(ngModel)]="displayName" autocomplete="name" placeholder="Иван Петров" />
+
+          <label class="form-label" for="reg-pin">PIN-код (4–8 цифр)</label>
+          <input
+            id="reg-pin" class="input mb-3" type="password" name="pin"
+            [(ngModel)]="pin" required inputmode="numeric" minlength="4" maxlength="8"
+            autocomplete="new-password" />
+
+          <label class="checkbox-row mb-3">
+            <input type="checkbox" name="privacyAccepted" [(ngModel)]="privacyAccepted" required />
+            <span>
+              Согласен с <a routerLink="/privacy" target="_blank">политикой конфиденциальности</a>
+            </span>
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="!canSubmitDetails">
+            Отправить код на email
+          </button>
+          <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
+        </form>
+      }
+      @case ('register-code') {
+        <form (ngSubmit)="confirmRegistration()">
+          <p class="muted mb-2">
+            Код отправлен на {{ email }}. Он действителен 10 минут — введите его, чтобы завершить регистрацию.
+          </p>
+
+          <label class="form-label" for="reg-code">Код из письма</label>
+          <input
+            id="reg-code" class="input mb-3" type="text" name="code"
+            [(ngModel)]="code" required inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Создать аккаунт</button>
+          @if (errorCode() === 'email_taken') {
+            <button type="button" class="btn btn-secondary btn-block" (click)="useExistingAccount()">
+              Войти в этот аккаунт
+            </button>
+          }
+          <button type="button" class="btn-link" (click)="backToDetails()">Изменить данные</button>
+        </form>
+      }
+      @case ('reset-pin-email') {
+        <form (ngSubmit)="sendResetCode()">
+          <p class="muted mb-2">Укажите email аккаунта — если он зарегистрирован, пришлём код для сброса PIN.</p>
+
+          <label class="form-label" for="reset-email">Email</label>
+          <input
+            id="reset-email" class="input mb-3" type="email" name="email"
+            [(ngModel)]="email" required autocomplete="email" />
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Отправить код</button>
+          <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
+        </form>
+      }
+      @case ('reset-pin-code') {
+        <form (ngSubmit)="confirmResetPin()">
+          <p class="muted mb-2">
+            Если аккаунт с адресом {{ email }} существует, код уже отправлен (10 минут). Введите его и новый PIN.
+          </p>
+
+          <label class="form-label" for="reset-code">Код из письма</label>
+          <input
+            id="reset-code" class="input mb-2" type="text" name="code"
+            [(ngModel)]="code" required inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+
+          <label class="form-label" for="reset-new-pin">Новый PIN-код (4–8 цифр)</label>
+          <input
+            id="reset-new-pin" class="input mb-3" type="password" name="pin"
+            [(ngModel)]="pin" required inputmode="numeric" minlength="4" maxlength="8"
+            autocomplete="new-password" />
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Сохранить новый PIN</button>
+          <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
+        </form>
+      }
+    }
+  </div>
 </div>

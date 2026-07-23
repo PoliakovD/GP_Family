@@ -14,6 +14,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(u => u.Username).HasMaxLength(32);
+        builder.Property(u => u.TgUsername).HasMaxLength(32);
         builder.Property(u => u.Email).HasMaxLength(320);
         builder.Property(u => u.PinHash).HasMaxLength(200);
 
@@ -21,6 +22,10 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // Telegram-only и PWA-only пользователи сосуществуют).
         builder.HasIndex(u => u.TelegramId).IsUnique().HasFilter("\"TelegramId\" IS NOT NULL");
         builder.HasIndex(u => u.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL");
+
+        // Видимый username уникален среди заполненных; TgUsername (зеркало TG-хэндла) —
+        // намеренно без уникальности, это просто отображаемый атрибут профиля.
+        builder.HasIndex(u => u.Username).IsUnique().HasFilter("\"Username\" IS NOT NULL");
 
         builder.HasMany(u => u.Memberships)
             .WithOne(m => m.User)

@@ -14,8 +14,16 @@ public class User
 
     public string DisplayName { get; set; } = string.Empty;
 
-    /// <summary>Telegram @username (без '@'), может отсутствовать у пользователя.</summary>
+    /// <summary>
+    /// Видимый username аккаунта (уникальный, формат — см. UsernameRules), задаётся при
+    /// PWA-регистрации. Для Telegram-пользователей при первом входе копируется из TgUsername,
+    /// если тот свободен и валиден по формату — иначе остаётся null (не назначается автоматически
+    /// повторно). НЕ путать с <see cref="TgUsername"/>, который не уникален.
+    /// </summary>
     public string? Username { get; set; }
+
+    /// <summary>Telegram @username (без '@'), зеркалится и обновляется при каждом TG-входе. Не уникален.</summary>
+    public string? TgUsername { get; set; }
 
     /// <summary>Email для PWA-входа (нормализован в lowercase); null — вход только через Telegram.</summary>
     public string? Email { get; set; }

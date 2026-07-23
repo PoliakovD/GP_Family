@@ -153,6 +153,7 @@ public class AccountService(
             user.Id,
             user.DisplayName,
             user.Username,
+            user.TgUsername,
             user.Email,
             hasTelegram = user.TelegramId is not null,
             user.CreatedAt,

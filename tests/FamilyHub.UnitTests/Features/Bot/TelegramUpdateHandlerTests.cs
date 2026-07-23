@@ -1,3 +1,5 @@
+using FamilyHub.Api.Features.Account;
+using FamilyHub.Api.Features.Auth;
 using FamilyHub.Api.Features.Bot;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Domain.Enums;
@@ -20,6 +22,7 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
 {
     private readonly ITelegramBotClient _bot = Substitute.For<ITelegramBotClient>();
     private readonly TelegramUpdateHandler _sut;
+    private readonly TelegramLinkService _links;
 
     public TelegramUpdateHandlerTests()
     {
@@ -28,7 +31,9 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
         IUserProvisioningService provisioning = new UserProvisioningService(Db, NullLogger<UserProvisioningService>.Instance);
         var invites = new InviteService(
             Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, NullLogger<InviteService>.Instance);
-        _sut = new TelegramUpdateHandler(_bot, provisioning, invites, Options.Create(new TelegramOptions()));
+        var merge = new AccountMergeService(Db, NullLogger<AccountMergeService>.Instance);
+        _links = new TelegramLinkService(Db, merge, NullLogger<TelegramLinkService>.Instance);
+        _sut = new TelegramUpdateHandler(_bot, provisioning, invites, _links, Options.Create(new TelegramOptions()));
     }
 
     private static Update StartUpdate(long fromId, long chatId, string? argument, string firstName = "Ada")
@@ -124,5 +129,116 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
         await _sut.HandleAsync(update, CancellationToken.None);
 
         await _bot.DidNotReceive().SendRequest(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    private Domain.Entities.User AddWebUser(string email = "danil@example.com")
+    {
+        var user = new Domain.Entities.User
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            PinHash = "hash",
+            DisplayName = "Web User",
+            CreatedAt = DateTime.UtcNow,
+        };
+        Db.Users.Add(user);
+        Db.SaveChanges();
+        return user;
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartWithLinkCode_ShowsConfirmKeyboard_AndDoesNotProvisionTelegramUser()
+    {
+        var webUser = AddWebUser();
+        var (_, code, _) = await _links.StartAsync(webUser.Id);
+
+        await _sut.HandleAsync(
+            StartUpdate(777, 777, $"{TelegramUpdateHandler.LinkPrefix}{code}"), CancellationToken.None);
+
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.ChatId == 777 && r.Text.Contains("d***@example.com")
+                && r.ReplyMarkup is Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup),
+            Arg.Any<CancellationToken>());
+        // Ветка привязки не должна резолвить/создавать пользователя для этого TelegramId —
+        // иначе КАЖДАЯ привязка стала бы merge'ем, даже для впервые увиденного Telegram.
+        Db.Users.Should().NotContain(u => u.TelegramId == 777);
+        Db.Users.Should().ContainSingle(); // только исходный web-пользователь
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartWithInvalidLinkCode_RepliesWithError()
+    {
+        await _sut.HandleAsync(
+            StartUpdate(778, 778, $"{TelegramUpdateHandler.LinkPrefix}bogus-code"), CancellationToken.None);
+
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.Text.Contains("недействителен")),
+            Arg.Any<CancellationToken>());
+    }
+
+    private static Update CallbackUpdate(long fromId, long chatId, int messageId, string data, string firstName = "Ada") => new()
+    {
+        CallbackQuery = new CallbackQuery
+        {
+            Id = "cb-1",
+            From = new User { Id = fromId, FirstName = firstName },
+            Message = new Message { Id = messageId, Chat = new Chat { Id = chatId } },
+            Data = data,
+        },
+    };
+
+    [Fact]
+    public async Task HandleAsync_CallbackConfirmLink_NoExistingTelegramUser_LinksDirectly()
+    {
+        var webUser = AddWebUser();
+        var (_, code, _) = await _links.StartAsync(webUser.Id);
+
+        await _sut.HandleAsync(CallbackUpdate(779, 779, 42, $"link:{code}"), CancellationToken.None);
+
+        Db.Users.Single(u => u.Id == webUser.Id).TelegramId.Should().Be(779);
+        await _bot.Received(1).SendRequest(Arg.Any<AnswerCallbackQueryRequest>(), Arg.Any<CancellationToken>());
+        await _bot.Received(1).SendRequest(
+            Arg.Is<EditMessageTextRequest>(r => r.ChatId == 779 && r.MessageId == 42 && r.Text.Contains("привязан")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_CallbackConfirmLink_ExistingTelegramUser_MergesAndReplies()
+    {
+        var webUser = AddWebUser();
+        var (_, code, _) = await _links.StartAsync(webUser.Id);
+        var telegramUser = new Domain.Entities.User
+        {
+            Id = Guid.NewGuid(),
+            TelegramId = 780,
+            DisplayName = "Telegram Only",
+            CreatedAt = DateTime.UtcNow,
+        };
+        Db.Users.Add(telegramUser);
+        await Db.SaveChangesAsync();
+
+        await _sut.HandleAsync(CallbackUpdate(780, 780, 43, $"link:{code}"), CancellationToken.None);
+
+        Db.Users.Should().NotContain(u => u.Id == telegramUser.Id);
+        Db.Users.Single(u => u.Id == webUser.Id).TelegramId.Should().Be(780);
+        await _bot.Received(1).SendRequest(
+            Arg.Is<EditMessageTextRequest>(r => r.Text.Contains("объединены")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_CallbackCancel_RepliesCancelled_AndDoesNotLink()
+    {
+        var webUser = AddWebUser();
+        var (_, code, _) = await _links.StartAsync(webUser.Id);
+
+        await _sut.HandleAsync(CallbackUpdate(781, 781, 44, "link-cancel"), CancellationToken.None);
+
+        Db.Users.Single(u => u.Id == webUser.Id).TelegramId.Should().BeNull();
+        await _bot.Received(1).SendRequest(
+            Arg.Is<EditMessageTextRequest>(r => r.Text.Contains("отменена")),
+            Arg.Any<CancellationToken>());
+        // Код остаётся годным несмотря на отмену первого показа — не был потреблён.
+        (await _links.ConfirmAsync(code!, 781, "X", null)).Should().Be(LinkTelegramResult.Linked);
     }
 }

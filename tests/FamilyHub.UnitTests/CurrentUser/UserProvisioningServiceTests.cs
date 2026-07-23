@@ -71,4 +71,68 @@ public class UserProvisioningServiceTests : SqliteTestBase
         userId.Should().Be(existing.Id);
         Db.Users.Count(u => u.TelegramId == 999).Should().Be(1);
     }
+
+    [Fact]
+    public async Task GetOrCreateUserIdAsync_NewUser_CopiesHandleToTgUsernameAndUsername_WhenValidAndFree()
+    {
+        var userId = await _sut.GetOrCreateUserIdAsync(111, "Ada", "ada_lovelace");
+
+        var user = Db.Users.Single(u => u.Id == userId);
+        user.TgUsername.Should().Be("ada_lovelace");
+        user.Username.Should().Be("ada_lovelace");
+    }
+
+    [Fact]
+    public async Task GetOrCreateUserIdAsync_NewUser_HandleTooShortForUsernameFormat_TgUsernameSetButUsernameNull()
+    {
+        // Формат Username требует 5-32 симв.; короткие TG-хэндлы (тут — 3 симв.) зеркалятся
+        // в TgUsername как есть, но не переносятся в видимый Username.
+        var userId = await _sut.GetOrCreateUserIdAsync(112, "Bo", "bob");
+
+        var user = Db.Users.Single(u => u.Id == userId);
+        user.TgUsername.Should().Be("bob");
+        user.Username.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetOrCreateUserIdAsync_NewUser_HandleCollidesWithExistingUsername_TgUsernameSetButUsernameNull()
+    {
+        // PWA-пользователь уже занял этот хэндл как видимый Username.
+        Db.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "taken@example.com",
+            Username = "shared_handle",
+            DisplayName = "Taken",
+            CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var userId = await _sut.GetOrCreateUserIdAsync(113, "Cy", "Shared_Handle"); // разный регистр — коллизия по normalize
+
+        var user = Db.Users.Single(u => u.Id == userId);
+        user.TgUsername.Should().Be("Shared_Handle");
+        user.Username.Should().BeNull("хэндл уже занят другим пользователем после нормализации");
+    }
+
+    [Fact]
+    public async Task GetOrCreateUserIdAsync_ExistingUser_RefreshesOnlyTgUsername_NeverTouchesAppUsername()
+    {
+        var firstId = await _sut.GetOrCreateUserIdAsync(114, "Dana", "dana_handle");
+        var user = Db.Users.Single(u => u.Id == firstId);
+        user.Username.Should().Be("dana_handle");
+
+        // Пользователь мог сменить видимый Username вручную (гипотетически, через будущий
+        // профиль-эндпоинт) — эмулируем это напрямую и убеждаемся, что следующий вход из
+        // Telegram его не перезатирает, даже когда TG-хэндл поменялся.
+        user.Username = "custom_chosen_name";
+        await Db.SaveChangesAsync();
+
+        var secondId = await _sut.GetOrCreateUserIdAsync(114, "Dana", "dana_new_handle");
+
+        secondId.Should().Be(firstId);
+        var refreshed = Db.Users.Single(u => u.Id == firstId);
+        refreshed.TgUsername.Should().Be("dana_new_handle");
+        refreshed.Username.Should().Be("custom_chosen_name", "видимый Username не должен обновляться из Telegram");
+    }
 }

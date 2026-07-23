@@ -1,19 +1,23 @@
-<div class="card" style="max-width: 640px; margin: 1.5rem auto; padding: 1.5rem;">
-  @if (error()) {
-    <div class="alert-danger mb-2">{{ error() }}</div>
-  }
+<div class="auth-shell">
+  <div class="card auth-card elev-md">
+    @if (error()) {
+      <div class="alert-danger mb-2">{{ error() }}</div>
+    }
 
-  @if (consentHtml(); as html) {
-    <div class="mb-2" [innerHTML]="html"></div>
-    <p class="mb-2" style="font-size: 0.85em;">
-      Версия: {{ version() }} · <a routerLink="/privacy">Политика конфиденциальности</a>
-    </p>
-    <label class="mb-2" style="display: flex; gap: 0.5rem; align-items: flex-start;">
-      <input type="checkbox" [(ngModel)]="agreed" />
-      <span>Я даю согласие на обработку моих персональных данных, включая сведения о здоровье</span>
-    </label>
-    <button class="btn-primary" [disabled]="!agreed || busy()" (click)="accept()">Принять и продолжить</button>
-  } @else {
-    <p>Загрузка…</p>
-  }
+    @if (consentHtml(); as html) {
+      <div class="mb-2" [innerHTML]="html"></div>
+      <p class="muted mb-2">
+        Версия: {{ version() }} · <a routerLink="/privacy" target="_blank">Политика конфиденциальности</a>
+      </p>
+      <label class="checkbox-row mb-3">
+        <input type="checkbox" [(ngModel)]="agreed" />
+        <span>Я даю согласие на обработку моих персональных данных, включая сведения о здоровье</span>
+      </label>
+      <button class="btn btn-primary btn-block" [disabled]="!agreed || busy()" (click)="accept()">
+        Принять и продолжить
+      </button>
+    } @else {
+      <p>Загрузка…</p>
+    }
+  </div>
 </div>

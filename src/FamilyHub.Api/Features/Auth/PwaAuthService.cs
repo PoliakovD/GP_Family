@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
@@ -12,11 +13,13 @@ namespace FamilyHub.Api.Features.Auth;
 
 public enum StartCodeResult { Sent, Throttled }
 
-public enum ConfirmRegistrationResult { Success, InvalidCode, EmailTaken, WeakPin }
+public enum ConfirmRegistrationResult { Success, InvalidCode, EmailTaken, WeakPin, InvalidUsername, UsernameTaken }
 
 public enum LoginResult { Success, InvalidCredentials, LockedOut }
 
 public enum LinkEmailResult { Success, InvalidCode, EmailTaken, WeakPin }
+
+public enum ResetPinResult { Success, InvalidCode, WeakPin }
 
 /// <summary>
 /// PWA-вход (этап 2 п.2.4): регистрация email → код на почту → PIN; вход email+PIN.
@@ -45,6 +48,22 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
 
     public Task<StartCodeResult> StartLinkEmailAsync(Guid userId, string rawEmail, CancellationToken ct = default) =>
         IssueCodeAsync(NormalizeEmail(rawEmail), EmailCodePurpose.LinkEmail, userId, ct);
+
+    /// <summary>
+    /// Забыли PIN: анти-enumeration в ОТВЕТЕ (всегда Sent, как и у регистрации) — но, в отличие
+    /// от register/start, письмо реально уходит только на email существующего PWA-аккаунта.
+    /// Иначе владелец постороннего адреса получал бы непонятное "код для сброса PIN" без
+    /// всякого аккаунта — при регистрации это письмо хотя бы уместно (человек как раз и
+    /// пытается создать аккаунт с этим адресом), при сбросе PIN уместности нет.
+    /// </summary>
+    public async Task<StartCodeResult> StartResetPinAsync(string rawEmail, CancellationToken ct = default)
+    {
+        var normalizedEmail = NormalizeEmail(rawEmail);
+        if (!await db.Users.AnyAsync(u => u.Email == normalizedEmail && u.PinHash != null, ct))
+            return StartCodeResult.Sent;
+
+        return await IssueCodeAsync(normalizedEmail, EmailCodePurpose.ResetPin, userId: null, ct);
+    }
 
     private async Task<StartCodeResult> IssueCodeAsync(
         string normalizedEmail, EmailCodePurpose purpose, Guid? userId, CancellationToken ct)
@@ -104,10 +123,25 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
         return candidate; // SaveChanges — на вызывающей стороне, одной транзакцией с бизнес-изменением.
     }
 
+    public async Task<bool> IsUsernameAvailableAsync(string rawUsername, CancellationToken ct = default)
+    {
+        var normalized = UsernameRules.Normalize(rawUsername);
+        if (!UsernameRules.IsValid(normalized)) return false;
+        return !await db.Users.AnyAsync(u => u.Username == normalized, ct);
+    }
+
     public async Task<(ConfirmRegistrationResult Result, Guid UserId)> ConfirmRegistrationAsync(
-        string rawEmail, string code, string pin, string? displayName, CancellationToken ct = default)
+        string rawEmail, string code, string pin, string rawUsername, string? displayName, CancellationToken ct = default)
     {
         if (!IsValidPin(pin)) return (ConfirmRegistrationResult.WeakPin, Guid.Empty);
+
+        // Проверка username — ДО потребления email-кода: занятый хэндл не должен сжигать
+        // 10-минутный код (пользователь иначе вынужден запрашивать письмо заново).
+        var normalizedUsername = UsernameRules.Normalize(rawUsername);
+        if (!UsernameRules.IsValid(normalizedUsername))
+            return (ConfirmRegistrationResult.InvalidUsername, Guid.Empty);
+        if (await db.Users.AnyAsync(u => u.Username == normalizedUsername, ct))
+            return (ConfirmRegistrationResult.UsernameTaken, Guid.Empty);
 
         var normalizedEmail = NormalizeEmail(rawEmail);
         var verification = await ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.Register, ct);
@@ -124,13 +158,27 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
             Id = Guid.NewGuid(),
             Email = normalizedEmail,
             PinHash = PinHasher.Hash(pin),
+            Username = normalizedUsername,
             DisplayName = string.IsNullOrWhiteSpace(displayName)
                 ? normalizedEmail[..normalizedEmail.IndexOf('@')]
                 : displayName.Trim(),
             CreatedAt = DateTime.UtcNow,
         };
         db.Users.Add(user);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Гонка на уникальном индексе Username между нашей проверкой и вставкой: код
+            // ещё не потреблён на диске (SaveChanges для ConsumeCodeAsync шёл в этом же
+            // вызове SaveChanges — откатился вместе с insert'ом), но снаружи это неотличимо
+            // от "просто заново попробуй" — сообщаем UsernameTaken.
+            logger.LogDebug(ex, "Гонка при регистрации: username {Username} занят параллельно", normalizedUsername);
+            return (ConfirmRegistrationResult.UsernameTaken, Guid.Empty);
+        }
 
         logger.LogInformation("PWA-регистрация: создан пользователь {UserId}", user.Id);
         return (ConfirmRegistrationResult.Success, user.Id);
@@ -196,5 +244,33 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
 
         logger.LogInformation("К аккаунту {UserId} привязан email для PWA-входа", userId);
         return LinkEmailResult.Success;
+    }
+
+    /// <summary>Сброс забытого PIN по email-коду; при успехе — сразу вход (как при регистрации).</summary>
+    public async Task<(ResetPinResult Result, Guid UserId)> ConfirmResetPinAsync(
+        string rawEmail, string code, string newPin, CancellationToken ct = default)
+    {
+        if (!IsValidPin(newPin)) return (ResetPinResult.WeakPin, Guid.Empty);
+
+        var normalizedEmail = NormalizeEmail(rawEmail);
+        var verification = await ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.ResetPin, ct);
+        if (verification is null) return (ResetPinResult.InvalidCode, Guid.Empty);
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.PinHash != null, ct);
+        if (user is null)
+        {
+            // Код мог быть выпущен StartResetPinAsync для несуществующего аккаунта только если
+            // аккаунт удалили в промежутке — крайне маловероятно, но на всякий случай не 500.
+            await db.SaveChangesAsync(ct);
+            return (ResetPinResult.InvalidCode, Guid.Empty);
+        }
+
+        user.PinHash = PinHasher.Hash(newPin);
+        user.FailedPinAttempts = 0;
+        user.LockedUntil = null;
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("PWA: PIN сброшен для пользователя {UserId}", user.Id);
+        return (ResetPinResult.Success, user.Id);
     }
 }

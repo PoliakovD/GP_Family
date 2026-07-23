@@ -8,4 +8,7 @@ public enum EmailCodePurpose
 
     /// <summary>Привязка email к существующему (Telegram) аккаунту.</summary>
     LinkEmail = 1,
+
+    /// <summary>Сброс забытого PIN-кода существующего PWA-аккаунта.</summary>
+    ResetPin = 2,
 }

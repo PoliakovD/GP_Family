@@ -4,26 +4,29 @@
   </header>
 
   <main class="app-content">
-    @if (state.error()) {
+    @if (showTabs() && state.error()) {
       <div class="alert-danger mb-2">{{ state.error() }}</div>
     }
-    @if (state.loading()) {
+    @if (showTabs() && state.loading()) {
       <app-loading-spinner />
     }
 
     <router-outlet></router-outlet>
   </main>
 
-  <nav class="tab-bar">
-    @for (t of tabs; track t.id) {
-      <button [routerLink]="['/', t.id]" routerLinkActive="active" #rla="routerLinkActive">
-        <i [class]="(rla.isActive ? 'ph-fill ' : 'ph ') + t.icon" aria-hidden="true"></i>
-        <span>{{ t.label }}</span>
-      </button>
-    }
-  </nav>
+  @if (showTabs()) {
+    <nav class="tab-bar">
+      @for (t of tabs; track t.id) {
+        <button [routerLink]="['/', t.id]" routerLinkActive="active" #rla="routerLinkActive">
+          <i [class]="(rla.isActive ? 'ph-fill ' : 'ph ') + t.icon" aria-hidden="true"></i>
+          <span>{{ t.label }}</span>
+        </button>
+      }
+    </nav>
+  }
 </div>
 
 <app-dev-panel></app-dev-panel>
 <app-toast-container></app-toast-container>
 <app-confirm-dialog></app-confirm-dialog>
+<app-cookie-banner></app-cookie-banner>

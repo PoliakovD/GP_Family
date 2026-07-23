@@ -73,8 +73,13 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         builder.UseSetting("FileStorage:Provider", "Local");
         builder.UseSetting("LocalFileStorage:RootPath", _uploadsRoot);
         builder.UseSetting("Telegram:BotToken", "test-bot-token-not-real");
+        builder.UseSetting("Telegram:BotUsername", "familyhub_test_bot");
         builder.UseSetting("Telegram:WebhookSecret", WebhookSecret);
         builder.UseSetting("Telegram:WebhookUrl", "");
+        // Тесты линковки Telegram (POST /api/auth/link-telegram/start) идут с одного IP —
+        // штатный лимит "auth-code" (3/час) дал бы ложные 429 в наборе из нескольких тестов.
+        builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");
+        builder.UseSetting("RateLimiting:CodePermitLimit", "100000");
 
         builder.ConfigureServices(services =>
         {

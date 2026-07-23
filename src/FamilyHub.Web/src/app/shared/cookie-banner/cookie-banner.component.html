@@ -1,0 +1,12 @@
+@if (visible()) {
+  <div class="card cookie-banner">
+    <p class="card-body mb-0">
+      Мы используем только один строго необходимый cookie — для сессии входа. Трекинга и
+      аналитики нет. Подробнее — в <a routerLink="/privacy">политике конфиденциальности</a>.
+    </p>
+    <div class="cookie-banner-actions">
+      <button type="button" class="btn btn-secondary btn-sm" (click)="decline()">Отклонить</button>
+      <button type="button" class="btn btn-primary btn-sm" (click)="accept()">Принять</button>
+    </div>
+  </div>
+}

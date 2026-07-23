@@ -10,11 +10,5 @@
   </head>
   <body>
     <app-root></app-root>
-    <script>
-      // PWA service worker (этап 2 п.2.4): только вне Telegram и только в проде (https).
-      if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Telegram?.WebApp?.initData) {
-        navigator.serviceWorker.register('/sw.js');
-      }
-    </script>
   </body>
 </html>

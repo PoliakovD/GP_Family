@@ -247,6 +247,10 @@ builder.Services.AddScoped<ConsentService>();
 // --- Права субъекта ПДн (задача 2.3): удаление аккаунта + экспорт ---
 builder.Services.AddScoped<AccountService>();
 
+// --- Привязка Telegram к веб-аккаунту с подтверждением от бота + слияние аккаунтов ---
+builder.Services.AddScoped<AccountMergeService>();
+builder.Services.AddScoped<TelegramLinkService>();
+
 // --- Аудит доступа к медданным (задача 2.7): синхронная запись + ретеншн-джоба ---
 builder.Services.AddScoped<IMedicalAuditWriter, MedicalAuditWriter>();
 builder.Services.AddScoped<AuditRetentionJob>();
@@ -339,6 +343,22 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+
+// Явный запрет кэширования для всех /api-ответов. Обнаружен случай (Telegram Mini App
+// WebView), когда GET /api/auth/me иногда получал закэшированный где-то на клиенте
+// index.html вместо актуального JSON, хотя прямые HTTP-проверки того же бэкенда/прокси
+// всегда отвечали корректно — сам ответ API не запрещал явно своё кэширование. Response
+// Cache-Control — авторитетный сигнал для любого кэша (клиентского, прокси), надёжнее
+// одних только запросных заголовков.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        context.Response.Headers.Pragma = "no-cache";
+    }
+    await next();
+});
 
 app.MapAuthEndpoints();
 app.MapConsentEndpoints();
