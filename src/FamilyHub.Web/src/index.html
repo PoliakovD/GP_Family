@@ -6,6 +6,13 @@
     <title>FamilyHub</title>
     <meta name="theme-color" content="#2f6f4f" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.ico" />
+    <!-- iOS не читает manifest.webmanifest для установки на домашний экран — нужны отдельные
+         apple-* теги (этап 3, гибридный доступ: простая установка PWA на iPhone). -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="FamilyHub" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>

@@ -4,6 +4,7 @@ using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
 using FamilyHub.Modules.Medical.Ocr;
+using FamilyHub.Modules.Medical.Search;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +23,9 @@ public static class MedicalModule
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<MedicationOcrService>();
+        // Стеммер/триграммы — чистые функции без состояния (этап 3, ADR-0003): singleton безопасен.
+        services.AddSingleton<IRussianTextSearcher, RussianTextSearcher>();
+        services.AddScoped<SearchService>();
         return services;
     }
 
@@ -35,5 +39,6 @@ public static class MedicalModule
         module.MapMedicalRecordEndpoints();
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
+        module.MapSearchEndpoints();
     }
 }

@@ -7,6 +7,7 @@ using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
+using FamilyHub.Modules.Medical.Search;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -42,7 +43,8 @@ public class AttachmentServiceTests : SqliteTestBase
         var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
         var auditWriter = new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db);
         var medicalRecords = new MedicalRecordService(
-            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, auditWriter, NullLogger<MedicalRecordService>.Instance);
+            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, auditWriter,
+            new RussianTextSearcher(), NullLogger<MedicalRecordService>.Instance);
         var downloadTokens = new DownloadTokenService(
             Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
         _sut = new AttachmentService(

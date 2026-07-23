@@ -12,7 +12,8 @@
 - [`api-core.md`](api-core.md) — `FamilyHub.Api`: семьи/инвайты/участники/оповещения, бот-вебхук, `Program.cs` (композиция всего приложения).
 - [`module-medical.md`](module-medical.md) — `FamilyHub.Modules.Medical`: аптечка, анализы (персональный ресурс с шарингом), вложения.
 - [`module-birthdays.md`](module-birthdays.md) — `FamilyHub.Modules.Birthdays`: дни рождения.
-- [`web-miniapp.md`](web-miniapp.md) — `FamilyHub.Web`: React Mini App (Telegram-клиент), её контракт с API.
+- [`web-miniapp.md`](web-miniapp.md) — `FamilyHub.Web`: React Mini App (Telegram-клиент), её контракт с API. **Устарел** — фронт переписан на Angular 18, см. `auth-uiux-rework-stage.md`.
+- [`auth-uiux-rework-stage.md`](auth-uiux-rework-stage.md) — Auth + UI/UX rework после Stage 2 (username/Telegram-линковка/merge аккаунтов, гвард навигации, cookie-баннер), дебаг-репорт по Mini App багам, паттерны разработки для бэка и фронта (логгер, особенности PWA/Mini App).
 
 ## Архитектура одной картинкой
 

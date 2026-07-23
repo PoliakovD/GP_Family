@@ -133,6 +133,22 @@ export interface Attachment {
     uploadedAt: string;
 }
 
+/** Этап 3: три источника с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService. */
+export const SearchResultType = { Medication: 0, Kb: 1, Record: 2 } as const;
+export type SearchResultType = typeof SearchResultType[keyof typeof SearchResultType];
+
+export interface SearchResultItem {
+    type: number; // SearchResultType
+    id: string;
+    title: string;
+    snippet: string | null;
+    score: number;
+}
+
+export interface SearchResponse {
+    items: SearchResultItem[];
+}
+
 export interface AppNotification {
     id: string;
     type: number; // NotificationType

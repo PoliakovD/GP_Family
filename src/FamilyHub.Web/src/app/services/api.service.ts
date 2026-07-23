@@ -16,6 +16,7 @@ import {
   Medkit,
   MedkitInput,
   PendingMember, RemoveMemberResult,
+  SearchResponse,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -250,4 +251,7 @@ export class ApiService {
   getNotifications = (unreadOnly: boolean) =>
     this.get<AppNotification[]>(`/api/notifications?unreadOnly=${unreadOnly}`);
   markNotificationRead = (id: string) => this.post<void>(`/api/notifications/${id}/read`);
+
+  // Поиск (этап 3): гибрид Postgres-FTS (лекарства, справочник) + in-memory (анализы) — см. SearchService.
+  search = (q: string) => this.get<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`);
 }

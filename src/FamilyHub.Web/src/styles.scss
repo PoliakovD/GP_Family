@@ -347,6 +347,15 @@ textarea.input {
   background: var(--color-surface);
 }
 
+// Карточка-результат поиска, ведущая на экран раздела (этап 3) — визуальный намёк на клик.
+.card-clickable {
+  cursor: pointer;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+
 .card-kicker {
   font-family: var(--font-heading);
   font-size: 10px;

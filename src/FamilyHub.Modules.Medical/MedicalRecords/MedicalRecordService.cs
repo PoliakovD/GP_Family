@@ -5,6 +5,7 @@ using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Search;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -20,6 +21,7 @@ public class MedicalRecordService(
     IFamilyAccessService access,
     IOutboxWriter outbox,
     IMedicalAuditWriter audit,
+    IRussianTextSearcher searcher,
     ILogger<MedicalRecordService> logger)
 {
     /// <summary>
@@ -73,6 +75,48 @@ public class MedicalRecordService(
 
     public Task<bool> IsVisibleToAsync(Guid recordId, Guid userId, CancellationToken ct = default) =>
         VisibleRecordsQuery(userId).AnyAsync(r => r.Id == recordId, ct);
+
+    /// <summary>
+    /// Поиск по видимым медкартам (этап 3, ADR-0003). PersonName/Doctor/Description зашифрованы
+    /// at-rest (ADR-0002) — Postgres-FTS по ним невозможен, поэтому поиск строится in-memory:
+    /// грузим ТОЛЬКО записи в scope пользователя (реюз VisibleRecordsQuery — тот же инвариант
+    /// доступа, что и у GetVisibleRecordsAsync), EF расшифровывает поля конвертером при
+    /// материализации, дальше матчим через IRussianTextSearcher (морфология + опечатки OCR).
+    /// Объём мал (записи одной семьи/пользователя) — расшифровка всех подряд безопасна.
+    /// </summary>
+    public async Task<List<MedicalRecordSearchHit>> SearchAsync(
+        Guid userId, string query, int limit = 20, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return [];
+
+        var records = await VisibleRecordsQuery(userId).ToListAsync(ct);
+
+        // Аудит просмотра чужих (расшаренных) записей — тот же инвариант, что в GetVisibleRecordsAsync:
+        // поиск по чужой медкарте — тоже факт доступа к ней.
+        var foreignOwnerIds = records.Select(r => r.OwnerUserId).Where(o => o != userId).Distinct().ToList();
+        if (foreignOwnerIds.Count > 0)
+        {
+            foreach (var ownerId in foreignOwnerIds)
+                audit.Enqueue(userId, MedicalAccessAction.ViewList, ownerUserId: ownerId);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var hits = new List<MedicalRecordSearchHit>();
+        foreach (var record in records)
+        {
+            var haystack = string.Join(
+                ' ', new[] { record.PersonName, record.Doctor, record.Description }
+                    .Where(s => !string.IsNullOrWhiteSpace(s)));
+            var score = searcher.Score(haystack, query);
+            if (score > 0)
+                hits.Add(new MedicalRecordSearchHit(ToDto(record, []), score));
+        }
+
+        logger.LogDebug(
+            "Поиск по медкартам: {UserId} нашёл {Count} из {Total} видимых записей", userId, hits.Count, records.Count);
+
+        return hits.OrderByDescending(h => h.Score).Take(limit).ToList();
+    }
 
     /// <summary>УРОВЕНЬ 1 (чтение): семьи, которым владелец глобально расшарил свои записи.</summary>
     public Task<List<Guid>> GetSharedFamilyIdsAsync(Guid ownerUserId, CancellationToken ct = default) =>

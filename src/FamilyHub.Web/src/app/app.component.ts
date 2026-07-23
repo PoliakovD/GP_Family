@@ -36,6 +36,7 @@ export class AppComponent implements OnInit {
   private readonly log = inject(DevLoggerService);
 
   readonly tabs: { id: string; label: string; icon: string }[] = [
+    { id: 'search', label: 'Поиск', icon: 'ph-magnifying-glass' },
     { id: 'families', label: 'Семьи', icon: 'ph-users-three' },
     { id: 'medications', label: 'Аптечка', icon: 'ph-first-aid-kit' },
     { id: 'birthdays', label: 'Дни р.', icon: 'ph-cake' },

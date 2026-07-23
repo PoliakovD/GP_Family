@@ -29,6 +29,12 @@ export const routes: Routes = [
   // Данные: требуют входа (PWA) и принятого согласия ПДн (задачи 2.3/2.4).
   { path: '', redirectTo: 'families', pathMatch: 'full' },
   {
+    path: 'search',
+    canActivate: [authGuard, consentGuard],
+    loadComponent: () =>
+      import('./components/search/search.component').then((m) => m.SearchComponent),
+  },
+  {
     path: 'families',
     canActivate: [authGuard, consentGuard],
     loadComponent: () =>

@@ -14,4 +14,7 @@ public record CreateMedicalRecordRequest(string PersonName, DateOnly RecordDate,
 
 public record FamilyIdsRequest(List<Guid> FamilyIds);
 
+/// <summary>Результат in-memory поиска (этап 3, ADR-0003) — запись + релевантность запросу (0..1].</summary>
+public record MedicalRecordSearchHit(MedicalRecordDto Record, double Score);
+
 public enum MedicalRecordAccessResult { Success, Forbidden, NotFound }
