@@ -70,6 +70,30 @@
     }
 
     <section class="mb-2">
+      <h3>Push-уведомления</h3>
+      @if (push.isSupported) {
+        <div class="d-flex align-items-center justify-content-between gap-2">
+          <p class="muted mb-0">
+            Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
+          </p>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [checked]="push.isSubscribed()"
+              [disabled]="pushBusy()"
+              (change)="togglePush()"
+            />
+            <span class="switch-knob"></span>
+          </label>
+        </div>
+      } @else if (tg.isInsideTelegram()) {
+        <p class="muted mb-0">Недоступно внутри Telegram — откройте FamilyHub в браузере.</p>
+      } @else {
+        <p class="muted mb-0">Ваш браузер не поддерживает push-уведомления.</p>
+      }
+    </section>
+
+    <section class="mb-2">
       <h3>Мои данные</h3>
       <p class="mb-2">
         <a routerLink="/privacy">Политика конфиденциальности</a>

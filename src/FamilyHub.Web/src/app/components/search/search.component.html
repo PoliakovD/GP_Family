@@ -13,6 +13,20 @@
     />
   </div>
 
+  <div class="seg mb-3">
+    @for (chip of filterChips; track chip.value) {
+      <label class="seg-opt">
+        <input
+          type="radio"
+          name="searchFilter"
+          [checked]="activeFilter === chip.value"
+          (change)="setFilter(chip.value)"
+        />
+        {{ chip.label }}
+      </label>
+    }
+  </div>
+
   @if (error) {
     <div class="alert-danger mb-2">{{ error }}</div>
   }

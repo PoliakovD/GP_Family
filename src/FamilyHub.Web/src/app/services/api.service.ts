@@ -17,6 +17,7 @@ import {
   MedkitInput,
   PendingMember, RemoveMemberResult,
   SearchResponse,
+  VapidPublicKeyResponse,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -253,5 +254,18 @@ export class ApiService {
   markNotificationRead = (id: string) => this.post<void>(`/api/notifications/${id}/read`);
 
   // Поиск (этап 3): гибрид Postgres-FTS (лекарства, справочник) + in-memory (анализы) — см. SearchService.
-  search = (q: string) => this.get<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}`);
+  // types — опциональный серверный фильтр источников ("medication"/"kb"/"record", можно через
+  // запятую); не запрошенный источник бэкенд вообще не трогает (см. SearchService.SearchAsync).
+  search = (q: string, types?: string) => {
+    const typesQuery = types ? `&types=${encodeURIComponent(types)}` : '';
+    return this.get<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${typesQuery}`);
+  };
+
+  // Web Push (редизайн навигации, ADR-0004)
+  getPushVapidPublicKey = () => this.get<VapidPublicKeyResponse>('/api/push/vapid-public-key');
+
+  subscribePush = (endpoint: string, p256dh: string, auth: string) =>
+    this.post<void>('/api/push/subscribe', { endpoint, p256dh, auth });
+
+  unsubscribePush = (endpoint: string) => this.post<void>('/api/push/unsubscribe', { endpoint });
 }

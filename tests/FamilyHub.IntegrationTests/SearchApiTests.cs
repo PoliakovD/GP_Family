@@ -36,8 +36,12 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         return body!.Id;
     }
 
-    private static Task<SearchResponse?> SearchAsync(HttpClient client, string q) =>
-        client.GetFromJsonAsync<SearchResponse>($"/api/search?q={Uri.EscapeDataString(q)}", JsonOpts);
+    private static Task<SearchResponse?> SearchAsync(HttpClient client, string q, string? types = null)
+    {
+        var url = $"/api/search?q={Uri.EscapeDataString(q)}";
+        if (types is not null) url += $"&types={Uri.EscapeDataString(types)}";
+        return client.GetFromJsonAsync<SearchResponse>(url, JsonOpts);
+    }
 
     [Fact]
     public async Task Search_FindsMedication_ByWordForm_Postgres_Tsvector()
@@ -175,6 +179,34 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var response = await httpResponse.Content.ReadFromJsonAsync<SearchResponse>(JsonOpts);
 
         response!.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Search_TypesFilter_ScopesToRequestedSourcesOnly()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        var medkitId = await CreateMedkitAsync(admin, familyId);
+        const string token = "уникальныйтокен777";
+
+        // Один и тот же токен — и в лекарстве, и в медкарте: без фильтра находятся оба типа.
+        await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
+            new CreateMedicationRequest(token, null, null));
+        await admin.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Тестовый Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null));
+
+        var unfiltered = await SearchAsync(admin, token);
+        unfiltered!.Items.Select(i => i.Type).Should().BeEquivalentTo(
+            [SearchResultType.Medication, SearchResultType.Record],
+            "без фильтра оба совпавших источника должны попасть в выдачу");
+
+        var medicationOnly = await SearchAsync(admin, token, types: "medication");
+        medicationOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Medication,
+            "types=medication не должен возвращать совпавшую медкарту — это отдельный (дорогой, in-memory) источник");
+
+        var recordOnly = await SearchAsync(admin, token, types: "record");
+        recordOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Record);
     }
 
     [Fact]

@@ -11,6 +11,7 @@ using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Api.Features.Notifications;
+using FamilyHub.Api.Features.Push;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.LmStudio;
@@ -68,6 +69,7 @@ builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection(Outbo
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
+builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 
 // --- At-rest шифрование (этап 2, 152-ФЗ): ключ вне БД, fail-fast при отсутствии ---
 // Синглтоны обязательны: EF кэширует модель с конвертером, захватившим первый cipher.
@@ -263,11 +265,11 @@ builder.Services.AddHangfireServer();
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<NotificationSendingService>();
+builder.Services.AddScoped<PushSubscriptionService>();
 
 // --- Telegram-бот: тонкий клиент + доставка оповещений (этап 4 п.12) ---
 // Всё, что зависит от ITelegramBotClient, регистрируем только если задан BotToken: без него
-// (локальный dev) бота не существует — нет смысла поднимать вебхук-эндпоинт и обработчик,
-// а доставка оповещений остаётся в LoggingNotificationSender, как и раньше.
+// (локальный dev) бота не существует — нет смысла поднимать вебхук-эндпоинт и обработчик.
 var telegramBotToken = builder.Configuration["Telegram:BotToken"];
 var telegramBotConfigured = !string.IsNullOrWhiteSpace(telegramBotToken);
 if (telegramBotConfigured)
@@ -277,7 +279,27 @@ if (telegramBotConfigured)
     builder.Services.AddScoped<TelegramUpdateHandler>();
     builder.Services.AddHostedService<TelegramWebhookRegistrar>();
 }
-else
+
+// --- Web Push: реальная доставка PWA-пользователям (редизайн навигации, ADR-0004) — покрывает
+// пользователей без Telegram, которых TelegramNotificationSender не видит вовсе. Независимо от
+// Telegram-канала: оба могут быть настроены одновременно (NotificationSendingService.TrySendAsync
+// фан-аутит на ВСЕ зарегистрированные INotificationSender, см. IEnumerable<INotificationSender>).
+var webPushOptions = builder.Configuration.GetSection(WebPushOptions.SectionName).Get<WebPushOptions>();
+var webPushConfigured = webPushOptions?.IsConfigured == true;
+if (webPushConfigured)
+{
+    builder.Services.AddSingleton<WebPush.IWebPushClient>(sp =>
+    {
+        var options = sp.GetRequiredService<IOptions<WebPushOptions>>().Value;
+        var client = new WebPush.WebPushClient();
+        client.SetVapidDetails(options.Subject, options.VapidPublicKey, options.VapidPrivateKey);
+        return client;
+    });
+    builder.Services.AddScoped<INotificationSender, WebPushNotificationSender>();
+}
+
+// Ни один реальный канал не настроен (типично — локальный dev) — доставка остаётся в логах.
+if (!telegramBotConfigured && !webPushConfigured)
 {
     builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
 }
@@ -369,6 +391,7 @@ app.MapMemberEndpoints();
 app.MapMedicalModule();
 app.MapBirthdayModule();
 app.MapNotificationEndpoints();
+app.MapPushEndpoints();
 if (telegramBotConfigured)
 {
     app.MapBotEndpoints();

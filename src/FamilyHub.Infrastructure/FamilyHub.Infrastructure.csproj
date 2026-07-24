@@ -23,6 +23,9 @@
     <!-- SMTP-отправка (задача 2.5): универсальный клиент вместо SDK конкретного вендора —
          российский провайдер задаётся конфигом (host/логин), без привязки в коде. -->
     <PackageReference Include="MailKit" Version="4.17.0" />
+    <!-- Web Push (VAPID + RFC8291-шифрование payload) — редизайн навигации, ADR-0004: реальная
+         доставка PWA-пользователям, не только через Telegram-бота. -->
+    <PackageReference Include="WebPush" Version="1.0.13" />
   </ItemGroup>
 
   <ItemGroup>

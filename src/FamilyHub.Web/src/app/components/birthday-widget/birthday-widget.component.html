@@ -1,0 +1,20 @@
+@if (!loading && upcoming.length > 0) {
+  <div class="card elev-sm mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-1">
+      <div class="card-kicker mb-0">Дни рождения</div>
+      <a [routerLink]="['/birthdays']" class="muted" style="font-size:12px;text-decoration:none">
+        Все дни рождения →
+      </a>
+    </div>
+
+    @for (item of upcoming; track item.id) {
+      <div class="d-flex align-items-start gap-2">
+        <i class="ph-fill ph-cake" style="font-size:18px;color:var(--color-accent)" aria-hidden="true"></i>
+        <div class="flex-fill">
+          <strong class="card-title" style="font-size:14px">{{ urgencyLabel(item) }}</strong>
+          <div class="card-meta">{{ metaLabel(item) }}</div>
+        </div>
+      </div>
+    }
+  </div>
+}

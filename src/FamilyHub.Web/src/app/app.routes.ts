@@ -51,27 +51,39 @@ export const routes: Routes = [
       ),
   },
   {
-    path: 'medications',
+    // Хаб «Здоровье» (редизайн навигации): Аптечка + Анализы под одним табом, настоящие
+    // вложенные роуты (не in-page state) — переживают refresh, работают с browser back.
+    path: 'health',
     canActivate: [authGuard, consentGuard],
     loadComponent: () =>
-      import('./components/medications-tab/medications-tab.component').then(
-        (m) => m.MedicationsTabComponent,
-      ),
+      import('./components/health-hub/health-hub.component').then((m) => m.HealthHubComponent),
+    children: [
+      { path: '', redirectTo: 'medications', pathMatch: 'full' },
+      {
+        path: 'medications',
+        loadComponent: () =>
+          import('./components/medications-tab/medications-tab.component').then(
+            (m) => m.MedicationsTabComponent,
+          ),
+      },
+      {
+        path: 'records',
+        loadComponent: () =>
+          import('./components/medical-records-tab/medical-records-tab.component').then(
+            (m) => m.MedicalRecordsTabComponent,
+          ),
+      },
+    ],
   },
+  // Обратная совместимость со старыми прямыми ссылками/букмарками на плоские роуты.
+  { path: 'medications', redirectTo: 'health/medications' },
+  { path: 'records', redirectTo: 'health/records' },
   {
     path: 'birthdays',
     canActivate: [authGuard, consentGuard],
     loadComponent: () =>
       import('./components/birthdays-tab/birthdays-tab.component').then(
         (m) => m.BirthdaysTabComponent,
-      ),
-  },
-  {
-    path: 'records',
-    canActivate: [authGuard, consentGuard],
-    loadComponent: () =>
-      import('./components/medical-records-tab/medical-records-tab.component').then(
-        (m) => m.MedicalRecordsTabComponent,
       ),
   },
   {

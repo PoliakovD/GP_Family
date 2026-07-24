@@ -14,6 +14,7 @@
 - [`module-birthdays.md`](module-birthdays.md) — `FamilyHub.Modules.Birthdays`: дни рождения.
 - [`web-miniapp.md`](web-miniapp.md) — `FamilyHub.Web`: React Mini App (Telegram-клиент), её контракт с API. **Устарел** — фронт переписан на Angular 18, см. `auth-uiux-rework-stage.md`.
 - [`auth-uiux-rework-stage.md`](auth-uiux-rework-stage.md) — Auth + UI/UX rework после Stage 2 (username/Telegram-линковка/merge аккаунтов, гвард навигации, cookie-баннер), дебаг-репорт по Mini App багам, паттерны разработки для бэка и фронта (логгер, особенности PWA/Mini App).
+- [`navigation-redesign-and-web-push.md`](navigation-redesign-and-web-push.md) — редизайн навигации (7 табов → 4, хаб «Здоровье», серверные чипы поиска), систематизация Pages/Panels/Modals, реальный Web Push (ADR-0004), дебаг-репорт по ngsw/`ng serve`/permission-flow, контекст docker dev-стека.
 
 ## Архитектура одной картинкой
 

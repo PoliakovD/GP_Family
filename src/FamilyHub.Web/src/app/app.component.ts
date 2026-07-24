@@ -35,14 +35,14 @@ export class AppComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly log = inject(DevLoggerService);
 
+  // Редизайн навигации: 7 табов → 4 (Поиск — иконка в шапке, см. app.component.html; Аптечка +
+  // Анализы объединены в хаб «Здоровье», /health/*; Дни рождения — виджет на Главной + отдельная
+  // страница /birthdays без своего таба, см. FamiliesTabComponent).
   readonly tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'search', label: 'Поиск', icon: 'ph-magnifying-glass' },
-    { id: 'families', label: 'Семьи', icon: 'ph-users-three' },
-    { id: 'medications', label: 'Аптечка', icon: 'ph-first-aid-kit' },
-    { id: 'birthdays', label: 'Дни р.', icon: 'ph-cake' },
-    { id: 'records', label: 'Анализы', icon: 'ph-heartbeat' },
-    { id: 'notifications', label: 'Оповещ.', icon: 'ph-bell' },
-    { id: 'settings', label: 'Ещё', icon: 'ph-gear' },
+    { id: 'families', label: 'Главная', icon: 'ph-users-three' },
+    { id: 'health', label: 'Здоровье', icon: 'ph-heartbeat' },
+    { id: 'notifications', label: 'Уведомл.', icon: 'ph-bell' },
+    { id: 'settings', label: 'Профиль', icon: 'ph-user' },
   ];
 
   /** Консервативный дефолт — скрыто, пока первая навигация не подтвердит обратное (без мигания). */

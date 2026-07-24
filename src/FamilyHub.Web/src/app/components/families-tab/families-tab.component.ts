@@ -7,11 +7,12 @@ import { FamilyRole, MemberStatus } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { BirthdayWidgetComponent } from '../birthday-widget/birthday-widget.component';
 
 @Component({
   selector: 'app-families-tab',
   standalone: true,
-  imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent],
+  imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent, BirthdayWidgetComponent],
   templateUrl: './families-tab.component.html',
 })
 export class FamiliesTabComponent {

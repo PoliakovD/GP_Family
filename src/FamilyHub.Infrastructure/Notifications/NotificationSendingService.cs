@@ -8,12 +8,14 @@ namespace FamilyHub.Infrastructure.Notifications;
 
 /// <summary>
 /// Общая логика создания и доставки оповещений, извлечённая из ReminderScanJob (этап 1 плана):
-/// идемпотентная вставка (UNIQUE по DedupKey) + немедленная отправка через INotificationSender.
+/// идемпотентная вставка (UNIQUE по DedupKey) + немедленная отправка через все зарегистрированные
+/// INotificationSender (Telegram и/или Web Push — редизайн навигации, оба канала независимы:
+/// пользователь может быть привязан к одному, к обоим или ни к одному).
 /// Используется event-хендлерами (мгновенные алерты) и самой джобой (ежедневный ретрай-свип).
 /// </summary>
 public class NotificationSendingService(
     AppDbContext db,
-    INotificationSender sender,
+    IEnumerable<INotificationSender> senders,
     ILogger<NotificationSendingService> logger)
 {
     /// <summary>
@@ -80,19 +82,29 @@ public class NotificationSendingService(
         }
     }
 
-    /// <summary>Попытка доставки: успех отмечается в SentAt (без SaveChanges), сбой — только логируется.</summary>
+    /// <summary>
+    /// Попытка доставки по ВСЕМ зарегистрированным каналам — сбой одного не должен блокировать
+    /// остальные (свой try/catch на каждый sender, тот же принцип изоляции, что и внутри самих
+    /// реализаций, напр. TelegramNotificationSender.SendAsync). SentAt проставляется, если попытка
+    /// была предпринята хотя бы по одному каналу (симметрично прежнему однока­нальному поведению —
+    /// "мы попытались доставить", а не "доставка гарантированно успешна").
+    /// </summary>
     public async Task TrySendAsync(Notification notification, CancellationToken ct = default)
     {
-        try
+        foreach (var sender in senders)
         {
-            await sender.SendAsync(notification, ct);
-            notification.SentAt = DateTime.UtcNow;
+            try
+            {
+                await sender.SendAsync(notification, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex, "Не удалось отправить оповещение {NotificationId} пользователю {UserId} через {Sender}",
+                    notification.Id, notification.UserId, sender.GetType().Name);
+            }
         }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex, "Не удалось отправить оповещение {NotificationId} пользователю {UserId}",
-                notification.Id, notification.UserId);
-        }
+
+        notification.SentAt = DateTime.UtcNow;
     }
 }

@@ -39,6 +39,7 @@
     "!/api/attachments/**",
     "!/api/birthdays/**",
     "!/api/notifications/**",
-    "!/api/search/**"
+    "!/api/search/**",
+    "!/api/push/**"
   ]
 }

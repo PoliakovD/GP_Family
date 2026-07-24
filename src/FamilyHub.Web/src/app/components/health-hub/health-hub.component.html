@@ -1,0 +1,15 @@
+<div>
+  <h3 class="mb-3">Здоровье</h3>
+
+  <div class="seg mb-3">
+    @for (s of sections; track s.path) {
+      <a
+        class="seg-opt"
+        [routerLink]="[s.path]"
+        routerLinkActive="active"
+      >{{ s.label }}</a>
+    }
+  </div>
+
+  <router-outlet></router-outlet>
+</div>

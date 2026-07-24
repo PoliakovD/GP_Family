@@ -9,3 +9,4 @@
 | [0001](0001-data-locality-and-egress.md) | Локализация данных в РФ и контур исходящего трафика |
 | [0002](0002-field-and-file-encryption-key-management.md) | At-rest шифрование и управление ключами |
 | [0003](0003-search-architecture.md) | Архитектура поиска: Postgres FTS + in-memory, отказ от OpenSearch |
+| [0004](0004-web-push-egress-exception.md) | Web Push: исключение из egress-политики ADR-0001 |

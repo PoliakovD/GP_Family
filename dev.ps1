@@ -10,6 +10,7 @@ function Invoke-Help {
     Write-Host "  .\dev.ps1 dev            Запустить все сервисы"
     Write-Host "  .\dev.ps1 dev-restart-web    Перезапустить web (быстро, volumes не трогает)"
     Write-Host "  .\dev.ps1 dev-rebuild-api    Пересобрать api"
+    Write-Host "  .\dev.ps1 dev-rebuild-api-web    Пересобрать api+web"
     Write-Host "  .\dev.ps1 dev-npm        Пересобрать web после изменения package.json"
     Write-Host "  .\dev.ps1 dev-rebuild    Полный сброс: всё удалить + пересобрать"
     Write-Host "  .\dev.ps1 logs           Логи всех сервисов"
@@ -59,6 +60,23 @@ switch ($Command) {
             # Полный сброс: удаляет ВСЕ volumes включая БД
             docker compose down api -v
             docker compose up api --build -d
+        }
+    "dev-rebuild-api-web" {
+            # Полный сброс: удаляет ВСЕ volumes включая БД
+            docker compose down api -v
+            docker compose up api --build -d
+            # Пересобрать web-образ с нуля (нужно при изменении package.json)
+                    docker compose rm -sf web
+                    $project = (Split-Path -Leaf (Get-Location)).ToLower() -replace '[^a-z0-9]', ''
+                    "web-node-modules", "web-angular-cache" | ForEach-Object {
+                        $vol = "${project}_$_"
+                        $exists = docker volume ls -q | Where-Object { $_ -eq $vol }
+                        if ($exists) {
+                            Write-Host "Удаляю volume: $vol"
+                            docker volume rm $vol
+                        }
+                    }
+                    docker compose up --build -d web
         }
 
     "logs" {

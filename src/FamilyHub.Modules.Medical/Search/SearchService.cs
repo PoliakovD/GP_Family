@@ -17,17 +17,32 @@ public class SearchService(AppDbContext db, IFamilyAccessService access, Medical
     private const int MinQueryLength = 2;
     private const int PerSourceLimit = 20;
 
-    public async Task<SearchResponse> SearchAsync(Guid userId, string? query, CancellationToken ct = default)
+    /// <param name="types">
+    /// Ограничить источники (например, только «Лекарства»). <c>null</c>/пустой набор — все три
+    /// (общий поиск из шапки). Экономия не косметическая: <c>record</c> — самый дорогой источник,
+    /// он расшифровывает ВСЕ видимые пользователю медкарты (см. MedicalRecordService.SearchAsync);
+    /// не запрошенный источник не трогает БД вовсе.
+    /// </param>
+    public async Task<SearchResponse> SearchAsync(
+        Guid userId, string? query, IReadOnlySet<SearchResultType>? types = null, CancellationToken ct = default)
     {
         var q = query?.Trim();
         if (string.IsNullOrEmpty(q) || q.Length < MinQueryLength)
             return new SearchResponse([]);
 
-        // Последовательно, НЕ Task.WhenAll: все три источника читают через один и тот же
-        // scoped AppDbContext (DbContext не потокобезопасен для параллельных операций).
-        var medications = await SearchMedicationsAsync(userId, q, ct);
-        var kb = await SearchKbAsync(q, ct);
-        var records = await medicalRecords.SearchAsync(userId, q, PerSourceLimit, ct);
+        var wantsAll = types is null || types.Count == 0;
+
+        // Последовательно, НЕ Task.WhenAll: все источники читают через один и тот же scoped
+        // AppDbContext (DbContext не потокобезопасен для параллельных операций).
+        var medications = wantsAll || types!.Contains(SearchResultType.Medication)
+            ? await SearchMedicationsAsync(userId, q, ct)
+            : [];
+        var kb = wantsAll || types!.Contains(SearchResultType.Kb)
+            ? await SearchKbAsync(q, ct)
+            : [];
+        var records = wantsAll || types!.Contains(SearchResultType.Record)
+            ? await medicalRecords.SearchAsync(userId, q, PerSourceLimit, ct)
+            : [];
 
         var items = medications
             .Concat(kb)

@@ -149,6 +149,10 @@ export interface SearchResponse {
     items: SearchResultItem[];
 }
 
+export interface VapidPublicKeyResponse {
+    publicKey: string;
+}
+
 export interface AppNotification {
     id: string;
     type: number; // NotificationType

@@ -4,6 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService, LinkTelegramStart } from '../../services/auth.service';
+import { ApiError } from '../../services/api.service';
+import { PushNotificationService } from '../../services/push-notification.service';
+import { TelegramService } from '../../services/telegram.service';
 import { ToastService } from '../../shared/toast/toast.service';
 
 const LINK_POLL_INTERVAL_MS = 4000;
@@ -17,10 +20,13 @@ const LINK_POLL_INTERVAL_MS = 4000;
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
+  readonly push = inject(PushNotificationService);
+  readonly tg = inject(TelegramService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
 
   readonly busy = signal(false);
+  readonly pushBusy = signal(false);
   readonly linkStep = signal<'idle' | 'code'>('idle');
   readonly deleteConfirmVisible = signal(false);
   readonly telegramLink = signal<LinkTelegramStart | null>(null);
@@ -34,6 +40,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     await this.auth.loadMe();
+    void this.push.refreshStatus();
   }
 
   ngOnDestroy(): void {
@@ -104,6 +111,23 @@ export class SettingsComponent implements OnInit, OnDestroy {
         throw e;
       }
     });
+  }
+
+  async togglePush(): Promise<void> {
+    this.pushBusy.set(true);
+    try {
+      if (this.push.isSubscribed()) {
+        await this.push.unsubscribe();
+        this.toast.success('Push-уведомления отключены.');
+      } else {
+        await this.push.subscribe();
+        this.toast.success('Push-уведомления включены.');
+      }
+    } catch (e) {
+      this.toast.error(e instanceof ApiError ? e.message : 'Не удалось изменить push-уведомления.');
+    } finally {
+      this.pushBusy.set(false);
+    }
   }
 
   async logout(): Promise<void> {
