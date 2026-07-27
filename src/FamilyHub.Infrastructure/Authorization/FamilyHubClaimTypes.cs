@@ -11,4 +11,10 @@ public static class FamilyHubClaimTypes
 
     /// <summary>Провайдер аутентификации текущей сессии: "telegram" | "email" | "dev".</summary>
     public const string AuthProvider = "familyhub:auth_provider";
+
+    /// <summary>Email пользователя — только у PWA-сессий (JWT access-токен).</summary>
+    public const string Email = "familyhub:email";
+
+    /// <summary>Id записи UserSession, которой выпущен текущий access-токен. Только PWA.</summary>
+    public const string SessionId = "familyhub:session_id";
 }

@@ -11,7 +11,7 @@ import { LoadingSpinnerComponent } from './shared/loading-spinner/loading-spinne
 import { CookieBannerComponent } from './shared/cookie-banner/cookie-banner.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран. */
-const AUTH_ROUTE_PREFIXES = ['/login', '/consent'];
+const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind'];
 
 @Component({
   selector: 'app-root',
@@ -64,11 +64,10 @@ export class AppComponent implements OnInit {
     // PWA: реагируем на КАЖДЫЙ переход auth.me() в непустое состояние, а не только на
     // бутстрап приложения. Раньше refresh() запускался один раз в ngOnInit — если в этот
     // момент пользователь ещё не был аутентифицирован (например, только что открыл /login),
-    // последующие login()/registerConfirm()/resetPinConfirm() в той же SPA-сессии (без
+    // последующие login()/registerConfirm()/resetPasswordConfirm() в той же SPA-сессии (без
     // перезагрузки страницы) никогда не triggerили refresh(): state.loading оставался true
     // навсегда, и глобальный спиннер оболочки зависал на любом экране после входа.
-    // Telegram-режим эффектом не покрываем — там refresh() уже вызывается немедленно в
-    // ngOnInit, не дожидаясь /me (см. ниже); иначе тут случился бы двойной вызов.
+    // Telegram-режим покрывается отдельным эффектом ниже (по telegramBound(), а не по me()).
     // refresh() пишет в свои families/loading/error-сигналы уже после await (в микротаске) —
     // zone.js сохраняет реактивный контекст эффекта поперёк await, поэтому Angular всё равно
     // требует allowSignalWrites для этого пути. Циклической реактивности здесь нет: сигналы
@@ -78,21 +77,47 @@ export class AppComponent implements OnInit {
         this.state.refresh();
       }
     }, { allowSignalWrites: true });
+
+    // Telegram: тот же принцип, что и выше для PWA, но по переходу telegramBound() в true —
+    // не только на бутстрапе (initAuth ниже), а на ЛЮБОМ таком переходе, включая более поздний,
+    // случившийся уже после первого рендера (успешная привязка через TelegramBindComponent).
+    // Раньше initAuth() грузил семьи/профиль напрямую и только на бутстрапе; если на тот момент
+    // TelegramId ещё не был привязан, initAuth() выходил раньше этого вызова и никогда больше не
+    // запускался повторно (ngOnInit — один раз) — после последующей привязки и навигации на "/"
+    // ничего не догружало ни /me, ни семьи, и FamilyStateService.loading оставался true навсегда,
+    // из-за чего зависимые панели/страницы вечно показывали спиннер, хотя пользователь уже вошёл.
+    effect(() => {
+      if (this.auth.mode === 'telegram' && this.auth.telegramBound() === true) {
+        this.state.refresh();
+        void this.auth.loadMe();
+      }
+    }, { allowSignalWrites: true });
   }
 
   ngOnInit(): void {
     this.tg.init();
     this.subscribeToRouter();
-    this.initAuth();
+    void this.initAuth();
   }
 
-  private initAuth(): void {
+  private async initAuth(): Promise<void> {
     if (this.auth.mode === 'telegram') {
-      // Telegram-сессия аутентифицирована неявно (заголовок на каждый запрос) — семьи
-      // грузим сразу же, НЕ дожидаясь /me: единственная задержка/транзиентная ошибка ЭТОГО
-      // одного запроса (а не самих семейных данных) иначе оставляла бы state.loading true
-      // навсегда. loadMe() всё равно запускаем — для профиля/username в настройках, — но
-      // параллельно, не блокируя ничего.
+      // Реальный Telegram Mini App: TelegramId может быть ещё не привязан ни к одному
+      // аккаунту (TelegramMiniAppAuthenticationHandler — lookup-only, отклонит любой запрос
+      // до привязки). Дожидаемся результата — грузить семьи/профиль отсюда напрямую не
+      // нужно: telegramBound() пишется внутри ensureTelegramBound() в любом случае (true
+      // и false), и эффект в конструкторе сам среагирует на переход в true. Именно поэтому
+      // тем же эффектом (а не отдельным вызовом здесь) покрывается и случай более ПОЗДНЕЙ
+      // привязки через TelegramBindComponent — тогда initAuth() уже не выполняется повторно
+      // (ngOnInit — один раз), и без общего эффекта грузить семьи/профиль было бы некому.
+      if (this.tg.isInsideTelegram()) {
+        await this.auth.ensureTelegramBound();
+        return;
+      }
+
+      // Dev-заголовок (X-Dev-TelegramId): DevAuthenticationHandler авто-создаёт пользователя,
+      // привязка не нужна — telegramBound() для этого пути остаётся null навсегда, эффект
+      // выше никогда не сработает, поэтому грузим сразу же явно.
       void this.auth.loadMe();
       this.state.refresh();
       return;

@@ -1,0 +1,43 @@
+<div class="auth-shell">
+  <div class="card auth-card elev-md">
+    <div class="auth-brand">
+      <div class="card-kicker">FamilyHub</div>
+      <h2 class="card-title mb-0">Подтверждение Email</h2>
+    </div>
+
+    <p class="text-muted mb-3">
+      Для защиты медицинских данных подтвердите email. Если он совпадает с вашим существующим
+      аккаунтом FamilyHub — вся история семей, анализов и аптечки станет доступна прямо здесь.
+      Если этого email ещё нет в FamilyHub, мы создадим аккаунт и пришлём пароль для входа с сайта.
+    </p>
+
+    @if (error()) {
+      <div class="alert-danger">{{ error() }}</div>
+    }
+
+    @switch (step()) {
+      @case ('email') {
+        <form (ngSubmit)="sendCode()">
+          <label class="form-label" for="tg-bind-email">Email</label>
+          <input
+            id="tg-bind-email" class="input mb-3" type="email" name="email"
+            [(ngModel)]="email" required autocomplete="email" />
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Получить код</button>
+        </form>
+      }
+      @case ('code') {
+        <form (ngSubmit)="confirmBind()">
+          <label class="form-label" for="tg-bind-code">Код из письма</label>
+          <input
+            id="tg-bind-code" class="input mb-3" type="text" name="code"
+            [(ngModel)]="code" required inputmode="numeric" minlength="6" maxlength="6"
+            autocomplete="one-time-code" />
+
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Подтвердить</button>
+          <button type="button" class="btn-link" (click)="backToEmail()">Изменить email</button>
+        </form>
+      }
+    }
+  </div>
+</div>

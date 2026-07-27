@@ -7,6 +7,7 @@
 .env
 dev.env
 prod.env
+yandex.env
 
 # User-specific files
 *.rsuser

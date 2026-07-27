@@ -9,6 +9,13 @@ public enum EmailCodePurpose
     /// <summary>Привязка email к существующему (Telegram) аккаунту.</summary>
     LinkEmail = 1,
 
-    /// <summary>Сброс забытого PIN-кода существующего PWA-аккаунта.</summary>
-    ResetPin = 2,
+    /// <summary>Сброс забытого пароля существующего PWA-аккаунта.</summary>
+    ResetPassword = 2,
+
+    /// <summary>
+    /// Привязка Telegram Mini App к email-аккаунту (первый вход, анонимный поток —
+    /// не путать с LinkEmail, где привязка идёт от уже аутентифицированного пользователя).
+    /// UserId неизвестен на момент выпуска кода — определяется в момент подтверждения по email.
+    /// </summary>
+    TelegramBind = 3,
 }

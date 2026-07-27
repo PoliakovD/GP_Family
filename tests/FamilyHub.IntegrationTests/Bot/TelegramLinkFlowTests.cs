@@ -29,7 +29,7 @@ public class TelegramLinkFlowTests(BotWebhookWebFactory factory)
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts =
         new(System.Text.Json.JsonSerializerDefaults.Web);
 
-    private async Task<(Guid UserId, HttpClient Client)> SeedPwaUserAsync(string email, string pin = "1234")
+    private async Task<(Guid UserId, HttpClient Client)> SeedPwaUserAsync(string email, string password = "Passw0rd")
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -37,7 +37,7 @@ public class TelegramLinkFlowTests(BotWebhookWebFactory factory)
         {
             Id = Guid.NewGuid(),
             Email = email,
-            PinHash = PinHasher.Hash(pin),
+            PasswordHash = PasswordHasher.Hash(password),
             DisplayName = "Web User",
             CreatedAt = DateTime.UtcNow,
         };
@@ -45,7 +45,7 @@ public class TelegramLinkFlowTests(BotWebhookWebFactory factory)
         await db.SaveChangesAsync();
 
         var client = factory.CreateClient();
-        (await client.PostAsJsonAsync("/api/auth/login", new { email, pin }))
+        (await client.PostAsJsonAsync("/api/auth/login", new { email, password }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         return (user.Id, client);
@@ -133,21 +133,22 @@ public class TelegramLinkFlowTests(BotWebhookWebFactory factory)
         var (userId, client) = await SeedPwaUserAsync(email);
         var telegramId = TelegramId();
 
-        // Этот Telegram уже писал боту раньше — есть отдельная запись User с TelegramId,
-        // до какой-либо попытки привязки.
-        await PostWebhookAsync(new Update
-        {
-            Message = new Message
-            {
-                Text = "/start",
-                Chat = new Chat { Id = telegramId, Type = ChatType.Private },
-                From = new User { Id = telegramId, FirstName = "PreExisting" },
-            },
-        });
+        // Отдельная запись User с этим TelegramId, заведённая ДО перехода на lookup-only
+        // бота (тот больше не создаёт голых Telegram-аккаунтов сам — см.
+        // TelegramUpdateHandler/[[auth-architecture-email-anchor]]). Такие "осиротевшие"
+        // записи могли остаться в проде с прошлого дизайна — этот сценарий проверяет,
+        // что путь слияния через AccountMergeService всё ещё их подхватывает.
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            (await db.Users.CountAsync(u => u.TelegramId == telegramId)).Should().Be(1);
+            db.Users.Add(new DomainUser
+            {
+                Id = Guid.NewGuid(),
+                TelegramId = telegramId,
+                DisplayName = "PreExisting",
+                CreatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
         }
 
         var code = await StartLinkAsync(client);
@@ -196,5 +197,5 @@ public class TelegramLinkFlowTests(BotWebhookWebFactory factory)
     private static long TelegramId() => Random.Shared.NextInt64(1_000_000_000, 9_000_000_000);
 
     private record StartLinkDto(string Code, string DeepLink, DateTime ExpiresAt);
-    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPin);
+    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPassword);
 }

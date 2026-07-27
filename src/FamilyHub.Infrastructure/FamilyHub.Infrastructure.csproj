@@ -26,6 +26,8 @@
     <!-- Web Push (VAPID + RFC8291-шифрование payload) — редизайн навигации, ADR-0004: реальная
          доставка PWA-пользователям, не только через Telegram-бота. -->
     <PackageReference Include="WebPush" Version="1.0.13" />
+    <!-- JWT access-токен для PWA-сессии (access-в-cookie + refresh в БД, см. auth-uiux rework). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>

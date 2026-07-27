@@ -122,6 +122,7 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options, ILogge
 
         [System.Text.Json.Serialization.JsonPropertyName("last_name")]
         public string? LastName { get; set; }
+
         [System.Text.Json.Serialization.JsonPropertyName("username")]
         public string? Username { get; set; }
     }

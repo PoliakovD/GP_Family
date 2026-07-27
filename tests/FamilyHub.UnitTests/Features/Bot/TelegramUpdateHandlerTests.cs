@@ -51,21 +51,22 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task HandleAsync_StartWithoutCode_RepliesWithWelcome_AndProvisionsUser()
+    public async Task HandleAsync_StartWithoutCode_UnboundTelegramId_RepliesWithWelcome_DoesNotProvision()
     {
+        // Ровно тот же lookup-only принцип, что и в TelegramMiniAppAuthenticationHandler:
+        // бот не должен создавать "голого" Telegram-only пользователя без email — это
+        // именно то, что раньше требовало последующего слияния аккаунтов.
         await _sut.HandleAsync(StartUpdate(fromId: 111, chatId: 111, argument: null), CancellationToken.None);
 
-        Db.Users.Should().ContainSingle(u => u.TelegramId == 111);
+        Db.Users.Should().NotContain(u => u.TelegramId == 111);
         await _bot.Received(1).SendRequest(
             Arg.Is<SendMessageRequest>(r => r.ChatId == 111 && r.Text.Contains("Добро пожаловать")),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_StartWithValidLinkInviteCode_ResultsInPendingApprovalAndReplies()
+    public async Task HandleAsync_StartWithInviteCode_UnboundTelegramId_DoesNotProvision_AsksToBindFirst()
     {
-        // Через deep-link бота ("/start <код>") код всегда ссылочный (TargetUserId неизвестен на
-        // момент создания инвайта) — редимится через InviteService.RedeemInviteAsync как обычно.
         var (family, admin) = Db.SeedFamilyWithAdmin();
         const long targetTelegramId = 222;
         var invite = TestData.NewInvite(family.Id, admin.Id, maxUses: 5);
@@ -74,17 +75,57 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
 
         await _sut.HandleAsync(StartUpdate(targetTelegramId, targetTelegramId, invite.Code), CancellationToken.None);
 
-        var user = Db.Users.Single(u => u.TelegramId == targetTelegramId);
-        Db.FamilyMembers.Should().ContainSingle(m => m.FamilyId == family.Id && m.UserId == user.Id && m.Status == MemberStatus.PendingApproval);
+        Db.Users.Should().NotContain(u => u.TelegramId == targetTelegramId);
+        Db.FamilyMembers.Should().HaveCount(1, "инвайт не должен редимиться до привязки email — в семье остаётся только сидированный admin");
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.Text.Contains("сначала откройте приложение")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartWithValidLinkInviteCode_AlreadyBoundTelegramId_ResultsInPendingApprovalAndReplies()
+    {
+        // Через deep-link бота ("/start <код>") код всегда ссылочный (TargetUserId неизвестен на
+        // момент создания инвайта) — редимится через InviteService.RedeemInviteAsync как обычно,
+        // но только для УЖЕ привязанного (email-anchor) аккаунта — см. lookup-only выше.
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        const long targetTelegramId = 222;
+        var boundUser = AddWebUser("bound-invitee@example.com");
+        boundUser.TelegramId = targetTelegramId;
+        await Db.SaveChangesAsync();
+        var invite = TestData.NewInvite(family.Id, admin.Id, maxUses: 5);
+        Db.FamilyInvites.Add(invite);
+        await Db.SaveChangesAsync();
+
+        await _sut.HandleAsync(StartUpdate(targetTelegramId, targetTelegramId, invite.Code), CancellationToken.None);
+
+        Db.FamilyMembers.Should().ContainSingle(m => m.FamilyId == family.Id && m.UserId == boundUser.Id && m.Status == MemberStatus.PendingApproval);
         await _bot.Received(1).SendRequest(
             Arg.Is<SendMessageRequest>(r => r.Text.Contains("Заявка отправлена")),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_StartWithUnknownCode_RepliesNotFound()
+    public async Task HandleAsync_StartWithUnknownCode_UnboundTelegramId_AsksToBindFirst()
     {
         await _sut.HandleAsync(StartUpdate(333, 333, "no-such-code"), CancellationToken.None);
+
+        // Неизвестный TelegramId никогда не резолвится в userId, поэтому редимить нечего — даже
+        // до проверки самого инвайт-кода отвечаем предложением сначала привязать email.
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.Text.Contains("сначала откройте приложение")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartWithUnknownCode_AlreadyBoundTelegramId_RepliesNotFound()
+    {
+        const long telegramId = 334;
+        var boundUser = AddWebUser("bound-unknown-code@example.com");
+        boundUser.TelegramId = telegramId;
+        await Db.SaveChangesAsync();
+
+        await _sut.HandleAsync(StartUpdate(telegramId, telegramId, "no-such-code"), CancellationToken.None);
 
         await _bot.Received(1).SendRequest(
             Arg.Is<SendMessageRequest>(r => r.Text.Contains("не найден")),
@@ -137,7 +178,7 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
         {
             Id = Guid.NewGuid(),
             Email = email,
-            PinHash = "hash",
+            PasswordHash = "hash",
             DisplayName = "Web User",
             CreatedAt = DateTime.UtcNow,
         };

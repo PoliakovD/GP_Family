@@ -9,6 +9,6 @@ public interface ICurrentUser
 {
     Guid UserId { get; }
 
-    /// <summary>null — сессия PWA (email/PIN), Telegram-клейма нет.</summary>
+    /// <summary>null — сессия PWA (email/пароль), Telegram-клейма нет.</summary>
     long? TelegramId { get; }
 }

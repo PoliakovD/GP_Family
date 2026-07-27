@@ -28,12 +28,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
   readonly busy = signal(false);
   readonly pushBusy = signal(false);
   readonly linkStep = signal<'idle' | 'code'>('idle');
+  readonly revokeTelegramConfirmVisible = signal(false);
   readonly deleteConfirmVisible = signal(false);
   readonly telegramLink = signal<LinkTelegramStart | null>(null);
 
   linkEmail = '';
   linkCode = '';
-  linkPin = '';
+  linkPassword = '';
   deleteConfirmText = '';
 
   private pollHandle?: ReturnType<typeof setInterval>;
@@ -57,7 +58,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   async confirmLinkEmail(): Promise<void> {
     await this.run(async () => {
-      await this.auth.linkEmailConfirm(this.linkEmail, this.linkCode, this.linkPin);
+      await this.auth.linkEmailConfirm(this.linkEmail, this.linkCode, this.linkPassword);
       this.linkStep.set('idle');
       this.toast.success('Email привязан — теперь можно входить из браузера');
     });
@@ -94,6 +95,23 @@ export class SettingsComponent implements OnInit, OnDestroy {
         this.toast.success('Telegram привязан');
       }
     }, LINK_POLL_INTERVAL_MS);
+  }
+
+  /**
+   * Если открыто из самого Telegram — сразу после revoke текущий TelegramId больше не находится
+   * lookup-only хендлером, эта же сессия перестаёт проходить аутентификацию; ведём на повторную
+   * привязку, а не оставляем на странице настроек с последующими молчаливыми 401.
+   */
+  async revokeTelegram(): Promise<void> {
+    this.revokeTelegramConfirmVisible.set(false);
+    await this.run(async () => {
+      await this.auth.revokeTelegram();
+      if (this.auth.mode === 'telegram') {
+        await this.router.navigate(['/telegram-bind']);
+      } else {
+        this.toast.success('Telegram отвязан');
+      }
+    });
   }
 
   async deleteAccount(): Promise<void> {
@@ -156,10 +174,28 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     try {
       await action();
-    } catch {
-      this.toast.error('Не получилось — попробуйте ещё раз');
+    } catch (e) {
+      this.toast.error(this.describe(e));
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /**
+   * Раньше run() глотал ЛЮБУЮ ошибку в один и тот же текст "Не получилось — попробуйте ещё
+   * раз" — в частности, backend-код weak_password (см. PwaAuthService.ConfirmLinkEmailAsync)
+   * никогда не доходил до пользователя, тот просто не понимал, что не так с паролем. Тот же
+   * паттерн код→сообщение, что и в LoginComponent.describe() — единый стиль, а не третий вариант.
+   */
+  private describe(e: unknown): string {
+    if (e instanceof HttpErrorResponse) {
+      switch (e.error?.code) {
+        case 'invalid_code': return 'Неверный или истёкший код подтверждения.';
+        case 'email_taken': return 'Этот email уже привязан к другому аккаунту.';
+        case 'weak_password': return 'Пароль — минимум 8 символов, обязательно строчная и заглавная латинские буквы и цифра.';
+      }
+      if (e.status === 429) return 'Слишком много запросов — подождите немного.';
+    }
+    return 'Не получилось — попробуйте ещё раз.';
   }
 }

@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
-using System.Text;
 using FamilyHub.Api.Features.Account;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -26,9 +26,6 @@ public class TelegramLinkService(AppDbContext db, AccountMergeService merge, ILo
 {
     private const int CodeTtlMinutes = 10;
 
-    private static string HashCode(string code) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
-
     public async Task<(StartLinkTelegramResult Result, string? Code, DateTime? ExpiresAt)> StartAsync(
         Guid userId, CancellationToken ct = default)
     {
@@ -45,7 +42,7 @@ public class TelegramLinkService(AppDbContext db, AccountMergeService merge, ILo
         db.TelegramLinkCodes.Add(new TelegramLinkCode
         {
             Id = Guid.NewGuid(),
-            CodeHash = HashCode(rawCode),
+            CodeHash = TokenHasher.Hash(rawCode),
             UserId = userId,
             ExpiresAt = expiresAt,
             CreatedAt = DateTime.UtcNow,
@@ -110,7 +107,7 @@ public class TelegramLinkService(AppDbContext db, AccountMergeService merge, ILo
 
     private async Task<TelegramLinkCode?> FindActiveCodeAsync(string rawCode, CancellationToken ct)
     {
-        var hash = HashCode(rawCode);
+        var hash = TokenHasher.Hash(rawCode);
         var now = DateTime.UtcNow;
         return await db.TelegramLinkCodes.FirstOrDefaultAsync(
             c => c.CodeHash == hash && c.ConsumedAt == null && c.ExpiresAt > now, ct);

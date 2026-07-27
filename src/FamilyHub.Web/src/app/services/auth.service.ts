@@ -14,7 +14,7 @@ export interface Me {
   /** Зеркало Telegram @username — не уникален, обновляется на каждый TG-вход. */
   tgUsername: string | null;
   hasTelegram: boolean;
-  hasPin: boolean;
+  hasPassword: boolean;
 }
 
 export interface LinkTelegramStart {
@@ -35,7 +35,7 @@ export interface ConsentText {
 
 /**
  * Аутентификация в двух окружениях (этап 2 п.2.4): Telegram Mini App (initData через
- * интерцептор) и PWA (email+PIN, cookie-сессия). Плюс статус согласия ПДн (задача 2.3).
+ * интерцептор) и PWA (email+пароль, cookie-сессия). Плюс статус согласия ПДн (задача 2.3).
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -46,8 +46,16 @@ export class AuthService {
   readonly me = signal<Me | null>(null);
   readonly consent = signal<ConsentStatus | null>(null);
 
+  /**
+   * null — ещё не проверяли; true/false — известный результат последнего /telegram/init.
+   * Только для реального Telegram Mini App (initData) — dev-заголовок это не использует
+   * (DevAuthenticationHandler по-прежнему авто-создаёт пользователя, привязка не нужна).
+   */
+  readonly telegramBound = signal<boolean | null>(null);
+
   /** Общий in-flight запрос — см. loadMe(). */
   private pendingLoadMe: Promise<Me | null> | null = null;
+  private pendingTelegramInit: Promise<boolean> | null = null;
 
   /** telegram/dev — вход неявный (заголовки интерцептора); pwa — нужна cookie-сессия. */
   get mode(): 'telegram' | 'pwa' {
@@ -101,10 +109,10 @@ export class AuthService {
   }
 
   async registerConfirm(
-    email: string, code: string, pin: string, username: string, displayName: string | null,
+    email: string, code: string, password: string, username: string, displayName: string | null,
   ): Promise<void> {
     await firstValueFrom(
-      this.http.post<void>('/api/auth/register/confirm', { email, code, pin, username, displayName }),
+      this.http.post<void>('/api/auth/register/confirm', { email, code, password, username, displayName }),
     );
     await this.loadMe();
   }
@@ -117,18 +125,18 @@ export class AuthService {
     return response.available;
   }
 
-  async login(email: string, pin: string): Promise<void> {
-    await firstValueFrom(this.http.post<void>('/api/auth/login', { email, pin }));
+  async login(email: string, password: string): Promise<void> {
+    await firstValueFrom(this.http.post<void>('/api/auth/login', { email, password }));
     await this.loadMe();
   }
 
-  /** Забыли PIN: код на email (анти-enumeration — тот же ответ вне зависимости от наличия аккаунта). */
-  resetPinStart(email: string): Promise<void> {
-    return firstValueFrom(this.http.post<void>('/api/auth/reset-pin/start', { email }));
+  /** Забыли пароль: код на email (анти-enumeration — тот же ответ вне зависимости от наличия аккаунта). */
+  resetPasswordStart(email: string): Promise<void> {
+    return firstValueFrom(this.http.post<void>('/api/auth/reset-password/start', { email }));
   }
 
-  async resetPinConfirm(email: string, code: string, newPin: string): Promise<void> {
-    await firstValueFrom(this.http.post<void>('/api/auth/reset-pin/confirm', { email, code, newPin }));
+  async resetPasswordConfirm(email: string, code: string, newPassword: string): Promise<void> {
+    await firstValueFrom(this.http.post<void>('/api/auth/reset-password/confirm', { email, code, newPassword }));
     await this.loadMe();
   }
 
@@ -137,12 +145,84 @@ export class AuthService {
     this.me.set(null);
   }
 
+  /** Logout со всех устройств (после смены пароля / подозрения на компрометацию сессии). */
+  async logoutAll(): Promise<void> {
+    await firstValueFrom(this.http.post<void>('/api/auth/logout-all', {}));
+    this.me.set(null);
+  }
+
+  /**
+   * Ручное обновление access-токена по refresh-cookie. В обычной работе этим занимается
+   * authInterceptor (401 → refresh → повтор запроса) — этот метод для случаев, когда нужно
+   * освежить сессию явно, вне контекста конкретного проваленного запроса.
+   */
+  async refresh(): Promise<boolean> {
+    try {
+      await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Проверяет, привязан ли текущий TelegramId к аккаунту — POST /api/auth/telegram/init.
+   * У Telegram нет сессии/токенов (см. TokenService — только PWA): при bound=true дальнейшие
+   * запросы просто проходят обычный per-request initData-хендлер, никаких токенов сохранять
+   * не нужно. Общий in-flight запрос — authGuard может дёрнуть это на каждой навигации.
+   */
+  ensureTelegramBound(): Promise<boolean> {
+    if (this.pendingTelegramInit) return this.pendingTelegramInit;
+
+    this.pendingTelegramInit = (async () => {
+      try {
+        const res = await firstValueFrom(
+          this.http.post<{ bound: boolean }>('/api/auth/telegram/init', { initData: this.tg.getInitData() }),
+        );
+        this.telegramBound.set(res.bound);
+        return res.bound;
+      } catch {
+        this.telegramBound.set(false);
+        return false;
+      } finally {
+        this.pendingTelegramInit = null;
+      }
+    })();
+
+    return this.pendingTelegramInit;
+  }
+
+  telegramSendCode(email: string): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>('/api/auth/telegram/send-code', { email, initData: this.tg.getInitData() }),
+    );
+  }
+
+  async telegramBind(email: string, code: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post<void>('/api/auth/telegram/bind', { email, code, initData: this.tg.getInitData() }),
+    );
+    this.telegramBound.set(true);
+  }
+
+  /**
+   * Отвязка Telegram (компрометация устройства/бота) — из PWA-сессии, требует пароль для входа
+   * (иначе аккаунт остался бы вообще без способа войти). У Telegram нет сессии/токена: следующий
+   * же запрос из этого Telegram-аккаунта получит 401 и уйдёт на повторную привязку (см.
+   * authInterceptor).
+   */
+  async revokeTelegram(): Promise<void> {
+    await firstValueFrom(this.http.post<void>('/api/auth/telegram/revoke', {}));
+    this.telegramBound.set(false);
+    await this.loadMe();
+  }
+
   linkEmailStart(email: string): Promise<void> {
     return firstValueFrom(this.http.post<void>('/api/auth/link-email/start', { email }));
   }
 
-  async linkEmailConfirm(email: string, code: string, pin: string): Promise<void> {
-    await firstValueFrom(this.http.post<void>('/api/auth/link-email/confirm', { email, code, pin }));
+  async linkEmailConfirm(email: string, code: string, password: string): Promise<void> {
+    await firstValueFrom(this.http.post<void>('/api/auth/link-email/confirm', { email, code, password }));
     await this.loadMe();
   }
 

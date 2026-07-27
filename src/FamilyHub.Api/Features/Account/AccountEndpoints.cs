@@ -1,4 +1,4 @@
-using FamilyHub.Infrastructure.Auth;
+using FamilyHub.Infrastructure.Auth.Jwt;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Modules.Medical.Attachments;
 
@@ -14,15 +14,22 @@ public static class AccountEndpoints
 
         // Право на забвение: подтверждение строкой — защита от случайного вызова.
         group.MapPost("/delete", async (
-            DeleteAccountRequest request, AccountService service, ICurrentUser currentUser, CancellationToken ct) =>
+            DeleteAccountRequest request, AccountService service, ICurrentUser currentUser,
+            HttpContext http, CancellationToken ct) =>
         {
             if (request.Confirm != "DELETE")
                 return Results.BadRequest(new { code = "confirmation_required" });
 
             var outcome = await service.DeleteAccountAsync(currentUser.UserId, ct);
-            return outcome.Deleted
-                ? Results.SignOut(authenticationSchemes: [AuthSchemes.PwaCookie])
-                : Results.Conflict(new { code = "last_admin", families = outcome.BlockingFamilies });
+            if (!outcome.Deleted)
+                return Results.Conflict(new { code = "last_admin", families = outcome.BlockingFamilies });
+
+            // Аккаунт (и его UserSessions — см. AccountService.DeleteAccountAsync) уже стёрт из
+            // БД; здесь только гасим PWA-сессию текущего запроса (Telegram-режим — no-op, cookie
+            // никогда не выставлялась). Results.SignOut тут не подходит: PwaCookie теперь JWT-схема,
+            // не реализующая IAuthenticationSignOutHandler.
+            PwaSessionCookieWriter.ClearSessionCookies(http);
+            return Results.Ok();
         });
 
         // Экспорт данных субъекта: стрим zip прямо в ответ.

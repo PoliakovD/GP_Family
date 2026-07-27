@@ -71,8 +71,10 @@ public class BotWebhookTests(BotWebhookWebFactory factory)
     }
 
     [Fact]
-    public async Task CorrectSecret_StartCommand_Returns200_AndRepliesViaBotClient_AndProvisionsUser()
+    public async Task CorrectSecret_StartCommand_Returns200_AndRepliesViaBotClient_DoesNotProvisionUnboundUser()
     {
+        // Lookup-only: бот никогда не создаёт "голого" Telegram-only пользователя без
+        // email-привязки (email — единственный якорь identity, см. TelegramMiniAppAuthenticationHandler).
         var client = factory.CreateClient();
         const long telegramId = 903;
 
@@ -85,6 +87,6 @@ public class BotWebhookTests(BotWebhookWebFactory factory)
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.Users.Should().Contain(u => u.TelegramId == telegramId);
+        db.Users.Should().NotContain(u => u.TelegramId == telegramId);
     }
 }

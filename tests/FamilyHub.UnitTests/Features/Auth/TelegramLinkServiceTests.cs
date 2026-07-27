@@ -28,7 +28,7 @@ public class TelegramLinkServiceTests : SqliteTestBase
         {
             Id = Guid.NewGuid(),
             Email = email ?? $"{Guid.NewGuid():N}@example.com",
-            PinHash = "hash",
+            PasswordHash = "hash",
             DisplayName = "Web User",
             CreatedAt = DateTime.UtcNow,
         };

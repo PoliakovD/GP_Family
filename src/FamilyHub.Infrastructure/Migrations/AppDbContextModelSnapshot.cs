@@ -662,13 +662,13 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
-                    b.Property<int>("FailedPinAttempts")
+                    b.Property<int>("FailedLoginAttempts")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("LockedUntil")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("PinHash")
+                    b.Property<string>("PasswordHash")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -726,6 +726,48 @@ namespace FamilyHub.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("UserConsents", "identity");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.UserSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceInfo")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("ReplacedByTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserSessions", "identity");
                 });
 
             modelBuilder.Entity("FamilyHub.Infrastructure.Outbox.OutboxMessage", b =>

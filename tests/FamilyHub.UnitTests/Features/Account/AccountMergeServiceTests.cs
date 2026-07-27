@@ -27,7 +27,7 @@ public class AccountMergeServiceTests : SqliteTestBase
         {
             Id = Guid.NewGuid(),
             Email = $"{Guid.NewGuid():N}@example.com",
-            PinHash = "hash",
+            PasswordHash = "hash",
             Username = username,
             DisplayName = "Target",
             CreatedAt = DateTime.UtcNow,

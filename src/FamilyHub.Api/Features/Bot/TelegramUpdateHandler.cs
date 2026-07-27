@@ -78,10 +78,8 @@ public class TelegramUpdateHandler(
         var parts = message.Text!.Split(' ', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var arg = parts.Length > 1 ? parts[1] : null;
 
-        // Привязка Telegram к веб-аккаунту (LinkPrefix) — намеренно ДО провижининга ниже:
-        // GetOrCreateUserIdAsync тут же создал бы Telegram-only пользователя, и любая
-        // привязка автоматически стала бы merge'ем, даже когда этот Telegram впервые видит
-        // FamilyHub. Резолв/создание пользователя для этой ветки — только внутри
+        // Привязка Telegram к веб-аккаунту (LinkPrefix) обрабатывается отдельно, ДО lookup'а
+        // ниже: резолв/создание пользователя для этой ветки — только внутри
         // TelegramLinkService.ConfirmAsync, после явного подтверждения кнопкой.
         if (arg is not null && arg.StartsWith(LinkPrefix, StringComparison.Ordinal))
         {
@@ -89,17 +87,28 @@ public class TelegramUpdateHandler(
             return;
         }
 
-        var displayName = string.Join(' ', new[] { from.FirstName, from.LastName }
-            .Where(s => !string.IsNullOrWhiteSpace(s)));
-
-        var userId = await userProvisioning.GetOrCreateUserIdAsync(
-            from.Id, string.IsNullOrWhiteSpace(displayName) ? null : displayName, from.Username, ct);
-
         // Новый формат инвайта: аргумент начинается с InvitePrefix ("invite___<hex>").
         // Старый формат (сырой hex-код) поддерживается для обратной совместимости.
         string? inviteCode = arg is null
             ? null
             : arg.StartsWith(InvitePrefix, StringComparison.Ordinal) ? arg[InvitePrefix.Length..] : arg;
+
+        // Бот НИКОГДА не создаёт пользователя сам (тот же lookup-only принцип, что и в
+        // TelegramMiniAppAuthenticationHandler, и в ветке LinkPrefix выше) — "голый"
+        // Telegram-аккаунт без email воспроизводил бы именно ту проблему раздельных
+        // личностей, ради устранения которой это всё затевалось. Резолвим существующего
+        // пользователя по TelegramId; если его нет — направляем в Mini App на привязку
+        // email, прежде чем делать что-либо ещё (в т.ч. принимать инвайт).
+        var userId = await userProvisioning.GetUserIdByTelegramIdAsync(from.Id, ct);
+        if (userId is null)
+        {
+            var welcomeReply = inviteCode is null
+                ? $"Добро пожаловать в FamilyHub! Откройте приложение и подтвердите email, чтобы начать.\n\n{HelpText}"
+                : "Чтобы принять приглашение, сначала откройте приложение и подтвердите email — "
+                    + "после этого перейдите по ссылке приглашения ещё раз.";
+            await ReplyWithMiniAppButtonAsync(message.Chat.Id, welcomeReply, ct);
+            return;
+        }
 
         if (inviteCode is null)
         {
@@ -107,7 +116,7 @@ public class TelegramUpdateHandler(
             return;
         }
 
-        var result = await invites.RedeemInviteAsync(inviteCode, userId, ct);
+        var result = await invites.RedeemInviteAsync(inviteCode, userId.Value, ct);
         var reply = result switch
         {
             RedeemResult.Joined => "Вы успешно присоединились к семье!",

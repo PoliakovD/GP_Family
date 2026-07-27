@@ -8,6 +8,7 @@ using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Auth;
+using FamilyHub.Infrastructure.Auth.Jwt;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Api.Features.Notifications;
@@ -26,11 +27,13 @@ using FamilyHub.Modules.Medical;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Minio;
 using Serilog;
 using Serilog.Events;
@@ -70,6 +73,7 @@ builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(E
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 
 // --- At-rest шифрование (этап 2, 152-ФЗ): ключ вне БД, fail-fast при отсутствии ---
 // Синглтоны обязательны: EF кэширует модель с конвертером, захватившим первый cipher.
@@ -144,9 +148,36 @@ builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = options.DefaultPolicy;
 });
 
-// --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-cookie, ---
+// --- JWT PWA-сессия: access-токен в httpOnly cookie + refresh-токен в БД (ротация,   ---
+// --- reuse-detection, revoke-all). Fail-fast: ключ подписи обязателен во всех средах. ---
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey))
+    throw new InvalidOperationException("Jwt:SigningKey не задан (env Jwt__SigningKey) — JWT-сессии PWA невозможны.");
+
+byte[] jwtSigningKeyBytes;
+try
+{
+    jwtSigningKeyBytes = Convert.FromBase64String(jwtOptions.SigningKey);
+}
+catch (FormatException ex)
+{
+    // Без этой проверки ошибка проявлялась бы не при старте, а лениво — на первый же
+    // входящий запрос, внутри IOptionsFactory для JwtBearer (см. AddJwtBearer ниже), и
+    // валила бы 500 АБСОЛЮТНО любой запрос (включая AllowAnonymous — аутентификация
+    // пытается резолвить дефолтную схему до authorization независимо от эндпоинта). Самый
+    // частый источник — незаменённый плейсхолдер `Jwt__SigningKey=CHANGE_ME` из .env.example
+    // (не валиден как Base64: недопустимый символ `_` и некорректная длина).
+    throw new InvalidOperationException(
+        "Jwt:SigningKey (env Jwt__SigningKey) задан, но не является корректной Base64-строкой — " +
+        "похоже на незаменённый плейсхолдер из .env.example. Сгенерировать реальный ключ: " +
+        "`openssl rand -base64 32` (или PowerShell: " +
+        "[Convert]::ToBase64String((1..32|%{Get-Random -Max 256}))).", ex);
+}
+builder.Services.AddScoped<ITokenService, TokenService>();
+
+// --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-JWT,   ---
 // --- плюс Dev-заглушка (только Development). Селектор "Smart" во всех средах:      ---
-// --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → cookie.       ---
+// --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.          ---
 var isDevelopment = builder.Environment.IsDevelopment();
 
 var authBuilder = builder.Services.AddAuthentication(options =>
@@ -158,25 +189,36 @@ var authBuilder = builder.Services.AddAuthentication(options =>
 
 authBuilder.AddScheme<AuthenticationSchemeOptions, TelegramMiniAppAuthenticationHandler>(AuthSchemes.TelegramMiniApp, null);
 
-authBuilder.AddCookie(AuthSchemes.PwaCookie, cookieOptions =>
+authBuilder.AddJwtBearer(AuthSchemes.PwaCookie, jwtBearerOptions =>
 {
-    cookieOptions.Cookie.Name = "familyhub.auth";
-    cookieOptions.Cookie.HttpOnly = true;
-    cookieOptions.Cookie.SameSite = SameSiteMode.Lax;
-    // SameAsRequest: в проде TLS даёт Secure, локально работает по http.
-    cookieOptions.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    cookieOptions.SlidingExpiration = true;
-    cookieOptions.ExpireTimeSpan = TimeSpan.FromDays(14);
-    // SPA-API: вместо redirect'ов на страницы логина отдаём коды статуса.
-    cookieOptions.Events.OnRedirectToLogin = ctx =>
+    jwtBearerOptions.TokenValidationParameters = new TokenValidationParameters
     {
-        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return Task.CompletedTask;
+        ValidateIssuer = true,
+        ValidIssuer = jwtOptions.Issuer,
+        ValidateAudience = true,
+        ValidAudience = jwtOptions.Audience,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(jwtSigningKeyBytes),
+        ValidateLifetime = true,
+        ClockSkew = jwtOptions.ClockSkew,
     };
-    cookieOptions.Events.OnRedirectToAccessDenied = ctx =>
+    jwtBearerOptions.Events = new JwtBearerEvents
     {
-        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-        return Task.CompletedTask;
+        // Access-токен ездит в httpOnly cookie, а не в заголовке Authorization —
+        // PWA-запросы идут через withCredentials, не bearer-заголовок.
+        OnMessageReceived = ctx =>
+        {
+            if (ctx.Request.Cookies.TryGetValue(PwaCookieNames.AccessToken, out var accessToken))
+                ctx.Token = accessToken;
+            return Task.CompletedTask;
+        },
+        // SPA-API: вместо WWW-Authenticate-челленджа отдаём голый 401, как и раньше у cookie-схемы.
+        OnChallenge = ctx =>
+        {
+            ctx.HandleResponse();
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        },
     };
 });
 
@@ -230,7 +272,9 @@ builder.Services.AddRateLimiter(limiterOptions =>
 // Провайдеры заданы → MailKit с failover (российский SMTP задаётся конфигом),
 // иначе — log-заглушка (зеркало переключателя INotificationSender по BotToken).
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.AddScoped<EmailOtpService>();
 builder.Services.AddScoped<PwaAuthService>();
+builder.Services.AddScoped<TelegramBindingService>();
 var emailProvidersConfigured = builder.Configuration.GetSection($"{EmailOptions.SectionName}:Providers").GetChildren().Any();
 if (emailProvidersConfigured)
 {
@@ -383,6 +427,7 @@ app.Use(async (context, next) =>
 });
 
 app.MapAuthEndpoints();
+app.MapTelegramBindingEndpoints();
 app.MapConsentEndpoints();
 app.MapAccountEndpoints();
 app.MapFamilyEndpoints();

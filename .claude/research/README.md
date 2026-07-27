@@ -13,8 +13,9 @@
 - [`module-medical.md`](module-medical.md) — `FamilyHub.Modules.Medical`: аптечка, анализы (персональный ресурс с шарингом), вложения.
 - [`module-birthdays.md`](module-birthdays.md) — `FamilyHub.Modules.Birthdays`: дни рождения.
 - [`web-miniapp.md`](web-miniapp.md) — `FamilyHub.Web`: React Mini App (Telegram-клиент), её контракт с API. **Устарел** — фронт переписан на Angular 18, см. `auth-uiux-rework-stage.md`.
-- [`auth-uiux-rework-stage.md`](auth-uiux-rework-stage.md) — Auth + UI/UX rework после Stage 2 (username/Telegram-линковка/merge аккаунтов, гвард навигации, cookie-баннер), дебаг-репорт по Mini App багам, паттерны разработки для бэка и фронта (логгер, особенности PWA/Mini App).
+- [`auth-uiux-rework-stage.md`](auth-uiux-rework-stage.md) — Auth + UI/UX rework после Stage 2 (username/Telegram-линковка/merge аккаунтов, гвард навигации, cookie-баннер), дебаг-репорт по Mini App багам, паттерны разработки для бэка и фронта (логгер, особенности PWA/Mini App). Telegram-линковка оттуда (`TelegramLinkService`/`AccountMergeService`) — легаси-путь, не заменён, см. следующий файл.
 - [`navigation-redesign-and-web-push.md`](navigation-redesign-and-web-push.md) — редизайн навигации (7 табов → 4, хаб «Здоровье», серверные чипы поиска), систематизация Pages/Panels/Modals, реальный Web Push (ADR-0004), дебаг-репорт по ngsw/`ng serve`/permission-flow, контекст docker dev-стека.
+- [`auth-email-anchor-jwt-rework.md`](auth-email-anchor-jwt-rework.md) — email как единственный якорь identity (без merge для новых привязок): PWA переведена на JWT-access + DB-backed refresh-сессии (`UserSession`/`TokenService`, ротация + reuse-detection), Telegram Mini App стал lookup-only (`TelegramMiniAppAuthenticationHandler` больше не авто-провижинит), новый bind-флоу `TelegramBindingService`/`/api/auth/telegram/{init,send-code,bind,revoke}`. Дебаг-репорт: `BindAsync`-коллизия имени в Minimal API, 3 теста, сломанные удалением auto-provisioning.
 
 ## Архитектура одной картинкой
 

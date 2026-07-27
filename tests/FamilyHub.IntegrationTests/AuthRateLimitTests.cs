@@ -38,10 +38,10 @@ public class AuthRateLimitTests(RateLimitedWebFactory factory)
 
         // Лимит политики "auth" = 3/час на IP: четвёртый запрос отбрасывается.
         for (var i = 0; i < 3; i++)
-            (await client.PostAsJsonAsync("/api/auth/login", new { email = $"u{i}@example.com", pin = "0000" }))
+            (await client.PostAsJsonAsync("/api/auth/login", new { email = $"u{i}@example.com", password = "Wr0ngPwd" }))
                 .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        (await client.PostAsJsonAsync("/api/auth/login", new { email = "u4@example.com", pin = "0000" }))
+        (await client.PostAsJsonAsync("/api/auth/login", new { email = "u4@example.com", password = "Wr0ngPwd" }))
             .StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
     }
 

@@ -5,16 +5,20 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 
-type Step = 'login' | 'register-details' | 'register-code' | 'reset-pin-email' | 'reset-pin-code';
+type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
 type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
 
 /** Формат видимого username — зеркалит UsernameRules на бэкенде (единый источник истины — сервер). */
 const USERNAME_PATTERN = /^[a-z][a-z0-9_]{4,31}$/;
 const USERNAME_CHECK_DEBOUNCE_MS = 400;
 
+/** Зеркалит FamilyHub.Domain.ValueObjects.PasswordRules на бэкенде: 8-100 симв., строчная +
+ * заглавная латинские буквы + цифра. Единый источник истины — сервер; здесь только UX. */
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,100}$/;
+
 /**
- * PWA-вход (этап 2 п.2.4): email+PIN, регистрация степпером email/username/имя/PIN → код,
- * и восстановление забытого PIN тем же email-кодом. Код регистрации запрашивается ПОСЛЕДНИМ
+ * PWA-вход (этап 2 п.2.4): email+пароль, регистрация степпером email/username/имя/пароль → код,
+ * и восстановление забытого пароля тем же email-кодом. Код регистрации запрашивается ПОСЛЕДНИМ
  * шагом, сразу перед подтверждением: он живёт всего 10 минут, и если запросить его до
  * заполнения остальной формы, пользователь рискует не уложиться (или потерять код при
  * случайном обновлении страницы посреди заполнения).
@@ -41,7 +45,7 @@ export class LoginComponent {
   readonly showCookieNotice = computed(() => this.cookieConsent.choice() === 'declined');
 
   email = '';
-  pin = '';
+  password = '';
   code = '';
   username = '';
   displayName = '';
@@ -50,13 +54,23 @@ export class LoginComponent {
   private usernameCheckTimer?: ReturnType<typeof setTimeout>;
   private usernameCheckToken = 0;
 
+  /** Только для полей, где пароль ЗАДАЁТСЯ (регистрация, сброс) — вход не гейтится силой пароля,
+   * иначе аккаунты с уже установленным (в т.ч. старым, короче 8 симв.) паролем не смогли бы войти. */
+  get isPasswordValid(): boolean {
+    return PASSWORD_PATTERN.test(this.password);
+  }
+
   get canSubmitDetails(): boolean {
-    return !this.busy() && this.privacyAccepted && this.usernameStatus() === 'free';
+    return !this.busy() && this.privacyAccepted && this.usernameStatus() === 'free' && this.isPasswordValid;
+  }
+
+  get canSubmitNewPassword(): boolean {
+    return !this.busy() && this.isPasswordValid;
   }
 
   async login(): Promise<void> {
     await this.run(async () => {
-      await this.auth.login(this.email, this.pin);
+      await this.auth.login(this.email, this.password);
       await this.router.navigate(['/']);
     });
   }
@@ -105,7 +119,7 @@ export class LoginComponent {
 
   async confirmRegistration(): Promise<void> {
     await this.run(async () => {
-      await this.auth.registerConfirm(this.email, this.code, this.pin, this.username, this.displayName || null);
+      await this.auth.registerConfirm(this.email, this.code, this.password, this.username, this.displayName || null);
       await this.router.navigate(['/consent']);
     });
   }
@@ -122,25 +136,26 @@ export class LoginComponent {
   useExistingAccount(): void {
     this.error.set(null);
     this.errorCode.set(null);
-    this.pin = ''; // PIN, введённый для регистрации, — не тот, что нужен для входа в старый аккаунт
+    this.password = ''; // пароль, введённый для регистрации, — не тот, что нужен для входа в старый аккаунт
     this.step.set('login');
   }
 
-  startResetPin(): void {
+  startResetPassword(): void {
     this.error.set(null);
-    this.step.set('reset-pin-email');
+    this.step.set('reset-password-email');
   }
 
   async sendResetCode(): Promise<void> {
     await this.run(async () => {
-      await this.auth.resetPinStart(this.email);
-      this.step.set('reset-pin-code');
+      await this.auth.resetPasswordStart(this.email);
+      this.step.set('reset-password-code');
     });
   }
 
-  async confirmResetPin(): Promise<void> {
+  async confirmResetPassword(): Promise<void> {
+    if (!this.canSubmitNewPassword) return;
     await this.run(async () => {
-      await this.auth.resetPinConfirm(this.email, this.code, this.pin);
+      await this.auth.resetPasswordConfirm(this.email, this.code, this.password);
       await this.router.navigate(['/']);
     });
   }
@@ -172,11 +187,11 @@ export class LoginComponent {
   private describe(e: unknown): string {
     if (e instanceof HttpErrorResponse) {
       switch (e.error?.code) {
-        case 'invalid_credentials': return 'Неверный email или PIN.';
+        case 'invalid_credentials': return 'Неверный email или пароль.';
         case 'locked_out': return 'Слишком много попыток — вход временно заблокирован. Попробуйте через 15 минут.';
         case 'invalid_code': return 'Неверный или истёкший код подтверждения.';
         case 'email_taken': return 'Этот email уже зарегистрирован.';
-        case 'weak_pin': return 'PIN должен состоять из 4–8 цифр.';
+        case 'weak_password': return 'Пароль — минимум 8 символов, обязательно строчная и заглавная латинские буквы и цифра.';
         case 'invalid_username': return 'Некорректный username — 5–32 символа: латиница, цифры, «_», с буквы.';
         case 'username_taken': return 'Этот username уже занят — выберите другой.';
       }

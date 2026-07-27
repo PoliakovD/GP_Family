@@ -8,6 +8,15 @@ namespace FamilyHub.Infrastructure.CurrentUser;
 
 public class UserProvisioningService(AppDbContext db, ILogger<UserProvisioningService> logger) : IUserProvisioningService
 {
+    public async Task<Guid?> GetUserIdByTelegramIdAsync(long telegramId, CancellationToken ct = default)
+    {
+        var id = await db.Users.AsNoTracking()
+            .Where(u => u.TelegramId == telegramId)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(ct);
+        return id;
+    }
+
     public async Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? displayName, string? username = null, CancellationToken ct = default)
     {
         var existing = await db.Users

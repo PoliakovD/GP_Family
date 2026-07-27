@@ -4,7 +4,7 @@ public static class AuthSchemes
 {
     public const string TelegramMiniApp = "TelegramMiniApp";
 
-    /// <summary>Cookie-сессия PWA-входа (email + PIN, этап 2 п.2.4).</summary>
+    /// <summary>Cookie-сессия PWA-входа (email + пароль, этап 2 п.2.4).</summary>
     public const string PwaCookie = "PwaCookie";
 
     /// <summary>Селектор схемы по признакам запроса (tma-заголовок → Telegram, иначе cookie).</summary>

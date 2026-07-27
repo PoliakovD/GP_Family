@@ -13,6 +13,12 @@ namespace FamilyHub.Infrastructure.Auth;
 /// Схема аутентификации Telegram Mini App. initData принимается в заголовке
 /// "Authorization: tma &lt;initData&gt;" (рекомендация Telegram) либо в "X-Telegram-Init-Data"
 /// как запасной вариант для отладки. Валидация HMAC — ПЕРВЫЙ шаг, до любой бизнес-логики.
+///
+/// Lookup-only: НЕ создаёт пользователя, если TelegramId ещё не привязан ни к одному User —
+/// раньше здесь был get-or-create, что молча плодило "голые" Telegram-аккаунты без email и
+/// требовало последующего слияния с PWA-аккаунтом того же человека. Теперь такой TelegramId
+/// должен сначала пройти привязку через email+OTP (POST /api/auth/telegram/init → send-code →
+/// bind, см. TelegramBindingService) — только после неё запрос сюда пройдёт успешно.
 /// </summary>
 public class TelegramMiniAppAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -38,13 +44,20 @@ public class TelegramMiniAppAuthenticationHandler(
             return AuthenticateResult.Fail("Telegram initData не прошла валидацию подписи.");
         }
 
-        var userId = await userProvisioning.GetOrCreateUserIdAsync(
-            result.TelegramId, result.DisplayName, result.Username, Context.RequestAborted);
+        var userId = await userProvisioning.GetUserIdByTelegramIdAsync(result.TelegramId, Context.RequestAborted);
+        if (userId is null)
+        {
+            Logger.LogInformation(
+                "Telegram Mini App аутентификация отклонена: TelegramId={TelegramId} не привязан ни к одному аккаунту " +
+                "(требуется /api/auth/telegram/init → bind)", result.TelegramId);
+            return AuthenticateResult.Fail("TelegramId не привязан к аккаунту.");
+        }
+
         Logger.LogDebug("Telegram Mini App аутентификация: TelegramId={TelegramId} -> UserId={UserId}", result.TelegramId, userId);
 
         var claims = new[]
         {
-            new Claim(FamilyHubClaimTypes.UserId, userId.ToString()),
+            new Claim(FamilyHubClaimTypes.UserId, userId.Value.ToString()),
             new Claim(FamilyHubClaimTypes.TelegramId, result.TelegramId.ToString()),
         };
         var identity = new ClaimsIdentity(claims, Scheme.Name);

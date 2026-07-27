@@ -9,6 +9,12 @@ export const routes: Routes = [
       import('./components/login/login.component').then((m) => m.LoginComponent),
   },
   {
+    // Первичная привязка Telegram Mini App к email-аккаунту (см. authGuard/TelegramBindComponent).
+    path: 'telegram-bind',
+    loadComponent: () =>
+      import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
+  },
+  {
     path: 'privacy',
     loadComponent: () =>
       import('./components/privacy/privacy.component').then((m) => m.PrivacyComponent),

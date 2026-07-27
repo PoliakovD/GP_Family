@@ -6,8 +6,8 @@ using Xunit;
 namespace FamilyHub.IntegrationTests;
 
 /// <summary>
-/// Сквозной PWA-вход (этап 2 п.2.4): регистрация email→код→PIN, cookie-сессия,
-/// lockout после серии неверных PIN. Клиент WebApplicationFactory по умолчанию
+/// Сквозной PWA-вход (этап 2 п.2.4): регистрация email→код→пароль, cookie-сессия,
+/// lockout после серии неверных паролей. Клиент WebApplicationFactory по умолчанию
 /// сохраняет cookie между запросами (HandleCookies=true) — сессия работает как в браузере.
 /// </summary>
 public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
@@ -16,7 +16,7 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
 
     private static string FreshUsername() => $"user{Guid.NewGuid():N}"[..20];
 
-    private async Task<(HttpClient Client, string Email)> RegisterAsync(string pin = "1234", string? username = null)
+    private async Task<(HttpClient Client, string Email)> RegisterAsync(string password = "Passw0rd", string? username = null)
     {
         var client = AnonymousClient();
         var email = FreshEmail();
@@ -27,7 +27,7 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         code.Should().NotBeNullOrEmpty();
 
         var confirm = await client.PostAsJsonAsync("/api/auth/register/confirm",
-            new { email, code, pin, username = username ?? FreshUsername(), displayName = "PWA Пользователь" });
+            new { email, code, password, username = username ?? FreshUsername(), displayName = "PWA Пользователь" });
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
 
         return (client, email);
@@ -49,32 +49,32 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Login_WithRegisteredPin_Succeeds_AndWrongPin_Returns401()
+    public async Task Login_WithRegisteredPassword_Succeeds_AndWrongPassword_Returns401()
     {
-        var (_, email) = await RegisterAsync(pin: "9876");
+        var (_, email) = await RegisterAsync(password: "Str0ngPw");
         var freshClient = AnonymousClient();
 
-        (await freshClient.PostAsJsonAsync("/api/auth/login", new { email, pin = "0000" }))
+        (await freshClient.PostAsJsonAsync("/api/auth/login", new { email, password = "Wr0ngPwd" }))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        (await freshClient.PostAsJsonAsync("/api/auth/login", new { email, pin = "9876" }))
+        (await freshClient.PostAsJsonAsync("/api/auth/login", new { email, password = "Str0ngPw" }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         (await freshClient.GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task Login_FiveWrongPins_Returns423_EvenForCorrectPin()
+    public async Task Login_FiveWrongPasswords_Returns423_EvenForCorrectPassword()
     {
-        var (_, email) = await RegisterAsync(pin: "9876");
+        var (_, email) = await RegisterAsync(password: "Str0ngPw");
         var client = AnonymousClient();
 
         for (var i = 0; i < 4; i++)
-            (await client.PostAsJsonAsync("/api/auth/login", new { email, pin = "0000" }))
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "Wr0ngPwd" }))
                 .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        (await client.PostAsJsonAsync("/api/auth/login", new { email, pin = "0000" }))
+        (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "Wr0ngPwd" }))
             .StatusCode.Should().Be(HttpStatusCode.Locked);
-        (await client.PostAsJsonAsync("/api/auth/login", new { email, pin = "9876" }))
+        (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "Str0ngPw" }))
             .StatusCode.Should().Be(HttpStatusCode.Locked);
     }
 
@@ -111,16 +111,16 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
             .StatusCode.Should().Be(HttpStatusCode.OK);
         var code = Factory.Emails.LastCodeFor(email);
 
-        (await telegramClient.PostAsJsonAsync("/api/auth/link-email/confirm", new { email, code, pin = "2468" }))
+        (await telegramClient.PostAsJsonAsync("/api/auth/link-email/confirm", new { email, code, password = "Link3dPw" }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         var pwaClient = AnonymousClient();
-        (await pwaClient.PostAsJsonAsync("/api/auth/login", new { email, pin = "2468" }))
+        (await pwaClient.PostAsJsonAsync("/api/auth/login", new { email, password = "Link3dPw" }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         var me = await (await pwaClient.GetAsync("/api/auth/me")).Content.ReadFromJsonAsync<MeDto>(JsonOpts);
         me!.HasTelegram.Should().BeTrue("это тот же аккаунт, что и Telegram-сессия");
     }
 
-    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPin);
+    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPassword);
 }

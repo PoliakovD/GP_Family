@@ -1,16 +1,28 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from './auth.service';
+import { TelegramService } from './telegram.service';
 
 /**
  * PWA-режим без cookie-сессии → /login; Telegram/dev-режим аутентифицируется
- * заголовками на каждом запросе — гард пропускает.
+ * заголовками на каждом запросе — гард пропускает, но для РЕАЛЬНОГО Telegram Mini App
+ * (не dev-заголовка) сперва проверяет привязку TelegramId к аккаунту: без неё
+ * TelegramMiniAppAuthenticationHandler теперь lookup-only и отклонит любой запрос (401),
+ * пока пользователь не пройдёт email+OTP привязку (см. TelegramBindComponent).
  */
 export const authGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
+  const tg = inject(TelegramService);
   const router = inject(Router);
 
-  if (auth.mode === 'telegram') return true;
+  if (auth.mode === 'telegram') {
+    if (!tg.isInsideTelegram()) return true; // dev-заголовок — DevAuthenticationHandler авто-создаёт
+
+    if (auth.telegramBound() === true) return true;
+    const bound = await auth.ensureTelegramBound();
+    return bound ? true : router.createUrlTree(['/telegram-bind']);
+  }
+
   if (auth.me() !== null) return true;
 
   const me = await auth.loadMe();

@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using FamilyHub.Api.Features.Auth;
+using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Email;
+using FamilyHub.Infrastructure.Security;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,32 +25,33 @@ public class PwaAuthServiceTests : SqliteTestBase
                 _lastSentBody = callInfo.ArgAt<string>(2);
                 return Task.CompletedTask;
             });
-        _sut = new PwaAuthService(Db, _email, NullLogger<PwaAuthService>.Instance);
+        var otp = new EmailOtpService(Db, _email, NullLogger<EmailOtpService>.Instance);
+        _sut = new PwaAuthService(Db, otp, NullLogger<PwaAuthService>.Instance);
     }
 
     private string LastCode() => Regex.Match(_lastSentBody!, @"\d{6}").Value;
 
     private async Task<(string Email, Guid UserId)> RegisterAsync(
-        string email = "user@example.com", string pin = "1234", string username = "testuser")
+        string email = "user@example.com", string password = "Passw0rd", string username = "testuser")
     {
         (await _sut.StartRegistrationAsync(email)).Should().Be(StartCodeResult.Sent);
-        var (result, userId) = await _sut.ConfirmRegistrationAsync(email, LastCode(), pin, username, "Тестовый");
+        var (result, userId) = await _sut.ConfirmRegistrationAsync(email, LastCode(), password, username, "Тестовый");
         result.Should().Be(ConfirmRegistrationResult.Success);
         return (email, userId);
     }
 
     [Fact]
-    public async Task RegisterFlow_CreatesUserWithNormalizedEmailAndPin()
+    public async Task RegisterFlow_CreatesUserWithNormalizedEmailAndPassword()
     {
         await _sut.StartRegistrationAsync("  MiXeD@Example.COM ");
-        var (result, userId) = await _sut.ConfirmRegistrationAsync("mixed@example.com", LastCode(), "5678", "mixeduser", null);
+        var (result, userId) = await _sut.ConfirmRegistrationAsync("mixed@example.com", LastCode(), "Str0ngPw", "mixeduser", null);
 
         result.Should().Be(ConfirmRegistrationResult.Success);
         var user = Db.Users.Single(u => u.Id == userId);
         user.Email.Should().Be("mixed@example.com");
         user.Username.Should().Be("mixeduser");
         user.TelegramId.Should().BeNull();
-        user.PinHash.Should().NotBeNull();
+        user.PasswordHash.Should().NotBeNull();
         user.DisplayName.Should().Be("mixed", "имя по умолчанию — локальная часть адреса");
     }
 
@@ -60,12 +63,12 @@ public class PwaAuthServiceTests : SqliteTestBase
 
         for (var i = 0; i < 5; i++)
         {
-            var (result, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", "000000", "1234", "bruteuser", null);
+            var (result, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", "000000", "Passw0rd", "bruteuser", null);
             result.Should().Be(ConfirmRegistrationResult.InvalidCode);
         }
 
         // После 5 неверных попыток даже настоящий код недействителен.
-        var (finalResult, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", realCode, "1234", "bruteuser", null);
+        var (finalResult, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", realCode, "Passw0rd", "bruteuser", null);
         finalResult.Should().Be(ConfirmRegistrationResult.InvalidCode);
     }
 
@@ -75,11 +78,11 @@ public class PwaAuthServiceTests : SqliteTestBase
         await _sut.StartRegistrationAsync("badname@example.com");
         var code = LastCode();
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "1234", "ab", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "Passw0rd", "ab", null);
         result.Should().Be(ConfirmRegistrationResult.InvalidUsername);
 
         // Код не потреблён — тот же код всё ещё годится с валидным username.
-        var (retry, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "1234", "goodname", null);
+        var (retry, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "Passw0rd", "goodname", null);
         retry.Should().Be(ConfirmRegistrationResult.Success);
     }
 
@@ -91,11 +94,11 @@ public class PwaAuthServiceTests : SqliteTestBase
         await _sut.StartRegistrationAsync("second@example.com");
         var code = LastCode();
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "1234", "takenname", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "Passw0rd", "takenname", null);
         result.Should().Be(ConfirmRegistrationResult.UsernameTaken);
 
         // Код не потреблён — тот же код всё ещё годится с другим username.
-        var (retry, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "1234", "freename", null);
+        var (retry, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "Passw0rd", "freename", null);
         retry.Should().Be(ConfirmRegistrationResult.Success);
     }
 
@@ -116,74 +119,103 @@ public class PwaAuthServiceTests : SqliteTestBase
         code.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
         await Db.SaveChangesAsync();
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("late@example.com", LastCode(), "1234", "lateuser", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("late@example.com", LastCode(), "Passw0rd", "lateuser", null);
 
         result.Should().Be(ConfirmRegistrationResult.InvalidCode);
     }
 
-    [Fact]
-    public async Task ConfirmRegistration_WeakPin_IsRejected()
+    [Theory]
+    [InlineData("Sh0rt")] // короче 8 символов
+    [InlineData("passw0rd")] // нет заглавной буквы
+    [InlineData("PASSW0RD")] // нет строчной буквы
+    [InlineData("PasswordOnly")] // нет цифры
+    [InlineData("1234")] // старый формат PIN — регрессия: больше не годится для НОВОГО пароля
+    public async Task ConfirmRegistration_WeakPassword_IsRejected(string weakPassword)
     {
         await _sut.StartRegistrationAsync("weak@example.com");
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("weak@example.com", LastCode(), "12", "weakuser", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("weak@example.com", LastCode(), weakPassword, "weakuser", null);
 
-        result.Should().Be(ConfirmRegistrationResult.WeakPin);
+        result.Should().Be(ConfirmRegistrationResult.WeakPassword);
     }
 
     [Fact]
-    public async Task Login_CorrectPin_Succeeds_AndResetsFailures()
+    public async Task Login_CorrectPassword_Succeeds_AndResetsFailures()
     {
-        var (email, userId) = await RegisterAsync(pin: "4321");
-        await _sut.LoginAsync(email, "0000");
+        var (email, userId) = await RegisterAsync(password: "MyPass99");
+        await _sut.LoginAsync(email, "Wr0ngPwd");
 
-        var (result, user, _) = await _sut.LoginAsync(email, "4321");
+        var (result, user, _) = await _sut.LoginAsync(email, "MyPass99");
 
         result.Should().Be(LoginResult.Success);
         user!.Id.Should().Be(userId);
-        Db.Users.Single(u => u.Id == userId).FailedPinAttempts.Should().Be(0);
+        Db.Users.Single(u => u.Id == userId).FailedLoginAttempts.Should().Be(0);
     }
 
     [Fact]
-    public async Task Login_FiveWrongPins_LocksOut_AndCorrectPinIsRejectedWhileLocked()
+    public async Task Login_FiveWrongPasswords_LocksOut_AndCorrectPasswordIsRejectedWhileLocked()
     {
-        var (email, userId) = await RegisterAsync(pin: "4321");
+        var (email, userId) = await RegisterAsync(password: "MyPass99");
 
         for (var i = 0; i < 4; i++)
-            (await _sut.LoginAsync(email, "0000")).Result.Should().Be(LoginResult.InvalidCredentials);
+            (await _sut.LoginAsync(email, "Wr0ngPwd")).Result.Should().Be(LoginResult.InvalidCredentials);
 
-        var fifth = await _sut.LoginAsync(email, "0000");
+        var fifth = await _sut.LoginAsync(email, "Wr0ngPwd");
         fifth.Result.Should().Be(LoginResult.LockedOut);
         fifth.LockedUntil.Should().BeAfter(DateTime.UtcNow);
 
-        (await _sut.LoginAsync(email, "4321")).Result.Should().Be(LoginResult.LockedOut);
+        (await _sut.LoginAsync(email, "MyPass99")).Result.Should().Be(LoginResult.LockedOut);
 
         // Окно блокировки истекло → вход снова возможен.
         Db.Users.Single(u => u.Id == userId).LockedUntil = DateTime.UtcNow.AddMinutes(-1);
         await Db.SaveChangesAsync();
-        (await _sut.LoginAsync(email, "4321")).Result.Should().Be(LoginResult.Success);
+        (await _sut.LoginAsync(email, "MyPass99")).Result.Should().Be(LoginResult.Success);
     }
 
     [Fact]
     public async Task Login_UnknownEmail_InvalidCredentials()
     {
-        (await _sut.LoginAsync("nobody@example.com", "1234")).Result.Should().Be(LoginResult.InvalidCredentials);
+        (await _sut.LoginAsync("nobody@example.com", "Passw0rd")).Result.Should().Be(LoginResult.InvalidCredentials);
     }
 
     [Fact]
-    public async Task LinkEmail_BindsEmailAndPinToExistingTelegramUser()
+    public async Task Login_LegacyShortPassword_StillSucceeds()
+    {
+        // Учётки, чей пароль был установлен ДО перехода на политику PasswordRules (например,
+        // ещё в формате старого 4-8-значного numeric PIN), не должны терять возможность войти —
+        // LoginAsync намеренно не проверяет формат, только совпадение хеша. Это единственный
+        // тест, который реально закрепляет эту гарантию обратной совместимости.
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "legacy@example.com",
+            PasswordHash = PasswordHasher.Hash("1234"),
+            DisplayName = "Legacy",
+            CreatedAt = DateTime.UtcNow,
+        };
+        Db.Users.Add(user);
+        await Db.SaveChangesAsync();
+
+        var (result, loggedInUser, _) = await _sut.LoginAsync("legacy@example.com", "1234");
+
+        result.Should().Be(LoginResult.Success);
+        loggedInUser!.Id.Should().Be(user.Id);
+    }
+
+    [Fact]
+    public async Task LinkEmail_BindsEmailAndPasswordToExistingTelegramUser()
     {
         var telegramUser = Db.AddUser();
 
         (await _sut.StartLinkEmailAsync(telegramUser.Id, "linked@example.com")).Should().Be(StartCodeResult.Sent);
-        var result = await _sut.ConfirmLinkEmailAsync(telegramUser.Id, "linked@example.com", LastCode(), "9876");
+        var result = await _sut.ConfirmLinkEmailAsync(telegramUser.Id, "linked@example.com", LastCode(), "Link3dPw");
 
         result.Should().Be(LinkEmailResult.Success);
         var user = Db.Users.Single(u => u.Id == telegramUser.Id);
         user.Email.Should().Be("linked@example.com");
-        user.PinHash.Should().NotBeNull();
+        user.PasswordHash.Should().NotBeNull();
 
-        (await _sut.LoginAsync("linked@example.com", "9876")).Result.Should().Be(LoginResult.Success);
+        (await _sut.LoginAsync("linked@example.com", "Link3dPw")).Result.Should().Be(LoginResult.Success);
     }
 
     [Fact]
@@ -193,7 +225,7 @@ public class PwaAuthServiceTests : SqliteTestBase
         var attacker = Db.AddUser();
         await _sut.StartLinkEmailAsync(owner.Id, "victim@example.com");
 
-        var result = await _sut.ConfirmLinkEmailAsync(attacker.Id, "victim@example.com", LastCode(), "1234");
+        var result = await _sut.ConfirmLinkEmailAsync(attacker.Id, "victim@example.com", LastCode(), "Passw0rd");
 
         result.Should().Be(LinkEmailResult.InvalidCode);
     }
@@ -204,73 +236,88 @@ public class PwaAuthServiceTests : SqliteTestBase
         var (email, _) = await RegisterAsync();
 
         await _sut.StartRegistrationAsync(email);
-        var (result, _) = await _sut.ConfirmRegistrationAsync(email, LastCode(), "1234", "anotheruser", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync(email, LastCode(), "Passw0rd", "anotheruser", null);
 
         result.Should().Be(ConfirmRegistrationResult.EmailTaken);
     }
 
     [Fact]
-    public async Task ResetPin_ExistingAccount_SendsCode_AndChangesPinAfterConfirm()
+    public async Task ResetPassword_ExistingAccount_SendsCode_AndChangesPasswordAfterConfirm()
     {
-        var (email, userId) = await RegisterAsync(pin: "1111");
+        var (email, userId) = await RegisterAsync(password: "First1Pw");
 
-        (await _sut.StartResetPinAsync(email)).Should().Be(StartCodeResult.Sent);
-        var (result, confirmedUserId) = await _sut.ConfirmResetPinAsync(email, LastCode(), "2222");
+        (await _sut.StartResetPasswordAsync(email)).Should().Be(StartCodeResult.Sent);
+        var (result, confirmedUserId) = await _sut.ConfirmResetPasswordAsync(email, LastCode(), "Second2Pw");
 
-        result.Should().Be(ResetPinResult.Success);
+        result.Should().Be(ResetPasswordResult.Success);
         confirmedUserId.Should().Be(userId);
-        (await _sut.LoginAsync(email, "1111")).Result.Should().Be(LoginResult.InvalidCredentials, "старый PIN больше не действует");
-        (await _sut.LoginAsync(email, "2222")).Result.Should().Be(LoginResult.Success);
+        (await _sut.LoginAsync(email, "First1Pw")).Result.Should().Be(LoginResult.InvalidCredentials, "старый пароль больше не действует");
+        (await _sut.LoginAsync(email, "Second2Pw")).Result.Should().Be(LoginResult.Success);
     }
 
     [Fact]
-    public async Task ResetPin_UnknownEmail_StillReturnsSent_ButNoEmailIsActuallySent()
+    public async Task ResetPassword_UnknownEmail_StillReturnsSent_ButNoEmailIsActuallySent()
     {
         // Анти-enumeration в ответе — но письмо реально не уходит на несуществующий аккаунт
         // (в отличие от register/start, где письмо уместно всегда).
-        (await _sut.StartResetPinAsync("nobody@example.com")).Should().Be(StartCodeResult.Sent);
+        (await _sut.StartResetPasswordAsync("nobody@example.com")).Should().Be(StartCodeResult.Sent);
 
         await _email.DidNotReceive().SendAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task ResetPin_UnlocksAccount_LockedOutByFailedPins()
+    public async Task ResetPassword_UnlocksAccount_LockedOutByFailedLogins()
     {
-        var (email, userId) = await RegisterAsync(pin: "3333");
+        var (email, userId) = await RegisterAsync(password: "Third3Pw");
         for (var i = 0; i < 5; i++)
-            await _sut.LoginAsync(email, "0000");
+            await _sut.LoginAsync(email, "Wr0ngPwd");
         Db.Users.Single(u => u.Id == userId).LockedUntil.Should().NotBeNull();
 
-        await _sut.StartResetPinAsync(email);
-        (await _sut.ConfirmResetPinAsync(email, LastCode(), "4444")).Result.Should().Be(ResetPinResult.Success);
+        await _sut.StartResetPasswordAsync(email);
+        (await _sut.ConfirmResetPasswordAsync(email, LastCode(), "Fourth4Pw")).Result.Should().Be(ResetPasswordResult.Success);
 
         var user = Db.Users.Single(u => u.Id == userId);
         user.LockedUntil.Should().BeNull();
-        user.FailedPinAttempts.Should().Be(0);
-        (await _sut.LoginAsync(email, "4444")).Result.Should().Be(LoginResult.Success);
+        user.FailedLoginAttempts.Should().Be(0);
+        (await _sut.LoginAsync(email, "Fourth4Pw")).Result.Should().Be(LoginResult.Success);
     }
 
-    [Fact]
-    public async Task ResetPin_WeakNewPin_IsRejected_AndDoesNotConsumeCode()
+    [Theory]
+    [InlineData("Sh0rt")]
+    [InlineData("passw0rd")]
+    [InlineData("PASSW0RD")]
+    [InlineData("PasswordOnly")]
+    [InlineData("1234")]
+    public async Task ResetPassword_WeakNewPassword_IsRejected(string weakPassword)
     {
-        var (email, _) = await RegisterAsync(pin: "5555");
-        await _sut.StartResetPinAsync(email);
+        var (email, _) = await RegisterAsync(password: "Fifth5Pw");
+        await _sut.StartResetPasswordAsync(email);
         var code = LastCode();
 
-        (await _sut.ConfirmResetPinAsync(email, code, "12")).Result.Should().Be(ResetPinResult.WeakPin);
-
-        // Код не потреблён — тот же код всё ещё годится с валидным PIN.
-        (await _sut.ConfirmResetPinAsync(email, code, "6666")).Result.Should().Be(ResetPinResult.Success);
+        (await _sut.ConfirmResetPasswordAsync(email, code, weakPassword)).Result.Should().Be(ResetPasswordResult.WeakPassword);
     }
 
     [Fact]
-    public async Task ResetPin_WrongCode_IsRejected()
+    public async Task ResetPassword_WeakNewPassword_DoesNotConsumeCode()
     {
-        var (email, _) = await RegisterAsync(pin: "7777");
-        await _sut.StartResetPinAsync(email);
+        var (email, _) = await RegisterAsync(password: "Sixth6Pw");
+        await _sut.StartResetPasswordAsync(email);
+        var code = LastCode();
 
-        (await _sut.ConfirmResetPinAsync(email, "000000", "8888")).Result.Should().Be(ResetPinResult.InvalidCode);
-        (await _sut.LoginAsync(email, "7777")).Result.Should().Be(LoginResult.Success, "старый PIN всё ещё действует");
+        (await _sut.ConfirmResetPasswordAsync(email, code, "Sh0rt")).Result.Should().Be(ResetPasswordResult.WeakPassword);
+
+        // Код не потреблён — тот же код всё ещё годится с валидным паролем.
+        (await _sut.ConfirmResetPasswordAsync(email, code, "Seventh7")).Result.Should().Be(ResetPasswordResult.Success);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WrongCode_IsRejected()
+    {
+        var (email, _) = await RegisterAsync(password: "Eighth8Pw");
+        await _sut.StartResetPasswordAsync(email);
+
+        (await _sut.ConfirmResetPasswordAsync(email, "000000", "Ninth9Pw")).Result.Should().Be(ResetPasswordResult.InvalidCode);
+        (await _sut.LoginAsync(email, "Eighth8Pw")).Result.Should().Be(LoginResult.Success, "старый пароль всё ещё действует");
     }
 }

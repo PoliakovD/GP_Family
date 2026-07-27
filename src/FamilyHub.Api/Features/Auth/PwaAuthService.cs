@@ -1,9 +1,6 @@
-using System.Security.Cryptography;
-using System.Text;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.ValueObjects;
-using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
@@ -11,116 +8,48 @@ using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Api.Features.Auth;
 
-public enum StartCodeResult { Sent, Throttled }
-
-public enum ConfirmRegistrationResult { Success, InvalidCode, EmailTaken, WeakPin, InvalidUsername, UsernameTaken }
+public enum ConfirmRegistrationResult { Success, InvalidCode, EmailTaken, WeakPassword, InvalidUsername, UsernameTaken }
 
 public enum LoginResult { Success, InvalidCredentials, LockedOut }
 
-public enum LinkEmailResult { Success, InvalidCode, EmailTaken, WeakPin }
+public enum LinkEmailResult { Success, InvalidCode, EmailTaken, WeakPassword }
 
-public enum ResetPinResult { Success, InvalidCode, WeakPin }
+public enum ResetPasswordResult { Success, InvalidCode, WeakPassword }
 
 /// <summary>
-/// PWA-вход (этап 2 п.2.4): регистрация email → код на почту → PIN; вход email+PIN.
-/// Брутфорс-защита: лимит попыток кода (5 на код), lockout входа (15 мин после 5 неудач),
-/// троттлинг выдачи кодов (3 активных в час на адрес) — поверх IP-rate-limit'а эндпоинтов.
+/// PWA-вход (этап 2 п.2.4): регистрация email → код на почту → пароль; вход email+пароль.
+/// Lockout входа (15 мин после 5 неудачных попыток) поверх IP-rate-limit'а эндпоинтов.
 /// Анти-enumeration: register/start всегда отвечает 200, существование email не раскрывается.
+/// Выпуск/проверка email-кодов — общий <see cref="EmailOtpService"/> (используется также
+/// Telegram-привязкой, см. TelegramBindingService).
 /// </summary>
-public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuthService> logger)
+public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAuthService> logger)
 {
-    private const int CodeTtlMinutes = 10;
-    private const int MaxCodeAttempts = 5;
-    private const int MaxActiveCodesPerHour = 3;
-    private const int MaxFailedPins = 5;
+    private const int MaxFailedLogins = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
     public static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
-    private static bool IsValidPin(string pin) =>
-        pin.Length is >= 4 and <= 8 && pin.All(char.IsAsciiDigit);
-
-    private static string HashCode(string code) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
-
     public Task<StartCodeResult> StartRegistrationAsync(string rawEmail, CancellationToken ct = default) =>
-        IssueCodeAsync(NormalizeEmail(rawEmail), EmailCodePurpose.Register, userId: null, ct);
+        otp.IssueCodeAsync(NormalizeEmail(rawEmail), EmailCodePurpose.Register, userId: null, ct);
 
     public Task<StartCodeResult> StartLinkEmailAsync(Guid userId, string rawEmail, CancellationToken ct = default) =>
-        IssueCodeAsync(NormalizeEmail(rawEmail), EmailCodePurpose.LinkEmail, userId, ct);
+        otp.IssueCodeAsync(NormalizeEmail(rawEmail), EmailCodePurpose.LinkEmail, userId, ct);
 
     /// <summary>
-    /// Забыли PIN: анти-enumeration в ОТВЕТЕ (всегда Sent, как и у регистрации) — но, в отличие
-    /// от register/start, письмо реально уходит только на email существующего PWA-аккаунта.
-    /// Иначе владелец постороннего адреса получал бы непонятное "код для сброса PIN" без
-    /// всякого аккаунта — при регистрации это письмо хотя бы уместно (человек как раз и
-    /// пытается создать аккаунт с этим адресом), при сбросе PIN уместности нет.
+    /// Забыли пароль: анти-enumeration в ОТВЕТЕ (всегда Sent, как и у регистрации) — но, в
+    /// отличие от register/start, письмо реально уходит только на email существующего
+    /// PWA-аккаунта. Иначе владелец постороннего адреса получал бы непонятное "код для сброса
+    /// пароля" без всякого аккаунта — при регистрации это письмо хотя бы уместно (человек как
+    /// раз и пытается создать аккаунт с этим адресом), при сбросе пароля уместности нет.
     /// </summary>
-    public async Task<StartCodeResult> StartResetPinAsync(string rawEmail, CancellationToken ct = default)
+    public async Task<StartCodeResult> StartResetPasswordAsync(string rawEmail, CancellationToken ct = default)
     {
         var normalizedEmail = NormalizeEmail(rawEmail);
-        if (!await db.Users.AnyAsync(u => u.Email == normalizedEmail && u.PinHash != null, ct))
+        if (!await db.Users.AnyAsync(u => u.Email == normalizedEmail && u.PasswordHash != null, ct))
             return StartCodeResult.Sent;
 
-        return await IssueCodeAsync(normalizedEmail, EmailCodePurpose.ResetPin, userId: null, ct);
-    }
-
-    private async Task<StartCodeResult> IssueCodeAsync(
-        string normalizedEmail, EmailCodePurpose purpose, Guid? userId, CancellationToken ct)
-    {
-        var hourAgo = DateTime.UtcNow.AddHours(-1);
-        var recentCount = await db.EmailVerificationCodes.CountAsync(
-            c => c.Email == normalizedEmail && c.Purpose == purpose && c.CreatedAt >= hourAgo && c.ConsumedAt == null, ct);
-        if (recentCount >= MaxActiveCodesPerHour)
-        {
-            logger.LogWarning("Троттлинг кодов: {Purpose} для адреса (hash {EmailHash}) — лимит выдачи исчерпан",
-                purpose, HashCode(normalizedEmail)[..8]);
-            return StartCodeResult.Throttled;
-        }
-
-        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-        db.EmailVerificationCodes.Add(new EmailVerificationCode
-        {
-            Id = Guid.NewGuid(),
-            Email = normalizedEmail,
-            CodeHash = HashCode(code),
-            Purpose = purpose,
-            UserId = userId,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(CodeTtlMinutes),
-            CreatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync(ct);
-
-        await email.SendAsync(
-            normalizedEmail,
-            "FamilyHub: код подтверждения",
-            $"Ваш код подтверждения: {code}\nКод действителен {CodeTtlMinutes} минут.", ct);
-
-        return StartCodeResult.Sent;
-    }
-
-    /// <summary>Проверяет код и помечает потреблённым при успехе; инкрементирует Attempts при неверном вводе.</summary>
-    private async Task<EmailVerificationCode?> ConsumeCodeAsync(
-        string normalizedEmail, string code, EmailCodePurpose purpose, CancellationToken ct)
-    {
-        var now = DateTime.UtcNow;
-        var candidate = await db.EmailVerificationCodes
-            .Where(c => c.Email == normalizedEmail && c.Purpose == purpose
-                && c.ConsumedAt == null && c.ExpiresAt > now && c.Attempts < MaxCodeAttempts)
-            .OrderByDescending(c => c.CreatedAt)
-            .FirstOrDefaultAsync(ct);
-        if (candidate is null) return null;
-
-        if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(candidate.CodeHash), Encoding.UTF8.GetBytes(HashCode(code))))
-        {
-            candidate.Attempts++;
-            await db.SaveChangesAsync(ct);
-            return null;
-        }
-
-        candidate.ConsumedAt = now;
-        return candidate; // SaveChanges — на вызывающей стороне, одной транзакцией с бизнес-изменением.
+        return await otp.IssueCodeAsync(normalizedEmail, EmailCodePurpose.ResetPassword, userId: null, ct);
     }
 
     public async Task<bool> IsUsernameAvailableAsync(string rawUsername, CancellationToken ct = default)
@@ -131,9 +60,9 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
     }
 
     public async Task<(ConfirmRegistrationResult Result, Guid UserId)> ConfirmRegistrationAsync(
-        string rawEmail, string code, string pin, string rawUsername, string? displayName, CancellationToken ct = default)
+        string rawEmail, string code, string password, string rawUsername, string? displayName, CancellationToken ct = default)
     {
-        if (!IsValidPin(pin)) return (ConfirmRegistrationResult.WeakPin, Guid.Empty);
+        if (!PasswordRules.IsValid(password)) return (ConfirmRegistrationResult.WeakPassword, Guid.Empty);
 
         // Проверка username — ДО потребления email-кода: занятый хэндл не должен сжигать
         // 10-минутный код (пользователь иначе вынужден запрашивать письмо заново).
@@ -144,7 +73,7 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
             return (ConfirmRegistrationResult.UsernameTaken, Guid.Empty);
 
         var normalizedEmail = NormalizeEmail(rawEmail);
-        var verification = await ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.Register, ct);
+        var verification = await otp.ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.Register, ct);
         if (verification is null) return (ConfirmRegistrationResult.InvalidCode, Guid.Empty);
 
         if (await db.Users.AnyAsync(u => u.Email == normalizedEmail, ct))
@@ -157,7 +86,7 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
         {
             Id = Guid.NewGuid(),
             Email = normalizedEmail,
-            PinHash = PinHasher.Hash(pin),
+            PasswordHash = PasswordHasher.Hash(password),
             Username = normalizedUsername,
             DisplayName = string.IsNullOrWhiteSpace(displayName)
                 ? normalizedEmail[..normalizedEmail.IndexOf('@')]
@@ -185,29 +114,34 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
     }
 
     public async Task<(LoginResult Result, User? User, DateTime? LockedUntil)> LoginAsync(
-        string rawEmail, string pin, CancellationToken ct = default)
+        string rawEmail, string password, CancellationToken ct = default)
     {
         var normalizedEmail = NormalizeEmail(rawEmail);
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.PinHash != null, ct);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.PasswordHash != null, ct);
         if (user is null)
         {
             // Выравнивание времени ответа: не раскрываем таймингом, существует ли аккаунт.
-            PinHasher.Verify(pin, PinHasher.Hash("00000"));
+            PasswordHasher.Verify(password, PasswordHasher.Hash("Dummy0000"));
             return (LoginResult.InvalidCredentials, null, null);
         }
 
         if (user.LockedUntil is { } lockedUntil && lockedUntil > DateTime.UtcNow)
             return (LoginResult.LockedOut, null, lockedUntil);
 
-        if (!PinHasher.Verify(pin, user.PinHash!))
+        // Намеренно НЕТ проверки PasswordRules.IsValid здесь: вход проверяет только совпадение
+        // хеша, а не формат ввода. Иначе аккаунты, у которых пароль был установлен ДО перехода
+        // с 4-8-значного numeric PIN на текущую политику (см. PasswordRules), потеряли бы
+        // возможность войти — старый хеш продолжает верифицироваться той же PasswordHasher,
+        // формат хранения не менялся.
+        if (!PasswordHasher.Verify(password, user.PasswordHash!))
         {
-            user.FailedPinAttempts++;
+            user.FailedLoginAttempts++;
             DateTime? lockout = null;
-            if (user.FailedPinAttempts >= MaxFailedPins)
+            if (user.FailedLoginAttempts >= MaxFailedLogins)
             {
                 lockout = DateTime.UtcNow.Add(LockoutDuration);
                 user.LockedUntil = lockout;
-                user.FailedPinAttempts = 0;
+                user.FailedLoginAttempts = 0;
                 logger.LogWarning("PWA-вход: пользователь {UserId} заблокирован до {LockedUntil}", user.Id, lockout);
             }
             await db.SaveChangesAsync(ct);
@@ -216,19 +150,19 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
                 : (LoginResult.LockedOut, null, lockout);
         }
 
-        user.FailedPinAttempts = 0;
+        user.FailedLoginAttempts = 0;
         user.LockedUntil = null;
         await db.SaveChangesAsync(ct);
         return (LoginResult.Success, user, null);
     }
 
     public async Task<LinkEmailResult> ConfirmLinkEmailAsync(
-        Guid userId, string rawEmail, string code, string pin, CancellationToken ct = default)
+        Guid userId, string rawEmail, string code, string password, CancellationToken ct = default)
     {
-        if (!IsValidPin(pin)) return LinkEmailResult.WeakPin;
+        if (!PasswordRules.IsValid(password)) return LinkEmailResult.WeakPassword;
 
         var normalizedEmail = NormalizeEmail(rawEmail);
-        var verification = await ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.LinkEmail, ct);
+        var verification = await otp.ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.LinkEmail, ct);
         if (verification is null || verification.UserId != userId) return LinkEmailResult.InvalidCode;
 
         if (await db.Users.AnyAsync(u => u.Email == normalizedEmail && u.Id != userId, ct))
@@ -239,38 +173,38 @@ public class PwaAuthService(AppDbContext db, IEmailSender email, ILogger<PwaAuth
 
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         user.Email = normalizedEmail;
-        user.PinHash = PinHasher.Hash(pin);
+        user.PasswordHash = PasswordHasher.Hash(password);
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation("К аккаунту {UserId} привязан email для PWA-входа", userId);
         return LinkEmailResult.Success;
     }
 
-    /// <summary>Сброс забытого PIN по email-коду; при успехе — сразу вход (как при регистрации).</summary>
-    public async Task<(ResetPinResult Result, Guid UserId)> ConfirmResetPinAsync(
-        string rawEmail, string code, string newPin, CancellationToken ct = default)
+    /// <summary>Сброс забытого пароля по email-коду; при успехе — сразу вход (как при регистрации).</summary>
+    public async Task<(ResetPasswordResult Result, Guid UserId)> ConfirmResetPasswordAsync(
+        string rawEmail, string code, string newPassword, CancellationToken ct = default)
     {
-        if (!IsValidPin(newPin)) return (ResetPinResult.WeakPin, Guid.Empty);
+        if (!PasswordRules.IsValid(newPassword)) return (ResetPasswordResult.WeakPassword, Guid.Empty);
 
         var normalizedEmail = NormalizeEmail(rawEmail);
-        var verification = await ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.ResetPin, ct);
-        if (verification is null) return (ResetPinResult.InvalidCode, Guid.Empty);
+        var verification = await otp.ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.ResetPassword, ct);
+        if (verification is null) return (ResetPasswordResult.InvalidCode, Guid.Empty);
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.PinHash != null, ct);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail && u.PasswordHash != null, ct);
         if (user is null)
         {
-            // Код мог быть выпущен StartResetPinAsync для несуществующего аккаунта только если
-            // аккаунт удалили в промежутке — крайне маловероятно, но на всякий случай не 500.
+            // Код мог быть выпущен StartResetPasswordAsync для несуществующего аккаунта только
+            // если аккаунт удалили в промежутке — крайне маловероятно, но на всякий случай не 500.
             await db.SaveChangesAsync(ct);
-            return (ResetPinResult.InvalidCode, Guid.Empty);
+            return (ResetPasswordResult.InvalidCode, Guid.Empty);
         }
 
-        user.PinHash = PinHasher.Hash(newPin);
-        user.FailedPinAttempts = 0;
+        user.PasswordHash = PasswordHasher.Hash(newPassword);
+        user.FailedLoginAttempts = 0;
         user.LockedUntil = null;
         await db.SaveChangesAsync(ct);
 
-        logger.LogInformation("PWA: PIN сброшен для пользователя {UserId}", user.Id);
-        return (ResetPinResult.Success, user.Id);
+        logger.LogInformation("PWA: пароль сброшен для пользователя {UserId}", user.Id);
+        return (ResetPasswordResult.Success, user.Id);
     }
 }
