@@ -19,7 +19,7 @@ public class MailKitSmtpEmailSender(
     /// <summary>Счётчик отправок за календарные сутки (UTC): ключ — имя провайдера.</summary>
     private readonly ConcurrentDictionary<string, (DateOnly Day, int Count)> _dailyCounts = new();
 
-    public async Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default)
+    public async Task SendAsync(string to, string subject, EmailBody body, CancellationToken ct = default)
     {
         var providers = options.Value.Providers;
         if (providers.Count == 0)
@@ -36,7 +36,7 @@ public class MailKitSmtpEmailSender(
 
             try
             {
-                await transport.SendAsync(provider, to, subject, textBody, ct);
+                await transport.SendAsync(provider, to, subject, body, ct);
                 IncrementDailyCount(provider);
                 logger.LogDebug("Письмо отправлено через SMTP-провайдера {Provider}", provider.Name);
                 return;

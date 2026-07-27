@@ -8,9 +8,13 @@ namespace FamilyHub.Infrastructure.Email;
 /// </summary>
 public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSender
 {
-    public Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default)
+    // Логируем только текстовую часть: HTML-версия письма (~6 КБ) забила бы консоль/Seq и не
+    // нужна для чтения кода/пароля в dev-цикле — для просмотра вёрстки есть отдельный
+    // /dev/email-preview/{name} и EmailPreviewWriter (см. EmailTemplateRenderer).
+    public Task SendAsync(string to, string subject, EmailBody body, CancellationToken ct = default)
     {
-        logger.LogInformation("EMAIL (заглушка) → {To}: [{Subject}] {Body}", to, subject, textBody);
+        logger.LogInformation("EMAIL (заглушка) → {To}: [{Subject}] {Body} (html={HtmlLength} байт)",
+            to, subject, body.Text, body.Html?.Length ?? 0);
         return Task.CompletedTask;
     }
 }

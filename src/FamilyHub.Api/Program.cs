@@ -6,6 +6,7 @@ using FamilyHub.Api.Features.Consents;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Auth.Jwt;
@@ -15,6 +16,7 @@ using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Api.Features.Push;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Email;
+using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Outbox;
@@ -275,9 +277,23 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailO
 builder.Services.AddScoped<EmailOtpService>();
 builder.Services.AddScoped<PwaAuthService>();
 builder.Services.AddScoped<TelegramBindingService>();
+// HTML-вёрстка писем (see docs plan): рендерер не зависит от того, какой IEmailSender выбран
+// ниже — регистрируем его безусловно, чтобы dev/тесты тоже видели настоящий рендер (опечатка
+// в плейсхолдере шаблона должна ронять сборку/тесты, а не только молчать в проде).
+builder.Services.AddSingleton<EmailTemplateRenderer>();
 var emailProvidersConfigured = builder.Configuration.GetSection($"{EmailOptions.SectionName}:Providers").GetChildren().Any();
 if (emailProvidersConfigured)
 {
+    // Провайдеры заданы ⇒ письма уходят наружу ⇒ ссылка в кнопке «Открыть FamilyHub» обязана
+    // быть настоящей. Проверка схемы заодно закрывает подстановку javascript:-URL в href шаблона.
+    var publicSiteUrl = builder.Configuration[$"{EmailOptions.SectionName}:PublicSiteUrl"];
+    if (!Uri.TryCreate(publicSiteUrl, UriKind.Absolute, out var siteUri)
+        || (siteUri.Scheme != Uri.UriSchemeHttps && siteUri.Scheme != Uri.UriSchemeHttp))
+    {
+        throw new InvalidOperationException(
+            "Email:PublicSiteUrl должен быть абсолютным http(s)-URL — он подставляется в кнопку «Открыть FamilyHub» в письмах.");
+    }
+
     builder.Services.AddSingleton<ISmtpTransport, MailKitSmtpTransport>();
     builder.Services.AddSingleton<IEmailSender, MailKitSmtpEmailSender>();
 }
@@ -476,6 +492,28 @@ if (app.Environment.IsDevelopment())
         var processed = await processor.ProcessBatchAsync(ct);
         return Results.Ok(new { processed });
     });
+
+    // Просмотр вёрстки email-писем в браузере: LoggingEmailSender печатает в лог только
+    // текстовую часть, а SMTP в dev обычно не настроен, поэтому иначе HTML не увидеть без
+    // EmailPreviewWriter (юнит-тест, пишущий файлы). Правка шаблона .html требует пересборки
+    // API — они embedded-ресурсы (см. EmailTemplateRenderer). AllowAnonymous обязателен:
+    // FallbackPolicy выше требует аутентификации, а у браузера при заходе сюда напрямую нет
+    // ни Telegram initData, ни dev-заголовка (тот же случай, что и /hangfire выше).
+    app.MapGet("/dev/email-preview/{name}", (string name, EmailTemplateRenderer renderer) =>
+    {
+        const string demoEmail = "demo@example.com";
+        string? html = name switch
+        {
+            "temporary-password" => renderer.RenderTemporaryPassword(
+                TelegramBindingService.TemporaryPasswordCopy(demoEmail), demoEmail, "Kd7mQx4Ttb2z"),
+            _ when Enum.TryParse<EmailCodePurpose>(name, ignoreCase: true, out var purpose) =>
+                renderer.RenderCode(EmailOtpService.CopyFor(purpose).Copy, "482915", 10),
+            _ => null,
+        };
+        return html is null
+            ? Results.NotFound("Доступные имена: register | linkemail | resetpassword | telegrambind | temporary-password")
+            : Results.Content(html, "text/html; charset=utf-8");
+    }).AllowAnonymous();
 }
 
 // --- Регистрация ежедневной джобы оповещений (этап 3 п.10) ---

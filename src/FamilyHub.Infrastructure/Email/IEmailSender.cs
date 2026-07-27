@@ -1,11 +1,18 @@
 namespace FamilyHub.Infrastructure.Email;
 
 /// <summary>
+/// Тело письма: текстовая часть обязательна (accessibility-фолбэк, антиспам-сигнал и то, что
+/// печатает LoggingEmailSender в dev), HTML — опциональна. Html == null ⇒ письмо уходит как
+/// одиночный text/plain, байт-в-байт как до вёрстки (см. MailKitSmtpTransport.BuildMessage).
+/// </summary>
+public sealed record EmailBody(string Text, string? Html = null);
+
+/// <summary>
 /// Абстракция отправки email (mirrors INotificationSender). Реализации:
 /// LoggingEmailSender (dev-заглушка) и MailKitSmtpEmailSender (российские SMTP-провайдеры
 /// с failover, задача 2.5). Выбор — в Program.cs по наличию Email:Providers.
 /// </summary>
 public interface IEmailSender
 {
-    Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default);
+    Task SendAsync(string to, string subject, EmailBody body, CancellationToken ct = default);
 }

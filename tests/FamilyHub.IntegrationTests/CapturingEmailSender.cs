@@ -15,13 +15,19 @@ namespace FamilyHub.IntegrationTests;
 /// </summary>
 public sealed class CapturingEmailSender : IEmailSender
 {
-    public sealed record Message(string To, string Subject, string Body);
+    /// <summary>
+    /// Body — ВСЕГДА текстовая часть, никогда HTML: LastCodeFor ищет первый \d{6} в Body, а
+    /// #004961 (accent-800) встречается в каждом email-шаблоне — если сюда попадёт HTML,
+    /// хелпер начнёт возвращать "004961" вместо кода. Html — отдельное поле именно чтобы
+    /// не было соблазна их перепутать/склеить.
+    /// </summary>
+    public sealed record Message(string To, string Subject, string Body, string? Html);
 
     private readonly ConcurrentDictionary<string, ConcurrentQueue<Message>> _byEmail = new();
 
-    public Task SendAsync(string to, string subject, string textBody, CancellationToken ct = default)
+    public Task SendAsync(string to, string subject, EmailBody body, CancellationToken ct = default)
     {
-        _byEmail.GetOrAdd(to, _ => new ConcurrentQueue<Message>()).Enqueue(new Message(to, subject, textBody));
+        _byEmail.GetOrAdd(to, _ => new ConcurrentQueue<Message>()).Enqueue(new Message(to, subject, body.Text, body.Html));
         return Task.CompletedTask;
     }
 

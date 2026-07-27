@@ -1,16 +1,19 @@
 import { Routes } from '@angular/router';
 import { authGuard, consentGuard } from './services/auth.guards';
+import { pendingCodeGuard } from './services/pending-code.guard';
 
 export const routes: Routes = [
   // Публичные / служебные маршруты (без гардов).
   {
     path: 'login',
+    canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/login/login.component').then((m) => m.LoginComponent),
   },
   {
     // Первичная привязка Telegram Mini App к email-аккаунту (см. authGuard/TelegramBindComponent).
     path: 'telegram-bind',
+    canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
   },

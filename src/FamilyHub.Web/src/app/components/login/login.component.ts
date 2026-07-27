@@ -1,8 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
+import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
@@ -29,7 +30,7 @@ const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,100}$/;
   imports: [FormsModule, RouterLink],
   templateUrl: './login.component.html',
 })
-export class LoginComponent {
+export class LoginComponent implements HasPendingCodeEntry {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly cookieConsent = inject(CookieConsentService);
@@ -37,6 +38,10 @@ export class LoginComponent {
   readonly step = signal<Step>('login');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  /** Успешный confirm ставит true ПЕРЕД навигацией — без этого pendingCodeGuard переспрашивал
+   * бы «прервать ввод кода?» даже при УСПЕШНОМ завершении регистрации/сброса пароля (на момент
+   * router.navigate() step() всё ещё 'register-code'/'reset-password-code'). */
+  private readonly completed = signal(false);
   /** Код последней ошибки (см. backend `{ code: "..." }`) — для условного UI (например, CTA на email_taken). */
   readonly errorCode = signal<string | null>(null);
   readonly usernameStatus = signal<UsernameStatus>('idle');
@@ -120,6 +125,7 @@ export class LoginComponent {
   async confirmRegistration(): Promise<void> {
     await this.run(async () => {
       await this.auth.registerConfirm(this.email, this.code, this.password, this.username, this.displayName || null);
+      this.completed.set(true);
       await this.router.navigate(['/consent']);
     });
   }
@@ -156,8 +162,20 @@ export class LoginComponent {
     if (!this.canSubmitNewPassword) return;
     await this.run(async () => {
       await this.auth.resetPasswordConfirm(this.email, this.code, this.password);
+      this.completed.set(true);
       await this.router.navigate(['/']);
     });
+  }
+
+  /** pendingCodeGuard (CanDeactivate) — см. doc-комментарий там. */
+  hasPendingCodeEntry(): boolean {
+    return !this.completed() && (this.step() === 'register-code' || this.step() === 'reset-password-code');
+  }
+
+  /** Guard ловит только навигацию Angular Router — F5/закрытие вкладки идут мимо него. */
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(e: BeforeUnloadEvent): void {
+    if (this.hasPendingCodeEntry()) e.preventDefault(); // текст диалога задаёт браузер, кастомный игнорируется
   }
 
   backToLogin(): void {

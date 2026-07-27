@@ -6,5 +6,5 @@ namespace FamilyHub.Infrastructure.Email;
 /// </summary>
 public interface ISmtpTransport
 {
-    Task SendAsync(SmtpProviderOptions provider, string to, string subject, string textBody, CancellationToken ct);
+    Task SendAsync(SmtpProviderOptions provider, string to, string subject, EmailBody body, CancellationToken ct);
 }

@@ -44,6 +44,13 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Вёрстка HTML-писем — встроенные ресурсы (как Legal\*.html в FamilyHub.Api): шаблон
+         жёстко связан со сборкой, отдельного деплоя/тома для него не нужно. Правка требует
+         пересборки — на диске меняется, в процессе не отражается, пока не пересобрано. -->
+    <EmbeddedResource Include="Email\Templates\*.html" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

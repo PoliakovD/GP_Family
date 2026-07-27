@@ -34,6 +34,24 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
     }
 
     [Fact]
+    public async Task RegisterFlow_SendsStyledHtmlEmail_WithSiteLinkFromConfig()
+    {
+        // Регресс-сеть на проводку Email:PublicSiteUrl (FamilyHubWebFactory задаёт
+        // "https://test.familyhub.local") и на то, что рендерер реально прогоняется через
+        // настоящий DI-граф в интеграционном тесте, а не только в юнитах рендерера.
+        var client = AnonymousClient();
+        var email = FreshEmail();
+        (await client.PostAsJsonAsync("/api/auth/register/start", new { email }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var message = Factory.Emails.MessagesFor(email).Should().ContainSingle().Subject;
+        message.Html.Should().NotBeNullOrEmpty();
+        message.Html.Should().NotContain("{{", "незаполненный плейсхолдер не должен уходить пользователю");
+        message.Html.Should().Contain("https://test.familyhub.local");
+        message.Subject.Should().Be("FamilyHub: код для регистрации");
+    }
+
+    [Fact]
     public async Task RegisterFlow_IssuesCookieSession_ThatAccessesApi()
     {
         var (client, _) = await RegisterAsync();

@@ -9,6 +9,11 @@ interface TelegramWebApp {
   openLink: (url: string) => void;
   openTelegramLink: (url: string) => void;
   close: () => void;
+  /** Системное подтверждение перед закрытием Mini App (аппаратный «назад» на Android его тоже
+   * триггерит) — Angular Router popstate-guard'ов внутри Mini App не видит: сворачивание/закрытие
+   * перехватывает сам Telegram, а не браузерная история. */
+  enableClosingConfirmation: () => void;
+  disableClosingConfirmation: () => void;
 }
 
 declare global {
@@ -68,5 +73,15 @@ export class TelegramService {
     } else {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
+  }
+
+  /** См. doc-комментарий enableClosingConfirmation в TelegramWebApp — вызывать на шагах,
+   * где случайное закрытие/сворачивание Mini App теряет введённые данные (ввод email-кода). */
+  enableClosingConfirmation(): void {
+    this.webApp?.enableClosingConfirmation();
+  }
+
+  disableClosingConfirmation(): void {
+    this.webApp?.disableClosingConfirmation();
   }
 }

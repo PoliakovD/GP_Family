@@ -3,11 +3,13 @@ using FamilyHub.Api.Features.Auth;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Email;
+using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -31,14 +33,17 @@ public class TelegramBindingServiceTests : SqliteTestBase
 
     public TelegramBindingServiceTests()
     {
-        _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                _sent.Add((callInfo.ArgAt<string>(0), callInfo.ArgAt<string>(2)));
+                _sent.Add((callInfo.ArgAt<string>(0), callInfo.ArgAt<EmailBody>(2).Text));
                 return Task.CompletedTask;
             });
-        var otp = new EmailOtpService(Db, _email, NullLogger<EmailOtpService>.Instance);
-        _sut = new TelegramBindingService(Db, otp, _validator, _email, NullLogger<TelegramBindingService>.Instance);
+        var emailOptions = Options.Create(new EmailOptions { PublicSiteUrl = "https://test.familyhub.local" });
+        var templates = new EmailTemplateRenderer(emailOptions);
+        var otp = new EmailOtpService(Db, _email, templates, emailOptions, NullLogger<EmailOtpService>.Instance);
+        _sut = new TelegramBindingService(
+            Db, otp, _validator, _email, templates, emailOptions, NullLogger<TelegramBindingService>.Instance);
     }
 
     private void SetupValidInitData(long telegramId, string? displayName = null, string? username = null) =>
@@ -169,7 +174,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         SetupValidInitData(211, "Resilient", "resilient_tg");
         await _sut.SendCodeAsync("resilient@example.com", ValidInitData);
         var code = LastCode("resilient@example.com");
-        _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("SMTP недоступен")));
 
         var result = await _sut.ConfirmBindAsync("resilient@example.com", code, ValidInitData);

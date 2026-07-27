@@ -2,10 +2,12 @@ using System.Text.RegularExpressions;
 using FamilyHub.Api.Features.Auth;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Email;
+using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -19,13 +21,15 @@ public class PwaAuthServiceTests : SqliteTestBase
 
     public PwaAuthServiceTests()
     {
-        _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                _lastSentBody = callInfo.ArgAt<string>(2);
+                _lastSentBody = callInfo.ArgAt<EmailBody>(2).Text;
                 return Task.CompletedTask;
             });
-        var otp = new EmailOtpService(Db, _email, NullLogger<EmailOtpService>.Instance);
+        var emailOptions = Options.Create(new EmailOptions { PublicSiteUrl = "https://test.familyhub.local" });
+        var templates = new EmailTemplateRenderer(emailOptions);
+        var otp = new EmailOtpService(Db, _email, templates, emailOptions, NullLogger<EmailOtpService>.Instance);
         _sut = new PwaAuthService(Db, otp, NullLogger<PwaAuthService>.Instance);
     }
 
@@ -263,7 +267,7 @@ public class PwaAuthServiceTests : SqliteTestBase
         (await _sut.StartResetPasswordAsync("nobody@example.com")).Should().Be(StartCodeResult.Sent);
 
         await _email.DidNotReceive().SendAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

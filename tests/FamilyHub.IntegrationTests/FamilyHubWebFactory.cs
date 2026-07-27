@@ -66,6 +66,8 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // Тест брутфорс-защиты использует отдельную фабрику с заниженными лимитами.
         builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");
         builder.UseSetting("RateLimiting:CodePermitLimit", "100000");
+        // Детерминированный домен в письмах: тесты, проверяющие HTML/CTA, не зависят от appsettings.
+        builder.UseSetting("Email:PublicSiteUrl", "https://test.familyhub.local");
 
         builder.ConfigureServices(services =>
         {

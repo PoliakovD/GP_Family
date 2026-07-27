@@ -1,11 +1,13 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Email;
+using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Telegram;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Api.Features.Auth;
 
@@ -32,8 +34,17 @@ public enum TelegramBindResult { Success, InvalidCode, InvalidInitData, EmailLin
 /// </summary>
 public class TelegramBindingService(
     AppDbContext db, EmailOtpService otp, ITelegramInitDataValidator validator, IEmailSender email,
-    ILogger<TelegramBindingService> logger)
+    EmailTemplateRenderer templates, IOptions<EmailOptions> emailOptions, ILogger<TelegramBindingService> logger)
 {
+    /// <summary>Копирайт рамки письма с временным паролем. Public static — как EmailOtpService.CopyFor,
+    /// переиспользуется EmailPreviewWriter/dev-эндпоинтом предпросмотра без похода в БД.</summary>
+    public static EmailLayoutCopy TemporaryPasswordCopy(string email) => new(
+        "Пароль для входа с сайта",
+        "Временный пароль для входа на сайте",
+        $"Аккаунт FamilyHub с адресом {email} создан через Telegram — на сайте в него можно войти с временным паролем.",
+        "Сменить пароль можно на странице входа — «Забыли пароль?».");
+
+
     public async Task<TelegramInitResult> InitAsync(string initData, CancellationToken ct = default)
     {
         var result = validator.Validate(initData);
@@ -139,20 +150,29 @@ public class TelegramBindingService(
 
         // Письмо — ПОСЛЕ успешного сохранения (иначе можно отправить пароль для строки,
         // которая не была записана из-за проигранной гонки), и с широким catch: сбой
-        // почтового провайдера не должен блокировать уже выданный доступ из Telegram — он
-        // работает вне зависимости от письма. Восстановить вход в PWA всегда можно через
-        // "Забыли пароль?" позже.
+        // почтового провайдера ИЛИ рендера шаблона не должен блокировать уже выданный доступ
+        // из Telegram — он работает вне зависимости от письма. Восстановить вход в PWA всегда
+        // можно через "Забыли пароль?" позже. Именно поэтому рендер HTML — тоже внутри try:
+        // опечатка в плейсхолдере шаблона не должна ронять привязку Telegram целиком (ловим
+        // такие опечатки тестами, не аварийным путём в проде).
         if (temporaryPassword is not null)
         {
             try
             {
-                await email.SendAsync(
-                    normalizedEmail,
-                    "FamilyHub: пароль для входа с сайта",
+                var copy = TemporaryPasswordCopy(normalizedEmail);
+                var html = templates.RenderTemporaryPassword(copy, normalizedEmail, temporaryPassword);
+
+                // Текстовая часть — строки с паролем сохранены ДОСЛОВНО: на них опирается
+                // CapturingEmailSender.LastTemporaryPasswordFor (регулярка "пароль для входа на
+                // сайте: (\S+)"). Ссылка на сайт — ПОСЛЕ них, чтобы (\S+) по-прежнему
+                // останавливался на самом пароле.
+                var text =
                     $"Аккаунт FamilyHub с адресом {normalizedEmail} создан через Telegram.\n" +
                     $"Ваш временный пароль для входа на сайте: {temporaryPassword}\n" +
-                    "Сменить его можно на странице входа — «Забыли пароль?».",
-                    ct);
+                    "Сменить его можно на странице входа — «Забыли пароль?».\n\n" +
+                    $"Открыть FamilyHub: {emailOptions.Value.PublicSiteUrl}";
+
+                await email.SendAsync(normalizedEmail, "FamilyHub: пароль для входа с сайта", new EmailBody(text, html), ct);
             }
             catch (Exception ex)
             {

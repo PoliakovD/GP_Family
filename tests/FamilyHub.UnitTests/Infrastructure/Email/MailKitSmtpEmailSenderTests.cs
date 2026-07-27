@@ -29,26 +29,27 @@ public class MailKitSmtpEmailSenderTests
     {
         var sut = CreateSut(Provider("primary"), Provider("fallback"));
 
-        await sut.SendAsync("to@example.com", "тема", "текст");
+        await sut.SendAsync("to@example.com", "тема", new EmailBody("текст"));
 
         await _transport.Received(1).SendAsync(
-            Arg.Is<SmtpProviderOptions>(p => p.Name == "primary"), "to@example.com", "тема", "текст", Arg.Any<CancellationToken>());
+            Arg.Is<SmtpProviderOptions>(p => p.Name == "primary"), "to@example.com", "тема",
+            Arg.Is<EmailBody>(b => b.Text == "текст"), Arg.Any<CancellationToken>());
         await _transport.DidNotReceive().SendAsync(
-            Arg.Is<SmtpProviderOptions>(p => p.Name == "fallback"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Is<SmtpProviderOptions>(p => p.Name == "fallback"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Send_FirstProviderFails_FallsOverToSecond()
     {
         _transport.SendAsync(Arg.Is<SmtpProviderOptions>(p => p.Name == "primary"),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new IOException("соединение оборвано"));
         var sut = CreateSut(Provider("primary"), Provider("fallback"));
 
-        await sut.SendAsync("to@example.com", "тема", "текст");
+        await sut.SendAsync("to@example.com", "тема", new EmailBody("текст"));
 
         await _transport.Received(1).SendAsync(
-            Arg.Is<SmtpProviderOptions>(p => p.Name == "fallback"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Is<SmtpProviderOptions>(p => p.Name == "fallback"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -56,25 +57,25 @@ public class MailKitSmtpEmailSenderTests
     {
         var sut = CreateSut(Provider("limited", dailyLimit: 2), Provider("fallback"));
 
-        await sut.SendAsync("a@example.com", "s", "b");
-        await sut.SendAsync("b@example.com", "s", "b");
+        await sut.SendAsync("a@example.com", "s", new EmailBody("b"));
+        await sut.SendAsync("b@example.com", "s", new EmailBody("b"));
         // Лимит primary исчерпан — третье письмо уходит через fallback без попытки primary.
-        await sut.SendAsync("c@example.com", "s", "b");
+        await sut.SendAsync("c@example.com", "s", new EmailBody("b"));
 
         await _transport.Received(2).SendAsync(
-            Arg.Is<SmtpProviderOptions>(p => p.Name == "limited"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Is<SmtpProviderOptions>(p => p.Name == "limited"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>());
         await _transport.Received(1).SendAsync(
-            Arg.Is<SmtpProviderOptions>(p => p.Name == "fallback"), "c@example.com", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Is<SmtpProviderOptions>(p => p.Name == "fallback"), "c@example.com", Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Send_AllProvidersFail_ThrowsWithAggregatedCauses()
     {
-        _transport.SendAsync(Arg.Any<SmtpProviderOptions>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _transport.SendAsync(Arg.Any<SmtpProviderOptions>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new IOException("недоступен"));
         var sut = CreateSut(Provider("p1"), Provider("p2"));
 
-        var act = async () => await sut.SendAsync("to@example.com", "s", "b");
+        var act = async () => await sut.SendAsync("to@example.com", "s", new EmailBody("b"));
 
         var thrown = await act.Should().ThrowAsync<InvalidOperationException>();
         thrown.Which.InnerException.Should().BeOfType<AggregateException>()

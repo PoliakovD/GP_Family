@@ -1,8 +1,10 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
+import { HasPendingCodeEntry } from '../../services/pending-code.guard';
+import { TelegramService } from '../../services/telegram.service';
 
 type Step = 'email' | 'code';
 
@@ -23,13 +25,17 @@ type Step = 'email' | 'code';
   imports: [FormsModule],
   templateUrl: './telegram-bind.component.html',
 })
-export class TelegramBindComponent {
+export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly tg = inject(TelegramService);
 
   readonly step = signal<Step>('email');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  /** См. LoginComponent.completed — тот же приём: успешный confirmBind ставит true ПЕРЕД
+   * навигацией, иначе pendingCodeGuard переспрашивал бы «прервать?» даже при успехе. */
+  private readonly completed = signal(false);
 
   email = '';
   code = '';
@@ -38,12 +44,18 @@ export class TelegramBindComponent {
     await this.run(async () => {
       await this.auth.telegramSendCode(this.email);
       this.step.set('code');
+      // Реальный Telegram Mini App: аппаратный «назад» на Android сворачивает/закрывает
+      // приложение мимо Angular Router — popstate-guard (pendingCodeGuard) его не видит.
+      // Нативный эквивалент — системное подтверждение Telegram.
+      this.tg.enableClosingConfirmation();
     });
   }
 
   async confirmBind(): Promise<void> {
     await this.run(async () => {
       await this.auth.telegramBind(this.email, this.code);
+      this.completed.set(true);
+      this.tg.disableClosingConfirmation();
       await this.router.navigate(['/']);
     });
   }
@@ -52,6 +64,26 @@ export class TelegramBindComponent {
     this.error.set(null);
     this.code = '';
     this.step.set('email');
+    this.tg.disableClosingConfirmation();
+  }
+
+  /** pendingCodeGuard (CanDeactivate, браузер/PWA-доступ к /telegram-bind) — см. doc-комментарий там. */
+  hasPendingCodeEntry(): boolean {
+    return !this.completed() && this.step() === 'code';
+  }
+
+  /** Guard ловит только навигацию Angular Router — F5/закрытие вкладки идут мимо него
+   * (в самом Mini App это дополнительно перехватывает Telegram.WebApp — см. sendCode). */
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(e: BeforeUnloadEvent): void {
+    if (this.hasPendingCodeEntry()) e.preventDefault();
+  }
+
+  ngOnDestroy(): void {
+    // Страховка: если компонент уничтожен в обход confirmBind/backToEmail (например,
+    // pendingCodeGuard пропустил уход после подтверждения диалога) — не оставляем Mini App
+    // с навсегда включённым системным подтверждением закрытия.
+    this.tg.disableClosingConfirmation();
   }
 
   private async run(action: () => Promise<void>): Promise<void> {
