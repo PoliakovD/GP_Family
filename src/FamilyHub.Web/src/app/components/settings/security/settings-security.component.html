@@ -1,0 +1,110 @@
+@if (auth.me(); as me) {
+  <section class="mb-2">
+    <h3>Пароль</h3>
+    @if (me.hasPassword) {
+      <form (ngSubmit)="changePassword()">
+        <label class="form-label" for="current-password">Текущий пароль</label>
+        <input
+          id="current-password" class="input mb-2" type="password" name="currentPassword"
+          [(ngModel)]="currentPassword" required autocomplete="current-password" />
+
+        <label class="form-label" for="new-password">Новый пароль (минимум 8 симв., строчная и заглавная буквы, цифра)</label>
+        <input
+          id="new-password" class="input mb-2" type="password" name="newPassword"
+          [(ngModel)]="newPassword" required minlength="8" maxlength="100"
+          autocomplete="new-password" />
+
+        <label class="form-label" for="new-password-repeat">Повторите новый пароль</label>
+        <input
+          id="new-password-repeat" class="input mb-2" type="password" name="newPasswordRepeat"
+          [(ngModel)]="newPasswordRepeat" required autocomplete="new-password" />
+        @if (newPasswordRepeat && newPassword !== newPasswordRepeat) {
+          <p class="field-hint field-hint-error mb-2">Пароли не совпадают.</p>
+        }
+
+        <button type="submit" class="btn btn-primary" [disabled]="busy() || !passwordFormValid">Сменить пароль</button>
+      </form>
+    } @else {
+      <p class="muted mb-0">
+        У аккаунта ещё нет пароля — сначала привяжите email на вкладке
+        <a routerLink="/settings/profile">«Профиль»</a>.
+      </p>
+    }
+  </section>
+
+  @if (auth.mode === 'pwa') {
+    <section class="mb-2">
+      <h3>Мои устройства</h3>
+      @if (sessions(); as list) {
+        @if (list.length === 0) {
+          <p class="muted mb-0">Активных сессий не найдено.</p>
+        } @else {
+          <ul class="list-unstyled mb-2">
+            @for (s of list; track s.id) {
+              <li class="mb-2">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                  <div>
+                    <p class="mb-0">
+                      <i class="ph ph-device-mobile" aria-hidden="true"></i>
+                      {{ s.device }}
+                      @if (s.isCurrent) { <span class="tag tag-accent">Это устройство</span> }
+                    </p>
+                    <p class="muted mb-0">
+                      {{ s.ipAddress ?? '—' }} · последняя активность {{ s.lastSeenAt | date: 'd MMM, HH:mm' }}
+                    </p>
+                  </div>
+                  @if (!s.isCurrent) {
+                    <button
+                      type="button" class="btn btn-secondary btn-sm" [disabled]="sessionsBusy()"
+                      (click)="revokeSession(s.id)">
+                      Завершить
+                    </button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+        <button type="button" class="btn btn-danger btn-sm" (click)="logoutAll()">Выйти со всех устройств</button>
+      } @else {
+        <p class="muted mb-0">Загрузка…</p>
+      }
+    </section>
+  } @else {
+    <section class="mb-2">
+      <h3>Мои устройства</h3>
+      <p class="muted mb-0">
+        В Telegram Mini App нет отдельных сессий — доступ проверяется на каждый запрос. Список
+        устройств доступен только при входе через браузер (PWA).
+      </p>
+    </section>
+  }
+
+  @if (me.hasTelegram && me.hasPassword) {
+    <section class="mb-2">
+      <h3>Telegram</h3>
+      <p class="muted mb-2">
+        Отвяжите Telegram, если аккаунт мог быть скомпрометирован — доступ из Telegram
+        пропадёт сразу, войти можно будет по email и паролю.
+      </p>
+      @if (!revokeTelegramConfirmVisible()) {
+        <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="revokeTelegramConfirmVisible.set(true)">
+          Отвязать Telegram…
+        </button>
+      } @else {
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="revokeTelegram()">
+          Точно отвязать
+        </button>
+        <button type="button" class="btn-link" (click)="revokeTelegramConfirmVisible.set(false)">Отмена</button>
+      }
+    </section>
+  }
+
+  @if (me.provider === 'email') {
+    <section>
+      <button class="btn btn-secondary" (click)="logout()">Выйти</button>
+    </section>
+  }
+} @else {
+  <p>Загрузка…</p>
+}

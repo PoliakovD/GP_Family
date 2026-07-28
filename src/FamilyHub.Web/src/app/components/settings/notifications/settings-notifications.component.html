@@ -1,0 +1,84 @@
+@if (auth.me(); as me) {
+  <section class="mb-2">
+    <h3>Push-уведомления</h3>
+    @if (push.isSupported) {
+      <div class="d-flex align-items-center justify-content-between gap-2">
+        <p class="muted mb-0">
+          Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
+        </p>
+        <label class="switch">
+          <input
+            type="checkbox"
+            [checked]="push.isSubscribed()"
+            [disabled]="pushBusy()"
+            (change)="togglePush()"
+          />
+          <span class="switch-knob"></span>
+        </label>
+      </div>
+    } @else if (tg.isInsideTelegram()) {
+      <p class="muted mb-0">Недоступно внутри Telegram — откройте FamilyHub в браузере.</p>
+    } @else {
+      <p class="muted mb-0">Ваш браузер не поддерживает push-уведомления.</p>
+    }
+  </section>
+
+  <section>
+    <h3>Оповещения по типам</h3>
+    @if (!push.isSupported && !me.hasTelegram) {
+      <p class="muted mb-0">
+        Нет доступного канала доставки — включите push-уведомления или привяжите Telegram
+        на вкладке «Профиль», чтобы настроить оповещения по отдельным типам.
+      </p>
+    } @else if (preferences()) {
+      <div style="overflow-x: auto;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Тип оповещения</th>
+              @if (push.isSupported) { <th>Push</th> }
+              @if (me.hasTelegram) { <th>Telegram</th> }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows; track row.type) {
+              <tr>
+                <td>{{ label(row.type) }}</td>
+                @if (push.isSupported) {
+                  <td>
+                    <label class="switch">
+                      <input
+                        type="checkbox"
+                        [checked]="row.pushEnabled"
+                        [disabled]="prefsBusy()"
+                        (change)="setPreference(row.type, 'pushEnabled', !row.pushEnabled)"
+                      />
+                      <span class="switch-knob"></span>
+                    </label>
+                  </td>
+                }
+                @if (me.hasTelegram) {
+                  <td>
+                    <label class="switch">
+                      <input
+                        type="checkbox"
+                        [checked]="row.telegramEnabled"
+                        [disabled]="prefsBusy()"
+                        (change)="setPreference(row.type, 'telegramEnabled', !row.telegramEnabled)"
+                      />
+                      <span class="switch-knob"></span>
+                    </label>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="muted mb-0">Загрузка…</p>
+    }
+  </section>
+} @else {
+  <p>Загрузка…</p>
+}

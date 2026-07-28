@@ -1,0 +1,70 @@
+@if (auth.me(); as me) {
+  <section class="mb-2">
+    <h3>Аккаунт</h3>
+    <p class="mb-1">{{ me.displayName }}</p>
+    <p class="muted">
+      @if (me.username) { &#64;{{ me.username }} · }
+      Telegram: {{ me.hasTelegram ? (me.tgUsername ? '@' + me.tgUsername : 'привязан') : '—' }} ·
+      Email: {{ me.email ?? '—' }} ·
+      Вход: {{ me.provider === 'email' ? 'браузер (PWA)' : 'Telegram' }}
+    </p>
+  </section>
+
+  @if (!me.email) {
+    <section class="mb-2">
+      <h3>Вход из браузера (PWA)</h3>
+      <p class="muted mb-2">Привяжите email и пароль, чтобы открывать FamilyHub без Telegram.</p>
+      @switch (linkStep()) {
+        @case ('idle') {
+          <form (ngSubmit)="startLinkEmail()">
+            <label class="form-label" for="link-email">Email</label>
+            <input id="link-email" class="input mb-2" type="email" name="linkEmail" [(ngModel)]="linkEmail" required />
+            <button type="submit" class="btn btn-primary" [disabled]="busy()">Отправить код</button>
+          </form>
+        }
+        @case ('code') {
+          <form (ngSubmit)="confirmLinkEmail()">
+            <label class="form-label" for="link-code">Код из письма</label>
+            <input
+              id="link-code" class="input mb-2" type="text" name="linkCode"
+              [(ngModel)]="linkCode" required inputmode="numeric" maxlength="6" />
+
+            <label class="form-label" for="link-password">Пароль (минимум 8 симв., строчная и заглавная буквы, цифра)</label>
+            <input
+              id="link-password" class="input mb-2" type="password" name="linkPassword"
+              [(ngModel)]="linkPassword" required minlength="8" maxlength="100"
+              autocomplete="new-password" />
+
+            <button type="submit" class="btn btn-primary" [disabled]="busy()">Привязать</button>
+          </form>
+        }
+      }
+    </section>
+  }
+
+  @if (me.provider === 'email' && !me.hasTelegram) {
+    <section class="mb-2">
+      <h3>Telegram</h3>
+      <p class="muted mb-2">
+        Привяжите Telegram-аккаунт — потом можно будет входить и через бота/Mini App.
+        Если этот Telegram уже писал боту раньше, данные объединятся с текущим аккаунтом.
+      </p>
+      @if (telegramLink(); as link) {
+        <p class="mb-1">
+          1. Откройте бота и нажмите «Привязать» в сообщении.<br />
+          2. Или введите код вручную: <strong>{{ link.code }}</strong>
+        </p>
+        <a class="btn btn-secondary btn-sm mb-1" [href]="link.deepLink" target="_blank" rel="noopener">
+          Открыть бота
+        </a>
+        <p class="muted mb-0">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
+      } @else {
+        <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="startLinkTelegram()">
+          Привязать Telegram
+        </button>
+      }
+    </section>
+  }
+} @else {
+  <p>Загрузка…</p>
+}
