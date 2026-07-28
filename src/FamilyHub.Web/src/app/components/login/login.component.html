@@ -1,4 +1,19 @@
 <div class="auth-shell">
+  @if (step() === 'login') {
+    <div class="login-intro">
+      <div class="card-kicker">FamilyHub</div>
+      <h1 class="login-intro-title">Вся забота о семье — в одном месте</h1>
+      <ul class="login-intro-features">
+        <li><i class="ph-duotone ph-first-aid-kit" aria-hidden="true"></i> Аптечка с контролем сроков годности</li>
+        <li><i class="ph-duotone ph-heartbeat" aria-hidden="true"></i> Анализы — доступ только тем, кому вы разрешите</li>
+        <li><i class="ph-duotone ph-cake" aria-hidden="true"></i> Дни рождения всей семьи — не забудете ни один</li>
+        <li><i class="ph-duotone ph-lock-key" aria-hidden="true"></i> Данные зашифрованы, доступ строго по ролям</li>
+      </ul>
+      <p class="login-intro-note">
+        Закрытое пространство для своей семьи — присоединяйтесь, остальное мы берём на себя.
+      </p>
+    </div>
+  }
   <div class="card auth-card elev-md">
     <div class="auth-brand">
       <div class="card-kicker">FamilyHub</div>
@@ -37,8 +52,8 @@
             [(ngModel)]="password" required autocomplete="current-password" />
 
           <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
-          <button type="button" class="btn-link" (click)="startRegistration()">Создать аккаунт</button>
-          <button type="button" class="btn-link" (click)="startResetPassword()">Забыли пароль?</button>
+          <button type="button" class="btn btn-secondary btn-block" (click)="startRegistration()">Создать аккаунт</button>
+          <button type="button" class="btn-link btn-block" (click)="startResetPassword()">Забыли пароль?</button>
         </form>
       }
       @case ('register-details') {
@@ -82,10 +97,27 @@
             <span class="field-hint field-hint-muted">Минимум 8 симв., строчная и заглавная латинские буквы, цифра</span>
           }
 
-          <label class="checkbox-row mb-3 mt-2">
+          <label class="checkbox-row mb-2 mt-2">
             <input type="checkbox" name="privacyAccepted" [(ngModel)]="privacyAccepted" required />
             <span>
-              Согласен с <a routerLink="/privacy" target="_blank">политикой конфиденциальности</a>
+              Согласен с <button type="button" class="link-inline" (click)="showLegalText('privacy')">политикой конфиденциальности</button>
+            </span>
+          </label>
+
+          <label class="checkbox-row mb-2">
+            <input type="checkbox" name="pdnConsentAgreed" [(ngModel)]="pdnConsentAgreed" required />
+            <span>
+              Даю <button type="button" class="link-inline" (click)="showLegalText('consent')">согласие на обработку персональных
+              данных</button> на изложенных в нём условиях
+            </span>
+          </label>
+
+          <label class="checkbox-row mb-3">
+            <input type="checkbox" name="pdnSpecialCategoryAgreed" [(ngModel)]="pdnSpecialCategoryAgreed" required />
+            <span>
+              Отдельно даю согласие на обработку специальной категории персональных данных —
+              сведений о состоянии здоровья (медицинские записи, результаты анализов, сведения о
+              лекарственных препаратах)
             </span>
           </label>
 
@@ -159,3 +191,11 @@
     }
   </div>
 </div>
+
+<app-modal [title]="legalModalTitle()" [open]="legalModalOpen()" (closed)="closeLegalModal()">
+  @if (legalModalHtml(); as html) {
+    <div [innerHTML]="html"></div>
+  } @else {
+    <p>Загрузка…</p>
+  }
+</app-modal>

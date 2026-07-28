@@ -9,11 +9,19 @@
       <p class="muted mb-2">
         Версия: {{ version() }} · <a routerLink="/privacy" target="_blank">Политика конфиденциальности</a>
       </p>
-      <label class="checkbox-row mb-3">
+      <label class="checkbox-row mb-2">
         <input type="checkbox" [(ngModel)]="agreed" />
-        <span>Я даю согласие на обработку моих персональных данных, включая сведения о здоровье</span>
+        <span>Я даю согласие на обработку моих персональных данных на условиях, изложенных выше</span>
       </label>
-      <button class="btn btn-primary btn-block" [disabled]="!agreed || busy()" (click)="accept()">
+      <label class="checkbox-row mb-3">
+        <input type="checkbox" [(ngModel)]="specialCategoryAgreed" />
+        <span>
+          Отдельно даю согласие на обработку специальной категории персональных данных —
+          сведений о состоянии здоровья (медицинские записи, результаты анализов, сведения о
+          лекарственных препаратах)
+        </span>
+      </label>
+      <button class="btn btn-primary btn-block" [disabled]="!agreed || !specialCategoryAgreed || busy()" (click)="accept()">
         Принять и продолжить
       </button>
     } @else {

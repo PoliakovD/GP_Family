@@ -23,6 +23,14 @@ export const routes: Routes = [
       import('./components/privacy/privacy.component').then((m) => m.PrivacyComponent),
   },
   {
+    // Текст согласия ПДн, доступный БЕЗ входа (в отличие от /consent ниже — это гейт
+    // ПРИНЯТИЯ для уже аутентифицированного пользователя). Сюда ведут ссылки с формы
+    // регистрации, где согласие нужно прочитать до создания аккаунта.
+    path: 'consent-text',
+    loadComponent: () =>
+      import('./components/consent-text/consent-text.component').then((m) => m.ConsentTextComponent),
+  },
+  {
     path: 'consent',
     canActivate: [authGuard],
     loadComponent: () =>

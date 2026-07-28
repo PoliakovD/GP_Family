@@ -39,30 +39,41 @@ public class ConsentService(AppDbContext db, IMemoryCache cache, IOptions<Consen
         // признак устаревшего клиента, согласие не засчитывается.
         if (version != CurrentVersion) return AcceptConsentResult.StaleVersion;
 
-        if (!await HasAcceptedCurrentAsync(userId, ct))
-        {
-            db.Set<UserConsent>().Add(new UserConsent
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                Kind = ConsentKind.PdnConsent,
-                Version = version,
-                AcceptedAt = DateTime.UtcNow,
-            });
-
-            try
-            {
-                await db.SaveChangesAsync(ct);
-            }
-            catch (DbUpdateException)
-            {
-                // Гонка двойного клика: UNIQUE(UserId, Kind, Version) — согласие уже записано.
-                db.ChangeTracker.Clear();
-            }
-        }
+        // Два обязательных чекбокса на ConsentGateComponent (общий + отдельный на спецкатегорию
+        // здоровья, ч. 2 ст. 10 152-ФЗ) гейтят одну кнопку «Принять» — оба были отмечены к
+        // моменту вызова, поэтому здесь пишем обе строки атомарно одним запросом. Каждая — своя
+        // идемпотентность (UNIQUE(UserId, Kind, Version)), т.к. это независимые записи.
+        await AddIfMissingAsync(userId, ConsentKind.PdnConsent, version, ct);
+        await AddIfMissingAsync(userId, ConsentKind.SpecialCategoryConsent, version, ct);
 
         // Прогрев кэша ConsentRequiredFilter: принятие видно немедленно.
         cache.Set(ConsentRequiredFilter.CacheKey(userId, version), true, TimeSpan.FromMinutes(5));
         return AcceptConsentResult.Accepted;
+    }
+
+    private async Task AddIfMissingAsync(Guid userId, ConsentKind kind, string version, CancellationToken ct)
+    {
+        var exists = await db.Set<UserConsent>().AnyAsync(
+            c => c.UserId == userId && c.Kind == kind && c.Version == version, ct);
+        if (exists) return;
+
+        db.Set<UserConsent>().Add(new UserConsent
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Kind = kind,
+            Version = version,
+            AcceptedAt = DateTime.UtcNow,
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Гонка двойного клика: UNIQUE(UserId, Kind, Version) — согласие уже записано.
+            db.ChangeTracker.Clear();
+        }
     }
 }

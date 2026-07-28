@@ -10,5 +10,5 @@ public class ConsentOptions
     /// (история версий — git, тексты в src/FamilyHub.Api/Legal). Пользователи с согласием
     /// на старую версию должны подтвердить новую.
     /// </summary>
-    public string CurrentVersion { get; set; } = "2026-07-22";
+    public string CurrentVersion { get; set; } = "2026-07-27";
 }

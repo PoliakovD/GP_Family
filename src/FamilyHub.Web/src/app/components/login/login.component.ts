@@ -1,10 +1,13 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
+import { ModalComponent } from '../../shared/modal/modal.component';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
 type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
@@ -27,12 +30,14 @@ const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,100}$/;
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, ModalComponent],
   templateUrl: './login.component.html',
 })
 export class LoginComponent implements HasPendingCodeEntry {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly http = inject(HttpClient);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly cookieConsent = inject(CookieConsentService);
 
   readonly step = signal<Step>('login');
@@ -49,12 +54,31 @@ export class LoginComponent implements HasPendingCodeEntry {
   /** На форме входа объясняем, что сессионный cookie строго необходим, если раньше отклонили баннер. */
   readonly showCookieNotice = computed(() => this.cookieConsent.choice() === 'declined');
 
+  /**
+   * Тексты политики/согласия на форме регистрации показываем МОДАЛКОЙ, а не ссылкой на
+   * отдельный роут (`target="_blank"`): в PWA, установленном на телефон/десктоп в standalone-
+   * режиме, `target="_blank"` для ссылки на тот же origin у части браузеров открывает не новую
+   * вкладку, а НАВИГАЦИЮ В ТОМ ЖЕ ОКНЕ — форма регистрации разрушается, и «назад» возвращает уже
+   * не на неё, а на чистый /login (все введённые email/пароль/username потеряны). Модалка держит
+   * пользователя на той же странице/том же компоненте — данные формы никогда не пропадают.
+   */
+  readonly legalModalTitle = signal('');
+  readonly legalModalHtml = signal<SafeHtml | null>(null);
+  readonly legalModalBusy = signal(false);
+  readonly legalModalOpen = computed(() => this.legalModalTitle() !== '');
+
   email = '';
   password = '';
   code = '';
   username = '';
   displayName = '';
   privacyAccepted = false;
+  /** Согласие на обработку ПДн (общее) — отдельно от privacyAccepted выше: политика
+   * конфиденциальности и согласие на обработку ПДн — разные документы (ст. 9 152-ФЗ). */
+  pdnConsentAgreed = false;
+  /** Отдельное обязательное согласие на спецкатегорию — сведения о здоровье (ч. 2 ст. 10
+   * 152-ФЗ), тот же приём, что и в ConsentGateComponent. */
+  pdnSpecialCategoryAgreed = false;
 
   private usernameCheckTimer?: ReturnType<typeof setTimeout>;
   private usernameCheckToken = 0;
@@ -66,7 +90,8 @@ export class LoginComponent implements HasPendingCodeEntry {
   }
 
   get canSubmitDetails(): boolean {
-    return !this.busy() && this.privacyAccepted && this.usernameStatus() === 'free' && this.isPasswordValid;
+    return !this.busy() && this.privacyAccepted && this.pdnConsentAgreed && this.pdnSpecialCategoryAgreed
+      && this.usernameStatus() === 'free' && this.isPasswordValid;
   }
 
   get canSubmitNewPassword(): boolean {
@@ -126,8 +151,25 @@ export class LoginComponent implements HasPendingCodeEntry {
     await this.run(async () => {
       await this.auth.registerConfirm(this.email, this.code, this.password, this.username, this.displayName || null);
       this.completed.set(true);
-      await this.router.navigate(['/consent']);
+      // Оба обязательных чекбокса ПДн-согласия отмечены на предыдущем шаге (register-details,
+      // см. canSubmitDetails) — записываем принятие сразу же, пока сессия свежая, той версией
+      // текста, которая ДЕЙСТВИТЕЛЬНО актуальна на сервере (не кэшированной с момента открытия
+      // формы: между заполнением формы и этим моментом текст мог смениться).
+      // Если запрос не удался (сеть) — не блокируем регистрацию: ConsentRequiredFilter и
+      // consentGuard всё равно перехватят на защищённых роутах и покажут /consent как обычно.
+      const accepted = await this.acceptPdnConsent();
+      await this.router.navigate([accepted ? '/' : '/consent']);
     });
+  }
+
+  private async acceptPdnConsent(): Promise<boolean> {
+    try {
+      const current = await this.auth.getConsentText();
+      await this.auth.acceptConsent(current.version);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** С шага «код» — назад к деталям (например, поправить email), без потери введённого. */
@@ -182,6 +224,30 @@ export class LoginComponent implements HasPendingCodeEntry {
     this.error.set(null);
     this.errorCode.set(null);
     this.step.set('login');
+  }
+
+  async showLegalText(kind: 'privacy' | 'consent'): Promise<void> {
+    this.legalModalBusy.set(true);
+    this.legalModalTitle.set(kind === 'privacy' ? 'Политика конфиденциальности' : 'Согласие на обработку персональных данных');
+    this.legalModalHtml.set(null);
+    try {
+      const html = kind === 'privacy'
+        ? await firstValueFrom(this.http.get('/api/legal/privacy-policy', { responseType: 'text' }))
+        : (await this.auth.getConsentText()).text;
+      // Текст приходит с нашего же бэкенда (embedded-ресурс сборки) — доверенный HTML, как и
+      // в ConsentTextComponent/PrivacyComponent, которые показывают тот же текст на своих роутах.
+      this.legalModalHtml.set(this.sanitizer.bypassSecurityTrustHtml(html));
+    } catch {
+      this.legalModalTitle.set('');
+      this.error.set('Не удалось загрузить текст. Попробуйте ещё раз.');
+    } finally {
+      this.legalModalBusy.set(false);
+    }
+  }
+
+  closeLegalModal(): void {
+    this.legalModalTitle.set('');
+    this.legalModalHtml.set(null);
   }
 
   acceptCookies(): void {

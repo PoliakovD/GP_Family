@@ -25,6 +25,9 @@ export class ConsentGateComponent implements OnInit {
   readonly error = signal<string | null>(null);
 
   agreed = false;
+  /** Отдельное обязательное согласие на спецкатегорию — сведения о здоровье (ч. 2 ст. 10
+   * 152-ФЗ): по закону нельзя «зашить» его в общий чекбокс, нужен собственный явный отметка. */
+  specialCategoryAgreed = false;
 
   async ngOnInit(): Promise<void> {
     const current = await this.auth.getConsentText();
@@ -34,7 +37,7 @@ export class ConsentGateComponent implements OnInit {
   }
 
   async accept(): Promise<void> {
-    if (!this.agreed) return;
+    if (!this.agreed || !this.specialCategoryAgreed) return;
     this.busy.set(true);
     this.error.set(null);
     try {

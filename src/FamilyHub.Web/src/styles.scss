@@ -183,16 +183,47 @@ a {
   padding: 0;
 }
 
-// Текстовая ссылка-кнопка (вторичное действие форм: "Создать аккаунт", "Назад" и т.п.) —
-// без фона и рамки, в отличие от .btn-ghost не имеет hover-подложки, только подчёркивание.
+// Текстовая ссылка-кнопка (вторичное действие форм: "Назад", "Отмена" и т.п.) — без фона и
+// рамки, в отличие от .btn-ghost не имеет hover-подложки, только подчёркивание. В отличие от
+// .btn/.btn-secondary/… используется САМА ПО СЕБЕ, без базового класса .btn — поэтому в отличие
+// от них ей нужен собственный сброс нативного вида <button> (фон/рамка/курсор/шрифт), иначе
+// поверх подчёркивания остаётся системная рамка кнопки браузера.
 .btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 13px;
   color: var(--color-accent);
   padding: var(--space-1) 0;
   text-decoration: underline;
   text-underline-offset: 3px;
 
   &:hover { color: var(--color-accent-700); }
-  &:disabled { text-decoration: none; }
+  &:disabled { text-decoration: none; cursor: not-allowed; opacity: 0.6; }
+}
+
+// Кнопка, визуально неотличимая от обычной инлайновой ссылки ВНУТРИ фразы (в отличие от
+// .btn-link это не отдельный элемент действия, а слово в предложении — наследует размер/шрифт
+// окружающего текста). Нужна там, где раньше стояла <a routerLink target="_blank">, но переход
+// на отдельный роут рискует потерять состояние текущей формы (см. LoginComponent.showLegalText —
+// в PWA standalone-режиме на части браузеров target="_blank" для ссылки на тот же origin
+// открывает не новую вкладку, а навигацию в том же окне).
+.link-inline {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+
+  &:hover { color: var(--color-accent-700); }
 }
 
 .btn-block {
@@ -691,6 +722,13 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
+  // gap/wrap не влияют на страницы с одним ребёнком (telegram-bind, consent-gate — им
+  // всё ещё центрируют одну карточку): нужны только LoginComponent на шаге 'login', где
+  // рядом с карточкой появляется .login-intro. wrap вместо media-query — на узких экранах
+  // .login-intro не помещается в строку с карточкой (min-width ниже) и сама переносится
+  // выше неё, ровно то расположение «текст над формой», которое нужно на мобильных.
+  gap: var(--space-6);
+  flex-wrap: wrap;
   padding: var(--space-4);
 }
 
@@ -702,6 +740,90 @@ textarea.input {
 .auth-brand {
   text-align: center;
   margin-bottom: var(--space-2);
+}
+
+// Вводный блок слева от формы входа (только шаг 'login' — на шагах регистрации/кода
+// отвлекающий текст не нужен, там и так самое важное действие — форма).
+.login-intro {
+  flex: 1 1 340px;
+  max-width: 420px;
+  padding: var(--space-2) 0;
+}
+
+.login-intro-title {
+  margin: var(--space-1) 0 var(--space-4);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 25px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.login-intro-features {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.login-intro-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-text);
+}
+
+.login-intro-features i {
+  flex: none;
+  font-size: 20px;
+  color: var(--color-accent);
+  margin-top: 1px;
+}
+
+.login-intro-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-neutral-600);
+}
+
+// Мобильный список: несёт ту же информацию компактнее, вместо .login-intro-features
+// с описанием каждого пункта фразой — иначе на узком экране блок выше формы слишком
+// длинный (см. итоговый совет: не перегружать страницу входа).
+@media (max-width: 640px) {
+  .login-intro {
+    max-width: none;
+    text-align: center;
+  }
+
+  .login-intro-title {
+    font-size: 21px;
+  }
+
+  .login-intro-features {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-3) var(--space-4);
+  }
+
+  .login-intro-features li {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    max-width: 88px;
+    text-align: center;
+  }
+
+  .login-intro-features i {
+    margin-top: 0;
+  }
 }
 
 // ============================================================================
