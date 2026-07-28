@@ -1,0 +1,27 @@
+<section class="mb-2">
+  <h3>Мои данные</h3>
+  <p class="mb-2">
+    <a routerLink="/privacy">Политика конфиденциальности</a>
+  </p>
+  <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="exportData()">
+    Выгрузить мои данные (zip)
+  </button>
+</section>
+
+<section class="mb-2">
+  <h3>Удаление аккаунта</h3>
+  <p class="muted mb-2">
+    Безвозвратно удаляет аккаунт, медицинские записи, файлы и отзывает согласие на
+    обработку персональных данных.
+  </p>
+  @if (!deleteConfirmVisible()) {
+    <button class="btn btn-danger" (click)="deleteConfirmVisible.set(true)">Удалить аккаунт…</button>
+  } @else {
+    <label class="form-label" for="delete-confirm">Введите «УДАЛИТЬ» для подтверждения</label>
+    <input id="delete-confirm" class="input mb-2" type="text" name="deleteConfirm" [(ngModel)]="deleteConfirmText" />
+    <button class="btn btn-danger" [disabled]="deleteConfirmText !== 'УДАЛИТЬ' || busy()" (click)="deleteAccount()">
+      Удалить навсегда
+    </button>
+    <button class="btn-link" (click)="deleteConfirmVisible.set(false)">Отмена</button>
+  }
+</section>

@@ -16,6 +16,8 @@ public enum LinkEmailResult { Success, InvalidCode, EmailTaken, WeakPassword }
 
 public enum ResetPasswordResult { Success, InvalidCode, WeakPassword }
 
+public enum ChangePasswordResult { Success, NoPassword, InvalidCurrentPassword, WeakPassword }
+
 /// <summary>
 /// PWA-вход (этап 2 п.2.4): регистрация email → код на почту → пароль; вход email+пароль.
 /// Lockout входа (15 мин после 5 неудачных попыток) поверх IP-rate-limit'а эндпоинтов.
@@ -206,5 +208,33 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
 
         logger.LogInformation("PWA: пароль сброшен для пользователя {UserId}", user.Id);
         return (ResetPasswordResult.Success, user.Id);
+    }
+
+    /// <summary>
+    /// Смена пароля из настроек (аутентифицированный пользователь знает текущий пароль) — в
+    /// отличие от ConfirmResetPasswordAsync, не требует email-кода. Отзыв прочих сессий —
+    /// забота вызывающего эндпоинта (см. AuthEndpoints.MapAuthEndpoints), не этого метода.
+    /// </summary>
+    public async Task<ChangePasswordResult> ChangePasswordAsync(
+        Guid userId, string currentPassword, string newPassword, CancellationToken ct = default)
+    {
+        if (!PasswordRules.IsValid(newPassword)) return ChangePasswordResult.WeakPassword;
+
+        var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
+        if (user.PasswordHash is null) return ChangePasswordResult.NoPassword;
+
+        // Намеренно НЕТ проверки формата текущего пароля через PasswordRules — та же причина,
+        // что в LoginAsync: старый хеш (в том числе ещё PIN-формата) должен продолжать
+        // верифицироваться, даже если сам ввод больше не проходит текущие правила формата.
+        if (!PasswordHasher.Verify(currentPassword, user.PasswordHash))
+            return ChangePasswordResult.InvalidCurrentPassword;
+
+        user.PasswordHash = PasswordHasher.Hash(newPassword);
+        user.FailedLoginAttempts = 0;
+        user.LockedUntil = null;
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("PWA: пароль изменён пользователем {UserId} из настроек", user.Id);
+        return ChangePasswordResult.Success;
     }
 }

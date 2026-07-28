@@ -93,6 +93,7 @@ public class AccountService(
             .Where(c => c.UserId == userId || (user.Email != null && c.Email == user.Email))
             .ExecuteDeleteAsync(ct);
         await db.UserSessions.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
+        await db.UserNotificationPreferences.Where(p => p.UserId == userId).ExecuteDeleteAsync(ct);
         await db.FamilyInviteRedemptions.Where(r => r.UserId == userId).ExecuteDeleteAsync(ct);
         await db.FamilyInvites.Where(i => i.TargetUserId == userId || i.CreatedByUserId == userId)
             .ExecuteDeleteAsync(ct);

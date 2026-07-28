@@ -52,7 +52,7 @@ public class PushApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(fac
         }
 
         var unsubscribeResponse = await user.PostAsJsonAsync("/api/push/unsubscribe", new { endpoint });
-        unsubscribeResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        unsubscribeResponse.StatusCode.Should().Be(HttpStatusCode.OK, "запись реально была и её удалили этим запросом");
 
         using (var scope = Factory.Services.CreateScope())
         {
@@ -62,18 +62,24 @@ public class PushApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(fac
         }
     }
 
+    /// <summary>
+    /// Идемпотентность (см. комментарий над MapPost("/unsubscribe", ...)): клиенту важен только
+    /// конечный результат "подписки больше нет", не то, была ли она вообще. Раньше 404 здесь
+    /// ломал фронт — PushNotificationService.unsubscribe() падал ДО локальной отписки от SW,
+    /// пользователь застревал с "включённым" тумблером, хотя подписки и так уже не было.
+    /// </summary>
     [Fact]
-    public async Task Unsubscribe_UnknownEndpoint_Returns404()
+    public async Task Unsubscribe_UnknownEndpoint_Returns204_NotAnError()
     {
         var user = ClientAs(FreshTelegramId());
 
         var response = await user.PostAsJsonAsync("/api/push/unsubscribe", new { endpoint = "https://fcm.googleapis.com/fcm/send/never-subscribed" });
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent, "подписки и так не было — это успех, а не ошибка");
     }
 
     [Fact]
-    public async Task Unsubscribe_AnotherUsersSubscription_Returns404_AndSubscriptionSurvives()
+    public async Task Unsubscribe_AnotherUsersSubscription_Returns204_AndSubscriptionSurvives()
     {
         var owner = ClientAs(FreshTelegramId());
         var stranger = ClientAs(FreshTelegramId());
@@ -82,7 +88,10 @@ public class PushApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(fac
 
         var response = await stranger.PostAsJsonAsync("/api/push/unsubscribe", new { endpoint });
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound, "чужую подписку удалить нельзя, даже зная endpoint");
+        // С точки зрения "чужого" запроса своей подписки по этому endpoint нет — тот же 204,
+        // что и для полностью неизвестного endpoint (см. Unsubscribe_UnknownEndpoint_Returns204_NotAnError).
+        // Владелец при этом не пострадал — это проверяет вторая часть теста.
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent, "чужую подписку удалить нельзя, даже зная endpoint");
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

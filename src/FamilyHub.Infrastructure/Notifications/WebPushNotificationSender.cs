@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,8 @@ public class WebPushNotificationSender(
     ILogger<WebPushNotificationSender> logger) : INotificationSender
 {
     private static readonly JsonSerializerOptions PayloadJsonOptions = new(JsonSerializerDefaults.Web);
+
+    public NotificationChannel Channel => NotificationChannel.WebPush;
 
     public async Task SendAsync(Notification notification, CancellationToken ct = default)
     {

@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Infrastructure.Notifications;
@@ -9,6 +10,9 @@ namespace FamilyHub.Infrastructure.Notifications;
 /// </summary>
 public class LoggingNotificationSender(ILogger<LoggingNotificationSender> logger) : INotificationSender
 {
+    /// <summary>Дев-заглушка не фильтруется предпочтениями (см. NotificationSendingService.TrySendAsync).</summary>
+    public NotificationChannel Channel => NotificationChannel.Log;
+
     public Task SendAsync(Notification notification, CancellationToken ct = default)
     {
         logger.LogInformation(

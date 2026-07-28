@@ -1,20 +1,9 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
-import { NotificationType, type AppNotification } from '../../models/types';
+import { type AppNotification } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
-
-const TYPE_LABEL: Record<number, string> = {
-  [NotificationType.MedicationExpiringSoon]: 'Срок годности скоро истекает',
-  [NotificationType.MedicationExpired]: 'Срок годности истёк',
-  [NotificationType.BirthdayUpcoming]: 'Скоро день рождения',
-};
-
-const TYPE_ICON: Record<number, string> = {
-  [NotificationType.MedicationExpiringSoon]: 'ph-duotone ph-warning-circle',
-  [NotificationType.MedicationExpired]: 'ph-duotone ph-warning-circle',
-  [NotificationType.BirthdayUpcoming]: 'ph-duotone ph-cake',
-};
+import { notificationTypeIcon, notificationTypeLabel } from '../../shared/util/notification-type-labels';
 
 const MONTHS_GEN = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -75,11 +64,11 @@ export class NotificationsTabComponent implements OnInit {
   }
 
   typeLabel(type: number): string {
-    return TYPE_LABEL[type] ?? 'Оповещение';
+    return notificationTypeLabel(type);
   }
 
   typeIcon(type: number): string {
-    return TYPE_ICON[type] ?? 'ph-duotone ph-bell';
+    return notificationTypeIcon(type);
   }
 
   /** "Сегодня" / "Вчера" / "18 июля" — кикер группы даты (см. дизайн-дэк). */

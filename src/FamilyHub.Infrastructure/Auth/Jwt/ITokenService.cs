@@ -32,4 +32,8 @@ public interface ITokenService
 
     /// <summary>Отзыв всех активных сессий пользователя (logout-all / account erasure).</summary>
     Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Отзыв конкретной сессии (список «мои устройства»). false — сессии нет,
+    /// она уже отозвана, либо принадлежит другому пользователю (owner-фильтр встроен в запрос).</summary>
+    Task<bool> RevokeByIdAsync(Guid userId, Guid sessionId, CancellationToken ct = default);
 }

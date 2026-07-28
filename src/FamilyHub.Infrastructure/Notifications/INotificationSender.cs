@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 
 namespace FamilyHub.Infrastructure.Notifications;
 
@@ -9,5 +10,9 @@ namespace FamilyHub.Infrastructure.Notifications;
 /// </summary>
 public interface INotificationSender
 {
+    /// <summary>Канал, которым фильтруются пользовательские предпочтения
+    /// (см. NotificationSendingService.TrySendAsync + UserNotificationPreference).</summary>
+    NotificationChannel Channel { get; }
+
     Task SendAsync(Notification notification, CancellationToken ct = default);
 }

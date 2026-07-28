@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Telegram;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,8 @@ public class TelegramNotificationSender(
     IOptions<TelegramOptions> options,
     ILogger<TelegramNotificationSender> logger) : INotificationSender
 {
+    public NotificationChannel Channel => NotificationChannel.Telegram;
+
     public async Task SendAsync(Notification notification, CancellationToken ct = default)
     {
         var telegramId = await db.Users.AsNoTracking()

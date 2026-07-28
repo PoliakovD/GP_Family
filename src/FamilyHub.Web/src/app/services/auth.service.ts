@@ -23,6 +23,16 @@ export interface LinkTelegramStart {
   expiresAt: string;
 }
 
+export interface UserSessionInfo {
+  id: string;
+  /** Момент последней ротации refresh-токена (не первый вход — см. TokenService.RefreshAsync). */
+  lastSeenAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  device: string;
+  isCurrent: boolean;
+}
+
 export interface ConsentStatus {
   accepted: boolean;
   version: string;
@@ -215,6 +225,27 @@ export class AuthService {
     await firstValueFrom(this.http.post<void>('/api/auth/telegram/revoke', {}));
     this.telegramBound.set(false);
     await this.loadMe();
+  }
+
+  /**
+   * Смена пароля из настроек (в отличие от reset-password/*, требует знания текущего пароля —
+   * не анонимная). Бэкенд отзывает все прочие сессии и переиздаёт cookie текущей, поэтому здесь
+   * НЕ нужно самостоятельно дёргать logout/refresh — сессия остаётся валидной как есть.
+   */
+  changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>('/api/auth/change-password', { currentPassword, newPassword }),
+    );
+  }
+
+  /** Список активных сессий (вкладка «Безопасность» → «Мои устройства»). Только PWA — у Telegram сессий нет. */
+  getSessions(): Promise<UserSessionInfo[]> {
+    return firstValueFrom(this.http.get<UserSessionInfo[]>('/api/auth/sessions'));
+  }
+
+  /** Отзыв одной сессии (не текущей — для этого logout()/logoutAll()). */
+  revokeSession(id: string): Promise<void> {
+    return firstValueFrom(this.http.post<void>(`/api/auth/sessions/${id}/revoke`, {}));
   }
 
   linkEmailStart(email: string): Promise<void> {

@@ -37,10 +37,44 @@ export const routes: Routes = [
       import('./components/consent-gate/consent-gate.component').then((m) => m.ConsentGateComponent),
   },
   {
+    // Хаб «Настройки» (вкладки Профиль/Безопасность/Уведомления/Данные) — намеренно БЕЗ
+    // consentGuard, в отличие от блока данных ниже: настройки должны быть доступны и до
+    // принятия согласия ПДн (например, чтобы выйти или посмотреть политику конфиденциальности).
     path: 'settings',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./components/settings/settings.component').then((m) => m.SettingsComponent),
+    children: [
+      { path: '', redirectTo: 'profile', pathMatch: 'full' },
+      {
+        path: 'profile',
+        loadComponent: () =>
+          import('./components/settings/profile/settings-profile.component').then(
+            (m) => m.SettingsProfileComponent,
+          ),
+      },
+      {
+        path: 'security',
+        loadComponent: () =>
+          import('./components/settings/security/settings-security.component').then(
+            (m) => m.SettingsSecurityComponent,
+          ),
+      },
+      {
+        path: 'notifications',
+        loadComponent: () =>
+          import('./components/settings/notifications/settings-notifications.component').then(
+            (m) => m.SettingsNotificationsComponent,
+          ),
+      },
+      {
+        path: 'data',
+        loadComponent: () =>
+          import('./components/settings/data/settings-data.component').then(
+            (m) => m.SettingsDataComponent,
+          ),
+      },
+    ],
   },
 
   // Данные: требуют входа (PWA) и принятого согласия ПДн (задачи 2.3/2.4).

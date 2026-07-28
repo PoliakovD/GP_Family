@@ -15,6 +15,9 @@ export const NotificationType = {
     MedicationExpiringSoon: 0,
     MedicationExpired: 1,
     BirthdayUpcoming: 2,
+    MemberLeft: 3,
+    MemberApproved: 4,
+    MedicalRecordShared: 5,
 } as const;
 
 export interface FamilySummary {
@@ -151,6 +154,14 @@ export interface SearchResponse {
 
 export interface VapidPublicKeyResponse {
     publicKey: string;
+}
+
+/** Предпочтения доставки по типу оповещения (вкладка «Настройки → Уведомления»). Записи
+ * в /api/notifications создаются всегда — здесь только про push/Telegram-доставку. */
+export interface NotificationPreference {
+    type: number; // NotificationType
+    pushEnabled: boolean;
+    telegramEnabled: boolean;
 }
 
 export interface AppNotification {

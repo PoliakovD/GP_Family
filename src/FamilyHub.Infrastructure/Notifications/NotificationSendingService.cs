@@ -83,16 +83,23 @@ public class NotificationSendingService(
     }
 
     /// <summary>
-    /// Попытка доставки по ВСЕМ зарегистрированным каналам — сбой одного не должен блокировать
-    /// остальные (свой try/catch на каждый sender, тот же принцип изоляции, что и внутри самих
-    /// реализаций, напр. TelegramNotificationSender.SendAsync). SentAt проставляется, если попытка
-    /// была предпринята хотя бы по одному каналу (симметрично прежнему однока­нальному поведению —
-    /// "мы попытались доставить", а не "доставка гарантированно успешна").
+    /// Попытка доставки по ВСЕМ зарегистрированным каналам, кроме тех, что пользователь выключил
+    /// для данного типа оповещения (см. UserNotificationPreference) — сбой одного не должен
+    /// блокировать остальные (свой try/catch на каждый sender, тот же принцип изоляции, что и
+    /// внутри самих реализаций, напр. TelegramNotificationSender.SendAsync). SentAt проставляется
+    /// безусловно (симметрично прежнему поведению — "мы обработали", а не "доставка гарантированно
+    /// успешна"): иначе запись с полностью выключенными каналами вечно попадала бы в ежедневный
+    /// свип ReminderScanJob.SendPendingAsync.
     /// </summary>
     public async Task TrySendAsync(Notification notification, CancellationToken ct = default)
     {
+        var preference = await db.Set<UserNotificationPreference>().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == notification.UserId && p.Type == notification.Type, ct);
+
         foreach (var sender in senders)
         {
+            if (!IsChannelEnabled(preference, sender.Channel)) continue;
+
             try
             {
                 await sender.SendAsync(notification, ct);
@@ -107,4 +114,15 @@ public class NotificationSendingService(
 
         notification.SentAt = DateTime.UtcNow;
     }
+
+    /// <summary>Отсутствие строки предпочтений — дефолт "все каналы включены" (разреженное
+    /// хранение, см. UserNotificationPreference). Log-канал (дев-заглушка) не фильтруется вовсе.</summary>
+    private static bool IsChannelEnabled(UserNotificationPreference? preference, NotificationChannel channel) =>
+        channel switch
+        {
+            NotificationChannel.Log => true,
+            NotificationChannel.Telegram => preference?.TelegramEnabled ?? true,
+            NotificationChannel.WebPush => preference?.PushEnabled ?? true,
+            _ => true,
+        };
 }

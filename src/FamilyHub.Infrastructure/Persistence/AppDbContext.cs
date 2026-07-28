@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<TelegramLinkCode> TelegramLinkCodes => Set<TelegramLinkCode>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
     public DbSet<GlobalMedicationKb> GlobalMedicationsKb => Set<GlobalMedicationKb>();
     public DbSet<PersonalCompatibilityResult> PersonalCompatibilityResults => Set<PersonalCompatibilityResult>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();

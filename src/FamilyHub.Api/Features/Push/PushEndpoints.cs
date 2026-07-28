@@ -22,11 +22,17 @@ public static class PushEndpoints
             return Results.NoContent();
         });
 
+        // Идемпотентно: клиенту важен только конечный результат "подписки больше нет", а не то,
+        // кто её убрал — тот же браузер сейчас или WebPushNotificationSender ранее при 404/410
+        // от push-релея (см. его SendAsync). 404 здесь означал бы "уже отписан", а не ошибку —
+        // раньше это ломало фронт (PushNotificationService.unsubscribe() падал ДО локальной
+        // отписки от SW, тумблер застревал "включённым"). 200 — запись правда была и её удалили
+        // сейчас, 204 — её и так уже не было; оба случая успешны.
         group.MapPost("/unsubscribe", async (
             UnsubscribePushRequest request, PushSubscriptionService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
             var removed = await service.UnsubscribeAsync(currentUser.UserId, request.Endpoint, ct);
-            return removed ? Results.NoContent() : Results.NotFound();
+            return removed ? Results.Ok() : Results.NoContent();
         });
     }
 }

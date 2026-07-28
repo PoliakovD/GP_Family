@@ -74,6 +74,14 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
     }
 
+    public async Task<bool> RevokeByIdAsync(Guid userId, Guid sessionId, CancellationToken ct = default)
+    {
+        var affected = await db.UserSessions
+            .Where(s => s.Id == sessionId && s.UserId == userId && s.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
+        return affected > 0;
+    }
+
     private (string Token, DateTime ExpiresAt) CreateAccessToken(Guid userId, string email, Guid sessionId)
     {
         var jwt = options.Value;

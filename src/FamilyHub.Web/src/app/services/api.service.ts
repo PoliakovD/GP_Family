@@ -15,6 +15,7 @@ import {
   MedicationOcrResponse,
   Medkit,
   MedkitInput,
+  NotificationPreference,
   PendingMember, RemoveMemberResult,
   SearchResponse,
   VapidPublicKeyResponse,
@@ -252,6 +253,11 @@ export class ApiService {
   getNotifications = (unreadOnly: boolean) =>
     this.get<AppNotification[]>(`/api/notifications?unreadOnly=${unreadOnly}`);
   markNotificationRead = (id: string) => this.post<void>(`/api/notifications/${id}/read`);
+
+  // Предпочтения доставки по типу оповещения (вкладка «Настройки → Уведомления»).
+  getNotificationPreferences = () => this.get<NotificationPreference[]>('/api/notifications/preferences');
+  saveNotificationPreferences = (prefs: NotificationPreference[]) =>
+    this.put<void>('/api/notifications/preferences', prefs);
 
   // Поиск (этап 3): гибрид Postgres-FTS (лекарства, справочник) + in-memory (анализы) — см. SearchService.
   // types — опциональный серверный фильтр источников ("medication"/"kb"/"record", можно через

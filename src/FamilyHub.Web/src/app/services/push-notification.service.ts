@@ -23,7 +23,8 @@ const PUSH_SW_URL = '/push-sw.js';
  *    ни с dev-панелью, ни с hot-reload, ни с прокси на API.
  *
  * Оба пути шлют/читают тот же формат подписки и тот же payload — выбор пути прозрачен для UI
- * (SettingsComponent просто спрашивает isSupported/isSubscribed, не зная про ngsw vs ручной SW).
+ * (вкладка «Настройки → Уведомления» просто спрашивает isSupported/isSubscribed, не зная про
+ * ngsw vs ручной SW).
  */
 @Injectable({ providedIn: 'root' })
 export class PushNotificationService {
@@ -127,10 +128,22 @@ export class PushNotificationService {
     this.isSubscribed.set(true);
   }
 
+  /**
+   * Локальная отписка (SW/PushManager) выполняется ВСЕГДА, независимо от результата вызова
+   * бэкенда. Раньше сбой api.unsubscribePush() (в первую очередь честный 404 — WebPushNotificationSender
+   * сам чистит строку PushSubscription при 404/410 от push-релея, см. его SendAsync, так что
+   * пользователь мог кликнуть "выключить" уже после того, как бэкенд сам всё убрал) выбрасывался
+   * ДО вызова swPush.unsubscribe()/subscription.unsubscribe() — тумблер оставался "включён",
+   * пользователь застревал с ошибкой "Not Found" и не мог отписаться вообще никак.
+   */
   async unsubscribe(): Promise<void> {
     const subscription = await this.currentSubscription();
     if (subscription) {
-      await this.api.unsubscribePush(subscription.endpoint);
+      try {
+        await this.api.unsubscribePush(subscription.endpoint);
+      } catch (e) {
+        this.log.log('push', 'info', `unsubscribePush не удался (${String(e)}) — всё равно отписываемся локально`);
+      }
     }
 
     if (this.usesNgsw) {

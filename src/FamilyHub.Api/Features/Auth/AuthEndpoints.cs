@@ -15,6 +15,8 @@ public record ConfirmRegistrationRequest(string Email, string Code, string Passw
 public record LoginRequest(string Email, string Password);
 public record ConfirmLinkEmailRequest(string Email, string Code, string Password);
 public record ConfirmResetPasswordRequest(string Email, string Code, string NewPassword);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record SessionResponse(Guid Id, DateTime LastSeenAt, DateTime ExpiresAt, string? IpAddress, string Device, bool IsCurrent);
 
 public static class AuthEndpoints
 {
@@ -149,6 +151,71 @@ public static class AuthEndpoints
                 hasTelegram = user.TelegramId is not null,
                 hasPassword = user.PasswordHash is not null,
             });
+        });
+
+        // Смена пароля из настроек — в отличие от reset-password/*, требует знания ТЕКУЩЕГО
+        // пароля, не анонимная. Компрометация пароля могла означать компрометацию сессии —
+        // отзываем все сессии пользователя и переиздаём cookie только текущего запроса (если он
+        // вообще пришёл по PWA-cookie; Telegram-режим сессий не имеет вовсе).
+        group.MapPost("/change-password", async (
+            ChangePasswordRequest request, PwaAuthService service, ICurrentUser currentUser,
+            ClaimsPrincipal principal, ITokenService tokenService, HttpContext http, CancellationToken ct) =>
+        {
+            var result = await service.ChangePasswordAsync(
+                currentUser.UserId, request.CurrentPassword, request.NewPassword, ct);
+            if (result != ChangePasswordResult.Success)
+            {
+                return result switch
+                {
+                    ChangePasswordResult.NoPassword => Results.BadRequest(new { code = "no_password" }),
+                    ChangePasswordResult.InvalidCurrentPassword => Results.BadRequest(new { code = "invalid_credentials" }),
+                    _ => Results.BadRequest(new { code = "weak_password" }),
+                };
+            }
+
+            await tokenService.RevokeAllForUserAsync(currentUser.UserId, ct);
+
+            var email = principal.FindFirst(FamilyHubClaimTypes.Email)?.Value;
+            if (email is not null && http.Request.Cookies.ContainsKey(PwaCookieNames.RefreshToken))
+                return await IssueSessionAsync(currentUser.UserId, email, tokenService, http, ct);
+
+            return Results.Ok();
+        });
+
+        // Список «мои устройства» (вкладка «Безопасность»): активные строки UserSession — ровно
+        // одна на устройство (ротация /refresh переиздаёт новую строку и гасит старую, см.
+        // TokenService.RefreshAsync). CreatedAt здесь означает "последняя ротация", а не первый
+        // вход — фронт подписывает это как "последняя активность".
+        group.MapGet("/sessions", async (
+            ICurrentUser currentUser, ClaimsPrincipal principal, AppDbContext db, CancellationToken ct) =>
+        {
+            var currentSessionId = Guid.TryParse(
+                principal.FindFirst(FamilyHubClaimTypes.SessionId)?.Value, out var sid) ? sid : (Guid?)null;
+
+            var now = DateTime.UtcNow;
+            var sessions = await db.UserSessions
+                .AsNoTracking()
+                .Where(s => s.UserId == currentUser.UserId && s.RevokedAt == null && s.ExpiresAt > now)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            return Results.Ok(sessions.Select(s => new SessionResponse(
+                s.Id, s.CreatedAt, s.ExpiresAt, s.IpAddress, UserAgentSummary.Describe(s.DeviceInfo), s.Id == currentSessionId)));
+        });
+
+        group.MapPost("/sessions/{id:guid}/revoke", async (
+            Guid id, ICurrentUser currentUser, ClaimsPrincipal principal, ITokenService tokenService,
+            HttpContext http, CancellationToken ct) =>
+        {
+            var revoked = await tokenService.RevokeByIdAsync(currentUser.UserId, id, ct);
+            if (!revoked) return Results.NotFound();
+
+            var currentSessionId = Guid.TryParse(
+                principal.FindFirst(FamilyHubClaimTypes.SessionId)?.Value, out var sid) ? sid : (Guid?)null;
+            if (id == currentSessionId)
+                PwaSessionCookieWriter.ClearSessionCookies(http);
+
+            return Results.NoContent();
         });
 
         group.MapPost("/link-email/start", async (

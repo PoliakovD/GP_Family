@@ -1,0 +1,12 @@
+// Четыре русских ярлыка не влезают в узкий экран — .seg в styles.scss inline-flex без переноса,
+// та же горизонтальная прокрутка, что и в family-details.component.scss для сегмент-контрола вкладок.
+.seg {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+
+  .seg-opt {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

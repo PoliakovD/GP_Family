@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth.service';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
+import { PASSWORD_PATTERN } from '../settings/settings-task';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
 type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
@@ -15,10 +16,6 @@ type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
 /** Формат видимого username — зеркалит UsernameRules на бэкенде (единый источник истины — сервер). */
 const USERNAME_PATTERN = /^[a-z][a-z0-9_]{4,31}$/;
 const USERNAME_CHECK_DEBOUNCE_MS = 400;
-
-/** Зеркалит FamilyHub.Domain.ValueObjects.PasswordRules на бэкенде: 8-100 симв., строчная +
- * заглавная латинские буквы + цифра. Единый источник истины — сервер; здесь только UX. */
-const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,100}$/;
 
 /**
  * PWA-вход (этап 2 п.2.4): email+пароль, регистрация степпером email/username/имя/пароль → код,
