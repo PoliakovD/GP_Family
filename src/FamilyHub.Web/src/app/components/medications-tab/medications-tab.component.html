@@ -1,17 +1,53 @@
 <div>
   <h3 class="mb-3">Аптечка</h3>
 
-  @if (state.activeFamilies().length === 0 && !state.loading()) {
-    <p class="muted">
-      Нет ни одной семьи, в которой вы состоите как активный участник.
-      Создайте семью или примите инвайт на вкладке «Семьи».
-    </p>
-  }
+  <app-search-field
+    placeholder="Поиск по всем аптечкам…"
+    [value]="search.query"
+    (valueChange)="onQueryChange($event)"
+  />
 
-  @for (f of state.activeFamilies(); track f.id) {
-    <div class="mb-4">
-      <div class="card-kicker mb-2">{{ f.name }}</div>
-      <app-medkits-panel [familyId]="f.id" />
-    </div>
+  @if (search.query.trim().length > 0) {
+    @if (search.error) {
+      <div class="alert-danger mb-2">{{ search.error }}</div>
+    }
+
+    @if (search.loading) {
+      <app-loading-spinner text="Ищем…" />
+    } @else {
+      @for (item of search.items; track item.id) {
+        <div class="card mb-2 medication-card card-clickable" [class]="expiryClass(item.medication?.expiryDate)" (click)="openResult(item)">
+          <div class="name-with-tags mb-1">
+            <strong class="card-title">{{ item.title }}</strong>
+          </div>
+          @if (item.medication) {
+            <p class="muted mb-1">{{ item.medication.familyName }} · {{ item.medication.medkitName }}</p>
+          }
+          @if (item.medication?.expiryDate) {
+            <p class="muted mb-0">Срок годности: {{ item.medication?.expiryDate }}</p>
+          } @else {
+            <p class="muted mb-0">Срок годности не указан</p>
+          }
+        </div>
+      }
+
+      @if (search.searched && search.items.length === 0) {
+        <p class="muted">Ничего не найдено.</p>
+      }
+    }
+  } @else {
+    @if (state.activeFamilies().length === 0 && !state.loading()) {
+      <p class="muted">
+        Нет ни одной семьи, в которой вы состоите как активный участник.
+        Создайте семью или примите инвайт на странице «Семьи» (кнопка на Главной).
+      </p>
+    }
+
+    @for (f of state.activeFamilies(); track f.id) {
+      <div class="mb-4">
+        <div class="card-kicker mb-2">{{ f.name }}</div>
+        <app-medkits-panel [familyId]="f.id" [expandMedkitId]="f.id === expandFamilyId() ? expandMedkitId() : null" />
+      </div>
+    }
   }
 </div>

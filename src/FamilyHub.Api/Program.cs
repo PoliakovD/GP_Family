@@ -21,6 +21,7 @@ using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
@@ -85,6 +86,11 @@ if (string.IsNullOrWhiteSpace(builder.Configuration["Encryption:MasterKey"]))
 builder.Services.AddSingleton<IFieldCipher, AesGcmFieldCipher>();
 builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
 builder.Services.AddSingleton<DownloadTokenService>();
+
+// Стеммер/триграммы — чистые функции без состояния (этап 3, ADR-0003): singleton безопасен.
+// Общий для Modules.Medical (медкарты) и Modules.Birthdays (дни рождения) — оба зависят только
+// от Domain/Infrastructure и не ссылаются друг на друга, поэтому регистрация — здесь, не в модуле.
+builder.Services.AddSingleton<IRussianTextSearcher, RussianTextSearcher>();
 
 // --- Persistence ---
 builder.Services.AddDbContext<AppDbContext>(options =>

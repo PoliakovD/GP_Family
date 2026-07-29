@@ -121,8 +121,12 @@
   } @else if (loading) {
     <app-loading-spinner />
   } @else {
-    @for (item of items; track item.id) {
-      <div class="card mb-2 medication-card" [class]="expiryClass(item)">
+    @if (items.length > 0) {
+      <app-search-field placeholder="Поиск в аптечке…" [value]="searchQuery" (valueChange)="searchQuery = $event" />
+    }
+
+    @for (item of filteredItems; track item.id) {
+      <div class="card mb-2 medication-card" [class]="expiryClassFor(item)">
         <div class="name-with-tags mb-1">
           <strong class="card-title">{{ item.name }}</strong>
           @if (quantityOf(item)) {
@@ -160,6 +164,8 @@
 
     @if (items.length === 0) {
       <p class="muted">Аптечка пуста.</p>
+    } @else if (filteredItems.length === 0) {
+      <p class="muted">Ничего не найдено.</p>
     } @else {
       <div class="expiry-legend d-flex flex-wrap gap-3 mt-2">
         <span class="expiry-legend-item">

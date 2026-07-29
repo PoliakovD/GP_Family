@@ -44,11 +44,15 @@ public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger
         return family.Id;
     }
 
-    /// <summary>Семьи, где пользователь состоит (включая PendingApproval — там он "ждёт", но видит сам факт заявки).</summary>
+    /// <summary>Семьи, где пользователь состоит (включая PendingApproval — там он "ждёт", но видит сам факт заявки).
+    /// Семьи, где пользователь админ, идут первыми (FamilyRole.Admin=1 > Member=0) — так на Главной/на
+    /// странице «Семьи» видно в первую очередь то, чем управляешь.</summary>
     public async Task<List<FamilySummary>> GetMyFamiliesAsync(Guid userId, CancellationToken ct = default)
     {
         var result = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.UserId == userId)
+            .OrderByDescending(m => m.Role)
+            .ThenBy(m => m.Family.Name)
             .Select(m => new FamilySummary(m.FamilyId, m.Family.Name, m.Role, m.Status))
             .ToListAsync(ct);
 

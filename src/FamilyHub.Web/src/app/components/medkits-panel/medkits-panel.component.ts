@@ -18,6 +18,10 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 export class MedkitsPanelComponent implements OnInit {
   readonly familyId = input.required<string>();
 
+  /** Аптечка, которую нужно автоматически раскрыть — клик по результату поиска (Главная/поиск
+   * в Аптечке) знает конкретный medkitId заранее, ждать загрузки items для этого не нужно. */
+  readonly expandMedkitId = input<string | null>(null);
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -49,6 +53,16 @@ export class MedkitsPanelComponent implements OnInit {
       this.expandedId = null;
       this.everOpenedIds.clear();
       void this.refresh();
+    });
+
+    // Автораскрытие по клику из поиска — expandedId/everOpenedIds здесь обычные поля, не
+    // сигналы, поэтому запись в них из effect() не требует allowSignalWrites (см. правило в
+    // patterns/frontend_web.md — оно про запись именно в signal, не в произвольное поле).
+    effect(() => {
+      const id = this.expandMedkitId();
+      if (!id) return;
+      this.expandedId = id;
+      this.everOpenedIds.add(id);
     });
   }
 

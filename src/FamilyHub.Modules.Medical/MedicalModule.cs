@@ -23,8 +23,8 @@ public static class MedicalModule
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<MedicationOcrService>();
-        // Стеммер/триграммы — чистые функции без состояния (этап 3, ADR-0003): singleton безопасен.
-        services.AddSingleton<IRussianTextSearcher, RussianTextSearcher>();
+        // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
+        // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();
         return services;
     }

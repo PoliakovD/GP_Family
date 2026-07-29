@@ -18,10 +18,14 @@
     <button class="btn btn-primary btn-sm align-self-start" (click)="handleSubmit()">Добавить запись</button>
   </div>
 
+  @if (!loading && items.length > 0) {
+    <app-search-field placeholder="Поиск по анализам…" [value]="search.query" (valueChange)="onSearchQueryChange($event)" />
+  }
+
   @if (loading) {
     <app-loading-spinner />
   } @else {
-    @for (item of items; track item.id) {
+    @for (item of displayedItems; track item.id) {
       <div class="card mb-2">
         <div class="d-flex align-items-start justify-content-between gap-2">
           <div>
@@ -62,6 +66,8 @@
 
     @if (items.length === 0) {
       <p class="muted">Записей нет.</p>
+    } @else if (displayedItems.length === 0) {
+      <p class="muted">Ничего не найдено.</p>
     }
   }
 

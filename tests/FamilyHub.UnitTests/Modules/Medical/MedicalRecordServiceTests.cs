@@ -1,8 +1,8 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.MedicalRecords;
-using FamilyHub.Modules.Medical.Search;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;

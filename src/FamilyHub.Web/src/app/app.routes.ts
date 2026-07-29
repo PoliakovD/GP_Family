@@ -78,13 +78,17 @@ export const routes: Routes = [
   },
 
   // Данные: требуют входа (PWA) и принятого согласия ПДн (задачи 2.3/2.4).
-  { path: '', redirectTo: 'families', pathMatch: 'full' },
+  { path: '', redirectTo: 'home', pathMatch: 'full' },
   {
-    path: 'search',
+    // Главная (редизайн навигации): глобальный поиск + вход в «Семьи» + виджет дней рождения.
+    path: 'home',
     canActivate: [authGuard, consentGuard],
     loadComponent: () =>
-      import('./components/search/search.component').then((m) => m.SearchComponent),
+      import('./components/home/home.component').then((m) => m.HomeComponent),
   },
+  // Обратная совместимость со старой прямой ссылкой на отдельную страницу поиска — теперь
+  // поиск живёт на Главной (см. HomeComponent).
+  { path: 'search', redirectTo: 'home' },
   {
     path: 'families',
     canActivate: [authGuard, consentGuard],
@@ -145,5 +149,5 @@ export const routes: Routes = [
         (m) => m.NotificationsTabComponent,
       ),
   },
-  { path: '**', redirectTo: 'families' },
+  { path: '**', redirectTo: 'home' },
 ];

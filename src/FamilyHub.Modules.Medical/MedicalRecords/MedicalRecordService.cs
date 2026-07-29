@@ -5,7 +5,7 @@ using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
-using FamilyHub.Modules.Medical.Search;
+using FamilyHub.Infrastructure.Search;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 

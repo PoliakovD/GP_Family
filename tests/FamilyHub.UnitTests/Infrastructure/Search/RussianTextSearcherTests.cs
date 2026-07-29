@@ -1,13 +1,13 @@
-using FamilyHub.Modules.Medical.Search;
+using FamilyHub.Infrastructure.Search;
 using FluentAssertions;
 using Xunit;
 
-namespace FamilyHub.UnitTests.Modules.Medical;
+namespace FamilyHub.UnitTests.Infrastructure.Search;
 
 /// <summary>
-/// Этап 3: in-memory поиск по зашифрованным медкартам должен находить словоформы («анализ» ↔
-/// «анализы») и опечатки OCR («гемоглабин» → «гемоглобин»), как это делает Postgres-FTS для
-/// незашифрованных данных (ADR-0003).
+/// Этап 3: in-memory поиск по зашифрованным данным (медкарты, дни рождения) должен находить
+/// словоформы («анализ» ↔ «анализы») и опечатки OCR («гемоглабин» → «гемоглобин»), как это делает
+/// Postgres-FTS для незашифрованных данных (ADR-0003).
 /// </summary>
 public class RussianTextSearcherTests
 {

@@ -3,6 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Birthday } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { matchesQuery } from '../../shared/util/local-filter';
 import {
   MONTHS_NOM,
   birthdayMetaLabel,
@@ -13,7 +15,7 @@ import {
 @Component({
   selector: 'app-birthdays-panel',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent],
+  imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
   templateUrl: './birthdays-panel.component.html',
 })
 export class BirthdaysPanelComponent implements OnInit {
@@ -22,6 +24,8 @@ export class BirthdaysPanelComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   items: Birthday[] = [];
+  /** Локальный фильтр по имени — источника в SearchService для дней рождения нет (ADR-0003). */
+  searchQuery = '';
   form = { personName: '', date: '' };
   editingId: string | null = null;
   error: string | null = null;
@@ -38,6 +42,7 @@ export class BirthdaysPanelComponent implements OnInit {
       const id = this.familyId();
       if (id === this.loadedFamilyId) return;
       this.resetForm();
+      this.searchQuery = '';
       void this.refresh();
     });
   }
@@ -108,10 +113,15 @@ export class BirthdaysPanelComponent implements OnInit {
     return birthdayMetaLabel(item.date);
   }
 
+  /** Список, отфильтрованный по имени, — группировка ниже строится уже поверх него. */
+  get filteredItems(): Birthday[] {
+    return this.items.filter((item) => matchesQuery(this.searchQuery, item.personName));
+  }
+
   /** Список сгруппирован по месяцу дня рождения, начиная с текущего месяца (по кругу). */
   get groupedByMonth(): { month: string; items: Birthday[] }[] {
     const groups = new Map<number, Birthday[]>();
-    for (const item of this.items) {
+    for (const item of this.filteredItems) {
       const m = parseLocalBirthDate(item.date).getMonth();
       const list = groups.get(m);
       if (list) list.push(item);

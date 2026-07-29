@@ -1,4 +1,5 @@
 using FamilyHub.Infrastructure.Consents;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Birthdays.Birthdays;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,9 @@ public static class BirthdayModule
     public static IServiceCollection AddBirthdayModule(this IServiceCollection services)
     {
         services.AddScoped<BirthdayService>();
+        // Источник для глобального поиска (SearchService, Modules.Medical) — DI-абстракция из
+        // Infrastructure, без прямой зависимости между модулями (см. IBirthdaySearchSource).
+        services.AddScoped<IBirthdaySearchSource, BirthdaySearchSource>();
         return services;
     }
 

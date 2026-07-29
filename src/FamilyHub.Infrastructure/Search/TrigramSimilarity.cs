@@ -1,4 +1,4 @@
-namespace FamilyHub.Modules.Medical.Search;
+namespace FamilyHub.Infrastructure.Search;
 
 /// <summary>
 /// Символьные триграммы + мера схожести Жаккара — та же модель, что использует Postgres-расширение

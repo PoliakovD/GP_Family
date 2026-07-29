@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import type { Birthday } from '../../models/types';
+import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { matchesQuery } from '../../shared/util/local-filter';
 import {
   birthdayMetaLabel,
   birthdayUrgencyLabel,
@@ -12,15 +14,19 @@ import {
 const TOP_N = 3;
 
 /**
- * Виджет «ближайшие дни рождения» на Главной (редизайн навигации) — read-only срез по ВСЕМ
+ * «Дни рождения» на Главной (редизайн навигации, +встроенный поиск) — read-only срез по ВСЕМ
  * активным семьям пользователя, в отличие от BirthdaysPanelComponent (полное CRUD по одной
  * семье, семейный саб-таб / отдельная страница /birthdays). Датовая арифметика общая —
- * shared/util/birthday-date.ts, не дублируем.
+ * shared/util/birthday-date.ts, не дублируем. Без запроса — top-N ближайших; с запросом —
+ * все совпавшие по имени (по всем семьям сразу, не только среди top-N), тоже по возрастанию
+ * дней до наступления. Локальный фильтр, а не /api/search: набор уже загружен целиком (виджет
+ * и так тянет birthdays по каждой активной семье), а строить отдельный HTTP-поиск ради
+ * содержимого, которое уже в памяти, не нужно.
  */
 @Component({
   selector: 'app-birthday-widget',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, SearchFieldComponent],
   templateUrl: './birthday-widget.component.html',
 })
 export class BirthdayWidgetComponent implements OnInit {
@@ -29,6 +35,7 @@ export class BirthdayWidgetComponent implements OnInit {
 
   items: Birthday[] = [];
   loading = true;
+  searchQuery = '';
 
   // undefined — ещё ни разу не загружали для текущего набора семей.
   private loadedFamilyIds: string | undefined = undefined;
@@ -83,5 +90,14 @@ export class BirthdayWidgetComponent implements OnInit {
       .slice()
       .sort((a, b) => daysUntilNextBirthday(a.date) - daysUntilNextBirthday(b.date))
       .slice(0, TOP_N);
+  }
+
+  /** Без запроса — top-N; с запросом — все совпавшие по имени, без ограничения TOP_N. */
+  get displayed(): Birthday[] {
+    const q = this.searchQuery.trim();
+    if (!q) return this.upcoming;
+    return this.items
+      .filter((item) => matchesQuery(q, item.personName))
+      .sort((a, b) => daysUntilNextBirthday(a.date) - daysUntilNextBirthday(b.date));
   }
 }

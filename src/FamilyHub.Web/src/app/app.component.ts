@@ -35,11 +35,12 @@ export class AppComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly log = inject(DevLoggerService);
 
-  // Редизайн навигации: 7 табов → 4 (Поиск — иконка в шапке, см. app.component.html; Аптечка +
-  // Анализы объединены в хаб «Здоровье», /health/*; Дни рождения — виджет на Главной + отдельная
-  // страница /birthdays без своего таба, см. FamiliesTabComponent).
+  // Редизайн навигации: 7 табов → 4 (Аптечка + Анализы объединены в хаб «Здоровье», /health/*;
+  // Дни рождения — виджет на Главной + отдельная страница /birthdays без своего таба, см.
+  // FamiliesTabComponent). Поиск с Главной больше не иконка в шапке (см. app.component.html) —
+  // теперь это сама Главная (HomeComponent), а список семей переехал на отдельную /families.
   readonly tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'families', label: 'Главная', icon: 'ph-users-three' },
+    { id: 'home', label: 'Главная', icon: 'ph-house' },
     { id: 'health', label: 'Здоровье', icon: 'ph-heartbeat' },
     { id: 'notifications', label: 'Уведомл.', icon: 'ph-bell' },
     { id: 'settings', label: 'Профиль', icon: 'ph-user' },

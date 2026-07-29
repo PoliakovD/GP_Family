@@ -3,14 +3,16 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
-import type { Attachment, MedicalRecord } from '../../models/types';
+import type { Attachment, MedicalRecord, SearchResultItem } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
+import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { DebouncedSearch, SEARCH_MIN_QUERY_LENGTH } from '../../shared/util/debounced-search';
 
 @Component({
   selector: 'app-medical-records-tab',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent, BottomSheetComponent],
+  imports: [FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent],
   templateUrl: './medical-records-tab.component.html',
 })
 export class MedicalRecordsTabComponent implements OnInit {
@@ -22,6 +24,29 @@ export class MedicalRecordsTabComponent implements OnInit {
   form = { personName: '', recordDate: '', doctor: '', description: '' };
   error: string | null = null;
   loading = true;
+
+  /** Поиск по анализам (types=record) — серверный, но рендерим уже загруженные `items`
+   * (шторка «Доступ», вложения и т.п. живут только в них; сервер отдаёт только id + score),
+   * отфильтрованные и упорядоченные по совпавшим id. */
+  readonly search = new DebouncedSearch<SearchResultItem>(
+    (q) => this.api.search(q, 'record').then((r) => r.items),
+    (err) => (err instanceof ApiError ? err.message : 'Не удалось выполнить поиск.'),
+  );
+
+  onSearchQueryChange(value: string): void {
+    this.search.query = value;
+    this.search.onQueryChange();
+  }
+
+  get displayedItems(): MedicalRecord[] {
+    if (this.search.query.trim().length < SEARCH_MIN_QUERY_LENGTH || !this.search.searched) {
+      return this.items;
+    }
+    const scoreById = new Map(this.search.items.map((i) => [i.id, i.score]));
+    return this.items
+      .filter((r) => scoreById.has(r.id))
+      .sort((a, b) => scoreById.get(b.id)! - scoreById.get(a.id)!);
+  }
 
   // Бэкенд не отдаёт список вложений отдельным эндпоинтом — храним то, что
   // загрузили в текущей сессии (ответ POST .../attachments содержит Attachment целиком).

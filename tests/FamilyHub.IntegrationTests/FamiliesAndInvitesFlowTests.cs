@@ -68,6 +68,35 @@ public class FamiliesAndInvitesFlowTests(FamilyHubWebFactory factory) : Integrat
     }
 
     [Fact]
+    public async Task MyFamiliesList_OrdersAdminFamiliesBeforeMemberFamilies()
+    {
+        // Пользователь — админ своей семьи "Я-Семья" и обычный участник чужой "Ай-Семья"
+        // (имя выбрано так, чтобы при сортировке по одному только имени "Ай-Семья" оказалась
+        // раньше — так тест доказывает, что роль важнее имени, а не совпадает с ним случайно).
+        var user = ClientAs(FreshTelegramId());
+        var ownFamilyResponse = await user.PostAsJsonAsync("/api/families", new { Name = "Я-Семья" });
+        var ownFamily = await ownFamilyResponse.Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
+
+        var otherAdmin = ClientAs(FreshTelegramId());
+        var otherFamilyResponse = await otherAdmin.PostAsJsonAsync("/api/families", new { Name = "Ай-Семья" });
+        var otherFamily = await otherFamilyResponse.Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
+        var inviteResponse = await otherAdmin.PostAsJsonAsync($"/api/families/{otherFamily!.Id}/invites",
+            new CreateInviteRequest(TargetUserId: null, AssignedRole: FamilyRole.Member, MaxUses: 1, ExpiresAt: null));
+        var invite = await inviteResponse.Content.ReadFromJsonAsync<CreateInviteResponseDto>(JsonOpts);
+        await user.PostAsync($"/api/invites/{invite!.Code}/redeem", null);
+        var pending = await (await otherAdmin.GetAsync($"/api/families/{otherFamily.Id}/pending")).Content.ReadFromJsonAsync<List<PendingMemberDto>>(JsonOpts);
+        await otherAdmin.PostAsync($"/api/families/{otherFamily.Id}/members/{pending!.Single().UserId}/approve", null);
+
+        var families = await (await user.GetAsync("/api/families")).Content.ReadFromJsonAsync<List<FamilySummaryDto>>(JsonOpts);
+
+        families.Should().HaveCount(2);
+        families![0].Id.Should().Be(ownFamily!.Id, "семья, где пользователь админ, должна идти первой");
+        families[0].MyRole.Should().Be(FamilyRole.Admin);
+        families[1].Id.Should().Be(otherFamily.Id);
+        families[1].MyRole.Should().Be(FamilyRole.Member);
+    }
+
+    [Fact]
     public async Task CreateInvite_AsNonAdminMember_Returns403()
     {
         var (familyId, admin) = await CreateFamilyAsAdminAsync();

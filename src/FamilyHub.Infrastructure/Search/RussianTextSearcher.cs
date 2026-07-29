@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace FamilyHub.Modules.Medical.Search;
+namespace FamilyHub.Infrastructure.Search;
 
 /// <inheritdoc cref="IRussianTextSearcher"/>
 public sealed class RussianTextSearcher : IRussianTextSearcher

@@ -1,9 +1,12 @@
-namespace FamilyHub.Modules.Medical.Search;
+namespace FamilyHub.Infrastructure.Search;
 
 /// <summary>
 /// In-memory полнотекстовый поиск с русской морфологией и устойчивостью к опечаткам OCR —
-/// применяется там, где Postgres-FTS невозможен физически (зашифрованные at-rest поля медкарт,
-/// ADR-0002/ADR-0003): данные уже расшифрованы в памяти сервиса, дальше матчинг идёт здесь.
+/// применяется там, где Postgres-FTS невозможен физически (зашифрованные at-rest поля, ADR-0002/
+/// ADR-0003): данные уже расшифрованы в памяти сервиса, дальше матчинг идёт здесь. Живёт в
+/// Infrastructure (не в конкретном модуле), т.к. используется несколькими независимыми модулями
+/// (Modules.Medical — медкарты, Modules.Birthdays — дни рождения), которые сознательно не
+/// ссылаются друг на друга (см. AddMedicalModule/AddBirthdayModule).
 /// </summary>
 public interface IRussianTextSearcher
 {

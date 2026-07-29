@@ -1,0 +1,16 @@
+<div class="mb-3 d-flex align-items-center gap-2">
+  <i class="ph ph-magnifying-glass" style="font-size:20px;color:var(--color-neutral-600)" aria-hidden="true"></i>
+  <input
+    class="input flex-fill"
+    type="search"
+    [placeholder]="placeholder"
+    autocomplete="off"
+    [ngModel]="value"
+    (ngModelChange)="onInput($event)"
+  />
+  @if (value.length > 0) {
+    <button type="button" class="btn btn-icon btn-ghost" aria-label="Очистить" (click)="clear()">
+      <i class="ph-bold ph-x" aria-hidden="true"></i>
+    </button>
+  }
+</div>

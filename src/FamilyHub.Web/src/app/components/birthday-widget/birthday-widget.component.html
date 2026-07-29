@@ -1,4 +1,4 @@
-@if (!loading && upcoming.length > 0) {
+@if (!loading && items.length > 0) {
   <div class="card elev-sm mb-3">
     <div class="d-flex align-items-center justify-content-between mb-1">
       <div class="card-kicker mb-0">Дни рождения</div>
@@ -7,7 +7,9 @@
       </a>
     </div>
 
-    @for (item of upcoming; track item.id) {
+    <app-search-field placeholder="Поиск по имени…" [value]="searchQuery" (valueChange)="searchQuery = $event" />
+
+    @for (item of displayed; track item.id) {
       <div class="d-flex align-items-start gap-2">
         <i class="ph-fill ph-cake" style="font-size:18px;color:var(--color-accent)" aria-hidden="true"></i>
         <div class="flex-fill">
@@ -15,6 +17,10 @@
           <div class="card-meta">{{ metaLabel(item) }}</div>
         </div>
       </div>
+    }
+
+    @if (searchQuery.trim().length > 0 && displayed.length === 0) {
+      <p class="muted mb-0" style="font-size:13px">Ничего не найдено.</p>
     }
   </div>
 }

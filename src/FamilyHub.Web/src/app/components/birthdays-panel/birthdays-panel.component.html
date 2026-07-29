@@ -16,6 +16,10 @@
     </div>
   </div>
 
+  @if (!loading && items.length > 0) {
+    <app-search-field placeholder="Поиск по имени…" [value]="searchQuery" (valueChange)="searchQuery = $event" />
+  }
+
   @if (loading) {
     <app-loading-spinner />
   } @else {
@@ -40,6 +44,8 @@
 
     @if (items.length === 0) {
       <p class="muted">Дни рождения не добавлены.</p>
+    } @else if (filteredItems.length === 0) {
+      <p class="muted">Ничего не найдено.</p>
     }
   }
 </div>

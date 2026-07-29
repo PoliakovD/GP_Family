@@ -4,7 +4,10 @@ import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { compressImage } from '../../shared/util/image-compression';
+import { expiryClass } from '../../shared/util/expiry';
+import { matchesQuery } from '../../shared/util/local-filter';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 
 const MAX_PHOTOS = 5;
 const KNOWN_KEYS = ['instructions', 'quantity'];
@@ -23,7 +26,7 @@ let nextInstanceId = 0;
 @Component({
   selector: 'app-medications-panel',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent],
+  imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
   templateUrl: './medications-panel.component.html',
   styleUrl: './medications-panel.component.scss',
 })
@@ -44,6 +47,9 @@ export class MedicationsPanelComponent implements OnInit {
   readonly photoInputId = `medication-photo-input-${nextInstanceId++}`;
 
   items: Medication[] = [];
+  /** Локальный фильтр внутри уже загруженной аптечки — не источник в SearchService, заводить
+   * серверный поиск ради одной аптечки на сотню наименований не нужно (см. plan). */
+  searchQuery = '';
   form = { name: '', expiryDate: '', instructions: '', quantity: '' };
   extraRows: DataRow[] = [];
   editingId: string | null = null;
@@ -64,6 +70,12 @@ export class MedicationsPanelComponent implements OnInit {
 
   get recognizing(): boolean {
     return this.recognizeStep !== 'idle';
+  }
+
+  /** Фильтр по названию, инструкции и всем доп. полям (в т.ч. найденным при OCR-распознавании). */
+  get filteredItems(): Medication[] {
+    return this.items.filter((item) =>
+      matchesQuery(this.searchQuery, item.name, ...Object.values(item.data ?? {})));
   }
 
   stepState(id: RecognizeStep): 'done' | 'active' | 'pending' {
@@ -88,6 +100,7 @@ export class MedicationsPanelComponent implements OnInit {
       if (id === this.loadedMedkitId) return;
       this.resetForm();
       this.activeTab = 'list';
+      this.searchQuery = '';
       void this.refresh();
     });
   }
@@ -113,16 +126,9 @@ export class MedicationsPanelComponent implements OnInit {
     }
   }
 
-  /** Цветовая индикация по сроку годности: ≤1 мес — красный, 2-4 мес — жёлтый, дальше — зелёный, без даты — фиолетовый. */
-  expiryClass(item: Medication): string {
-    if (!item.expiryDate) return 'expiry-none';
-
-    const daysLeft = Math.floor(
-      (new Date(item.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-    );
-    if (daysLeft <= 30) return 'expiry-danger';
-    if (daysLeft <= 120) return 'expiry-warning';
-    return 'expiry-ok';
+  /** Цветовая индикация по сроку годности — общая с плоским списком поиска Аптечки (MedicationsTabComponent). */
+  expiryClassFor(item: Medication): string {
+    return expiryClass(item.expiryDate);
   }
 
   dataEntries(item: Medication): DataRow[] {

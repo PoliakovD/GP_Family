@@ -136,9 +136,27 @@ export interface Attachment {
     uploadedAt: string;
 }
 
-/** Этап 3: три источника с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService. */
-export const SearchResultType = { Medication: 0, Kb: 1, Record: 2 } as const;
+/** Этап 3: четыре источника с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService. */
+export const SearchResultType = { Medication: 0, Kb: 1, Record: 2, Birthday: 3 } as const;
 export type SearchResultType = typeof SearchResultType[keyof typeof SearchResultType];
+
+/** Контекст лекарства в результате поиска — где оно лежит и до какого срока годно.
+ * Заполнен только для SearchResultType.Medication (см. SearchService.SearchMedicationsAsync). */
+export interface MedicationSearchContext {
+    familyId: string;
+    familyName: string;
+    medkitId: string;
+    medkitName: string;
+    expiryDate: string | null; // DateOnly "yyyy-MM-dd"
+}
+
+/** Контекст дня рождения в результате поиска — в какой семье он записан и когда.
+ * Заполнен только для SearchResultType.Birthday (см. BirthdaySearchSource на бэкенде). */
+export interface BirthdaySearchContext {
+    familyId: string;
+    familyName: string;
+    date: string; // DateOnly "yyyy-MM-dd"
+}
 
 export interface SearchResultItem {
     type: number; // SearchResultType
@@ -146,6 +164,8 @@ export interface SearchResultItem {
     title: string;
     snippet: string | null;
     score: number;
+    birthday: BirthdaySearchContext | null;
+    medication: MedicationSearchContext | null;
 }
 
 export interface SearchResponse {

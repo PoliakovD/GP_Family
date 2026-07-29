@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Birthdays.Birthdays;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
@@ -56,6 +57,27 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var response = await SearchAsync(admin, "ибупрофена");
 
         response!.Items.Should().ContainSingle(i => i.Type == SearchResultType.Medication && i.Title == "Ибупрофен");
+    }
+
+    [Fact]
+    public async Task Search_Medication_IncludesFamilyAndMedkitContext()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        var medkitId = await CreateMedkitAsync(admin, familyId);
+        var expiry = DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(6);
+        await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
+            new CreateMedicationRequest("Нурофен", expiry, null));
+
+        // Контекст нужен UI Аптечки, чтобы клик по результату поиска раскрывал именно эту
+        // аптечку/семью, а не просто открывал общий список раздела (см. HomeComponent/MedicationsTabComponent).
+        var response = await SearchAsync(admin, "нурофен");
+
+        var item = response!.Items.Should().ContainSingle(i => i.Type == SearchResultType.Medication).Subject;
+        item.Medication.Should().NotBeNull();
+        item.Medication!.FamilyId.Should().Be(familyId);
+        item.Medication.MedkitId.Should().Be(medkitId);
+        item.Medication.ExpiryDate.Should().Be(expiry);
     }
 
     [Fact]
@@ -170,6 +192,39 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
     }
 
     [Fact]
+    public async Task Search_FindsBirthday_ByTypo_InMemory_DespiteAtRestEncryption()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        await admin.PostAsJsonAsync($"/api/families/{familyId}/birthdays",
+            new CreateBirthdayRequest("Александра Иванова", new DateOnly(1990, 5, 20)));
+
+        // PersonName зашифровано at-rest (ADR-0002) — как и у медкарт, находится только через
+        // in-memory поиск после расшифровки (ADR-0003); опечатка проверяет триграммный fallback.
+        var response = await SearchAsync(admin, "Алексндра");
+
+        var item = response!.Items.Should().ContainSingle(i => i.Type == SearchResultType.Birthday).Subject;
+        item.Title.Should().Be("Александра Иванова");
+        item.Birthday.Should().NotBeNull();
+        item.Birthday!.FamilyId.Should().Be(familyId);
+        item.Birthday.Date.Should().Be(new DateOnly(1990, 5, 20));
+    }
+
+    [Fact]
+    public async Task Search_Birthday_IsScopedToOwnFamilies_NotVisibleToOutsider()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        await admin.PostAsJsonAsync($"/api/families/{familyId}/birthdays",
+            new CreateBirthdayRequest("Уникальноеимя77", new DateOnly(1985, 1, 1)));
+        var outsider = ClientAs(FreshTelegramId());
+
+        var response = await SearchAsync(outsider, "уникальноеимя77");
+
+        response!.Items.Should().BeEmpty("день рождения чужой семьи не должен попадать в результаты поиска");
+    }
+
+    [Fact]
     public async Task Search_ShortOrEmptyQuery_ReturnsEmptyWithoutError()
     {
         var user = ClientAs(FreshTelegramId());
@@ -189,17 +244,19 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var medkitId = await CreateMedkitAsync(admin, familyId);
         const string token = "уникальныйтокен777";
 
-        // Один и тот же токен — и в лекарстве, и в медкарте: без фильтра находятся оба типа.
+        // Один и тот же токен — в лекарстве, медкарте и дне рождения: без фильтра находятся все три.
         await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications",
             new CreateMedicationRequest(token, null, null));
         await admin.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
                 "Тестовый Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null));
+        await admin.PostAsJsonAsync($"/api/families/{familyId}/birthdays",
+            new CreateBirthdayRequest(token, new DateOnly(2000, 1, 1)));
 
         var unfiltered = await SearchAsync(admin, token);
         unfiltered!.Items.Select(i => i.Type).Should().BeEquivalentTo(
-            [SearchResultType.Medication, SearchResultType.Record],
-            "без фильтра оба совпавших источника должны попасть в выдачу");
+            [SearchResultType.Medication, SearchResultType.Record, SearchResultType.Birthday],
+            "без фильтра все три совпавших источника должны попасть в выдачу");
 
         var medicationOnly = await SearchAsync(admin, token, types: "medication");
         medicationOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Medication,
@@ -207,6 +264,9 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
 
         var recordOnly = await SearchAsync(admin, token, types: "record");
         recordOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Record);
+
+        var birthdayOnly = await SearchAsync(admin, token, types: "birthday");
+        birthdayOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Birthday);
     }
 
     [Fact]
