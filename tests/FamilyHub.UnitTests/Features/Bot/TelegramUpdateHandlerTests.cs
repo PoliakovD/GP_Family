@@ -217,6 +217,57 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
             Arg.Any<CancellationToken>());
     }
 
+    private static Update TextUpdate(long fromId, long chatId, string text, string firstName = "Ada") => new()
+    {
+        Message = new Message
+        {
+            Text = text,
+            Chat = new Chat { Id = chatId },
+            From = new User { Id = fromId, FirstName = firstName },
+        },
+    };
+
+    [Fact]
+    public async Task HandleAsync_PlainTextLinkCode_ShowsConfirmKeyboard()
+    {
+        // Инструкция "введите код вручную" в SettingsProfileComponent — код присылают без
+        // /start и без deep-link-префикса, голым текстом сообщения.
+        var webUser = AddWebUser();
+        var (_, code, _) = await _links.StartAsync(webUser.Id);
+
+        await _sut.HandleAsync(TextUpdate(782, 782, code), CancellationToken.None);
+
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.ChatId == 782 && r.Text.Contains("d***@example.com")
+                && r.ReplyMarkup is Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup),
+            Arg.Any<CancellationToken>());
+        Db.Users.Should().NotContain(u => u.TelegramId == 782);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PlainTextLinkCode_UppercasePastedCode_StillMatches()
+    {
+        var webUser = AddWebUser();
+        var (_, code, _) = await _links.StartAsync(webUser.Id);
+
+        await _sut.HandleAsync(TextUpdate(783, 783, code.ToUpperInvariant()), CancellationToken.None);
+
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.ChatId == 783 && r.Text.Contains("d***@example.com")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_PlainTextNotLinkCode_FallsBackToUnknownCommand()
+    {
+        // Защита от слишком широкого совпадения: обычный текст не должен трактоваться как код.
+        await _sut.HandleAsync(TextUpdate(784, 784, "привет"), CancellationToken.None);
+
+        await _bot.Received(1).SendRequest(
+            Arg.Is<SendMessageRequest>(r => r.Text.Contains("Не понимаю эту команду")),
+            Arg.Any<CancellationToken>());
+    }
+
     private static Update CallbackUpdate(long fromId, long chatId, int messageId, string data, string firstName = "Ada") => new()
     {
         CallbackQuery = new CallbackQuery

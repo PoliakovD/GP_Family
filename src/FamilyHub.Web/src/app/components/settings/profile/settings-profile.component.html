@@ -50,12 +50,9 @@
         Если этот Telegram уже писал боту раньше, данные объединятся с текущим аккаунтом.
       </p>
       @if (telegramLink(); as link) {
-        <p class="mb-1">
-          1. Откройте бота и нажмите «Привязать» в сообщении.<br />
-          2. Или введите код вручную: <strong>{{ link.code }}</strong>
-        </p>
-        <a class="btn btn-secondary btn-sm mb-1" [href]="link.deepLink" target="_blank" rel="noopener">
-          Открыть бота
+        <p class="mb-2">Откройте Telegram и нажмите «Привязать» в сообщении от бота.</p>
+        <a class="btn btn-primary btn-lg mb-1" [href]="link.deepLink" target="_blank" rel="noopener">
+          <i class="ph-fill ph-telegram-logo" aria-hidden="true"></i> Открыть Telegram
         </a>
         <p class="muted mb-0">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
       } @else {

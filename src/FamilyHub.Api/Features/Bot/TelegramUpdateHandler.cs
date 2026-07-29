@@ -67,8 +67,20 @@ public class TelegramUpdateHandler(
             return;
         }
 
+        // Ручной ввод кода привязки (без перехода по deep-link) — та же инструкция "введите код
+        // вручную" в SettingsProfileComponent. Формат совпадает с TelegramLinkService.StartAsync
+        // (Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)) — ровно 32 hex-символа);
+        // ToLowerInvariant на случай другого регистра при копипасте — хэш сравнивается как есть.
+        if (LooksLikeLinkCode(text))
+        {
+            await HandleLinkStartAsync(message.Chat.Id, text.ToLowerInvariant(), ct);
+            return;
+        }
+
         await ReplyWithMiniAppButtonAsync(message.Chat.Id, $"Не понимаю эту команду.\n\n{HelpText}", ct);
     }
+
+    private static bool LooksLikeLinkCode(string text) => text.Length == 32 && text.All(Uri.IsHexDigit);
 
     private async Task HandleStartAsync(Message message, CancellationToken ct)
     {

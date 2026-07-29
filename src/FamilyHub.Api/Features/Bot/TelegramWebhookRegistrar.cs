@@ -30,7 +30,10 @@ public class TelegramWebhookRegistrar(
         await bot.SetWebhook(
             url: opts.WebhookUrl,
             secretToken: string.IsNullOrEmpty(opts.WebhookSecret) ? null : opts.WebhookSecret,
-            allowedUpdates: new[] { UpdateType.Message },
+            // CallbackQuery обязателен: инлайн-кнопки "Привязать"/"Отмена" (TelegramUpdateHandler.
+            // HandleCallbackQueryAsync) без него молчат — Telegram фильтрует доставку по этому
+            // списку НА СВОЕЙ стороне, /bot/webhook такие апдейты вообще не получает.
+            allowedUpdates: new[] { UpdateType.Message, UpdateType.CallbackQuery },
             cancellationToken: cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(opts.MiniAppUrl))
