@@ -157,6 +157,9 @@
         }
         <div class="d-flex gap-2">
           <button class="btn btn-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
+          <button class="btn btn-secondary btn-sm" (click)="openKb(item)">
+            <i class="ph ph-book-open-text" aria-hidden="true"></i> Справка
+          </button>
           <button class="btn btn-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
         </div>
       </div>
@@ -183,4 +186,33 @@
       </div>
     }
   }
+
+  <app-bottom-sheet title="Справка о препарате" [open]="kbOpen" (closed)="closeKb()">
+    @if (kbLoading) {
+      <app-loading-spinner />
+    } @else if (kbError) {
+      <div class="alert-danger mb-0">{{ kbError }}</div>
+    } @else if (kbResponse) {
+      @if (kbResponse.status === MedicationKbStatus.Ready && kbResponse.card) {
+        <app-kb-card [card]="kbResponse.card" />
+      } @else {
+        @if (kbResponse.status === MedicationKbStatus.Pending || kbResponse.status === MedicationKbStatus.Running) {
+          <p class="muted">Справочник уточняется — обычно это занимает до минуты. Загляните сюда чуть позже.</p>
+        } @else if (kbResponse.status === MedicationKbStatus.Failed) {
+          <p class="muted">Не удалось найти информацию об этом препарате в открытых источниках.</p>
+        } @else {
+          <p class="muted">Информации об этом препарате в справочнике пока нет.</p>
+        }
+
+        @if (kbResponse.candidate) {
+          <p class="muted mb-2">
+            Похоже на «{{ kbResponse.candidate.displayName }}» из справочника — но мы не уверены
+            достаточно, чтобы показать это автоматически.
+          </p>
+        }
+
+        <button class="btn btn-secondary btn-sm" (click)="refreshKb()">Уточнить в справочнике</button>
+      }
+    }
+  </app-bottom-sheet>
 </div>

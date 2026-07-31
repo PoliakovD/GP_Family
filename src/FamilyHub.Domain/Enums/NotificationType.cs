@@ -20,4 +20,7 @@ public enum NotificationType
 
     /// <summary>Участник открыл семье доступ к своим медицинским записям.</summary>
     MedicalRecordShared = 5,
+
+    /// <summary>Справочник пополнен данными о препарате, сохранённом пользователем (этап 4).</summary>
+    MedicationEnriched = 6,
 }

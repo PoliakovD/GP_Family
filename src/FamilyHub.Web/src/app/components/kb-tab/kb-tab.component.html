@@ -1,0 +1,47 @@
+<div>
+  @if (error) {
+    <div class="alert-danger mb-2">{{ error }}</div>
+  }
+
+  <app-search-field
+    placeholder="Поиск по справочнику…"
+    [value]="search.query"
+    (valueChange)="onQueryChange($event)"
+  />
+
+  @if (loading && !showingSearch) {
+    <app-loading-spinner />
+  } @else if (showingSearch && search.loading) {
+    <app-loading-spinner text="Ищем…" />
+  } @else if (search.error) {
+    <div class="alert-danger mb-2">{{ search.error }}</div>
+  } @else if (items.length === 0) {
+    @if (showingSearch) {
+      <p class="muted">Ничего не найдено.</p>
+    } @else {
+      <p class="muted">
+        Справочник наполняется автоматически: как только вы сохраните лекарство в Аптечке,
+        мы найдём и добавим сюда информацию о нём.
+      </p>
+    }
+  } @else {
+    @for (item of items; track item.id) {
+      <div class="card mb-2 card-clickable" (click)="openCard(item.id)">
+        <strong class="card-title">{{ item.displayName }}</strong>
+        @if (item.purpose) {
+          <p class="card-body mb-0">{{ item.purpose }}</p>
+        }
+      </div>
+    }
+  }
+
+  <app-bottom-sheet [title]="selectedCard?.displayName ?? 'Препарат'" [open]="cardOpen" (closed)="closeCard()">
+    @if (cardLoading) {
+      <app-loading-spinner />
+    } @else if (cardError) {
+      <div class="alert-danger mb-0">{{ cardError }}</div>
+    } @else if (selectedCard) {
+      <app-kb-card [card]="selectedCard" />
+    }
+  </app-bottom-sheet>
+</div>

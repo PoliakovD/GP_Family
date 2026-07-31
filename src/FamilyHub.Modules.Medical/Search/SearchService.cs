@@ -92,17 +92,25 @@ public class SearchService(
             new MedicationContext(r.FamilyId, r.FamilyName, r.MedkitId, r.MedkitName, r.ExpiryDate))).ToList();
     }
 
-    /// <summary>Справочник обезличен и глобален по определению (задача 2.6) — доступен любому вошедшему с согласием.</summary>
+    /// <summary>Справочник обезличен и глобален по определению (задача 2.6) — доступен любому вошедшему с согласием.
+    /// "{q} = ANY(Aliases)" (этап 4) — точное совпадение по торговому названию (напр. "нурофен" находит запись
+    /// "ибупрофен"); Aliases не входит в search_vector (Postgres: array_to_string не IMMUTABLE, не годится для
+    /// generated-колонки, см. миграцию AddMedicationEnrichment) — поэтому проверяется отдельным условием.</summary>
     private async Task<List<SearchResultItem>> SearchKbAsync(string q, CancellationToken ct)
     {
+        // Aliases хранятся уже нормализованными (lowercase, см. KbWriter/MedicationNameNormalizer) —
+        // сравниваем lower(q), иначе "Нурофен" (как ввёл пользователь) не совпал бы с "нурофен".
         var rows = await db.Database.SqlQuery<KbSearchRow>($"""
             SELECT "Id", "DisplayName",
                    GREATEST(
                        ts_rank(search_vector, plainto_tsquery('russian', {q})),
-                       similarity("DisplayName", {q})
+                       similarity("DisplayName", {q}),
+                       CASE WHEN lower({q}) = ANY("Aliases") THEN 1.0 ELSE 0.0 END
                    ) AS "Score"
             FROM kb.global_medications_kb
-            WHERE search_vector @@ plainto_tsquery('russian', {q}) OR similarity("DisplayName", {q}) > 0.3
+            WHERE search_vector @@ plainto_tsquery('russian', {q})
+               OR similarity("DisplayName", {q}) > 0.3
+               OR lower({q}) = ANY("Aliases")
             ORDER BY "Score" DESC
             LIMIT {PerSourceLimit}
             """).ToListAsync(ct);

@@ -21,6 +21,18 @@ public class GlobalMedicationKb
     /// <summary>Источник знания (например, "ГРЛС", "инструкция производителя").</summary>
     public string Source { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Торговые названия/синонимы одного и того же препарата (например, "нурофен" для
+    /// "ибупрофен") — этап 4, попадание за один индексный лукап без нечёткого поиска.
+    /// НЕ заведено в EF-модель (как search_vector): Postgres text[] с GIN-индексом не имеет
+    /// кроссплатформенного (Npgsql/SQLite-юнит-тесты) маппинга — читается/пишется только raw SQL
+    /// (см. KbLookupService/KbWriter), поэтому это поле здесь чисто документирующее.
+    /// </summary>
+    public string[] Aliases { get; set; } = [];
+
+    /// <summary>Версия схемы <see cref="PayloadJson"/> — позволяет мигрировать формат знания без потери строк.</summary>
+    public int PayloadVersion { get; set; } = 1;
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

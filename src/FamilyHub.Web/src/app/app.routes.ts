@@ -128,6 +128,12 @@ export const routes: Routes = [
             (m) => m.MedicalRecordsTabComponent,
           ),
       },
+      {
+        // Общий обезличенный справочник препаратов (этап 4) — наполняется AI-конвейером обогащения.
+        path: 'kb',
+        loadComponent: () =>
+          import('./components/kb-tab/kb-tab.component').then((m) => m.KbTabComponent),
+      },
     ],
   },
   // Обратная совместимость со старыми прямыми ссылками/букмарками на плоские роуты.

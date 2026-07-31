@@ -18,6 +18,14 @@ public class GlobalMedicationKbConfiguration : IEntityTypeConfiguration<GlobalMe
         builder.Property(k => k.PayloadJson).HasColumnType("jsonb").IsRequired();
         builder.Property(k => k.Source).HasMaxLength(200).IsRequired();
 
+        builder.Property(k => k.PayloadVersion).IsRequired();
+
+        // Торговые названия (этап 4) — Postgres text[] с GIN-индексом, заводится raw SQL в
+        // миграции AddMedicationEnrichment, как и search_vector: не единого кроссплатформенного
+        // маппинга (Npgsql array vs SQLite-юнит-тесты), читается/пишется только через raw SQL
+        // (KbLookupService/KbWriter) — исключаем из EF-модели, иначе SQLite-тесты не соберут модель.
+        builder.Ignore(k => k.Aliases);
+
         builder.HasIndex(k => k.NormalizedName).IsUnique();
     }
 }

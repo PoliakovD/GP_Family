@@ -17,6 +17,7 @@ using FamilyHub.Api.Features.Push;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Email.Templates;
+using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Outbox;
@@ -27,6 +28,7 @@ using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.Modules.Birthdays;
 using FamilyHub.Modules.Medical;
+using FamilyHub.Modules.Medical.Enrichment;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication;
@@ -71,6 +73,7 @@ builder.Services.Configure<LocalFileStorageOptions>(builder.Configuration.GetSec
 builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
+builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(EnrichmentOptions.SectionName));
 builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection(OutboxOptions.SectionName));
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
@@ -327,7 +330,17 @@ builder.Services.AddScoped<AuditRetentionJob>();
 var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.");
 builder.Services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(opt => opt.UseNpgsqlConnection(postgresConnectionString)));
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(o => o.Queues = ["default"]);
+// Второй сервер, выделенная очередь "enrichment" (этап 4) с ОДНИМ воркером: обогащение
+// справочника не должно отъедать пропускную способность у ReminderScanJob/AuditRetentionJob,
+// а один воркер естественно укладывается в лимит внешнего поиска (Brave free-tier — 1 req/s),
+// без отдельного rate-limiter в коде (см. MedicationEnrichmentProcessor).
+builder.Services.AddHangfireServer(o =>
+{
+    o.Queues = ["enrichment"];
+    o.WorkerCount = 1;
+    o.ServerName = "enrichment-server";
+});
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<NotificationSendingService>();
@@ -370,13 +383,53 @@ if (!telegramBotConfigured && !webPushConfigured)
     builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
 }
 
-// --- LM Studio: локальная vision-LLM для оцифровки медикаментов по фото (не хранит фото) ---
-builder.Services.AddHttpClient<ILmStudioVisionClient, LmStudioVisionClient>((sp, client) =>
+// --- LM Studio: локальная LLM (текст + vision) — оцифровка медикаментов по фото (не хранит
+// --- фото) и суммаризация веб-сниппетов для справочника (этап 4) ---
+builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, client) =>
 {
     var lmStudioOptions = sp.GetRequiredService<IOptions<LmStudioOptions>>().Value;
     client.BaseAddress = new Uri(lmStudioOptions.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(lmStudioOptions.TimeoutSeconds);
 });
+
+// --- Enrichment: внешний веб-поиск для обогащения справочника препаратов (этап 4, ADR-0005) ---
+// Переключатель Enrichment:Provider = Null|Brave|Yandex, зеркало FileStorage:Provider выше.
+// Без явного конфига — Null: наружу не уходит ни одного запроса (см. NullMedicationSearchProvider).
+var enrichmentOptions = builder.Configuration.GetSection(EnrichmentOptions.SectionName).Get<EnrichmentOptions>()
+    ?? new EnrichmentOptions();
+if (enrichmentOptions.Provider != MedicationSearchProviderKind.Null && string.IsNullOrWhiteSpace(enrichmentOptions.ApiKey))
+{
+    throw new InvalidOperationException(
+        $"Enrichment:Provider={enrichmentOptions.Provider} задан, но Enrichment:ApiKey (env Enrichment__ApiKey) пуст.");
+}
+if (enrichmentOptions.Provider == MedicationSearchProviderKind.Yandex && string.IsNullOrWhiteSpace(enrichmentOptions.FolderId))
+{
+    throw new InvalidOperationException(
+        "Enrichment:Provider=Yandex задан, но Enrichment:FolderId (env Enrichment__FolderId) пуст — " +
+        "обязателен для Yandex Web Search API v2/gen/search.");
+}
+switch (enrichmentOptions.Provider)
+{
+    case MedicationSearchProviderKind.Brave:
+        builder.Services.AddHttpClient<IMedicationSearchProvider, BraveSearchProvider>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<EnrichmentOptions>>().Value;
+            client.BaseAddress = new Uri("https://api.search.brave.com/");
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+        break;
+    case MedicationSearchProviderKind.Yandex:
+        builder.Services.AddHttpClient<IMedicationSearchProvider, YandexSearchProvider>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<EnrichmentOptions>>().Value;
+            client.BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/");
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+        break;
+    default:
+        builder.Services.AddScoped<IMedicationSearchProvider, NullMedicationSearchProvider>();
+        break;
+}
 
 // --- Medical-модуль ---
 builder.Services.AddMedicalModule();
@@ -497,6 +550,15 @@ if (app.Environment.IsDevelopment())
     {
         var processed = await processor.ProcessBatchAsync(ct);
         return Results.Ok(new { processed });
+    });
+
+    // Синхронный прогон конкретной задачи обогащения справочника (этап 4) — минуя очередь
+    // Hangfire, для локальной проверки конвейера без ожидания воркера enrichment-server.
+    app.MapPost("/dev/trigger-enrichment/{jobId:guid}", async (
+        Guid jobId, MedicationEnrichmentProcessor processor, CancellationToken ct) =>
+    {
+        await processor.RunAsync(jobId, ct);
+        return Results.Ok();
     });
 
     // Просмотр вёрстки email-писем в браузере: LoggingEmailSender печатает в лог только

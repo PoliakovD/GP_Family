@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Enrichment;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +15,8 @@ namespace FamilyHub.Modules.Medical.Medications;
 /// фильтруются по MedkitId (инвариант 1) — никогда не грузим Medication по Id без проверки
 /// доступа к его семье.
 /// </summary>
-public class MedicationService(AppDbContext db, IFamilyAccessService access, ILogger<MedicationService> logger)
+public class MedicationService(
+    AppDbContext db, IFamilyAccessService access, IEnrichmentRequestService enrichment, ILogger<MedicationService> logger)
 {
     public async Task<(MedicationAccessResult Result, List<MedicationDto> Items)> GetForMedkitAsync(
         Guid medkitId, Guid userId, CancellationToken ct = default)
@@ -81,6 +83,12 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access, ILo
         logger.LogInformation(
             "Медикамент {MedicationId} ({Name}) создан пользователем {UserId} в аптечке {MedkitId}",
             medication.Id, medication.Name, userId, medkitId);
+
+        // Этап 4: постановка задачи обогащения справочника — no-op, если знание уже есть или
+        // такая же задача уже в очереди (см. EnrichmentRequestService). Не блокирует ответ
+        // ошибкой создания медикамента — сбой здесь не должен ронять основной сценарий.
+        await enrichment.RequestAsync(medication, userId, ct);
+
         return (MedicationAccessResult.Success, ToDto(medication));
     }
 
@@ -108,6 +116,11 @@ public class MedicationService(AppDbContext db, IFamilyAccessService access, ILo
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Медикамент {MedicationId} обновлён пользователем {UserId}", medicationId, userId);
+
+        // Название могло измениться (ручная правка/повторный OCR) — тот же промах-триггер, что и
+        // при создании (см. CreateAsync); дедуп по NormalizedName делает повторный вызов дешёвым.
+        await enrichment.RequestAsync(medication, userId, ct);
+
         return MedicationAccessResult.Success;
     }
 

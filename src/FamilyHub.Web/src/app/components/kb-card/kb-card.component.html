@@ -1,0 +1,65 @@
+<div>
+  <h4 class="mb-1">{{ card().displayName }}</h4>
+  @if (card().internationalName) {
+    <p class="muted mb-2">МНН: {{ card().internationalName }}</p>
+  }
+
+  @if (card().tradeNames.length > 0) {
+    <div class="d-flex flex-wrap gap-1 mb-2">
+      @for (name of card().tradeNames; track name) {
+        <span class="tag tag-neutral">{{ name }}</span>
+      }
+    </div>
+  }
+
+  <div class="data-table-wrap mb-2">
+    <table class="data-table">
+      <tbody>
+        @if (card().form) {
+          <tr>
+            <td class="data-table-key">Форма выпуска</td>
+            <td class="data-table-value">{{ card().form }}</td>
+          </tr>
+        }
+        @if (card().purpose) {
+          <tr>
+            <td class="data-table-key">Назначение</td>
+            <td class="data-table-value">{{ card().purpose }}</td>
+          </tr>
+        }
+        @if (card().usage) {
+          <tr>
+            <td class="data-table-key">Способ применения</td>
+            <td class="data-table-value">{{ card().usage }}</td>
+          </tr>
+        }
+        @if (card().storage) {
+          <tr>
+            <td class="data-table-key">Хранение</td>
+            <td class="data-table-value">{{ card().storage }}</td>
+          </tr>
+        }
+        @if (card().driving) {
+          <tr>
+            <td class="data-table-key">Вождение</td>
+            <td class="data-table-value">{{ card().driving }}</td>
+          </tr>
+        }
+        @if (card().specialNotes) {
+          <tr>
+            <td class="data-table-key">Противопоказания и рекомендации</td>
+            <td class="data-table-value">{{ card().specialNotes }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="alert-info mb-2">
+    Информация из открытых медицинских источников, собрана автоматически и не является
+    медицинской консультацией. Перед применением препарата проконсультируйтесь с врачом или
+    ознакомьтесь с инструкцией производителя.
+  </div>
+
+  <p class="muted mb-0">Источник: {{ card().source }} · обновлено {{ card().updatedAt | date: 'dd.MM.yyyy' }}</p>
+</div>

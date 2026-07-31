@@ -69,9 +69,76 @@ Forbidden`), даже `Admin` семьи не может вмешаться. Э�
 `AttachmentService` (`GetForMedicalRecordAsync(recordId, userId)`, с той же проверкой
 видимости через `MedicalRecordService.IsVisibleToAsync`, что и у `GetPresignedUrlAsync`).
 
+## OCR (`Ocr/`) — оцифровка медикамента по фото
+
+`MedicationOcrService` — вызывает `ILmStudioJsonClient` (`FamilyHub.Infrastructure.LmStudio`,
+переименован из `ILmStudioVisionClient` на этапе 4, когда клиент стал использоваться и для
+чисто текстовых запросов — суммаризация, см. ниже) с русским system-промптом, просящим
+строго один JSON-объект `{ name, expiryDate, fields[] }`. Фото никогда не сохраняются —
+используются только в рамках одного запроса. `POST /api/medications/ocr` синхронный (блокирует
+запрос на время локального инференса, до `LmStudio:TimeoutSeconds`), возвращает 200 даже при
+неудачном распознавании (бизнес-исход, не серверная ошибка).
+
+## Справочник + AI-конвейер обогащения (`Kb/`, `Enrichment/`) — этап 4
+
+Наполняет `kb.global_medications_kb` (задача 2.6) — обезличенный общий справочник препаратов
+(назначение, форма выпуска, хранение, влияние на вождение). Конвейер: сохранение медикамента →
+нормализация имени → каскадный поиск в справочнике → при промахе/неуверенном совпадении —
+фоновая задача Hangfire → веб-поиск по доверенным РФ-источникам → суммаризация локальным Qwen →
+запись в справочник → push пользователю. См. [ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md)
+для обоснования исходящего вызова и [stage-4.md](../plans/medical-platform/stage/stage-4.md) для истории задачи.
+
+- **`MedicationNameNormalizer`** (`FamilyHub.Infrastructure.Search`) — чистая функция:
+  «Парацетамол 400мг таб. №20» → «парацетамол» (снимает дозировку/фасовку/форму выпуска,
+  чинит латинские гомоглифы в смешанных словах). Ключ дедупликации `NormalizedName` и точка
+  входа каскада поиска.
+- **`KbLookupService`** — каскад точное совпадение → алиас (торговое название) → нечёткое
+  (триграммы + tsvector, пороги строже общего поиска: `0.55` автопривязка, `0.35` кандидат на
+  подтверждение). `Aliases` и `search_vector` — Postgres `text[]`/`tsvector`, как и в
+  `SearchService`, намеренно вне EF-модели (не проходят кроссплатформенно в SQLite-юнит-тестах).
+- **`EnrichmentRequestService`** (за интерфейсом `IEnrichmentRequestService` — реализация ходит
+  raw SQL к Postgres-специфичным функциям, юнит-тесты `MedicationService` подставляют заглушку) —
+  вызывается из `MedicationService.CreateAsync`/`UpdateAsync` сразу после сохранения. `RequestAsync`
+  прерывается на уверенном `Hit`; `RequestRefreshAsync` (ручное «Уточнить в справочнике») — нет.
+  Дедуп на уровне БД — частичный уникальный индекс `MedicationEnrichmentJobs.NormalizedName` среди
+  `Pending`/`Running` задач.
+- **`MedicationEnrichmentProcessor`** — Hangfire-джоба в выделенной очереди `enrichment`
+  (`[Queue("enrichment")]`, один воркер — см. `Program.cs`, естественно укладывается в лимит
+  Brave free-tier 1 req/s), `[AutomaticRetry(Attempts = 3)]` только на настоящие сбои; ожидаемые
+  исходы (нет доверенных источников, квота исчерпана) переводят статус задачи в `Failed`/`Skipped`
+  обычным `return`, без ретрая.
+- **`IMedicationSearchProvider`** (`FamilyHub.Infrastructure.Enrichment`) — `NullMedicationSearchProvider`
+  по умолчанию (наружу не уходит ничего); активный провайдер — `YandexSearchProvider`
+  (`Enrichment:Provider=Yandex`, Web Search API `v2/gen/search`/GenSearch, egress через
+  `searchapi.api.cloud.yandex.net`, ответ приходит ОБЁРНУТЫМ В МАССИВ — подтверждено живым
+  запросом, расходится с примером в документации Yandex). Фильтрация по `TrustedDomains` —
+  постфактум по `used`-источникам (пробовали ограничивать сам запрос полем `host` — на практике
+  это стабильно давало «Ничего не найдено» даже для доменов, которые находятся без ограничения).
+  `BraveSearchProvider` — поддерживаемая альтернатива (`Enrichment:Provider=Brave`), не
+  используется по умолчанию. Наружу уходит только нормализованное название препарата — один запрос
+  на весь справочник, не по запросу на пользователя (см. ADR-0005).
+- **`MedicationSummarizer`** — суммаризация сниппетов локальным Qwen (`ILmStudioJsonClient`,
+  текстовая перегрузка без фото; уровень «размышлений» — `LmStudio:ThinkingLevel`, 0-3, см.
+  `LmStudioOptions`/`LmStudioJsonClient`). Антигаллюцинационный гейт: пустой `usedSourceIndexes`
+  или все поля `null` → запись в справочник отклоняется. Способ применения/дозы (`Usage`, схема v2)
+  и противопоказания/рекомендации (`SpecialNotes`) извлекаются в полном объёме, что есть в
+  цитируемой инструкции, — это не ограничивается искусственно (продуктовое решение, см. ADR-0005
+  п.8); заземление на процитированные доверенные источники остаётся обязательным.
+- **`KbWriter`** — единственная точка записи в `kb.global_medications_kb` (тот самый «writer-сервис
+  этапа 4», которого явно ждёт `KbIsolationGuardTests.PersonalContext_CannotBeStoredInKbRow»).
+  Двойная проверка изоляции: структурная (EF-модель без персональных полей) + на уровне значений
+  (GUID/e-mail/длинные цифровые последовательности/персональные ключевые слова в тексте payload).
+  Upsert по `NormalizedName` (`ON CONFLICT ... DO UPDATE`), слияние `Aliases`.
+
+Маршруты: `GET /api/kb/medications` (поиск/листинг для UI), `GET /api/kb/medications/{id}`
+(карточка), `GET /api/medications/{medicationId}/kb` (статус обогащения конкретного медикамента),
+`POST /api/medications/{medicationId}/kb/refresh` (ручной рефреш).
+
 ## Wiring модуля (`MedicalModule.cs`)
 
-`AddMedicalModule()` регистрирует `MedicationService`, `MedicalRecordService`,
-`AttachmentService` в DI; `MapMedicalModule()` вызывает три `Map*Endpoints()`. Подключается из
-`FamilyHub.Api/Program.cs`, не имеет обратной зависимости на `FamilyHub.Api` или
-`FamilyHub.Modules.Birthdays`.
+`AddMedicalModule()` регистрирует все сервисы модуля (`Medkit`/`Medication`/`MedicalRecord`/
+`Attachment`/`MedicationOcr`/`Search` + этап-4 `KbLookupService`/`KbCatalogService`/
+`MedicationKbStatusService`/`KbWriter`/`MedicationSummarizer`/`IEnrichmentRequestService`/
+`MedicationEnrichmentProcessor`) в DI; `MapMedicalModule()` вызывает все `Map*Endpoints()`, вся
+группа — под `ConsentRequiredFilter`. Подключается из `FamilyHub.Api/Program.cs`, не имеет
+обратной зависимости на `FamilyHub.Api` или `FamilyHub.Modules.Birthdays`.

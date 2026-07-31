@@ -289,6 +289,9 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         {
             "IX_Medications_search_vector", "IX_Medications_Name_trgm",
             "IX_global_medications_kb_search_vector", "IX_global_medications_kb_DisplayName_trgm",
+            // Этап 4 (AddMedicationEnrichment): Aliases (торговые названия) индексируются отдельно,
+            // а search_vector пересобран так, чтобы включать их же (см. миграцию).
+            "IX_global_medications_kb_Aliases",
         });
     }
 }

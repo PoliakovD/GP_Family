@@ -1,13 +1,16 @@
 import { Component, EventEmitter, OnInit, Output, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
-import type { Medication } from '../../models/types';
+import type { Medication, MedicationKbResponse } from '../../models/types';
+import { MedicationKbStatus } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { compressImage } from '../../shared/util/image-compression';
 import { expiryClass } from '../../shared/util/expiry';
 import { matchesQuery } from '../../shared/util/local-filter';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
+import { KbCardComponent } from '../kb-card/kb-card.component';
 
 const MAX_PHOTOS = 5;
 const KNOWN_KEYS = ['instructions', 'quantity'];
@@ -26,7 +29,7 @@ let nextInstanceId = 0;
 @Component({
   selector: 'app-medications-panel',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
+  imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
   templateUrl: './medications-panel.component.html',
   styleUrl: './medications-panel.component.scss',
 })
@@ -70,6 +73,55 @@ export class MedicationsPanelComponent implements OnInit {
 
   get recognizing(): boolean {
     return this.recognizeStep !== 'idle';
+  }
+
+  // --- Справка из общего справочника (этап 4) ---
+
+  /** Шаблону нужен доступ к значениям enum для сравнения статуса — реэкспорт как поле инстанса. */
+  readonly MedicationKbStatus = MedicationKbStatus;
+
+  kbOpen = false;
+  kbLoading = false;
+  kbError: string | null = null;
+  kbResponse: MedicationKbResponse | null = null;
+  private kbMedicationId: string | null = null;
+
+  async openKb(item: Medication): Promise<void> {
+    this.kbOpen = true;
+    this.kbMedicationId = item.id;
+    await this.loadKb();
+  }
+
+  closeKb(): void {
+    this.kbOpen = false;
+  }
+
+  /** Ручной запрос «Уточнить в справочнике» — асинхронный, без поллинга: статус перечитывается
+   * один раз сразу после постановки задачи (обычно даёт Pending), дальше пользователь проверяет
+   * сам, открыв «Справку» снова. */
+  async refreshKb(): Promise<void> {
+    if (!this.kbMedicationId) return;
+    try {
+      await this.api.refreshMedicationKb(this.kbMedicationId);
+      this.toast.success('Запрошено обновление справочника — обычно занимает до минуты.');
+      await this.loadKb();
+    } catch (err) {
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось запросить обновление справочника.');
+    }
+  }
+
+  private async loadKb(): Promise<void> {
+    if (!this.kbMedicationId) return;
+    this.kbLoading = true;
+    this.kbError = null;
+    this.kbResponse = null;
+    try {
+      this.kbResponse = await this.api.getMedicationKb(this.kbMedicationId);
+    } catch (err) {
+      this.kbError = err instanceof ApiError ? err.message : 'Не удалось загрузить справку.';
+    } finally {
+      this.kbLoading = false;
+    }
   }
 
   /** Фильтр по названию, инструкции и всем доп. полям (в т.ч. найденным при OCR-распознавании). */

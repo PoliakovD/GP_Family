@@ -1,5 +1,7 @@
 using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Medical.Attachments;
+using FamilyHub.Modules.Medical.Enrichment;
+using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
@@ -26,6 +28,16 @@ public static class MedicalModule
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();
+
+        // Конвейер обогащения справочника (этап 4) — IMedicationSearchProvider регистрируется
+        // в Program.cs (переключатель Enrichment:Provider, зеркало LmStudio/FileStorage выше).
+        services.AddScoped<KbLookupService>();
+        services.AddScoped<KbCatalogService>();
+        services.AddScoped<MedicationKbStatusService>();
+        services.AddScoped<KbWriter>();
+        services.AddScoped<MedicationSummarizer>();
+        services.AddScoped<IEnrichmentRequestService, EnrichmentRequestService>();
+        services.AddScoped<MedicationEnrichmentProcessor>();
         return services;
     }
 
@@ -40,5 +52,6 @@ public static class MedicalModule
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
         module.MapSearchEndpoints();
+        module.MapKbEndpoints();
     }
 }

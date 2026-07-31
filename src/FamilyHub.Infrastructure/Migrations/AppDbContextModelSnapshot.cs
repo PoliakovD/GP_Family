@@ -301,6 +301,9 @@ namespace FamilyHub.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<int>("PayloadVersion")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -450,6 +453,73 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasIndex("MedkitId");
 
                     b.ToTable("Medications", "medical");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationEnrichmentJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ExternalSearchAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("KbId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MedicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MedicationId");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN (0, 1)");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("MedicationEnrichmentJobs", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Medkit", b =>

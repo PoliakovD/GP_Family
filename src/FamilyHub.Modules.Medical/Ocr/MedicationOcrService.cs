@@ -8,7 +8,7 @@ namespace FamilyHub.Modules.Medical.Ocr;
 /// Оцифровка медикамента по фото упаковки/этикетки через локальную vision-LLM (LM Studio).
 /// Фото не сохраняются — используются только для распознавания в рамках одного запроса.
 /// </summary>
-public class MedicationOcrService(ILmStudioVisionClient client, ILogger<MedicationOcrService> logger)
+public class MedicationOcrService(ILmStudioJsonClient client, ILogger<MedicationOcrService> logger)
 {
     private const int MaxPhotos = 5;
 

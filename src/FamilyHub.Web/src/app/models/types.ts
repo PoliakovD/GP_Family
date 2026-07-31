@@ -18,6 +18,7 @@ export const NotificationType = {
     MemberLeft: 3,
     MemberApproved: 4,
     MedicalRecordShared: 5,
+    MedicationEnriched: 6,
 } as const;
 
 export interface FamilySummary {
@@ -174,6 +175,57 @@ export interface SearchResponse {
 
 export interface VapidPublicKeyResponse {
     publicKey: string;
+}
+
+// Этап 4: общий обезличенный справочник препаратов, наполняемый AI-конвейером обогащения
+// (OCR/ручной ввод → промах в справочнике → веб-поиск по доверенным РФ-источникам →
+// суммаризация локальным Qwen → запись) — см. FamilyHub.Modules.Medical.Kb.
+
+export interface KbListItem {
+    id: string;
+    displayName: string;
+    purpose: string | null;
+}
+
+export interface KbListResponse {
+    items: KbListItem[];
+    /** Похоже, что есть ещё страница (столько же элементов, сколько запрошено) — точный total не считаем. */
+    hasMore: boolean;
+}
+
+export interface KbMedicationCard {
+    id: string;
+    displayName: string;
+    internationalName: string | null;
+    tradeNames: string[];
+    form: string | null;
+    purpose: string | null;
+    /** Способ применения и дозы — как в официальной инструкции (общие данные, не для конкретного человека). */
+    usage: string | null;
+    storage: string | null;
+    driving: string | null;
+    specialNotes: string | null;
+    /** Провайдер + домены-источники, напр. "brave: vidal.ru, rlsnet.ru" — для прослеживаемости знания. */
+    source: string;
+    updatedAt: string;
+}
+
+/** Статус обогащения конкретного медикамента пользователя (GET /api/medications/{id}/kb). */
+export const MedicationKbStatus = { None: 0, Pending: 1, Running: 2, Failed: 3, Ready: 4 } as const;
+export type MedicationKbStatus = typeof MedicationKbStatus[keyof typeof MedicationKbStatus];
+
+export interface KbCandidate {
+    kbId: string;
+    displayName: string;
+    score: number;
+}
+
+export interface MedicationKbResponse {
+    status: number; // MedicationKbStatus
+    /** Заполнена только при status === Ready. */
+    card: KbMedicationCard | null;
+    /** Неуверенная нечёткая привязка — предложить пользователю на подтверждение, не показывать как готовый ответ. */
+    candidate: KbCandidate | null;
 }
 
 /** Предпочтения доставки по типу оповещения (вкладка «Настройки → Уведомления»). Записи

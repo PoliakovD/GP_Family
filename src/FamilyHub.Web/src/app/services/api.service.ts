@@ -8,10 +8,13 @@ import {
   BirthdayInput, CurrentMember,
   FamilySummary,
   InviteCreated,
+  KbListResponse,
+  KbMedicationCard,
   MedicalRecord,
   MedicalRecordInput,
   Medication,
   MedicationInput,
+  MedicationKbResponse,
   MedicationOcrResponse,
   Medkit,
   MedkitInput,
@@ -266,6 +269,20 @@ export class ApiService {
     const typesQuery = types ? `&types=${encodeURIComponent(types)}` : '';
     return this.get<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${typesQuery}`);
   };
+
+  // Справочник препаратов (этап 4) — общий обезличенный, наполняется AI-конвейером обогащения.
+  searchKb = (q?: string, skip = 0, take = 20) => {
+    const qQuery = q ? `&q=${encodeURIComponent(q)}` : '';
+    return this.get<KbListResponse>(`/api/kb/medications?skip=${skip}&take=${take}${qQuery}`);
+  };
+
+  getKbMedication = (id: string) => this.get<KbMedicationCard>(`/api/kb/medications/${id}`);
+
+  /** Статус обогащения конкретного медикамента пользователя + карточка, если уже готова. */
+  getMedicationKb = (medicationId: string) => this.get<MedicationKbResponse>(`/api/medications/${medicationId}/kb`);
+
+  /** Ручной запрос «Уточнить в справочнике» — 202 Accepted, конвейер асинхронный (см. GetMedicationKb для статуса). */
+  refreshMedicationKb = (medicationId: string) => this.post<void>(`/api/medications/${medicationId}/kb/refresh`);
 
   // Web Push (редизайн навигации, ADR-0004)
   getPushVapidPublicKey = () => this.get<VapidPublicKeyResponse>('/api/push/vapid-public-key');

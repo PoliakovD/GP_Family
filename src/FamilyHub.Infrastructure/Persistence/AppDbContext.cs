@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
     public DbSet<GlobalMedicationKb> GlobalMedicationsKb => Set<GlobalMedicationKb>();
     public DbSet<PersonalCompatibilityResult> PersonalCompatibilityResults => Set<PersonalCompatibilityResult>();
+    public DbSet<MedicationEnrichmentJob> MedicationEnrichmentJobs => Set<MedicationEnrichmentJob>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

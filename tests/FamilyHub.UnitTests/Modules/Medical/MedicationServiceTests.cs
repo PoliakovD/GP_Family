@@ -1,9 +1,11 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Modules.Medical;
@@ -14,8 +16,13 @@ public class MedicationServiceTests : SqliteTestBase
 
     public MedicationServiceTests()
     {
+        // IEnrichmentRequestService — заглушка: реализация ходит raw SQL к Postgres-специфичным
+        // функциям (см. KbLookupService), не исполняется против SQLite этого теста.
         _sut = new MedicationService(
-            Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), NullLogger<MedicationService>.Instance);
+            Db,
+            new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
+            Substitute.For<IEnrichmentRequestService>(),
+            NullLogger<MedicationService>.Instance);
     }
 
     [Fact]

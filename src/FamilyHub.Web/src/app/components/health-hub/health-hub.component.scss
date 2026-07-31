@@ -1,0 +1,12 @@
+// Три русских ярлыка (Аптечка/Анализы/Справочник, этап 4) не гарантированно влезают в узкий
+// экран — та же горизонтальная прокрутка .seg, что и в settings.component.scss/family-details.component.scss.
+.seg {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+
+  .seg-opt {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

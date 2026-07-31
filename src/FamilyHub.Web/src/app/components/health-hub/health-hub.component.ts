@@ -13,10 +13,12 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   standalone: true,
   imports: [RouterLink, RouterLinkActive, RouterOutlet],
   templateUrl: './health-hub.component.html',
+  styleUrl: './health-hub.component.scss',
 })
 export class HealthHubComponent {
   readonly sections: { path: string; label: string }[] = [
     { path: 'medications', label: 'Аптечка' },
     { path: 'records', label: 'Анализы' },
+    { path: 'kb', label: 'Справочник' },
   ];
 }
