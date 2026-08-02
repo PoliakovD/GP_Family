@@ -57,6 +57,13 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
         builder.UseSetting("FileStorage:Provider", "Local");
         builder.UseSetting("LocalFileStorage:RootPath", _uploadsRoot);
+        // Секреты не хардкодятся в appsettings.Development.json (даже для dev — см. Program.cs
+        // fail-fast) — тестовый хост задаёт свои фиксированные значения явно, тем же путём, что и
+        // остальную конфигурацию здесь. DevMasterKey переиспользует константу, которой уже
+        // пользуется InitializeAsync выше для миграций (design-time-ключ, не для прода).
+        builder.UseSetting("Encryption:MasterKey", DesignTimeDbContextFactory.DevMasterKey);
+        builder.UseSetting("Jwt:SigningKey", "ZGV2LWp3dC1zaWduaW5nLWtleS0zMi1ieXRlcy1va2s=");
+        builder.UseSetting("Attachments:DownloadSigningKey", "dev-attachment-download-signing-key");
         // Без BotToken: вебхук-эндпоинт и ITelegramBotClient не регистрируются (см. Program.cs) —
         // достаточно для всего, кроме BotWebhookTests, у которых своя фабрика-наследник.
         builder.UseSetting("Telegram:BotToken", "");

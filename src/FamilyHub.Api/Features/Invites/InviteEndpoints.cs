@@ -31,10 +31,10 @@ public static class InviteEndpoints
         });
         
         group.MapGet("/families/{familyId:guid}/current",
-            async (Guid familyId, FamilyService service, CancellationToken ct) =>
+            async (Guid familyId, FamilyService service, ICurrentUser currentUser, CancellationToken ct) =>
             {
-                var result = await service.GetFamilyMembersAsync(familyId, ct);
-                return Results.Ok(result);
+                var (result, members) = await service.GetFamilyMembersAsync(familyId, currentUser.UserId, ct);
+                return result == GetFamilyMembersResult.Forbidden ? Results.Forbid() : Results.Ok(members);
             }
         );
 

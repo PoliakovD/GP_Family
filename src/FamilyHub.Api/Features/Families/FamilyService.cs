@@ -13,6 +13,8 @@ public record CurrentFamilyMember(Guid Id, string DisplayName, string? Username,
 
 public enum DeleteFamilyResult { Deleted, Forbidden, NotFound }
 
+public enum GetFamilyMembersResult { Success, Forbidden }
+
 public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger<FamilyService> logger)
 {
     /// <summary>Создатель семьи становится её первым админом, сразу Active.</summary>
@@ -60,8 +62,16 @@ public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger
         return result;
     }
 
-    public async Task<List<CurrentFamilyMember>>  GetFamilyMembersAsync(Guid familyId, CancellationToken ct)
+    public async Task<(GetFamilyMembersResult Result, List<CurrentFamilyMember> Members)> GetFamilyMembersAsync(
+        Guid familyId, Guid requestingUserId, CancellationToken ct)
     {
+        if (!await access.HasRoleAsync(requestingUserId, familyId, FamilyRole.Member, ct))
+        {
+            logger.LogWarning(
+                "Список участников семьи {FamilyId} отклонён: {UserId} не активный участник", familyId, requestingUserId);
+            return (GetFamilyMembersResult.Forbidden, []);
+        }
+
         var result = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == familyId)
             .Include(m => m.User)
@@ -69,7 +79,7 @@ public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger
             .ToListAsync(ct);
 
         logger.LogDebug("Загружено {Count} участников семьи {FamilyId}", result.Count, familyId);
-        return result;
+        return (GetFamilyMembersResult.Success, result);
     }
 
     /// <summary>

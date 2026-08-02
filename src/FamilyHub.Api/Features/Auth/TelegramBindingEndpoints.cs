@@ -57,6 +57,20 @@ public static class TelegramBindingEndpoints
         // ничего не найдёт, и следующий же запрос из Telegram получит 401.
         group.MapPost("/revoke", async (ICurrentUser currentUser, AppDbContext db, CancellationToken ct) =>
         {
+            var user = await db.Users
+                .Where(u => u.Id == currentUser.UserId)
+                .Select(u => new { u.Email, u.PasswordHash })
+                .FirstOrDefaultAsync(ct);
+            if (user is null) return Results.NotFound();
+
+            // Гейт есть и в UI (settings-security: кнопка «Отвязать» показывается только при
+            // hasTelegram && hasPassword), но без серверной проверки прямой вызов эндпоинта
+            // (DevTools/curl) для Telegram-only аккаунта необратимо отрезал бы его от входа:
+            // TelegramMiniAppAuthenticationHandler — lookup-only, PwaAuthService.LoginAsync
+            // требует Email + PasswordHash. Восстановить такой аккаунт было бы нечем.
+            if (string.IsNullOrEmpty(user.Email) || user.PasswordHash is null)
+                return Results.Conflict(new { code = "password_required" });
+
             await db.Users.Where(u => u.Id == currentUser.UserId)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.TelegramId, (long?)null), ct);
             return Results.Ok();

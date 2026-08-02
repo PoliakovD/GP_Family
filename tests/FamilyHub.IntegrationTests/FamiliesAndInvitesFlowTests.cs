@@ -15,6 +15,7 @@ public class FamiliesAndInvitesFlowTests(FamilyHubWebFactory factory) : Integrat
     private record CreateInviteResponseDto(Guid Id, string Code, int MaxUses, DateTime? ExpiresAt);
     private record RedeemResponseDto(string Status);
     private record PendingMemberDto(Guid UserId, FamilyRole Role, DateTime JoinedAt);
+    private record CurrentMemberDto(Guid Id, string DisplayName, string? Username, DateTime JoinedAt, FamilyRole Role);
 
     private async Task<(Guid FamilyId, HttpClient AdminClient)> CreateFamilyAsAdminAsync()
     {
@@ -115,5 +116,49 @@ public class FamiliesAndInvitesFlowTests(FamilyHubWebFactory factory) : Integrat
             new CreateInviteRequest(TargetUserId: null, AssignedRole: FamilyRole.Member, MaxUses: 1, ExpiresAt: null));
 
         forbiddenResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // Регрессия на broken access control (аудит 2026-08-02, находка [02]): GetFamilyMembersAsync
+    // раньше не принимал userId и не проверял членство вообще — любой аутентифицированный
+    // пользователь мог прочитать состав ЛЮБОЙ семьи по известному GUID.
+    [Fact]
+    public async Task GetCurrentMembers_AsOutsider_Returns403()
+    {
+        var (familyId, _) = await CreateFamilyAsAdminAsync();
+        var outsider = ClientAs(FreshTelegramId());
+
+        var response = await outsider.GetAsync($"/api/families/{familyId}/current");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetCurrentMembers_AsActiveAdmin_Returns200AndIncludesSelf()
+    {
+        var (familyId, admin) = await CreateFamilyAsAdminAsync();
+
+        var response = await admin.GetAsync($"/api/families/{familyId}/current");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var members = await response.Content.ReadFromJsonAsync<List<CurrentMemberDto>>(JsonOpts);
+        members.Should().ContainSingle(m => m.Role == FamilyRole.Admin);
+    }
+
+    [Fact]
+    public async Task GetCurrentMembers_AsPendingApplicant_Returns403()
+    {
+        var (familyId, admin) = await CreateFamilyAsAdminAsync();
+        var inviteResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/invites",
+            new CreateInviteRequest(TargetUserId: null, AssignedRole: FamilyRole.Member, MaxUses: 1, ExpiresAt: null));
+        var invite = await inviteResponse.Content.ReadFromJsonAsync<CreateInviteResponseDto>(JsonOpts);
+
+        var applicant = ClientAs(FreshTelegramId());
+        await applicant.PostAsync($"/api/invites/{invite!.Code}/redeem", null);
+
+        // Заявитель формально состоит в семье (PendingApproval), но ещё не Active —
+        // HasRoleAsync требует Active, поэтому доступа к составу семьи у него быть не должно.
+        var response = await applicant.GetAsync($"/api/families/{familyId}/current");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

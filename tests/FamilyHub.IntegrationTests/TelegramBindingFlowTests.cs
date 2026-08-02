@@ -214,6 +214,29 @@ public class TelegramBindingFlowTests(TelegramBindingWebFactory factory)
         (await TelegramClient(telegramId).GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    // Регрессия на самоблокировку (аудит 2026-08-02, находка [01]): /revoke раньше не проверял
+    // на бэкенде наличие пароля — гейт был только в UI. Telegram-only пользователь (нет Email/
+    // PasswordHash) мог необратимо обнулить свой единственный способ входа.
+    [Fact]
+    public async Task Revoke_TelegramOnlyAccountWithoutPassword_Returns409_AndAccessStaysIntact()
+    {
+        var telegramId = FreshTelegramId();
+        // Dev-схема (X-Dev-TelegramId) создаёт пользователя тем же путём, что и штатный Telegram
+        // Mini App логин без предварительной email-привязки: TelegramId есть, Email/PasswordHash — нет.
+        var telegramOnlyClient = factory.CreateClientAs(telegramId);
+        (await telegramOnlyClient.GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.OK, "аккаунт создан и рабочий");
+
+        var revokeResponse = await telegramOnlyClient.PostAsync("/api/auth/telegram/revoke", null);
+
+        revokeResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await revokeResponse.Content.ReadFromJsonAsync<ErrorCodeDto>(JsonOpts);
+        body!.Code.Should().Be("password_required");
+
+        // TelegramId не тронут — доступ по-прежнему рабочий.
+        (await factory.CreateClientAs(telegramId).GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private record ErrorCodeDto(string Code);
     private record BoundDto(bool Bound);
     private record CreatedFamilyDto(Guid Id);
     private record FamilyDto(Guid Id, string Name);

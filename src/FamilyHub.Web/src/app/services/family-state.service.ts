@@ -24,18 +24,28 @@ export class FamilyStateService {
             this.error.set(null);
             this.log.log('state', 'info', `families loaded: ${result.length}`);
             for (const f of this.families()) {
+                // Участников видит только активный member (бэкенд проверяет членство —
+                // GET /api/families/{id}/current теперь 403 для не-Active статусов, включая
+                // собственный PendingApproval). Пропускаем такие семьи и не даём сбою по одной
+                // семье оборвать загрузку остальных.
+                if (f.myStatus !== MemberStatus.Active) continue;
 
-                f.currentMembers = await this.api.getCurrentMembers(f.id);
-                f.currentMembers.forEach((m) => {
-                    this.log.log('state', 'info',
-                        `Id:${m.id}\n` +
-                        `displayName:${m.displayName}\n` +
-                        `username:$${m.username}\n` +
-                        `role:${m.role}\n` +
-                        `joinedAt:${m.joinedAt}`
-                    );
-                })
-                this.log.log('state', 'info', 'loaded ' + f.currentMembers.length + 'members');
+                try {
+                    f.currentMembers = await this.api.getCurrentMembers(f.id);
+                    f.currentMembers.forEach((m) => {
+                        this.log.log('state', 'info',
+                            `Id:${m.id}\n` +
+                            `displayName:${m.displayName}\n` +
+                            `username:$${m.username}\n` +
+                            `role:${m.role}\n` +
+                            `joinedAt:${m.joinedAt}`
+                        );
+                    })
+                    this.log.log('state', 'info', 'loaded ' + f.currentMembers.length + 'members');
+                } catch (err) {
+                    const msg = err instanceof ApiError ? err.message : String(err);
+                    this.log.log('state', 'error', `getCurrentMembers(${f.id}) failed: ${msg}`);
+                }
             }
         } catch (err) {
             const msg = err instanceof ApiError ? err.message : 'Не удалось загрузить семьи.';

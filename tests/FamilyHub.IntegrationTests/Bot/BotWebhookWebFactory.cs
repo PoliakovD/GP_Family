@@ -72,6 +72,11 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
         builder.UseSetting("FileStorage:Provider", "Local");
         builder.UseSetting("LocalFileStorage:RootPath", _uploadsRoot);
+        // Секреты не хардкодятся в appsettings.Development.json (даже для dev — см. Program.cs
+        // fail-fast) — тестовый хост задаёт свои фиксированные значения явно.
+        builder.UseSetting("Encryption:MasterKey", DesignTimeDbContextFactory.DevMasterKey);
+        builder.UseSetting("Jwt:SigningKey", "ZGV2LWp3dC1zaWduaW5nLWtleS0zMi1ieXRlcy1va2s=");
+        builder.UseSetting("Attachments:DownloadSigningKey", "dev-attachment-download-signing-key");
         builder.UseSetting("Telegram:BotToken", "test-bot-token-not-real");
         builder.UseSetting("Telegram:BotUsername", "familyhub_test_bot");
         builder.UseSetting("Telegram:WebhookSecret", WebhookSecret);

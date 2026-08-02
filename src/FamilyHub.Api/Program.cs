@@ -83,12 +83,30 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 
 // --- At-rest шифрование (этап 2, 152-ФЗ): ключ вне БД, fail-fast при отсутствии ---
 // Синглтоны обязательны: EF кэширует модель с конвертером, захватившим первый cipher.
-if (string.IsNullOrWhiteSpace(builder.Configuration["Encryption:MasterKey"]))
+var encryptionMasterKey = builder.Configuration["Encryption:MasterKey"];
+if (string.IsNullOrWhiteSpace(encryptionMasterKey))
     throw new InvalidOperationException(
         "Encryption:MasterKey не задан (env Encryption__MasterKey) — at-rest шифрование обязательно.");
+// appsettings.Development.json и docker-compose.yml больше НЕ содержат дефолт этого ключа —
+// секреты везде тянутся из окружения, даже в Development (см. .env.example). Единственное
+// оставшееся легитимное место с этим значением — DesignTimeDbContextFactory.DevMasterKey
+// (design-time `dotnet ef`/тестовые фабрики, реальных данных не касается). Но строка всё
+// равно навсегда осталась в истории git — этот guard блокирует её случайное копирование
+// в реальное окружение вне Development.
+if (!builder.Environment.IsDevelopment() && encryptionMasterKey == DesignTimeDbContextFactory.DevMasterKey)
+    throw new InvalidOperationException(
+        "Encryption:MasterKey равен design-time/тестовому dev-ключу из истории репозитория — " +
+        "вне Development это недопустимо. Сгенерировать реальный ключ: `openssl rand -base64 32`.");
 builder.Services.AddSingleton<IFieldCipher, AesGcmFieldCipher>();
 builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
 builder.Services.AddSingleton<DownloadTokenService>();
+
+// Fail-fast для ключа подписи ссылок на скачивание вложений — без него DownloadTokenService.Sign
+// бросал бы лениво, только при первой попытке выдать ссылку (см. находку 09.2 аудита безопасности).
+if (string.IsNullOrWhiteSpace(builder.Configuration["Attachments:DownloadSigningKey"]))
+    throw new InvalidOperationException(
+        "Attachments:DownloadSigningKey не задан (env Attachments__DownloadSigningKey) — " +
+        "выдача ссылок на вложения невозможна.");
 
 // Стеммер/триграммы — чистые функции без состояния (этап 3, ADR-0003): singleton безопасен.
 // Общий для Modules.Medical (медкарты) и Modules.Birthdays (дни рождения) — оба зависят только
