@@ -30,13 +30,14 @@ public class MedicationKbStatusService(
         return (MedicationAccessResult.Success, await BuildStatusAsync(medication!, ct));
     }
 
-    public async Task<MedicationAccessResult> RequestRefreshAsync(Guid medicationId, Guid userId, CancellationToken ct = default)
+    public async Task<(MedicationAccessResult Result, EnrichmentRefreshOutcome? Outcome)> RequestRefreshAsync(
+        Guid medicationId, Guid userId, CancellationToken ct = default)
     {
         var (result, medication) = await LoadAuthorizedAsync(medicationId, userId, ct);
-        if (result != MedicationAccessResult.Success) return result;
+        if (result != MedicationAccessResult.Success) return (result, null);
 
-        await enrichment.RequestRefreshAsync(medication!, userId, ct);
-        return MedicationAccessResult.Success;
+        var outcome = await enrichment.RequestRefreshAsync(medication!, userId, ct);
+        return (MedicationAccessResult.Success, outcome);
     }
 
     private async Task<(MedicationAccessResult Result, Medication? Medication)> LoadAuthorizedAsync(

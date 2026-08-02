@@ -6,6 +6,7 @@ import {
   Attachment,
   Birthday,
   BirthdayInput, CurrentMember,
+  EnrichmentRefreshOutcome,
   FamilySummary,
   InviteCreated,
   KbListResponse,
@@ -281,8 +282,11 @@ export class ApiService {
   /** Статус обогащения конкретного медикамента пользователя + карточка, если уже готова. */
   getMedicationKb = (medicationId: string) => this.get<MedicationKbResponse>(`/api/medications/${medicationId}/kb`);
 
-  /** Ручной запрос «Уточнить в справочнике» — 202 Accepted, конвейер асинхронный (см. GetMedicationKb для статуса). */
-  refreshMedicationKb = (medicationId: string) => this.post<void>(`/api/medications/${medicationId}/kb/refresh`);
+  /** Ручной запрос «Уточнить в справочнике» — конвейер асинхронный (см. getMedicationKb для статуса
+   * после Requested); при OnCooldown задача не ставится — платный API по этому названию уже
+   * запрашивался недавно (см. EnrichmentRefreshOutcome.availableAt). */
+  refreshMedicationKb = (medicationId: string) =>
+    this.post<EnrichmentRefreshOutcome>(`/api/medications/${medicationId}/kb/refresh`);
 
   // Web Push (редизайн навигации, ADR-0004)
   getPushVapidPublicKey = () => this.get<VapidPublicKeyResponse>('/api/push/vapid-public-key');

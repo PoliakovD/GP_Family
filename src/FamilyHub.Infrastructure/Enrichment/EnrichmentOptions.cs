@@ -25,6 +25,11 @@ public class EnrichmentOptions
     /// зависит от тарифа) — считается по Postgres, не в памяти.</summary>
     public int MonthlyQuota { get; set; } = 2000;
 
+    /// <summary>Минимальный интервал между обращениями к платному API за ОДНО и то же нормализованное
+    /// название (см. MedicationSearchCache) — защита от повторной оплаты за один и тот же препарат,
+    /// не связана с MonthlyQuota (тот лимит — суммарный по всем названиям сразу).</summary>
+    public int MinRefreshIntervalMonths { get; set; } = 1;
+
     /// <summary>Сколько сниппетов максимум передаём суммаризатору за один запрос.</summary>
     public int MaxSnippets { get; set; } = 5;
 

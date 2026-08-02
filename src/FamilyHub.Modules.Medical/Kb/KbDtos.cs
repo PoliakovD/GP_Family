@@ -20,6 +20,8 @@ public record KbMedicationCard(
     IReadOnlyList<string> TradeNames,
     string? Form,
     string? Purpose,
+    /// <summary>Назначение бытовым языком, не медицинскими терминами — см. MedicationSummary.SimplePurpose.</summary>
+    string? SimplePurpose,
     string? Usage,
     string? Storage,
     string? Driving,
@@ -45,6 +47,7 @@ internal sealed record KbPayloadDto(
     [property: JsonPropertyName("tradeNames")] List<string>? TradeNames,
     [property: JsonPropertyName("form")] string? Form,
     [property: JsonPropertyName("purpose")] string? Purpose,
+    [property: JsonPropertyName("simplePurpose")] string? SimplePurpose,
     [property: JsonPropertyName("usage")] string? Usage,
     [property: JsonPropertyName("storage")] string? Storage,
     [property: JsonPropertyName("driving")] string? Driving,

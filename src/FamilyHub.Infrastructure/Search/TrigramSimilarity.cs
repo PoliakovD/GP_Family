@@ -5,9 +5,11 @@ namespace FamilyHub.Infrastructure.Search;
 /// <c>pg_trgm</c> (функция <c>similarity()</c>: доля общих триграмм от их объединения), см. ADR-0003.
 /// Устойчивость к опечаткам OCR: два близких по написанию слова делят большинство триграмм, даже
 /// если отличаются на 1-2 символа. Используется как fallback, когда морфологическое совпадение
-/// (см. <see cref="RussianStemmer"/>) не найдено.
+/// (см. <see cref="RussianStemmer"/>) не найдено — и как сторонняя проверка правдоподобия
+/// "исправленного" названия препарата (см. MedicationEnrichmentProcessor в Modules.Medical),
+/// поэтому публичный, а не internal.
 /// </summary>
-internal static class TrigramSimilarity
+public static class TrigramSimilarity
 {
     /// <summary>Схожесть двух строк по Жаккару на множестве символьных триграмм, [0..1].</summary>
     public static double Similarity(string a, string b)

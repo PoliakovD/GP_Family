@@ -88,6 +88,53 @@ public class EnrichmentQuotaZeroWebFactory : EnrichmentWebFactory
     }
 }
 
+/// <summary>Возвращает correctedName, когда видит конкретное "искажённое OCR" название в userText —
+/// имитирует случай, когда фото упаковки распознано с ошибкой, но найденные источники явно
+/// указывают на настоящий препарат (см. MedicationEnrichmentProcessor.ResolveCorrectedName).</summary>
+file sealed class FakeCorrectingLmStudioJsonClient : ILmStudioJsonClient
+{
+    public const string GarbledName = "Сумматрептан";
+    public const string CorrectedName = "Суматриптан";
+
+    public Task<LmStudioJsonResult> ExtractJsonAsync(
+        string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images,
+        CancellationToken ct = default) =>
+        ExtractJsonAsync(systemPrompt, userText, ct);
+
+    public Task<LmStudioJsonResult> ExtractJsonAsync(string systemPrompt, string userText, CancellationToken ct = default)
+    {
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["internationalName"] = JsonSerializer.SerializeToElement(CorrectedName),
+            ["tradeNames"] = JsonSerializer.SerializeToElement(Array.Empty<string>()),
+            ["form"] = JsonSerializer.SerializeToElement("таблетки"),
+            ["purpose"] = JsonSerializer.SerializeToElement("от мигрени"),
+            ["usage"] = JsonSerializer.SerializeToElement((string?)null),
+            ["storage"] = JsonSerializer.SerializeToElement((string?)null),
+            ["driving"] = JsonSerializer.SerializeToElement((string?)null),
+            ["specialNotes"] = JsonSerializer.SerializeToElement((string?)null),
+            ["usedSourceIndexes"] = JsonSerializer.SerializeToElement(new[] { 0 }),
+            ["correctedName"] = userText.Contains(GarbledName, StringComparison.OrdinalIgnoreCase)
+                ? JsonSerializer.SerializeToElement(CorrectedName)
+                : JsonSerializer.SerializeToElement((string?)null),
+        };
+        return Task.FromResult(new LmStudioJsonResult(true, payload, null));
+    }
+}
+
+public class EnrichmentCorrectionWebFactory : FamilyHubWebFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services =>
+        {
+            services.AddScoped<IMedicationSearchProvider, FakeMedicationSearchProvider>();
+            services.AddScoped<ILmStudioJsonClient, FakeCorrectingLmStudioJsonClient>();
+        });
+    }
+}
+
 [CollectionDefinition(Name)]
 public class EnrichmentCollection : ICollectionFixture<EnrichmentWebFactory>
 {
@@ -98,6 +145,12 @@ public class EnrichmentCollection : ICollectionFixture<EnrichmentWebFactory>
 public class EnrichmentQuotaZeroCollection : ICollectionFixture<EnrichmentQuotaZeroWebFactory>
 {
     public const string Name = "EnrichmentQuotaZeroIntegration";
+}
+
+[CollectionDefinition(Name)]
+public class EnrichmentCorrectionCollection : ICollectionFixture<EnrichmentCorrectionWebFactory>
+{
+    public const string Name = "EnrichmentCorrectionIntegration";
 }
 
 /// <summary>Классы этого файла НЕ наследуют IntegrationTestBase (у неё свой [Collection] на
@@ -121,8 +174,10 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
     private record MedicationKbCardDto(string DisplayName, string Source);
     private record MedicationKbResponseDto(int Status, MedicationKbCardDto? Card);
     private record NotificationItemDto(Guid Id, NotificationType Type, string Title);
+    private record RefreshOutcomeDto(int Status, DateTime? AvailableAt);
 
     private const int StatusReady = 4;
+    private const int RefreshStatusRequested = 0;
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
@@ -198,6 +253,58 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
                 .Content.ReadFromJsonAsync<List<NotificationItemDto>>(JsonOpts);
             return notifications!.Any(n => n.Type == NotificationType.MedicationEnriched);
         }, "пользователь, сохранивший медикамент, должен получить уведомление о пополнении справочника");
+    }
+
+    [Fact]
+    public async Task ManualRefresh_RightAfterEnrichment_ReusesCachedSnippets_WithoutNewExternalCall()
+    {
+        var admin = ClientAs(Random.Shared.NextInt64(1_000_000_000, 9_000_000_000));
+        var familyId = await CreateFamilyAsync(admin);
+        var medkitId = await CreateMedkitAsync(admin, familyId);
+
+        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Кэшпрепарат{Guid.NewGuid():N}");
+
+        await WaitForAsync(
+            async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,
+            "фоновый конвейер должен довести задачу до Completed, записав MedicationSearchCache");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var medication = await db.Medications.AsNoTracking().SingleAsync(m => m.Id == medicationId);
+        var normalizedName = MedicationNameNormalizer.Normalize(medication.Name);
+
+        var cacheRow = await db.MedicationSearchCaches.AsNoTracking()
+            .SingleAsync(c => c.NormalizedName == normalizedName);
+        cacheRow.CanBeUpdatedAfter.Should().BeAfter(DateTime.UtcNow,
+            "успешный внешний запрос должен сразу поставить минимум +1 месяц кулдауна (Enrichment:MinRefreshIntervalMonths)");
+        cacheRow.SnippetsJson.Should().NotBeNullOrEmpty(
+            "настоящий кэш хранит сами сниппеты, а не только факт обращения — иначе пересчитать summarize без нового платного запроса нечем");
+        var lastUpdatedBefore = cacheRow.LastUpdatedAt;
+
+        // Ручной «Уточнить в справочнике» сразу после первого обогащения — то, что раньше упиралось
+        // в кулдаун и полностью блокировалось. Теперь задача должна выполниться, переиспользовав
+        // закэшированные сниппеты, без нового обращения к платному API.
+        var refreshResponse = await admin.PostAsync($"/api/medications/{medicationId}/kb/refresh", null);
+        refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var outcome = await refreshResponse.Content.ReadFromJsonAsync<RefreshOutcomeDto>(JsonOpts);
+        outcome!.Status.Should().Be(RefreshStatusRequested);
+
+        await WaitForAsync(async () =>
+        {
+            var completedCount = await db.MedicationEnrichmentJobs
+                .CountAsync(j => j.NormalizedName == normalizedName && j.Status == EnrichmentJobStatus.Completed);
+            return completedCount >= 2;
+        }, "ручной рефреш должен поставить и выполнить вторую задачу, переиспользовав кэш");
+
+        var cacheRowAfter = await db.MedicationSearchCaches.AsNoTracking()
+            .SingleAsync(c => c.NormalizedName == normalizedName);
+        cacheRowAfter.LastUpdatedAt.Should().Be(lastUpdatedBefore,
+            "в пределах кулдауна повторный рефреш не должен был обращаться к платному API — кэш не обновился");
+
+        var jobsForName = await db.MedicationEnrichmentJobs.Where(j => j.NormalizedName == normalizedName).ToListAsync();
+        jobsForName.Should().HaveCount(2);
+        jobsForName.Count(j => j.ExternalSearchAt != null).Should().Be(1,
+            "только первая (исходная) задача должна была реально сходить к платному API — вторая переиспользовала кэш");
     }
 
     [Fact]
@@ -286,5 +393,101 @@ public class EnrichmentQuotaTests(EnrichmentQuotaZeroWebFactory factory)
             .SingleAsync(j => j.MedicationId == medication!.Id);
         completedJob.ExternalSearchAt.Should().BeNull("исчерпанная квота проверяется ДО внешнего запроса");
         completedJob.Error.Should().Contain("квота");
+    }
+}
+
+[Collection(EnrichmentCorrectionCollection.Name)]
+public class EnrichmentNameCorrectionTests(EnrichmentCorrectionWebFactory factory)
+{
+    private record CreateFamilyResponseDto(Guid Id);
+    private record MedicationKbCardDto(string DisplayName);
+    private record MedicationKbResponseDto(int Status, MedicationKbCardDto? Card);
+
+    private const int StatusReady = 4;
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    private HttpClient ClientAs(long telegramId)
+    {
+        var client = factory.CreateClientAs(telegramId);
+        ConsentHelper.AcceptCurrent(client);
+        return client;
+    }
+
+    private async Task<Guid> CreateFamilyAsync(HttpClient admin)
+    {
+        var response = await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" });
+        var body = await response.Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
+        return body!.Id;
+    }
+
+    private async Task<Guid> CreateMedkitAsync(HttpClient admin, Guid familyId)
+    {
+        var response = await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits", new CreateMedkitRequest("Аптечка"));
+        var body = await response.Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+        return body!.Id;
+    }
+
+    private async Task<Guid> CreateMedicationAsync(HttpClient admin, Guid medkitId, string name)
+    {
+        var response = await admin.PostAsJsonAsync($"/api/medkits/{medkitId}/medications", new CreateMedicationRequest(name, null, null));
+        var body = await response.Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
+        return body!.Id;
+    }
+
+    private static async Task<MedicationKbResponseDto> GetKbStatusAsync(HttpClient client, Guid medicationId)
+    {
+        var response = await client.GetAsync($"/api/medications/{medicationId}/kb");
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<MedicationKbResponseDto>(JsonOpts))!;
+    }
+
+    private static async Task WaitForAsync(Func<Task<bool>> condition, string because, int timeoutMs = 45_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition()) return;
+            await Task.Delay(300);
+        }
+
+        (await condition()).Should().BeTrue(because);
+    }
+
+    [Fact]
+    public async Task OcrMisreadName_GetsCorrectedInKnowledgeBase_AndOriginalResolvesViaAliasWithoutNewJob()
+    {
+        var admin = ClientAs(Random.Shared.NextInt64(1_000_000_000, 9_000_000_000));
+        var familyId = await CreateFamilyAsync(admin);
+        var medkitId = await CreateMedkitAsync(admin, familyId);
+
+        var medicationId = await CreateMedicationAsync(admin, medkitId, FakeCorrectingLmStudioJsonClient.GarbledName);
+
+        await WaitForAsync(
+            async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,
+            "конвейер должен довести задачу до Completed");
+
+        var status = await GetKbStatusAsync(admin, medicationId);
+        status.Card!.DisplayName.Should().Be(FakeCorrectingLmStudioJsonClient.CorrectedName,
+            "суммаризатор нашёл настоящее название в цитируемых источниках — справочник должен хранить его, а не искажённое OCR-имя");
+
+        // Второй медикамент с ТЕМ ЖЕ искажённым именем — должен разрешиться сразу через алиас на
+        // исправленной записи, без повторной постановки задачи/внешнего запроса.
+        var medkit2Id = await CreateMedkitAsync(admin, familyId);
+        var secondMedicationId = await CreateMedicationAsync(admin, medkit2Id, FakeCorrectingLmStudioJsonClient.GarbledName);
+
+        await WaitForAsync(
+            async () => (await GetKbStatusAsync(admin, secondMedicationId)).Status == StatusReady,
+            "повторное искажённое имя должно резолвиться немедленно через алиас, без ожидания фонового конвейера");
+
+        var secondStatus = await GetKbStatusAsync(admin, secondMedicationId);
+        secondStatus.Card!.DisplayName.Should().Be(FakeCorrectingLmStudioJsonClient.CorrectedName);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var garbledNormalized = MedicationNameNormalizer.Normalize(FakeCorrectingLmStudioJsonClient.GarbledName);
+
+        (await db.MedicationEnrichmentJobs.CountAsync(j => j.NormalizedName == garbledNormalized))
+            .Should().Be(1, "повторное искажённое имя не должно порождать вторую задачу — алиас должен сработать до постановки в очередь");
     }
 }

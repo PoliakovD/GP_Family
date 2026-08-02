@@ -32,10 +32,15 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
     private static readonly Regex PersonalKeywordPattern = new(
         @"\b(UserId|FamilyId|Person|Owner|Telegram|Email|Phone|Member)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <param name="extraAliases">Доп. алиасы помимо summary.TradeNames — например, исходное
+    /// (искажённое OCR) название, когда запись пишется под исправленным именем (см.
+    /// MedicationEnrichmentProcessor): следующее распознавание той же опечатки находит запись
+    /// сразу через алиас, без повторного внешнего поиска.</param>
     public async Task<KbWriteResult> UpsertAsync(
-        string normalizedName, string displayName, MedicationSummary summary, string source, CancellationToken ct = default)
+        string normalizedName, string displayName, MedicationSummary summary, string source,
+        IReadOnlyList<string>? extraAliases = null, CancellationToken ct = default)
     {
-        var violation = FindPersonalContextViolation(displayName, summary);
+        var violation = FindPersonalContextViolation(displayName, summary, extraAliases);
         if (violation is not null)
         {
             logger.LogWarning(
@@ -51,15 +56,18 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
             tradeNames = summary.TradeNames,
             form = summary.Form,
             purpose = summary.Purpose,
+            simplePurpose = summary.SimplePurpose,
             usage = summary.Usage,
             storage = summary.Storage,
             driving = summary.Driving,
             specialNotes = summary.SpecialNotes,
         });
 
-        // Алиасы — нормализованные торговые названия (та же функция, что и ключ дедупликации),
+        // Алиасы — нормализованные торговые названия (та же функция, что и ключ дедупликации) плюс
+        // extraAliases (исходное искажённое OCR название при переименовании, см. параметр выше),
         // без самого NormalizedName (иначе он же попал бы и в основной ключ, и в алиасы).
         var aliases = summary.TradeNames
+            .Concat(extraAliases ?? [])
             .Select(MedicationNameNormalizer.Normalize)
             .Where(a => a.Length > 0 && a != normalizedName)
             .Distinct()
@@ -93,14 +101,16 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         return KbWriteResult.Ok(actualId);
     }
 
-    private static string? FindPersonalContextViolation(string displayName, MedicationSummary summary)
+    private static string? FindPersonalContextViolation(
+        string displayName, MedicationSummary summary, IReadOnlyList<string>? extraAliases)
     {
         var candidates = new List<string?>
         {
-            displayName, summary.InternationalName, summary.Form, summary.Purpose, summary.Usage,
+            displayName, summary.InternationalName, summary.Form, summary.Purpose, summary.SimplePurpose, summary.Usage,
             summary.Storage, summary.Driving, summary.SpecialNotes,
         };
         candidates.AddRange(summary.TradeNames);
+        if (extraAliases is not null) candidates.AddRange(extraAliases);
 
         foreach (var text in candidates)
         {

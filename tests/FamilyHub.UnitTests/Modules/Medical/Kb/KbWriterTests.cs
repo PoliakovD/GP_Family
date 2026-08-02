@@ -25,12 +25,12 @@ public class KbWriterTests : SqliteTestBase
     }
 
     private static MedicationSummary SummaryWithNote(string specialNotes) =>
-        new("Ибупрофен", ["Нурофен"], "таблетки", "жаропонижающее", "по 1 таб. до 3 раз в сутки",
-            "в сухом месте", "не влияет", specialNotes, [0]);
+        new("Ибупрофен", ["Нурофен"], "таблетки", "жаропонижающее", "сбивает температуру и снимает боль",
+            "по 1 таб. до 3 раз в сутки", "в сухом месте", "не влияет", specialNotes, [0]);
 
     private static MedicationSummary SummaryWithUsage(string usage) =>
-        new("Ибупрофен", ["Нурофен"], "таблетки", "жаропонижающее", usage,
-            "в сухом месте", "не влияет", null, [0]);
+        new("Ибупрофен", ["Нурофен"], "таблетки", "жаропонижающее", "сбивает температуру и снимает боль",
+            usage, "в сухом месте", "не влияет", null, [0]);
 
     [Fact]
     public async Task Upsert_ValueLooksLikeGuid_IsRejected()
@@ -84,6 +84,19 @@ public class KbWriterTests : SqliteTestBase
         var summary = SummaryWithUsage("Согласовано с Telegram-ботом семьи");
 
         var result = await _sut.UpsertAsync("ибупрофен", "Ибупрофен", summary, "тест");
+
+        result.Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Upsert_PersonalKeywordInExtraAlias_IsRejected()
+    {
+        // extraAliases — исходное искажённое OCR название при переименовании (см.
+        // MedicationEnrichmentProcessor.ResolveCorrectedName) — тоже проходит проверку.
+        var summary = SummaryWithNote("Хранить в сухом месте");
+
+        var result = await _sut.UpsertAsync(
+            "ибупрофен", "Ибупрофен", summary, "тест", extraAliases: ["ivan.petrov@example.com"]);
 
         result.Success.Should().BeFalse();
     }

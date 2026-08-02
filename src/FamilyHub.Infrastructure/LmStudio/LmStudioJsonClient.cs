@@ -9,26 +9,18 @@ namespace FamilyHub.Infrastructure.LmStudio;
 
 /// <summary>
 /// Типизированный HttpClient к LM Studio (эндпоинт /v1/chat/completions, OpenAI-совместимый).
-/// Уровень "размышлений" (LmStudioOptions.ThinkingLevel, env LmStudio__ThinkingLevel=0..3)
-/// применяется ТРЕМЯ независимыми способами (каждый следующий — подстраховка на случай, если
-/// предыдущий не сработал для конкретной версии LM Studio/чат-шаблона):
-/// 1) литерал "/no_think" (уровень None) или "/think" (Low/Medium/High) в конце пользовательского
-///    сообщения — документированный Qwen3-переключатель на уровне самого чат-шаблона (Jinja
-///    сканирует текст диалога), срабатывает даже когда параметры ниже бэкенд не поддерживает —
-///    самый надёжный способ реально исключить размышление, а не просто скрыть его постфактум;
-/// 2) request-level chat_template_kwargs.enable_thinking + thinking_budget и top-level
-///    reasoning_effort — best-effort: градация Low/Medium/High реально различается, только если
-///    загруженная модель/шаблон их понимает, иначе все три ведут себя как "думает сколько хочет";
-/// 3) defensively — вырезание &lt;think&gt;...&lt;/think&gt; из ответа перед парсингом JSON, работает
-///    гарантированно вне зависимости от того, сработали ли (1)/(2), но при включённом размышлении
-///    НЕ ускоряет генерацию — блок всё равно был сгенерирован и просто отбрасывается при парсинге.
+/// Уровень "размышлений" (LmStudioOptions.Reasoning, env LmStudio__Reasoning=none|minimal|medium|
+/// maximum) НЕ управляется никаким API-параметром запроса — см. докстринг LmStudioReasoning:
+/// ни chat_template_kwargs.enable_thinking, ни top-level reasoning_effort не дают предсказуемого
+/// результата на разных моделях/квантизациях (проверено curl'ом). Канал рассуждений всегда
+/// оставлен структурно включённым, а глубину задаёт словесная инструкция, дописанная в конец
+/// системного промпта (см. ReasoningDirectives) — модель сама подстраивается под неё.
+/// Вырезание &lt;think&gt;...&lt;/think&gt; из content — подстраховка на случай бэкенда, который
+/// вкладывает рассуждение прямо в основной текст ответа, а не в отдельное поле reasoning_content.
 /// </summary>
 public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions> options, ILogger<LmStudioJsonClient> logger)
     : ILmStudioJsonClient
 {
-    private const string NoThinkDirective = "/no_think";
-    private const string ThinkDirective = "/think";
-
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private static readonly Regex ThinkBlockRegex =
@@ -36,6 +28,17 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
 
     private static readonly Regex CodeFenceRegex =
         new(@"```(?:json)?\s*([\s\S]*?)```", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Текст, которым модели явно называется желаемая глубина размышлений — подобран и
+    /// проверен curl'ом на bonsai-27b (см. LmStudioReasoning). Дописывается в конец системного
+    /// промпта конкретной задачи (OCR/суммаризация), а не заменяет его.</summary>
+    private static readonly Dictionary<LmStudioReasoning, string> ReasoningDirectives = new()
+    {
+        [LmStudioReasoning.None] = "Уровень рассуждений: без рассуждений. Не рассуждай перед ответом вообще — отвечай сразу и кратко, без промежуточных шагов.",
+        [LmStudioReasoning.Minimal] = "Уровень рассуждений: минимальный. Рассуждай перед ответом по минимуму — только то, что действительно необходимо, коротко.",
+        [LmStudioReasoning.Medium] = "Уровень рассуждений: средний. Рассуждай перед ответом в разумных пределах — по существу, без лишних деталей.",
+        [LmStudioReasoning.Maximum] = "Уровень рассуждений: максимальный. Рассуждай перед ответом подробно и тщательно, проверяя себя на каждом шаге, прежде чем дать финальный ответ.",
+    };
 
     /// <inheritdoc cref="ILmStudioJsonClient.ExtractJsonAsync(string, string, CancellationToken)"/>
     public Task<LmStudioJsonResult> ExtractJsonAsync(string systemPrompt, string userText, CancellationToken ct = default) =>
@@ -47,13 +50,9 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
         IReadOnlyList<(byte[] Bytes, string ContentType)> images,
         CancellationToken ct = default)
     {
-        var thinkingLevel = options.Value.ThinkingLevel;
-        var thinkingEnabled = thinkingLevel != LmStudioThinkingLevel.None;
+        var systemPromptWithReasoning = $"{systemPrompt}\n\n{ReasoningDirectives[options.Value.Reasoning]}";
 
-        // "/no_think" / "/think" — переключатель самого чат-шаблона Qwen3 (см. докстринг класса),
-        // а не API-параметр: работает даже когда chat_template_kwargs.enable_thinking проигнорирован.
-        var directive = thinkingEnabled ? ThinkDirective : NoThinkDirective;
-        var contentParts = new List<ContentPart> { new("text", Text: $"{userText}\n\n{directive}") };
+        var contentParts = new List<ContentPart> { new("text", Text: userText) };
         foreach (var (bytes, contentType) in images)
         {
             var dataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
@@ -64,22 +63,26 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
             Model: options.Value.Model,
             Messages:
             [
-                new ChatMessage("system", systemPrompt),
+                new ChatMessage("system", systemPromptWithReasoning),
                 new ChatMessage("user", contentParts),
             ],
             Temperature: 0.1,
-            Stream: false,
-            ChatTemplateKwargs: new ChatTemplateKwargs(
-                EnableThinking: thinkingEnabled,
-                ThinkingBudget: thinkingEnabled ? ThinkingBudgetFor(thinkingLevel) : null),
-            ReasoningEffort: thinkingEnabled ? ReasoningEffortFor(thinkingLevel) : null,
-            MaxTokens: thinkingEnabled ? MaxTokensFor(thinkingLevel) : null);
+            Stream: false);
 
         string? rawContent;
         try
         {
             using var response = await httpClient.PostAsJsonAsync("v1/chat/completions", request, JsonOptions, ct);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                // Тело ответа LM Studio на 4xx обычно объясняет, что именно не понравилось в
+                // запросе — логируем его, а не только код: EnsureSuccessStatusCode() выбросил бы
+                // HttpRequestException без тела, и причина терялась бы за общим "недоступен".
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+                logger.LogWarning(
+                    "LM Studio вернул {StatusCode} на запрос: {Body}", (int)response.StatusCode, errorBody);
+                return LmStudioJsonResult.Failure($"Локальный сервер распознавания вернул ошибку {(int)response.StatusCode}.");
+            }
 
             var parsed = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, ct);
             rawContent = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
@@ -115,37 +118,6 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
         }
     }
 
-    /// <summary>Best-effort подсказка объёма рассуждения (chat_template_kwargs.thinking_budget,
-    /// токены) — учитывается только если конкретная модель/шаблон её понимает, иначе игнорируется.</summary>
-    private static int ThinkingBudgetFor(LmStudioThinkingLevel level) => level switch
-    {
-        LmStudioThinkingLevel.Low => 1024,
-        LmStudioThinkingLevel.Medium => 4096,
-        LmStudioThinkingLevel.High => 16384,
-        _ => 1024,
-    };
-
-    /// <summary>Best-effort подсказка в духе OpenAI reasoning_effort — на случай, если бэкенд её
-    /// поддерживает для загруженной модели; неизвестное поле большинство OpenAI-совместимых
-    /// серверов просто игнорирует.</summary>
-    private static string ReasoningEffortFor(LmStudioThinkingLevel level) => level switch
-    {
-        LmStudioThinkingLevel.Low => "low",
-        LmStudioThinkingLevel.Medium => "medium",
-        LmStudioThinkingLevel.High => "high",
-        _ => "low",
-    };
-
-    /// <summary>С включённым размышлением ответ = reasoning-токены + сам JSON — без явного max_tokens
-    /// сервер мог бы обрезать генерацию до того, как модель допишет JSON после долгого рассуждения.</summary>
-    private static int MaxTokensFor(LmStudioThinkingLevel level) => level switch
-    {
-        LmStudioThinkingLevel.Low => 4096,
-        LmStudioThinkingLevel.Medium => 8192,
-        LmStudioThinkingLevel.High => 24576,
-        _ => 4096,
-    };
-
     /// <summary>Снимает &lt;think&gt;-блок и markdown-фенсы, подстраховкой вырезает от первой { до последней }.</summary>
     private static string ExtractJsonPayload(string content)
     {
@@ -170,14 +142,7 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
         [property: JsonPropertyName("model")] string Model,
         [property: JsonPropertyName("messages")] List<ChatMessage> Messages,
         [property: JsonPropertyName("temperature")] double Temperature,
-        [property: JsonPropertyName("stream")] bool Stream,
-        [property: JsonPropertyName("chat_template_kwargs")] ChatTemplateKwargs ChatTemplateKwargs,
-        [property: JsonPropertyName("reasoning_effort"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ReasoningEffort = null,
-        [property: JsonPropertyName("max_tokens"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MaxTokens = null);
-
-    private sealed record ChatTemplateKwargs(
-        [property: JsonPropertyName("enable_thinking")] bool EnableThinking,
-        [property: JsonPropertyName("thinking_budget"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ThinkingBudget = null);
+        [property: JsonPropertyName("stream")] bool Stream);
 
     private sealed record ChatMessage(
         [property: JsonPropertyName("role")] string Role,
@@ -186,7 +151,9 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
     private sealed record ContentPart(
         [property: JsonPropertyName("type")] string Type,
         [property: JsonPropertyName("text")] string? Text = null,
-        [property: JsonPropertyName("image_url")] ImageUrlPart? ImageUrl = null);
+        // WhenWritingNull: для текстовых частей (без фото) не шлём лишний "image_url": null —
+        // возможный источник 400 у строгих OpenAI-совместимых валидаторов схемы запроса.
+        [property: JsonPropertyName("image_url"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ImageUrlPart? ImageUrl = null);
 
     private sealed record ImageUrlPart([property: JsonPropertyName("url")] string Url);
 

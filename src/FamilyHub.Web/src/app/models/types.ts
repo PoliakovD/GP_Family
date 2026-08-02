@@ -200,6 +200,8 @@ export interface KbMedicationCard {
     tradeNames: string[];
     form: string | null;
     purpose: string | null;
+    /** То же назначение простыми бытовыми словами, не медицинскими терминами (напр. "сбивает температуру"). */
+    simplePurpose: string | null;
     /** Способ применения и дозы — как в официальной инструкции (общие данные, не для конкретного человека). */
     usage: string | null;
     storage: string | null;
@@ -226,6 +228,15 @@ export interface MedicationKbResponse {
     card: KbMedicationCard | null;
     /** Неуверенная нечёткая привязка — предложить пользователю на подтверждение, не показывать как готовый ответ. */
     candidate: KbCandidate | null;
+}
+
+/** Итог ручного запроса «Уточнить в справочнике» (POST /api/medications/{id}/kb/refresh). */
+export const EnrichmentRefreshStatus = { Requested: 0, NothingToRefresh: 1 } as const;
+export type EnrichmentRefreshStatus = typeof EnrichmentRefreshStatus[keyof typeof EnrichmentRefreshStatus];
+
+export interface EnrichmentRefreshOutcome {
+    status: number; // EnrichmentRefreshStatus
+    availableAt: string | null;
 }
 
 /** Предпочтения доставки по типу оповещения (вкладка «Настройки → Уведомления»). Записи

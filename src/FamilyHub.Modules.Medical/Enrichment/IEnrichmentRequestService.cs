@@ -14,5 +14,5 @@ public interface IEnrichmentRequestService
 
     /// <summary>Ручной запрос («Уточнить в справочнике») — в отличие от RequestAsync не прерывается
     /// на существующем Hit (пользователь хочет принудительного повторного обогащения).</summary>
-    Task RequestRefreshAsync(Medication medication, Guid userId, CancellationToken ct = default);
+    Task<EnrichmentRefreshOutcome> RequestRefreshAsync(Medication medication, Guid userId, CancellationToken ct = default);
 }

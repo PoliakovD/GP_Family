@@ -42,12 +42,12 @@ public static class KbEndpoints
         medicationGroup.MapPost("/refresh", async (
             Guid medicationId, MedicationKbStatusService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var result = await service.RequestRefreshAsync(medicationId, currentUser.UserId, ct);
+            var (result, outcome) = await service.RequestRefreshAsync(medicationId, currentUser.UserId, ct);
             return result switch
             {
                 MedicationAccessResult.NotFound => Results.NotFound(),
                 MedicationAccessResult.Forbidden => Results.Forbid(),
-                _ => Results.Accepted(),
+                _ => Results.Ok(outcome),
             };
         });
     }

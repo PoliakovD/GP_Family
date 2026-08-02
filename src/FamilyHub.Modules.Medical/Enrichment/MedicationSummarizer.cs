@@ -10,7 +10,11 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// Суммаризация веб-сниппетов доверенных источников локальным Qwen (этап 4, шаг 4 конвейера).
 /// Сниппеты на входе уже отфильтрованы провайдером по TrustedDomains (см. BraveSearchProvider) —
 /// поэтому достаточно проверить, что модель вообще на что-то сослалась (антигаллюцинационный
-/// гейт), не перепроверять домен каждого индекса здесь же.
+/// гейт), не перепроверять домен каждого индекса здесь же. Также может предложить исправленное
+/// название препарата (MedicationSummary.CorrectedName) — OCR по фото упаковки иногда искажает
+/// название ("Сумматрептан" вместо "Суматриптан"), и без исправления неверное имя навсегда
+/// оседало бы как DisplayName/NormalizedName записи справочника (см. MedicationEnrichmentProcessor,
+/// где коррекция дополнительно проверяется на схожесть с исходным именем).
 /// </summary>
 public class MedicationSummarizer(ILmStudioJsonClient client, ILogger<MedicationSummarizer> logger)
 {
@@ -26,18 +30,27 @@ public class MedicationSummarizer(ILmStudioJsonClient client, ILogger<Medication
           "tradeNames": ["торговое название", "..."],
           "form": "форма выпуска (таблетки/капли/сироп и т.д.) или null",
           "purpose": "назначение/показания к применению или null",
+          "simplePurpose": "то же назначение, но простыми бытовыми словами без медицинских терминов, понятно человеку без медицинского образования (например, не \"жаропонижающее\", а \"сбивает температуру\"; не \"антигистаминное\", а \"от аллергии\") или null",
           "usage": "способ применения и дозы — КАК НАПИСАНО В ИНСТРУКЦИИ (общие данные для препарата, не для конкретного человека) или null",
           "storage": "условия хранения или null",
           "driving": "влияние на способность управлять транспортом или null",
           "specialNotes": "противопоказания, побочные эффекты, меры предосторожности и другие важные рекомендации из инструкции или null",
+          "correctedName": "настоящее название препарата, если переданное название искажено (опечатка, ошибка распознавания по фото упаковки), а сниппеты явно указывают на конкретный другой препарат — иначе null",
           "usedSourceIndexes": [0, 2]
         }
 
         Правила:
+        - "simplePurpose" — коротко и просто, обычными словами, которыми говорят в быту, а не
+          медицинскими терминами. Если по сути совпадает с "purpose" и упростить нечего — можно
+          оставить null.
         - Извлекай МАКСИМУМ полезной информации из сниппетов. Способ применения, дозы,
           противопоказания и побочные эффекты — обычные разделы инструкции к препарату, не
           медицинская консультация: указывай их так, как они есть в источнике, не сокращай и не
           пропускай специально.
+        - "correctedName" заполняй ТОЛЬКО когда уверен, что переданное название — искажённая
+          форма ОДНОГО конкретного препарата из сниппетов (например, "Сумматрептан" →
+          "Суматриптан" — явная опечатка того же слова). Если сниппеты про несколько разных
+          вероятных препаратов или ты не уверен — оставь null, не гадай.
         - "usedSourceIndexes" — индексы (из подписи "[N]" перед каждым сниппетом) источников,
           на которые реально опирается ответ. Если ни один сниппет не содержит полезной
           информации о препарате — верни пустой массив и null во всех текстовых полях.
@@ -83,17 +96,19 @@ public class MedicationSummarizer(ILmStudioJsonClient client, ILogger<Medication
             TradeNames: ReadStringArray(result.Payload, "tradeNames"),
             Form: ReadString(result.Payload, "form"),
             Purpose: ReadString(result.Payload, "purpose"),
+            SimplePurpose: ReadString(result.Payload, "simplePurpose"),
             Usage: ReadString(result.Payload, "usage"),
             Storage: ReadString(result.Payload, "storage"),
             Driving: ReadString(result.Payload, "driving"),
             SpecialNotes: ReadString(result.Payload, "specialNotes"),
-            UsedSourceIndexes: usedIndexes);
+            UsedSourceIndexes: usedIndexes,
+            CorrectedName: ReadString(result.Payload, "correctedName"));
 
         // Второе условие гейта: индексы есть, но контента по сути нет (модель сослалась на
         // источник, где не нашла ничего полезного) — тоже не пишем пустую строку в справочник.
         var hasContent = summary.TradeNames.Count > 0 || new[]
         {
-            summary.InternationalName, summary.Form, summary.Purpose, summary.Usage,
+            summary.InternationalName, summary.Form, summary.Purpose, summary.SimplePurpose, summary.Usage,
             summary.Storage, summary.Driving, summary.SpecialNotes,
         }.Any(f => !string.IsNullOrWhiteSpace(f));
 

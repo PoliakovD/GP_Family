@@ -27,6 +27,12 @@
             <td class="data-table-value">{{ card().purpose }}</td>
           </tr>
         }
+        @if (card().simplePurpose) {
+          <tr>
+            <td class="data-table-key">Простыми словами</td>
+            <td class="data-table-value">{{ card().simplePurpose }}</td>
+          </tr>
+        }
         @if (card().usage) {
           <tr>
             <td class="data-table-key">Способ применения</td>

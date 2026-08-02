@@ -16,6 +16,10 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// Дедуп на уровне БД (частичный уникальный индекс по NormalizedName среди Pending/Running задач,
 /// см. MedicationEnrichmentJobConfiguration) — конкурентное сохранение того же препарата в другой
 /// семье молча становится no-op, а не ошибкой и не вторым внешним запросом.
+/// Платная квота/кулдаун здесь намеренно НЕ проверяются — этим занимается сам
+/// MedicationEnrichmentProcessor (у него есть настоящий кэш сниппетов: если по названию уже
+/// есть закэшированный поиск, задача выполнится мгновенно и бесплатно, повторно ходить к
+/// платному API незачем). Проверка здесь заранее только дублировала бы эту логику.
 /// </summary>
 public class EnrichmentRequestService(
     AppDbContext db,
@@ -37,16 +41,17 @@ public class EnrichmentRequestService(
         await EnqueueAsync(medication, normalizedName, userId, ct);
     }
 
-    public async Task RequestRefreshAsync(Medication medication, Guid userId, CancellationToken ct = default)
+    public async Task<EnrichmentRefreshOutcome> RequestRefreshAsync(Medication medication, Guid userId, CancellationToken ct = default)
     {
         var normalizedName = MedicationNameNormalizer.Normalize(medication.Name);
-        if (normalizedName.Length == 0) return;
+        if (normalizedName.Length == 0) return EnrichmentRefreshOutcome.NothingToRefresh();
 
         // Ручной запрос («Уточнить в справочнике», GET/POST /api/medications/{id}/kb/refresh) —
         // в отличие от RequestAsync намеренно НЕ прерывается на Hit: пользователь мог заметить
         // устаревшую/неполную карточку и хочет принудительного повторного обогащения. Дедуп на
         // Pending/Running всё равно защищает от повторной постановки, пока предыдущая не завершилась.
         await EnqueueAsync(medication, normalizedName, userId, ct);
+        return EnrichmentRefreshOutcome.Requested();
     }
 
     private async Task EnqueueAsync(Medication medication, string normalizedName, Guid userId, CancellationToken ct)

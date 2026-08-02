@@ -36,6 +36,7 @@ public static class MedicalModule
         services.AddScoped<MedicationKbStatusService>();
         services.AddScoped<KbWriter>();
         services.AddScoped<MedicationSummarizer>();
+        services.AddScoped<MedicationSearchCacheService>();
         services.AddScoped<IEnrichmentRequestService, EnrichmentRequestService>();
         services.AddScoped<MedicationEnrichmentProcessor>();
         return services;

@@ -146,4 +146,27 @@ public class MedicationSummarizerTests
         result.Success.Should().BeTrue();
         result.Summary!.Usage.Should().Contain("200 мг");
     }
+
+    [Fact]
+    public async Task ValidResponse_MapsSimplePurposeField()
+    {
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LmStudioJsonResult(true, Payload(new
+            {
+                internationalName = "Ибупрофен",
+                tradeNames = Array.Empty<string>(),
+                form = (string?)null,
+                purpose = "нестероидное противовоспалительное средство",
+                simplePurpose = "сбивает температуру и снимает боль",
+                storage = (string?)null,
+                driving = (string?)null,
+                specialNotes = (string?)null,
+                usedSourceIndexes = new[] { 0 },
+            }), null));
+
+        var result = await _sut.SummarizeAsync("Ибупрофен", OneTrustedSnippet);
+
+        result.Success.Should().BeTrue();
+        result.Summary!.SimplePurpose.Should().Be("сбивает температуру и снимает боль");
+    }
 }

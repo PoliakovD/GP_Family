@@ -61,7 +61,7 @@ public class KbCatalogService(AppDbContext db, ILogger<KbCatalogService> logger)
         var payload = ParsePayload(row.Id, row.PayloadJson);
         return new KbMedicationCard(
             row.Id, row.DisplayName, payload.InternationalName, payload.TradeNames ?? [],
-            payload.Form, payload.Purpose, payload.Usage, payload.Storage, payload.Driving, payload.SpecialNotes,
+            payload.Form, payload.Purpose, payload.SimplePurpose, payload.Usage, payload.Storage, payload.Driving, payload.SpecialNotes,
             row.Source, row.UpdatedAt);
     }
 
@@ -72,12 +72,12 @@ public class KbCatalogService(AppDbContext db, ILogger<KbCatalogService> logger)
         try
         {
             return JsonSerializer.Deserialize<KbPayloadDto>(payloadJson, JsonOptions)
-                ?? new KbPayloadDto(null, null, null, null, null, null, null, null, null);
+                ?? new KbPayloadDto(null, null, null, null, null, null, null, null, null, null);
         }
         catch (JsonException ex)
         {
             logger.LogWarning(ex, "Не удалось распарсить PayloadJson записи справочника {KbId}", id);
-            return new KbPayloadDto(null, null, null, null, null, null, null, null, null);
+            return new KbPayloadDto(null, null, null, null, null, null, null, null, null, null);
         }
     }
 }
