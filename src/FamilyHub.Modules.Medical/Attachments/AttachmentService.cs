@@ -28,10 +28,38 @@ public class AttachmentService(
     IMedicalAuditWriter audit,
     ILogger<AttachmentService> logger)
 {
+    /// <summary>Явный лимит вместо неявного дефолта Kestrel (см. аудит
+    /// module-review-2026-08-02/03-medical-records-attachments.md, находка 2).</summary>
+    public const long MaxSizeBytes = 30 * 1024 * 1024;
+
+    /// <summary>Сканы мед-документов: изображения + PDF. Defense-in-depth — проверка по
+    /// заявленному ContentType, не по magic bytes (тело всё равно скачивается с
+    /// Content-Disposition: attachment, см. AttachmentEndpoints — снижает риск даже при
+    /// подделке заголовка).</summary>
+    public static readonly IReadOnlySet<string> AllowedContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf",
+    };
+
     /// <summary>Прикладывать сканы к анализу может только владелец записи — тот же барьер, что и для шаринга.</summary>
     public async Task<(AttachmentAccessResult Result, AttachmentDto? Item)> UploadForMedicalRecordAsync(
         Guid recordId, Guid ownerUserId, string fileName, string contentType, long sizeBytes, Stream content, CancellationToken ct = default)
     {
+        if (sizeBytes > MaxSizeBytes)
+        {
+            logger.LogWarning(
+                "Загрузка вложения к мед-записи {RecordId} отклонена: {SizeBytes} байт превышает лимит {MaxSizeBytes}",
+                recordId, sizeBytes, MaxSizeBytes);
+            return (AttachmentAccessResult.TooLarge, null);
+        }
+        if (!AllowedContentTypes.Contains(contentType))
+        {
+            logger.LogWarning(
+                "Загрузка вложения к мед-записи {RecordId} отклонена: ContentType {ContentType} не в allow-list",
+                recordId, contentType);
+            return (AttachmentAccessResult.UnsupportedContentType, null);
+        }
+
         var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);
         if (record is null)
         {
@@ -45,6 +73,7 @@ public class AttachmentService(
             return (AttachmentAccessResult.Forbidden, null);
         }
 
+        fileName = FileNameSanitizer.Sanitize(fileName);
         var attachmentId = Guid.NewGuid();
         // Без имени файла в ключе: имя может содержать ФИО/диагноз, а ключи объектов
         // видны администраторам хранилища и попадают в его служебные логи.

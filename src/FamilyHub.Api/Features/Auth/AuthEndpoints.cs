@@ -5,6 +5,7 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Telegram;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -135,11 +136,28 @@ public static class AuthEndpoints
             return Results.Ok();
         });
 
-        group.MapGet("/me", async (ICurrentUser currentUser, ClaimsPrincipal principal, AppDbContext db, CancellationToken ct) =>
+        group.MapGet("/me", async (
+            ICurrentUser currentUser, ClaimsPrincipal principal, AppDbContext db, HttpContext http,
+            IAntiforgery antiforgery, IOptions<JwtOptions> jwtOptions, CancellationToken ct) =>
         {
-            var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == currentUser.UserId, ct);
+            // SingleOrDefaultAsync, не SingleAsync: узкое окно гонки с удалением аккаунта
+            // (слияние аккаунтов, самостоятельное удаление с другого устройства) — старый
+            // access-токен ещё валиден, но строки Users уже нет. Раньше SingleAsync в этом
+            // случае бросал исключение → 500 вместо ожидаемого 401.
+            var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == currentUser.UserId, ct);
+            if (user is null) return Results.Unauthorized();
+
+            var isPwaSession = principal.FindFirst(FamilyHubClaimTypes.TelegramId) is null;
             var provider = principal.FindFirst(FamilyHubClaimTypes.AuthProvider)?.Value
-                ?? (principal.FindFirst(FamilyHubClaimTypes.TelegramId) is null ? "email" : "telegram");
+                ?? (isPwaSession ? "email" : "telegram");
+
+            // Перевыпуск CSRF-cookie на каждый /me — устраняет "дыру на раскатке" этой защиты:
+            // уже залогиненные пользователи получают XSRF-TOKEN при первой же загрузке SPA
+            // (app.component.ts дёргает /me на старте), а не только на следующем логине. Только
+            // для PWA — у Telegram/Dev ambient-cookie аутентификации нет, CSRF неприменим.
+            if (isPwaSession)
+                PwaSessionCookieWriter.IssueCsrfCookie(http, antiforgery, DateTime.UtcNow.Add(jwtOptions.Value.AccessTokenLifetime));
+
             return Results.Ok(new
             {
                 userId = user.Id,

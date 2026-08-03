@@ -69,20 +69,39 @@ public class EnrichmentRequestService(
         };
         db.MedicationEnrichmentJobs.Add(job);
 
+        // Pending-строка и Hangfire-энкью — единая единица отката в явной транзакции (Hangfire
+        // использует ОТДЕЛЬНОЕ соединение, не наш EF DbContext — см. докстринг класса, поэтому
+        // здесь нет распределённой транзакции с Hangfire, только гарантия для НАШЕЙ вставки).
+        // Раньше SaveChangesAsync коммитился сразу, и если backgroundJobs.Enqueue ниже кидал
+        // исключение (Hangfire-сторож недоступен), Pending-строка оставалась в БД БЕЗ реальной
+        // задачи в очереди — это навсегда блокировало бы дедупом повторные попытки обогащения
+        // для того же препарата. Любой сбой здесь (включая недоступность Hangfire) не должен
+        // ронять основной сценарий (создание/правку медикамента) — см. аудит
+        // module-review-2026-08-02/04-medications-medkits-kb-enrichment-ocr.md, находка 1.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
             await db.SaveChangesAsync(ct);
+            backgroundJobs.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+            await tx.CommitAsync(ct);
         }
         catch (DbUpdateException ex)
         {
             // Уже есть Pending/Running задача на этот NormalizedName (частичный уникальный индекс,
             // тот же приём, что NotificationSendingService.AddIfNewAsync с DedupKey) — no-op.
+            await tx.RollbackAsync(ct);
             logger.LogDebug(ex, "Обогащение «{NormalizedName}» уже в очереди, пропускаем", normalizedName);
             db.Entry(job).State = EntityState.Detached;
             return;
         }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(ct);
+            logger.LogWarning(ex, "Не удалось поставить обогащение «{NormalizedName}» в очередь", normalizedName);
+            db.Entry(job).State = EntityState.Detached;
+            return;
+        }
 
-        backgroundJobs.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
         logger.LogInformation(
             "Обогащение справочника поставлено в очередь: «{Name}» ({NormalizedName})", medication.Name, normalizedName);
     }

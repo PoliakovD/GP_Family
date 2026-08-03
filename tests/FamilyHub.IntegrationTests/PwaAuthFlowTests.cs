@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using FamilyHub.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -29,6 +33,7 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         var confirm = await client.PostAsJsonAsync("/api/auth/register/confirm",
             new { email, code, password, username = username ?? FreshUsername(), displayName = "PWA Пользователь" });
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+        await CsrfTestHelper.CaptureCsrfTokenAsync(client);
 
         return (client, email);
     }
@@ -112,6 +117,25 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         (await AnonymousClient().GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    // Регрессия на находку 4 (аудит module-review-2026-08-02/01-auth-identity.md): мутирующий
+    // PWA-cookie запрос без CSRF-заголовка обязан отклоняться, даже если сама PWA-сессия валидна.
+    [Fact]
+    public async Task MutatingPwaRequest_WithoutCsrfHeader_Returns400()
+    {
+        var (client, _) = await RegisterAsync();
+        // Симулируем клиента без withXsrfConfiguration (не-Angular caller/сторонний сайт).
+        client.DefaultRequestHeaders.Remove("X-XSRF-TOKEN");
+
+        var response = await client.PostAsync("/api/auth/logout", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOpts);
+        body.GetProperty("code").GetString().Should().Be("csrf_token_invalid");
+
+        // Сессия при этом НЕ должна быть тронута (logout не выполнился) — GET по-прежнему проходит.
+        (await client.GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task TelegramDevHeaderPath_StillWorks_AlongsideCookieScheme()
     {
@@ -138,6 +162,30 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
 
         var me = await (await pwaClient.GetAsync("/api/auth/me")).Content.ReadFromJsonAsync<MeDto>(JsonOpts);
         me!.HasTelegram.Should().BeTrue("это тот же аккаунт, что и Telegram-сессия");
+    }
+
+    // Регрессия на аудит module-review-2026-08-02/01-auth-identity.md, находка 6: access-токен —
+    // самодостаточный JWT (не ходит в БД на каждый запрос), поэтому остаётся валидным ещё до
+    // истечения TTL, даже если строка Users уже удалена конкурентно (слияние аккаунтов,
+    // самостоятельное удаление с другого устройства). /me раньше падал 500 (SingleAsync) вместо
+    // ожидаемого 401 в этом узком окне.
+    [Fact]
+    public async Task Me_WithStaleTokenAfterConcurrentAccountDeletion_Returns401NotFail500()
+    {
+        var (client, email) = await RegisterAsync();
+        (await client.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.OK, "аккаунт пока существует");
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync(u => u.Email == email);
+            db.Users.Remove(user);
+            await db.SaveChangesAsync();
+        }
+
+        // Тот же клиент — access-токен в cookie не тронут, всё ещё криптографически валиден
+        // (JwtBearer ничего не знает про удаление строки, exp ещё не наступил).
+        (await client.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPassword);

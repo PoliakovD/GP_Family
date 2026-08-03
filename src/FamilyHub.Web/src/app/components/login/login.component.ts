@@ -231,8 +231,10 @@ export class LoginComponent implements HasPendingCodeEntry {
       const html = kind === 'privacy'
         ? await firstValueFrom(this.http.get('/api/legal/privacy-policy', { responseType: 'text' }))
         : (await this.auth.getConsentText()).text;
-      // Текст приходит с нашего же бэкенда (embedded-ресурс сборки) — доверенный HTML, как и
-      // в ConsentTextComponent/PrivacyComponent, которые показывают тот же текст на своих роутах.
+      // ИНВАРИАНТ: bypassSecurityTrustHtml здесь безопасен ТОЛЬКО пока текст — embedded-ресурс
+      // бэкенда, не редактируемый через CMS/админку контент, как и в ConsentTextComponent/
+      // PrivacyComponent, которые показывают тот же текст на своих роутах. См. аудит
+      // module-review-2026-08-02/08-web-frontend-angular.md, находка 5.
       this.legalModalHtml.set(this.sanitizer.bypassSecurityTrustHtml(html));
     } catch {
       this.legalModalTitle.set('');

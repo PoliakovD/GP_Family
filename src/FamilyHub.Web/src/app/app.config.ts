@@ -1,5 +1,5 @@
 import { ApplicationConfig, isDevMode, provideZoneChangeDetection } from '@angular/core';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { authInterceptor } from './services/auth.interceptor';
@@ -18,7 +18,16 @@ const isInsideTelegram = (): boolean => !!window.Telegram?.WebApp?.initData;
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    // withXsrfConfiguration: CSRF-защита PWA-сессии сверх SameSite=Lax (см. аудит
+    // module-review-2026-08-02/01-auth-identity.md, находка 4). Angular сам читает cookie
+    // XSRF-TOKEN (выставляется только вместе с PWA-сессией, см. PwaSessionCookieWriter) и
+    // подставляет её значение в заголовок X-XSRF-TOKEN на каждый мутирующий запрос — имена
+    // указаны явно, чтобы не зависеть от дефолтов Angular (сервер настроен на те же имена,
+    // см. Program.cs AddAntiforgery).
+    provideHttpClient(
+      withInterceptors([authInterceptor]),
+      withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' }),
+    ),
     // canceledNavigationResolution: 'computed' — по умолчанию ('replace') отменённая
     // popstate-навигация (см. pendingCodeGuard: пользователь нажал «Остаться» в диалоге)
     // восстанавливает URL, но НЕ позицию в истории браузера; после пары отмен нативная

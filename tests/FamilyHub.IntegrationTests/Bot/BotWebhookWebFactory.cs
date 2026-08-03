@@ -85,6 +85,7 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         // штатный лимит "auth-code" (3/час) дал бы ложные 429 в наборе из нескольких тестов.
         builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");
         builder.UseSetting("RateLimiting:CodePermitLimit", "100000");
+        builder.UseSetting("RateLimiting:RedeemPermitLimit", "100000");
 
         builder.ConfigureServices(services =>
         {

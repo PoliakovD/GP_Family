@@ -10,6 +10,14 @@ public static class AttachmentEndpoints
     {
         var group = app.MapGroup("/api").RequireAuthorization();
 
+        // .DisableAntiforgery() ЗДЕСЬ ОБЯЗАТЕЛЕН, хотя раньше (до AddAntiforgery в Program.cs) был
+        // no-op: с антифорджери, зарегистрированным в DI, ASP.NET Core сам примешивает требование
+        // антифорджери-валидации к любому эндпоинту, принимающему IFormFile/IFormFileCollection —
+        // а поскольку app.UseAntiforgery() мы намеренно НЕ подключаем (CSRF проверяется своим
+        // глобальным гейтом в Program.cs, не встроенным middleware), без этого вызова запрос падал
+        // бы в 500 ("required antiforgery middleware is not present"). Реальная CSRF-защита для
+        // этого POST всё равно есть — тот самый глобальный гейт (IAntiforgery.IsRequestValidAsync
+        // по заголовку X-XSRF-TOKEN, не трогает тело — безопасно для multipart-загрузки).
         group.MapPost("/medical-records/{recordId:guid}/attachments", async (
             Guid recordId, IFormFile file, AttachmentService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
@@ -21,6 +29,12 @@ public static class AttachmentEndpoints
             {
                 AttachmentAccessResult.NotFound => Results.NotFound(),
                 AttachmentAccessResult.Forbidden => Results.Forbid(),
+                AttachmentAccessResult.TooLarge => Results.Json(
+                    new { code = "attachment_too_large", maxSizeBytes = AttachmentService.MaxSizeBytes },
+                    statusCode: StatusCodes.Status413PayloadTooLarge),
+                AttachmentAccessResult.UnsupportedContentType => Results.Json(
+                    new { code = "unsupported_content_type", allowed = AttachmentService.AllowedContentTypes },
+                    statusCode: StatusCodes.Status415UnsupportedMediaType),
                 _ => Results.Created($"/api/attachments/{item!.Id}", item),
             };
         }).DisableAntiforgery();

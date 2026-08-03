@@ -12,6 +12,12 @@ public class MedicationOcrService(ILmStudioJsonClient client, ILogger<Medication
 {
     private const int MaxPhotos = 5;
 
+    /// <summary>Клиент сжимает фото до FullHD перед отправкой — этого с большим запасом хватает
+    /// (см. аудит module-review-2026-08-02/04, находка 2). Явный лимит вместо неявного дефолта
+    /// Kestrel — не только для честного клиента: без него много крупных фото → большие
+    /// base64-payload'ы в памяти процесса и на инференс (локальный resource-exhaustion).</summary>
+    private const long MaxPhotoSizeBytes = 1 * 1024 * 1024;
+
     private const string UserText = "Определи препарат по этим фотографиям (их может быть от 1 до 5, все — один и тот же препарат).";
 
     private const string SystemPrompt = """
@@ -64,6 +70,12 @@ public class MedicationOcrService(ILmStudioJsonClient client, ILogger<Medication
                 !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
                 return Failure("Допустимы только изображения.");
+            }
+
+            // Проверка ДО буферизации в память — большой файл не должен даже попадать в MemoryStream.
+            if (file.Length > MaxPhotoSizeBytes)
+            {
+                return Failure($"Каждое фото должно быть не больше {MaxPhotoSizeBytes / (1024 * 1024)} МБ.");
             }
 
             using var ms = new MemoryStream();

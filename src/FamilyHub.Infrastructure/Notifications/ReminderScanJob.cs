@@ -106,7 +106,24 @@ public class ReminderScanJob(
     {
         // Ретрай-свип: подхватывает оповещения, чья отправка не удалась хендлерам
         // (например, sender упал) — не только созданные по событиям этого прогона.
-        var pending = await db.Notifications.Where(n => n.SentAt == null).ToListAsync(ct);
+        // Ограничен по возрасту (RetrySweepMaxAgeDays) — без верхней границы при затяжном сбое
+        // (например, истёкший VAPID/Bot Token) строки копились бы и пытались отправиться каждый
+        // день бесконечно (см. аудит module-review-2026-08-02/06-notifications-push-bot-outbox.md,
+        // находка 3).
+        var cutoff = DateTime.UtcNow.AddDays(-options.Value.RetrySweepMaxAgeDays);
+        var pending = await db.Notifications.Where(n => n.SentAt == null && n.CreatedAt >= cutoff).ToListAsync(ct);
+
+        // Не просто молча исключаем устаревшие строки из свипа — иначе затяжной сбой канала
+        // остался бы незамеченным навсегда. Считаем отдельным запросом (не грузим сами записи).
+        var staleCount = await db.Notifications.CountAsync(n => n.SentAt == null && n.CreatedAt < cutoff, ct);
+        if (staleCount > 0)
+        {
+            logger.LogWarning(
+                "{StaleCount} недоставленных оповещений старше {MaxAgeDays} дн. исключены из ретрай-свипа — " +
+                "возможен затяжной сбой канала доставки (Telegram Bot Token/Web Push VAPID)",
+                staleCount, options.Value.RetrySweepMaxAgeDays);
+        }
+
         if (pending.Count == 0) return;
 
         logger.LogDebug("Отправка {Count} неотправленных оповещений", pending.Count);

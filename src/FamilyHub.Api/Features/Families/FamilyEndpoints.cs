@@ -18,7 +18,12 @@ public static class FamilyEndpoints
                 if (string.IsNullOrWhiteSpace(request.Name))
                     return Results.BadRequest("Имя семьи не может быть пустым.");
 
-                var familyId = await service.CreateFamilyAsync(currentUser.UserId, request.Name.Trim(), ct);
+                var (result, familyId) = await service.CreateFamilyAsync(currentUser.UserId, request.Name.Trim(), ct);
+                if (result == CreateFamilyResult.LimitExceeded)
+                    return Results.Conflict(
+                        $"Достигнут лимит в {FamilyService.MaxFamiliesPerUser} созданных семей. " +
+                        "Удалите одну из существующих, чтобы создать новую.");
+
                 return Results.Created($"/api/families/{familyId}", new { id = familyId });
             });
 

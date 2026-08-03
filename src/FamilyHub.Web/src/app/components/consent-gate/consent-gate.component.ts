@@ -32,7 +32,12 @@ export class ConsentGateComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     const current = await this.auth.getConsentText();
     this.version.set(current.version);
-    // Текст согласия приходит с нашего же бэкенда (embedded-ресурс сборки) — доверенный HTML.
+    // ИНВАРИАНТ: bypassSecurityTrustHtml здесь безопасен ТОЛЬКО пока текст согласия —
+    // embedded-ресурс бэкенда (ConsentService.LoadLegalText), не редактируемый пользователем/
+    // админкой контент. Если когда-либо появится редактирование этого текста через CMS/админку —
+    // этот вызов станет реальной XSS-дырой и должен быть пересмотрен (санитизация через
+    // Angular's built-in HTML sanitizer вместо bypass, либо серверная санитизация редактируемого
+    // HTML перед отдачей). См. аудит module-review-2026-08-02/08-web-frontend-angular.md, находка 5.
     this.consentHtml.set(this.sanitizer.bypassSecurityTrustHtml(current.text));
   }
 

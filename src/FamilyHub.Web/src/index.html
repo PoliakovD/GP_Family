@@ -15,7 +15,25 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="FamilyHub" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      // Раньше грузился безусловно для ВСЕХ посетителей (включая чистый PWA-режим) — сторонний
+      // скрипт с полным доступом к DOM/JS-контексту без необходимости для большинства визитов
+      // (см. аудит module-review-2026-08-02/08-web-frontend-angular.md, находка 1). Telegram при
+      // запуске Mini App всегда добавляет initData как #tgWebAppData=... в location.hash ДО того,
+      // как страница вообще начинает грузиться — это надёжный, синхронно доступный признак
+      // «мы реально внутри Telegram», не требующий самого SDK для проверки.
+      // document.write здесь безопасен и не даёт браузерного warning'а (в отличие от async-вызова
+      // после load): выполняется синхронно во время начального парсинга <head>, до тех пор ведёт
+      // себя как обычный статический <script> тег — сохраняет тот же порядок загрузки, на который
+      // полагается app.config.ts (isInsideTelegram() читает window.Telegram.WebApp.initData уже
+      // на этапе конфигурации провайдеров, до бутстрапа Angular).
+      // SRI (integrity=) сознательно не добавлен: у Telegram нет официально публикуемого хеша для
+      // этого файла, а сам скрипт обновляется вместе с релизами Telegram — захардкоженный хеш
+      // сломал бы Mini App при первом же обновлении без синхронного процесса его освежения.
+      if (location.hash.indexOf('tgWebAppData') !== -1) {
+        document.write('<script src="https://telegram.org/js/telegram-web-app.js" crossorigin="anonymous"><\/script>');
+      }
+    </script>
   </head>
   <body>
     <app-root></app-root>

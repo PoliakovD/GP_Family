@@ -18,4 +18,12 @@ public class AuthRateLimitOptions
     public int CodePermitLimit { get; set; } = 3;
 
     public int CodeWindowSeconds { get; set; } = 3600;
+
+    /// <summary>Погашений инвайт-кода (POST /api/invites/{code}/redeem) с одного IP за окно —
+    /// единственный «угадай-секрет» эндпоинт вне /api/auth без rate-limit (см. аудит
+    /// module-review-2026-08-02/02-core-family-invites-members-account-consent.md, находка 2).
+    /// Код — 128 бит, перебор непрактичен и без лимита; это про единообразие модели защиты.</summary>
+    public int RedeemPermitLimit { get; set; } = 1;
+
+    public int RedeemWindowSeconds { get; set; } = 5;
 }

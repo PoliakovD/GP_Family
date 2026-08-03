@@ -17,14 +17,12 @@ public class AesGcmFieldCipher : IFieldCipher
 
     private readonly byte[] _key;
     private readonly string _keyId;
-    private readonly bool _allowLegacyPlaintextRead;
 
     public AesGcmFieldCipher(IOptions<EncryptionOptions> options)
     {
         var opts = options.Value;
         _key = DecodeKey(opts.MasterKey);
         _keyId = opts.ActiveKeyId;
-        _allowLegacyPlaintextRead = opts.AllowLegacyPlaintextRead;
     }
 
     internal static byte[] DecodeKey(string masterKeyBase64)
@@ -69,12 +67,7 @@ public class AesGcmFieldCipher : IFieldCipher
     public string Unprotect(string stored)
     {
         if (!stored.StartsWith($"{Prefix}:", StringComparison.Ordinal))
-        {
-            // Строки, созданные до внедрения шифрования. На записи всегда шифруем,
-            // так что доля legacy-значений только убывает.
-            if (_allowLegacyPlaintextRead) return stored;
-            throw new InvalidOperationException("Обнаружено незашифрованное значение при запрете legacy-чтения.");
-        }
+            throw new InvalidOperationException("Значение не зашифровано (нет префикса \"enc:\").");
 
         var parts = stored.Split(':', 3);
         if (parts.Length != 3)

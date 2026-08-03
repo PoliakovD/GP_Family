@@ -10,10 +10,4 @@ public class EncryptionOptions
 
     /// <summary>Идентификатор активного ключа — пишется в префикс шифротекста (задел под ротацию).</summary>
     public string ActiveKeyId { get; set; } = "v1";
-
-    /// <summary>
-    /// Читать значения без префикса "enc:" как открытый текст (данные, созданные до этапа 2).
-    /// Запись всегда шифруется. Выключить после полной перешифровки данных.
-    /// </summary>
-    public bool AllowLegacyPlaintextRead { get; set; } = true;
 }

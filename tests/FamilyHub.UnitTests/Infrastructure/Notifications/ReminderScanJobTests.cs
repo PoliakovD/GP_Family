@@ -152,4 +152,53 @@ public class ReminderScanJobTests : SqliteTestBase
 
         await _sender.DidNotReceive().SendAsync(Arg.Is<Domain.Entities.Notification>(n => n.Id == notification.Id), Arg.Any<CancellationToken>());
     }
+
+    // Регрессия на аудит module-review-2026-08-02/06-notifications-push-bot-outbox.md,
+    // находка 3: раньше ретрай-свип не имел верхней границы давности — недоставленное оповещение
+    // при затяжном сбое канала пыталось бы отправиться каждый день бесконечно.
+    [Fact]
+    public async Task RunAsync_PendingNotificationOlderThanRetryWindow_IsNotResent()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var stale = TestData.NewNotification(admin.Id, family.Id, "dk-stale-pending");
+        stale.CreatedAt = DateTime.UtcNow.AddDays(-8); // старше дефолтного окна в 7 дней
+        Db.Notifications.Add(stale);
+        await Db.SaveChangesAsync();
+
+        await CreateSut().RunAsync();
+
+        await _sender.DidNotReceive().SendAsync(
+            Arg.Is<Domain.Entities.Notification>(n => n.Id == stale.Id), Arg.Any<CancellationToken>());
+        Db.Notifications.Single(n => n.Id == stale.Id).SentAt.Should().BeNull("устаревшая запись не должна помечаться отправленной — она просто исключена из свипа");
+    }
+
+    [Fact]
+    public async Task RunAsync_PendingNotificationWithinRetryWindow_IsStillResent()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var fresh = TestData.NewNotification(admin.Id, family.Id, "dk-fresh-pending");
+        fresh.CreatedAt = DateTime.UtcNow.AddDays(-6); // младше дефолтного окна в 7 дней
+        Db.Notifications.Add(fresh);
+        await Db.SaveChangesAsync();
+
+        await CreateSut().RunAsync();
+
+        await _sender.Received(1).SendAsync(
+            Arg.Is<Domain.Entities.Notification>(n => n.Id == fresh.Id), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_CustomRetrySweepMaxAgeDays_IsRespected()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var notification = TestData.NewNotification(admin.Id, family.Id, "dk-custom-window");
+        notification.CreatedAt = DateTime.UtcNow.AddDays(-2);
+        Db.Notifications.Add(notification);
+        await Db.SaveChangesAsync();
+
+        await CreateSut(new NotificationOptions { RetrySweepMaxAgeDays = 1 }).RunAsync();
+
+        await _sender.DidNotReceive().SendAsync(
+            Arg.Is<Domain.Entities.Notification>(n => n.Id == notification.Id), Arg.Any<CancellationToken>());
+    }
 }

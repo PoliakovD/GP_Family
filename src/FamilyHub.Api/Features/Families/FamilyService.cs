@@ -15,11 +15,31 @@ public enum DeleteFamilyResult { Deleted, Forbidden, NotFound }
 
 public enum GetFamilyMembersResult { Success, Forbidden }
 
+public enum CreateFamilyResult { Success, LimitExceeded }
+
 public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger<FamilyService> logger)
 {
+    /// <summary>Максимум семей, которые может СОЗДАТЬ (не просто состоять в них) один
+    /// пользователь — Admin присваивается только создателю (промоушена участника в Admin в
+    /// продукте нет), поэтому подсчёт FamilyMembers с Role=Admin == подсчёт созданных семей.
+    /// Защита от спама/захламления БД (см. аудит
+    /// module-review-2026-08-02/02-core-family-invites-members-account-consent.md, находка 4).</summary>
+    public const int MaxFamiliesPerUser = 25;
+
     /// <summary>Создатель семьи становится её первым админом, сразу Active.</summary>
-    public async Task<Guid> CreateFamilyAsync(Guid creatorUserId, string name, CancellationToken ct = default)
+    public async Task<(CreateFamilyResult Result, Guid FamilyId)> CreateFamilyAsync(
+        Guid creatorUserId, string name, CancellationToken ct = default)
     {
+        var createdCount = await db.FamilyMembers.CountAsync(
+            m => m.UserId == creatorUserId && m.Role == FamilyRole.Admin, ct);
+        if (createdCount >= MaxFamiliesPerUser)
+        {
+            logger.LogWarning(
+                "Создание семьи отклонено: {UserId} уже создал(а) {Count} семей (лимит {Limit})",
+                creatorUserId, createdCount, MaxFamiliesPerUser);
+            return (CreateFamilyResult.LimitExceeded, Guid.Empty);
+        }
+
         logger.LogDebug("Создание семьи {Name} пользователем {UserId}", name, creatorUserId);
 
         var family = new Family
@@ -43,7 +63,7 @@ public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Семья {FamilyId} ({Name}) создана пользователем {UserId}", family.Id, name, creatorUserId);
-        return family.Id;
+        return (CreateFamilyResult.Success, family.Id);
     }
 
     /// <summary>Семьи, где пользователь состоит (включая PendingApproval — там он "ждёт", но видит сам факт заявки).

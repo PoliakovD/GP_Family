@@ -1,5 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using FamilyHub.Api.Features.Invites;
+using FamilyHub.Domain.Enums;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Xunit;
@@ -19,6 +22,11 @@ public class RateLimitedWebFactory : FamilyHubWebFactory
         builder.UseSetting("RateLimiting:AuthWindowSeconds", "3600");
         builder.UseSetting("RateLimiting:CodePermitLimit", "2");
         builder.UseSetting("RateLimiting:CodeWindowSeconds", "3600");
+        // Переопределяет высокий дефолт FamilyHubWebFactory (100000, чтобы остальные тесты не
+        // ловили 429) — здесь, наоборот, нужен низкий лимит. Долгое окно (не 5с из прода) —
+        // тест не должен зависеть от реального времени выполнения.
+        builder.UseSetting("RateLimiting:RedeemPermitLimit", "1");
+        builder.UseSetting("RateLimiting:RedeemWindowSeconds", "3600");
     }
 }
 
@@ -31,6 +39,12 @@ public class RateLimitCollection : ICollectionFixture<RateLimitedWebFactory>
 [Collection(RateLimitCollection.Name)]
 public class AuthRateLimitTests(RateLimitedWebFactory factory)
 {
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+    private static long FreshTelegramId() => Random.Shared.NextInt64(1_000_000_000, 9_000_000_000);
+
+    private record CreatedFamilyDto(Guid Id);
+    private record CreatedInviteDto(Guid Id, string Code);
+
     [Fact]
     public async Task AuthEndpoints_OverIpLimit_Return429()
     {
@@ -58,6 +72,27 @@ public class AuthRateLimitTests(RateLimitedWebFactory factory)
                 .StatusCode.Should().Be(HttpStatusCode.OK);
 
         (await client.PostAsJsonAsync("/api/auth/register/start", new { email = "rl3@example.com" }))
+            .StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+    }
+
+    // Регрессия на аудит module-review-2026-08-02/02, находка 2: POST /invites/{code}/redeem —
+    // единственный «угадай-секрет» эндпоинт вне /api/auth, раньше вообще без rate-limit.
+    [Fact]
+    public async Task InviteRedeem_OverIpLimit_Returns429()
+    {
+        var admin = factory.CreateClientAs(FreshTelegramId());
+        var family = await (await admin.PostAsJsonAsync("/api/families", new { Name = "RL Family" }))
+            .Content.ReadFromJsonAsync<CreatedFamilyDto>(JsonOpts);
+        var invite = await (await admin.PostAsJsonAsync($"/api/families/{family!.Id}/invites",
+                new CreateInviteRequest(TargetUserId: null, AssignedRole: FamilyRole.Member, MaxUses: 10, ExpiresAt: null)))
+            .Content.ReadFromJsonAsync<CreatedInviteDto>(JsonOpts);
+
+        // Лимит политики "invite-redeem" = 1/час на IP: первый погашает, второй (тем же IP,
+        // хоть и другим пользователем/кодом — партиция по IP, а не по коду) отбрасывается.
+        (await factory.CreateClientAs(FreshTelegramId()).PostAsync($"/api/invites/{invite!.Code}/redeem", null))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await factory.CreateClientAs(FreshTelegramId()).PostAsync($"/api/invites/{invite.Code}/redeem", null))
             .StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
     }
 }

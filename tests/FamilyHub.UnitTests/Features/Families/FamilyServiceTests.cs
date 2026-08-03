@@ -23,11 +23,30 @@ public class FamilyServiceTests : SqliteTestBase
     {
         var creator = Db.AddUser();
 
-        var familyId = await _sut.CreateFamilyAsync(creator.Id, "My Family");
+        var (result, familyId) = await _sut.CreateFamilyAsync(creator.Id, "My Family");
 
+        result.Should().Be(CreateFamilyResult.Success);
         var member = Db.FamilyMembers.Single(m => m.FamilyId == familyId && m.UserId == creator.Id);
         member.Role.Should().Be(FamilyRole.Admin);
         member.Status.Should().Be(MemberStatus.Active);
+    }
+
+    [Fact]
+    public async Task CreateFamilyAsync_AtLimit_ReturnsLimitExceeded_AndDoesNotCreateFamily()
+    {
+        var creator = Db.AddUser();
+        for (var i = 0; i < FamilyService.MaxFamiliesPerUser; i++)
+        {
+            var (result, _) = await _sut.CreateFamilyAsync(creator.Id, $"Family {i}");
+            result.Should().Be(CreateFamilyResult.Success);
+        }
+
+        var (limitResult, familyId) = await _sut.CreateFamilyAsync(creator.Id, "One too many");
+
+        limitResult.Should().Be(CreateFamilyResult.LimitExceeded);
+        familyId.Should().Be(Guid.Empty);
+        Db.FamilyMembers.Count(m => m.UserId == creator.Id && m.Role == FamilyRole.Admin)
+            .Should().Be(FamilyService.MaxFamiliesPerUser);
     }
 
     [Fact]

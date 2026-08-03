@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, isDevMode } from '@angular/core';
 import { DevLoggerService } from './dev-logger.service';
 
 interface TelegramWebApp {
@@ -48,6 +48,12 @@ export class TelegramService {
   }
 
   getDevTelegramId(): string | null {
+    // Сервер (DevAuthenticationHandler) и так отклоняет этот путь вне Development — практической
+    // угрозы не было, но чтение/запись ?devTgId= молча происходило и в prod-сборке. isDevMode() —
+    // тот же compile-time гейт, что и у DevPanelComponent, вырезается сборкой production (см.
+    // аудит module-review-2026-08-02/08-web-frontend-angular.md, находка 4).
+    if (!isDevMode()) return null;
+
     const fromQuery = new URLSearchParams(window.location.search).get('devTgId');
     if (fromQuery) {
       localStorage.setItem(DEV_TG_ID_KEY, fromQuery);

@@ -30,6 +30,13 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
     private const int MaxFailedLogins = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
+    // Фиксированный dummy-хеш для анти-enumeration в LoginAsync: считается ОДИН раз при первом
+    // обращении к типу, а не на каждый запрос. Раньше PasswordHasher.Hash(...) пересчитывался
+    // на КАЖДЫЙ логин с несуществующим email — лишний PBKDF2-прогон (210k итераций) сверх
+    // необходимого для выравнивания тайминга с реальным путём (там всего один Verify). См.
+    // аудит docs/security/module-review-2026-08-02/01-auth-identity.md, находка 3.
+    private static readonly string DummyPasswordHash = PasswordHasher.Hash("Dummy0000");
+
     public static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
     public Task<StartCodeResult> StartRegistrationAsync(string rawEmail, CancellationToken ct = default) =>
@@ -123,7 +130,7 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
         if (user is null)
         {
             // Выравнивание времени ответа: не раскрываем таймингом, существует ли аккаунт.
-            PasswordHasher.Verify(password, PasswordHasher.Hash("Dummy0000"));
+            PasswordHasher.Verify(password, DummyPasswordHash);
             return (LoginResult.InvalidCredentials, null, null);
         }
 

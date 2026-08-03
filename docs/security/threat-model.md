@@ -26,7 +26,7 @@
 | Спам кодами / истощение email-лимитов | троттлинг: 3 активных кода в час на адрес + IP-лимит 3/час на выдачу |
 | Перечисление аккаунтов (enumeration) | register/start всегда 200; login с выравниванием времени (фиктивный PBKDF2-verify для несуществующих) |
 | Кража cookie (XSS) | HttpOnly + SameSite=Lax; SPA не имеет доступа к cookie из JS |
-| CSRF | SameSite=Lax + same-origin SPA; мутации — POST JSON (не форма) |
+| CSRF | SameSite=Lax (базовый слой) + double-submit антифорджери-токен (`IAntiforgery`): публичная cookie `XSRF-TOKEN` + заголовок `X-XSRF-TOKEN` на каждый мутирующий `/api`-запрос PWA-сессии (Angular `withXsrfConfiguration` подставляет сама, см. `app.config.ts`/`Program.cs` CSRF-гейт). Telegram Mini App — initData в заголовке, ambient-cookie CSRF неприменим по конструкции. Вне модели: login CSRF (принуждение залогиниться под чужим аккаунтом) — отдельный, более редкий класс, не покрыт |
 | Захват привязки email к чужому аккаунту | код LinkEmail связан с UserId инициатора; подтверждение с чужой сессии отвергается |
 | Session fixation | cookie выпускается только после успешной проверки, самим сервером |
 
@@ -64,3 +64,14 @@
 
 - Компрометация хоста/root-доступ — уровень инфраструктуры, не приложения.
 - DoS-стойкость за пределами auth-rate-limiting — этап 3 (инфраструктура).
+- Rate-limiting auth-эндпоинтов (`AuthRateLimitOptions`) — партиция только по IP клиента.
+  NAT/офисный прокси/мобильный оператор с общим IP может словить ложные 429 у легитимных
+  пользователей; ротация IP (residential proxy) тривиально обходит лимит. Принято как
+  достаточное при текущем масштабе — device-fingerprint/CAPTCHA слой не реализован (см. аудит
+  module-review-2026-08-02/01-auth-identity.md, находка 5).
+- `IAntiforgery` (CSRF-токен PWA, см. таблицу выше) использует ASP.NET Core Data Protection для
+  приватной половины токена; ключи сейчас in-memory (нет `AddDataProtection().PersistKeysToFileSystem`
+  /аналога) — для одного инстанса не проблема, но при будущем горизонтальном масштабировании
+  (несколько реплик API без общего key-ring) токен, выданный одной репликой, не пройдёт валидацию
+  на другой → случайные `400 csrf_token_invalid` при балансировке между репликами. Тот же класс
+  ограничения, что уже зафиксирован для `ConsentRequiredFilter`/`IMemoryCache` выше.

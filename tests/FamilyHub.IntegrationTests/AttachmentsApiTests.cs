@@ -46,12 +46,13 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
     }
 
-    private static MultipartFormDataContent BuildUpload(string text = "scan-content")
+    private static MultipartFormDataContent BuildUpload(
+        string text = "scan-content", string fileName = "scan.txt", string contentType = "application/pdf")
     {
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(text));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
-        content.Add(fileContent, "file", "scan.txt");
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Add(fileContent, "file", fileName);
         return content;
     }
 
@@ -145,5 +146,56 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var rawText = Encoding.UTF8.GetString(buffer.ToArray());
         rawText.Should().NotContain("very-private-scan", "в хранилище должен лежать только шифротекст");
         rawText.Should().StartWith("FHE1");
+    }
+
+    // Регрессия на аудит module-review-2026-08-02/03, находка 1 (Zip Slip): имя файла от
+    // клиента (Content-Disposition) не санитизировалось и позже становилось частью пути внутри
+    // ZIP-экспорта (AccountService.BuildZipAsync). Проверяем на слое, где имя реально попадает
+    // в систему — сохранённое/возвращаемое FileName не должно содержать путевых сегментов.
+    [Theory]
+    [InlineData("../../../etc/passwd")]
+    [InlineData("..\\..\\windows\\system32\\evil.pdf")]
+    [InlineData("/etc/passwd")]
+    [InlineData("..")]
+    public async Task Upload_WithPathTraversalFileName_IsSanitized(string maliciousName)
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+
+        var response = await owner.PostAsync(
+            $"/api/medical-records/{record.Id}/attachments", BuildUpload(fileName: maliciousName));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<AttachmentDto>(JsonOpts);
+        created!.FileName.Should().NotContain("..").And.NotContain("/").And.NotContain("\\");
+    }
+
+    [Fact]
+    public async Task Upload_WithDisallowedContentType_Returns415()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+
+        var response = await owner.PostAsync(
+            $"/api/medical-records/{record.Id}/attachments", BuildUpload(contentType: "text/html"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
+    }
+
+    [Fact]
+    public async Task Upload_OverSizeLimit_Returns413()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+
+        var oversized = new byte[AttachmentService.MaxSizeBytes + 1];
+        var content = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(oversized);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        content.Add(fileContent, "file", "huge.pdf");
+
+        var response = await owner.PostAsync($"/api/medical-records/{record.Id}/attachments", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge);
     }
 }

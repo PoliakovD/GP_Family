@@ -31,6 +31,7 @@ using FamilyHub.Modules.Medical;
 using FamilyHub.Modules.Medical.Enrichment;
 using Hangfire;
 using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -204,6 +205,25 @@ catch (FormatException ex)
 }
 builder.Services.AddScoped<ITokenService, TokenService>();
 
+// --- CSRF: double-submit антифорджери-токен поверх SameSite=Lax для PWA-cookie сессии (аудит
+// --- module-review-2026-08-02/01-auth-identity.md, находка 4). Только PWA — Telegram Mini App
+// --- аутентифицируется явным initData в заголовке, ambient-cookie CSRF к нему неприменим.
+// --- Cookie.Name — приватная (httpOnly) половина токена; публичную, которую читает Angular
+// --- (withXsrfConfiguration), выставляет PwaSessionCookieWriter.IssueCsrfCookie отдельно.
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "familyhub.csrf";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    // Path обязателен явно: без него браузер/CookieContainer скоупит cookie по RFC 6265
+    // default-path (директория ПЕРВОГО запроса, который её выставил — например
+    // "/api/auth/register", если сессия открыта регистрацией) и она не долетает до
+    // остальных /api-путей на следующих мутирующих запросах.
+    options.Cookie.Path = "/";
+    options.HeaderName = "X-XSRF-TOKEN";
+});
+
 // --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-JWT,   ---
 // --- плюс Dev-заглушка (только Development). Селектор "Smart" во всех средах:      ---
 // --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.          ---
@@ -293,6 +313,18 @@ builder.Services.AddRateLimiter(limiterOptions =>
         {
             PermitLimit = authRateLimits.CodePermitLimit,
             Window = TimeSpan.FromSeconds(authRateLimits.CodeWindowSeconds),
+            QueueLimit = 0,
+        }));
+
+    // Погашение инвайт-кода — вне группы /api/auth, поэтому политика "auth" сюда не
+    // распространяется; отдельная политика ради единообразия модели защиты (см. аудит,
+    // находка 02.2), а не из-за реальной практичности перебора 128-битного кода.
+    limiterOptions.AddPolicy("invite-redeem", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = authRateLimits.RedeemPermitLimit,
+            Window = TimeSpan.FromSeconds(authRateLimits.RedeemWindowSeconds),
             QueueLimit = 0,
         }));
 });
@@ -459,6 +491,12 @@ builder.Services.AddBirthdayModule();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Явный запас над AttachmentService.MaxSizeBytes (30 МиБ): без этого implicit-дефолт Kestrel
+// (~28.6 МиБ, 30_000_000 байт) обрубал бы запрос СВОЕЙ, менее информативной ошибкой раньше,
+// чем срабатывала бы наша проверка с понятным телом ответа ({code, maxSizeBytes}) — см. аудит
+// module-review-2026-08-02/03-medical-records-attachments.md, находка 2.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 40 * 1024 * 1024);
+
 var app = builder.Build();
 
 // --- Структурированное логирование HTTP-запросов (метод, путь, статус, время, пользователь) в Seq ---
@@ -499,9 +537,72 @@ if (app.Environment.IsDevelopment())
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// --- Заголовки безопасности (аудит module-review-2026-08-02/08-web-frontend-angular.md,
+// --- находка 2 / 09-config-deployment-devops.md, находка 3): раньше не выставлялись нигде —
+// --- ни на уровне бэкенда (сам раздаёт SPA-сборку через UseStaticFiles/MapFallbackToFile выше,
+// --- отдельного реверс-прокси в репозитории нет), ни в index.html. CSP — базовый, под реальные
+// --- нужды текущего фронтенда (без внешних CDN — шрифты/иконки забандлены, единственный внешний
+// --- script-src — телеграмовский SDK, подгружаемый условно, см. index.html): style-src требует
+// --- 'unsafe-inline' — Angular без CSP-nonce вставляет component-стили инлайново, это стандартное
+// --- и ожидаемое ограничение, не наша недоработка.
+app.Use(async (context, next) =>
+{
+    // /hangfire (дашборд) и /dev/* — dev-only инструменты (см. Program.cs ниже, обёрнуты в
+    // IsDevelopment()), у Hangfire.Dashboard есть собственные инлайн-скрипты без CSP-нонсов —
+    // не наш фронтенд, не часть этой находки, не блокируем.
+    if (context.Request.Path.StartsWithSegments("/hangfire") || context.Request.Path.StartsWithSegments("/dev"))
+    {
+        await next();
+        return;
+    }
+
+    var headers = context.Response.Headers;
+    headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "script-src 'self' https://telegram.org; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; " +
+        "font-src 'self'; " +
+        "connect-src 'self'; " +
+        "object-src 'none'; " +
+        "frame-ancestors 'none'; " +
+        "base-uri 'self'; " +
+        "form-action 'self'";
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    // X-Frame-Options — тот же запрет, что frame-ancestors выше, для браузеров без поддержки CSP3.
+    headers["X-Frame-Options"] = "DENY";
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+
+// --- CSRF-гейт (аудит module-review-2026-08-02/01-auth-identity.md, находка 4): мутирующий
+// --- /api-запрос, несущий публичную cookie CsrfCookieNames.PublicToken (выставляется ТОЛЬКО
+// --- вместе с PWA-сессией, см. PwaSessionCookieWriter.IssueCsrfCookie), обязан нести валидный
+// --- заголовок X-XSRF-TOKEN. Telegram/Dev-запросы эту cookie никогда не получают — пропускаются
+// --- естественно, без отдельной проверки auth-схемы. IsRequestValidAsync при наличии заголовка
+// --- читает токен ИЗ заголовка, не трогая тело запроса — безопасно и для multipart-загрузок.
+app.Use(async (context, next) =>
+{
+    var method = context.Request.Method;
+    var isMutating = HttpMethods.IsPost(method) || HttpMethods.IsPut(method)
+        || HttpMethods.IsPatch(method) || HttpMethods.IsDelete(method);
+    if (isMutating && context.Request.Path.StartsWithSegments("/api")
+        && context.Request.Cookies.ContainsKey(CsrfCookieNames.PublicToken))
+    {
+        var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
+        if (!await antiforgery.IsRequestValidAsync(context))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsJsonAsync(new { code = "csrf_token_invalid" });
+            return;
+        }
+    }
+    await next();
+});
 
 // Явный запрет кэширования для всех /api-ответов. Обнаружен случай (Telegram Mini App
 // WebView), когда GET /api/auth/me иногда получал закэшированный где-то на клиенте

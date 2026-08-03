@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
+using FamilyHub.IntegrationTests;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,8 +46,9 @@ public class TelegramLinkFlowTests(BotWebhookWebFactory factory)
         await db.SaveChangesAsync();
 
         var client = factory.CreateClient();
-        (await client.PostAsJsonAsync("/api/auth/login", new { email, password }))
-            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        await CsrfTestHelper.CaptureCsrfTokenAsync(client);
 
         return (user.Id, client);
     }

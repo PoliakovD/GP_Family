@@ -1,9 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
-import { FamilyRole, MemberStatus } from '../../models/types';
+import { FamilyRole, MemberStatus, MAX_FAMILIES_PER_USER } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -26,6 +26,15 @@ export class FamiliesTabComponent {
 
   readonly FamilyRole = FamilyRole;
   readonly MemberStatus = MemberStatus;
+  readonly MAX_FAMILIES_PER_USER = MAX_FAMILIES_PER_USER;
+
+  /** Семьи, где пользователь Admin, == семьи, которые он создал (промоушена в Admin в продукте
+   * нет — см. FamilyService.MaxFamiliesPerUser). Гейтит кнопку «Создать» ДО запроса на сервер. */
+  readonly createdFamiliesCount = computed(
+    () => this.state.families().filter((f) => f.myRole === FamilyRole.Admin).length,
+  );
+
+  readonly atFamilyLimit = computed(() => this.createdFamiliesCount() >= MAX_FAMILIES_PER_USER);
 
   statusLabel(status: number): string {
     return status === MemberStatus.Active ? 'активен' : 'ожидает подтверждения';
@@ -36,6 +45,10 @@ export class FamiliesTabComponent {
   }
 
   openCreateModal(): void {
+    if (this.atFamilyLimit()) {
+      this.toast.error(`Достигнут лимит в ${MAX_FAMILIES_PER_USER} созданных семей.`);
+      return;
+    }
     this.newFamilyName = '';
     this.showCreateModal = true;
   }

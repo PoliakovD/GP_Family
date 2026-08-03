@@ -1,8 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
+using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -161,4 +166,43 @@ public class FamiliesAndInvitesFlowTests(FamilyHubWebFactory factory) : Integrat
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    // Регрессия на аудит module-review-2026-08-02/02, находка 4: без лимита пользователь мог
+    // насоздавать сколько угодно семей подряд (спам/захламление БД).
+    [Fact]
+    public async Task CreateFamily_AtLimit_Returns409_AndDoesNotCreateExtraFamily()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var me = await (await admin.GetAsync("/api/auth/me")).Content.ReadFromJsonAsync<MeDto>(JsonOpts);
+
+        // Сидируем напрямую через БД (быстрее, чем 25 HTTP round-trip'ов) — семьи, где
+        // пользователь Admin, ровно то, что считает FamilyService.MaxFamiliesPerUser.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            for (var i = 0; i < FamilyService.MaxFamiliesPerUser; i++)
+            {
+                var family = new Family { Id = Guid.NewGuid(), Name = $"Seed {i}", PlanType = PlanType.Free, CreatedAt = DateTime.UtcNow };
+                db.Families.Add(family);
+                db.FamilyMembers.Add(new FamilyMember
+                {
+                    Id = Guid.NewGuid(),
+                    FamilyId = family.Id,
+                    UserId = me!.UserId,
+                    Role = FamilyRole.Admin,
+                    Status = MemberStatus.Active,
+                    JoinedAt = DateTime.UtcNow,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var response = await admin.PostAsJsonAsync("/api/families", new { Name = "One too many" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var families = await (await admin.GetAsync("/api/families")).Content.ReadFromJsonAsync<List<FamilySummaryDto>>(JsonOpts);
+        families.Should().HaveCount(FamilyService.MaxFamiliesPerUser, "лишняя семья создаваться не должна была");
+    }
+
+    private record MeDto(Guid UserId);
 }

@@ -6,12 +6,17 @@ using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
 using FluentAssertions;
+using Hangfire;
+using Hangfire.Common;
+using Hangfire.States;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -151,6 +156,32 @@ public class EnrichmentQuotaZeroCollection : ICollectionFixture<EnrichmentQuotaZ
 public class EnrichmentCorrectionCollection : ICollectionFixture<EnrichmentCorrectionWebFactory>
 {
     public const string Name = "EnrichmentCorrectionIntegration";
+}
+
+/// <summary>Тот же happy-path конвейер, но с подменённым IBackgroundJobClient, у которого
+/// Create(...) всегда бросает исключение — имитирует недоступность Hangfire-стораж
+/// (см. аудит module-review-2026-08-02/04-medications-medkits-kb-enrichment-ocr.md, находка 1).
+/// Регистрация ПОСЛЕ Program.cs (который регистрирует настоящий AddHangfireServer/клиент)
+/// выигрывает — тот же приём, что и остальные подмены в этом файле.</summary>
+public class EnrichmentHangfireDownWebFactory : FamilyHubWebFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services =>
+        {
+            var client = Substitute.For<IBackgroundJobClient>();
+            client.Create(Arg.Any<Job>(), Arg.Any<IState>())
+                .Returns(_ => throw new InvalidOperationException("Hangfire storage unavailable (test)"));
+            services.AddSingleton(client);
+        });
+    }
+}
+
+[CollectionDefinition(Name)]
+public class EnrichmentHangfireDownCollection : ICollectionFixture<EnrichmentHangfireDownWebFactory>
+{
+    public const string Name = "EnrichmentHangfireDownIntegration";
 }
 
 /// <summary>Классы этого файла НЕ наследуют IntegrationTestBase (у неё свой [Collection] на
@@ -489,5 +520,56 @@ public class EnrichmentNameCorrectionTests(EnrichmentCorrectionWebFactory factor
 
         (await db.MedicationEnrichmentJobs.CountAsync(j => j.NormalizedName == garbledNormalized))
             .Should().Be(1, "повторное искажённое имя не должно порождать вторую задачу — алиас должен сработать до постановки в очередь");
+    }
+}
+
+// Регрессия на аудит module-review-2026-08-02/04, находка 1: сбой постановки задачи обогащения
+// (Hangfire недоступен) раньше пробрасывался необработанным исключением через
+// MedicationService.CreateAsync до самого эндпоинта → 500 клиенту, хотя медикамент уже был
+// закоммичен отдельным, более ранним SaveChangesAsync. Пользователь увидел бы ошибку и,
+// вероятно, повторил попытку — дубль медикамента при том, что первая попытка на самом деле
+// удалась.
+[Collection(EnrichmentHangfireDownCollection.Name)]
+public class EnrichmentHangfireDownTests(EnrichmentHangfireDownWebFactory factory)
+{
+    private record CreateFamilyResponseDto(Guid Id);
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    private HttpClient ClientAs(long telegramId)
+    {
+        var client = factory.CreateClientAs(telegramId);
+        ConsentHelper.AcceptCurrent(client);
+        return client;
+    }
+
+    [Fact]
+    public async Task CreateMedication_WhenHangfireEnqueueFails_StillReturns201_AndLeavesNoOrphanedPendingJob()
+    {
+        var admin = ClientAs(Random.Shared.NextInt64(1_000_000_000, 9_000_000_000));
+        var family = await (await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" }))
+            .Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
+        var medkit = await (await admin.PostAsJsonAsync($"/api/families/{family!.Id}/medkits", new CreateMedkitRequest("Аптечка")))
+            .Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+
+        var name = $"Хангфайрнедоступен{Guid.NewGuid():N}";
+        var createResponse = await admin.PostAsJsonAsync(
+            $"/api/medkits/{medkit!.Id}/medications", new CreateMedicationRequest(name, null, null));
+
+        // Главное утверждение находки: медикамент создаётся успешно, а не 500, несмотря на то,
+        // что Hangfire-энкью внутри гарантированно бросает исключение (см. фабрику).
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var medication = await createResponse.Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
+        medication!.Name.Should().Be(name);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var normalizedName = MedicationNameNormalizer.Normalize(name);
+
+        // Pending-строка должна быть откачена вместе с несостоявшимся Hangfire-энкью — иначе
+        // дедуп по NormalizedName навсегда заблокировал бы будущие попытки обогащения этого
+        // препарата (Hangfire ведь так и не узнал о задаче, но строка выглядела бы "в очереди").
+        (await db.MedicationEnrichmentJobs.AnyAsync(j => j.NormalizedName == normalizedName))
+            .Should().BeFalse("Pending-строка без реальной задачи в Hangfire не должна оставаться в БД");
     }
 }

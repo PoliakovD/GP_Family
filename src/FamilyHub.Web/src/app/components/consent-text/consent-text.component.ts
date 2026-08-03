@@ -30,8 +30,10 @@ export class ConsentTextComponent implements OnInit {
   readonly html = signal<SafeHtml | null>(null);
 
   async ngOnInit(): Promise<void> {
-    // Текст согласия — embedded-ресурс нашего бэкенда, доверенный HTML (тот же источник,
-    // что и на /consent).
+    // ИНВАРИАНТ: bypassSecurityTrustHtml здесь безопасен ТОЛЬКО пока текст согласия —
+    // embedded-ресурс бэкенда (тот же источник, что и на /consent), не редактируемый через
+    // CMS/админку контент. См. подробности инварианта в ConsentGateComponent / аудит
+    // module-review-2026-08-02/08-web-frontend-angular.md, находка 5.
     const current = await this.auth.getConsentText();
     this.html.set(this.sanitizer.bypassSecurityTrustHtml(current.text));
   }

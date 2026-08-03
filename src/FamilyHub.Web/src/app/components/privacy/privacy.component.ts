@@ -24,7 +24,10 @@ export class PrivacyComponent implements OnInit {
   readonly html = signal<SafeHtml | null>(null);
 
   async ngOnInit(): Promise<void> {
-    // Текст политики — embedded-ресурс нашего бэкенда, доверенный HTML.
+    // ИНВАРИАНТ: bypassSecurityTrustHtml здесь безопасен ТОЛЬКО пока текст политики —
+    // embedded-ресурс бэкенда, не редактируемый через CMS/админку контент. См. подробности
+    // инварианта в ConsentGateComponent / аудит
+    // module-review-2026-08-02/08-web-frontend-angular.md, находка 5.
     const raw = await firstValueFrom(this.http.get('/api/legal/privacy-policy', { responseType: 'text' }));
     this.html.set(this.sanitizer.bypassSecurityTrustHtml(raw));
   }

@@ -9,13 +9,11 @@ public class AesGcmFieldCipherTests
 {
     private const string Key = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
-    private static AesGcmFieldCipher CreateSut(
-        string? key = null, string keyId = "v1", bool allowLegacy = true) =>
+    private static AesGcmFieldCipher CreateSut(string? key = null, string keyId = "v1") =>
         new(Options.Create(new EncryptionOptions
         {
             MasterKey = key ?? Key,
             ActiveKeyId = keyId,
-            AllowLegacyPlaintextRead = allowLegacy,
         }));
 
     [Fact]
@@ -63,15 +61,12 @@ public class AesGcmFieldCipherTests
     }
 
     [Fact]
-    public void Unprotect_LegacyPlaintext_PassesThroughWhenAllowed()
+    public void Unprotect_PlaintextValue_AlwaysThrows()
     {
-        CreateSut().Unprotect("до-шифровальное значение").Should().Be("до-шифровальное значение");
-    }
-
-    [Fact]
-    public void Unprotect_LegacyPlaintext_ThrowsWhenDisallowed()
-    {
-        var act = () => CreateSut(allowLegacy: false).Unprotect("plaintext");
+        // Проект ещё в разработке — старых БД с "переходным периодом" не существует (пересоздаются
+        // с нуля), поэтому legacy-чтение незашифрованных значений не поддерживается вовсе:
+        // запись всегда шифрует, чтение всегда требует префикс "enc:".
+        var act = () => CreateSut().Unprotect("plaintext");
 
         act.Should().Throw<InvalidOperationException>();
     }

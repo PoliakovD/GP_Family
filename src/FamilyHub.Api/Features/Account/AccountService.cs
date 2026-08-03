@@ -190,7 +190,12 @@ public class AccountService(
             var download = await attachments.GetDownloadAsync(row.Id, ct);
             if (download is null) continue;
 
-            var entry = zip.CreateEntry($"attachments/{row.OwnerId}/{download.Value.FileName}");
+            // Defense in depth: имя уже санитизируется на загрузке (AttachmentService), но
+            // сверяем ещё раз здесь — единственное место, где имя файла становится частью пути
+            // внутри архива (Zip Slip, см. аудит module-review-2026-08-02, находка 1). Покрывает
+            // и гипотетические строки, записанные в обход AttachmentService.
+            var safeFileName = FileNameSanitizer.Sanitize(download.Value.FileName);
+            var entry = zip.CreateEntry($"attachments/{row.OwnerId}/{safeFileName}");
             await using var entryStream = entry.Open();
             await using var content = download.Value.Content;
             await content.CopyToAsync(entryStream, ct);

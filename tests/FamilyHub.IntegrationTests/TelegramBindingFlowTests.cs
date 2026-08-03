@@ -85,14 +85,16 @@ public class TelegramBindingFlowTests(TelegramBindingWebFactory factory)
         (await client.PostAsJsonAsync("/api/auth/register/start", new { email }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         var code = factory.Emails.LastCodeFor(email);
-        (await client.PostAsJsonAsync("/api/auth/register/confirm", new
+        var confirm = await client.PostAsJsonAsync("/api/auth/register/confirm", new
         {
             email,
             code,
             password = "Passw0rd",
             username = $"tguser{Guid.NewGuid():N}"[..20],
             displayName = "TG Bind PWA User",
-        })).StatusCode.Should().Be(HttpStatusCode.OK);
+        });
+        confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+        await CsrfTestHelper.CaptureCsrfTokenAsync(client);
 
         var familyResponse = await client.PostAsJsonAsync("/api/families", new { name = "Привязка Telegram — семья" });
         familyResponse.StatusCode.Should().Be(HttpStatusCode.Created);

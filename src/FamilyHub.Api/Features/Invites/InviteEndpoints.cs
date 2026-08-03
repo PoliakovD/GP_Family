@@ -54,7 +54,7 @@ public static class InviteEndpoints
                 RedeemResult.PendingApproval => Results.Ok(new { status = "pending_approval" }),
                 _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
             };
-        });
+        }).RequireRateLimiting("invite-redeem");
 
         group.MapPost("/invites/{inviteId:guid}/revoke", async (
             Guid inviteId, InviteService service, ICurrentUser currentUser, CancellationToken ct) =>

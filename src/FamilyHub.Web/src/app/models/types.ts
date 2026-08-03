@@ -2,6 +2,10 @@
 // enum'ы без JsonStringEnumConverter сериализуются как целые числа — см. FamilyHub.Domain.Enums.*.
 
 export const FamilyRole = {Member: 0, Admin: 1} as const;
+
+/** Зеркалит FamilyService.MaxFamiliesPerUser — макс. семей, которые может СОЗДАТЬ один
+ * пользователь (см. аудит module-review-2026-08-02/02, находка 4). */
+export const MAX_FAMILIES_PER_USER = 25;
 export const MemberStatus = {PendingApproval: 0, Active: 1} as const;
 export const RemoveMemberResult = {
     Removed: 0,
