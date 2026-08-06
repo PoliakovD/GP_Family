@@ -47,7 +47,7 @@ public class LmStudioOptions
 
     /// <summary>Таймаут запроса — локальный vision-инференс на нескольких фото не быстрый,
     /// а при более высоком уровне размышлений может занять заметно дольше.</summary>
-    public int TimeoutSeconds { get; set; } = 300;
+    public int TimeoutSeconds { get; set; } = 1000;
 
     /// <summary>По умолчанию None (без размышлений) — самый быстрый ответ; конфигурируется через
     /// env LmStudio__Reasoning=none|minimal|medium|maximum.</summary>

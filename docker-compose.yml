@@ -60,9 +60,6 @@ services:
       # Сгенерировать: openssl rand -base64 32
       Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:?не задан в .env — сгенерируйте: openssl rand -base64 32}"
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
-      # api крутится в контейнере, LM Studio — на хосте разработчика; host.docker.internal
-      # резолвится в хост через Docker Desktop.
-      LmStudio__BaseUrl: "http://host.docker.internal:1234"
     depends_on:
       postgres:
         condition: service_healthy
