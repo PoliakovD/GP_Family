@@ -7,6 +7,8 @@ import {
   Birthday,
   BirthdayInput, CurrentMember,
   EnrichmentRefreshOutcome,
+  FamilyDependent,
+  FamilyDependentInput,
   FamilySummary,
   InviteCreated,
   KbListResponse,
@@ -148,6 +150,18 @@ export class ApiService {
 
   redeemInvite = (code: string) => this.post<{ status: string }>(`/api/invites/${code}/redeem`);
 
+  // Подопечные (дети/питомцы/пожилые родственники без своего User) — семейный ресурс, тот же
+  // паттерн, что аптечки/дни рождения. Create/Update — любой активный участник, Delete — только Admin.
+  getDependents = (familyId: string) => this.get<FamilyDependent[]>(`/api/families/${familyId}/dependents`);
+
+  createDependent = (familyId: string, input: FamilyDependentInput) =>
+    this.post<FamilyDependent>(`/api/families/${familyId}/dependents`, input);
+
+  updateDependent = (id: string, input: FamilyDependentInput) =>
+    this.put<void>(`/api/dependents/${id}`, input);
+
+  deleteDependent = (id: string) => this.del<void>(`/api/dependents/${id}`);
+
   // Аптечки
   getMedkits = (familyId: string) => this.get<Medkit[]>(`/api/families/${familyId}/medkits`);
 
@@ -238,6 +252,9 @@ export class ApiService {
 
   unhideMedicalRecord = (recordId: string, familyIds: string[]) =>
     this.post<void>(`/api/medical-records/${recordId}/unhide`, { familyIds });
+
+  /** Безусловное удаление — сервер разрешает только владельцу (кто физически загрузил). */
+  deleteMedicalRecord = (id: string) => this.del<void>(`/api/medical-records/${id}`);
 
   getAttachmentUrl = (id: string) => this.get<{ url: string }>(`/api/attachments/${id}/url`);
 

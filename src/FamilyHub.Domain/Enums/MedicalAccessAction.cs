@@ -26,4 +26,8 @@ public enum MedicalAccessAction
 
     /// <summary>Удаление аккаунта (право на забвение).</summary>
     Erasure = 7,
+
+    /// <summary>Владелец безусловно удалил запись (независимо от того, кому она была видна —
+    /// себе, подопечному семьи или назначенному TargetUserId).</summary>
+    Delete = 8,
 }

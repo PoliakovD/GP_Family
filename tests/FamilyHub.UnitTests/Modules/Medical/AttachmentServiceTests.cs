@@ -44,7 +44,7 @@ public class AttachmentServiceTests : SqliteTestBase
         var auditWriter = new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db);
         var medicalRecords = new MedicalRecordService(
             Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, auditWriter,
-            new RussianTextSearcher(), NullLogger<MedicalRecordService>.Instance);
+            new RussianTextSearcher(), _storage, NullLogger<MedicalRecordService>.Instance);
         var downloadTokens = new DownloadTokenService(
             Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
         _sut = new AttachmentService(

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
     public DbSet<FamilyInvite> FamilyInvites => Set<FamilyInvite>();
     public DbSet<FamilyInviteRedemption> FamilyInviteRedemptions => Set<FamilyInviteRedemption>();
+    public DbSet<FamilyDependent> FamilyDependents => Set<FamilyDependent>();
     public DbSet<Medkit> Medkits => Set<Medkit>();
     public DbSet<Medication> Medications => Set<Medication>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();

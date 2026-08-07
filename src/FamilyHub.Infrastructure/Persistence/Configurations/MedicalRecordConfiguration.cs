@@ -24,5 +24,19 @@ public class MedicalRecordConfiguration : IEntityTypeConfiguration<MedicalRecord
         // Списки/поиск теперь всегда фильтруют по виду записи (Kind не зашифрован — фильтр
         // применяется прямо в SQL, до расшифровки остальных полей).
         builder.HasIndex(r => new { r.OwnerUserId, r.Kind });
+
+        // Обе новые ветки видимости (VisibleRecordsQuery) фильтруют по этим колонкам.
+        builder.HasIndex(r => r.FamilyDependentId);
+        builder.HasIndex(r => r.TargetUserId);
+
+        // Единственный реальный FK на MedicalRecord — по требованию буквального DELETE CASCADE
+        // при удалении подопечного (FamilyDependentService.DeleteAsync). Основной путь удаления
+        // всё равно явный (собирает FileAttachment/MinIO-ключи ДО удаления строк) — этот FK лишь
+        // защита на случай будущих обходных путей. TargetUserId остаётся FK-less, тот же
+        // осознанный выбор, что и у OwnerUserId — запись не должна зависеть от связи на User.
+        builder.HasOne<FamilyDependent>()
+            .WithMany()
+            .HasForeignKey(r => r.FamilyDependentId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

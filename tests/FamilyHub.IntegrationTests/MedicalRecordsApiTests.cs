@@ -161,6 +161,90 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
     }
 
     [Fact]
+    public async Task Create_ForTargetUserInSameFamily_Succeeds_AndVisibleToTarget_OwnerStaysUploader()
+    {
+        var (_, owner, target) = await CreateFamilyWithActiveMemberAsync();
+        var targetUserId = await GetMyUserIdAsync(target);
+
+        var record = await CreateForTargetAsync(owner, targetUserId);
+
+        record.TargetUserId.Should().Be(targetUserId);
+        record.OwnerUserId.Should().NotBe(targetUserId, "владелец — тот, кто физически загрузил, а не получатель");
+        (await (await target.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>())!
+            .Should().ContainSingle(r => r.Id == record.Id);
+    }
+
+    [Fact]
+    public async Task Create_ForTargetUserWithoutSharedFamily_ReturnsForbidden()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var stranger = ClientAs(FreshTelegramId());
+        var strangerUserId = await GetMyUserIdAsync(stranger);
+
+        var response = await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null, TargetUserId: strangerUserId));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Create_BothDependentAndTargetSet_ReturnsBadRequest()
+    {
+        var (_, owner, target) = await CreateFamilyWithActiveMemberAsync();
+        var targetUserId = await GetMyUserIdAsync(target);
+
+        var response = await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null,
+                FamilyDependentId: Guid.NewGuid(), TargetUserId: targetUserId));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Delete_Owner_Succeeds_TargetCannotDelete_UnconditionalOwnerOnlyRule()
+    {
+        var (_, owner, target) = await CreateFamilyWithActiveMemberAsync();
+        var targetUserId = await GetMyUserIdAsync(target);
+        var record = await CreateForTargetAsync(owner, targetUserId);
+
+        var targetAttempt = await target.DeleteAsync($"/api/medical-records/{record.Id}");
+        targetAttempt.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var ownerAttempt = await owner.DeleteAsync($"/api/medical-records/{record.Id}");
+        ownerAttempt.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await target.GetAsync("/api/medical-records")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var targetListAfter = await (await target.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        targetListAfter.Should().NotContain(r => r.Id == record.Id);
+    }
+
+    [Fact]
+    public async Task Delete_UnknownRecord_ReturnsNotFound()
+    {
+        var owner = ClientAs(FreshTelegramId());
+
+        var response = await owner.DeleteAsync($"/api/medical-records/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    private record MeDto(Guid UserId);
+
+    private static async Task<Guid> GetMyUserIdAsync(HttpClient client) =>
+        (await (await client.GetAsync("/api/auth/me")).Content.ReadFromJsonAsync<MeDto>(JsonOpts)).UserId;
+
+    private static async Task<MedicalRecordDto> CreateForTargetAsync(HttpClient owner, Guid targetUserId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null, TargetUserId: targetUserId));
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts))!;
+    }
+
+    [Fact]
     public async Task GetAttachments_OwnerSeesThem_OutsiderForbidden_UnknownRecordNotFound()
     {
         var (familyId, owner, member) = await CreateFamilyWithActiveMemberAsync();

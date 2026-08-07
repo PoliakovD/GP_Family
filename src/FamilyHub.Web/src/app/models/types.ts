@@ -31,6 +31,7 @@ export interface FamilySummary {
     myRole: number; // FamilyRole admin or member
     myStatus: number; // MemberStatus // active or pending to be active
     currentMembers: CurrentMember[] | null;
+    dependents: FamilyDependent[] | null;
 }
 
 export interface PendingMember {
@@ -57,6 +58,26 @@ export interface InviteCreated {
     maxUses: number;
     expiresAt: string | null;
     telegramLink: string | null;
+}
+
+/** Подопечный без своего User — ребёнок, питомец или пожилой родственник (семейный ресурс,
+ * см. FamilyHub.Api.Features.Dependents). Не заводим фейковый User с синтетическим email. */
+export interface FamilyDependent {
+    id: string;
+    familyId: string;
+    name: string;
+    birthDate: string | null;
+    isPet: boolean;
+    petSpecies: string | null;
+    createdByUserId: string;
+    createdAt: string;
+}
+
+export interface FamilyDependentInput {
+    name: string;
+    birthDate: string | null;
+    isPet: boolean;
+    petSpecies: string | null;
 }
 
 export interface Medkit {
@@ -134,6 +155,13 @@ export interface MedicalRecord {
     createdAt: string;
     /** L2: семьи, от которых точечно скрыта именно эта запись (отдаётся только владельцу). */
     hiddenFamilyIds: string[];
+    /** Подопечный семьи, для которого загружена запись — видна всей активной семье подопечного
+     * автоматически, без L1-шаринга. Взаимоисключимо с targetUserId. */
+    familyDependentId: string | null;
+    /** Участник семьи, для которого другой участник загрузил запись — видна ему напрямую.
+     * ownerUserId при этом остаётся за тем, кто физически загрузил (только он может удалить —
+     * см. api.deleteMedicalRecord). Взаимоисключимо с familyDependentId. */
+    targetUserId: string | null;
 }
 
 export interface MedicalRecordInput {
@@ -143,6 +171,8 @@ export interface MedicalRecordInput {
     doctor: string | null;
     description: string | null;
     hideFromFamilyIds: string[] | null;
+    familyDependentId: string | null;
+    targetUserId: string | null;
 }
 
 export interface Attachment {

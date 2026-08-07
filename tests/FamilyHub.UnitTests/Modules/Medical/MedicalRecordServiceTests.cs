@@ -2,10 +2,13 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Modules.Medical;
@@ -21,6 +24,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
             new TestSupport.OutboxTestPipeline(Db).Writer,
             new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db),
             new RussianTextSearcher(),
+            Substitute.For<IFileStorage>(),
             NullLogger<MedicalRecordService>.Instance);
     }
 
@@ -201,10 +205,10 @@ public class MedicalRecordServiceTests : SqliteTestBase
         });
         await Db.SaveChangesAsync();
 
-        var dto = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+        var (_, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
             "Self", new DateOnly(2024, 1, 1), null, null, [myFamily.Id, otherFamily.Id]));
 
-        var hidden = Db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == dto.Id).Select(h => h.FamilyId).ToList();
+        var hidden = Db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == dto!.Id).Select(h => h.FamilyId).ToList();
         hidden.Should().ContainSingle().Which.Should().Be(myFamily.Id);
     }
 
@@ -252,10 +256,145 @@ public class MedicalRecordServiceTests : SqliteTestBase
     {
         var owner = Db.AddUser();
 
-        var dto = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+        var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
             "Пациент", new DateOnly(2024, 1, 1), "Доктор", null, null, MedicalRecordKind.DoctorVisit));
 
-        dto.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
+        result.Should().Be(MedicalRecordAccessResult.Success);
+        dto!.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
         (await Db.MedicalRecords.FindAsync(dto.Id))!.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
+    }
+
+    [Fact]
+    public async Task CreateAsync_BothDependentAndTargetSet_ReturnsInvalidTarget()
+    {
+        var owner = Db.AddUser();
+        var (family, _) = Db.SeedFamilyWithAdmin();
+        var dependent = new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = family.Id, Name = "Барсик", IsPet = true, CreatedByUserId = owner.Id,
+            CreatedAt = DateTime.UtcNow,
+        };
+        Db.FamilyDependents.Add(dependent);
+        await Db.SaveChangesAsync();
+
+        var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Пациент", new DateOnly(2024, 1, 1), null, null, null,
+            FamilyDependentId: dependent.Id, TargetUserId: Guid.NewGuid()));
+
+        result.Should().Be(MedicalRecordAccessResult.InvalidTarget);
+        dto.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ForDependent_MemberOfDependentFamily_Succeeds_AndVisibleToOtherActiveMember()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var otherMember = Db.AddMember(family.Id);
+        var dependent = new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = family.Id, Name = "Барсик", IsPet = true, CreatedByUserId = owner.Id,
+            CreatedAt = DateTime.UtcNow,
+        };
+        Db.FamilyDependents.Add(dependent);
+        await Db.SaveChangesAsync();
+
+        var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Барсик", new DateOnly(2024, 1, 1), "Ветеринар", null, null, FamilyDependentId: dependent.Id));
+
+        result.Should().Be(MedicalRecordAccessResult.Success);
+        dto!.OwnerUserId.Should().Be(owner.Id, "владелец — тот, кто физически загрузил, а не подопечный");
+        (await _sut.GetVisibleRecordsAsync(otherMember.Id)).Should().ContainSingle(r => r.Id == dto.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ForDependentOfAnotherFamily_ReturnsForbidden()
+    {
+        var owner = Db.AddUser();
+        var (otherFamily, otherAdmin) = Db.SeedFamilyWithAdmin();
+        var dependent = new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = otherFamily.Id, Name = "Чужой", IsPet = false, CreatedByUserId = otherAdmin.Id,
+            CreatedAt = DateTime.UtcNow,
+        };
+        Db.FamilyDependents.Add(dependent);
+        await Db.SaveChangesAsync();
+
+        var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Чужой", new DateOnly(2024, 1, 1), null, null, null, FamilyDependentId: dependent.Id));
+
+        result.Should().Be(MedicalRecordAccessResult.Forbidden);
+        dto.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ForTargetUserWithoutSharedFamily_ReturnsForbidden()
+    {
+        var owner = Db.AddUser();
+        var stranger = Db.AddUser();
+
+        var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Пациент", new DateOnly(2024, 1, 1), null, null, null, TargetUserId: stranger.Id));
+
+        result.Should().Be(MedicalRecordAccessResult.Forbidden);
+        dto.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ForTargetUserInSameFamily_Succeeds_AndVisibleToTarget_ButOwnerStaysUploader()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var target = Db.AddMember(family.Id);
+        await Db.SaveChangesAsync();
+
+        var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Пациент", new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
+
+        result.Should().Be(MedicalRecordAccessResult.Success);
+        dto!.OwnerUserId.Should().Be(owner.Id);
+        dto.TargetUserId.Should().Be(target.Id);
+        (await _sut.GetVisibleRecordsAsync(target.Id)).Should().ContainSingle(r => r.Id == dto.Id);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_Owner_Succeeds_AndRemovesRecord()
+    {
+        var owner = Db.AddUser();
+        Db.MedicalRecords.Add(TestData.NewMedicalRecord(owner.Id));
+        await Db.SaveChangesAsync();
+        var record = await Db.MedicalRecords.FirstAsync(r => r.OwnerUserId == owner.Id);
+
+        var result = await _sut.DeleteAsync(owner.Id, record.Id);
+
+        result.Should().Be(MedicalRecordAccessResult.Success);
+        // ExecuteDeleteAsync — bulk-операция в обход change tracker'а: FindAsync вернул бы
+        // устаревший закэшированный экземпляр (record уже отслеживается тем же Db-контекстом
+        // после чтения выше) вместо реального состояния БД — нужен AsNoTracking, чтобы форсировать
+        // настоящий запрос.
+        (await Db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == record.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_TargetUser_CannotDelete_UnconditionalOwnerOnlyRule()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var target = Db.AddMember(family.Id);
+        await Db.SaveChangesAsync();
+        var (_, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Пациент", new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
+
+        var result = await _sut.DeleteAsync(target.Id, dto!.Id);
+
+        result.Should().Be(MedicalRecordAccessResult.Forbidden);
+        (await Db.MedicalRecords.FindAsync(dto.Id)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnknownRecord_ReturnsNotFound()
+    {
+        var owner = Db.AddUser();
+
+        var result = await _sut.DeleteAsync(owner.Id, Guid.NewGuid());
+
+        result.Should().Be(MedicalRecordAccessResult.NotFound);
     }
 }

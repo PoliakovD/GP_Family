@@ -40,5 +40,19 @@ public class MedicalRecord
 
     public ExtractionStatus ExtractionStatus { get; set; }
 
+    /// <summary>Подопечный (ребёнок/питомец/пожилой родственник без своего User), для которого
+    /// загружена эта запись. Видна всей активной семье подопечного автоматически — см.
+    /// MedicalRecordService.VisibleRecordsQuery. Взаимоисключимо с TargetUserId (проверяется в
+    /// MedicalRecordService.CreateAsync). FK на FamilyDependent с DELETE CASCADE — см.
+    /// MedicalRecordConfiguration.</summary>
+    public Guid? FamilyDependentId { get; set; }
+
+    /// <summary>Полноценный член семьи, для которого другой участник загрузил эту запись — видна
+    /// ему напрямую, без L1-шаринга. OwnerUserId при этом остаётся за тем, кто физически
+    /// загрузил: правило собственности на файл и безусловного удаления не зависит от того, для
+    /// кого запись. FK-less, как и OwnerUserId — тот же осознанный выбор (см. комментарий у
+    /// индекса OwnerUserId в MedicalRecordConfiguration). Взаимоисключимо с FamilyDependentId.</summary>
+    public Guid? TargetUserId { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }

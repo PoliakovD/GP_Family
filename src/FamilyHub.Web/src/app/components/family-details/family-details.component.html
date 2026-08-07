@@ -178,5 +178,9 @@
         @if (activeSubTab === 'birthdays') {
             <app-birthdays-panel [familyId]="id"/>
         }
+
+        @if (activeSubTab === 'dependents') {
+            <app-dependents-panel [familyId]="id"/>
+        }
     }
 </div>

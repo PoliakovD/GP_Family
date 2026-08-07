@@ -23,8 +23,23 @@ public static class MedicalRecordEndpoints
         group.MapPost("/", async (
             CreateMedicalRecordRequest request, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var created = await service.CreateAsync(currentUser.UserId, request, ct);
-            return Results.Created($"/api/medical-records/{created.Id}", created);
+            var (result, created) = await service.CreateAsync(currentUser.UserId, request, ct);
+            return result switch
+            {
+                MedicalRecordAccessResult.NotFound => Results.NotFound(),
+                MedicalRecordAccessResult.Forbidden => Results.Forbid(),
+                MedicalRecordAccessResult.InvalidTarget => Results.BadRequest(new { code = "invalid_target" }),
+                _ => Results.Created($"/api/medical-records/{created!.Id}", created),
+            };
+        });
+
+        // Безусловное удаление — только владелец (кто физически загрузил), см.
+        // MedicalRecordService.DeleteAsync.
+        group.MapDelete("/{recordId:guid}", async (
+            Guid recordId, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var result = await service.DeleteAsync(currentUser.UserId, recordId, ct);
+            return MapResult(result);
         });
 
         group.MapPost("/share", async (

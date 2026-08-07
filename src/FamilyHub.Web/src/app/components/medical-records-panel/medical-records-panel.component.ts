@@ -3,11 +3,13 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
+import { AuthService } from '../../services/auth.service';
 import { MedicalRecordKind } from '../../models/types';
 import type { Attachment, MedicalRecord, SearchResultItem } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { DebouncedSearch, SEARCH_MIN_QUERY_LENGTH } from '../../shared/util/debounced-search';
 
 interface KindLabels {
@@ -51,6 +53,17 @@ const SEARCH_TYPE_TOKEN: Record<MedicalRecordKind, string> = {
   [MedicalRecordKind.DoctorVisit]: 'visit',
 };
 
+/** Одна опция дропдауна "Кто пациент?" — либо «Я» (оба id null), либо подопечный семьи, либо
+ * другой активный участник. Составной строковый key нужен для [(ngModel)] на <select>. */
+interface PatientOption {
+  key: string;
+  familyDependentId: string | null;
+  targetUserId: string | null;
+  label: string;
+}
+
+const SELF_OPTION: PatientOption = { key: 'self', familyDependentId: null, targetUserId: null, label: 'Я' };
+
 /**
  * Panel (не Page — своего URL нет, контекст приходит через input): список записей одного вида
  * (анализ/посещение врача — MedicalRecordKind), форма создания, поиск, шторка «Доступ», вложения.
@@ -69,12 +82,21 @@ export class MedicalRecordsPanelComponent implements OnInit {
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly tg = inject(TelegramService);
+  private readonly auth = inject(AuthService);
+  private readonly confirm = inject(ConfirmService);
 
   /** Доступен в шаблоне для сравнения с this.kind(). */
   readonly Kind = MedicalRecordKind;
 
   items: MedicalRecord[] = [];
-  form = { personName: '', recordDate: '', doctor: '', description: '' };
+  form = {
+    personName: '',
+    recordDate: '',
+    doctor: '',
+    description: '',
+    familyDependentId: null as string | null,
+    targetUserId: null as string | null,
+  };
   error: string | null = null;
   loading = true;
 
@@ -117,6 +139,53 @@ export class MedicalRecordsPanelComponent implements OnInit {
 
   get labels(): KindLabels {
     return KIND_LABELS[this.kind()];
+  }
+
+  /** «Я» + все подопечные и все другие активные участники из моих активных семей (дедуп по
+   * userId — участник может состоять сразу в нескольких общих со мной семьях). */
+  get patientOptions(): PatientOption[] {
+    const options: PatientOption[] = [SELF_OPTION];
+    const myUserId = this.auth.me()?.userId;
+    const seenUserIds = new Set<string>(myUserId ? [myUserId] : []);
+
+    for (const family of this.state.activeFamilies()) {
+      for (const dep of family.dependents ?? []) {
+        options.push({
+          key: `dep:${dep.id}`,
+          familyDependentId: dep.id,
+          targetUserId: null,
+          label: `${dep.name} (${family.name})`,
+        });
+      }
+      for (const member of family.currentMembers ?? []) {
+        if (seenUserIds.has(member.id)) continue;
+        seenUserIds.add(member.id);
+        options.push({
+          key: `user:${member.id}`,
+          familyDependentId: null,
+          targetUserId: member.id,
+          label: `${member.displayName} (${family.name})`,
+        });
+      }
+    }
+    return options;
+  }
+
+  get selectedPatientKey(): string {
+    if (this.form.familyDependentId) return `dep:${this.form.familyDependentId}`;
+    if (this.form.targetUserId) return `user:${this.form.targetUserId}`;
+    return 'self';
+  }
+
+  /** Меняет familyDependentId/targetUserId по выбору и подставляет имя в форму для удобства —
+   * поле остаётся редактируемым вручную дальше. */
+  set selectedPatientKey(key: string) {
+    const option = this.patientOptions.find((o) => o.key === key);
+    this.form.familyDependentId = option?.familyDependentId ?? null;
+    this.form.targetUserId = option?.targetUserId ?? null;
+    if (option && option !== SELF_OPTION) {
+      this.form.personName = option.label.replace(/\s*\([^)]*\)$/, '');
+    }
   }
 
   private buildSearch(kind: MedicalRecordKind): DebouncedSearch<SearchResultItem> {
@@ -181,11 +250,37 @@ export class MedicalRecordsPanelComponent implements OnInit {
         doctor: this.form.doctor.trim() || null,
         description: this.form.description.trim() || null,
         hideFromFamilyIds: null,
+        familyDependentId: this.form.familyDependentId,
+        targetUserId: this.form.targetUserId,
       });
       this.resetForm();
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
+    }
+  }
+
+  /** Безусловное удаление доступно только владельцу (кто физически загрузил) — сервер
+   * перепроверит независимо от того, кому запись сейчас видна. */
+  canDelete(record: MedicalRecord): boolean {
+    return record.ownerUserId === this.auth.me()?.userId;
+  }
+
+  async handleDelete(record: MedicalRecord): Promise<void> {
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить запись?',
+      message: 'Запись и все её вложения будут удалены безвозвратно.',
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await this.api.deleteMedicalRecord(record.id);
+      if (this.accessRecord?.id === record.id) this.accessRecord = null;
+      await this.refresh();
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';
     }
   }
 
@@ -292,6 +387,13 @@ export class MedicalRecordsPanelComponent implements OnInit {
   }
 
   private resetForm(): void {
-    this.form = { personName: '', recordDate: '', doctor: '', description: '' };
+    this.form = {
+      personName: '',
+      recordDate: '',
+      doctor: '',
+      description: '',
+      familyDependentId: null,
+      targetUserId: null,
+    };
   }
 }

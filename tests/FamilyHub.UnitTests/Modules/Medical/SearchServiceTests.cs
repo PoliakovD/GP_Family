@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Search;
 using FamilyHub.TestUtils;
@@ -27,7 +28,7 @@ public class SearchServiceTests : SqliteTestBase
         var medicalRecords = new MedicalRecordService(
             Db, access, new TestSupport.OutboxTestPipeline(Db).Writer,
             new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db),
-            new RussianTextSearcher(), NullLogger<MedicalRecordService>.Instance);
+            new RussianTextSearcher(), Substitute.For<IFileStorage>(), NullLogger<MedicalRecordService>.Instance);
         var birthdays = Substitute.For<IBirthdaySearchSource>();
         birthdays.SearchAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns([]);

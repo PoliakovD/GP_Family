@@ -1,0 +1,64 @@
+<div>
+  @if (error) {
+    <div class="alert-danger mb-2">{{ error }}</div>
+  }
+
+  <div class="card mb-3">
+    <input class="input" [(ngModel)]="form.name" placeholder="Имя" />
+    <input class="input" type="date" [(ngModel)]="form.birthDate" placeholder="Дата рождения" />
+
+    <label class="checkbox-row">
+      <input type="checkbox" [(ngModel)]="form.isPet" />
+      <span>Это питомец</span>
+    </label>
+
+    @if (form.isPet) {
+      <input class="input" [(ngModel)]="form.petSpecies" placeholder="Вид животного (кот, собака…)" />
+    }
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
+        {{ editingId ? 'Сохранить' : 'Добавить' }}
+      </button>
+      @if (editingId) {
+        <button class="btn btn-secondary btn-sm" (click)="resetForm()">Отмена</button>
+      }
+    </div>
+  </div>
+
+  @if (loading) {
+    <app-loading-spinner />
+  } @else {
+    @for (item of items; track item.id) {
+      <div class="card mb-2">
+        <div class="d-flex align-items-start gap-2">
+          <i
+            [class]="item.isPet ? 'ph-duotone ph-paw-print' : 'ph-duotone ph-user'"
+            style="font-size:20px;color:var(--color-accent)"
+            aria-hidden="true"
+          ></i>
+          <div class="flex-fill">
+            <strong class="card-title">{{ item.name }}</strong>
+            <div class="card-meta">
+              @if (item.isPet) {
+                {{ item.petSpecies || 'Питомец' }}
+              } @else if (item.birthDate) {
+                {{ item.birthDate }}
+              }
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-ghost btn-sm" (click)="startEdit(item)">Изменить</button>
+          @if (isAdmin) {
+            <button class="btn btn-ghost btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (items.length === 0) {
+      <p class="muted">Пока никого не добавили.</p>
+    }
+  }
+</div>

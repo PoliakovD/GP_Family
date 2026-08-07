@@ -46,6 +46,15 @@ export class FamilyStateService {
                     const msg = err instanceof ApiError ? err.message : String(err);
                     this.log.log('state', 'error', `getCurrentMembers(${f.id}) failed: ${msg}`);
                 }
+
+                // Подопечные — тот же per-family приём, что currentMembers выше: нужны и панели
+                // "Близкие и питомцы", и дропдауну "Кто пациент?" в медзаписях.
+                try {
+                    f.dependents = await this.api.getDependents(f.id);
+                } catch (err) {
+                    const msg = err instanceof ApiError ? err.message : String(err);
+                    this.log.log('state', 'error', `getDependents(${f.id}) failed: ${msg}`);
+                }
             }
         } catch (err) {
             const msg = err instanceof ApiError ? err.message : 'Не удалось загрузить семьи.';

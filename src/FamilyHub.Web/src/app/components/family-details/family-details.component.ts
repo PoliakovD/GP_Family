@@ -11,18 +11,19 @@ import {
 } from '../../models/types';
 import {MedkitsPanelComponent} from '../medkits-panel/medkits-panel.component';
 import {BirthdaysPanelComponent} from '../birthdays-panel/birthdays-panel.component';
+import {DependentsPanelComponent} from '../dependents-panel/dependents-panel.component';
 import {DatePipe} from "@angular/common";
 import {ToastService} from '../../shared/toast/toast.service';
 import {ConfirmService} from '../../shared/confirm/confirm.service';
 import {ModalComponent} from '../../shared/modal/modal.component';
 import {TelegramService} from '../../services/telegram.service';
 
-type FamilySubTab = 'members' | 'medkits' | 'birthdays';
+type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
 
 @Component({
     selector: 'app-family-details',
     standalone: true,
-    imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DatePipe, ModalComponent],
+    imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent, DatePipe, ModalComponent],
     templateUrl: './family-details.component.html',
     styleUrl: './family-details.component.scss',
 })
@@ -49,6 +50,7 @@ export class FamilyDetailsComponent implements OnInit {
         {id: 'members', label: 'Участники'},
         {id: 'medkits', label: 'Аптечки'},
         {id: 'birthdays', label: 'Дни рождения'},
+        {id: 'dependents', label: 'Близкие и питомцы'},
     ];
 
     get family(): FamilySummary | undefined {

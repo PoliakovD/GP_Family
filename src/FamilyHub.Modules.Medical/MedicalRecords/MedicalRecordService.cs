@@ -6,6 +6,7 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +15,10 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 /// <summary>
 /// Мед-анализы — персональный ресурс (раздел 4.2 брифа): принадлежат пользователю, НЕ
 /// семье, приватны по умолчанию. Шарингом и скрытием управляет ТОЛЬКО владелец — даже
-/// админ семьи сюда не лезет (инвариант 2). Видимость — дословно по разделу 6 брифа.
+/// админ семьи сюда не лезет (инвариант 2). Видимость — дословно по разделу 6 брифа, плюс два
+/// прямых канала без L1-шаринга: подопечный семьи (FamilyDependentId) и назначение конкретному
+/// участнику (TargetUserId) — см. VisibleRecordsQuery. OwnerUserId в обоих случаях остаётся за
+/// тем, кто физически загрузил запись — только он безусловно удаляет (см. DeleteAsync).
 /// </summary>
 public class MedicalRecordService(
     AppDbContext db,
@@ -22,11 +26,14 @@ public class MedicalRecordService(
     IOutboxWriter outbox,
     IMedicalAuditWriter audit,
     IRussianTextSearcher searcher,
+    IFileStorage storage,
     ILogger<MedicalRecordService> logger)
 {
     /// <summary>
-    /// Видно, если: владелец, ИЛИ (мои анализы расшарены этой семье И я в ней состою
-    /// активным членом И запись не скрыта именно от неё). Главный запрос раздела 6.
+    /// Видно, если: владелец, ИЛИ запись назначена лично этому пользователю (TargetUserId), ИЛИ
+    /// (мои анализы расшарены этой семье И я в ней состою активным членом И запись не скрыта
+    /// именно от неё), ИЛИ запись привязана к подопечному семьи, где я активный член (видна всей
+    /// семье подопечного автоматически, без L1-шаринга — подопечный не может сам "расшарить").
     /// Опциональный <paramref name="kind"/> — фильтр по виду записи (анализ/посещение врача);
     /// Kind не зашифрован, поэтому фильтруется прямо в SQL, до расшифровки остальных полей.
     /// </summary>
@@ -34,6 +41,7 @@ public class MedicalRecordService(
     {
         var query = db.MedicalRecords.AsNoTracking().Where(r =>
             r.OwnerUserId == userId
+            || r.TargetUserId == userId
             || db.FamilyMedicalShares.Any(share =>
                    share.OwnerUserId == r.OwnerUserId &&
                    db.FamilyMembers.Any(m =>
@@ -42,7 +50,11 @@ public class MedicalRecordService(
                        m.Status == MemberStatus.Active) &&
                    !db.MedicalRecordHiddens.Any(h =>
                        h.MedicalRecordId == r.Id &&
-                       h.FamilyId == share.FamilyId)));
+                       h.FamilyId == share.FamilyId))
+            || (r.FamilyDependentId != null && db.FamilyMembers.Any(m =>
+                   m.UserId == userId &&
+                   m.Status == MemberStatus.Active &&
+                   db.FamilyDependents.Any(d => d.Id == r.FamilyDependentId && d.FamilyId == m.FamilyId))));
 
         return kind is null ? query : query.Where(r => r.Kind == kind);
     }
@@ -134,8 +146,64 @@ public class MedicalRecordService(
             .Select(s => s.FamilyId)
             .ToListAsync(ct);
 
-    public async Task<MedicalRecordDto> CreateAsync(Guid ownerUserId, CreateMedicalRecordRequest request, CancellationToken ct = default)
+    /// <summary>
+    /// OwnerUserId всегда — вызывающий (кто физически загружает), независимо от
+    /// FamilyDependentId/TargetUserId — так выполняется правило "владелец = загрузивший" без
+    /// отдельной проверки. FamilyDependentId и TargetUserId взаимоисключимы и оба валидируются:
+    /// без этого любой мог бы прикрепить запись к чужому подопечному или назначить её постороннему,
+    /// зная только id.
+    /// </summary>
+    public async Task<(MedicalRecordAccessResult Result, MedicalRecordDto? Item)> CreateAsync(
+        Guid ownerUserId, CreateMedicalRecordRequest request, CancellationToken ct = default)
     {
+        if (request.FamilyDependentId is not null && request.TargetUserId is not null)
+        {
+            logger.LogWarning(
+                "Создание мед-записи отклонено: одновременно заданы FamilyDependentId и TargetUserId ({UserId})",
+                ownerUserId);
+            return (MedicalRecordAccessResult.InvalidTarget, null);
+        }
+
+        if (request.FamilyDependentId is { } dependentId)
+        {
+            var dependentFamilyId = await db.FamilyDependents.AsNoTracking()
+                .Where(d => d.Id == dependentId)
+                .Select(d => (Guid?)d.FamilyId)
+                .FirstOrDefaultAsync(ct);
+            if (dependentFamilyId is null)
+            {
+                logger.LogWarning("Создание мед-записи: подопечный {DependentId} не найден", dependentId);
+                return (MedicalRecordAccessResult.NotFound, null);
+            }
+            if (!await access.HasRoleAsync(ownerUserId, dependentFamilyId.Value, FamilyRole.Member, ct))
+            {
+                logger.LogWarning(
+                    "Создание мед-записи для подопечного {DependentId} отклонено: {UserId} не состоит в его семье",
+                    dependentId, ownerUserId);
+                return (MedicalRecordAccessResult.Forbidden, null);
+            }
+        }
+
+        if (request.TargetUserId is { } targetUserId)
+        {
+            // Не различаем "юзера не существует" и "нет общей активной семьи" — одинаковый
+            // Forbidden без 404, чтобы не давать enumeration чужих userId.
+            var sharesActiveFamily = await db.FamilyMembers.AsNoTracking()
+                .Where(m => m.UserId == ownerUserId && m.Status == MemberStatus.Active)
+                .Select(m => m.FamilyId)
+                .Join(
+                    db.FamilyMembers.Where(m => m.UserId == targetUserId && m.Status == MemberStatus.Active),
+                    familyId => familyId, m => m.FamilyId, (familyId, m) => familyId)
+                .AnyAsync(ct);
+            if (!sharesActiveFamily)
+            {
+                logger.LogWarning(
+                    "Создание мед-записи для пользователя {TargetUserId} отклонено: нет общей активной семьи с {UserId}",
+                    targetUserId, ownerUserId);
+                return (MedicalRecordAccessResult.Forbidden, null);
+            }
+        }
+
         var record = new MedicalRecord
         {
             Id = Guid.NewGuid(),
@@ -146,6 +214,8 @@ public class MedicalRecordService(
             Doctor = request.Doctor,
             Description = request.Description,
             ExtractionStatus = ExtractionStatus.None,
+            FamilyDependentId = request.FamilyDependentId,
+            TargetUserId = request.TargetUserId,
             CreatedAt = DateTime.UtcNow,
         };
         db.MedicalRecords.Add(record);
@@ -173,7 +243,7 @@ public class MedicalRecordService(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Мед-запись {RecordId} создана владельцем {OwnerUserId}", record.Id, ownerUserId);
-        return ToDto(record, hiddenFamilyIds);
+        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds));
     }
 
     /// <summary>УРОВЕНЬ 1: владелец открывает ВСЕ свои анализы выбранной семье одним действием.</summary>
@@ -302,7 +372,64 @@ public class MedicalRecordService(
         return MedicalRecordAccessResult.Success;
     }
 
+    /// <summary>
+    /// Безусловное удаление — только владелец (кто физически загрузил), НЕЗАВИСИМО от того, кому
+    /// запись сейчас видна (TargetUserId-получатель, вся семья подопечного, расшаренная семья).
+    /// Ни назначение, ни привязка к подопечному, ни L1-шаринг не дают права на удаление — это и
+    /// есть смысл "владелец = загрузивший" из строгого правила. Чистка вложений — тот же паттерн,
+    /// что FamilyDependentService.DeleteAsync/AccountService.DeleteAccountAsync: собрать ключи
+    /// хранилища ДО удаления строк → транзакция → коммит → best-effort удаление блобов.
+    /// </summary>
+    public async Task<MedicalRecordAccessResult> DeleteAsync(Guid ownerUserId, Guid recordId, CancellationToken ct = default)
+    {
+        var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);
+        if (record is null)
+        {
+            logger.LogWarning("Удаление мед-записи {RecordId}: не найдена (запросил {UserId})", recordId, ownerUserId);
+            return MedicalRecordAccessResult.NotFound;
+        }
+
+        if (record.OwnerUserId != ownerUserId)
+        {
+            logger.LogWarning(
+                "Удаление мед-записи {RecordId} отклонено: {UserId} не владелец", recordId, ownerUserId);
+            return MedicalRecordAccessResult.Forbidden;
+        }
+
+        var storageKeys = await db.FileAttachments
+            .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId)
+            .Select(a => a.StorageKey)
+            .ToListAsync(ct);
+
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            await db.FileAttachments
+                .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId)
+                .ExecuteDeleteAsync(ct);
+            // MedicalRecordHidden по этой записи — каскадом FK (MedicalRecordHiddenConfiguration).
+            await db.MedicalRecords.Where(r => r.Id == recordId).ExecuteDeleteAsync(ct);
+            await audit.WriteAsync(ownerUserId, MedicalAccessAction.Delete, ownerUserId: ownerUserId, medicalRecordId: recordId, ct: ct);
+            await tx.CommitAsync(ct);
+        }
+
+        foreach (var key in storageKeys)
+        {
+            try
+            {
+                await storage.DeleteAsync(key, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Удаление мед-записи {RecordId}: не удалось удалить блоб {StorageKey}", recordId, key);
+            }
+        }
+
+        logger.LogInformation(
+            "Мед-запись {RecordId} удалена владельцем {UserId} ({Files} файлов)", recordId, ownerUserId, storageKeys.Count);
+        return MedicalRecordAccessResult.Success;
+    }
+
     private static MedicalRecordDto ToDto(MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds) =>
         new(r.Id, r.OwnerUserId, r.Kind, r.PersonName, r.RecordDate, r.Doctor, r.Description,
-            r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds);
+            r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId);
 }

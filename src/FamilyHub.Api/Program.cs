@@ -3,6 +3,7 @@ using FamilyHub.Api.Features.Auth;
 using FamilyHub.Api.Features.Account;
 using FamilyHub.Api.Features.Bot;
 using FamilyHub.Api.Features.Consents;
+using FamilyHub.Api.Features.Dependents;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
@@ -164,10 +165,11 @@ builder.Services.AddSingleton<IMinioClient>(sp =>
 });
 builder.Services.AddSingleton<IFileStorage, MinioFileStorage>();
 
-// --- Core-фичи: семьи, приглашения, участники ---
+// --- Core-фичи: семьи, приглашения, участники, подопечные ---
 builder.Services.AddScoped<FamilyService>();
 builder.Services.AddScoped<InviteService>();
 builder.Services.AddScoped<MembershipService>();
+builder.Services.AddScoped<FamilyDependentService>();
 
 // --- Авторизация по ролям в семье ---
 builder.Services.AddScoped<IFamilyAccessService, FamilyAccessService>();
@@ -628,6 +630,9 @@ app.MapAccountEndpoints();
 app.MapFamilyEndpoints();
 app.MapInviteEndpoints();
 app.MapMemberEndpoints();
+// Подопечные хранят ПДн (имя + дата рождения) — та же консент-гарантия, что у Medical/Birthdays
+// (см. BirthdayModule.MapBirthdayModule).
+app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapFamilyDependentEndpoints();
 app.MapMedicalModule();
 app.MapBirthdayModule();
 app.MapNotificationEndpoints();
