@@ -80,10 +80,11 @@ public static class TestData
         Date = date ?? new DateOnly(2000, 1, 1),
     };
 
-    public static MedicalRecord NewMedicalRecord(Guid ownerUserId) => new()
+    public static MedicalRecord NewMedicalRecord(Guid ownerUserId, MedicalRecordKind kind = MedicalRecordKind.Analysis) => new()
     {
         Id = Guid.NewGuid(),
         OwnerUserId = ownerUserId,
+        Kind = kind,
         PersonName = "Test Patient",
         RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
         CreatedAt = DateTime.UtcNow,

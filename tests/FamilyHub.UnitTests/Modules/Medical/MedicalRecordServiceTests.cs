@@ -207,4 +207,55 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var hidden = Db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == dto.Id).Select(h => h.FamilyId).ToList();
         hidden.Should().ContainSingle().Which.Should().Be(myFamily.Id);
     }
+
+    [Fact]
+    public async Task GetVisibleRecordsAsync_FilterByKind_OnlyReturnsMatchingKind()
+    {
+        var owner = Db.AddUser();
+        Db.MedicalRecords.Add(TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.Analysis));
+        Db.MedicalRecords.Add(TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit));
+        await Db.SaveChangesAsync();
+
+        var analyses = await _sut.GetVisibleRecordsAsync(owner.Id, MedicalRecordKind.Analysis);
+        var visits = await _sut.GetVisibleRecordsAsync(owner.Id, MedicalRecordKind.DoctorVisit);
+        var all = await _sut.GetVisibleRecordsAsync(owner.Id);
+
+        analyses.Should().ContainSingle(r => r.Kind == MedicalRecordKind.Analysis);
+        visits.Should().ContainSingle(r => r.Kind == MedicalRecordKind.DoctorVisit);
+        all.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task SearchAsync_FilterByKind_DoesNotMatchOtherKind()
+    {
+        // types=visit не должен находить (и, следовательно, расшифровывать) анализы, и наоборот —
+        // ключевая гарантия для SearchService.SearchMedicalRecordsAsync.
+        var owner = Db.AddUser();
+        var analysis = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.Analysis);
+        analysis.PersonName = "Иванов";
+        var visit = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit);
+        visit.PersonName = "Иванов";
+        Db.MedicalRecords.AddRange(analysis, visit);
+        await Db.SaveChangesAsync();
+
+        var visitHits = await _sut.SearchAsync(owner.Id, "Иванов", MedicalRecordKind.DoctorVisit);
+        var analysisHits = await _sut.SearchAsync(owner.Id, "Иванов", MedicalRecordKind.Analysis);
+        var allHits = await _sut.SearchAsync(owner.Id, "Иванов");
+
+        visitHits.Should().ContainSingle(h => h.Record.Id == visit.Id);
+        analysisHits.Should().ContainSingle(h => h.Record.Id == analysis.Id);
+        allHits.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task CreateAsync_SetsKindFromRequest()
+    {
+        var owner = Db.AddUser();
+
+        var dto = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            "Пациент", new DateOnly(2024, 1, 1), "Доктор", null, null, MedicalRecordKind.DoctorVisit));
+
+        dto.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
+        (await Db.MedicalRecords.FindAsync(dto.Id))!.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
+    }
 }

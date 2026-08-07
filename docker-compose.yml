@@ -28,6 +28,11 @@ services:
       - "${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   seq:
     image: datalust/seq:latest
@@ -55,7 +60,6 @@ services:
       Minio__Endpoint: "minio:9000"
       Minio__AccessKey: "${MINIO_ROOT_USER}"
       Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
-      FileStorage__Provider: "Minio"
       # Ключ шифрования ПДн. Без дефолта намеренно: значение в git = шифрование известным ключом.
       # Сгенерировать: openssl rand -base64 32
       Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:?не задан в .env — сгенерируйте: openssl rand -base64 32}"
@@ -64,7 +68,7 @@ services:
       postgres:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
       seq:
         condition: service_started
 

@@ -6,9 +6,11 @@ Composition root приложения (`Program.cs`) + core-фичи, котор
 
 ## `Program.cs` — что и в каком порядке
 
-1. Конфигурация: `TelegramOptions`, `LocalFileStorageOptions`, `MinioOptions`, `NotificationOptions`.
+1. Конфигурация: `TelegramOptions`, `MinioOptions`, `NotificationOptions`.
 2. `AppDbContext` (Postgres), `ICurrentUser`/`IUserProvisioningService`, `ITelegramInitDataValidator`.
-3. `IFileStorage` — `Local` или `Minio` по `FileStorage:Provider` (см. `infrastructure.md`).
+3. `IFileStorage` — единственная реализация MinioFileStorage, в т.ч. в Development
+   (`LocalFileStorage` упразднён); fail-fast на старте без `Minio:Endpoint/AccessKey/SecretKey`
+   (см. `infrastructure.md`).
 4. Core-сервисы: `FamilyService`, `InviteService`, `MembershipService`.
 5. Авторизация: `IFamilyAccessService`, `IAuthorizationHandler` (`FamilyRoleHandler`),
    `FallbackPolicy = DefaultPolicy` (всё требует аутентификации по умолчанию).

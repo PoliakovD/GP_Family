@@ -1,25 +1,23 @@
 <div>
-  <h3 class="mb-3">Анализы</h3>
-
   @if (error) {
     <div class="alert-danger mb-2">{{ error }}</div>
   }
 
   <div class="card mb-3">
-    <input class="input" [(ngModel)]="form.personName" placeholder="Пациент" />
+    <input class="input" [(ngModel)]="form.personName" [placeholder]="labels.personPlaceholder" />
     <input class="input" type="date" [(ngModel)]="form.recordDate" />
-    <input class="input" [(ngModel)]="form.doctor" placeholder="Врач (необязательно)" />
+    <input class="input" [(ngModel)]="form.doctor" [placeholder]="labels.doctorPlaceholder" />
     <textarea
       class="input"
       [(ngModel)]="form.description"
-      placeholder="Описание (необязательно)"
+      [placeholder]="labels.descriptionPlaceholder"
       rows="2"
     ></textarea>
-    <button class="btn btn-primary btn-sm align-self-start" (click)="handleSubmit()">Добавить запись</button>
+    <button class="btn btn-primary btn-sm align-self-start" (click)="handleSubmit()">{{ labels.addButtonLabel }}</button>
   </div>
 
   @if (!loading && items.length > 0) {
-    <app-search-field placeholder="Поиск по анализам…" [value]="search.query" (valueChange)="onSearchQueryChange($event)" />
+    <app-search-field [placeholder]="labels.searchPlaceholder" [value]="search.query" (valueChange)="onSearchQueryChange($event)" />
   }
 
   @if (loading) {
@@ -65,7 +63,7 @@
     }
 
     @if (items.length === 0) {
-      <p class="muted">Записей нет.</p>
+      <p class="muted">{{ labels.emptyLabel }}</p>
     } @else if (displayedItems.length === 0) {
       <p class="muted">Ничего не найдено.</p>
     }
@@ -110,7 +108,7 @@
           }
         </div>
       } @else {
-        <p class="muted mb-0">Нет ни одной активной семьи, чтобы расшарить анализы.</p>
+        <p class="muted mb-0">Нет ни одной активной семьи, чтобы расшарить доступ.</p>
       }
     </app-bottom-sheet>
   }

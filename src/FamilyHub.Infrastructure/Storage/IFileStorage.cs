@@ -1,10 +1,10 @@
 namespace FamilyHub.Infrastructure.Storage;
 
 /// <summary>
-/// Абстракция объектного хранилища сканов (LocalFileStorage — диск, MinioFileStorage — MinIO).
-/// С этапа 2 блобы зашифрованы IFileCipher, поэтому прямых/presigned-ссылок на хранилище
-/// больше нет: скачивание — только через API-эндпоинт, который расшифровывает поток
-/// (доступ по короткоживущему HMAC-токену, см. DownloadTokenService).
+/// Абстракция объектного хранилища сканов. Единственная реализация — MinioFileStorage, в т.ч.
+/// в Development (LocalFileStorage упразднён). С этапа 2 блобы зашифрованы IFileCipher, поэтому
+/// прямых/presigned-ссылок на хранилище больше нет: скачивание — только через API-эндпоинт,
+/// который расшифровывает поток (доступ по короткоживущему HMAC-токену, см. DownloadTokenService).
 /// </summary>
 public interface IFileStorage
 {

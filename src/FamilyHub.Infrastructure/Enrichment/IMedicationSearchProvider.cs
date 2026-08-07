@@ -7,7 +7,7 @@ public record WebSnippet(string Title, string Url, string Text);
 /// <summary>
 /// Абстракция внешнего поиска для обогащения справочника препаратов (этап 4, ADR-0005).
 /// Реализация подключается конфигом (Enrichment:Provider), не кодом — по образцу
-/// FileStorage:Provider/INotificationSender-фан-аута в этом проекте. Наружу должно уходить
+/// INotificationSender-фан-аута в этом проекте. Наружу должно уходить
 /// ТОЛЬКО нормализованное название препарата — без user/family-контекста (см. ADR-0001, п.3).
 /// </summary>
 public interface IMedicationSearchProvider

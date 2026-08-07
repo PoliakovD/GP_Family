@@ -213,8 +213,13 @@ export class ApiService {
 
   deleteBirthday = (id: string) => this.del<void>(`/api/birthdays/${id}`);
 
-  // Анализы и вложения
-  getMedicalRecords = () => this.get<MedicalRecord[]>('/api/medical-records');
+  // Анализы и посещения врачей — единая таблица на бэкенде (MedicalRecordKind), kind опционален
+  // ("analysis"/"visit") — без него отдаются оба вида.
+  getMedicalRecords = (kind?: 'analysis' | 'visit') =>
+    this.get<MedicalRecord[]>(`/api/medical-records${kind ? `?kind=${kind}` : ''}`);
+
+  /** Список вложений записи — грузится с сервера (не копится в памяти сессии, как раньше). */
+  getRecordAttachments = (recordId: string) => this.get<Attachment[]>(`/api/medical-records/${recordId}/attachments`);
 
   /** L1-семьи (расшарены глобально владельцем) — состояние для тумблеров в bottom-sheet «Доступ». */
   getMedicalRecordShares = () => this.get<string[]>('/api/medical-records/shares');

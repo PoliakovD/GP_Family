@@ -27,9 +27,12 @@ public class MedicalRecordService(
     /// <summary>
     /// Видно, если: владелец, ИЛИ (мои анализы расшарены этой семье И я в ней состою
     /// активным членом И запись не скрыта именно от неё). Главный запрос раздела 6.
+    /// Опциональный <paramref name="kind"/> — фильтр по виду записи (анализ/посещение врача);
+    /// Kind не зашифрован, поэтому фильтруется прямо в SQL, до расшифровки остальных полей.
     /// </summary>
-    private IQueryable<MedicalRecord> VisibleRecordsQuery(Guid userId) =>
-        db.MedicalRecords.AsNoTracking().Where(r =>
+    private IQueryable<MedicalRecord> VisibleRecordsQuery(Guid userId, MedicalRecordKind? kind = null)
+    {
+        var query = db.MedicalRecords.AsNoTracking().Where(r =>
             r.OwnerUserId == userId
             || db.FamilyMedicalShares.Any(share =>
                    share.OwnerUserId == r.OwnerUserId &&
@@ -41,13 +44,17 @@ public class MedicalRecordService(
                        h.MedicalRecordId == r.Id &&
                        h.FamilyId == share.FamilyId)));
 
+        return kind is null ? query : query.Where(r => r.Kind == kind);
+    }
+
     /// <summary>
     /// HiddenFamilyIds (L2) отдаётся только владельцу записи — это его личная настройка доступа,
     /// а не то, что должны видеть другие члены семьи, которым запись расшарена.
     /// </summary>
-    public async Task<List<MedicalRecordDto>> GetVisibleRecordsAsync(Guid userId, CancellationToken ct = default)
+    public async Task<List<MedicalRecordDto>> GetVisibleRecordsAsync(
+        Guid userId, MedicalRecordKind? kind = null, CancellationToken ct = default)
     {
-        var records = await VisibleRecordsQuery(userId).ToListAsync(ct);
+        var records = await VisibleRecordsQuery(userId, kind).ToListAsync(ct);
 
         // Аудит (задача 2.7): факт просмотра ЧУЖИХ (расшаренных) записей — по владельцу.
         var foreignOwnerIds = records.Select(r => r.OwnerUserId).Where(o => o != userId).Distinct().ToList();
@@ -83,13 +90,15 @@ public class MedicalRecordService(
     /// доступа, что и у GetVisibleRecordsAsync), EF расшифровывает поля конвертером при
     /// материализации, дальше матчим через IRussianTextSearcher (морфология + опечатки OCR).
     /// Объём мал (записи одной семьи/пользователя) — расшифровка всех подряд безопасна.
+    /// Опциональный <paramref name="kind"/> сужает расшифровку до одного вида — важно для
+    /// SearchService: types=visit не должен расшифровывать вообще ни одного анализа, и наоборот.
     /// </summary>
     public async Task<List<MedicalRecordSearchHit>> SearchAsync(
-        Guid userId, string query, int limit = 20, CancellationToken ct = default)
+        Guid userId, string query, MedicalRecordKind? kind = null, int limit = 20, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query)) return [];
 
-        var records = await VisibleRecordsQuery(userId).ToListAsync(ct);
+        var records = await VisibleRecordsQuery(userId, kind).ToListAsync(ct);
 
         // Аудит просмотра чужих (расшаренных) записей — тот же инвариант, что в GetVisibleRecordsAsync:
         // поиск по чужой медкарте — тоже факт доступа к ней.
@@ -131,10 +140,12 @@ public class MedicalRecordService(
         {
             Id = Guid.NewGuid(),
             OwnerUserId = ownerUserId,
+            Kind = request.Kind,
             PersonName = request.PersonName,
             RecordDate = request.RecordDate,
             Doctor = request.Doctor,
             Description = request.Description,
+            ExtractionStatus = ExtractionStatus.None,
             CreatedAt = DateTime.UtcNow,
         };
         db.MedicalRecords.Add(record);
@@ -292,5 +303,6 @@ public class MedicalRecordService(
     }
 
     private static MedicalRecordDto ToDto(MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds) =>
-        new(r.Id, r.OwnerUserId, r.PersonName, r.RecordDate, r.Doctor, r.Description, r.CreatedAt, hiddenFamilyIds);
+        new(r.Id, r.OwnerUserId, r.Kind, r.PersonName, r.RecordDate, r.Doctor, r.Description,
+            r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds);
 }

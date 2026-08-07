@@ -375,6 +375,15 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<string>("Doctor")
                         .HasColumnType("text");
 
+                    b.Property<string>("ExtractedDataJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ExtractionStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uuid");
 
@@ -388,6 +397,8 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("OwnerUserId", "Kind");
 
                     b.ToTable("MedicalRecords", "medical");
                 });

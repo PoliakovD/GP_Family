@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Birthdays.Birthdays;
 using FamilyHub.Modules.Medical.MedicalRecords;
@@ -189,6 +190,46 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         // Скрыто от собственной семьи владельца — но сам владелец продолжает находить свою запись.
         var afterHide = await SearchAsync(admin, "кардиолог");
         afterHide!.Items.Should().ContainSingle(i => i.Type == SearchResultType.Record);
+    }
+
+    [Fact]
+    public async Task Search_FindsDoctorVisit_InMemory_MappedToVisitType_NotRecord()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Мария Кузнецова", DateOnly.FromDateTime(DateTime.UtcNow), "Невролог Смирнова",
+                "Жалобы на мигрень", null, MedicalRecordKind.DoctorVisit));
+
+        var response = await SearchAsync(owner, "мигрень");
+
+        var item = response!.Items.Should().ContainSingle().Subject;
+        item.Type.Should().Be(SearchResultType.Visit);
+        item.Title.Should().Be("Мария Кузнецова · Невролог Смирнова");
+    }
+
+    [Fact]
+    public async Task Search_TypesRecordVsVisit_AreIndependentSources()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        const string token = "уникальныйтокен888";
+        await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Анализ Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null,
+                MedicalRecordKind.Analysis));
+        await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(
+                "Врач Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null,
+                MedicalRecordKind.DoctorVisit));
+
+        var recordOnly = await SearchAsync(owner, token, types: "record");
+        recordOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Record);
+
+        var visitOnly = await SearchAsync(owner, token, types: "visit");
+        visitOnly!.Items.Should().OnlyContain(i => i.Type == SearchResultType.Visit);
+
+        var both = await SearchAsync(owner, token, types: "record,visit");
+        both!.Items.Select(i => i.Type).Should().BeEquivalentTo([SearchResultType.Record, SearchResultType.Visit]);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -24,11 +25,16 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         .WithPassword("postgres")
         .Build();
 
-    private readonly string _uploadsRoot = Path.Combine(Path.GetTempPath(), "familyhub-it-uploads-" + Guid.NewGuid());
+    // MinIO — теперь единственная реализация IFileStorage (LocalFileStorage упразднён), поэтому
+    // вложения гоняются через реальный объектный стор и здесь, а не через временный каталог на диске.
+    private readonly MinioContainer _minio = new MinioBuilder()
+        .WithUsername("minioadmin")
+        .WithPassword("minioadmin")
+        .Build();
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync());
 
         // Прогоняем реальные миграции один раз против поднятого контейнера — до первого запроса,
         // независимо от хоста (используем отдельный, временный AppDbContext).
@@ -40,8 +46,7 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
     public new async Task DisposeAsync()
     {
         await _postgres.DisposeAsync();
-        if (Directory.Exists(_uploadsRoot))
-            Directory.Delete(_uploadsRoot, recursive: true);
+        await _minio.DisposeAsync();
         await base.DisposeAsync();
     }
 
@@ -55,8 +60,12 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // подключался к дефолтному localhost:5432 из appsettings, а не к Testcontainers-порту).
         // UseSetting пишет напрямую в тот же конфиг, который видит WebApplicationBuilder.
         builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
-        builder.UseSetting("FileStorage:Provider", "Local");
-        builder.UseSetting("LocalFileStorage:RootPath", _uploadsRoot);
+        // GetConnectionString() отдаёт полный URL ("http://127.0.0.1:PORT/") — Minio:Endpoint
+        // ждёт голый host:port (см. MinioFileStorage: .WithEndpoint(...).WithSSL(...) раздельно).
+        builder.UseSetting("Minio:Endpoint", new Uri(_minio.GetConnectionString()).Authority);
+        builder.UseSetting("Minio:AccessKey", _minio.GetAccessKey());
+        builder.UseSetting("Minio:SecretKey", _minio.GetSecretKey());
+        builder.UseSetting("Minio:UseSsl", "false");
         // Секреты не хардкодятся в appsettings.Development.json (даже для dev — см. Program.cs
         // fail-fast) — тестовый хост задаёт свои фиксированные значения явно, тем же путём, что и
         // остальную конфигурацию здесь. DevMasterKey переиспользует константу, которой уже
@@ -80,6 +89,7 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         builder.ConfigureServices(services =>
         {
             services.AddSingleton(_postgres);
+            services.AddSingleton(_minio);
             // Перехват писем (коды PWA-регистрации): регистрация ПОСЛЕ Program.cs — выигрывает.
             services.AddSingleton<CapturingEmailSender>();
             services.AddSingleton<FamilyHub.Infrastructure.Email.IEmailSender>(

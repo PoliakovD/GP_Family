@@ -7,6 +7,7 @@ using NSubstitute;
 using Telegram.Bot;
 using Telegram.Bot.Requests;
 using Telegram.Bot.Types;
+using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -32,7 +33,11 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         .WithPassword("postgres")
         .Build();
 
-    private readonly string _uploadsRoot = Path.Combine(Path.GetTempPath(), "familyhub-it-bot-uploads-" + Guid.NewGuid());
+    // MinIO — единственная реализация IFileStorage (LocalFileStorage упразднён).
+    private readonly MinioContainer _minio = new MinioBuilder()
+        .WithUsername("minioadmin")
+        .WithPassword("minioadmin")
+        .Build();
 
     public BotWebhookWebFactory()
     {
@@ -41,7 +46,7 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync());
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_postgres.GetConnectionString());
         await using var db = new AppDbContext(optionsBuilder.Options, DesignTimeDbContextFactory.CreateDevCipher());
@@ -51,8 +56,7 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
     public new async Task DisposeAsync()
     {
         await _postgres.DisposeAsync();
-        if (Directory.Exists(_uploadsRoot))
-            Directory.Delete(_uploadsRoot, recursive: true);
+        await _minio.DisposeAsync();
         await base.DisposeAsync();
     }
 
@@ -70,8 +74,10 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         builder.UseEnvironment("Development");
 
         builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
-        builder.UseSetting("FileStorage:Provider", "Local");
-        builder.UseSetting("LocalFileStorage:RootPath", _uploadsRoot);
+        builder.UseSetting("Minio:Endpoint", new Uri(_minio.GetConnectionString()).Authority);
+        builder.UseSetting("Minio:AccessKey", _minio.GetAccessKey());
+        builder.UseSetting("Minio:SecretKey", _minio.GetSecretKey());
+        builder.UseSetting("Minio:UseSsl", "false");
         // Секреты не хардкодятся в appsettings.Development.json (даже для dev — см. Program.cs
         // fail-fast) — тестовый хост задаёт свои фиксированные значения явно.
         builder.UseSetting("Encryption:MasterKey", DesignTimeDbContextFactory.DevMasterKey);
@@ -90,6 +96,7 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         builder.ConfigureServices(services =>
         {
             services.AddSingleton(_postgres);
+            services.AddSingleton(_minio);
             services.AddSingleton(BotClient);
         });
     }

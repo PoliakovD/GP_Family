@@ -1,7 +1,9 @@
 namespace FamilyHub.Modules.Medical.Search;
 
-/// <summary>Источник результата поиска — четыре независимых контура доступа (см. SearchService).</summary>
-public enum SearchResultType { Medication, Kb, Record, Birthday }
+/// <summary>Источник результата поиска — пять независимых контуров доступа (см. SearchService).
+/// Visit — строго последним: фронт сравнивает и присылает числовые значения (models/types.ts),
+/// перенумеровывать существующие нельзя.</summary>
+public enum SearchResultType { Medication, Kb, Record, Birthday, Visit }
 
 public record SearchResultItem(
     SearchResultType Type, Guid Id, string Title, string? Snippet, double Score,

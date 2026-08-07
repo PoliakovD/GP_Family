@@ -68,7 +68,10 @@ public class AttachmentServiceTests : SqliteTestBase
         item!.FileName.Should().Be("scan.pdf");
 
         var storageKey = _savedBlobs.Keys.Single();
-        storageKey.Should().Contain(record.Id.ToString());
+        // Ключ полностью непрозрачен: ни recordId, ни какой-либо другой семантики родителя —
+        // связь blob ↔ запись живёт только в FileAttachments.StorageKey (см. StorageKeyFactory).
+        storageKey.Should().Be(StorageKeyFactory.Create(item!.Id));
+        storageKey.Should().NotContain(record.Id.ToString());
         storageKey.Should().NotContain("scan.pdf", "имя файла — ПДн и не должно попадать в ключ хранилища");
 
         // В хранилище лежит шифротекст, а не исходные байты.

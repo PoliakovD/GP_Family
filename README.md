@@ -2,16 +2,28 @@
 
 ## 📋 Суть проекта
 
-**FamilyHub** — семейное приложение для хранения и шаринга медицинских данных, аптечки, дней рождения с разграничением доступа по семьям и ролям.
+**FamilyHub** — семейное приложение для хранения и шаринга медицинских данных, аптечки, дней
+рождения с разграничением доступа по семьям и ролям. Два клиента на одном API: **PWA/Angular**
+(email + пароль) и **Telegram Mini App** (тонкий клиент, привязывается к тому же аккаунту).
 
 ### Основные фичи
-- **Аптечка** — лекарства, инструкции, сроки годности (с оповещениями)
-- **Мед-анализы** — записи по датам, врачам, описанию + PDF-сканы. Персональные, с управляемым шарингом
-- **Дни рождения** членов семьи
-- **(Позже)** внутрисемейный чат и календарь событий
+- **Аптечка** (медкиты + медикаменты) — лекарства, инструкции, сроки годности (с оповещениями),
+  распознавание по фото (OCR через локальную LLM)
+- **Справочник препаратов** — общий обезличенный каталог, автообогащается веб-поиском +
+  суммаризацией локальной моделью, когда препарата ещё нет в базе
+- **Мед-анализы** — записи по датам, врачам, описанию + PDF/фото-сканы. Персональные, с
+  двухуровневым управляемым шарингом на семью
+- **Дни рождения** членов семьи, с виджетом ближайших на главном экране
+- **Глобальный поиск** — по лекарствам, справочнику, анализам (Postgres full-text, русская морфология)
+- **Оповещения** — Telegram-бот и/или Web Push (сроки годности лекарств, дни рождения)
+- **Настройки/аккаунт** — смена пароля, список активных сессий, привязка/отвязка Telegram,
+  уведомления по типам, экспорт и удаление всех данных (152-ФЗ)
 
 ### Пользовательская модель
-Пользователь может состоять в нескольких семьях одновременно с разными ролями. Разграничение доступа — центральная часть проекта.
+Пользователь может состоять в нескольких семьях одновременно с разными ролями. Разграничение
+доступа — центральная часть проекта. Identity — **email как единственный якорь**: у каждого
+пользователя ровно один email/пароль, Telegram — дополнительный привязанный канал входа
+(подробнее — раздел «Аутентификация»).
 
 ---
 
@@ -20,22 +32,34 @@
 ### Модульный монолит
 
 ```
-FamilyHub.sln
-├── FamilyHub.Api               // эндпоинты, DI, auth, SignalR hub
-├── FamilyHub.Domain            // сущности, enums, интерфейсы (IFamilyOwned)
-├── FamilyHub.Infrastructure    // EF Core, MinIO-клиент, Hangfire, Telegram, Auth/Authorization
-├── FamilyHub.Modules.Medical   // аптечка + анализы (ПЕРВЫЙ модуль)
+GP_Family.slnx
+├── FamilyHub.Api               // composition root (Program.cs), auth/families/invites/
+│                                //   members/consents/account/push/bot-webhook, раздача Angular SPA
+├── FamilyHub.Contracts         // DTO/события, общие между Api и модулями (Outbox-события)
+├── FamilyHub.Domain            // сущности, enum'ы, value objects, интерфейсы (IFamilyOwned)
+├── FamilyHub.Infrastructure    // EF Core, auth (JWT + Telegram), авторизация, шифрование,
+│                                //   файловое хранилище (MinIO/Local), Hangfire-оповещения,
+│                                //   email, LM Studio, поиск, Outbox, аудит
+├── FamilyHub.Modules.Medical   // аптечка, анализы, вложения, OCR, справочник + AI-обогащение
 ├── FamilyHub.Modules.Birthdays // дни рождения
-└── FamilyHub.TelegramBot       // Telegram.Bot, обработка апдейтов
+└── FamilyHub.Web               // Angular 18 PWA — единственный фронтенд, обслуживает и браузер,
+                                 //   и Telegram Mini App (тот же билд, разное поведение по контексту)
 ```
 
-**Принцип:** ядро (API + модель доступа + данные) делается один раз, клиенты подключаются по мере надобности. Бот — тонкий клиент поверх API.
+Отдельного проекта `FamilyHub.TelegramBot` нет — обработка апдейтов бота живёт в
+`FamilyHub.Api/Features/Bot` + `FamilyHub.Infrastructure/Telegram`, бот встроен в тот же процесс,
+что и API.
+
+**Принцип:** ядро (API + модель доступа + данные) — одно, клиенты (PWA, Telegram Mini App, бот)
+подключаются к нему поверх общего контракта.
 
 ### Зависимости модулей
 
-Модульная структура с чёткими границами:
-- `*.Modules.*` и `FamilyHub.Api` зависят от `FamilyHub.Domain` и `FamilyHub.Infrastructure`, но **никогда** друг от друга напрямую
-- Общие сквозные сервисы (доступ по ролям, текущий пользователь, хранилище файлов, оповещения) живут в Infrastructure как абстракции
+- `*.Modules.*` и `FamilyHub.Api` зависят от `FamilyHub.Domain`, `FamilyHub.Infrastructure` и
+  `FamilyHub.Contracts`, но **никогда** друг от друга напрямую (Medical не знает о Birthdays).
+- Общие сквозные сервисы (доступ по ролям, текущий пользователь, хранилище файлов, шифрование,
+  оповещения, Outbox) живут в Infrastructure как абстракции, подключаются модулям через DI.
+- Каждый модуль — свой csproj с `AddXModule()`/`MapXModule()`, регистрируется в `Program.cs`.
 
 ---
 
@@ -45,269 +69,249 @@ FamilyHub.sln
 
 | Ресурс | Владелец | Кто видит | Кто управляет доступом |
 |---|---|---|---|
-| Аптечка, ДР, события, чат | **Семья** (`FamilyId`) | Все члены семьи (по роли) | Админ семьи |
+| Аптечка (медкиты, медикаменты), ДР | **Семья** (`FamilyId`) | Все активные члены семьи (по роли) | Админ семьи |
 | Мед-анализы | **Пользователь** (`OwnerUserId`) | Владелец + семьи, где расшарено и не скрыто | **Только владелец** |
 
 ### Роли в семье
-Всего две роли: `Member` (просмотр + добавление/правка семейных ресурсов) и `Admin` (то же + приглашения и удаление участников). Понижения нет — только выгнать или выйти самому.
+Две роли: `Member` (просмотр + добавление/правка семейных ресурсов) и `Admin` (то же + приглашения
+и удаление участников). Понижения нет — только выгнать или выйти самому.
 
 ---
 
-## 🗄 Схема БД
+## 🔐 Аутентификация — email как единственный якорь identity
 
-### Core-таблицы
-```
-User
-  Id (PK), TelegramId, DisplayName, CreatedAt
+Никакого merge аккаунтов по умолчанию: у пользователя один email/пароль, Telegram — опциональный
+привязанный канал. Полная история решения — `.claude/research/auth-architecture-email-anchor.md`
+(память), реализация — `.claude/research/auth-email-anchor-jwt-rework.md`.
 
-Family
-  Id (PK), Name, PlanType, PlanExpiresAt, CreatedAt
-
-FamilyMember            -- many-to-many User<->Family + роль
-  Id (PK), FamilyId (FK), UserId (FK), Role, Status, JoinedAt
-  UNIQUE(FamilyId, UserId)
-
-FamilyInvite            -- приглашение в семью (ссылка/код)
-  Id (PK), FamilyId (FK), CreatedByUserId (FK), Code, TargetUserId, AssignedRole
-  MaxUses, UsedCount, ExpiresAt, IsRevoked, CreatedAt
-
-FamilyInviteRedemption  -- лог принятий
-  Id (PK), FamilyInviteId (FK), UserId (FK), RedeemedAt
-  UNIQUE(FamilyInviteId, UserId)
-```
-
-### Медицинский модуль
-```
-Medication              -- аптечка (семейный ресурс)
-  Id (PK), FamilyId (FK), Name, Instructions, ExpiryDate, Quantity, CreatedByUserId
-
-MedicalRecord           -- анализ (персональный ресурс)
-  Id (PK), OwnerUserId (FK), PersonName, RecordDate, Doctor, Description, CreatedAt
-
-FamilyMedicalShare      -- УРОВЕНЬ 1: владелец открыл свои анализы семье
-  Id (PK), OwnerUserId (FK), FamilyId (FK), SharedAt
-  UNIQUE(OwnerUserId, FamilyId)
-
-MedicalRecordHidden     -- УРОВЕНЬ 2: точечное скрытие записи от семьи
-  Id (PK), MedicalRecordId (FK), FamilyId (FK), HiddenAt
-  UNIQUE(MedicalRecordId, FamilyId)
-
-FileAttachment          -- метаданные сканов; файлы в MinIO
-  Id (PK), OwnerType ('MedicalRecord'/'Medication'), OwnerId, StorageKey
-  FileName, ContentType, SizeBytes, IsEncrypted, UploadedAt
-
-Birthday                -- семейный ресурс
-  Id (PK), FamilyId (FK), PersonName, Date
-```
-
-### Оповещения
-```
-Notification             -- оповещение о событиях
-  Id (PK), UserId (FK), NotificationType, Title, Message, DedupKey
-  SentAt, CreatedAt
-  UNIQUE(DedupKey)
-```
+- **PWA (браузер)** — регистрация/вход email + пароль (`PasswordRules`: 8+ симв., строчная +
+  заглавная + цифра). Сессия — access-**JWT** (короткоживущий, httpOnly cookie) + DB-backed
+  refresh-токен (`UserSession`) с ротацией и **reuse-detection**: если предъявлен уже
+  использованный refresh-токен — все сессии пользователя отзываются разом (признак кражи токена).
+- **Telegram Mini App** — **lookup-only**: `TelegramMiniAppAuthenticationHandler` проверяет HMAC
+  подписанного `initData` и ищет пользователя по `TelegramId`; если не привязан — 401, никакого
+  авто-создания аккаунта. Привязка — отдельный флоу (`/api/auth/telegram/{init,send-code,bind,revoke}`):
+  email + одноразовый код на почту роднит `TelegramId` с существующим или новым `User`.
+- **Dev-режим** — `DevAuthenticationHandler` (заголовок `X-Dev-TelegramId`), регистрируется
+  только при `ASPNETCORE_ENVIRONMENT=Development`, структурно недоступен в проде.
+- Резервный сброс пароля, смена пароля, список сессий с ручным отзывом (`logout-all`) — в
+  `/settings`.
 
 ---
 
-## 🔐 Логика видимости анализов
+## 🗄 Схема БД (основные сущности)
+
+```
+User, UserSession, EmailVerificationCode, TelegramLinkCode, UserConsent, UserNotificationPreference
+Family, FamilyMember, FamilyInvite, FamilyInviteRedemption
+
+Medkit                  -- аптечка (контейнер, семейный ресурс)
+Medication               -- медикамент внутри медкита, ExpiryDate для оповещений
+GlobalMedicationKb        -- обезличенный общий справочник препаратов (без персональных данных)
+MedicationEnrichmentJob   -- фоновая задача обогащения справочника (Hangfire)
+MedicationSearchCache     -- кеш результатов веб-поиска по препарату
+
+MedicalRecord             -- анализ или посещение врача (Kind), персональный ресурс (OwnerUserId)
+FamilyMedicalShare         -- уровень 1: владелец открыл все свои записи семье (общий для обоих Kind)
+MedicalRecordHidden        -- уровень 2: точечное скрытие записи от конкретной семьи
+FileAttachment              -- метаданные вложений; сами файлы в MinIO, шифрованы, ключ обезличен
+MedicalAccessAudit          -- аудит-лог доступа к чужим медданным
+PersonalCompatibilityResult -- результат персонального анализа совместимости (справочник)
+
+Birthday                  -- семейный ресурс
+
+Notification               -- оповещение, UNIQUE(DedupKey) для идемпотентности
+PushSubscription            -- Web Push подписка (Endpoint/keys шифрованы, EndpointHash для lookup)
+```
+
+Персональные и медицинские поля шифруются at-rest (AES-GCM, см. раздел «Безопасность»); полный
+список сущностей — `src/FamilyHub.Domain/Entities`, EF-конфигурации — `Infrastructure/Persistence/Configurations`.
+
+---
+
+## 🔐 Логика видимости мед-записей (анализы и посещения врачей)
 
 ```csharp
-// Видно, если: владелец, ИЛИ (мои анализы расшарены этой семье
-// И я в ней состою И запись не скрыта именно от неё)
+// Видно, если: владелец, ИЛИ (мои записи расшарены этой семье
+// И я в ней состою И запись не скрыта именно от неё). Одинаково для обоих Kind.
 var visibleRecords = _db.MedicalRecords
     .Where(r =>
-        r.OwnerUserId == userId                              // свои — всегда
+        r.OwnerUserId == userId
         || _db.FamilyMedicalShares.Any(share =>
-                share.OwnerUserId == r.OwnerUserId &&         // владелец открыл анализы
-                _db.FamilyMembers.Any(m =>                    // активный член семьи
+                share.OwnerUserId == r.OwnerUserId &&
+                _db.FamilyMembers.Any(m =>
                     m.FamilyId == share.FamilyId &&
                     m.UserId == userId &&
                     m.Status == MemberStatus.Active) &&
-                !_db.MedicalRecordsHidden.Any(h =>             // и запись не скрыта от неё
+                !_db.MedicalRecordsHidden.Any(h =>
                     h.MedicalRecordId == r.Id &&
                     h.FamilyId == share.FamilyId)));
 ```
 
----
-
-## 🔐 Проверка доступа (Authorization)
-
-### Resource-based authorization в ASP.NET Core
-
-```csharp
-public enum FamilyRole { Member = 0, Admin = 1 }
-public enum MemberStatus { PendingApproval = 0, Active = 1 }
-
-public interface IFamilyOwned { Guid FamilyId { get; } }
-
-public class FamilyRoleRequirement : IAuthorizationRequirement { ... }
-
-public class FamilyRoleHandler
-    : AuthorizationHandler<FamilyRoleRequirement, IFamilyOwned>
-{
-    private readonly AppDbContext _db;
-    
-    protected override async Task HandleRequirementAsync(...)
-    {
-        var userId = context.User.GetUserId();
-        var membership = await _db.FamilyMembers.FirstOrDefaultAsync(m =>
-            m.FamilyId == resource.FamilyId && m.UserId == userId);
-
-        // PendingApproval не даёт доступа ни к чему, даже к семейным ресурсам
-        if (membership is { Status: MemberStatus.Active }
-            && membership.Role >= requirement.MinRole)
-            context.Succeed(requirement);
-    }
-}
-```
-
-### Инварианты безопасности
-1. **Никогда не загружать ресурс по `Id` без фильтра по семьям юзера.** Списки всегда фильтруются по членству.
-2. **Шаринг и скрытие анализов — только владелец** (`OwnerUserId == userId`), даже админ семьи не может.
-3. **Семейные ресурсы — через роль** в той семье, которой принадлежит ресурс.
-4. Форма «скрыть при создании» показывает только семьи, которым у владельца уже есть `FamilyMedicalShare`.
-5. При отключении шаринга семье строки `MedicalRecordHidden` можно НЕ чистить — при повторном включении деликатное останется скрытым.
+Управление шарингом и скрытием — **только владелец записи**, даже админ семьи не может.
 
 ---
 
-## 📬 Приглашения и удаление участников
+## 🔐 Безопасность
 
-### Гибридное одобрение (ключевое)
-- **Персональный инвайт** (`TargetUserId` задан) → вступление **сразу `Active`**, без одобрения
-- **Ссылка-инвайт** (`TargetUserId = null`) → вступление в статусе **`PendingApproval`**, пока админ не подтвердит
-
-Пока статус `PendingApproval`, человек **не видит вообще ничего** в семье — даже аптечку и ДР. Членство существует, но неактивно. Все проверки доступа требуют `Status == Active`.
-
-### Защита для медданных
-Даже после активации вступление НЕ открывает чужие анализы. Активный член видит только семейные ресурсы (аптечка, ДР). Анализы остаются приватными у каждого до явного шаринга. Два независимых барьера: статус членства и владельческий шаринг.
-
-### Инварианты
-1. Создавать инвайт может только **Admin** семьи.
-2. Персональный инвайт → сразу `Active`; ссылка-инвайт → `PendingApproval` до одобрения админа.
-3. `PendingApproval` не даёт доступа ни к чему — даже к семейным ресурсам.
-4. Одобрять/отклонять заявки может только **Admin** семьи.
-5. Вступление по инвайту НЕ открывает чужие анализы.
-6. Инкремент `UsedCount` + вступление — в одной транзакции (гонка на `MaxUses`).
-7. Персональный инвайт принимает только адресат.
-8. Выгнать может только Admin; выйти сам может любой; **последнего админа убрать нельзя**.
-9. При выходе/удалении — автоматически чистится `FamilyMedicalShare` ушедшего для этой семьи.
-
----
-
-## 🖥 Инфраструктура (тонкий ВДС + домашний ПК)
-
-### Распределение
-- **На ВДС:** приложение + PostgreSQL + Redis. БД и realtime НЕ выносить на домашний ПК — разрыв VPN/перезагрузка роутера положит сервис.
-- **На домашнем ПК:** только MinIO (объектное хранилище PDF-сканов). Файлы терпят задержку и недоступность лучше, чем БД.
-
-### Файлы (сканы)
-- В БД только метаданные (`FileAttachment`), сами файлы в MinIO.
-- Доступ к файлу — через короткоживущие **pre-signed URL** (минуты), после проверки доступа через policy. Никаких прямых постоянных ссылок на MinIO.
+- **At-rest шифрование (152-ФЗ)** — `IFieldCipher`/`IFileCipher` (AES-GCM), синглтоны, ключ
+  (`Encryption:MasterKey`) обязателен на старте (fail-fast, никакого дефолта в коде/compose).
+  Формат `enc:{keyId}:{payload}` уже готов к ротации ключа (сама процедура ротации — не
+  реализована, задокументировано как осознанный технический долг).
+- **Файлы** — `IFileStorage`: MinIO, единственная реализация (в т.ч. для разработки —
+  `LocalFileStorage` упразднён). Блоб зашифрован целиком, ключ объекта в бакете полностью
+  обезличен (`StorageKeyFactory`). Скачивание — только через собственный API-эндпоинт с
+  расшифровкой по короткоживущей HMAC-подписанной ссылке; presigned-ссылки самого хранилища
+  упразднены (ADR-0002) — они бы отдавали шифротекст напрямую.
+- **Resource-based authorization** — `IFamilyAccessService.HasRoleAsync` перед каждой операцией
+  над семейным ресурсом; `FamilyRoleHandler : AuthorizationHandler<FamilyRoleRequirement, IFamilyOwned>`
+  доступен как декларативная альтернатива. `FallbackPolicy` требует аутентификации на любом
+  непокрытом явной политикой маршруте.
+- **Согласия (152-ФЗ)** — `ConsentRequiredFilter` блокирует Medical/Birthdays-модули до принятия
+  актуальной версии политики (`/api/consents`), тексты — `Api/Legal/*.html`.
+- **Аудит** — `MedicalAccessAudit` логирует доступ к чужим медданным.
+- **Outbox-паттерн** — изоляция модулей друг от друга через событийную шину поверх БД
+  (`FamilyHub.Infrastructure/Outbox`), события — в `FamilyHub.Contracts/Events`.
+- **Rate limiting** — на auth-эндпоинтах (`RequireRateLimiting("auth")`).
+- **Egress-политика** — данные по умолчанию не покидают РФ-контур; осознанные исключения
+  задокументированы ADR'ами (Web Push через иностранные push-релеи — только зашифрованный
+  RFC8291-payload; обогащение справочника — веб-поиск по обезличенному названию препарата).
+- Полная модель угроз, матрица доступа и журнал модульного аудита безопасности —
+  `docs/security/` (см. «Документация» ниже).
 
 ---
 
-## 🔐 Безопасность Telegram Mini App
+## 📬 Приглашения и участники
 
-1. **Валидация `initData`** — обязательно на бэкенде через HMAC с токеном бота. Без этого любой подделает Telegram ID и зайдёт в чужую семью. Делается ПЕРВЫМ, до бизнес-логики.
-2. **Контекст текущей семьи** — раз юзер в нескольких семьях, почти каждый запрос к семейным ресурсам несёт `familyId`, и членство проверяется.
-3. **PDF-сканы** — только через pre-signed URL с проверкой доступа.
+- **Персональный инвайт** (`TargetUserId` задан) → вступление сразу `Active`.
+- **Ссылка-инвайт** → `PendingApproval`, пока админ не подтвердит; в этом статусе пользователь
+  не видит вообще ничего в семье.
+- Инвайт создаёт/одобряет/отклоняет только **Admin**; выгнать может Admin, выйти — любой сам;
+  последнего админа удалить нельзя.
+- При выходе/удалении из семьи автоматически чистится `FamilyMedicalShare` ушедшего.
+- Вступление по инвайту **никогда** не открывает чужие анализы — это отдельный барьер
+  (владельческий шаринг), не связанный со статусом членства.
+
+---
+
+## 🖥 Инфраструктура и деплой
+
+- **Backend**: ASP.NET Core, PostgreSQL (EF Core), MinIO (S3-совместимое хранилище PDF/фото),
+  Seq (структурные логи, Serilog), Hangfire на PostgreSQL (фоновые задачи и очереди, включая
+  выделенную очередь `enrichment`).
+- **Frontend**: Angular dev-server (`ng serve`) в контейнере с hot-reload через bind-mount;
+  production-сборка (`ng build`) собирается отдельно и раздаётся тем же `FamilyHub.Api`.
+- Локальный dev-стек — `docker-compose.yml`: сервисы `postgres`, `minio`, `seq`, `api`, `web`.
+  Все секреты — через `.env` (см. `.env.example`), без дефолтов в compose для чувствительных
+  ключей (`ENCRYPTION_MASTER_KEY` и т.п. — контейнер не стартует без них).
+- Команды — `Makefile` (`make dev`, `make dev-restart`, `make dev-npm`, `make dev-rebuild`,
+  `make logs[-web|-api]`) и `dev.ps1` для Windows/PowerShell.
+
+---
+
+## 🔐 Telegram Mini App
+
+1. **Валидация `initData`** — HMAC с токеном бота, первым шагом, до бизнес-логики. Без
+   `Telegram:BotToken` валидатор всегда отказывает.
+2. Mini App — **lookup-only** (см. «Аутентификация»): непривязанный `TelegramId` получает 401 и
+   ведётся на флоу привязки email-кодом, а не авто-регистрируется.
+3. Контекст текущей семьи — почти каждый запрос к семейным ресурсам несёт `familyId`, членство
+   проверяется на каждый вызов.
+4. PDF/фото-сканы — только через собственный API-эндпоинт с HMAC-подписанной короткоживущей
+   ссылкой, после проверки доступа (presigned-ссылки самого хранилища упразднены, ADR-0002).
 
 ---
 
 ## ⚖️ Правовая заметка
 
-Хранятся чужие медицинские данные. При монетизации и пользователях извне семьи это попадает под закон о персональных данных (РФ — 152-ФЗ, медданные — спецкатегория с повышенными требованиями). Заложить возможность **шифрования сканов** в хранилище (поле `IsEncrypted` уже есть), чтобы включить без переделки архитектуры.
+Хранятся чужие медицинские данные — спецкатегория персональных данных по 152-ФЗ. Реализовано:
+at-rest шифрование персональных и медицинских полей, экспорт и полное удаление данных по запросу
+пользователя (`/api/account/export`, `/api/account/delete`), явное согласие с политикой
+(`/api/consents`) перед доступом к медицинским модулям, локализация данных в РФ-контуре с
+задокументированными точечными исключениями (ADR-0001, ADR-0004, ADR-0005).
 
 ---
 
-## 📅 План реализации (поэтапно)
+## 📁 Документация
 
-### Этап 1 — Ядро доступа + первый модуль
-1. Solution-структура (модульный монолит).
-2. Сущности: `User`, `Family`, `FamilyMember`, EF Core + миграции.
-3. Telegram-аутентификация + валидация Mini App initData.
-4. Authorization handler (`FamilyRoleHandler`, `IFamilyOwned`).
-5. Приглашения и одобрение, выгон/самовыход (зачистка `FamilyMedicalShare`, защита последнего админа).
-6. Модуль **Аптечка** (`Medication`) — CRUD со сроками, проверка доступа по роли.
+### Ресёрч по архитектуре — `.claude/research/`
+Актуальное «как сделано» по каждому модулю (индекс — `.claude/research/README.md`):
+`domain.md`, `infrastructure.md`, `api-core.md`, `module-medical.md`, `module-birthdays.md`,
+`auth-uiux-rework-stage.md`, `navigation-redesign-and-web-push.md`, `auth-email-anchor-jwt-rework.md`,
+`settings-hub-and-account-security.md`. (`web-miniapp.md` помечен устаревшим — описывает старый
+React-фронт, актуальная реализация — Angular, см. остальные файлы этого списка.)
 
-### Этап 2 — Анализы и файлы
-7. `MedicalRecord` + `FamilyMedicalShare` + `MedicalRecordHidden`.
-8. Эндпоинты: загрузить анализ, расшарить анализы семье, скрыть запись от семей, получить видимые записи.
-9. MinIO-интеграция: загрузка скана + pre-signed URL.
+### Architecture Decision Records — `docs/adr/`
+`0001` локализация данных и egress, `0002` at-rest шифрование и управление ключами, `0003`
+архитектура поиска (Postgres FTS, отказ от OpenSearch), `0004` исключение для Web Push, `0005`
+исключение для обогащения справочника препаратов.
 
-### Этап 3 — Оповещения
-10. Hangfire/Quartz: оповещения о сроках годности лекарств.
+### Безопасность — `docs/security/`
+`threat-model.md`, `access-matrix.md`, `backup-and-retention-policy.md`, и журнал модульного
+аудита `module-review-2026-08-02/` (по одному файлу на модуль, находки приоритизированы
+🔴/🟡/🟢, статус закрытия отслеживается в `00-INDEX.md`).
 
-### Этап 4 — Дни рождения + бот как клиент
-11. Модуль `Birthday`.
-12. Telegram-бот как тонкий клиент + Mini App для PDF и таблиц.
-
-### Этап 5 — Монетизация
-13. Тарифы на уровне `Family` (`PlanType`, лимиты: число семей, объём сканов, число членов).
-
-### Этап 6+ — Расширения
-14. Внутрисемейный чат (SignalR + Redis).
-15. Календарь событий с управляемыми оповещениями.
+### Паттерны разработки
+`.claude/patterns/backend.md`, `.claude/patterns/frontend_web.md` — устоявшиеся решения и грабли
+(идентити-резолюшн, шифрованное поле + hash-колонка для lookup, Service Worker vs `ng serve`,
+и т.д.), на которые стоит опираться при новом коде вместо переизобретения.
 
 ---
 
-## 🚀 Первый практический шаг для Claude Code
-
-Собрать каркас Этапа 1–2 Medical-модуля:
-- entity-классы (`MedicalRecord`, `FamilyMedicalShare`, `MedicalRecordHidden`, `Medication`, `FamilyMember` с двумя ролями, `FamilyInvite`, `FamilyInviteRedemption`);
-- `AppDbContext` с конфигурацией, UNIQUE-ограничениями и индексами;
-- начальную миграцию;
-- эндпоинты: создать/принять/отозвать инвайт, одобрить/отклонить заявку (для ссылок), выгнать участника, выйти из семьи; загрузить анализ, расшарить семье, скрыть от семей, получить видимые записи, + CRUD аптечки;
-- `FamilyRoleHandler` (с проверкой `Status == Active`), проверку владельца для операций над анализами, защиту последнего админа и зачистку шаринга при выходе.
-
----
-
-## 📁 Исследование архитектуры
-
-Файлы ресёрча в `.claude/research/`:
-- [`domain.md`](./research/domain.md) — `FamilyHub.Domain`: сущности, enum'ы, инварианты владения ресурсами.
-- [`infrastructure.md`](./research/infrastructure.md) — `FamilyHub.Infrastructure`: аутентификация, авторизация, БД/EF Core, файловое хранилище, оповещения, Telegram-интеграция.
-- [`api-core.md`](./research/api-core.md) — `FamilyHub.Api`: семьи/инвайты/участники/оповещения, бот-вебхук, `Program.cs`.
-- [`module-medical.md`](./research/module-medical.md) — `FamilyHub.Modules.Medical`: аптечка, анализы (персональный ресурс с шарингом), вложения.
-- [`module-birthdays.md`](./research/module-birthdays.md) — `FamilyHub.Modules.Birthdays`: дни рождения.
-- [`web-miniapp.md`](./research/web-miniapp.md) — `FamilyHub.Web`: React Mini App (Telegram-клиент), её контракт с API.
-
-**Архитектура одной картинкой:** модульный монолит с зависимостями только в одну сторону: `*.Modules.*` и `FamilyHub.Api` зависят от `FamilyHub.Domain` и `FamilyHub.Infrastructure`, но **никогда** друг от друга напрямую. Общие сквозные сервисы (доступ по ролям, текущий пользователь, хранилище файлов, отправка оповещений) живут в Infrastructure как абстракции и подключаются модулям через DI.
-
----
-
-## 📊 Точная карта маршрутов API
+## 📊 Карта маршрутов API
 
 | Группа | Маршруты |
 |---|---|
-| Families | `POST /api/families`, `GET /api/families` |
-| Invites | `POST /api/families/{familyId}/invites`, `POST /api/invites/{code}/redeem`, `POST /api/invites/{inviteId}/revoke`, `GET /api/families/{familyId}/pending`, `POST /api/families/{familyId}/members/{targetUserId}/approve`, `POST /api/families/{familyId}/members/{targetUserId}/reject` |
+| Auth | `POST /api/auth/{register/start,register/confirm,login,logout,logout-all,refresh,change-password,reset-password/start,reset-password/confirm,link-email/start,link-email/confirm,link-telegram/start}`, `GET /api/auth/{me,username-available,sessions}`, `POST /api/auth/sessions/{id}/revoke` |
+| Auth · Telegram bind | `POST /api/auth/telegram/{init,send-code,bind,revoke}` |
+| Families | `POST/GET /api/families`, `DELETE /api/families/{familyId}` |
+| Invites | `POST /api/families/{familyId}/invites`, `GET /api/families/{familyId}/current`, `POST /api/invites/{code}/redeem`, `POST /api/invites/{inviteId}/revoke`, `GET /api/families/{familyId}/pending`, `POST /api/families/{familyId}/members/{targetUserId}/{approve,reject}` |
 | Members | `POST /api/families/{familyId}/members/{targetUserId}/remove`, `POST /api/families/{familyId}/leave` |
-| Notifications | `GET /api/notifications?unreadOnly=`, `POST /api/notifications/{id}/read` |
-| Medications | `GET/POST /api/families/{familyId}/medications`, `PUT/DELETE /api/medications/{medicationId}` |
+| Consents | `GET /api/consents/{current,status}`, `POST /api/consents/accept`, `GET /api/legal/privacy-policy` |
+| Account | `POST /api/account/delete`, `GET /api/account/export` |
+| Medkits / Medications | `GET/POST /api/families/{familyId}/medkits`, `PUT/DELETE /api/medkits/{medkitId}`, `GET/POST /api/medkits/{medkitId}/medications`, `PUT/DELETE /api/medications/{medicationId}`, `POST /api/medications/ocr` |
+| Справочник (KB) | `GET /api/kb/medications`, `GET /api/kb/medications/{id}`, `GET /api/medications/{medicationId}/kb`, `POST /api/medications/{medicationId}/kb/refresh` |
+| Medical records (анализы + врачи, `?kind=analysis\|visit`) | `GET/POST /api/medical-records`, `GET /api/medical-records/shares`, `POST /api/medical-records/{share,unshare}`, `POST /api/medical-records/{recordId}/{hide,unhide}` |
+| Attachments | `POST /api/medical-records/{recordId}/attachments`, `GET /api/medical-records/{recordId}/attachments`, `GET /api/attachments/{attachmentId}/url`, `GET /api/attachments/{attachmentId}/file` |
 | Birthdays | `GET/POST /api/families/{familyId}/birthdays`, `PUT/DELETE /api/birthdays/{birthdayId}` |
-| Medical records | `GET/POST /api/medical-records`, `POST /api/medical-records/share`, `POST /api/medical-records/unshare`, `POST /api/medical-records/{recordId}/hide`, `POST /api/medical-records/{recordId}/unhide` |
-| Attachments | `POST /api/medical-records/{recordId}/attachments`, `GET /api/attachments/{attachmentId}/url` |
+| Search | `GET /api/search?types=` (`medication\|kb\|record\|visit\|birthday`) |
+| Notifications | `GET /api/notifications?unreadOnly=`, `POST /api/notifications/{id}/read`, `GET/PUT /api/notifications/preferences` |
+| Push | `GET /api/push/vapid-public-key`, `POST /api/push/{subscribe,unsubscribe}` |
 | Bot | `POST /bot/webhook` (только если `Telegram:BotToken` задан) |
 
-Все группы — `.RequireAuthorization()` по умолчанию.
+Все группы, кроме `Consents`/`Account` (частично анонимные для anti-enumeration) и `Auth`
+(частично анонимные до входа), — `.RequireAuthorization()` по умолчанию; непокрытые маршруты
+тоже требуют аутентификации через `FallbackPolicy`.
 
 ---
 
-## 📱 Telegram Mini App
+## 📱 Frontend — Angular PWA / Telegram Mini App
 
-React + TypeScript + Vite SPA, собирается прямо в `FamilyHub.Api/wwwroot`. Тот же origin, что и API → CORS не нужен.
+Один Angular 18 SPA обслуживает и браузер (PWA, service worker через `@angular/service-worker`),
+и Telegram Mini App — поведение переключается по контексту (`isInsideTelegram()`), не отдельными
+сборками. Собирается в статику, раздаётся `FamilyHub.Api`.
 
-### Структура
-- `src/telegram.ts` — обёртка над `window.Telegram.WebApp`: `initTelegram()`, `getInitData()`, `isInsideTelegram()`, `openExternalLink()`
-- `src/api.ts` — единственная точка HTTP-вызовов к API. `authHeaders()`: внутри Telegram → `Authorization: tma <initData>`, снаружи → `X-Dev-TelegramId` из query-параметра.
-- `src/types.ts` — TS-зеркало backend DTO. Enum'ы объявлены как `const`-объекты с `as const`.
-- `src/main.tsx` — точка входа, вызывает `initTelegram()` перед рендером.
-- `src/App.tsx` — вкладочная навигация (`'families' | 'medications' | 'birthdays' | 'records' | 'notifications'`).
+### Структура (`src/FamilyHub.Web/src/app/`)
+- `components/` — вкладки навигации (`home`, `health-hub` с саб-роутами `/health/medications`,
+  `/health/records`, `/health/visits`, `/health/kb`, `notifications-tab`, `settings`), формы
+  (`login`, `telegram-bind`), сущностные панели (`families-tab`, `family-details`,
+  `medications-panel`, `medkits-panel`, `medical-records-panel` — общая Panel для «Анализов» и
+  «Врачей», параметризована `MedicalRecordKind`, обёрнута тонкими Page `medical-records-tab`/
+  `doctor-visits-tab`, `birthdays-panel`/`-tab`, `birthday-widget`, `kb-card`/`kb-tab`),
+  правовые модалки (`consent-gate`, `consent-text`, `privacy`), `dev-panel` (только dev-режим).
+- `shared/` — переиспользуемые примитивы: `modal`, `bottom-sheet`, `confirm`, `toast`,
+  `loading-spinner`, `search-field`, `cookie-banner`, общие утилиты (`util/`).
+- `services/`, `models/` — HTTP-слой к API и TS-зеркало backend DTO.
+
+### Навигация
+Таб-бар: **Главная** (семьи + виджет ближайших ДР) / **Здоровье** (хаб: медикаменты + анализы +
+врачи + справочник) / **Уведомления** / **Профиль**. Поиск — на Главной, серверные фильтры по типу
+(`?types=medication,kb,record,visit,birthday`).
 
 ### Локальная разработка без Telegram
-`http://localhost:<port>/?devTgId=<любое число>` — один раз кладёт `devTgId` в `localStorage`, дальше работает как обычная авторизованная сессия через `X-Dev-TelegramId`. Работает только если API запущен с `ASPNETCORE_ENVIRONMENT=Development`.
+`http://localhost:<port>/?devTgId=<любое число>` — один раз кладёт `devTgId` в `localStorage`,
+дальше работает как обычная сессия через `X-Dev-TelegramId`. Работает только при
+`ASPNETCORE_ENVIRONMENT=Development`.
 
 ---
 
@@ -315,19 +319,17 @@ React + TypeScript + Vite SPA, собирается прямо в `FamilyHub.Api
 
 | Слой | Технология |
 |---|---|
-| Backend | ASP.NET Core Web API (.NET 8/9) |
-| ORM | EF Core |
-| БД | PostgreSQL |
-| Realtime (для будущего чата) | SignalR + Redis backplane |
-| Фоновые задачи (оповещения) | Hangfire или Quartz.NET |
-| Объектное хранилище (сканы PDF) | MinIO (S3-совместимое) |
-| Авторизация | Telegram ID + валидация Mini App initData (HMAC) |
-| Первый клиент | Telegram-бот (Telegram.Bot) + Telegram Mini App |
+| Backend | ASP.NET Core Web API (.NET 8/9), модульный монолит |
+| ORM / БД | EF Core / PostgreSQL |
+| Frontend | Angular 18 + Bootstrap 5, PWA (service worker), тот же SPA — Telegram Mini App |
+| Аутентификация | Email + пароль → JWT + DB-backed refresh-сессии (PWA); Telegram `initData` HMAC, lookup-only (Mini App) |
+| Фоновые задачи | Hangfire на PostgreSQL (оповещения, обогащение справочника) |
+| Объектное хранилище | MinIO (S3-совместимое) / локальный диск для dev |
+| Логи | Serilog → Seq |
+| Локальная LLM | LM Studio (OCR медикаментов по фото, суммаризация для справочника) |
+| Веб-поиск для обогащения справочника | Yandex Web Search API / Brave (опционально, off по умолчанию) |
+| Push-уведомления | Telegram-бот (Telegram.Bot) и/или Web Push (VAPID) |
+| At-rest шифрование | AES-GCM, поле- и файл-уровень |
 
-**Принцип:** ядро (API + модель доступа + данные) делается один раз, клиенты подключаются по мере надобности. Бот — тонкий клиент поверх API.
-
----
-
-## 📝 Стартовый контекст
-
-> Семейное приложение для хранения медицинских данных, аптечки, дней рождения, с разграничением доступа по семьям и ролям. Старт — Telegram-бот + Mini App. Закладывается под продукт и монетизацию.
+**Принцип:** ядро (API + модель доступа + данные) — одно, клиенты подключаются поверх общего
+контракта. Бот — тонкий клиент, встроенный в тот же процесс, что и API.

@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
 
 namespace FamilyHub.Modules.Medical.MedicalRecords;
@@ -10,8 +11,9 @@ public static class MedicalRecordEndpoints
     {
         var group = app.MapGroup("/api/medical-records").RequireAuthorization();
 
-        group.MapGet("/", async (MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
-            Results.Ok(await service.GetVisibleRecordsAsync(currentUser.UserId, ct)));
+        // kind опционален: без него отдаются оба вида (обратная совместимость со старыми клиентами).
+        group.MapGet("/", async (string? kind, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.GetVisibleRecordsAsync(currentUser.UserId, ParseKind(kind), ct)));
 
         // L1-семьи текущего пользователя (владельца) — нужны клиенту, чтобы отрисовать состояние
         // тумблеров доступа в bottom-sheet «Доступ», не запрашивая его отдельно на каждую запись.
@@ -59,5 +61,15 @@ public static class MedicalRecordEndpoints
         MedicalRecordAccessResult.NotFound => Results.NotFound(),
         MedicalRecordAccessResult.Forbidden => Results.Forbid(),
         _ => Results.NoContent(),
+    };
+
+    // "visit" на проводе короче и совпадает с токеном /api/search?types=visit (SearchDtos) и
+    // фронтовым сегментом роута /health/visits — сам enum в коде называется DoctorVisit
+    // (детальнее описывает сущность), поэтому это не Enum.TryParse, а явное сопоставление.
+    private static MedicalRecordKind? ParseKind(string? kind) => kind?.Trim().ToLowerInvariant() switch
+    {
+        "analysis" => MedicalRecordKind.Analysis,
+        "visit" => MedicalRecordKind.DoctorVisit,
+        _ => null,
     };
 }

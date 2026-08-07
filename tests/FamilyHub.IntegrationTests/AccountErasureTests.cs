@@ -91,7 +91,9 @@ public class AccountErasureTests(FamilyHubWebFactory factory) : IntegrationTestB
 
             var storage = scope.ServiceProvider.GetRequiredService<FamilyHub.Infrastructure.Storage.IFileStorage>();
             var act = async () => await storage.OpenReadAsync(storageKey);
-            await act.Should().ThrowAsync<FileNotFoundException>("блоб удалён из хранилища");
+            // MinIO — единственная реализация IFileStorage (LocalFileStorage упразднён): отсутствующий
+            // объект даёт ObjectNotFoundException из клиента MinIO, а не FileNotFoundException.
+            await act.Should().ThrowAsync<Minio.Exceptions.ObjectNotFoundException>("блоб удалён из хранилища");
         }
 
         // Повторный вход с тем же TelegramId создаёт НОВЫЙ пустой аккаунт (get-or-create) —

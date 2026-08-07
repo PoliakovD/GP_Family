@@ -138,6 +138,12 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         row.StorageKey.Should().NotContain("scan.txt", "имя файла — ПДн и не должно попадать в ключ хранилища");
         row.FileName.Should().Be("scan.txt", "EF-конвертер расшифровывает имя прозрачно");
 
+        // Ключ полностью непрозрачен (StorageKeyFactory): ни recordId, ни какой-либо иной
+        // семантики родителя — администратор хранилища видит только набор несвязанных блобов.
+        row.StorageKey.Should().Be(StorageKeyFactory.Create(row.Id));
+        row.StorageKey.Should().NotContain(record.Id.ToString());
+        row.StorageKey.Should().NotContain("medical-records");
+
         var storage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
         await using var blob = await storage.OpenReadAsync(row.StorageKey);
         using var buffer = new MemoryStream();

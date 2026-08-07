@@ -129,6 +129,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'visits',
+        loadComponent: () =>
+          import('./components/doctor-visits-tab/doctor-visits-tab.component').then(
+            (m) => m.DoctorVisitsTabComponent,
+          ),
+      },
+      {
         // Общий обезличенный справочник препаратов (этап 4) — наполняется AI-конвейером обогащения.
         path: 'kb',
         loadComponent: () =>

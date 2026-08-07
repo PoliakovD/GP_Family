@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
@@ -7,12 +8,14 @@ using Microsoft.EntityFrameworkCore;
 namespace FamilyHub.Modules.Medical.Search;
 
 /// <summary>
-/// Единая точка входа поиска (этап 3, ADR-0003) — фасад над четырьмя источниками с РАЗДЕЛЬНЫМ
+/// Единая точка входа поиска (этап 3, ADR-0003) — фасад над пятью источниками с РАЗДЕЛЬНЫМ
 /// контролем доступа (ни один источник не может отдать данные вне scope пользователя):
 ///   1. Лекарства — Postgres-FTS (tsvector+pg_trgm), скоуп: семьи, где пользователь активный член;
 ///   2. Справочник kb.global_medications_kb — Postgres-FTS, обезличен и глобален по определению;
-///   3. Медкарты — in-memory (MedicalRecordService.SearchAsync), скоуп: владелец + расшаренные.
-///   4. Дни рождения — in-memory (IBirthdaySearchSource, Modules.Birthdays через DI-абстракцию
+///   3. Анализы и 4. Врачи — обе in-memory (MedicalRecordService.SearchAsync, единая таблица
+///      MedicalRecord с дискриминатором Kind), скоуп: владелец + расшаренные, разделяются фильтром
+///      по Kind (см. SearchMedicalRecordsAsync).
+///   5. Дни рождения — in-memory (IBirthdaySearchSource, Modules.Birthdays через DI-абстракцию
 ///      из Infrastructure — этот модуль не ссылается на Modules.Birthdays напрямую), скоуп: семьи,
 ///      где пользователь активный член (как у лекарств — семейный ресурс, не персональный).
 /// </summary>
@@ -24,9 +27,9 @@ public class SearchService(
 
     /// <param name="types">
     /// Ограничить источники (например, только «Лекарства»). <c>null</c>/пустой набор — все
-    /// (общий поиск из шапки). Экономия не косметическая: <c>record</c> — самый дорогой источник,
-    /// он расшифровывает ВСЕ видимые пользователю медкарты (см. MedicalRecordService.SearchAsync);
-    /// не запрошенный источник не трогает БД вовсе.
+    /// (общий поиск из шапки). Экономия не косметическая: анализы/врачи — самый дорогой источник,
+    /// он расшифровывает ВСЕ видимые пользователю медкарты нужного вида (см.
+    /// MedicalRecordService.SearchAsync); не запрошенный источник не трогает БД вовсе.
     /// </param>
     public async Task<SearchResponse> SearchAsync(
         Guid userId, string? query, IReadOnlySet<SearchResultType>? types = null, CancellationToken ct = default)
@@ -45,16 +48,14 @@ public class SearchService(
         var kb = wantsAll || types!.Contains(SearchResultType.Kb)
             ? await SearchKbAsync(q, ct)
             : [];
-        var records = wantsAll || types!.Contains(SearchResultType.Record)
-            ? await medicalRecords.SearchAsync(userId, q, PerSourceLimit, ct)
-            : [];
+        var records = await SearchMedicalRecordsAsync(userId, q, wantsAll, types, ct);
         var birthdayHits = wantsAll || types!.Contains(SearchResultType.Birthday)
             ? await birthdays.SearchAsync(userId, q, PerSourceLimit, ct)
             : [];
 
         var items = medications
             .Concat(kb)
-            .Concat(records.Select(ToSearchItem))
+            .Concat(records)
             .Concat(birthdayHits.Select(ToSearchItem))
             .OrderByDescending(i => i.Score)
             .ToList();
@@ -118,14 +119,49 @@ public class SearchService(
         return rows.Select(r => new SearchResultItem(SearchResultType.Kb, r.Id, r.DisplayName, null, r.Score)).ToList();
     }
 
+    /// <summary>
+    /// Анализы и посещения врачей — одна и та же таблица (MedicalRecord.Kind), поэтому либо один
+    /// запрос на оба вида (types содержит и Record, и Visit, либо запрошены все источники), либо
+    /// один запрос на конкретный вид. Два отдельных вызова при wantsAll удвоили бы самый дорогой
+    /// источник — расшифровку всех видимых пользователю медкарт (см. MedicalRecordService.SearchAsync).
+    /// </summary>
+    private async Task<List<SearchResultItem>> SearchMedicalRecordsAsync(
+        Guid userId, string q, bool wantsAll, IReadOnlySet<SearchResultType>? types, CancellationToken ct)
+    {
+        var wantsRecord = wantsAll || types!.Contains(SearchResultType.Record);
+        var wantsVisit = wantsAll || types!.Contains(SearchResultType.Visit);
+        if (!wantsRecord && !wantsVisit) return [];
+
+        MedicalRecordKind? kind = (wantsRecord, wantsVisit) switch
+        {
+            (true, true) => null,
+            (true, false) => MedicalRecordKind.Analysis,
+            _ => MedicalRecordKind.DoctorVisit,
+        };
+
+        var hits = await medicalRecords.SearchAsync(userId, q, kind, PerSourceLimit, ct);
+        return hits.Select(ToSearchItem).ToList();
+    }
+
     private static SearchResultItem ToSearchItem(MedicalRecordSearchHit hit)
     {
         var record = hit.Record;
+        if (record.Kind == MedicalRecordKind.DoctorVisit)
+        {
+            var visitTitle = string.IsNullOrWhiteSpace(record.Doctor)
+                ? $"{record.PersonName} — {record.RecordDate:dd.MM.yyyy}"
+                : $"{record.PersonName} · {record.Doctor}";
+            var visitSnippet = Truncate(record.Description);
+            return new SearchResultItem(SearchResultType.Visit, record.Id, visitTitle, visitSnippet, hit.Score);
+        }
+
         var title = $"{record.PersonName} — {record.RecordDate:dd.MM.yyyy}";
-        var snippet = record.Description ?? record.Doctor;
-        if (snippet is { Length: > 160 }) snippet = snippet[..160] + "…";
+        var snippet = Truncate(record.Description ?? record.Doctor);
         return new SearchResultItem(SearchResultType.Record, record.Id, title, snippet, hit.Score);
     }
+
+    private static string? Truncate(string? snippet) =>
+        snippet is { Length: > 160 } ? snippet[..160] + "…" : snippet;
 
     private static SearchResultItem ToSearchItem(BirthdaySearchHit hit) =>
         new(SearchResultType.Birthday, hit.Id, hit.PersonName, null, hit.Score,

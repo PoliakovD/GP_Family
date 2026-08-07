@@ -68,20 +68,24 @@ data-check-string, сравнение `CryptographicOperations.FixedTimeEquals`)
 
 ## Файловое хранилище (`Storage/`)
 
-`IFileStorage` — единая абстракция (`SaveAsync`, `GetPresignedUrlAsync`), переключается в
-`Program.cs` по `FileStorage:Provider` (`Local`|`Minio`), вызывающий код (`AttachmentService`)
-не знает, какая реализация активна:
+`IFileStorage` (`SaveAsync`/`OpenReadAsync`/`DeleteAsync`) — единственная реализация
+**`MinioFileStorage`**, в т.ч. в Development (`LocalFileStorage` упразднён: раньше запуск API из
+IDE без Docker тихо писал сканы на диск мимо объектного хранилища, и этот путь не проверялся).
+`Program.cs` fail-fast'ит на старте, если `Minio:Endpoint`/`AccessKey`/`SecretKey` не заданы —
+в стиле уже существующих проверок `Encryption:MasterKey`/`Attachments:DownloadSigningKey`.
 
-- **`LocalFileStorage`** — пишет на диск, подписывает короткоживущую ссылку сам (HMAC по
-  `storageKey+expiry`), имитируя presigned URL. Раздаётся отдельным эндпоинтом в `Program.cs`
-  (`GET /local-files/{*key}?expires=&sig=`, `.AllowAnonymous()` — подлинность проверяется
-  подписью, не аутентификацией).
-- **`MinioFileStorage`** — настоящий MinIO presigned `GET`, с подменой хоста на
-  `MinioOptions.PublicEndpoint`, если внутренний и внешний адрес MinIO различаются (домашний
-  сервер за туннелем/прокси).
+Presigned-ссылки самого MinIO **не используются** (упразднены ADR-0002 — они отдавали бы
+шифротекст, блоб зашифрован целиком `IFileCipher` до записи). Доступ к файлу — только через
+собственный API-эндпоинт с расшифровкой, по короткоживущей HMAC-подписанной ссылке
+(`DownloadTokenService`, TTL `Attachments:UrlTtl` = 5 минут по умолчанию):
+`GET /api/attachments/{attachmentId}/file?expires=&sig=`, `.AllowAnonymous()` — подлинность
+проверяется подписью, не аутентификацией.
 
-И в той, и в другой реализации доступ к файлу — **только** через короткоживущий URL; прямых
-постоянных ссылок на бакет/диск не существует (раздел 9 брифа).
+Ключ объекта в бакете — `StorageKeyFactory.Create(attachmentId)`, полностью непрозрачный
+(`blobs/{a}/{b}/{attachmentId}`, `{a}{b}` — первые байты `attachmentId` как двухуровневый шард):
+ни типа записи, ни владельца, ни группировки нескольких сканов по одной медкарте в ключе нет —
+администратор хранилища и его служебные логи видят только набор несвязанных шифроблобов, связь
+blob ↔ запись живёт единственно в `medical."FileAttachments"."StorageKey"`.
 
 ## Оповещения (`Notifications/`)
 

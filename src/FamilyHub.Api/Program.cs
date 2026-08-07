@@ -70,7 +70,6 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 
 // --- Конфигурация ---
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
-builder.Services.Configure<LocalFileStorageOptions>(builder.Configuration.GetSection(LocalFileStorageOptions.SectionName));
 builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
@@ -143,26 +142,27 @@ builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 // --- Telegram auth ---
 builder.Services.AddScoped<ITelegramInitDataValidator, TelegramInitDataValidator>();
 
-// --- Хранилище файлов: переключатель FileStorage:Provider = Local|Minio (этап 2 п.9) ---
-var fileStorageProvider = builder.Configuration["FileStorage:Provider"] ?? "Local";
-if (string.Equals(fileStorageProvider, "Minio", StringComparison.OrdinalIgnoreCase))
+// --- Хранилище файлов: MinIO — единственная реализация IFileStorage, в т.ч. в Development ---
+// Раньше был переключатель FileStorage:Provider = Local|Minio: запуск из IDE тихо писал
+// медицинские сканы на диск мимо объектного хранилища, и этот путь никогда не проверялся.
+// Fail-fast на пустые креды — без него ошибка всплыла бы только при первой загрузке файла.
+if (string.IsNullOrWhiteSpace(builder.Configuration["Minio:Endpoint"])
+    || string.IsNullOrWhiteSpace(builder.Configuration["Minio:AccessKey"])
+    || string.IsNullOrWhiteSpace(builder.Configuration["Minio:SecretKey"]))
+    throw new InvalidOperationException(
+        "Minio:Endpoint/AccessKey/SecretKey не заданы (env Minio__Endpoint/Minio__AccessKey/" +
+        "Minio__SecretKey) — хранилище вложений обязательно, в т.ч. в Development (см. docker-compose.yml).");
+
+builder.Services.AddSingleton<IMinioClient>(sp =>
 {
-    builder.Services.AddSingleton<IMinioClient>(sp =>
-    {
-        var minioOptions = sp.GetRequiredService<IOptions<MinioOptions>>().Value;
-        return (IMinioClient)new MinioClient()
-            .WithEndpoint(minioOptions.Endpoint)
-            .WithCredentials(minioOptions.AccessKey, minioOptions.SecretKey)
-            .WithSSL(minioOptions.UseSsl)
-            .Build();
-    });
-    builder.Services.AddSingleton<IFileStorage, MinioFileStorage>();
-}
-else
-{
-    builder.Services.AddSingleton<LocalFileStorage>();
-    builder.Services.AddSingleton<IFileStorage>(sp => sp.GetRequiredService<LocalFileStorage>());
-}
+    var minioOptions = sp.GetRequiredService<IOptions<MinioOptions>>().Value;
+    return (IMinioClient)new MinioClient()
+        .WithEndpoint(minioOptions.Endpoint)
+        .WithCredentials(minioOptions.AccessKey, minioOptions.SecretKey)
+        .WithSSL(minioOptions.UseSsl)
+        .Build();
+});
+builder.Services.AddSingleton<IFileStorage, MinioFileStorage>();
 
 // --- Core-фичи: семьи, приглашения, участники ---
 builder.Services.AddScoped<FamilyService>();
@@ -443,7 +443,8 @@ builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, cli
 });
 
 // --- Enrichment: внешний веб-поиск для обогащения справочника препаратов (этап 4, ADR-0005) ---
-// Переключатель Enrichment:Provider = Null|Brave|Yandex, зеркало FileStorage:Provider выше.
+// Переключатель Enrichment:Provider = Null|Brave|Yandex (тот же паттерн конфиг-переключателя,
+// что раньше был у FileStorage:Provider, пока хранилище не свели к единственной реализации).
 // Без явного конфига — Null: наружу не уходит ни одного запроса (см. NullMedicationSearchProvider).
 var enrichmentOptions = builder.Configuration.GetSection(EnrichmentOptions.SectionName).Get<EnrichmentOptions>()
     ?? new EnrichmentOptions();

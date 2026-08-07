@@ -75,9 +75,10 @@ public class AttachmentService(
 
         fileName = FileNameSanitizer.Sanitize(fileName);
         var attachmentId = Guid.NewGuid();
-        // Без имени файла в ключе: имя может содержать ФИО/диагноз, а ключи объектов
-        // видны администраторам хранилища и попадают в его служебные логи.
-        var storageKey = $"medical-records/{recordId}/{attachmentId}";
+        // Ключ полностью непрозрачен (StorageKeyFactory): не только без имени файла, но и без
+        // recordId и без вида родителя — администратор хранилища не видит ни ФИО/диагноз, ни то,
+        // что несколько объектов относятся к одной записи (то есть к одному человеку).
+        var storageKey = StorageKeyFactory.Create(attachmentId);
 
         // Шифруем блоб целиком до записи: в хранилище попадает только шифротекст.
         using var encrypted = new MemoryStream();
@@ -108,6 +109,42 @@ public class AttachmentService(
             "Вложение {AttachmentId} добавлено к мед-записи {RecordId} пользователем {UserId}",
             attachmentId, recordId, ownerUserId);
         return (AttachmentAccessResult.Success, ToDto(attachment));
+    }
+
+    /// <summary>
+    /// Список вложений мед-записи (TECH_DEBT #1: раньше такого эндпоинта не было — фронт держал
+    /// вложения только в памяти сессии, они пропадали при перезагрузке страницы). Доступ — тот же
+    /// инвариант видимости, что и у самой записи (MedicalRecordService.IsVisibleToAsync), а не
+    /// проверка владения: расшаренная запись должна показывать свои сканы и не-владельцу.
+    /// </summary>
+    public async Task<(AttachmentAccessResult Result, List<AttachmentDto> Items)> GetForMedicalRecordAsync(
+        Guid recordId, Guid userId, CancellationToken ct = default)
+    {
+        var record = await db.MedicalRecords.AsNoTracking()
+            .Where(r => r.Id == recordId)
+            .Select(r => new { r.Id, r.OwnerUserId })
+            .FirstOrDefaultAsync(ct);
+        if (record is null)
+            return (AttachmentAccessResult.NotFound, []);
+
+        if (!await medicalRecords.IsVisibleToAsync(recordId, userId, ct))
+        {
+            logger.LogWarning(
+                "Список вложений мед-записи {RecordId} отклонён: {UserId} нет доступа", recordId, userId);
+            return (AttachmentAccessResult.Forbidden, []);
+        }
+
+        // Просмотр списка вложений ЧУЖОЙ (расшаренной) записи — тоже факт доступа к чужим
+        // медданным (тот же приём, что MedicalRecordService.GetVisibleRecordsAsync).
+        if (record.OwnerUserId != userId)
+            await audit.WriteAsync(userId, MedicalAccessAction.ViewList, ownerUserId: record.OwnerUserId, medicalRecordId: recordId, ct: ct);
+
+        var items = await db.FileAttachments.AsNoTracking()
+            .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId)
+            .OrderBy(a => a.UploadedAt)
+            .ToListAsync(ct);
+
+        return (AttachmentAccessResult.Success, items.Select(ToDto).ToList());
     }
 
     /// <summary>

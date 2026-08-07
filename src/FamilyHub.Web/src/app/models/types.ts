@@ -113,19 +113,31 @@ export interface BirthdayInput {
     date: string;
 }
 
+/** Анализ или посещение врача — единая таблица на бэкенде (MedicalRecord.Kind). */
+export const MedicalRecordKind = {Analysis: 0, DoctorVisit: 1} as const;
+export type MedicalRecordKind = typeof MedicalRecordKind[keyof typeof MedicalRecordKind];
+
+/** Заготовка под OCR-конвейер (задачи 5.2/5.3 — ещё не реализован): статус распознавания вложения.
+ * Сейчас у всех записей всегда None. */
+export const ExtractionStatus = {None: 0, Pending: 1, Ready: 2, Failed: 3} as const;
+export type ExtractionStatus = typeof ExtractionStatus[keyof typeof ExtractionStatus];
+
 export interface MedicalRecord {
     id: string;
     ownerUserId: string;
+    kind: MedicalRecordKind;
     personName: string;
     recordDate: string;
     doctor: string | null;
     description: string | null;
+    extractionStatus: ExtractionStatus;
     createdAt: string;
     /** L2: семьи, от которых точечно скрыта именно эта запись (отдаётся только владельцу). */
     hiddenFamilyIds: string[];
 }
 
 export interface MedicalRecordInput {
+    kind: MedicalRecordKind;
     personName: string;
     recordDate: string;
     doctor: string | null;
@@ -141,8 +153,9 @@ export interface Attachment {
     uploadedAt: string;
 }
 
-/** Этап 3: четыре источника с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService. */
-export const SearchResultType = { Medication: 0, Kb: 1, Record: 2, Birthday: 3 } as const;
+/** Этап 3: пять источников с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService.
+ * Visit добавлен последним — перенумеровывать существующие значения нельзя (см. SearchDtos.cs). */
+export const SearchResultType = { Medication: 0, Kb: 1, Record: 2, Birthday: 3, Visit: 4 } as const;
 export type SearchResultType = typeof SearchResultType[keyof typeof SearchResultType];
 
 /** Контекст лекарства в результате поиска — где оно лежит и до какого срока годно.

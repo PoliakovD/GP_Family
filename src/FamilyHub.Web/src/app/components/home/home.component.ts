@@ -12,6 +12,7 @@ const TYPE_LABEL: Record<number, string> = {
   [SearchResultType.Kb]: 'Справочник',
   [SearchResultType.Record]: 'Анализ',
   [SearchResultType.Birthday]: 'День рождения',
+  [SearchResultType.Visit]: 'Приём у врача',
 };
 
 const TYPE_ICON: Record<number, string> = {
@@ -19,6 +20,7 @@ const TYPE_ICON: Record<number, string> = {
   [SearchResultType.Kb]: 'ph-duotone ph-book-open-text',
   [SearchResultType.Record]: 'ph-duotone ph-heartbeat',
   [SearchResultType.Birthday]: 'ph-fill ph-cake',
+  [SearchResultType.Visit]: 'ph-duotone ph-stethoscope',
 };
 
 /** Значения чипов-фильтров — 'all' убирает параметр types вовсе (см. api.service.ts). */
@@ -30,6 +32,7 @@ const TYPE_QUERY_TOKEN: Record<number, string> = {
   [SearchResultType.Kb]: 'kb',
   [SearchResultType.Record]: 'record',
   [SearchResultType.Birthday]: 'birthday',
+  [SearchResultType.Visit]: 'visit',
 };
 
 const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
@@ -37,6 +40,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
   { value: SearchResultType.Medication, label: 'Лекарства' },
   { value: SearchResultType.Kb, label: 'Справочник' },
   { value: SearchResultType.Record, label: 'Анализы' },
+  { value: SearchResultType.Visit, label: 'Врачи' },
   { value: SearchResultType.Birthday, label: 'Дни рождения' },
 ];
 
@@ -95,6 +99,7 @@ export class HomeComponent {
     return (
       item.type === SearchResultType.Medication ||
       item.type === SearchResultType.Record ||
+      item.type === SearchResultType.Visit ||
       item.type === SearchResultType.Birthday
     );
   }
@@ -102,8 +107,9 @@ export class HomeComponent {
   /**
    * Лекарство ведёт прямо в его аптечку (контекст пришёл вместе с результатом — см.
    * MedicationContext на бэкенде), а не на общий список раздела, как было раньше. Анализы,
-   * дни рождения и справочник контекста карточки для глубокой ссылки не несут — общий список
-   * раздела/пока не кликабельно (справочник: отдельного экрана просмотра ещё нет, появится в этапе 4).
+   * посещения врачей, дни рождения и справочник контекста карточки для глубокой ссылки не несут —
+   * общий список раздела/пока не кликабельно (справочник: отдельного экрана просмотра ещё нет,
+   * появится в этапе 4).
    */
   open(item: SearchResultItem): void {
     if (item.type === SearchResultType.Medication && item.medication) {
@@ -114,6 +120,10 @@ export class HomeComponent {
     }
     if (item.type === SearchResultType.Record) {
       void this.router.navigateByUrl('/health/records');
+      return;
+    }
+    if (item.type === SearchResultType.Visit) {
+      void this.router.navigateByUrl('/health/visits');
       return;
     }
     if (item.type === SearchResultType.Birthday) {

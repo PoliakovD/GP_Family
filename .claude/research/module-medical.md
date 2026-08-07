@@ -13,19 +13,38 @@
 
 Маршруты: `GET/POST /api/families/{familyId}/medications`, `PUT/DELETE /api/medications/{medicationId}`.
 
-## Анализы (`MedicalRecords/`) — персональный ресурс с двухуровневым шарингом
+## Анализы и посещения врачей (`MedicalRecords/`) — персональный ресурс с двухуровневым шарингом
+
+Одна таблица `MedicalRecord` на оба вида — дискриминатор `Kind` (`Analysis`/`DoctorVisit`, не
+шифруется, фильтруется прямо в SQL). Раздел «Врачи» на фронте — плоский список посещений, не
+отдельный справочник врачей: `Doctor` остаётся обычной строкой записи (для анализа — «кто
+назначил», для посещения — врач/специальность). Весь контур доступа — шаринг, скрытие, аудит,
+вложения — общий для обоих `Kind`, изменений не потребовал.
 
 `MedicalRecordService` — **не** использует `IFamilyOwned`/`IFamilyAccessService.HasRoleAsync`
 для проверки видимости самой записи (только для проверки «состоишь ли ты в семье, которой
 шаришь» при `ShareWithFamilyAsync`). Видимость считается явным предикатом
-`VisibleRecordsQuery(userId)`:
+`VisibleRecordsQuery(userId, kind: null)` — опциональный `kind` фильтрует по виду записи, не
+меняя сам предикат видимости:
 
 ```
 видно, если: ты владелец
-           ИЛИ (твои анализы расшарены этой семье
+           ИЛИ (твои записи расшарены этой семье
                 И ты в ней активный член
                 И эта конкретная запись не скрыта именно от неё)
 ```
+
+`GetVisibleRecordsAsync`/`SearchAsync` принимают опциональный `MedicalRecordKind? kind` —
+`GET /api/medical-records?kind=analysis|visit` и `SearchService` (источники `Record`/`Visit`)
+передают его насквозь, чтобы `types=visit` не расшифровывал вообще ни одного анализа (и наоборот) —
+это не косметика, а тот же принцип экономии, что и у остальных источников `SearchService`.
+
+Заготовка под будущий OCR-конвейер (задачи 5.2/5.3, `.claude/plans/medical-platform/stage/stage-5`):
+`MedicalRecord.ExtractedDataJson` (`[Encrypted]`) + `ExtractionStatus`, интерфейс
+`IMedicalDocumentExtractor` в `Extraction/` с `NullMedicalDocumentExtractor` по умолчанию (по
+образцу `IMedicationSearchProvider`/`NullMedicationSearchProvider` ниже). Ни очереди, ни
+эндпоинта, вызывающего этот интерфейс, ещё нет — только контракт, чтобы не дёргать схему БД
+второй раз, когда конвейер будет реализован.
 
 Два уровня шаринга, реализованные как отдельные таблицы (не флаги на самой записи):
 
@@ -49,25 +68,25 @@ Forbidden`), даже `Admin` семьи не может вмешаться. Э�
 ## Вложения (`Attachments/`)
 
 `AttachmentService` — метаданные в БД (`FileAttachment`), сам файл — в `IFileStorage`
-(Local/MinIO, см. `infrastructure.md`). У вложения **нет собственной видимости** — она
-наследуется от родителя через `OwnerType`+`OwnerId`:
+(MinIO, единственная реализация — см. `infrastructure.md`). У вложения **нет собственной
+видимости** — она наследуется от родителя через `OwnerType`+`OwnerId`:
 
 - `OwnerType.MedicalRecord` → видимость через `MedicalRecordService.IsVisibleToAsync` (та же
-  логика двухуровневого шаринга).
+  логика двухуровневого шаринга, общая для анализов и посещений врачей).
 - `OwnerType.Medication` → видимость через `IFamilyAccessService.HasRoleAsync` на `FamilyId`
   лекарства (`HasMedicationAccessAsync`).
 
-Загружать вложение к анализу может только владелец записи (`UploadForMedicalRecordAsync`) —
-тот же барьер, что и для шаринга. Скачивание — только presigned URL с TTL 5 минут
-(`GetPresignedUrlAsync`), не прямая ссылка.
+Загружать вложение может только владелец записи (`UploadForMedicalRecordAsync`) — тот же барьер,
+что и для шаринга. Объектный ключ — `StorageKeyFactory.Create(attachmentId)`, полностью
+непрозрачный (`blobs/{a}/{b}/{attachmentId}`), никакой связи с `recordId`/видом записи в ключе
+нет — администратор хранилища видит только набор несвязанных шифроблобов. Скачивание — только
+через собственный API-эндпоинт с HMAC-подписанной ссылкой (TTL 5 минут, `GetPresignedUrlAsync`),
+не прямая ссылка на хранилище.
 
 Маршруты: `POST /api/medical-records/{recordId}/attachments` (multipart `file`),
+`GET /api/medical-records/{recordId}/attachments` (список, доступ — тот же
+`IsVisibleToAsync`, что и у самой записи, аудит-запись при просмотре чужой расшаренной записи),
 `GET /api/attachments/{attachmentId}/url` → `{ url }`.
-
-**Известное ограничение v1**: нет эндпоинта «список вложений записи» — см.
-`TECH_DEBT.md` п.1. Если будете добавлять, естественное место — новый метод в
-`AttachmentService` (`GetForMedicalRecordAsync(recordId, userId)`, с той же проверкой
-видимости через `MedicalRecordService.IsVisibleToAsync`, что и у `GetPresignedUrlAsync`).
 
 ## OCR (`Ocr/`) — оцифровка медикамента по фото
 
@@ -137,7 +156,8 @@ Forbidden`), даже `Admin` семьи не может вмешаться. Э�
 ## Wiring модуля (`MedicalModule.cs`)
 
 `AddMedicalModule()` регистрирует все сервисы модуля (`Medkit`/`Medication`/`MedicalRecord`/
-`Attachment`/`MedicationOcr`/`Search` + этап-4 `KbLookupService`/`KbCatalogService`/
+`Attachment`/`MedicationOcr`/`Search` + `IMedicalDocumentExtractor` (заготовка под 5.2/5.3,
+Null-реализация по умолчанию) + этап-4 `KbLookupService`/`KbCatalogService`/
 `MedicationKbStatusService`/`KbWriter`/`MedicationSummarizer`/`IEnrichmentRequestService`/
 `MedicationEnrichmentProcessor`) в DI; `MapMedicalModule()` вызывает все `Map*Endpoints()`, вся
 группа — под `ConsentRequiredFilter`. Подключается из `FamilyHub.Api/Program.cs`, не имеет

@@ -39,6 +39,18 @@ public static class AttachmentEndpoints
             };
         }).DisableAntiforgery();
 
+        group.MapGet("/medical-records/{recordId:guid}/attachments", async (
+            Guid recordId, AttachmentService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, items) = await service.GetForMedicalRecordAsync(recordId, currentUser.UserId, ct);
+            return result switch
+            {
+                AttachmentAccessResult.NotFound => Results.NotFound(),
+                AttachmentAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(items),
+            };
+        });
+
         group.MapGet("/attachments/{attachmentId:guid}/url", async (
             Guid attachmentId, AttachmentService service, ICurrentUser currentUser, CancellationToken ct) =>
         {

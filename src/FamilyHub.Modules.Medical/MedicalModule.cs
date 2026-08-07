@@ -1,6 +1,7 @@
 using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.Enrichment;
+using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
@@ -25,6 +26,9 @@ public static class MedicalModule
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<MedicationOcrService>();
+        // Заготовка под OCR анализов/заключений (задачи 5.2/5.3 — не реализованы). По умолчанию
+        // Null: ни очереди, ни эндпоинта, вызывающего этот сервис, ещё нет.
+        services.AddScoped<IMedicalDocumentExtractor, NullMedicalDocumentExtractor>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();

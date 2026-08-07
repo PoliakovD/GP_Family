@@ -13,10 +13,16 @@ public class MedicalRecordConfiguration : IEntityTypeConfiguration<MedicalRecord
         builder.HasKey(r => r.Id);
 
         builder.Property(r => r.PersonName).HasMaxLength(200).IsRequired();
+        builder.Property(r => r.Kind).HasConversion<int>();
+        builder.Property(r => r.ExtractionStatus).HasConversion<int>();
 
         // Главный фильтр видимости (раздел 6 брифа) бьёт по OwnerUserId — индекс обязателен.
         // Намеренно НЕ настраиваем FK на User: запись остаётся персональным ресурсом
         // без связи на семью.
         builder.HasIndex(r => r.OwnerUserId);
+
+        // Списки/поиск теперь всегда фильтруют по виду записи (Kind не зашифрован — фильтр
+        // применяется прямо в SQL, до расшифровки остальных полей).
+        builder.HasIndex(r => new { r.OwnerUserId, r.Kind });
     }
 }
