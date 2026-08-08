@@ -276,8 +276,8 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
         var status = await GetKbStatusAsync(admin, medicationId);
         status.Card!.Source.Should().Contain("FakeProvider");
 
-        (await admin.PostAsync("/dev/trigger-outbox-dispatch", null)).StatusCode.Should().Be(HttpStatusCode.OK);
-
+        // Доставка события MedicationEnrichedEvent теперь асинхронная (ADR-0006, нет
+        // форсирующего /dev/trigger-outbox-dispatch) — ждём эффект тем же полингом ниже.
         await WaitForAsync(async () =>
         {
             var notifications = await (await admin.GetAsync("/api/notifications"))

@@ -1,8 +1,8 @@
 using System.Reflection;
 using FamilyHub.Domain;
 using FamilyHub.Domain.Entities;
-using FamilyHub.Infrastructure.Outbox;
 using FamilyHub.Infrastructure.Security;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -33,11 +33,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<PersonalCompatibilityResult> PersonalCompatibilityResults => Set<PersonalCompatibilityResult>();
     public DbSet<MedicationEnrichmentJob> MedicationEnrichmentJobs => Set<MedicationEnrichmentJob>();
     public DbSet<MedicationSearchCache> MedicationSearchCaches => Set<MedicationSearchCache>();
-    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // Таблицы шины MassTransit (ADR-0006): InboxState/OutboxState/OutboxMessage — замена
+        // собственной таблицы OutboxMessages. InboxState заведена сразу (миграция не потребуется
+        // повторно), хотя фильтр дедупликации на приёме пока не включён — см. Messaging/.
+        modelBuilder.AddInboxStateEntity();
+        modelBuilder.AddOutboxStateEntity();
+        modelBuilder.AddOutboxMessageEntity();
 
         // At-rest шифрование [Encrypted]-полей (этап 2, 152-ФЗ). ВНИМАНИЕ: EF кэширует модель
         // на процесс — конвертер захватывает cipher первого экземпляра контекста, поэтому

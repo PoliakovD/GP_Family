@@ -4,4 +4,4 @@ namespace FamilyHub.Contracts.Events;
 /// Пользователь покинул семью (сам вышел или выгнан админом). Хендлеры: Medical отзывает
 /// FamilyMedicalShare ушедшего для этой семьи; Notifications оповещает админов семьи.
 /// </summary>
-public record UserLeftFamilyEvent(Guid FamilyId, Guid UserId) : DomainEvent;
+public record UserLeftFamilyEvent(Guid FamilyId, Guid UserId);

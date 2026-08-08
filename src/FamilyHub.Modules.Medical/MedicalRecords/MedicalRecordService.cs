@@ -3,7 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
-using FamilyHub.Infrastructure.Outbox;
+using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Storage;
@@ -23,7 +23,7 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 public class MedicalRecordService(
     AppDbContext db,
     IFamilyAccessService access,
-    IOutboxWriter outbox,
+    IDomainEventPublisher publisher,
     IMedicalAuditWriter audit,
     IRussianTextSearcher searcher,
     IFileStorage storage,
@@ -269,7 +269,7 @@ public class MedicalRecordService(
                 SharedAt = DateTime.UtcNow,
             });
             // Только при реально созданной шаре (повторный вызов события не порождает).
-            outbox.Enqueue(new MedicalRecordSharedEvent(familyId, ownerUserId));
+            await publisher.PublishAsync(new MedicalRecordSharedEvent(familyId, ownerUserId), ct);
             audit.Enqueue(ownerUserId, MedicalAccessAction.Share, ownerUserId: ownerUserId, familyId: familyId);
             await db.SaveChangesAsync(ct);
             logger.LogInformation("Пользователь {OwnerUserId} расшарил мед-записи семье {FamilyId}", ownerUserId, familyId);

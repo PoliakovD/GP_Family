@@ -9,18 +9,22 @@ using Xunit;
 
 namespace FamilyHub.UnitTests.Features.Members;
 
-public class MembershipServiceTests : SqliteTestBase
+public class MembershipServiceTests : SqliteTestBase, IAsyncLifetime
 {
     private readonly MembershipService _sut;
-    private readonly OutboxTestPipeline _pipeline;
+    private readonly DomainEventTestPipeline _pipeline;
 
     public MembershipServiceTests()
     {
-        _pipeline = new OutboxTestPipeline(Db);
+        _pipeline = new DomainEventTestPipeline(ConnectionString, TestFieldCipher);
         _sut = new MembershipService(
             Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
-            _pipeline.Writer, NullLogger<MembershipService>.Instance);
+            _pipeline.Publisher, NullLogger<MembershipService>.Instance);
     }
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await _pipeline.DisposeAsync();
 
     [Fact]
     public async Task RemoveMemberAsync_NonAdmin_ReturnsForbidden()

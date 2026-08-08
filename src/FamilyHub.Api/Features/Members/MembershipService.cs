@@ -1,7 +1,7 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
-using FamilyHub.Infrastructure.Outbox;
+using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -12,9 +12,9 @@ namespace FamilyHub.Api.Features.Members;
 /// Выгон и самовыход (раздел 8 брифа). Выгнать может только Admin; выйти — любой участник
 /// без требования роли. В обоих случаях последнего активного админа убрать нельзя.
 /// Отзыв FamilyMedicalShare ушедшего выполняет Medical-модуль по событию UserLeftFamilyEvent
-/// (этап 1 плана): событие пишется в outbox в одной транзакции с удалением членства.
+/// (этап 1 плана, шина — ADR-0006): событие публикуется в одной транзакции с удалением членства.
 /// </summary>
-public class MembershipService(AppDbContext db, IFamilyAccessService access, IOutboxWriter outbox, ILogger<MembershipService> logger)
+public class MembershipService(AppDbContext db, IFamilyAccessService access, IDomainEventPublisher publisher, ILogger<MembershipService> logger)
 {
     public async Task<RemoveMemberResult> RemoveMemberAsync(Guid familyId, Guid targetUserId, Guid requestingUserId, CancellationToken ct = default)
     {
@@ -84,9 +84,9 @@ public class MembershipService(AppDbContext db, IFamilyAccessService access, IOu
         }
 
         db.FamilyMembers.Remove(member);
-        // Вышел/выгнан → его анализы перестают быть видны этой семье (шары отзовёт Medical-хендлер
+        // Вышел/выгнан → его анализы перестают быть видны этой семье (шары отзовёт Medical-потребитель
         // события; сами записи и сканы остаются у владельца), а админов оповестит Notifications.
-        outbox.Enqueue(new UserLeftFamilyEvent(familyId, targetUserId));
+        await publisher.PublishAsync(new UserLeftFamilyEvent(familyId, targetUserId), ct);
         await db.SaveChangesAsync(ct);
         return CoreOutcome.Removed;
     }

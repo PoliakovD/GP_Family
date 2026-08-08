@@ -32,7 +32,7 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         .WithPassword("minioadmin")
         .Build();
 
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync());
 
@@ -43,7 +43,10 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         await db.Database.MigrateAsync();
     }
 
-    public new async Task DisposeAsync()
+    // virtual (не только new) — KafkaWebFactory должна попасть в вызов через override, иначе
+    // xUnit (диспетчеризующий через интерфейс IAsyncLifetime) вызвал бы ТОЛЬКО этот метод, минуя
+    // _kafka.DisposeAsync() в производном классе (new без virtual не переопределяет слот интерфейса).
+    public new virtual async Task DisposeAsync()
     {
         await _postgres.DisposeAsync();
         await _minio.DisposeAsync();
@@ -76,8 +79,18 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // Без BotToken: вебхук-эндпоинт и ITelegramBotClient не регистрируются (см. Program.cs) —
         // достаточно для всего, кроме BotWebhookTests, у которых своя фабрика-наследник.
         builder.UseSetting("Telegram:BotToken", "");
-        // Ускоренный цикл outbox-диспетчера: тесты, проверяющие фоновую доставку, не ждут 5 секунд.
-        builder.UseSetting("Outbox:PollInterval", "00:00:00.500");
+        // Ускоренный цикл EF Core Outbox delivery service: тесты, проверяющие фоновую доставку,
+        // не ждут дефолтные несколько секунд (см. ADR-0006, MassTransitRegistration). 500мс, не
+        // меньше (тот же интервал, что был у старого Outbox:PollInterval) — каждый тик делает
+        // несколько запросов (OutboxState lock+select, InboxState cleanup, OutboxMessage select),
+        // тяжелее одного простого select старого OutboxDispatcher; при ~15 одновременно живых
+        // WebFactory-коллекциях в интеграционном прогоне более агрессивный интервал (пробовали
+        // 200мс) ощутимо нагружал Postgres-контейнеры и вызывал транзитные обрывы соединений
+        // (Npgsql "connection forcibly closed") на части тестов — не логическая ошибка, а
+        // эмпирически найденный порог для этого окружения.
+        builder.UseSetting("Messaging:Outbox:QueryDelay", "00:00:00.500");
+        // Дефолт для всей коллекции — без брокера; KafkaWebFactory переопределяет на true.
+        builder.UseSetting("Messaging:Kafka:Enabled", "false");
         // Все тесты коллекции ходят с одного IP: штатные лимиты дали бы ложные 429.
         // Тест брутфорс-защиты использует отдельную фабрику с заниженными лимитами.
         builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");

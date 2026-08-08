@@ -2,7 +2,7 @@ using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
-using FamilyHub.Infrastructure.Outbox;
+using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Kb;
@@ -31,7 +31,7 @@ public class MedicationEnrichmentProcessor(
     IMedicationSearchProvider provider,
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
-    IOutboxWriter outbox,
+    IDomainEventPublisher publisher,
     IOptions<EnrichmentOptions> options,
     ILogger<MedicationEnrichmentProcessor> logger)
 {
@@ -145,8 +145,12 @@ public class MedicationEnrichmentProcessor(
             job.Status = EnrichmentJobStatus.Completed;
             job.KbId = writeResult.KbId;
             job.CompletedAt = DateTime.UtcNow;
-            outbox.Enqueue(new MedicationEnrichedEvent(
-                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId));
+            // Публикация внутри явной транзакции: outbox-строка коммитится вместе с ней
+            // (корректно — тот же AppDbContext), но delivery-service шины "будится" сразу после
+            // SaveChangesAsync, ДО commit — строку он ещё не увидит и подхватит только на
+            // следующем тике Messaging:Outbox:QueryDelay. Не ошибка, просто небольшая задержка.
+            await publisher.PublishAsync(new MedicationEnrichedEvent(
+                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId), ct);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 

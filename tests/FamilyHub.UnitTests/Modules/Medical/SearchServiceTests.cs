@@ -26,7 +26,7 @@ public class SearchServiceTests : SqliteTestBase
     {
         var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
         var medicalRecords = new MedicalRecordService(
-            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer,
+            Db, access, new TestSupport.RecordingDomainEventPublisher(),
             new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db),
             new RussianTextSearcher(), Substitute.For<IFileStorage>(), NullLogger<MedicalRecordService>.Instance);
         var birthdays = Substitute.For<IBirthdaySearchSource>();

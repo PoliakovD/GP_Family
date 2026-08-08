@@ -1,6 +1,6 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
-using FamilyHub.Infrastructure.Outbox;
+using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,13 +11,13 @@ namespace FamilyHub.Infrastructure.Notifications;
 /// <summary>
 /// Ежедневная фоновая джоба (Hangfire recurring job, этап 3 п.10 брифа): сканирует сроки
 /// годности лекарств и приближающиеся дни рождения. С этапа 1 плана сама оповещений не
-/// создаёт — публикует MedicationExpiringEvent/BirthdayApproachingEvent в outbox, фан-аут
-/// по получателям делает Notifications-хендлер (идемпотентно, UNIQUE по DedupKey).
+/// создаёт — публикует MedicationExpiringEvent/BirthdayApproachingEvent через шину (ADR-0006),
+/// фан-аут по получателям делает Notifications-потребитель (идемпотентно, UNIQUE по DedupKey).
 /// SendPendingAsync остаётся ретрай-свипом недоставленных оповещений.
 /// </summary>
 public class ReminderScanJob(
     AppDbContext db,
-    IOutboxWriter outbox,
+    IDomainEventPublisher publisher,
     NotificationSendingService notifications,
     IOptions<NotificationOptions> options,
     ILogger<ReminderScanJob> logger)
@@ -29,7 +29,7 @@ public class ReminderScanJob(
 
         await ScanMedicationsAsync(today, ct);
         await ScanBirthdaysAsync(today, ct);
-        await db.SaveChangesAsync(ct); // фиксация поставленных в outbox событий
+        await db.SaveChangesAsync(ct); // фиксация поставленных в outbox строк шины
         await SendPendingAsync(ct);
 
         logger.LogInformation("ReminderScanJob завершён");
@@ -60,7 +60,7 @@ public class ReminderScanJob(
             if (await db.Notifications.AnyAsync(n => n.RelatedEntityId == med.Id && n.Type == type, ct))
                 continue;
 
-            outbox.Enqueue(new MedicationExpiringEvent(med.Id, med.FamilyId, med.Name, med.ExpiryDate, isExpired));
+            await publisher.PublishAsync(new MedicationExpiringEvent(med.Id, med.FamilyId, med.Name, med.ExpiryDate, isExpired), ct);
         }
     }
 
@@ -87,7 +87,7 @@ public class ReminderScanJob(
                         && n.DedupKey.EndsWith(yearSuffix), ct))
                 continue;
 
-            outbox.Enqueue(new BirthdayApproachingEvent(bday.Id, bday.FamilyId, bday.PersonName, nextOccurrence, daysUntil));
+            await publisher.PublishAsync(new BirthdayApproachingEvent(bday.Id, bday.FamilyId, bday.PersonName, nextOccurrence, daysUntil), ct);
         }
     }
 

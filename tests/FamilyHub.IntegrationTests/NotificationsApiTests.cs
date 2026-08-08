@@ -25,6 +25,20 @@ public class NotificationsApiTests(FamilyHubWebFactory factory) : IntegrationTes
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    /// <summary>Полинг до выполнения условия — доставка события шиной (ADR-0006) асинхронна,
+    /// нет форсирующего /dev/trigger-outbox-dispatch (удалён вместе с собственным outbox).</summary>
+    private static async Task WaitForAsync(Func<Task<bool>> condition, string because, int timeoutMs = 10_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition()) return;
+            await Task.Delay(200);
+        }
+
+        (await condition()).Should().BeTrue(because);
+    }
+
     [Fact]
     public async Task ExpiringMedication_ProducesNotification_VisibleOnlyToFamilyMember_WithUnreadFilterAndMarkRead()
     {
@@ -37,9 +51,13 @@ public class NotificationsApiTests(FamilyHubWebFactory factory) : IntegrationTes
                     new Dictionary<string, string> { ["quantity"] = "5" })))
             .StatusCode.Should().Be(HttpStatusCode.Created);
 
-        // Скан публикует событие в outbox; оповещения создаёт хендлер при доставке.
+        // Скан публикует событие через шину; оповещение создаёт потребитель при асинхронной
+        // доставке (ADR-0006) — ждём эффект полингом, а не форсируем доставку явно.
         await TriggerAsync(admin, "/dev/trigger-reminder-scan");
-        await TriggerAsync(admin, "/dev/trigger-outbox-dispatch");
+        await WaitForAsync(async () =>
+            (await (await admin.GetAsync("/api/notifications")).Content.ReadFromJsonAsync<List<NotificationDto>>(JsonOpts))!
+                .Any(n => n.Type == NotificationType.MedicationExpiringSoon),
+            "скан должен породить оповещение об истекающем сроке");
 
         var notifications = await (await admin.GetAsync("/api/notifications")).Content.ReadFromJsonAsync<List<NotificationDto>>(JsonOpts);
         notifications.Should().ContainSingle(n => n.Type == NotificationType.MedicationExpiringSoon);

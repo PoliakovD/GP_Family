@@ -20,8 +20,10 @@ using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Contracts.Events;
+using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Notifications;
-using FamilyHub.Infrastructure.Outbox;
+using FamilyHub.Infrastructure.Notifications.Consumers;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Security;
@@ -29,6 +31,7 @@ using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.Modules.Birthdays;
 using FamilyHub.Modules.Medical;
+using FamilyHub.Modules.Medical.Consumers;
 using FamilyHub.Modules.Medical.Enrichment;
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -75,7 +78,6 @@ builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioO
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
 builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(EnrichmentOptions.SectionName));
-builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection(OutboxOptions.SectionName));
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
@@ -119,21 +121,27 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")
         ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.")));
 
-// --- Событийная шина: MediatR + транзакционный outbox (этап 1 плана) ---
-// Хендлеры ищутся сканом сборок Infrastructure (Notifications-хендлеры) и модулей;
-// кастомный publisher изолирует сбой отдельного хендлера от остальных.
-builder.Services.AddMediatR(cfg =>
+// --- Событийная шина: MassTransit + EF Core Outbox + Kafka Rider (ADR-0006/ADR-0007) ---
+// Messaging:Kafka:Enabled=true (docker-compose/прод, дефолт для полного стека) — бизнес-потребители
+// подписаны на Kafka Rider (явный список ниже, composition root — единственное место, которому
+// позволено знать конкретные типы потребителей ИЗ ВСЕХ модулей сразу); false (dev-lite/юнит-тесты,
+// без Docker) — потребители сканом сборок на InMemory, как раньше. В обоих случаях сбой одного
+// потребителя не касается соседа — топология шины (свой receive endpoint/consumer group), не наш
+// код, как раньше у IsolatingLoggingPublisher.
+var kafkaConsumers = new KafkaConsumerRegistration[]
 {
-    cfg.RegisterServicesFromAssemblies(
-        typeof(OutboxDispatcher).Assembly,
-        typeof(MedicalModule).Assembly,
-        typeof(BirthdayModule).Assembly);
-    cfg.NotificationPublisherType = typeof(IsolatingLoggingPublisher);
-});
-builder.Services.AddSingleton<EventTypeRegistry>();
-builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
-builder.Services.AddScoped<OutboxProcessor>();
-builder.Services.AddHostedService<OutboxDispatcher>();
+    new(typeof(MedicalRecordSharedEvent), typeof(MedicalRecordSharedNotificationConsumer), "notifications-medical-record-shared"),
+    new(typeof(UserLeftFamilyEvent), typeof(UserLeftFamilyNotificationConsumer), "notifications-user-left-family"),
+    new(typeof(UserLeftFamilyEvent), typeof(UserLeftFamilyMedicalCleanupConsumer), "medical-user-left-family"),
+    new(typeof(MemberApprovedEvent), typeof(MemberApprovedNotificationConsumer), "notifications-member-approved"),
+    new(typeof(MedicationExpiringEvent), typeof(MedicationExpiringNotificationConsumer), "notifications-medication-expiring"),
+    new(typeof(BirthdayApproachingEvent), typeof(BirthdayApproachingNotificationConsumer), "notifications-birthday-approaching"),
+    new(typeof(MedicationEnrichedEvent), typeof(MedicationEnrichedNotificationConsumer), "notifications-medication-enriched"),
+};
+builder.Services.AddFamilyHubMessaging(builder.Configuration, kafkaConsumers,
+    typeof(DomainEventPublisher).Assembly,
+    typeof(MedicalModule).Assembly,
+    typeof(BirthdayModule).Assembly);
 
 // --- Текущий пользователь / провижининг ---
 builder.Services.AddHttpContextAccessor();
@@ -669,13 +677,9 @@ if (app.Environment.IsDevelopment())
         return Results.Ok();
     });
 
-    // Синхронный прогон outbox-доставки без ожидания фонового цикла — для локальной
-    // проверки и детерминизма интеграционных тестов.
-    app.MapPost("/dev/trigger-outbox-dispatch", async (OutboxProcessor processor, CancellationToken ct) =>
-    {
-        var processed = await processor.ProcessBatchAsync(ct);
-        return Results.Ok(new { processed });
-    });
+    // /dev/trigger-outbox-dispatch удалён (ADR-0006): у MassTransit нет поддерживаемого API
+    // "прогнать доставку сейчас" — UseBusOutbox будит delivery service сразу после SaveChanges,
+    // иначе полинг по Messaging:Outbox:QueryDelay. Тесты/дев — на QueryDelay + WaitForAsync-полинг.
 
     // Синхронный прогон конкретной задачи обогащения справочника (этап 4) — минуя очередь
     // Hangfire, для локальной проверки конвейера без ожидания воркера enrichment-server.

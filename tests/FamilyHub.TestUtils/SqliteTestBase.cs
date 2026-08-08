@@ -28,14 +28,32 @@ public abstract class SqliteTestBase : IDisposable
     private readonly SqliteConnection _connection;
     private readonly DbContextOptions<AppDbContext> _options;
 
+    /// <summary>
+    /// Строка подключения к именованной shared-cache in-memory БД этого теста — позволяет
+    /// открыть ВТОРОЕ независимое соединение к тем же данным (нужно DomainEventTestPipeline:
+    /// потребители событий работают со своим физическим SqliteConnection, отдельным от Db,
+    /// иначе продюсер — код теста/сервиса — и асинхронно доставленный MassTransit-потребитель
+    /// гоняют команды по одному connection-объекту параллельно, что SQLite не поддерживает).
+    /// Анонимный ":memory:" для этого не годится — второе соединение с тем же DataSource
+    /// открыло бы ДРУГУЮ, пустую базу.
+    /// </summary>
+    protected string ConnectionString { get; }
+
     /// <summary>Открытый на всё время теста контекст — большинству тестов достаточно одного.</summary>
     protected AppDbContext Db { get; }
 
     protected SqliteTestBase()
     {
-        // ":memory:" с закрытием соединения теряет БД — держим соединение открытым явно,
-        // а не доверяем connection pooling, на всё время жизни теста.
-        _connection = new SqliteConnection("DataSource=:memory:");
+        ConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = $"testdb-{Guid.NewGuid():N}",
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+
+        // С shared-cache БД живёт, пока открыто хотя бы одно соединение с этим именем —
+        // держим это соединение открытым явно на всё время теста, как и раньше с ":memory:".
+        _connection = new SqliteConnection(ConnectionString);
         _connection.Open();
 
         _options = new DbContextOptionsBuilder<AppDbContext>()

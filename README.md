@@ -35,11 +35,11 @@
 GP_Family.slnx
 ├── FamilyHub.Api               // composition root (Program.cs), auth/families/invites/
 │                                //   members/consents/account/push/bot-webhook, раздача Angular SPA
-├── FamilyHub.Contracts         // DTO/события, общие между Api и модулями (Outbox-события)
+├── FamilyHub.Contracts         // DTO/доменные события, общие между Api и модулями (шина — MassTransit)
 ├── FamilyHub.Domain            // сущности, enum'ы, value objects, интерфейсы (IFamilyOwned)
 ├── FamilyHub.Infrastructure    // EF Core, auth (JWT + Telegram), авторизация, шифрование,
 │                                //   файловое хранилище (MinIO/Local), Hangfire-оповещения,
-│                                //   email, LM Studio, поиск, Outbox, аудит
+│                                //   email, LM Studio, поиск, событийная шина (MassTransit), аудит
 ├── FamilyHub.Modules.Medical   // аптечка, анализы, вложения, OCR, справочник + AI-обогащение
 ├── FamilyHub.Modules.Birthdays // дни рождения
 └── FamilyHub.Web               // Angular 18 PWA — единственный фронтенд, обслуживает и браузер,
@@ -58,7 +58,7 @@ GP_Family.slnx
 - `*.Modules.*` и `FamilyHub.Api` зависят от `FamilyHub.Domain`, `FamilyHub.Infrastructure` и
   `FamilyHub.Contracts`, но **никогда** друг от друга напрямую (Medical не знает о Birthdays).
 - Общие сквозные сервисы (доступ по ролям, текущий пользователь, хранилище файлов, шифрование,
-  оповещения, Outbox) живут в Infrastructure как абстракции, подключаются модулям через DI.
+  оповещения, событийная шина) живут в Infrastructure как абстракции, подключаются модулям через DI.
 - Каждый модуль — свой csproj с `AddXModule()`/`MapXModule()`, регистрируется в `Program.cs`.
 
 ---
@@ -170,8 +170,14 @@ var visibleRecords = _db.MedicalRecords
 - **Согласия (152-ФЗ)** — `ConsentRequiredFilter` блокирует Medical/Birthdays-модули до принятия
   актуальной версии политики (`/api/consents`), тексты — `Api/Legal/*.html`.
 - **Аудит** — `MedicalAccessAudit` логирует доступ к чужим медданным.
-- **Outbox-паттерн** — изоляция модулей друг от друга через событийную шину поверх БД
-  (`FamilyHub.Infrastructure/Outbox`), события — в `FamilyHub.Contracts/Events`.
+- **Событийная шина (MassTransit 8.5.1 + EF Core Outbox + Kafka Rider)** — изоляция модулей друг
+  от друга через доменные события (`FamilyHub.Contracts/Events`, публикация — только через
+  `IDomainEventPublisher`, `src/FamilyHub.Infrastructure/Messaging`); транзакционная запись в
+  outbox поверх той же БД/транзакции, что и бизнес-запись, доставка — в реальный Kafka-топик
+  (`Messaging:Kafka:Enabled=true`, дефолт для docker-compose/прода), на который подписаны все
+  бизнес-потребители — задел под вынос модулей в микросервисы без переписывания контрактов/
+  потребителей уже сегодня, не только "в будущем" (ADR-0006, ADR-0007). `Enabled=false`
+  (дефолт `appsettings.json`, юнит-тесты, casual IDE-запуск) — dev-lite-режим на InMemory без брокера.
 - **Rate limiting** — на auth-эндпоинтах (`RequireRateLimiting("auth")`).
 - **Egress-политика** — данные по умолчанию не покидают РФ-контур; осознанные исключения
   задокументированы ADR'ами (Web Push через иностранные push-релеи — только зашифрованный
@@ -201,7 +207,9 @@ var visibleRecords = _db.MedicalRecords
   выделенную очередь `enrichment`).
 - **Frontend**: Angular dev-server (`ng serve`) в контейнере с hot-reload через bind-mount;
   production-сборка (`ng build`) собирается отдельно и раздаётся тем же `FamilyHub.Api`.
-- Локальный dev-стек — `docker-compose.yml`: сервисы `postgres`, `minio`, `seq`, `api`, `web`.
+- Локальный dev-стек — `docker-compose.yml`: сервисы `postgres`, `minio`, `seq`, `kafka`
+  (`apache/kafka` KRaft — реальный транспорт бизнес-событий, ADR-0006/ADR-0007;
+  `KAFKA_ENABLED=false` в `.env` переключает `api` на dev-lite InMemory-режим без брокера), `api`, `web`.
   Все секреты — через `.env` (см. `.env.example`), без дефолтов в compose для чувствительных
   ключей (`ENCRYPTION_MASTER_KEY` и т.п. — контейнер не стартует без них).
 - Команды — `Makefile` (`make dev`, `make dev-restart`, `make dev-npm`, `make dev-rebuild`,

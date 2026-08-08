@@ -13,6 +13,11 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="3.10.0" />
     <PackageReference Include="Testcontainers.Minio" Version="3.10.0" />
+    <!-- 3.10.0, не 4.x — совместимость с уже используемыми Testcontainers.PostgreSql/Minio 3.10.0. -->
+    <PackageReference Include="Testcontainers.Kafka" Version="3.10.0" />
+    <!-- Та же версия, что транзитивно тянет MassTransit.Kafka 8.5.1 (см. FamilyHub.Infrastructure) —
+         явная ссылка нужна только для raw-проб-консьюмера в KafkaBridgeFlowTests. -->
+    <PackageReference Include="Confluent.Kafka" Version="2.11.0" />
   </ItemGroup>
 
 </Project>

@@ -9,4 +9,4 @@ public record BirthdayApproachingEvent(
     Guid FamilyId,
     string PersonName,
     DateOnly OccurrenceDate,
-    int DaysUntil) : DomainEvent;
+    int DaysUntil);

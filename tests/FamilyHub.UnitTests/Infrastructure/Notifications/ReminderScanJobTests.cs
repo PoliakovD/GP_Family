@@ -10,18 +10,22 @@ using Xunit;
 
 namespace FamilyHub.UnitTests.Infrastructure.Notifications;
 
-public class ReminderScanJobTests : SqliteTestBase
+public class ReminderScanJobTests : SqliteTestBase, IAsyncLifetime
 {
     private readonly INotificationSender _sender = Substitute.For<INotificationSender>();
-    private readonly OutboxTestPipeline _pipeline;
+    private readonly DomainEventTestPipeline _pipeline;
 
     public ReminderScanJobTests()
     {
-        _pipeline = new OutboxTestPipeline(Db, _sender);
+        _pipeline = new DomainEventTestPipeline(ConnectionString, TestFieldCipher, _sender);
     }
 
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await _pipeline.DisposeAsync();
+
     private ReminderScanJob CreateSut(NotificationOptions? options = null) =>
-        new(Db, _pipeline.Writer, _pipeline.Notifications,
+        new(Db, _pipeline.Publisher, _pipeline.Notifications,
             Options.Create(options ?? new NotificationOptions()), NullLogger<ReminderScanJob>.Instance);
 
     /// <summary>Полный цикл «как в проде»: скан публикует события, диспетчер доставляет их хендлерам.</summary>

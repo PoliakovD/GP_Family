@@ -1,46 +1,50 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
-using MediatR;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 
-namespace FamilyHub.Infrastructure.Notifications.EventHandlers;
+namespace FamilyHub.Infrastructure.Notifications.Consumers;
 
 /// <summary>
 /// TG-алерт админам семьи о том, что участник покинул семью (сам или выгнан).
-/// Идемпотентность повторной доставки — DedupKey с EventId события.
+/// Идемпотентность повторной доставки — DedupKey с MessageId события (устойчив к редоставке
+/// в пределах ретраев одного этого потребителя — см. ADR-0006 про отказ от общего ретрая строки).
 /// </summary>
-public class UserLeftFamilyNotificationHandler(
+public class UserLeftFamilyNotificationConsumer(
     AppDbContext db,
-    NotificationSendingService notifications) : INotificationHandler<UserLeftFamilyEvent>
+    NotificationSendingService notifications) : IConsumer<UserLeftFamilyEvent>
 {
-    public async Task Handle(UserLeftFamilyEvent notification, CancellationToken cancellationToken)
+    public async Task Consume(ConsumeContext<UserLeftFamilyEvent> context)
     {
+        var notification = context.Message;
+        var ct = context.CancellationToken;
+
         // Семьи может уже не быть (каскад при удалении семьи) — тогда оповещать некого.
         var familyName = await db.Families.AsNoTracking()
             .Where(f => f.Id == notification.FamilyId)
             .Select(f => f.Name)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(ct);
         if (familyName is null) return;
 
         // Запись User переживает выход из семьи — имя доступно.
         var userName = await db.Users.AsNoTracking()
             .Where(u => u.Id == notification.UserId)
             .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(cancellationToken) ?? "Участник";
+            .FirstOrDefaultAsync(ct) ?? "Участник";
 
         var adminIds = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == notification.FamilyId
                 && m.Role == FamilyRole.Admin && m.Status == MemberStatus.Active)
             .Select(m => m.UserId)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
 
         await notifications.NotifyAsync(
             adminIds, notification.FamilyId, NotificationType.MemberLeft,
             $"Участник покинул семью: {userName}",
             $"{userName} больше не состоит в семье «{familyName}». Доступ к его медицинским данным отозван.",
             relatedEntityId: notification.UserId,
-            dedupKeyFor: userId => $"member-left:{notification.EventId}:{userId}",
-            ct: cancellationToken);
+            dedupKeyFor: userId => $"member-left:{context.MessageId}:{userId}",
+            ct: ct);
     }
 }

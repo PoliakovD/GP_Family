@@ -13,4 +13,4 @@ public record MedicationEnrichedEvent(
     Guid KbId,
     string DisplayName,
     Guid RequestedByUserId,
-    Guid FamilyId) : DomainEvent;
+    Guid FamilyId);

@@ -16,9 +16,19 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <!-- 12.5.0 — последняя версия под Apache-2.0 (v13+ перешла на коммерческую лицензию).
-         Возможностей 12.x достаточно: INotification, IPublisher, кастомный INotificationPublisher. -->
-    <PackageReference Include="MediatR" Version="12.5.0" />
+    <!-- 8.5.1 — последняя версия под Apache-2.0 (v9, апрель 2025, ушла на коммерческую лицензию —
+         та же история, что и с MediatR). Подтверждено спайком: MassTransit.EntityFrameworkCore
+         собран под EF Core 9.0.1, но NuGet резолвит наш пиннинг 10.0.9 без конфликтов (см.
+         ADR-0006). Заменяет MediatR + собственный Postgres-outbox (Infrastructure/Outbox/, этап 1). -->
+    <PackageReference Include="MassTransit" Version="8.5.1" />
+    <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.5.1" />
+    <PackageReference Include="MassTransit.Kafka" Version="8.5.1" />
+    <!-- Явная ссылка (не только транзитивная через MassTransit.Kafka) — используем
+         Confluent.Kafka.Admin напрямую для явного создания топиков при старте (ADR-0007):
+         TopicEndpoint-потребители валят весь Kafka Rider при старте, если топик ещё не
+         существует ("ReceiveTransport faulted") — auto.create.topics.enable не успевает
+         сработать до первой попытки подписки, нужно создавать топики явно, не полагаться на него. -->
+    <PackageReference Include="Confluent.Kafka" Version="2.11.0" />
     <PackageReference Include="Telegram.Bot" Version="22.10.1" />
     <!-- SMTP-отправка (задача 2.5): универсальный клиент вместо SDK конкретного вендора —
          российский провайдер задаётся конфигом (host/логин), без привязки в коде. -->

@@ -11,3 +11,5 @@
 | [0003](0003-search-architecture.md) | Архитектура поиска: Postgres FTS + in-memory, отказ от OpenSearch |
 | [0004](0004-web-push-egress-exception.md) | Web Push: исключение из egress-политики ADR-0001 |
 | [0005](0005-medication-enrichment-egress.md) | Обогащение справочника препаратов: исключение из egress-политики ADR-0001 |
+| [0006](0006-event-bus-masstransit-and-kafka.md) | Событийная шина: MediatR → MassTransit 8.5.1 + Kafka Rider (частично пересмотрен ADR-0007) |
+| [0007](0007-kafka-as-primary-event-transport.md) | Kafka Rider — реальный транспорт для бизнес-потребителей событий, не только внешний мост |

@@ -3,7 +3,7 @@ using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
-using FamilyHub.Infrastructure.Outbox;
+using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,7 +19,7 @@ public record PendingMemberDto(Guid UserId, string DisplayName, string? Username
 /// (персональный инвайт → Active сразу, ссылка → PendingApproval до одобрения админа),
 /// инкремент UsedCount в одной транзакции с вступлением (защита от гонки на MaxUses).
 /// </summary>
-public class InviteService(AppDbContext db, IFamilyAccessService access, IOutboxWriter outbox, ILogger<InviteService> logger)
+public class InviteService(AppDbContext db, IFamilyAccessService access, IDomainEventPublisher publisher, ILogger<InviteService> logger)
 {
     public async Task<(CreateInviteResult Result, FamilyInvite? Invite)> CreateInviteAsync(
         Guid creatorUserId, Guid familyId, CreateInviteRequest request, CancellationToken ct = default)
@@ -197,7 +197,7 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IOutbox
 
         member.Status = MemberStatus.Active;
         // Событие фиксируется тем же SaveChangesAsync, что и смена статуса, — атомарно.
-        outbox.Enqueue(new MemberApprovedEvent(familyId, targetUserId));
+        await publisher.PublishAsync(new MemberApprovedEvent(familyId, targetUserId), ct);
         await db.SaveChangesAsync(ct);
         logger.LogInformation(
             "Заявка пользователя {TargetUserId} в семью {FamilyId} одобрена админом {UserId}", targetUserId, familyId, requestingUserId);

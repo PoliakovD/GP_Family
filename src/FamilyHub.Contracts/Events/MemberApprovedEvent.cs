@@ -4,4 +4,4 @@ namespace FamilyHub.Contracts.Events;
 /// Админ одобрил заявку на вступление в семью. Хендлер Notifications оповещает
 /// остальных членов семьи о новом участнике.
 /// </summary>
-public record MemberApprovedEvent(Guid FamilyId, Guid UserId) : DomainEvent;
+public record MemberApprovedEvent(Guid FamilyId, Guid UserId);

@@ -21,7 +21,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
     {
         _sut = new MedicalRecordService(
             Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
-            new TestSupport.OutboxTestPipeline(Db).Writer,
+            new TestSupport.RecordingDomainEventPublisher(),
             new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db),
             new RussianTextSearcher(),
             Substitute.For<IFileStorage>(),

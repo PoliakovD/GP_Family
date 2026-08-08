@@ -24,7 +24,9 @@ public class SchemaSeparationTests(FamilyHubWebFactory factory) : IntegrationTes
     [InlineData("FileAttachments", "medical")]
     [InlineData("Medkits", "medical")]
     [InlineData("Medications", "medical")]
-    [InlineData("OutboxMessages", "public")]
+    [InlineData("OutboxMessage", "public")]
+    [InlineData("OutboxState", "public")]
+    [InlineData("InboxState", "public")]
     public async Task Table_LivesInExpectedSchema(string table, string expectedSchema)
     {
         // Прогрев: первый запрос гарантирует, что хост поднят и миграции применены.

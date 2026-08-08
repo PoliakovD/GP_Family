@@ -30,7 +30,7 @@ public class TelegramUpdateHandlerTests : SqliteTestBase
         var access = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
         IUserProvisioningService provisioning = new UserProvisioningService(Db, NullLogger<UserProvisioningService>.Instance);
         var invites = new InviteService(
-            Db, access, new TestSupport.OutboxTestPipeline(Db).Writer, NullLogger<InviteService>.Instance);
+            Db, access, new TestSupport.RecordingDomainEventPublisher(), NullLogger<InviteService>.Instance);
         var merge = new AccountMergeService(Db, NullLogger<AccountMergeService>.Instance);
         _links = new TelegramLinkService(Db, merge, NullLogger<TelegramLinkService>.Instance);
         _sut = new TelegramUpdateHandler(_bot, provisioning, invites, _links, Options.Create(new TelegramOptions()));

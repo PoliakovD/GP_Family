@@ -17,7 +17,7 @@ public class InviteServiceTests : SqliteTestBase
     {
         _sut = new InviteService(
             Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
-            new OutboxTestPipeline(Db).Writer, NullLogger<InviteService>.Instance);
+            new RecordingDomainEventPublisher(), NullLogger<InviteService>.Instance);
     }
 
     [Fact]

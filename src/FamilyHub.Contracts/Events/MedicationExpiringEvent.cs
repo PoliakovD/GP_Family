@@ -9,4 +9,4 @@ public record MedicationExpiringEvent(
     Guid FamilyId,
     string Name,
     DateOnly ExpiryDate,
-    bool IsExpired) : DomainEvent;
+    bool IsExpired);

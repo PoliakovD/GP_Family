@@ -45,6 +45,49 @@ services:
     volumes:
       - seq-data:/data
 
+  # Kafka Rider (ADR-0006, топология потребителей — ADR-0007): реальный транспорт для бизнес-
+  # событий — все 7 потребителей (Notifications + Medical cleanup) подписаны на топики через
+  # TopicEndpoint, не на InMemory. api ниже требует этот сервис (depends_on: service_healthy) —
+  # без него бизнес-события (одобрение заявки, выход из семьи и т.п.) не доставляются вообще.
+  # apache/kafka — официальный образ ASF, KRaft-режим (без Zookeeper), Apache-2.0 — та же
+  # лицензионная логика, что у выбора MassTransit 8.5.1 (не 9.x). Один узел совмещает роли
+  # broker+controller — этого достаточно для dev/single-instance; продовый кластер потребовал
+  # бы отдельных controller-узлов и внешнего KAFKA_ADVERTISED_LISTENERS для каждого брокера.
+  kafka:
+    image: apache/kafka:3.9.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # HOST — отдельный listener наружу (KAFKA_HOST_PORT) для отладки kafka-console-consumer.sh
+      # с хоста; PLAINTEXT — для api внутри docker-сети (advertised как "kafka:9092").
+      # Явный "0.0.0.0" здесь (а не голый ":port") ломает валидацию KafkaConfig эмпирически
+      # проверенным способом ("advertised.listeners cannot use the nonroutable meta-address
+      # 0.0.0.0") — образ ожидает именно голый ":port"-формат, как в официальных примерах
+      # apache/kafka/docker/examples.
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,HOST://localhost:${KAFKA_HOST_PORT:-9094}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # 152-ФЗ: ПДн/медицинские поля в части событий (BirthdayApproachingEvent.PersonName и
+      # т.п.) — ретеншн ограничен тем же сроком, что был у старого OutboxOptions.ProcessedRetention.
+      KAFKA_LOG_RETENTION_HOURS: 168
+    ports:
+      - "${KAFKA_HOST_PORT:-9094}:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
   api:
     build:
       context: .
@@ -64,6 +107,10 @@ services:
       # Сгенерировать: openssl rand -base64 32
       Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:?не задан в .env — сгенерируйте: openssl rand -base64 32}"
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
+      # true (дефолт) — бизнес-потребители подписаны на Kafka Rider, не InMemory (ADR-0007);
+      # false здесь означал бы полный dev-lite режим без брокера — для полного стека не нужен.
+      Messaging__Kafka__Enabled: "${KAFKA_ENABLED:-true}"
+      Messaging__Kafka__BootstrapServers: "kafka:9092"
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +118,8 @@ services:
         condition: service_healthy
       seq:
         condition: service_started
+      kafka:
+        condition: service_healthy
 
   web:
     build:
@@ -96,5 +145,6 @@ volumes:
   postgres-data:
   minio-data:
   seq-data:
+  kafka-data:
   web-node-modules:
   web-angular-cache:

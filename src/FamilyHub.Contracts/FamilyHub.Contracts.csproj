@@ -1,11 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <!-- Только маркерные интерфейсы MediatR (INotification) — сама MediatR-реализация
-         подключается в Infrastructure. Contracts остаётся максимально лёгкой сборкой,
-         на которую могут ссылаться все модули, не тянув за собой шину целиком. -->
-    <PackageReference Include="MediatR.Contracts" Version="2.0.1" />
-  </ItemGroup>
+  <!-- Ни одного PackageReference: MassTransit не требует интерфейса/атрибута на сообщении —
+       обычный record в референсящейся сборке уже валидное сообщение шины (маршрутизация по
+       message URN, см. ADR-0006). Contracts остаётся максимально лёгкой сборкой, на которую
+       могут ссылаться все модули, не тянув за собой шину целиком. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
