@@ -276,6 +276,12 @@ UpgradeLog*.htm
 ServiceFabricBackup/
 *.rptproj.bak
 
+# FamilyHub: deploy/backup/ (backup.sh + Dockerfile ночного бэкапа) — не авто-generated backup
+# студии, а часть деплой-стека (см. deploy/README.md §9). Правило Backup*/ выше (регистронезависимо
+# на Windows) иначе исключает его целиком — deploy.yml не смог бы scp'ить его на VPS.
+!deploy/backup/
+!deploy/backup/**
+
 # SQL Server files
 *.mdf
 *.ldf
