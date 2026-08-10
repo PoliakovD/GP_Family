@@ -6,3 +6,21 @@
 .vscode/
 .claude/
 .angular/
+**/.angular/
+**/dist/
+
+# Секреты — раньше попадали в build-контекст образа целиком (docker build отправляет context
+# демону ДО применения .dockerignore к отдельным COPY, поэтому даже неиспользуемый в Dockerfile
+# файл всё равно уезжает демону). .env.example — не секрет, нужен как документация формата.
+*.env
+.env*
+!.env.example
+
+# Не нужны внутри образа, раздувают контекст и не участвуют в publish/ng build.
+tests/
+docs/
+.idea/
+**/TestResults/
+*.slnx
+*.user
+FamilyHub Redesign - standalone.html

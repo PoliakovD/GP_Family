@@ -1,0 +1,58 @@
+# Реверс-прокси прод-контура (см. deploy/docker-compose.prod.yml и деплой-план, часть E).
+# Домены и e-mail для Let's Encrypt читаются из .env (тот же файл, что деплой-workflow кладёт
+# на VPS) — {$VAR} здесь читается из окружения ПРОЦЕССА caddy (env_file: .env в compose).
+#
+# Два класса сайтов:
+#   1. Публичный (PUBLIC_DOMAIN, www) — 0.0.0.0:443, автоматический TLS через Let's Encrypt
+#      (HTTP-01, порт 80 открыт). Единственная точка входа для реального трафика приложения.
+#   2. Админский (Seq/MinIO Console/Hangfire/Swagger) — контейнерный порт :8443, который Docker
+#      публикует ТОЛЬКО на WireGuard-адресе хоста (10.8.0.1:8443:8443, см. compose) — снаружи
+#      недостижим в принципе, TLS — самоподписанный ("tls internal": Let's Encrypt не выдаст
+#      сертификат на имя, которое резолвится в приватный 10.8.0.1 и не проходит HTTP-01).
+#      Доступ: https://seq.<домен>:8443 и т.п. — ТОЛЬКО подключившись к WireGuard. Один раз
+#      поставьте корневой CA Caddy на клиентскую машину (см. deploy/README.md), иначе браузер
+#      будет ругаться на самоподписанный сертификат при каждом заходе.
+{
+	email {$ACME_EMAIL}
+}
+
+{$PUBLIC_DOMAIN}, www.{$PUBLIC_DOMAIN} {
+	encode zstd gzip
+
+	# Защита в глубину поверх DevTools-флагов (см. DevToolsOptions в FamilyHub.Api): даже если
+	# флаг однажды включат по ошибке, эти пути с публичного домена всё равно не достучатся —
+	# только Hangfire/Swagger внутри admin-блока ниже, и то за собственным BasicAuth приложения.
+	@blocked path /dev/* /hangfire* /swagger* /health/*
+	respond @blocked 404
+
+	reverse_proxy api:8080
+}
+
+seq.{$PUBLIC_DOMAIN}:8443, s3.{$PUBLIC_DOMAIN}:8443, admin.{$PUBLIC_DOMAIN}:8443 {
+	tls internal
+
+	@seq host seq.{$PUBLIC_DOMAIN}
+	handle @seq {
+		reverse_proxy seq:80
+	}
+
+	@s3 host s3.{$PUBLIC_DOMAIN}
+	handle @s3 {
+		# 9001 — MinIO Console (веб-UI), не 9000 (S3 API) — вложения и так идут через
+		# HMAC-подписанный эндпоинт приложения (см. research/infrastructure.md), а не
+		# напрямую из MinIO; консоль нужна только администратору для отладки бакета.
+		reverse_proxy minio:9001
+	}
+
+	@admin host admin.{$PUBLIC_DOMAIN}
+	handle @admin {
+		# Hangfire (/hangfire) и Swagger (/swagger) на этом же api — за DevTools:AdminUiEnabled
+		# и собственным BasicAuth-фильтром приложения (HangfireBasicAuthFilter/AdminBasicAuth,
+		# см. Program.cs); WireGuard здесь — периметр, не единственный рубеж.
+		reverse_proxy api:8080
+	}
+
+	handle {
+		respond 404
+	}
+}

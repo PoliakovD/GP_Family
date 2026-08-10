@@ -215,6 +215,25 @@ var visibleRecords = _db.MedicalRecords
 - Команды — `Makefile` (`make dev`, `make dev-restart`, `make dev-npm`, `make dev-rebuild`,
   `make logs[-web|-api]`) и `dev.ps1` для Windows/PowerShell.
 
+### Параллельная разработка — git worktree
+
+`docker compose` берёт имя проекта (и, значит, имена named volumes вроде `postgres-data`) из
+имени каталога — два worktree с одинаковым `.env` делили бы одну и ту же БД/MinIO. Скрипты
+`scripts/worktree.ps1` (Windows) и `scripts/worktree.sh` (Bash) создают worktree рядом с
+репозиторием (`../worktrees/<slug>`) и переписывают в его `.env` свой `COMPOSE_PROJECT_NAME` и
+хостовые порты (смещение `slot × 100`), так что несколько стеков спокойно живут одновременно:
+
+```powershell
+./scripts/worktree.ps1 new feature/medications-search   # slot подбирается автоматически
+./scripts/worktree.ps1 list                              # git worktree list + docker compose ls
+./scripts/worktree.ps1 rm feature/medications-search      # down -v + git worktree remove
+```
+
+### Продовый деплой — `deploy/`
+
+Отдельный контур на VPS (Caddy + образ из GHCR + WireGuard-туннель к LM Studio на ноутбуке) —
+файлы и инструкция в [`deploy/README.md`](deploy/README.md); CI/CD — `.github/workflows/`.
+
 ---
 
 ## 🔐 Telegram Mini App

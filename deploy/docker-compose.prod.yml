@@ -1,0 +1,228 @@
+# Прод-стек на VPS (6 CPU/12 GB/120 GB) — живёт в /opt/familyhub/, деплоится GitHub Actions
+# (.github/workflows/deploy.yml) по SSH. В отличие от корневого docker-compose.yml (локальная
+# разработка, api/web собираются из исходников с hot-reload):
+#   - api — готовый образ из GHCR (${IMAGE}:${IMAGE_TAG}, пишутся в .env самим деплой-workflow),
+#     без Angular dev-server — SPA уже вшита в образ (см. src/FamilyHub.Api/Dockerfile);
+#   - ни у одного сервиса, кроме caddy, нет наружу смотрящих ports — Postgres/MinIO/Kafka/Seq
+#     доступны только внутри docker-сети и (для админок) через Caddy на WireGuard-адресе хоста;
+#   - лимиты памяти на каждый сервис (сумма меньше 12 GB — запас на ОС/docker/wg см. README);
+#   - json-file логи ограничены (сами логи приложения — в Seq, не в docker logs).
+#
+# ВАЖНО про порт 8443 у caddy: WireGuard (wg0, 10.8.0.1) — интерфейс ХОСТА, а не контейнера,
+# поэтому Caddy не может забиндиться на 10.8.0.1 изнутри контейнера напрямую. Вместо этого
+# админ-сайты Caddy слушают контейнерный порт 8443, а Docker публикует ЕГО на host-адресе
+# 10.8.0.1 (host-IP-scoped port mapping — работает на уровне docker, не требует видимости
+# wg0 внутри контейнера). Публичный 443 остаётся на 0.0.0.0 — два разных контейнерных порта,
+# конфликта биндинга нет (см. deploy/README.md, если нужно резюме этой развилки).
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - max_connections=100
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  seq:
+    image: datalust/seq:latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      # В отличие от локального дев-стека (SEQ_NO_AUTH=true) — на VPS Seq смотрит через Caddy
+      # на публичный интернет-периметр (пусть и только с WG-адреса), анонимный доступ недопустим.
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "false"
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SEQ_ADMIN_PASSWORD_HASH}
+      SEQ_CACHE_SYSTEMRAMTARGET: "0.6"
+    volumes:
+      - seq-data:/data
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+
+  # Kafka Rider (ADR-0006/ADR-0007) — тот же однонодовый broker+controller, что в дев-стеке.
+  # Отличия от docker-compose.yml: убран листенер HOST/проброс 9094 (был только для отладки
+  # kafka-console-consumer.sh с хоста — на VPS не нужен и не должен торчать); топики создаёт
+  # сам API при старте (EnsureTopicsExist, ADR-0007), поэтому автосоздание выключено — иначе
+  # опечатка в имени топика тихо создала бы отдельный "мусорный" топик вместо явной ошибки.
+  kafka:
+    image: apache/kafka:3.9.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # 152-ФЗ: та же граница ретеншна, что в дев-стеке (см. docker-compose.yml) — ПДн-события
+      # (BirthdayApproachingEvent.PersonName и т.п.) не должны жить в логе брокера дольше нужного.
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_HEAP_OPTS: "-Xmx1G -Xms1G"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  api:
+    image: ${IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Production, не Development: DeveloperExceptionPage иначе отдавал бы стектрейс клиенту
+      # наружу (см. деплой-план). Debug-логи и Hangfire/Swagger — за DevTools/Serilog в .env,
+      # НЕ за ASPNETCORE_ENVIRONMENT (см. DevToolsOptions в FamilyHub.Api/Configuration).
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Minio__Endpoint: "minio:9000"
+      Minio__AccessKey: "${MINIO_ROOT_USER}"
+      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:?не задан в .env — сгенерируйте: openssl rand -base64 32}"
+      Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
+      Messaging__Kafka__Enabled: "true"
+      Messaging__Kafka__BootstrapServers: "kafka:9092"
+    healthcheck:
+      # wget — не curl: он уже есть в aspnet:*-alpine (busybox), доп. пакет не нужен.
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      seq: { condition: service_started }
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      # Админ-сайты (Seq/MinIO Console/Hangfire/Swagger) — см. комментарий в шапке файла и
+      # deploy/Caddyfile: доступны только с WireGuard-адреса хоста, отдельный контейнерный порт.
+      - "10.8.0.1:8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Ночной pg_dump + зеркалирование MinIO с ротацией (см. deploy/backup/backup.sh) — часть H
+  # деплой-плана. Не сервис в привычном смысле — крутит cron и спит, docker compose держит
+  # его живым тем же restart-policy, что остальные.
+  backup:
+    build:
+      context: ./backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: familyhub
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  postgres-data:
+  minio-data:
+  seq-data:
+  kafka-data:
+  caddy-data:
+  caddy-config:

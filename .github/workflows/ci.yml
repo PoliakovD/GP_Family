@@ -1,0 +1,68 @@
+name: CI
+
+# Быстрый гейт на каждый push/PR: сборка всего решения, юнит-тесты (SQLite-in-memory, без
+# Docker) и продовая сборка Angular (ловит ошибки компиляции и превышение бюджетов из
+# angular.json — 850kb/1.5mb). Интеграционные тесты (Testcontainers: Postgres/MinIO/Kafka,
+# минуты) — отдельный workflow integration.yml, только на master (см. деплой-план, часть F).
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore GP_Family.slnx
+
+      - name: Build (Release)
+        run: dotnet build GP_Family.slnx -c Release --no-restore
+
+      - name: Unit tests
+        run: >
+          dotnet test tests/FamilyHub.UnitTests/FamilyHub.UnitTests.csproj
+          -c Release --no-build --logger "console;verbosity=normal"
+
+  angular-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/FamilyHub.Web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/FamilyHub.Web/package-lock.json
+
+      - run: npm ci
+
+      # angular.json: defaultConfiguration=production (outputHashing, serviceWorker, бюджеты) —
+      # обычный `ng build` уже собирает прод-конфигурацию, доп. флаг не нужен. Сборка идёт в
+      # ../FamilyHub.Api/wwwroot (см. outputPath) — здесь это просто проверка, что она проходит;
+      # реальный артефакт для деплоя собирается в Dockerfile (стадия web), не в этом workflow.
+      #
+      # `npm test` в package.json есть, но в angular.json нет architect-таргета test и karma-
+      # конфига — фронтовые тесты сюда намеренно не включены (отдельная задача).
+      - run: npx ng build

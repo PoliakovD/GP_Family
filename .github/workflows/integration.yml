@@ -1,0 +1,41 @@
+name: Integration Tests
+
+# Отдельно от ci.yml (см. деплой-план, часть F): тянет Testcontainers-образы Postgres/MinIO/Kafka
+# и поднимает приложение целиком (WebApplicationFactory<Program>) — минуты, не секунды. Гоняется
+# на каждый push в master (после merge) и по требованию, а не на каждый push/PR — иначе быстрый
+# фидбек по фичам блокировался бы на этом каждый раз. ubuntu-latest уже даёт рабочий Docker-демон.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore GP_Family.slnx
+
+      - name: Integration tests
+        run: >
+          dotnet test tests/FamilyHub.IntegrationTests/FamilyHub.IntegrationTests.csproj
+          -c Release --logger "console;verbosity=normal"

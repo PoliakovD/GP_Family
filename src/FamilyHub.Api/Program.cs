@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Features.Auth;
 using FamilyHub.Api.Features.Account;
 using FamilyHub.Api.Features.Bot;
@@ -7,6 +8,8 @@ using FamilyHub.Api.Features.Dependents;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
+using FamilyHub.Api.Health;
+using FamilyHub.Api.Security;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Auth;
@@ -39,7 +42,9 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -48,6 +53,7 @@ using Minio;
 using Serilog;
 using Serilog.Events;
 using Serilog.Exceptions;
+using System.Net;
 using Telegram.Bot;
 
 // Bootstrap-логгер ловит ошибки, которые случаются до того, как builder.Build()
@@ -84,6 +90,19 @@ builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(Cons
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 
+// --- DevTools (Hangfire/Swagger/DevAuth/`/dev/*`): раньше все четыре жёстко гейтились на
+// --- IsDevelopment(). Дев-контур на VPS работает под ASPNETCORE_ENVIRONMENT=Production (иначе
+// --- включается DeveloperExceptionPage, отдающий стектрейс наружу) — поэтому вынесены на флаги,
+// --- читаемые сразу (не только через DI Configure<>), т.к. используются ниже, до builder.Build().
+builder.Services.Configure<DevToolsOptions>(builder.Configuration.GetSection(DevToolsOptions.SectionName));
+var devToolsOptions = builder.Configuration.GetSection(DevToolsOptions.SectionName).Get<DevToolsOptions>()
+    ?? new DevToolsOptions();
+if (devToolsOptions.AdminUiEnabled
+    && (string.IsNullOrWhiteSpace(devToolsOptions.AdminUser) || string.IsNullOrWhiteSpace(devToolsOptions.AdminPassword)))
+    throw new InvalidOperationException(
+        "DevTools:AdminUiEnabled=true, но DevTools:AdminUser/AdminPassword (env DevTools__AdminUser/" +
+        "DevTools__AdminPassword) не заданы — Hangfire-дашборд и Swagger были бы доступны без пароля.");
+
 // --- At-rest шифрование (этап 2, 152-ФЗ): ключ вне БД, fail-fast при отсутствии ---
 // Синглтоны обязательны: EF кэширует модель с конвертером, захватившим первый cipher.
 var encryptionMasterKey = builder.Configuration["Encryption:MasterKey"];
@@ -94,12 +113,14 @@ if (string.IsNullOrWhiteSpace(encryptionMasterKey))
 // секреты везде тянутся из окружения, даже в Development (см. .env.example). Единственное
 // оставшееся легитимное место с этим значением — DesignTimeDbContextFactory.DevMasterKey
 // (design-time `dotnet ef`/тестовые фабрики, реальных данных не касается). Но строка всё
-// равно навсегда осталась в истории git — этот guard блокирует её случайное копирование
-// в реальное окружение вне Development.
-if (!builder.Environment.IsDevelopment() && encryptionMasterKey == DesignTimeDbContextFactory.DevMasterKey)
+// равно навсегда осталась в истории git — этот guard блокирует её случайное копирование в
+// реальное окружение. Условие теперь завязано на DevTools:DevAuthEnabled, а не на
+// ASPNETCORE_ENVIRONMENT — контур на VPS дев по защите, но Production по среде (см. выше).
+if (!devToolsOptions.DevAuthEnabled && encryptionMasterKey == DesignTimeDbContextFactory.DevMasterKey)
     throw new InvalidOperationException(
         "Encryption:MasterKey равен design-time/тестовому dev-ключу из истории репозитория — " +
-        "вне Development это недопустимо. Сгенерировать реальный ключ: `openssl rand -base64 32`.");
+        "при выключенном DevTools:DevAuthEnabled это недопустимо. Сгенерировать реальный ключ: " +
+        "`openssl rand -base64 32`.");
 builder.Services.AddSingleton<IFieldCipher, AesGcmFieldCipher>();
 builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
 builder.Services.AddSingleton<DownloadTokenService>();
@@ -234,11 +255,10 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-XSRF-TOKEN";
 });
 
-// --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-JWT,   ---
-// --- плюс Dev-заглушка (только Development). Селектор "Smart" во всех средах:      ---
-// --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.          ---
-var isDevelopment = builder.Environment.IsDevelopment();
-
+// --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-JWT,      ---
+// --- плюс Dev-заглушка (DevTools:DevAuthEnabled, НЕ привязана к ASPNETCORE_ENVIRONMENT —---
+// --- см. DevToolsOptions). Селектор "Smart" во всех средах:                           ---
+// --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.             ---
 var authBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = AuthSchemes.Smart;
@@ -281,7 +301,7 @@ authBuilder.AddJwtBearer(AuthSchemes.PwaCookie, jwtBearerOptions =>
     };
 });
 
-if (isDevelopment)
+if (devToolsOptions.DevAuthEnabled)
 {
     authBuilder.AddScheme<AuthenticationSchemeOptions, DevAuthenticationHandler>(AuthSchemes.Dev, null);
 }
@@ -294,7 +314,7 @@ authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions 
         var hasInitData = request.Headers.Authorization.ToString().StartsWith("tma ", StringComparison.Ordinal)
             || request.Headers.ContainsKey("X-Telegram-Init-Data");
         if (hasInitData) return AuthSchemes.TelegramMiniApp;
-        if (isDevelopment && request.Headers.ContainsKey("X-Dev-TelegramId")) return AuthSchemes.Dev;
+        if (devToolsOptions.DevAuthEnabled && request.Headers.ContainsKey("X-Dev-TelegramId")) return AuthSchemes.Dev;
         return AuthSchemes.PwaCookie;
     };
 });
@@ -502,6 +522,16 @@ builder.Services.AddBirthdayModule();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// --- Health checks: нужны и для депло-пайплайна (ждать /health/ready перед переключением
+// --- трафика), и для docker-compose depends_on: service_healthy. Раньше в проекте не было ни
+// --- одного. "llm" — отдельный тег: LM Studio на ноутбуке пользователя за WireGuard, его
+// --- недоступность (сон/выключен) ожидаема и не должна валить общую готовность (тег "ready").
+builder.Services.AddHealthChecks()
+    .AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"])
+    .AddCheck<MinioHealthCheck>("minio", tags: ["ready"])
+    .AddCheck<KafkaHealthCheck>("kafka", tags: ["ready"])
+    .AddCheck<LmStudioHealthCheck>("llm", tags: ["llm"]);
+
 // Явный запас над AttachmentService.MaxSizeBytes (30 МиБ): без этого implicit-дефолт Kestrel
 // (~28.6 МиБ, 30_000_000 байт) обрубал бы запрос СВОЕЙ, менее информативной ошибкой раньше,
 // чем срабатывала бы наша проверка с понятным телом ответа ({code, maxSizeBytes}) — см. аудит
@@ -510,9 +540,22 @@ builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 
 
 var app = builder.Build();
 
+var devTools = app.Services.GetRequiredService<IOptions<DevToolsOptions>>().Value;
+
+// --- Заголовки от Caddy (реверс-прокси, деплой-план): без этого Request.Scheme всегда "http" —
+// --- secure-куки (JWT access-cookie, CSRF) выставлялись бы без Secure, а RemoteIpAddress у ВСЕХ
+// --- запросов стал бы адресом Caddy (ломает партиционирование rate limiter по IP выше и
+// --- RemoteIp в логах Seq). KnownNetworks — весь диапазон docker-мостов по умолчанию (172.16/12),
+// --- не "доверяю всем" (X-Forwarded-* игнорируются от источников вне этой сети).
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    KnownIPNetworks = { new System.Net.IPNetwork(IPAddress.Parse("172.16.0.0"), 12) },
+});
+
 // --- Структурированное логирование HTTP-запросов (метод, путь, статус, время, пользователь) в Seq ---
-// Уровень поднимается на 4xx/5xx и падает на Debug для успешных запросов к статике/Hangfire —
-// иначе консоль в Development захлёстывает шумом от каждого ассета SPA.
+// Уровень поднимается на 4xx/5xx и падает на Debug для успешных запросов к статике/Hangfire/health —
+// иначе Seq захлёстывает шумом от каждого ассета SPA и от healthcheck-поллинга раз в несколько секунд.
 app.UseSerilogRequestLogging(options =>
 {
     options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} -> {StatusCode} за {Elapsed:0.0}мс";
@@ -521,7 +564,8 @@ app.UseSerilogRequestLogging(options =>
         ? LogEventLevel.Error
         : httpContext.Response.StatusCode >= 500 ? LogEventLevel.Error
         : httpContext.Response.StatusCode >= 400 ? LogEventLevel.Warning
-        : httpContext.Request.Path.StartsWithSegments("/hangfire") ? LogEventLevel.Debug
+        : httpContext.Request.Path.StartsWithSegments("/hangfire")
+            || httpContext.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Debug
         : LogEventLevel.Information;
 
     options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
@@ -536,8 +580,35 @@ app.UseSerilogRequestLogging(options =>
     };
 });
 
-if (app.Environment.IsDevelopment())
+// --- Health checks: /health/live — процесс жив (без проверок, для liveness-проб); /health/ready —
+// --- зависимости на месте (Postgres/MinIO/Kafka, тег "ready"); /health/llm — отдельно, т.к. LM
+// --- Studio на ноутбуке за WireGuard и его недоступность не должна валить readiness всего контура.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
+    Predicate = check => check.Tags.Contains("ready"),
+}).AllowAnonymous();
+app.MapHealthChecks("/health/llm", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("llm"),
+}).AllowAnonymous();
+
+// --- Swagger (ручное тестирование) — раньше только Development, теперь DevTools:AdminUiEnabled
+// --- (см. DevToolsOptions): на VPS доступен за тем же BasicAuth, что и Hangfire-дашборд ниже,
+// --- поверх периметра (Caddy пускает /swagger только на WireGuard-адресе).
+if (devTools.AdminUiEnabled)
+{
+    app.UseWhen(
+        context => context.Request.Path.StartsWithSegments("/swagger"),
+        branch => branch.Use(async (context, next) =>
+        {
+            if (!AdminBasicAuth.IsAuthorized(context, devTools))
+            {
+                AdminBasicAuth.Challenge(context);
+                return;
+            }
+            await next();
+        }));
     app.UseSwagger();
     app.UseSwaggerUI();
 }
@@ -558,10 +629,12 @@ app.UseStaticFiles();
 // --- и ожидаемое ограничение, не наша недоработка.
 app.Use(async (context, next) =>
 {
-    // /hangfire (дашборд) и /dev/* — dev-only инструменты (см. Program.cs ниже, обёрнуты в
-    // IsDevelopment()), у Hangfire.Dashboard есть собственные инлайн-скрипты без CSP-нонсов —
-    // не наш фронтенд, не часть этой находки, не блокируем.
-    if (context.Request.Path.StartsWithSegments("/hangfire") || context.Request.Path.StartsWithSegments("/dev"))
+    // /hangfire (дашборд), /swagger и /dev/* — служебные инструменты за DevTools-флагами (см.
+    // DevToolsOptions), у Hangfire.Dashboard и Swagger UI есть собственные инлайн-скрипты без
+    // CSP-нонсов — не наш фронтенд, не часть этой находки, не блокируем.
+    if (context.Request.Path.StartsWithSegments("/hangfire")
+        || context.Request.Path.StartsWithSegments("/swagger")
+        || context.Request.Path.StartsWithSegments("/dev"))
     {
         await next();
         return;
@@ -583,6 +656,12 @@ app.Use(async (context, next) =>
     headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     // X-Frame-Options — тот же запрет, что frame-ancestors выше, для браузеров без поддержки CSP3.
     headers["X-Frame-Options"] = "DENY";
+    // HSTS (аудит 09-config-deployment-devops.md, находка 6 — была отложена до решения по
+    // реверс-прокси; решение принято, это Caddy с автоматическим TLS). IsHttps здесь уже
+    // учитывает X-Forwarded-Proto благодаря UseForwardedHeaders выше — без него это условие
+    // никогда не срабатывало бы за прокси, т.к. Kestrel всегда видит голый HTTP от Caddy.
+    if (context.Request.IsHttps)
+        headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
     await next();
 });
 
@@ -655,21 +734,27 @@ if (telegramBotConfigured)
 // дело не дойдёт даже для статических маршрутов приложения.
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
-// --- Дашборд Hangfire — только Development (в проде потребовался бы отдельный auth-фильтр) ---
-if (app.Environment.IsDevelopment())
+// --- Дашборд Hangfire — DevTools:AdminUiEnabled (см. DevToolsOptions). Раньше был только
+// --- Development с пустым Authorization (см. историю), что означало анонимный доступ в тот же
+// --- момент, когда контур становится Production по среде (дев-контур на VPS, см. деплой-план) —
+// --- поэтому здесь собственный BasicAuth-фильтр, а не голое AllowAnonymous.
+if (devTools.AdminUiEnabled)
 {
     // AllowAnonymous обязателен: FallbackPolicy выше требует аутентификации для всех
     // эндпоинтов без явного исключения, а у браузера при заходе на /hangfire нет ни
-    // Telegram initData, ни dev-заголовка X-Dev-TelegramId.
-    // Authorization = [] отключает собственный фильтр Hangfire (по умолчанию
-    // LocalRequestsOnlyAuthorizationFilter, который 401-ит все запросы, где
-    // RemoteIpAddress не loopback — это ловит открытие дашборда через WSL/проброс портов
-    // или LAN-адрес хоста, даже когда ASP.NET Core-авторизация уже пропущена).
+    // Telegram initData, ни dev-заголовка X-Dev-TelegramId — реальная проверка личности здесь
+    // теперь HangfireBasicAuthFilter, не ASP.NET Core-аутентификация.
     app.MapHangfireDashboard("/hangfire", new DashboardOptions
     {
-        Authorization = Array.Empty<Hangfire.Dashboard.IDashboardAuthorizationFilter>(),
+        Authorization = [new HangfireBasicAuthFilter(app.Services.GetRequiredService<IOptions<DevToolsOptions>>())],
     }).AllowAnonymous();
+}
 
+// --- /dev/* — служебные эндпоинты без аутентификации по построению (ручной прогон Hangfire-джоб,
+// --- просмотр вёрстки писем). DevTools:DevEndpointsEnabled, независимо от AdminUiEnabled —
+// --- на VPS всегда false (см. деплой-план), локально включается вместе с DevAuthEnabled.
+if (devTools.DevEndpointsEnabled)
+{
     // Ручной запуск джобы оповещений без ожидания cron/UI дашборда — для локальной проверки.
     app.MapPost("/dev/trigger-reminder-scan", async (ReminderScanJob job, CancellationToken ct) =>
     {

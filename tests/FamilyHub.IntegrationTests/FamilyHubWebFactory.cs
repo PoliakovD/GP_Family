@@ -76,6 +76,12 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         builder.UseSetting("Encryption:MasterKey", DesignTimeDbContextFactory.DevMasterKey);
         builder.UseSetting("Jwt:SigningKey", "ZGV2LWp3dC1zaWduaW5nLWtleS0zMi1ieXRlcy1va2s=");
         builder.UseSetting("Attachments:DownloadSigningKey", "dev-attachment-download-signing-key");
+        // DevAuth/сервисные /dev/*-эндпоинты больше не гейтятся на ASPNETCORE_ENVIRONMENT (см.
+        // DevToolsOptions в Program.cs) — тестовый хост должен включить их явно, иначе
+        // CreateClientAs(...) и /dev/trigger-reminder-scan (DomainEventFlowTests,
+        // NotificationsApiTests) ловили бы 401/404.
+        builder.UseSetting("DevTools:DevAuthEnabled", "true");
+        builder.UseSetting("DevTools:DevEndpointsEnabled", "true");
         // Без BotToken: вебхук-эндпоинт и ITelegramBotClient не регистрируются (см. Program.cs) —
         // достаточно для всего, кроме BotWebhookTests, у которых своя фабрика-наследник.
         builder.UseSetting("Telegram:BotToken", "");

@@ -1,0 +1,162 @@
+name: Deploy
+
+# Только вручную (workflow_dispatch) — деплой-план фиксирует это как решение: контур дев по
+# защите (Hangfire/Debug-логи), но никакой автомерж не должен уезжать на VPS без явного клика.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ветка/тег/SHA для деплоя'
+        required: false
+        default: master
+      run_tests:
+        description: 'Прогнать юнит-тесты перед сборкой образа'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  # Один деплой за раз — второй запуск ждёт, не отменяет первый (cancel-in-progress: false),
+  # чтобы не оборвать docker compose up на середине.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: ${{ inputs.run_tests }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Unit tests
+        run: dotnet test tests/FamilyHub.UnitTests/FamilyHub.UnitTests.csproj -c Release
+
+  build-push:
+    needs: test
+    # Пропущенный test (run_tests=false) не должен блокировать сборку — только реальный провал.
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve image ref (lowercase owner — GHCR требует lowercase)
+        id: meta
+        run: |
+          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${owner}/gp_family-api" >> "$GITHUB_OUTPUT"
+          echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/FamilyHub.Api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    # "production" environment — отдельные секреты + возможность включить required reviewers
+    # в настройках репозитория (Settings → Environments) поверх самого workflow_dispatch.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            deploy
+          sparse-checkout-cone-mode: false
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Trust VPS host key
+        # НЕ StrictHostKeyChecking=no — известный отпечаток из секрета (ssh-keyscan заранее,
+        # см. deploy/README.md), иначе SSH молча доверял бы кому угодно на этот адрес.
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Render .env из секрета PROD_ENV
+        run: |
+          printf '%s\n' "${{ secrets.PROD_ENV }}" > env.rendered
+          # Тег образа — из пайплайна (build-push), не из секрета: секрет не должен решать,
+          # какой именно билд разворачивается.
+          echo "IMAGE=${{ needs.build-push.outputs.image }}" >> env.rendered
+          echo "IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}" >> env.rendered
+
+      - name: Загрузить .env и deploy/ на VPS
+        run: |
+          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'mkdir -p /opt/familyhub'
+          scp env.rendered "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/.env"
+          scp deploy/docker-compose.prod.yml "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/docker-compose.yml"
+          scp deploy/Caddyfile "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/Caddyfile"
+          scp -r deploy/backup "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/backup"
+
+      - name: docker compose pull && up -d + дождаться /health/ready
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -s <<REMOTE_SCRIPT
+            set -euo pipefail
+            cd /opt/familyhub
+            chmod 600 .env
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose pull
+            docker compose up -d --remove-orphans
+
+            echo "Жду /health/ready..."
+            for i in \$(seq 1 18); do
+              if docker compose exec -T api wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1; then
+                echo "api готов."
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "api не стал healthy за отведённое время." >&2
+            exit 1
+          REMOTE_SCRIPT
+
+      - name: Убрать старые образы
+        if: always()
+        run: ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'docker image prune -f'
+
+      - name: Логи api при неудаче
+        if: failure()
+        run: ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'cd /opt/familyhub && docker compose logs --tail=200 api'
+
+# Откат (не требует нового workflow_dispatch — см. deploy/README.md):
+#   ssh deploy@<host>
+#   cd /opt/familyhub
+#   sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<предыдущий sha>/' .env
+#   docker compose up -d api
