@@ -87,6 +87,12 @@ public class BotWebhookWebFactory : WebApplicationFactory<Program>, IAsyncLifeti
         builder.UseSetting("Telegram:BotUsername", "familyhub_test_bot");
         builder.UseSetting("Telegram:WebhookSecret", WebhookSecret);
         builder.UseSetting("Telegram:WebhookUrl", "");
+        // Encryption:MasterKey ниже — DesignTimeDbContextFactory.DevMasterKey; Program.cs fail-fast
+        // (строка 119) требует DevTools:DevAuthEnabled=true для этого значения, иначе приложение
+        // падает на старте ("entry point exited without ever building an IHost" в тестах). Сама
+        // Dev-схема аутентификации активируется только заголовком X-Dev-TelegramId (см. Program.cs) —
+        // тесты этой фабрики его не шлют, поэтому обычный /api/auth/login остаётся не затронут.
+        builder.UseSetting("DevTools:DevAuthEnabled", "true");
         // Тесты линковки Telegram (POST /api/auth/link-telegram/start) идут с одного IP —
         // штатный лимит "auth-code" (3/час) дал бы ложные 429 в наборе из нескольких тестов.
         builder.UseSetting("RateLimiting:AuthPermitLimit", "100000");

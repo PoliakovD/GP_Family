@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -212,6 +213,15 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Уникальный суффикс без цифр для названий препаратов, доходящих до KbWriter —
+    /// сырой Guid.NewGuid():N время от времени содержит подряд идущие 7+ цифр (телефон/паспорт
+    /// эвристика в KbWriter.FindPersonalContextViolation, см. LongDigitsPattern) и КОРРЕКТНО, но
+    /// НЕПРЕДНАМЕРЕННО отклоняет запись в справочник — задача зависает не в Ready, тест валится по
+    /// таймауту. Та же цифра всегда даёт ту же букву (g-p, без пересечения с a-f самого hex) —
+    /// уникальность и воспроизводимость сохраняются, просто цифр в строке больше никогда нет.</summary>
+    private static string UniqueDrugNameSuffix() => new(Guid.NewGuid().ToString("N")
+        .Select(c => char.IsDigit(c) ? (char)('g' + (c - '0')) : c).ToArray());
+
     private HttpClient ClientAs(long telegramId)
     {
         var client = factory.CreateClientAs(telegramId);
@@ -267,7 +277,7 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
         var familyId = await CreateFamilyAsync(admin);
         var medkitId = await CreateMedkitAsync(admin, familyId);
 
-        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Тестовыйпрепарат{Guid.NewGuid():N}");
+        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Тестовыйпрепарат{UniqueDrugNameSuffix()}");
 
         await WaitForAsync(
             async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,
@@ -293,7 +303,7 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
         var familyId = await CreateFamilyAsync(admin);
         var medkitId = await CreateMedkitAsync(admin, familyId);
 
-        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Кэшпрепарат{Guid.NewGuid():N}");
+        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Кэшпрепарат{UniqueDrugNameSuffix()}");
 
         await WaitForAsync(
             async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,
@@ -348,7 +358,7 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
         var medkit1 = await CreateMedkitAsync(admin1, family1);
         var medkit2 = await CreateMedkitAsync(admin2, family2);
 
-        var sharedName = $"Одинаковыйпрепарат{Guid.NewGuid():N}";
+        var sharedName = $"Одинаковыйпрепарат{UniqueDrugNameSuffix()}";
 
         // Два независимых пользователя из разных семей сохраняют препарат с одинаковым названием
         // одновременно — дедуп по частичному уникальному индексу NormalizedName (Pending/Running)

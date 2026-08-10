@@ -29,8 +29,13 @@ public class KafkaWebFactory : FamilyHubWebFactory
 
     public override async Task DisposeAsync()
     {
-        await _kafka.DisposeAsync();
+        // Хост (и MassTransit-бас внутри него) должен полностью остановиться ПЕРВЫМ — иначе
+        // ещё активные Kafka Rider consumers/producers ловят "Connection refused"/"brokers are
+        // down" от уже удалённого контейнера во время teardown. base.DisposeAsync()
+        // (FamilyHubWebFactory) в конце сам вызывает WebApplicationFactory.DisposeAsync(),
+        // который останавливает хост — только после этого можно убивать брокер.
         await base.DisposeAsync();
+        await _kafka.DisposeAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
