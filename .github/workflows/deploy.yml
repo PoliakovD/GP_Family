@@ -93,10 +93,34 @@ jobs:
             deploy
           sparse-checkout-cone-mode: false
 
+      - name: Снять passphrase с ключа
+        # webfactory/ssh-agent не умеет passphrase-protected ключи — ssh-add пытается
+        # спросить пароль интерактивно и виснет/падает в CI. Снимаем passphrase здесь,
+        # используя секрет SSH_KEY_PASSPHRASE, и дальше передаём уже "голый" ключ —
+        # он не покидает память раннера дольше самого шага и маскируется в логах.
+        id: ssh_key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KEY_PASSPHRASE: ${{ secrets.SSH_KEY_PASSPHRASE }}
+        run: |
+          key_file=$(mktemp)
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          ssh-keygen -p -P "$SSH_KEY_PASSPHRASE" -N "" -f "$key_file"
+          while IFS= read -r line; do
+            echo "::add-mask::$line"
+          done < "$key_file"
+          {
+            echo "key<<SSH_KEY_EOF"
+            cat "$key_file"
+            echo "SSH_KEY_EOF"
+          } >> "$GITHUB_OUTPUT"
+          rm -f "$key_file"
+
       - name: Install SSH key
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ steps.ssh_key.outputs.key }}
 
       - name: Trust VPS host key
         # НЕ StrictHostKeyChecking=no — известный отпечаток из секрета (ssh-keyscan заранее,

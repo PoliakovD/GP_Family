@@ -9,6 +9,7 @@
 
 | Файл | Роль |
 |---|---|
+| **[`DEPLOY_GUIDE.md`](DEPLOY_GUIDE.md)** | Пошаговый чек-лист поверх этого файла и `DECISIONS.md` — линейный порядок действий с готовым шаблоном `.env` |
 | `DECISIONS.md` | Рационале инфраструктурных решений + таблица несостыковок ("почему так", не "как выполнить") |
 | `bootstrap.sh` | Разовый провижининг чистого VPS (Ubuntu 24.04): Docker, firewall, fail2ban, WireGuard, пользователь `deploy` |
 | `docker-compose.prod.yml` | Прод-стек: api (образ из GHCR), postgres, minio, kafka, seq, caddy, backup |
@@ -108,8 +109,15 @@ Settings → Secrets and variables → Actions → New repository secret:
 | `SSH_HOST` | IP или домен сервера |
 | `SSH_USER` | `deploy` |
 | `SSH_PRIVATE_KEY` | содержимое `familyhub_deploy_key` (приватный ключ, **не** `.pub`) |
+| `SSH_KEY_PASSPHRASE` | passphrase ключа, если при `ssh-keygen` она была задана; иначе оставьте секрет пустым (или не создавайте) |
 | `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan <IP сервера>` со своей машины |
 | `PROD_ENV` | весь файл `.env` для прода целиком (см. ниже) |
+
+`webfactory/ssh-agent` (используется в `deploy.yml` для `ssh-add`) не умеет ключи с passphrase —
+в CI некому ввести пароль интерактивно, `ssh-add` просто зависнет/упадёт. Поэтому `deploy.yml`
+сначала снимает passphrase отдельным шагом (`ssh-keygen -p -P "$SSH_KEY_PASSPHRASE" -N ""`) и
+только потом отдаёт уже беспарольный ключ в `ssh-agent`; сам ключ с паролем в `SSH_PRIVATE_KEY`
+менять не нужно.
 
 Рекомендуется завести GitHub Environment `production` (Settings → Environments) с этими же
 секретами и, при желании, обязательным ревью перед запуском — `deploy.yml` уже ссылается на
