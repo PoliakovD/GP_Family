@@ -108,9 +108,10 @@ Settings → Secrets and variables → Actions → New repository secret:
 |---|---|
 | `SSH_HOST` | IP или домен сервера |
 | `SSH_USER` | `deploy` |
+| `SSH_PORT` | SSH-порт, если он не `22` (см. `sshd_config` на VPS); секрет не заведён -> `deploy.yml` использует `22` |
 | `SSH_PRIVATE_KEY` | содержимое `familyhub_deploy_key` (приватный ключ, **не** `.pub`) |
 | `SSH_KEY_PASSPHRASE` | passphrase ключа, если при `ssh-keygen` она была задана; иначе оставьте секрет пустым (или не создавайте) |
-| `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan <IP сервера>` со своей машины |
+| `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan -p <SSH_PORT> <IP сервера>` со своей машины (укажите `-p`, если порт не `22`, иначе `ssh -p ...` не найдёт хост в `known_hosts`) |
 | `PROD_ENV` | весь файл `.env` для прода целиком (см. ниже) |
 
 `webfactory/ssh-agent` (используется в `deploy.yml` для `ssh-add`) не умеет ключи с passphrase —
