@@ -170,8 +170,15 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Render .env из секрета PROD_ENV
+        # ${{ secrets.PROD_ENV }} подставляется в текст скрипта ДО того, как его увидит bash —
+        # это текстовая склейка, а не shell-раскрытие переменной. Любые кавычки/${...}/$(...)
+        # внутри секрета стали бы частью самого скрипта. Поэтому секрет идёт через env: и
+        # раскрывается как "$PROD_ENV" — уже настоящее (безопасное) shell-раскрытие, как в шаге
+        # "Снять passphrase с ключа" выше.
+        env:
+          PROD_ENV: ${{ secrets.PROD_ENV }}
         run: |
-          printf '%s\n' "${{ secrets.PROD_ENV }}" > env.rendered
+          printf '%s\n' "$PROD_ENV" > env.rendered
           # Тег образа — из пайплайна (build-push), не из секрета: секрет не должен решать,
           # какой именно билд разворачивается.
           echo "IMAGE=${{ needs.build-push.outputs.image }}" >> env.rendered
@@ -185,9 +192,13 @@ jobs:
         # Приватный ключ тоннеля — секрет, в git ему нельзя. Пустой WG_CONF допустим (бот тогда
         # не сможет пройти /health/telegram, но остальной прод-стек это не валит) — сначала
         # проверьте, что секрет действительно задан, если разворачиваете бота впервые.
+        # См. пояснение в шаге "Render .env" выше — секрет передаётся через env:, а не
+        # текстовой подстановкой ${{ }}, чтобы содержимое WG_CONF не могло сломать сам скрипт.
+        env:
+          WG_CONF: ${{ secrets.WG_CONF }}
         run: |
           mkdir -p wg
-          printf '%s\n' "${{ secrets.WG_CONF }}" > wg/awg0.conf
+          printf '%s\n' "$WG_CONF" > wg/awg0.conf
 
       - name: Загрузить .env и deploy/ на VPS
         run: |
