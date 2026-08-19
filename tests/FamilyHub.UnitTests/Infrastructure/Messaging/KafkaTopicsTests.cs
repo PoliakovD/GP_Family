@@ -1,5 +1,5 @@
+using FamilyHub.Contracts.Messaging;
 using FamilyHub.Infrastructure.Messaging;
-using FamilyHub.Infrastructure.Messaging.Kafka;
 using FluentAssertions;
 using Xunit;
 
@@ -35,6 +35,7 @@ public class KafkaTopicsTests
     [InlineData(KafkaTopics.MedicationExpiring)]
     [InlineData(KafkaTopics.BirthdayApproaching)]
     [InlineData(KafkaTopics.MedicationEnriched)]
+    [InlineData(KafkaTopics.TelegramOutbound)]
     public void TopicNames_AreKebabCase(string topic)
     {
         // apache/kafka создаёт топики по имени как есть — кириллица/подчёркивания/CamelCase

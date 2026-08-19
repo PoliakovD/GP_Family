@@ -29,7 +29,9 @@
          существует ("ReceiveTransport faulted") — auto.create.topics.enable не успевает
          сработать до первой попытки подписки, нужно создавать топики явно, не полагаться на него. -->
     <PackageReference Include="Confluent.Kafka" Version="2.11.0" />
-    <PackageReference Include="Telegram.Bot" Version="22.10.1" />
+    <!-- Telegram.Bot убран отсюда: единственный потребитель (ITelegramBotClient/SendMessage)
+         теперь FamilyHub.TelegramBot, отдельный процесс без доступа к БД. Здесь остаётся только
+         TelegramInitDataValidator (HMAC initData Mini App) — чистая криптография, без пакета. -->
     <!-- SMTP-отправка (задача 2.5): универсальный клиент вместо SDK конкретного вендора —
          российский провайдер задаётся конфигом (host/логин), без привязки в коде. -->
     <PackageReference Include="MailKit" Version="4.17.0" />

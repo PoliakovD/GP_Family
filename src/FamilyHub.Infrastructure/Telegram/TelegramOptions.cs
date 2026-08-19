@@ -1,6 +1,12 @@
 namespace FamilyHub.Infrastructure.Telegram;
 
-/// <summary>Конфигурация секции "Telegram" в appsettings.</summary>
+/// <summary>
+/// Конфигурация секции "Telegram" в appsettings — только то, что нужно FamilyHub.Api. После
+/// выноса бота в FamilyHub.TelegramBot (см. BotOptions там) WebhookSecret/WebhookUrl/MiniAppUrl
+/// уехали в тот процесс целиком: Api их больше не читает. BotToken остаётся ЗДЕСЬ ЖЕ (и
+/// дублируется в конфиге бота) — TelegramInitDataValidator выводит из него HMAC-ключ для
+/// проверки initData Mini App, это забота Api, а не бота.
+/// </summary>
 public class TelegramOptions
 {
     public const string SectionName = "Telegram";
@@ -9,18 +15,6 @@ public class TelegramOptions
 
     /// <summary>Максимальный возраст initData (auth_date), после которого она считается просроченной.</summary>
     public TimeSpan MaxInitDataAge { get; set; } = TimeSpan.FromHours(24);
-
-    /// <summary>
-    /// Секрет, который Telegram присылает в заголовке X-Telegram-Bot-Api-Secret-Token при каждом
-    /// вызове вебхука (передаётся в setWebhook). Проверяется ПЕРВЫМ, до обработки апдейта.
-    /// </summary>
-    public string WebhookSecret { get; set; } = string.Empty;
-
-    /// <summary>Публичный HTTPS-URL вебхука бота (используется при регистрации через setWebhook).</summary>
-    public string WebhookUrl { get; set; } = string.Empty;
-
-    /// <summary>URL Telegram Mini App — для кнопок "Открыть FamilyHub" и menu-button бота.</summary>
-    public string MiniAppUrl { get; set; } = string.Empty;
 
     /// <summary>Username бота без символа '@' (напр. "FamilyHubBot") — для формирования Deep Link инвайтов.</summary>
     public string BotUsername { get; set; } = string.Empty;

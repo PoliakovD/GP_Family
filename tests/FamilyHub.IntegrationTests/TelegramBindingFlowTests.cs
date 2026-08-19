@@ -4,9 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
-using Telegram.Bot;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -14,10 +11,10 @@ namespace FamilyHub.IntegrationTests;
 /// <summary>
 /// Отдельная от основной FamilyHubWebFactory (BotToken там пустой намеренно — TelegramInitDataValidator
 /// без него отклоняет любую initData) — только здесь бот-токен непустой, чтобы можно было
-/// сконструировать реально валидную (по HMAC) initData для /api/auth/telegram/*. Непустой
-/// BotToken в Program.cs также поднимает ITelegramBotClient + TelegramWebhookRegistrar
-/// (хостед-сервис) — как и в BotWebhookWebFactory, подменяем клиент NSubstitute-моком и держим
-/// WebhookUrl пустым, чтобы ничего не стучалось в реальный Telegram API при старте хоста.
+/// сконструировать реально валидную (по HMAC) initData для /api/auth/telegram/*. После выноса
+/// бота в FamilyHub.TelegramBot (ADR-0008) непустой BotToken в Api поднимает только HMAC-проверку
+/// initData — ITelegramBotClient/TelegramWebhookRegistrar здесь больше нет вообще, подменять
+/// нечего.
 /// </summary>
 public class TelegramBindingWebFactory : FamilyHubWebFactory
 {
@@ -27,12 +24,6 @@ public class TelegramBindingWebFactory : FamilyHubWebFactory
     {
         base.ConfigureWebHost(builder);
         builder.UseSetting("Telegram:BotToken", BotToken);
-        builder.UseSetting("Telegram:WebhookUrl", "");
-
-        builder.ConfigureServices(services =>
-        {
-            services.AddSingleton(Substitute.For<ITelegramBotClient>());
-        });
     }
 }
 

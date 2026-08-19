@@ -7,6 +7,13 @@
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Medical\FamilyHub.Modules.Medical.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Birthdays\FamilyHub.Modules.Birthdays.csproj" />
     <ProjectReference Include="..\FamilyHub.TestUtils\FamilyHub.TestUtils.csproj" />
+    <!-- Alias обязателен: у обоих проектов top-level Program.cs генерирует public partial class
+         Program в глобальном пространстве имён — без разделения по алиасам сборок
+         WebApplicationFactory<Program> был бы неоднозначен между FamilyHub.Api.dll и
+         FamilyHub.TelegramBot.dll (см. Bot/BotIntegrationFixture.cs, extern alias TelegramBotHost). -->
+    <ProjectReference Include="..\..\src\FamilyHub.TelegramBot\FamilyHub.TelegramBot.csproj">
+      <Aliases>TelegramBotHost</Aliases>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>

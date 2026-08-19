@@ -1,5 +1,5 @@
-using FamilyHub.Api.Features.Bot;
-using FamilyHub.Infrastructure.Telegram;
+using FamilyHub.TelegramBot.Configuration;
+using FamilyHub.TelegramBot.Webhook;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -7,27 +7,27 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using Telegram.Bot;
 using Telegram.Bot.Requests;
-using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Xunit;
 
-namespace FamilyHub.UnitTests.Features.Bot;
+namespace FamilyHub.UnitTests.TelegramBot;
 
 /// <summary>
 /// Регрессия на баг: инлайн-кнопки "Привязать"/"Отмена" (TelegramUpdateHandler.
 /// HandleCallbackQueryAsync) молчали, т.к. setWebhook регистрировался БЕЗ CallbackQuery в
 /// allowedUpdates — Telegram фильтрует доставку апдейтов на своей стороне, поэтому такие
 /// апдейты вообще не доходили до /bot/webhook. Прикладная логика была написана и покрыта
-/// тестами (TelegramUpdateHandlerTests, TelegramLinkFlowTests) корректно с самого начала —
-/// они синтезируют Update и шлют его напрямую, минуя реальную доставку от Telegram, поэтому
-/// этот дефект ими не ловился. Этот тест проверяет именно payload setWebhook.
+/// тестами (TelegramUpdateHandlerTests) корректно с самого начала — они синтезируют Update и
+/// шлют его напрямую, минуя реальную доставку от Telegram, поэтому этот дефект ими не ловился.
+/// Этот тест проверяет именно payload setWebhook. Перенесён из FamilyHub.Api вместе с классом
+/// (ADR-0008) — только namespace и тип опций (BotOptions вместо TelegramOptions) изменились.
 /// </summary>
 public class TelegramWebhookRegistrarTests
 {
     private readonly ITelegramBotClient _bot = Substitute.For<ITelegramBotClient>();
     private readonly ILogger<TelegramWebhookRegistrar> _logger = Substitute.For<ILogger<TelegramWebhookRegistrar>>();
 
-    private TelegramWebhookRegistrar CreateSut(TelegramOptions opts)
+    private TelegramWebhookRegistrar CreateSut(BotOptions opts)
     {
         var services = new ServiceCollection();
         services.AddSingleton(_bot);
@@ -37,7 +37,7 @@ public class TelegramWebhookRegistrarTests
     [Fact]
     public async Task StartAsync_RegistersWebhook_WithMessageAndCallbackQueryAllowed()
     {
-        var opts = new TelegramOptions { BotToken = "dummy-token", WebhookUrl = "https://example.test/bot/webhook" };
+        var opts = new BotOptions { BotToken = "dummy-token", WebhookUrl = "https://example.test/bot/webhook" };
         _bot.SendRequest(Arg.Any<SetWebhookRequest>(), Arg.Any<CancellationToken>()).Returns(true);
 
         await CreateSut(opts).StartAsync(CancellationToken.None);
@@ -53,7 +53,7 @@ public class TelegramWebhookRegistrarTests
     [Fact]
     public async Task StartAsync_WebhookUrlNotConfigured_DoesNotCallBot()
     {
-        var opts = new TelegramOptions { BotToken = "dummy-token", WebhookUrl = "" };
+        var opts = new BotOptions { BotToken = "dummy-token", WebhookUrl = "" };
 
         await CreateSut(opts).StartAsync(CancellationToken.None);
 

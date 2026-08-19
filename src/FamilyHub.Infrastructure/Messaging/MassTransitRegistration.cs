@@ -2,6 +2,7 @@ using System.Reflection;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using FamilyHub.Contracts.Events;
+using FamilyHub.Contracts.Messaging;
 using FamilyHub.Infrastructure.Messaging.Kafka;
 using FamilyHub.Infrastructure.Persistence;
 using MassTransit;
@@ -124,6 +125,9 @@ public static class MassTransitRegistration
                     r.AddProducer<MedicationExpiringEvent>(KafkaTopics.MedicationExpiring);
                     r.AddProducer<BirthdayApproachingEvent>(KafkaTopics.BirthdayApproaching);
                     r.AddProducer<MedicationEnrichedEvent>(KafkaTopics.MedicationEnriched);
+                    // Единственный топик, который Api публикует, но НЕ потребляет — читает его
+                    // только FamilyHub.TelegramBot (см. TelegramOutboundPublisher/TelegramOutboundConsumer).
+                    r.AddProducer<TelegramMessageRequestedEvent>(KafkaTopics.TelegramOutbound);
 
                     // Регистрация именно на r (реестр Rider'а), не на x (основная шина) — ниже
                     // ConfigureConsumer резолвит тип из IRiderRegistrationContext, отдельного от
@@ -159,6 +163,10 @@ public static class MassTransitRegistration
                         WireTopic<MedicationExpiringEvent>(KafkaTopics.MedicationExpiring);
                         WireTopic<BirthdayApproachingEvent>(KafkaTopics.BirthdayApproaching);
                         WireTopic<MedicationEnrichedEvent>(KafkaTopics.MedicationEnriched);
+                        // TelegramOutbound сюда намеренно не добавлен: у Api нет записи в
+                        // kafkaConsumers для TelegramMessageRequestedEvent (WireTopic просто не
+                        // найдёт совпадений в kafkaConsumers.Where(...) и не создаст endpoint) —
+                        // топик читает только FamilyHub.TelegramBot, отдельным процессом/группой.
                     });
                 });
             }

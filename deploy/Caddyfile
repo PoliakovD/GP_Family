@@ -19,16 +19,29 @@
 {$PUBLIC_DOMAIN}, www.{$PUBLIC_DOMAIN} {
 	encode zstd gzip
 
-	# Защита в глубину поверх DevTools-флагов (см. DevToolsOptions в FamilyHub.Api): даже если
-	# флаг однажды включат по ошибке, эти пути с публичного домена всё равно не достучатся —
-	# только Hangfire/Swagger внутри admin-блока ниже, и то за собственным BasicAuth приложения.
-	@blocked path /dev/* /hangfire* /swagger* /health/*
-	respond @blocked 404
+	# Защита в глубину поверх DevTools-флагов (см. DevToolsOptions в FamilyHub.Api) и
+	# InternalBotAuthFilter (см. /internal/* ниже): даже если один рубеж однажды сломают по
+	# ошибке, эти пути с публичного домена всё равно не достучатся. /internal/* — контракт
+	# FamilyHub.TelegramBot ↔ FamilyHub.Api (ADR-0008), снаружи не нужен вообще никому.
+	@blocked path /dev/* /hangfire* /swagger* /health/* /internal/*
+	handle @blocked {
+		respond 404
+	}
 
-	reverse_proxy api:8080
+	# Вебхук Telegram обслуживает отдельный контейнер бота (ADR-0008), не api. Имя wg-client, а
+	# не telegrambot: бот делит сетевой namespace с WG-сайдкаром (network_mode: service:wg-client,
+	# см. docker-compose.prod.yml) и своего имени в compose-сети не имеет — порт 8080 биндится в
+	# netns wg-client.
+	handle /bot/webhook {
+		reverse_proxy wg-client:8080
+	}
+
+	handle {
+		reverse_proxy api:8080
+	}
 }
 
-seq.{$PUBLIC_DOMAIN}:8443, s3.{$PUBLIC_DOMAIN}:8443, admin.{$PUBLIC_DOMAIN}:8443 {
+seq.{$PUBLIC_DOMAIN}:8443, s3.{$PUBLIC_DOMAIN}:8443, admin.{$PUBLIC_DOMAIN}:8443, bot.{$PUBLIC_DOMAIN}:8443 {
 	tls internal
 
 	@seq host seq.{$PUBLIC_DOMAIN}
@@ -50,6 +63,14 @@ seq.{$PUBLIC_DOMAIN}:8443, s3.{$PUBLIC_DOMAIN}:8443, admin.{$PUBLIC_DOMAIN}:8443
 		# и собственным BasicAuth-фильтром приложения (HangfireBasicAuthFilter/AdminBasicAuth,
 		# см. Program.cs); WireGuard здесь — периметр, не единственный рубеж.
 		reverse_proxy api:8080
+	}
+
+	# /health/ready и /health/telegram бота (ADR-0008) — только для ручной диагностики тоннеля
+	# через WireGuard, без SSH. wg-client:8080 — тот же адрес, что и у публичного /bot/webhook
+	# выше (сетевой namespace общий).
+	@bot host bot.{$PUBLIC_DOMAIN}
+	handle @bot {
+		reverse_proxy wg-client:8080
 	}
 
 	handle {

@@ -121,6 +121,38 @@ services:
       kafka:
         condition: service_healthy
 
+  # Telegram-бот (ADR-0008) — отдельным процессом, без доступа к БД. Под профилем "bot": по
+  # умолчанию `docker compose up` его НЕ поднимает (большинству локальной разработки токен бота
+  # не нужен) — явно: `docker compose --profile bot up -d`. Никакого wg-client здесь: локальная
+  # машина разработчика либо имеет прямой доступ к api.telegram.org, либо использует свой VPN —
+  # сплит-туннель через сайдкар нужен только на прод-VDS (см. deploy/docker-compose.prod.yml).
+  telegrambot:
+    profiles: ["bot"]
+    build:
+      context: .
+      dockerfile: src/FamilyHub.TelegramBot/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${BOT_PORT:-5277}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      Telegram__BotToken: "${Telegram__BotToken}"
+      Telegram__WebhookSecret: "${Telegram__WebhookSecret}"
+      # Пусто — TelegramWebhookRegistrar пропускает SetWebhook; тестируйте локально POST'ом
+      # синтетического Update на http://localhost:${BOT_PORT:-5277}/bot/webhook с заголовком
+      # X-Telegram-Bot-Api-Secret-Token (см. tests/.../BotWebhookTests.cs) или ngrok.
+      Telegram__WebhookUrl: ""
+      Telegram__MiniAppUrl: "${Telegram__MiniAppUrl}"
+      FamilyHubApi__BaseUrl: "http://api:5276"
+      Internal__BotApiToken: "${Internal__BotApiToken}"
+      Messaging__Kafka__Enabled: "${KAFKA_ENABLED:-true}"
+      Messaging__Kafka__BootstrapServers: "kafka:9092"
+      Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
+    depends_on:
+      - api
+      - kafka
+
   web:
     build:
       context: ./src/FamilyHub.Web

@@ -70,9 +70,10 @@ GitHub Environment `production` с этими же секретами (`deploy.y
 |---|---|---|
 | `SSH_HOST` | IP или домен VPS | из вывода `bootstrap.sh` |
 | `SSH_USER` | `deploy` | создан `bootstrap.sh` |
+| `SSH_PORT` | SSH-порт, если не `22` | значение из `sshd_config` на VPS; не заведён -> `deploy.yml` берёт `22` |
 | `SSH_PRIVATE_KEY` | содержимое `familyhub_deploy_key` (**приватный** ключ, не `.pub`) | `cat familyhub_deploy_key` |
 | `SSH_KEY_PASSPHRASE` | passphrase ключа (если задавали при `ssh-keygen`; иначе не заводите секрет) | та, что вводили в `ssh-keygen` |
-| `SSH_KNOWN_HOSTS` | отпечаток хоста | `ssh-keyscan <IP сервера>` со своей машины |
+| `SSH_KNOWN_HOSTS` | отпечаток хоста | `ssh-keyscan -p <SSH_PORT> <IP сервера>` со своей машины (добавьте `-p`, если порт не `22`) |
 
 ### `PROD_ENV` — содержимое всего `.env` для прода
 
@@ -270,3 +271,4 @@ curl -i https://<домен>/health/ready
 | Деплой прошёл, но `/hangfire`/`/swagger` отвечают 401 без пароля не для админ-домена, а на публичном `<домен>` | Caddy должен блокировать `/hangfire*`/`/swagger*`/`/dev/*` на публичном сайте — проверьте, что `deploy/Caddyfile` реально скопировался (тот же класс проблемы, что и с `deploy/backup/`, если правило `.gitignore` когда-нибудь тронут) |
 | WireGuard поднят, но `seq.<домен>:8443` недоступен | Порт `8443` слушается только на `10.8.0.1` (см. Шаг 6) — убедитесь, что запрос реально идёт через туннель, а не напрямую в интернет |
 | Шаг «Снять passphrase с ключа» падает на `ssh-keygen -p` | `SSH_KEY_PASSPHRASE` не задан или не совпадает с реальным паролем ключа — заведите/обновите секрет (см. Шаг 4) |
+| `ssh`/`scp` в `deploy.yml` падает с `Host key verification failed`, хотя `SSH_KNOWN_HOSTS` заведён | `SSH_KNOWN_HOSTS` сгенерирован без `-p <SSH_PORT>` (порт поменяли после первого `ssh-keyscan`) — при нестандартном порте запись в `known_hosts` хранится как `[хост]:порт ...`, без `-p` она не совпадёт. Перегенерируйте: `ssh-keyscan -p <SSH_PORT> <IP сервера>` |

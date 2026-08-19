@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using FamilyHub.Api.Features.Bot;
+using FamilyHub.Contracts.BotApi;
 using FamilyHub.Infrastructure.Auth.Jwt;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.CurrentUser;
@@ -272,7 +272,7 @@ public static class AuthEndpoints
             if (result == StartLinkTelegramResult.AlreadyLinked)
                 return Results.Conflict(new { code = "already_linked" });
 
-            var deepLink = $"https://t.me/{botUsername}?start={TelegramUpdateHandler.LinkPrefix}{code}";
+            var deepLink = $"https://t.me/{botUsername}?start={BotDeepLinks.LinkPrefix}{code}";
             return Results.Ok(new { code, deepLink, expiresAt });
         }).RequireRateLimiting("auth-code");
     }

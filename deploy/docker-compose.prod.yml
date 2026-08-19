@@ -3,6 +3,9 @@
 # разработка, api/web собираются из исходников с hot-reload):
 #   - api — готовый образ из GHCR (${IMAGE}:${IMAGE_TAG}, пишутся в .env самим деплой-workflow),
 #     без Angular dev-server — SPA уже вшита в образ (см. src/FamilyHub.Api/Dockerfile);
+#   - telegrambot (${IMAGE_BOT}:${IMAGE_TAG}) — Telegram-бот отдельным процессом (ADR-0008), без
+#     доступа к БД; делит сетевой namespace с wg-client (Amnezia WG-сайдкар), чтобы его исходящий
+#     трафик к api.telegram.org шёл через туннель — обычный egress api не тронут;
 #   - ни у одного сервиса, кроме caddy, нет наружу смотрящих ports — Postgres/MinIO/Kafka/Seq
 #     доступны только внутри docker-сети и (для админок) через Caddy на WireGuard-адресе хоста;
 #   - лимиты памяти на каждый сервис (сумма меньше 12 GB — запас на ОС/docker/wg см. README);
@@ -145,6 +148,11 @@ services:
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
       Messaging__Kafka__Enabled: "true"
       Messaging__Kafka__BootstrapServers: "kafka:9092"
+      # Секрет обмена с FamilyHub.TelegramBot (см. telegrambot ниже, profiles: ["bot"]) —
+      # ADR-0008. НЕ required (:-, не :?): пока профиль "bot" не включён, этой переменной может
+      # не быть в PROD_ENV вовсе — Api тогда просто не мапит /internal/bot/* (internalBotApiConfigured
+      # в Program.cs), а не падает при старте. Заполните перед включением COMPOSE_PROFILES=bot.
+      Internal__BotApiToken: "${INTERNAL_BOT_API_TOKEN:-}"
     healthcheck:
       # wget — не curl: он уже есть в aspnet:*-alpine (busybox), доп. пакет не нужен.
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
@@ -165,6 +173,114 @@ services:
         limits:
           memory: 3G
 
+  # Сплит-туннель к api.telegram.org для бота (ADR-0008, вынос Telegram-бота из api в отдельный
+  # контейнер): Российские сети блокируют исходящий доступ к Telegram — эта пара сервисов (см.
+  # telegrambot ниже) заворачивает ТОЛЬКО трафик бота через Amnezia WG-туннель на финский VPS,
+  # оставляя обычный egress api нетронутым. AllowedIPs в конфиге WG_CONF — подсети Telegram, НЕ
+  # 0.0.0.0/0: маршрут по умолчанию (docker bridge → api/kafka/seq) внутри netns остаётся
+  # нетронутым, поэтому internal-HTTP-вызовы бота к api идут напрямую, а не через тоннель.
+  #
+  # Образ — deploy/wg/Dockerfile (адаптация официального Dockerfile проекта amneziawg-go),
+  # собирается и пушится в GHCR тем же workflow, что api/bot (см. .github/workflows/deploy.yml).
+  # Проверено локально (docker build + docker run с NET_ADMIN/--device /dev/net/tun и реальным
+  # конфигом, структурно идентичным вашему): интерфейс поднимается, Jc/Jmin/Jmax/S1-S4/H1-H4/I1
+  # парсятся без ошибок, маршруты добавляются ТОЛЬКО для AllowedIPs (подсети Telegram) — маршрут
+  # по умолчанию контейнера остаётся на обычном docker bridge. Не проверено — реальный handshake
+  # с вашим сервером (для этого нужен настоящий Endpoint/ключи, недоступные в среде сборки).
+  # Конфиг тоннеля (awg0.conf) — секрет WG_CONF в GitHub Actions, деплой-workflow кладёт его в
+  # ./wg/awg0.conf на VPS (НЕ коммитится в git).
+  #
+  # profiles: ["bot"] — ОБА сервиса (wg-client + telegrambot) намеренно выключены по умолчанию.
+  # WG_IMAGE теперь пишет сам деплой-workflow (собран из исходников, см. выше), но
+  # TELEGRAM_BOT_TOKEN/TELEGRAM_WEBHOOK_SECRET/INTERNAL_BOT_API_TOKEN и секрет WG_CONF —
+  # по-прежнему только вручную в PROD_ENV. Без profiles обычный `docker compose up -d` ЛОМАЛ БЫ
+  # КАЖДЫЙ деплой ошибкой интерполяции ещё до того, как вы вообще прикоснулись к боту. Включение:
+  # добавьте `COMPOSE_PROFILES=bot` в PROD_ENV (docker compose читает .env из рабочего каталога
+  # автоматически, без изменений в deploy.yml/CLI-флагов) — ТОЛЬКО после того как реальный
+  # handshake с вашим Amnezia-сервером проверен (см. health/telegram у бота) и все
+  # TELEGRAM_*/INTERNAL_BOT_API_TOKEN/WG_CONF заданы.
+  wg-client:
+    image: ${WG_IMAGE}
+    restart: unless-stopped
+    profiles: ["bot"]
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    sysctls:
+      net.ipv4.conf.all.src_valid_mark: 1
+    volumes:
+      - ./wg:/etc/amnezia/amneziawg:ro
+    healthcheck:
+      # awg0 — фиксированное имя интерфейса (см. entrypoint.sh: awg-quick up awg0, ищет
+      # /etc/amnezia/amneziawg/awg0.conf) — конфиг WG_CONF должен монтироваться под этим именем.
+      test: ["CMD-SHELL", "awg show interfaces | grep -qw awg0"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Telegram-бот — отдельный процесс (FamilyHub.TelegramBot), никакого доступа к БД: команды
+  # (/start, инвайты, привязка) идут внутренним HTTP на api (/internal/bot/*, см.
+  # Internal__BotApiToken ниже и в api.environment), оповещения — через Kafka-топик
+  # telegram-outbound (TelegramOutboundPublisher в api → TelegramOutboundConsumer здесь).
+  telegrambot:
+    image: ${IMAGE_BOT}:${IMAGE_TAG}
+    restart: unless-stopped
+    profiles: ["bot"]
+    # network_mode делит netns с wg-client целиком: у контейнера НЕТ своего имени в
+    # compose-сети — Caddy обращается к нему как к wg-client:8080 (см. deploy/Caddyfile).
+    # ports/expose/networks/hostname/dns здесь ЗАПРЕЩЕНЫ Docker (conflicting options).
+    network_mode: "service:wg-client"
+    # env_file НАМЕРЕННО не используется (в отличие от api): .env несёт пароль Postgres,
+    # ENCRYPTION_MASTER_KEY и прочие секреты, которым в контейнере бота делать нечего — у него
+    # нет ни доступа к БД, ни причины их знать.
+    #
+    # Все ${VAR:-} здесь НЕ required (:?), хотя по смыслу обязательны для реальной работы бота —
+    # проверено эмпирически: Docker Compose интерполирует ВЕСЬ файл целиком при `docker compose
+    # config`/`up`, включая сервисы с неактивным profiles, ДО применения фильтра профилей.
+    # required-переменная здесь ломала бы КАЖДЫЙ обычный деплой (даже без COMPOSE_PROFILES=bot),
+    # а не только запуск бота. Отсутствие токена вместо этого — fail-soft на уровне приложения
+    # (FamilyHub.TelegramBot.Program: без BotToken/WebhookUrl хост поднимается, но не
+    # регистрирует вебхук — тот же идиом, что раньше был в FamilyHub.Api).
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      Telegram__BotToken: "${TELEGRAM_BOT_TOKEN:-}"
+      Telegram__WebhookSecret: "${TELEGRAM_WEBHOOK_SECRET:-}"
+      Telegram__WebhookUrl: "${TELEGRAM_WEBHOOK_URL:-}"
+      Telegram__MiniAppUrl: "${TELEGRAM_MINIAPP_URL:-}"
+      FamilyHubApi__BaseUrl: "http://api:8080"
+      Internal__BotApiToken: "${INTERNAL_BOT_API_TOKEN:-}"
+      Messaging__Kafka__Enabled: "true"
+      Messaging__Kafka__BootstrapServers: "kafka:9092"
+      Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      wg-client:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -180,6 +296,11 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    # НЕ добавлять сюда wg-client: тот в profiles: ["bot"] (выключен по умолчанию, см. выше) —
+    # depends_on на выключенный по профилю сервис ломает ВСЮ конфигурацию (`docker compose config`
+    # отказывает с "depends on undefined service"), даже если сам caddy профиль не запрашивает.
+    # Проверено эмпирически. Пока профиль "bot" не включён, /bot/webhook просто вернёт 502 —
+    # деградация локальная, не фатальная для остального стека.
     depends_on:
       - api
     logging:

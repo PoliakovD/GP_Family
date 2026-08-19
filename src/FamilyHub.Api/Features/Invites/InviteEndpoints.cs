@@ -1,5 +1,5 @@
-using FamilyHub.Api.Features.Bot;
 using FamilyHub.Api.Features.Families;
+using FamilyHub.Contracts.BotApi;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Telegram;
@@ -24,7 +24,7 @@ public static class InviteEndpoints
             var botUsername = telegramOptions.Value.BotUsername;
             var telegramLink = string.IsNullOrWhiteSpace(botUsername)
                 ? (string?)null
-                : $"https://t.me/{botUsername}?start={TelegramUpdateHandler.InvitePrefix}{invite!.Code}";
+                : $"https://t.me/{botUsername}?start={BotDeepLinks.InvitePrefix}{invite!.Code}";
 
             return Results.Created($"/api/invites/{invite!.Id}",
                 new { invite.Id, invite.Code, invite.MaxUses, invite.ExpiresAt, TelegramLink = telegramLink });

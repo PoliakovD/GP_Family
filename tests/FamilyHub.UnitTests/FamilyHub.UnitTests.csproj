@@ -4,6 +4,7 @@
     <ProjectReference Include="..\..\src\FamilyHub.Domain\FamilyHub.Domain.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Infrastructure\FamilyHub.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Api\FamilyHub.Api.csproj" />
+    <ProjectReference Include="..\..\src\FamilyHub.TelegramBot\FamilyHub.TelegramBot.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Medical\FamilyHub.Modules.Medical.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Birthdays\FamilyHub.Modules.Birthdays.csproj" />
     <ProjectReference Include="..\FamilyHub.TestUtils\FamilyHub.TestUtils.csproj" />

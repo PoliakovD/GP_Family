@@ -4,7 +4,6 @@ using FamilyHub.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
-using Telegram.Bot;
 using Telegram.Bot.Requests;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -12,20 +11,17 @@ using Xunit;
 
 namespace FamilyHub.IntegrationTests.Bot;
 
-[CollectionDefinition(Name)]
-public class BotWebhookTestCollection : ICollectionFixture<BotWebhookWebFactory>
-{
-    public const string Name = "FamilyHub bot webhook tests";
-}
-
 /// <summary>
-/// Сквозной HTTP-тест вебхука: реальная проверка секрета + реальный JSON-разбор Update через
-/// Telegram.Bot.JsonBotAPI.Options + реальный TelegramUpdateHandler/InviteService/UserProvisioning
-/// на настоящем Postgres. Единственная подмена — ITelegramBotClient (см. BotWebhookWebFactory),
-/// чтобы ответы хендлера не уходили в реальный Telegram.
+/// Сквозной HTTP-тест вебхука после выноса бота (ADR-0008): реальная проверка секрета + реальный
+/// JSON-разбор Update через Telegram.Bot.JsonBotAPI.Options на хосте FamilyHub.TelegramBot,
+/// который затем реальным HTTP-вызовом (через TestServer.CreateHandler(), см.
+/// BotIntegrationFixture) достигает /internal/bot/* на хосте FamilyHub.Api — InviteService/
+/// UserProvisioning на настоящем Postgres, как и раньше, просто теперь через сетевую границу
+/// между двумя процессами вместо in-process вызова. Единственная подмена — ITelegramBotClient
+/// (внутри бота), чтобы ответы хендлера не уходили в реальный Telegram.
 /// </summary>
-[Collection(BotWebhookTestCollection.Name)]
-public class BotWebhookTests(BotWebhookWebFactory factory)
+[Collection(BotIntegrationCollection.Name)]
+public class BotWebhookTests(BotIntegrationFixture fixture)
 {
     private static Update StartUpdate(long fromId, string? argument = null) => new()
     {
@@ -51,19 +47,19 @@ public class BotWebhookTests(BotWebhookWebFactory factory)
     [Fact]
     public async Task MissingSecretHeader_Returns401_AndHandlerNeverRuns()
     {
-        var client = factory.CreateClient();
-        factory.BotClient.ClearReceivedCalls();
+        var client = fixture.CreateBotWebhookClient();
+        fixture.BotClient.ClearReceivedCalls();
 
         var response = await client.SendAsync(BuildRequest(StartUpdate(901), secret: null));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        await factory.BotClient.DidNotReceive().SendRequest(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>());
+        await fixture.BotClient.DidNotReceive().SendRequest(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task WrongSecret_Returns401()
     {
-        var client = factory.CreateClient();
+        var client = fixture.CreateBotWebhookClient();
 
         var response = await client.SendAsync(BuildRequest(StartUpdate(902), secret: "not-the-real-secret"));
 
@@ -75,17 +71,17 @@ public class BotWebhookTests(BotWebhookWebFactory factory)
     {
         // Lookup-only: бот никогда не создаёт "голого" Telegram-only пользователя без
         // email-привязки (email — единственный якорь identity, см. TelegramMiniAppAuthenticationHandler).
-        var client = factory.CreateClient();
+        var client = fixture.CreateBotWebhookClient();
         const long telegramId = 903;
 
-        var response = await client.SendAsync(BuildRequest(StartUpdate(telegramId), secret: BotWebhookWebFactory.WebhookSecret));
+        var response = await client.SendAsync(BuildRequest(StartUpdate(telegramId), secret: BotIntegrationFixture.WebhookSecret));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        await factory.BotClient.Received(1).SendRequest(
+        await fixture.BotClient.Received(1).SendRequest(
             Arg.Is<SendMessageRequest>(r => r.ChatId == telegramId),
             Arg.Any<CancellationToken>());
 
-        using var scope = factory.Services.CreateScope();
+        using var scope = fixture.ApiServices.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Users.Should().NotContain(u => u.TelegramId == telegramId);
     }

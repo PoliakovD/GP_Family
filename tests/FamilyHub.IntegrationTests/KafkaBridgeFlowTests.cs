@@ -6,7 +6,7 @@ using Confluent.Kafka.Admin;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
-using FamilyHub.Infrastructure.Messaging.Kafka;
+using FamilyHub.Contracts.Messaging;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FluentAssertions;
 using MassTransit;

@@ -54,7 +54,6 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Exceptions;
 using System.Net;
-using Telegram.Bot;
 
 // Bootstrap-логгер ловит ошибки, которые случаются до того, как builder.Build()
 // поднимет настоящий Serilog-логгер из конфигурации (например, сбой при чтении appsettings).
@@ -89,6 +88,7 @@ builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetS
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.Configure<InternalOptions>(builder.Configuration.GetSection(InternalOptions.SectionName));
 
 // --- DevTools (Hangfire/Swagger/DevAuth/`/dev/*`): раньше все четыре жёстко гейтились на
 // --- IsDevelopment(). Дев-контур на VPS работает под ASPNETCORE_ENVIRONMENT=Production (иначе
@@ -426,18 +426,29 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<NotificationSendingService>();
 builder.Services.AddScoped<PushSubscriptionService>();
 
-// --- Telegram-бот: тонкий клиент + доставка оповещений (этап 4 п.12) ---
-// Всё, что зависит от ITelegramBotClient, регистрируем только если задан BotToken: без него
-// (локальный dev) бота не существует — нет смысла поднимать вебхук-эндпоинт и обработчик.
+// --- Telegram: доставка оповещений через шину (этап 4 п.12; бот сам живёт в отдельном ---
+// --- процессе FamilyHub.TelegramBot, см. ADR-0008) ---
+// BotToken по-прежнему обязателен здесь: TelegramInitDataValidator выводит из него HMAC-ключ
+// для проверки initData Mini App — это забота Api, а не бота. Сам бот (вебхук, SendMessage)
+// не живёт в этом процессе больше; TelegramOutboundPublisher публикует готовое сообщение в
+// Kafka (topic telegram-outbound), которое потребляет FamilyHub.TelegramBot.
 var telegramBotToken = builder.Configuration["Telegram:BotToken"];
 var telegramBotConfigured = !string.IsNullOrWhiteSpace(telegramBotToken);
 if (telegramBotConfigured)
 {
-    builder.Services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(telegramBotToken!));
-    builder.Services.AddScoped<INotificationSender, TelegramNotificationSender>();
-    builder.Services.AddScoped<TelegramUpdateHandler>();
-    builder.Services.AddHostedService<TelegramWebhookRegistrar>();
+    builder.Services.AddScoped<INotificationSender, TelegramOutboundPublisher>();
 }
+
+// --- Внутренний API для FamilyHub.TelegramBot (/internal/bot/*, см. InternalBotEndpoints) ---
+// Отдельный флаг от telegramBotConfigured: этот секрет защищает контур обмена с ботом-процессом,
+// а не с Telegram напрямую, и может быть сконфигурирован независимо (напр. в проде — всегда,
+// в локальной разработке без контейнера бота — не обязателен).
+var internalBotApiToken = builder.Configuration["Internal:BotApiToken"];
+var internalBotApiConfigured = !string.IsNullOrWhiteSpace(internalBotApiToken);
+if (internalBotApiConfigured && internalBotApiToken!.Length < 32)
+    throw new InvalidOperationException(
+        "Internal:BotApiToken (env Internal__BotApiToken) короче 32 символов — секрет обмена с " +
+        "FamilyHub.TelegramBot слишком слабый. Сгенерировать: `openssl rand -hex 32`.");
 
 // --- Web Push: реальная доставка PWA-пользователям (редизайн навигации, ADR-0004) — покрывает
 // пользователей без Telegram, которых TelegramNotificationSender не видит вовсе. Независимо от
@@ -702,7 +713,7 @@ app.Use(async (context, next) =>
 // одних только запросных заголовков.
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api"))
+    if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/internal"))
     {
         context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
         context.Response.Headers.Pragma = "no-cache";
@@ -724,9 +735,9 @@ app.MapMedicalModule();
 app.MapBirthdayModule();
 app.MapNotificationEndpoints();
 app.MapPushEndpoints();
-if (telegramBotConfigured)
+if (internalBotApiConfigured)
 {
-    app.MapBotEndpoints();
+    app.MapInternalBotEndpoints();
 }
 
 // SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).

@@ -48,16 +48,20 @@ jobs:
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
       image: ${{ steps.meta.outputs.image }}
+      image_bot: ${{ steps.meta.outputs.image_bot }}
+      image_wg: ${{ steps.meta.outputs.image_wg }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
 
-      - name: Resolve image ref (lowercase owner — GHCR требует lowercase)
+      - name: Resolve image refs (lowercase owner — GHCR требует lowercase)
         id: meta
         run: |
           owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           echo "image=ghcr.io/${owner}/gp_family-api" >> "$GITHUB_OUTPUT"
+          echo "image_bot=ghcr.io/${owner}/gp_family-telegrambot" >> "$GITHUB_OUTPUT"
+          echo "image_wg=ghcr.io/${owner}/gp_family-wg-client" >> "$GITHUB_OUTPUT"
           echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
@@ -76,8 +80,40 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.image }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Разные scope кэша GHA для api/bot — общий ключ заставил бы две сборки конкурировать
+          # за один и тот же кэш вместо использования каждой своего.
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Собрать и запушить образ FamilyHub.TelegramBot (ADR-0008)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/FamilyHub.TelegramBot/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_bot }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image_bot }}:latest
+          cache-from: type=gha,scope=bot
+          cache-to: type=gha,scope=bot,mode=max
+
+      - name: Собрать и запушить образ AmneziaWG-сайдкара (ADR-0008)
+        # Собирается с нуля из исходников amneziawg-go/amneziawg-tools (deploy/wg/Dockerfile) —
+        # тегами AMNEZIAWG_GO_COMMIT/AWGTOOLS_COMMIT (по умолчанию master) можно закрепить
+        # конкретный коммит после проверки, см. комментарии в самом Dockerfile. Собирается
+        # ВСЕГДА (не под условием "bot" профиля) — так образ уже готов в GHCR к моменту, когда вы
+        # решите включить COMPOSE_PROFILES=bot; собирать редко меняющийся сайдкар из исходников
+        # безопаснее, чем полагаться на непроверенный community-образ.
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/wg
+          file: deploy/wg/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_wg }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image_wg }}:latest
+          cache-from: type=gha,scope=wg
+          cache-to: type=gha,scope=wg,mode=max
 
   deploy:
     needs: build-push
@@ -140,14 +176,27 @@ jobs:
           # какой именно билд разворачивается.
           echo "IMAGE=${{ needs.build-push.outputs.image }}" >> env.rendered
           echo "IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}" >> env.rendered
+          echo "IMAGE_BOT=${{ needs.build-push.outputs.image_bot }}" >> env.rendered
+          # WG_IMAGE — тоже из пайплайна, не из PROD_ENV: сайдкар собирается из исходников
+          # amneziawg-go/amneziawg-tools тем же job'ом (см. шаг выше), секрету незачем это решать.
+          echo "WG_IMAGE=${{ needs.build-push.outputs.image_wg }}:${{ needs.build-push.outputs.image_tag }}" >> env.rendered
+
+      - name: Render конфиг Amnezia WG из секрета WG_CONF (ADR-0008)
+        # Приватный ключ тоннеля — секрет, в git ему нельзя. Пустой WG_CONF допустим (бот тогда
+        # не сможет пройти /health/telegram, но остальной прод-стек это не валит) — сначала
+        # проверьте, что секрет действительно задан, если разворачиваете бота впервые.
+        run: |
+          mkdir -p wg
+          printf '%s\n' "${{ secrets.WG_CONF }}" > wg/awg0.conf
 
       - name: Загрузить .env и deploy/ на VPS
         run: |
-          ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'mkdir -p /opt/familyhub'
+          ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'mkdir -p /opt/familyhub/wg'
           scp -P "$SSH_PORT" env.rendered "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/.env"
           scp -P "$SSH_PORT" deploy/docker-compose.prod.yml "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/docker-compose.yml"
           scp -P "$SSH_PORT" deploy/Caddyfile "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/Caddyfile"
           scp -P "$SSH_PORT" -r deploy/backup "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/backup"
+          scp -P "$SSH_PORT" wg/awg0.conf "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/wg/awg0.conf"
 
       - name: docker compose pull && up -d + дождаться /health/ready
         env:
@@ -158,32 +207,51 @@ jobs:
             set -euo pipefail
             cd /opt/familyhub
             chmod 600 .env
+            chmod 600 wg/awg0.conf
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
+            # wg-client и telegrambot ВСЕГДА вместе (network_mode: service:wg-client) — пересоздание
+            # одного без другого осиротит бота ("cannot join network of a non running container").
+            docker compose up -d --remove-orphans --force-recreate wg-client telegrambot
             docker compose up -d --remove-orphans
 
-            echo "Жду /health/ready..."
+            echo "Жду /health/ready (api)..."
             for i in \$(seq 1 18); do
               if docker compose exec -T api wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1; then
                 echo "api готов."
-                exit 0
+                break
+              fi
+              if [ "\$i" -eq 18 ]; then
+                echo "api не стал healthy за отведённое время." >&2
+                exit 1
               fi
               sleep 5
             done
-            echo "api не стал healthy за отведённое время." >&2
-            exit 1
+
+            echo "Жду /health/ready (telegrambot)..."
+            for i in \$(seq 1 18); do
+              if docker compose exec -T telegrambot wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1; then
+                echo "telegrambot готов."
+                exit 0
+              fi
+              if [ "\$i" -eq 18 ]; then
+                echo "telegrambot не стал healthy за отведённое время." >&2
+                exit 1
+              fi
+              sleep 5
+            done
           REMOTE_SCRIPT
 
       - name: Убрать старые образы
         if: always()
         run: ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'docker image prune -f'
 
-      - name: Логи api при неудаче
+      - name: Логи при неудаче
         if: failure()
-        run: ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'cd /opt/familyhub && docker compose logs --tail=200 api'
+        run: ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'cd /opt/familyhub && docker compose logs --tail=200 api telegrambot wg-client'
 
 # Откат (не требует нового workflow_dispatch — см. deploy/README.md):
 #   ssh -p <SSH_PORT> deploy@<host>
 #   cd /opt/familyhub
 #   sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<предыдущий sha>/' .env
-#   docker compose up -d api
+#   docker compose up -d api telegrambot   # IMAGE_BOT использует тот же IMAGE_TAG, что и api

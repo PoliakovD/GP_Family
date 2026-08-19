@@ -1,20 +1,20 @@
 using System.Security.Cryptography;
 using System.Text;
-using FamilyHub.Infrastructure.Telegram;
+using FamilyHub.TelegramBot.Configuration;
 using Microsoft.Extensions.Options;
 using Telegram.Bot.Types;
 
-namespace FamilyHub.Api.Features.Bot;
+namespace FamilyHub.TelegramBot.Webhook;
 
 public static class BotEndpoints
 {
     public static void MapBotEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/bot/webhook", async (
-            HttpContext httpContext, TelegramUpdateHandler handler, IOptions<TelegramOptions> options, CancellationToken ct) =>
+            HttpContext httpContext, TelegramUpdateHandler handler, IOptions<BotOptions> options, CancellationToken ct) =>
         {
             // Проверка подлинности источника — ПЕРВЫЙ шаг, до разбора тела и любой бизнес-логики
-            // (тот же принцип, что у валидации Mini App initData в TelegramInitDataValidator).
+            // (тот же принцип, что у валидации Mini App initData в TelegramInitDataValidator на Api).
             if (!IsValidSecret(httpContext, options.Value.WebhookSecret))
                 return Results.Unauthorized();
 
