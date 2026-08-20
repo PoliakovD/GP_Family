@@ -35,6 +35,12 @@
     <!-- SMTP-отправка (задача 2.5): универсальный клиент вместо SDK конкретного вендора —
          российский провайдер задаётся конфигом (host/логин), без привязки в коде. -->
     <PackageReference Include="MailKit" Version="4.17.0" />
+    <!-- Отладка 2026-08-19: исходящие SMTP-порты 587/465 оказались заблокированы и на VDS, и
+         локально у разработчика (провайдерский блок, не наш код) — Yandex Cloud Postbox даёт
+         SESv2-совместимый HTTPS API (порт 443, подтверждённо доступен), см.
+         YandexPostboxApiEmailSender. SMTP (выше) остаётся как канал в CompositeEmailSender —
+         вдруг у другого провайдера/сети 587 когда-то заработает. -->
+    <PackageReference Include="AWSSDK.SimpleEmailV2" Version="4.0.102.3" />
     <!-- Web Push (VAPID + RFC8291-шифрование payload) — редизайн навигации, ADR-0004: реальная
          доставка PWA-пользователям, не только через Telegram-бота. -->
     <PackageReference Include="WebPush" Version="1.0.13" />

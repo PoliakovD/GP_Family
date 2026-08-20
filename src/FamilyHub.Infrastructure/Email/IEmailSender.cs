@@ -8,9 +8,11 @@ namespace FamilyHub.Infrastructure.Email;
 public sealed record EmailBody(string Text, string? Html = null);
 
 /// <summary>
-/// Абстракция отправки email (mirrors INotificationSender). Реализации:
-/// LoggingEmailSender (dev-заглушка) и MailKitSmtpEmailSender (российские SMTP-провайдеры
-/// с failover, задача 2.5). Выбор — в Program.cs по наличию Email:Providers.
+/// Абстракция отправки email (mirrors INotificationSender). Реализации: LoggingEmailSender
+/// (dev-заглушка), YandexPostboxApiEmailSender (HTTPS API, основной канал, добавлено
+/// 2026-08-19) и MailKitSmtpEmailSender (SMTP-провайдеры с failover, задача 2.5, резервный
+/// канал) — оба реальных канала пробует CompositeEmailSender по порядку. Выбор — в Program.cs
+/// по наличию Email:PostboxApi/Email:Providers.
 /// </summary>
 public interface IEmailSender
 {
