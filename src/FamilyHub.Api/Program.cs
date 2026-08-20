@@ -9,6 +9,8 @@ using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
 using FamilyHub.Api.Health;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using FamilyHub.Api.Security;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
@@ -142,6 +144,16 @@ builder.Services.AddSingleton<IRussianTextSearcher, RussianTextSearcher>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")
         ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.")));
+
+// --- Data Protection (отладка 2026-08-20): без этого ключи живут в эфемерной ФС контейнера ---
+// (~/.aspnet/DataProtection-Keys) — каждый перезапуск/редеплой api сбрасывает их, инвалидируя
+// CSRF-токены (IAntiforgery, единственный потребитель Data Protection в этом приложении — JWT
+// подписывается отдельным Jwt:SigningKey, не затронут) у всех активных сессий.
+// PersistKeysToDbContext — та же Postgres, что и остальное состояние, автоматически попадает
+// под уже настроенный ночной pg_dump (см. deploy/backup).
+builder.Services.AddDataProtection()
+    .SetApplicationName("FamilyHub")
+    .PersistKeysToDbContext<AppDbContext>();
 
 // --- Событийная шина: MassTransit + EF Core Outbox + Kafka Rider (ADR-0006/ADR-0007) ---
 // Messaging:Kafka:Enabled=true (docker-compose/прод, дефолт для полного стека) — бизнес-потребители

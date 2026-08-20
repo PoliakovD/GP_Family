@@ -16,6 +16,13 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Отладка 2026-08-20: без явной конфигурации ASP.NET Core Data Protection хранит ключи в
+         эфемерной файловой системе контейнера (~/.aspnet/DataProtection-Keys) — каждый
+         перезапуск/редеплой api сбрасывает их, инвалидируя CSRF-токены (IAntiforgery, см.
+         Program.cs) у всех активных сессий. PersistKeysToDbContext<AppDbContext> — тот же
+         Postgres, что и всё остальное состояние приложения, автоматически попадает под уже
+         настроенный ночной pg_dump (см. deploy/backup). -->
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
     <!-- 8.5.1 — последняя версия под Apache-2.0 (v9, апрель 2025, ушла на коммерческую лицензию —
          та же история, что и с MediatR). Подтверждено спайком: MassTransit.EntityFrameworkCore
          собран под EF Core 9.0.1, но NuGet резолвит наш пиннинг 10.0.9 без конфликтов (см.

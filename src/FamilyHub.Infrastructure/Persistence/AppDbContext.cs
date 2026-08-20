@@ -3,12 +3,19 @@ using FamilyHub.Domain;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Security;
 using MassTransit;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace FamilyHub.Infrastructure.Persistence;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher fieldCipher) : DbContext(options)
+/// <summary>
+/// IDataProtectionKeyContext (добавлено 2026-08-20) — ключи Data Protection (CSRF-токены,
+/// IAntiforgery) хранятся в той же Postgres, что и остальное состояние, а не в эфемерной ФС
+/// контейнера, см. DataProtectionKeys ниже и AddDataProtection в Program.cs.
+/// </summary>
+public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher fieldCipher)
+    : DbContext(options), IDataProtectionKeyContext
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Family> Families => Set<Family>();
@@ -33,6 +40,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<PersonalCompatibilityResult> PersonalCompatibilityResults => Set<PersonalCompatibilityResult>();
     public DbSet<MedicationEnrichmentJob> MedicationEnrichmentJobs => Set<MedicationEnrichmentJob>();
     public DbSet<MedicationSearchCache> MedicationSearchCaches => Set<MedicationSearchCache>();
+
+    /// <summary>Требуется интерфейсом IDataProtectionKeyContext — имя DbSet фиксировано пакетом,
+    /// не наша конвенция именования.</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
