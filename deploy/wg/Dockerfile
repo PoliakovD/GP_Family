@@ -37,6 +37,18 @@ FROM alpine:3.19
 RUN apk --no-cache add iproute2 iptables bash openresolv
 COPY --from=tools /amneziawg-tools/src/wg /usr/bin/awg
 COPY --from=tools /amneziawg-tools/src/wg-quick/linux.bash /usr/bin/awg-quick
+# add_default() в этом форке безусловно дёргает `cmd sysctl -q net.ipv4.conf.all.src_valid_mark=1`
+# (в отличие от апстримного wg-quick — тут нет проверки "уже 1?" перед записью) и `cmd` считает
+# провал фатальным: интерфейс откатывается (down) и entrypoint.sh уходит в рестарт-луп. Docker
+# уже выставляет этот sysctl при создании контейнера через `sysctls:` в docker-compose.prod.yml —
+# но net.ipv4.conf.all.* можно менять так только на этапе создания контейнера (привилегированным
+# действием самого Docker) или в --privileged; обычный write() изнутри контейнера с одним лишь
+# NET_ADMIN упирается в "Read-only file system", даже когда значение уже верное. Раз оно и так
+# выставлено через compose, здесь достаточно не считать повторную (заведомо обречённую) попытку
+# фатальной.
+RUN sed -i \
+    "s/cmd sysctl -q net.ipv4.conf.all.src_valid_mark=1/sysctl -q net.ipv4.conf.all.src_valid_mark=1 || true/" \
+    /usr/bin/awg-quick
 RUN chmod +x /usr/bin/awg /usr/bin/awg-quick && \
     ln -s /usr/bin/awg /usr/bin/wg && \
     ln -s /usr/bin/awg-quick /usr/bin/wg-quick
