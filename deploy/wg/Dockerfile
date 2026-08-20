@@ -30,7 +30,11 @@ RUN apk add --no-cache git build-base linux-headers && \
 
 FROM alpine:3.19
 
-RUN apk --no-cache add iproute2 iptables bash
+# openresolv — даёт /sbin/resolvconf: awg-quick (linux.bash) вызывает его для DNS = из
+# [Interface]-секции конфига; без пакета команда не найдена, awg-quick падает и откатывает
+# интерфейс (ip link delete) ещё до healthcheck — рестарт-луп. systemd тут не нужен, openresolv
+# сам пишет /etc/resolv.conf.
+RUN apk --no-cache add iproute2 iptables bash openresolv
 COPY --from=tools /amneziawg-tools/src/wg /usr/bin/awg
 COPY --from=tools /amneziawg-tools/src/wg-quick/linux.bash /usr/bin/awg-quick
 RUN chmod +x /usr/bin/awg /usr/bin/awg-quick && \
