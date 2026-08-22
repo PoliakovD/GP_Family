@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FamilyHub.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -134,6 +135,74 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
 
         // Сессия при этом НЕ должна быть тронута (logout не выполнился) — GET по-прежнему проходит.
         (await client.GetAsync("/api/families")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    // Регрессия на инцидент 2026-08-20: после включения персистентных ключей Data Protection
+    // анонимный POST /api/auth/login с "чужой" CSRF-парой от ПРЕДЫДУЩЕЙ сессии (JWT истёк или
+    // отсутствует, но familyhub.csrf/XSRF-TOKEN ещё в браузере — естественное истечение JWT
+    // БЕЗ явного /logout их не чистит, см. PwaSessionCookieWriter.ClearSessionCookies) валил
+    // логин с "meant for a different claims-based user": IAntiforgery.GetAndStoreTokens
+    // привязывает токен к HttpContext.User НА МОМЕНТ ВЫДАЧИ, а на анонимном /login текущий
+    // пользователь ещё не определён. CSRF защищает только уже аутентифицированное действие —
+    // у анонимного запроса нет сессии, которую можно "прокатить" межсайтовой подделкой, гейт
+    // (Program.cs) теперь применяется только когда текущий запрос сам уже аутентифицирован.
+    [Fact]
+    public async Task Login_WithStaleCsrfCookieFromPreviousSession_Succeeds()
+    {
+        var previousSessionClient = AnonymousClient();
+        var email = FreshEmail();
+        const string password = "Passw0rd";
+
+        (await previousSessionClient.PostAsJsonAsync("/api/auth/register/start", new { email }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var code = Factory.Emails.LastCodeFor(email);
+        (await previousSessionClient.PostAsJsonAsync("/api/auth/register/confirm",
+                new { email, code, password, username = FreshUsername(), displayName = "PWA Пользователь" }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // /me переиздаёт CSRF-пару на каждый вызов (см. AuthEndpoints.MapAuthEndpoints, "/me") —
+        // тот же путь, которым реальный SPA получает токен при старте (app.component.ts).
+        var me = await previousSessionClient.GetAsync("/api/auth/me");
+        var (privateCookie, publicCookie, xsrfHeaderValue) = ExtractCsrfCookiePair(me);
+
+        // Клиент БЕЗ автоматического cookie-jar и БЕЗ единой JWT-cookie — эмулирует браузер без
+        // валидной сессии, у которого осталась только пара CSRF-cookie от прошлого раза.
+        var anonymousBrowserWithStaleCookies = Factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new { email, password }),
+        };
+        request.Headers.Add("Cookie", $"{privateCookie}; {publicCookie}");
+        request.Headers.Add("X-XSRF-TOKEN", xsrfHeaderValue);
+
+        var response = await anonymousBrowserWithStaleCookies.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private static (string PrivateCookie, string PublicCookie, string XsrfHeaderValue) ExtractCsrfCookiePair(HttpResponseMessage response)
+    {
+        response.Headers.TryGetValues("Set-Cookie", out var cookies).Should().BeTrue("/me должен переиздавать CSRF-пару");
+
+        string? privateCookie = null;
+        string? publicCookie = null;
+        string? xsrfHeaderValue = null;
+        foreach (var header in cookies!)
+        {
+            if (header.StartsWith("familyhub.csrf=", StringComparison.Ordinal))
+            {
+                privateCookie = header[..header.IndexOf(';')];
+            }
+            else if (header.StartsWith("XSRF-TOKEN=", StringComparison.Ordinal))
+            {
+                publicCookie = header[..header.IndexOf(';')];
+                xsrfHeaderValue = Uri.UnescapeDataString(publicCookie["XSRF-TOKEN=".Length..]);
+            }
+        }
+
+        privateCookie.Should().NotBeNull("приватная httpOnly antiforgery-cookie обязана быть в ответе /me");
+        publicCookie.Should().NotBeNull("публичная XSRF-TOKEN-cookie обязана быть в ответе /me");
+        return (privateCookie!, publicCookie!, xsrfHeaderValue!);
     }
 
     [Fact]

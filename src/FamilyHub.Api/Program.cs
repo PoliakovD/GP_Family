@@ -731,12 +731,26 @@ app.UseRateLimiter();
 // --- заголовок X-XSRF-TOKEN. Telegram/Dev-запросы эту cookie никогда не получают — пропускаются
 // --- естественно, без отдельной проверки auth-схемы. IsRequestValidAsync при наличии заголовка
 // --- читает токен ИЗ заголовка, не трогая тело запроса — безопасно и для multipart-загрузок.
+// ---
+// --- Отладка 2026-08-20 (после включения персистентных ключей Data Protection): гейт
+// --- срабатывал и на АНОНИМНЫХ запросах (/api/auth/login и т.п.), если в браузере оставалась
+// --- СТАРАЯ cookie CsrfCookieNames.PublicToken от предыдущей сессии — IAntiforgery.
+// --- GetAndStoreTokens привязывает токен к HttpContext.User НА МОМЕНТ ВЫДАЧИ (см.
+// --- PwaSessionCookieWriter), поэтому валидация такого токена на анонимном запросе (User
+// --- ещё не аутентифицирован — самого логина не произошло) детерминированно проваливается с
+// --- "meant for a different claims-based user", а не с ошибкой протухшего/непонятного ключа
+// --- (которую раньше маскировала ротация эфемерных ключей Data Protection при каждом
+// --- редеплое — токен предыдущей сессии и без того не расшифровывался, тем же кодом ошибки
+// --- ниже). CSRF по своей природе защищает только УЖЕ аутентифицированное действие — у
+// --- анонимного запроса нет сессии, которую можно было бы "прокатить" межсайтовой подделкой,
+// --- поэтому гейт применяется, только если текущий запрос сам уже аутентифицирован.
 app.Use(async (context, next) =>
 {
     var method = context.Request.Method;
     var isMutating = HttpMethods.IsPost(method) || HttpMethods.IsPut(method)
         || HttpMethods.IsPatch(method) || HttpMethods.IsDelete(method);
     if (isMutating && context.Request.Path.StartsWithSegments("/api")
+        && context.User.Identity?.IsAuthenticated == true
         && context.Request.Cookies.ContainsKey(CsrfCookieNames.PublicToken))
     {
         var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
