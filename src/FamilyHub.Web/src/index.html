@@ -2,6 +2,13 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <!-- Обязателен: без него esbuild-билдер (application builder, Angular 18+) эмитит
+         относительные пути до бандлов (main.js, chunk-*.js, styles.css) — при обновлении
+         страницы на вложенном роуте (например /health/medications) браузер резолвит их
+         от ТЕКУЩЕГО пути, а не от корня сайта, отдавая 404 на /health/main.js и т.п.
+         Та же причина ломает scope service worker'а (provideServiceWorker('ngsw-worker.js'),
+         см. app.config.ts) при бутстрапе приложения не с "/". -->
+    <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FamilyHub</title>
     <meta name="theme-color" content="#2f6f4f" />

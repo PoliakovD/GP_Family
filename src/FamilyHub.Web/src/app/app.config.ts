@@ -34,7 +34,7 @@ export const appConfig: ApplicationConfig = {
     // кнопка «назад»/«вперёд» начинает прыгать через записи истории. 'computed' — штатное
     // решение Angular Router именно для этого случая.
     provideRouter(routes, withComponentInputBinding(), withRouterConfig({ canceledNavigationResolution: 'computed' })),
-    provideServiceWorker('ngsw-worker.js', {
+    provideServiceWorker('/ngsw-worker.js', {
       enabled: !isDevMode() && !isInsideTelegram(),
       registrationStrategy: 'registerWhenStable:30000',
     }),
