@@ -160,6 +160,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    # 35s, не дефолтные 10s — покрывает Host.ShutdownTimeout=30s (см. Program.cs): без запаса
+    # Docker SIGKILL'ит процесс раньше, чем MassTransit успевает отправить Kafka LeaveGroup для
+    # всех consumer group Rider'а, и следующий старт дольше висит в /health/ready 503
+    # ("masstransit-bus: Not ready: not started") — брокер ждёт session.timeout.ms по "мёртвому"
+    # члену группы, прежде чем отдать партиции новому инстансу.
+    stop_grace_period: 35s
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
@@ -266,6 +272,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # См. комментарий у api выше — тот же Host.ShutdownTimeout=30s в FamilyHub.TelegramBot/Program.cs.
+    stop_grace_period: 35s
     depends_on:
       wg-client:
         condition: service_healthy

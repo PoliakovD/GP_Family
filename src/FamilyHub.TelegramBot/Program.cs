@@ -33,6 +33,10 @@ try
         .Enrich.WithEnvironmentName()
         .Enrich.WithMachineName());
 
+    // См. тот же комментарий в FamilyHub.Api/Program.cs — этот процесс тоже держит Kafka Rider
+    // (BotMessagingRegistration), дефолтных 5с ShutdownTimeout не хватает на graceful LeaveGroup.
+    builder.Host.ConfigureHostOptions(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
+
     builder.Services.Configure<BotOptions>(builder.Configuration.GetSection(BotOptions.SectionName));
     builder.Services.Configure<FamilyHubApiOptions>(builder.Configuration.GetSection(FamilyHubApiOptions.SectionName));
     builder.Services.Configure<InternalApiOptions>(builder.Configuration.GetSection(InternalApiOptions.SectionName));

@@ -80,6 +80,17 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .Enrich.WithEnvironmentName()
     .Enrich.WithMachineName());
 
+// --- Отладка (частые "masstransit-bus: Not ready: not started" в Seq): дефолтный
+// --- HostOptions.ShutdownTimeout — 5 секунд, а MassTransit на graceful stop обязан ДОЖДАТЬСЯ
+// --- корректного LeaveGroup для КАЖДОЙ из 7 consumer group Kafka Rider'а (см.
+// --- MassTransitRegistration) плюс остановку EF outbox delivery service. 5с на это часто не
+// --- хватает — при редеплое/рестарте контейнера хост принудительно убивает процесс раньше, чем
+// --- клиент успевает попрощаться с группой; брокер тогда держит место за "мёртвым" консьюмером
+// --- до истечения session.timeout.ms, и КАЖДЫЙ следующий старт висит в "not started" дольше
+// --- обычного — вплоть до момента, пока Kafka не отдаст партиции новому инстансу. Значение
+// --- согласовано с stop_grace_period в deploy/docker-compose.prod.yml (должен быть больше).
+builder.Host.ConfigureHostOptions(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
+
 // --- Конфигурация ---
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
