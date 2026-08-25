@@ -49,10 +49,14 @@ public class FamilyDependentService(
         {
             Id = Guid.NewGuid(),
             FamilyId = familyId,
-            Name = request.Name,
+            FirstName = request.FirstName,
+            // ФИО/PetSpecies — сервис не доверяет фронту, зануляет несовместимое с IsPet поле
+            // явно (тот же принцип, что раньше применялся только к PetSpecies).
+            LastName = request.IsPet ? null : request.LastName?.Trim(),
+            MiddleName = request.IsPet ? null : request.MiddleName?.Trim(),
+            Gender = request.Gender,
             BirthDate = request.BirthDate,
             IsPet = request.IsPet,
-            // Вид животного заполняется только если IsPet == true — сервис не доверяет фронту.
             PetSpecies = request.IsPet ? request.PetSpecies?.Trim() : null,
             CreatedByUserId = userId,
             CreatedAt = DateTime.UtcNow,
@@ -84,7 +88,10 @@ public class FamilyDependentService(
             return FamilyDependentAccessResult.Forbidden;
         }
 
-        dependent.Name = request.Name;
+        dependent.FirstName = request.FirstName;
+        dependent.LastName = request.IsPet ? null : request.LastName?.Trim();
+        dependent.MiddleName = request.IsPet ? null : request.MiddleName?.Trim();
+        dependent.Gender = request.Gender;
         dependent.BirthDate = request.BirthDate;
         dependent.IsPet = request.IsPet;
         dependent.PetSpecies = request.IsPet ? request.PetSpecies?.Trim() : null;
@@ -156,5 +163,6 @@ public class FamilyDependentService(
     }
 
     private static FamilyDependentDto ToDto(FamilyDependent d) =>
-        new(d.Id, d.FamilyId, d.Name, d.BirthDate, d.IsPet, d.PetSpecies, d.CreatedByUserId, d.CreatedAt);
+        new(d.Id, d.FamilyId, d.FirstName, d.LastName, d.MiddleName, d.Gender,
+            d.BirthDate, d.IsPet, d.PetSpecies, d.CreatedByUserId, d.CreatedAt);
 }

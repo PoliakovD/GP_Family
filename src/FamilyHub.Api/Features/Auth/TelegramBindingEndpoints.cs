@@ -39,10 +39,10 @@ public static class TelegramBindingEndpoints
 
         group.MapPost("/bind", async (TelegramBindRequest request, TelegramBindingService service, CancellationToken ct) =>
         {
-            var result = await service.ConfirmBindAsync(request.Email, request.Code, request.InitData, ct);
+            var (result, profileRequired) = await service.ConfirmBindAsync(request.Email, request.Code, request.InitData, ct);
             return result switch
             {
-                TelegramBindResult.Success => Results.Ok(),
+                TelegramBindResult.Success => Results.Ok(new { profileRequired }),
                 TelegramBindResult.InvalidCode => Results.BadRequest(new { code = "invalid_code" }),
                 TelegramBindResult.InvalidInitData => Results.BadRequest(new { code = "invalid_init_data" }),
                 TelegramBindResult.EmailLinkedToDifferentTelegram =>

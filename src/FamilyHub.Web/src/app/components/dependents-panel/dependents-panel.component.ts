@@ -3,9 +3,10 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { FamilyRole } from '../../models/types';
+import { FamilyRole, Gender } from '../../models/types';
 import type { FamilyDependent } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { PersonNameComponent } from '../../shared/person-name/person-name.component';
 
 /**
  * Panel «Близкие и питомцы» — семейный ресурс (дети/питомцы/пожилые родственники без своего
@@ -16,18 +17,22 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 @Component({
   selector: 'app-dependents-panel',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent],
+  imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent],
   templateUrl: './dependents-panel.component.html',
 })
 export class DependentsPanelComponent implements OnInit {
   readonly familyId = input.required<string>();
+  readonly Gender = Gender;
 
   private readonly api = inject(ApiService);
   private readonly state = inject(FamilyStateService);
   private readonly confirm = inject(ConfirmService);
 
   items: FamilyDependent[] = [];
-  form = { name: '', birthDate: '', isPet: false, petSpecies: '' };
+  form = {
+    firstName: '', lastName: '', middleName: '', gender: Gender.Male as number,
+    birthDate: '', isPet: false, petSpecies: '',
+  };
   editingId: string | null = null;
   error: string | null = null;
   loading = true;
@@ -69,9 +74,13 @@ export class DependentsPanelComponent implements OnInit {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.name.trim()) return;
+    if (!this.form.firstName.trim()) return;
+    if (!this.form.isPet && !this.form.lastName.trim()) return;
     const payload = {
-      name: this.form.name.trim(),
+      firstName: this.form.firstName.trim(),
+      lastName: this.form.isPet ? null : this.form.lastName.trim() || null,
+      middleName: this.form.isPet ? null : this.form.middleName.trim() || null,
+      gender: this.form.gender,
       birthDate: this.form.birthDate || null,
       isPet: this.form.isPet,
       petSpecies: this.form.isPet ? this.form.petSpecies.trim() || null : null,
@@ -95,7 +104,10 @@ export class DependentsPanelComponent implements OnInit {
   startEdit(item: FamilyDependent): void {
     this.editingId = item.id;
     this.form = {
-      name: item.name,
+      firstName: item.firstName,
+      lastName: item.lastName ?? '',
+      middleName: item.middleName ?? '',
+      gender: item.gender,
       birthDate: item.birthDate ?? '',
       isPet: item.isPet,
       petSpecies: item.petSpecies ?? '',
@@ -121,7 +133,10 @@ export class DependentsPanelComponent implements OnInit {
   }
 
   resetForm(): void {
-    this.form = { name: '', birthDate: '', isPet: false, petSpecies: '' };
+    this.form = {
+      firstName: '', lastName: '', middleName: '', gender: Gender.Male as number,
+      birthDate: '', isPet: false, petSpecies: '',
+    };
     this.editingId = null;
   }
 }

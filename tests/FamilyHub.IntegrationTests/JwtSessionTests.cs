@@ -58,7 +58,12 @@ public class JwtSessionTests(JwtWebFactory factory)
         code.Should().NotBeNullOrEmpty();
 
         var confirm = await client.PostAsJsonAsync("/api/auth/register/confirm",
-            new { email, code, password, username = FreshUsername(), displayName = "JWT Пользователь" });
+            new
+            {
+                email, code, password, username = FreshUsername(),
+                lastName = "Пользователев", firstName = "JWT", middleName = (string?)null,
+                birthDate = new DateOnly(1990, 1, 1), gender = 0,
+            });
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
 
         return (email, ExtractCookie(confirm, PwaAt), ExtractCookie(confirm, PwaRt));

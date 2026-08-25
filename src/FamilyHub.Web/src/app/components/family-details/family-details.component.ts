@@ -17,13 +17,17 @@ import {ToastService} from '../../shared/toast/toast.service';
 import {ConfirmService} from '../../shared/confirm/confirm.service';
 import {ModalComponent} from '../../shared/modal/modal.component';
 import {TelegramService} from '../../services/telegram.service';
+import {PersonNameComponent} from '../../shared/person-name/person-name.component';
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
 
 @Component({
     selector: 'app-family-details',
     standalone: true,
-    imports: [RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent, DatePipe, ModalComponent],
+    imports: [
+        RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent,
+        DatePipe, ModalComponent, PersonNameComponent,
+    ],
     templateUrl: './family-details.component.html',
     styleUrl: './family-details.component.scss',
 })

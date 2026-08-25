@@ -36,5 +36,17 @@ public static class AccountEndpoints
         group.MapGet("/export", (AccountService service, AttachmentService attachments, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Stream(async stream => await service.WriteExportZipAsync(currentUser.UserId, stream, attachments, ct),
                 "application/zip", "familyhub-export.zip"));
+
+        // Профиль (identity rework): единственный путь записи ФИО/ДР/пола после создания User —
+        // используется и настройками (SettingsProfileComponent), и первичным экраном сбора
+        // профиля после Telegram-привязки (ProfileSetupComponent).
+        group.MapPut("/profile", async (
+            UpdateProfileRequest request, ProfileService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var result = await service.UpdateAsync(currentUser.UserId, request, ct);
+            return result == UpdateProfileResult.Success
+                ? Results.Ok()
+                : Results.BadRequest(new { code = "invalid_profile" });
+        });
     }
 }

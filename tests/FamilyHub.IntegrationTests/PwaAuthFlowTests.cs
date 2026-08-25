@@ -32,7 +32,12 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         code.Should().NotBeNullOrEmpty();
 
         var confirm = await client.PostAsJsonAsync("/api/auth/register/confirm",
-            new { email, code, password, username = username ?? FreshUsername(), displayName = "PWA Пользователь" });
+            new
+            {
+                email, code, password, username = username ?? FreshUsername(),
+                lastName = "Пользователев", firstName = "PWA", middleName = (string?)null,
+                birthDate = new DateOnly(1990, 1, 1), gender = 0,
+            });
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
         await CsrfTestHelper.CaptureCsrfTokenAsync(client);
 
@@ -69,7 +74,8 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         var me = await (await client.GetAsync("/api/auth/me")).Content.ReadFromJsonAsync<MeDto>(JsonOpts);
         me!.Provider.Should().Be("email");
         me.HasTelegram.Should().BeFalse();
-        me.DisplayName.Should().Be("PWA Пользователь");
+        me.LastName.Should().Be("Пользователев");
+        me.FirstName.Should().Be("PWA");
     }
 
     [Fact]
@@ -157,7 +163,12 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
             .StatusCode.Should().Be(HttpStatusCode.OK);
         var code = Factory.Emails.LastCodeFor(email);
         (await previousSessionClient.PostAsJsonAsync("/api/auth/register/confirm",
-                new { email, code, password, username = FreshUsername(), displayName = "PWA Пользователь" }))
+                new
+                {
+                    email, code, password, username = FreshUsername(),
+                    lastName = "Пользователев", firstName = "PWA", middleName = (string?)null,
+                    birthDate = new DateOnly(1990, 1, 1), gender = 0,
+                }))
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         // /me переиздаёт CSRF-пару на каждый вызов (см. AuthEndpoints.MapAuthEndpoints, "/me") —
@@ -257,5 +268,7 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
         (await client.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPassword);
+    private record MeDto(
+        Guid UserId, string? LastName, string? FirstName, string? MiddleName,
+        string Provider, string? Email, bool HasTelegram, bool HasPassword);
 }

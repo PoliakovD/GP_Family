@@ -10,7 +10,7 @@ public interface IUserProvisioningService
     /// email-подтверждённого User не должен молча создавать новый аккаунт — это ровно то,
     /// что приводило к разделённым (Telegram-only) личностям, требующим слияния позже.
     /// </summary>
-    Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? displayName, string? username = null, CancellationToken ct = default);
+    Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? username = null, CancellationToken ct = default);
 
     /// <summary>Только чтение — null, если этот TelegramId ещё не привязан ни к одному User.</summary>
     Task<Guid?> GetUserIdByTelegramIdAsync(long telegramId, CancellationToken ct = default);

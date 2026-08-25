@@ -1,5 +1,6 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -28,10 +29,13 @@ public class UserLeftFamilyNotificationConsumer(
         if (familyName is null) return;
 
         // Запись User переживает выход из семьи — имя доступно.
-        var userName = await db.Users.AsNoTracking()
+        var leftUser = await db.Users.AsNoTracking()
             .Where(u => u.Id == notification.UserId)
-            .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(ct) ?? "Участник";
+            .Select(u => new { u.LastName, u.FirstName, u.MiddleName })
+            .FirstOrDefaultAsync(ct);
+        var userName = leftUser is null
+            ? "Участник"
+            : PersonName.FormatOrDefault(leftUser.LastName, leftUser.FirstName, leftUser.MiddleName, PersonNameStyle.Full, "Участник");
 
         var adminIds = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == notification.FamilyId

@@ -7,13 +7,13 @@
 
 | Сущность | Принадлежность | Назначение |
 |---|---|---|
-| `User` | — | Пользователь. `TelegramId` — основа авторизации. Может состоять в нескольких семьях (`Memberships`). |
+| `User` | — | Пользователь. `TelegramId` — основа авторизации. Может состоять в нескольких семьях (`Memberships`). Профиль (identity rework) — `LastName`/`FirstName`/`MiddleName`/`BirthDate`/`Gender`, все nullable (см. ниже). |
 | `Family` | — | Семья — владелец семейных ресурсов. `PlanType`/`PlanExpiresAt` — закладка под монетизацию (этап 5, не реализовано). |
 | `FamilyMember` | many-to-many `User`↔`Family` | `Role` (`FamilyRole`) + `Status` (`MemberStatus`). UNIQUE(`FamilyId`,`UserId`) — членство в нескольких семьях уже заложено в модели. |
 | `FamilyInvite` | семья | Одна таблица покрывает все сценарии инвайтов: одноразовый/многоразовый, персональный/по ссылке, с истечением. См. `RedeemResult` ниже. |
 | `FamilyInviteRedemption` | — | Лог принятий инвайта. UNIQUE(`FamilyInviteId`,`UserId`) — повторный редимит запрещён на уровне БД. |
 | `Medication` | `IFamilyOwned` (семья) | Аптечка. `ExpiryDate` — триггер для оповещений (`ReminderScanJob`). |
-| `Birthday` | `IFamilyOwned` (семья) | День рождения члена семьи. |
+| `Birthday` | `IFamilyOwned` (семья) | Ручная запись дня рождения — один из трёх источников, которые сканирует `ReminderScanJob` (см. `module-birthdays.md`), остальные два — `User.BirthDate`/`FamilyDependent.BirthDate`. |
 | `MedicalRecord` | **пользователь**, не семья | Анализ. По умолчанию приватен. Видимость через `FamilyMedicalShare`/`MedicalRecordHidden`, не через роль в семье — поэтому интерфейс `IFamilyOwned` НЕ реализует. |
 | `FamilyMedicalShare` | — | Уровень 1 шаринга анализов: «все мои анализы видны этой семье». UNIQUE(`OwnerUserId`,`FamilyId`). |
 | `MedicalRecordHidden` | — | Уровень 2: точечно скрыть **конкретную** запись от **конкретной** уже расшаренной семьи. UNIQUE(`MedicalRecordId`,`FamilyId`). |
@@ -28,6 +28,17 @@
 - `FileOwnerType` — к какой сущности относится `FileAttachment` (`MedicalRecord`/`Medication`).
 - `NotificationType` — типы оповещений (`MedicationExpiringSoon`, `MedicationExpired`, `BirthdayUpcoming`).
 - `PlanType` — закладка под монетизацию, пока всегда `Free`.
+- `Gender` — `Male`/`Female` (identity rework). Обязателен на `FamilyDependent`, nullable на `User`
+  (профиль может быть ещё не заполнен — см. `ValueObjects.PersonName.IsCompleteProfile`).
+
+## `ValueObjects.PersonName` (identity rework)
+
+Общее форматирование ФИО (`Format(last, first, middle, style)`: `Full`/`ShortPatronymic`/`Initials`,
+схлопывается без отчества) и валидация (`IsValidPart`, `IsValidBirthDate`, `IsCompleteProfile`) —
+используется и `User` (профиль), и `FamilyDependent` (не-питомцы), и `ReminderScanJob`
+(формирует текст напоминания). TS-зеркало — `FamilyHub.Web/src/app/shared/util/person-name.ts` +
+`BreakpointService` (`services/breakpoint.service.ts`, первая брейкпойнт-абстракция в проекте:
+≥1024px — Full, 640–1023px — ShortPatronymic, <640px — Initials).
 
 ## `IFamilyOwned`
 

@@ -53,10 +53,10 @@ export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
 
   async confirmBind(): Promise<void> {
     await this.run(async () => {
-      await this.auth.telegramBind(this.email, this.code);
+      const profileRequired = await this.auth.telegramBind(this.email, this.code);
       this.completed.set(true);
       this.tg.disableClosingConfirmation();
-      await this.router.navigate(['/']);
+      await this.router.navigate([profileRequired ? '/profile-setup' : '/']);
     });
   }
 

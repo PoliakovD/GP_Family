@@ -1,5 +1,6 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +26,13 @@ public class MemberApprovedNotificationConsumer(
             .FirstOrDefaultAsync(ct);
         if (familyName is null) return;
 
-        var userName = await db.Users.AsNoTracking()
+        var newMember = await db.Users.AsNoTracking()
             .Where(u => u.Id == notification.UserId)
-            .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(ct) ?? "Новый участник";
+            .Select(u => new { u.LastName, u.FirstName, u.MiddleName })
+            .FirstOrDefaultAsync(ct);
+        var userName = newMember is null
+            ? "Новый участник"
+            : PersonName.FormatOrDefault(newMember.LastName, newMember.FirstName, newMember.MiddleName, PersonNameStyle.Full, "Новый участник");
 
         var recipientIds = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == notification.FamilyId

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Api.Features.Auth;
 
-public enum ConfirmRegistrationResult { Success, InvalidCode, EmailTaken, WeakPassword, InvalidUsername, UsernameTaken }
+public enum ConfirmRegistrationResult { Success, InvalidCode, EmailTaken, WeakPassword, InvalidUsername, UsernameTaken, InvalidProfile }
 
 public enum LoginResult { Success, InvalidCredentials, LockedOut }
 
@@ -69,9 +69,17 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
     }
 
     public async Task<(ConfirmRegistrationResult Result, Guid UserId)> ConfirmRegistrationAsync(
-        string rawEmail, string code, string password, string rawUsername, string? displayName, CancellationToken ct = default)
+        string rawEmail, string code, string password, string rawUsername,
+        string lastName, string firstName, string? middleName, DateOnly birthDate, Gender gender,
+        CancellationToken ct = default)
     {
         if (!PasswordRules.IsValid(password)) return (ConfirmRegistrationResult.WeakPassword, Guid.Empty);
+
+        // Профиль — тоже ДО потребления кода (тот же принцип, что и username ниже): невалидная
+        // дата/пустая фамилия не должны сжигать 10-минутный код.
+        if (!PersonName.IsValidPart(lastName) || !PersonName.IsValidPart(firstName)
+            || !PersonName.IsValidOptionalPart(middleName) || !PersonName.IsValidBirthDate(birthDate))
+            return (ConfirmRegistrationResult.InvalidProfile, Guid.Empty);
 
         // Проверка username — ДО потребления email-кода: занятый хэндл не должен сжигать
         // 10-минутный код (пользователь иначе вынужден запрашивать письмо заново).
@@ -97,9 +105,11 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
             Email = normalizedEmail,
             PasswordHash = PasswordHasher.Hash(password),
             Username = normalizedUsername,
-            DisplayName = string.IsNullOrWhiteSpace(displayName)
-                ? normalizedEmail[..normalizedEmail.IndexOf('@')]
-                : displayName.Trim(),
+            LastName = lastName.Trim(),
+            FirstName = firstName.Trim(),
+            MiddleName = string.IsNullOrWhiteSpace(middleName) ? null : middleName.Trim(),
+            BirthDate = birthDate,
+            Gender = gender,
             CreatedAt = DateTime.UtcNow,
         };
         db.Users.Add(user);

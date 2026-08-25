@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Persistence;
@@ -75,15 +76,15 @@ public class TelegramBindingService(
     // с этим именем ловится той же проверкой и валит запуск хоста с InvalidOperationException
     // ("BindAsync method found ... incorrect format"), даже когда сервис используется только
     // через DI, а не как параметр модели.
-    public async Task<TelegramBindResult> ConfirmBindAsync(
+    public async Task<(TelegramBindResult Result, bool ProfileRequired)> ConfirmBindAsync(
         string rawEmail, string code, string initData, CancellationToken ct = default)
     {
         var initResult = validator.Validate(initData);
-        if (initResult is null) return TelegramBindResult.InvalidInitData;
+        if (initResult is null) return (TelegramBindResult.InvalidInitData, false);
 
         var normalizedEmail = PwaAuthService.NormalizeEmail(rawEmail);
         var verification = await otp.ConsumeCodeAsync(normalizedEmail, code, EmailCodePurpose.TelegramBind, ct);
-        if (verification is null) return TelegramBindResult.InvalidCode;
+        if (verification is null) return (TelegramBindResult.InvalidCode, false);
 
         var telegramId = initResult.TelegramId;
 
@@ -91,7 +92,7 @@ public class TelegramBindingService(
         if (await db.Users.AnyAsync(u => u.TelegramId == telegramId, ct))
         {
             await db.SaveChangesAsync(ct); // код всё равно потреблён
-            return TelegramBindResult.TelegramAlreadyBound;
+            return (TelegramBindResult.TelegramAlreadyBound, false);
         }
 
         var existingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
@@ -101,7 +102,7 @@ public class TelegramBindingService(
             if (existingUser.TelegramId is not null)
             {
                 await db.SaveChangesAsync(ct);
-                return TelegramBindResult.EmailLinkedToDifferentTelegram;
+                return (TelegramBindResult.EmailLinkedToDifferentTelegram, false);
             }
 
             existingUser.TelegramId = telegramId;
@@ -111,15 +112,16 @@ public class TelegramBindingService(
         }
         else
         {
+            // ФИО/ДР/пол здесь НЕ заполняются из Telegram initData — профиль (identity rework)
+            // собирается отдельным экраном ПОСЛЕ привязки (см. ProfileRequired ниже и
+            // TelegramBindComponent.confirmBind на фронте), тем же путём, что и для брошенной
+            // на середине PWA-регистрации.
             user = new User
             {
                 Id = Guid.NewGuid(),
                 Email = normalizedEmail,
                 TelegramId = telegramId,
                 TgUsername = initResult.Username,
-                DisplayName = string.IsNullOrWhiteSpace(initResult.DisplayName)
-                    ? normalizedEmail[..normalizedEmail.IndexOf('@')]
-                    : initResult.DisplayName,
                 CreatedAt = DateTime.UtcNow,
             };
             db.Users.Add(user);
@@ -145,7 +147,7 @@ public class TelegramBindingService(
         {
             // Уникальный индекс на TelegramId поймал гонку, не замеченную проверкой выше.
             logger.LogDebug(ex, "Гонка при привязке Telegram {TelegramId} — уже занят параллельно", telegramId);
-            return TelegramBindResult.TelegramAlreadyBound;
+            return (TelegramBindResult.TelegramAlreadyBound, false);
         }
 
         // Письмо — ПОСЛЕ успешного сохранения (иначе можно отправить пароль для строки,
@@ -182,6 +184,7 @@ public class TelegramBindingService(
         }
 
         logger.LogInformation("Telegram {TelegramId} привязан к аккаунту {UserId}", telegramId, user.Id);
-        return TelegramBindResult.Success;
+        var profileRequired = !PersonName.IsCompleteProfile(user.LastName, user.FirstName, user.BirthDate, user.Gender);
+        return (TelegramBindResult.Success, profileRequired);
     }
 }

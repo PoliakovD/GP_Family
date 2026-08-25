@@ -31,7 +31,7 @@ public class DevAuthenticationHandler(
         }
 
         var userId = await userProvisioning.GetOrCreateUserIdAsync(
-            telegramId, displayName: null, username: null, Context.RequestAborted);
+            telegramId, username: null, Context.RequestAborted);
         Logger.LogDebug("Dev-аутентификация: TelegramId={TelegramId} -> UserId={UserId}", telegramId, userId);
 
         var claims = new[]

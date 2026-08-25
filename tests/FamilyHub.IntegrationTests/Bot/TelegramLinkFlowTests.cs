@@ -39,7 +39,6 @@ public class TelegramLinkFlowTests(BotIntegrationFixture fixture)
             Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = PasswordHasher.Hash(password),
-            DisplayName = "Web User",
             CreatedAt = DateTime.UtcNow,
         };
         db.Users.Add(user);
@@ -147,7 +146,6 @@ public class TelegramLinkFlowTests(BotIntegrationFixture fixture)
             {
                 Id = Guid.NewGuid(),
                 TelegramId = telegramId,
-                DisplayName = "PreExisting",
                 CreatedAt = DateTime.UtcNow,
             });
             await db.SaveChangesAsync();
@@ -199,5 +197,7 @@ public class TelegramLinkFlowTests(BotIntegrationFixture fixture)
     private static long TelegramId() => Random.Shared.NextInt64(1_000_000_000, 9_000_000_000);
 
     private record StartLinkDto(string Code, string DeepLink, DateTime ExpiresAt);
-    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPassword);
+    private record MeDto(
+        Guid UserId, string? LastName, string? FirstName, string? MiddleName,
+        string Provider, string? Email, bool HasTelegram, bool HasPassword);
 }

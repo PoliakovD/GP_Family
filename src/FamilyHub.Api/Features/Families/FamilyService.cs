@@ -9,7 +9,10 @@ namespace FamilyHub.Api.Features.Families;
 
 public record FamilySummary(Guid Id, string Name, FamilyRole MyRole, MemberStatus MyStatus);
 
-public record CurrentFamilyMember(Guid Id, string DisplayName, string? Username, DateTime JoinedAt, FamilyRole Role);
+// ФИО передаётся тремя полями, не готовой строкой — форматирование под ширину экрана делает
+// фронт (см. shared/util/person-name.ts, зеркалит FamilyHub.Domain.ValueObjects.PersonName).
+public record CurrentFamilyMember(
+    Guid Id, string? LastName, string? FirstName, string? MiddleName, string? Username, DateTime JoinedAt, FamilyRole Role);
 
 public enum DeleteFamilyResult { Deleted, Forbidden, NotFound }
 
@@ -95,7 +98,8 @@ public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger
         var result = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == familyId)
             .Include(m => m.User)
-            .Select(m=>new CurrentFamilyMember(m.UserId,m.User.DisplayName,m.User.Username,m.JoinedAt,m.Role))
+            .Select(m => new CurrentFamilyMember(
+                m.UserId, m.User.LastName, m.User.FirstName, m.User.MiddleName, m.User.Username, m.JoinedAt, m.Role))
             .ToListAsync(ct);
 
         logger.LogDebug("Загружено {Count} участников семьи {FamilyId}", result.Count, familyId);

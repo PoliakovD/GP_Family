@@ -130,6 +130,74 @@ public class ReminderScanJobTests : SqliteTestBase, IAsyncLifetime
     }
 
     [Fact]
+    public async Task RunAsync_MemberBirthdayWithinWindow_NotifiesOtherActiveMembers_ButNotTheBirthdayPerson()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var birthdayMember = Db.AddMember(family.Id);
+        var soon = DateTime.UtcNow.AddDays(3);
+        birthdayMember.BirthDate = new DateOnly(soon.Year - 20, soon.Month, soon.Day);
+        await Db.SaveChangesAsync();
+
+        await RunAndDispatchAsync(CreateSut());
+
+        var notifications = Db.Notifications.Where(n => n.Type == NotificationType.BirthdayUpcoming).ToList();
+        notifications.Should().ContainSingle(n => n.UserId == admin.Id);
+        notifications.Should().NotContain(n => n.UserId == birthdayMember.Id, "именинник не должен получать оповещение о своём же ДР");
+    }
+
+    [Fact]
+    public async Task RunAsync_MemberWithoutBirthDate_IsIgnored()
+    {
+        // TestData.NewUser() (см. SeedFamilyWithAdmin/AddMember) уже задаёт BirthDate по
+        // умолчанию — эта проверка явно его обнуляет, чтобы покрыть путь "профиль не заполнен".
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        admin.BirthDate = null;
+        await Db.SaveChangesAsync();
+
+        await RunAndDispatchAsync(CreateSut());
+
+        Db.Notifications.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RunAsync_MemberInTwoFamilies_PublishesSeparateEventPerFamily()
+    {
+        var (familyA, personA) = Db.SeedFamilyWithAdmin("A");
+        var (familyB, personB) = Db.SeedFamilyWithAdmin("B");
+        var soon = DateTime.UtcNow.AddDays(3);
+        personA.BirthDate = new DateOnly(soon.Year - 20, soon.Month, soon.Day);
+        Db.FamilyMembers.Add(TestData.NewMember(familyB.Id, personA.Id)); // именинник — ещё и в семье B
+        Db.FamilyMembers.Add(TestData.NewMember(familyA.Id, personB.Id)); // получатель — тоже в обеих семьях
+        await Db.SaveChangesAsync();
+
+        await RunAndDispatchAsync(CreateSut());
+
+        var notifications = Db.Notifications.Where(n => n.Type == NotificationType.BirthdayUpcoming).ToList();
+        // personB (единственный получатель в каждой из двух семей, кроме самого именинника)
+        // получает ДВА отдельных оповещения — по одному на каждую семью, где состоит именинник.
+        notifications.Should().HaveCount(2);
+        notifications.Should().OnlyContain(n => n.UserId == personB.Id);
+        notifications.Select(n => n.FamilyId).Should().BeEquivalentTo([familyA.Id, familyB.Id]);
+    }
+
+    [Fact]
+    public async Task RunAsync_DependentBirthdayWithinWindow_NotifiesActiveMembers()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var soon = DateTime.UtcNow.AddDays(3);
+        Db.FamilyDependents.Add(new Domain.Entities.FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = family.Id, FirstName = "Барсик", IsPet = true, Gender = Gender.Male,
+            BirthDate = new DateOnly(soon.Year - 3, soon.Month, soon.Day), CreatedByUserId = admin.Id, CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        await RunAndDispatchAsync(CreateSut());
+
+        Db.Notifications.Should().ContainSingle(n => n.UserId == admin.Id && n.Type == NotificationType.BirthdayUpcoming);
+    }
+
+    [Fact]
     public async Task RunAsync_SendsPendingNotificationsAndMarksSentAt()
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();

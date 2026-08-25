@@ -45,3 +45,21 @@ export const consentGuard: CanActivateFn = async () => {
     return true;
   }
 };
+
+/**
+ * ФИО/ДР/пол обязательны (identity rework), но PWA-регистрация и Telegram-привязка заполняют
+ * их по-разному: PWA — сразу при регистрации (Me.profileComplete всегда true после неё),
+ * Telegram — НЕТ (initData не источник профиля, см. TelegramBindingService) — этот гард ловит
+ * именно такой недозаполненный аккаунт на любой последующей защищённой странице, не только
+ * сразу после привязки (тот же приём, что и consentGuard рядом).
+ */
+export const profileGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  const cached = auth.me();
+  if (cached?.profileComplete) return true;
+
+  const me = cached ?? (await auth.loadMe());
+  return me?.profileComplete ? true : router.createUrlTree(['/profile-setup']);
+};
