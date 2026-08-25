@@ -2,16 +2,22 @@
 # Домены и e-mail для Let's Encrypt читаются из .env (тот же файл, что деплой-workflow кладёт
 # на VPS) — {$VAR} здесь читается из окружения ПРОЦЕССА caddy (env_file: .env в compose).
 #
-# Два класса сайтов:
+# Три класса сайтов:
 #   1. Публичный (PUBLIC_DOMAIN, www) — 0.0.0.0:443, автоматический TLS через Let's Encrypt
 #      (HTTP-01, порт 80 открыт). Единственная точка входа для реального трафика приложения.
-#   2. Админский (Seq/MinIO Console/Hangfire/Swagger) — контейнерный порт :8443, который Docker
+#   2. Служебный (Seq/MinIO Console/Hangfire/Swagger) — контейнерный порт :8443, который Docker
 #      публикует ТОЛЬКО на WireGuard-адресе хоста (10.8.0.1:8443:8443, см. compose) — снаружи
 #      недостижим в принципе, TLS — самоподписанный ("tls internal": Let's Encrypt не выдаст
 #      сертификат на имя, которое резолвится в приватный 10.8.0.1 и не проходит HTTP-01).
 #      Доступ: https://seq.<домен>:8443 и т.п. — ТОЛЬКО подключившись к WireGuard. Один раз
 #      поставьте корневой CA Caddy на клиентскую машину (см. deploy/README.md), иначе браузер
 #      будет ругаться на самоподписанный сертификат при каждом заходе.
+#   3. Админ-панель (ADR-0009: статистика + ротация ключей) — admin.{PUBLIC_DOMAIN}:4059, тот же
+#      принцип, что у класса 2 (Docker публикует контейнерный :4059 на 10.8.0.1, self-signed TLS),
+#      но НАМЕРЕННО отдельный порт/блок от служебного :8443 — своя собственная аутентификация
+#      приложения (AuthSchemes.Admin, форма логина Angular), а не голый BasicAuth поверх периметра.
+#      Тот же хост-лейбл "admin." на РАЗНЫХ портах (:8443 — Hangfire/Swagger, :4059 — эта панель) —
+#      разные Caddy-адреса (host:port вместе), конфликта матчинга нет.
 {
 	email {$ACME_EMAIL}
 }
@@ -23,7 +29,11 @@
 	# InternalBotAuthFilter (см. /internal/* ниже): даже если один рубеж однажды сломают по
 	# ошибке, эти пути с публичного домена всё равно не достучатся. /internal/* — контракт
 	# FamilyHub.TelegramBot ↔ FamilyHub.Api (ADR-0008), снаружи не нужен вообще никому.
-	@blocked path /dev/* /hangfire* /swagger* /health/* /internal/*
+	# /admin* и /api/admin/* (ADR-0009) — админ-панель живёт ТОЛЬКО на admin.{PUBLIC_DOMAIN}:4059
+	# ниже, за WireGuard; с публичного домена своя аутентификация (AuthSchemes.Admin) всё равно
+	# отклонила бы запрос без cookie, но блокировка на периметре — тот же принцип защиты в
+	# глубину, что и у /hangfire*/swagger* здесь.
+	@blocked path /dev/* /hangfire* /swagger* /health/* /internal/* /admin* /api/admin/*
 	handle @blocked {
 		respond 404
 	}
@@ -76,4 +86,15 @@ seq.{$PUBLIC_DOMAIN}:8443, s3.{$PUBLIC_DOMAIN}:8443, admin.{$PUBLIC_DOMAIN}:8443
 	handle {
 		respond 404
 	}
+}
+
+# Админ-панель (ADR-0009) — отдельный порт/блок от служебного :8443 выше (см. комментарий в
+# шапке файла, класс 3): своя аутентификация приложения (AuthSchemes.Admin), WireGuard тут —
+# периметр в глубину, не единственный рубеж. SPA (/admin/*) и API (/api/admin/*) — один и тот же
+# api:8080, разделены на уровне приложения: Angular-роут /admin проверяет сессию собственным
+# гардом (adminGuard → GET /api/admin/session), а не Caddy.
+admin.{$PUBLIC_DOMAIN}:4059 {
+	tls internal
+
+	reverse_proxy api:8080
 }

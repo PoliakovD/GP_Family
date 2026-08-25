@@ -1,6 +1,5 @@
 using FamilyHub.Infrastructure.Security;
 using FluentAssertions;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Infrastructure.Security;
@@ -10,7 +9,7 @@ public class AesGcmFieldCipherTests
     private const string Key = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
     private static AesGcmFieldCipher CreateSut(string? key = null, string keyId = "v1") =>
-        new(Options.Create(new EncryptionOptions
+        new(new EncryptionKeyRing(new EncryptionOptions
         {
             MasterKey = key ?? Key,
             ActiveKeyId = keyId,
@@ -90,5 +89,70 @@ public class AesGcmFieldCipherTests
         var act = () => CreateSut(key: badKey);
 
         act.Should().Throw<InvalidOperationException>();
+    }
+
+    // --- Связка ключей (ADR-0009): активный + отставные ---
+
+    [Fact]
+    public void Unprotect_ValueEncryptedWithPreviousKey_StillReadable()
+    {
+        // v1 писал/читал сам себя, пока был активным...
+        var v1Ring = new EncryptionKeyRing(new EncryptionOptions { MasterKey = Key, ActiveKeyId = "v1" });
+        var stored = new AesGcmFieldCipher(v1Ring).Protect("секрет");
+
+        // ...после ротации v1 переехал в отставные, активен v2 — значение по-прежнему читается.
+        var otherKey = Convert.ToBase64String(Enumerable.Repeat((byte)9, 32).ToArray());
+        var rotatedRing = new EncryptionKeyRing(new EncryptionOptions
+        {
+            MasterKey = otherKey,
+            ActiveKeyId = "v2",
+            PreviousKeys = [new EncryptionKeyEntry { Id = "v1", Material = Key }],
+        });
+
+        new AesGcmFieldCipher(rotatedRing).Unprotect(stored).Should().Be("секрет");
+    }
+
+    [Fact]
+    public void Protect_AfterRotation_WritesWithNewActiveKeyId()
+    {
+        var otherKey = Convert.ToBase64String(Enumerable.Repeat((byte)9, 32).ToArray());
+        var rotatedRing = new EncryptionKeyRing(new EncryptionOptions
+        {
+            MasterKey = otherKey,
+            ActiveKeyId = "v2",
+            PreviousKeys = [new EncryptionKeyEntry { Id = "v1", Material = Key }],
+        });
+
+        new AesGcmFieldCipher(rotatedRing).Protect("секрет").Should().StartWith("enc:v2:");
+    }
+
+    [Fact]
+    public void DuplicateKeyIdBetweenActiveAndPrevious_ThrowsOnConstruction()
+    {
+        var act = () => new EncryptionKeyRing(new EncryptionOptions
+        {
+            MasterKey = Key,
+            ActiveKeyId = "v1",
+            PreviousKeys = [new EncryptionKeyEntry { Id = "v1", Material = Key }],
+        });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*v1*");
+    }
+
+    [Fact]
+    public void DuplicateKeyIdBetweenTwoPreviousKeys_ThrowsOnConstruction()
+    {
+        var act = () => new EncryptionKeyRing(new EncryptionOptions
+        {
+            MasterKey = Key,
+            ActiveKeyId = "v3",
+            PreviousKeys =
+            [
+                new EncryptionKeyEntry { Id = "v1", Material = Key },
+                new EncryptionKeyEntry { Id = "v1", Material = Key },
+            ],
+        });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*v1*");
     }
 }

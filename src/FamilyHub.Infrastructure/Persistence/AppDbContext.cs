@@ -41,6 +41,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<MedicationEnrichmentJob> MedicationEnrichmentJobs => Set<MedicationEnrichmentJob>();
     public DbSet<MedicationSearchCache> MedicationSearchCaches => Set<MedicationSearchCache>();
 
+    /// <summary>Прогоны перешифровки при ротации ключа (ADR-0009) — см. EncryptionRotationJob.</summary>
+    public DbSet<EncryptionRotationRun> EncryptionRotationRuns => Set<EncryptionRotationRun>();
+
     /// <summary>Требуется интерфейсом IDataProtectionKeyContext — имя DbSet фиксировано пакетом,
     /// не наша конвенция именования.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();

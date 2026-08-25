@@ -16,8 +16,14 @@ public class FileAttachmentConfiguration : IEntityTypeConfiguration<FileAttachme
         builder.Property(f => f.StorageKey).HasMaxLength(500).IsRequired();
         builder.Property(f => f.FileName).HasMaxLength(300).IsRequired();
         builder.Property(f => f.ContentType).HasMaxLength(150).IsRequired();
+        builder.Property(f => f.KeyId).HasMaxLength(255);
 
         // Доступ наследуется от родителя — нужен быстрый поиск вложений родительской записи.
         builder.HasIndex(f => new { f.OwnerType, f.OwnerId });
+
+        // Отчёт о ходе ротации (EncryptionRotationJob/админка, ADR-0009): "сколько блобов ещё не
+        // на активном ключе" — частичный индекс, только зашифрованные строки (KeyId IS NULL у
+        // legacy-вложений участвовать не должен и не будет отобран условием IsEncrypted).
+        builder.HasIndex(f => new { f.IsEncrypted, f.KeyId });
     }
 }

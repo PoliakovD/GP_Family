@@ -89,9 +89,13 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
             throw new InvalidOperationException("Jwt:SigningKey не задан — выпуск токенов невозможен.");
 
         var expiresAt = DateTime.UtcNow.Add(jwt.AccessTokenLifetime);
-        var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Convert.FromBase64String(jwt.SigningKey)),
-            SecurityAlgorithms.HmacSha256);
+        // KeyId → заголовок `kid` токена (ADR-0009, чисто диагностический — валидация пробует
+        // все ключи связки, см. IssuerSigningKeys в Program.cs, а не выбирает по kid).
+        var signingKey = new SymmetricSecurityKey(Convert.FromBase64String(jwt.SigningKey))
+        {
+            KeyId = jwt.ActiveKeyId,
+        };
+        var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             issuer: jwt.Issuer,

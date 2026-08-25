@@ -1,0 +1,51 @@
+@if (loading()) {
+  <p class="text-muted">Загрузка…</p>
+} @else if (error()) {
+  <div class="alert-danger">{{ error() }}</div>
+} @else {
+  @if (data(); as d) {
+    <div class="card mb-3">
+      <div class="card-title">Здоровье сервисов</div>
+      <div class="card-body">
+        <div class="d-flex gap-2" style="flex-wrap: wrap;">
+          <span class="tag" [class.tag-accent]="d.postgresHealthy" [class.tag-neutral]="!d.postgresHealthy">Postgres</span>
+          <span class="tag" [class.tag-accent]="d.minioHealthy" [class.tag-neutral]="!d.minioHealthy">MinIO</span>
+          <span class="tag" [class.tag-accent]="d.kafkaHealthy" [class.tag-neutral]="!d.kafkaHealthy">Kafka</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-title">Событийная шина (MassTransit outbox)</div>
+      <div class="card-body">
+        @if (d.outbox.undeliveredBatches === 0) {
+          <p class="mb-0">Недоставленных батчей нет.</p>
+        } @else {
+          <p class="mb-0">
+            <strong>{{ d.outbox.undeliveredBatches }}</strong> недоставленных батчей,
+            старейший с {{ d.outbox.oldestUndeliveredAt | date: 'dd.MM.yyyy HH:mm' }}.
+          </p>
+        }
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Очереди Hangfire</div>
+      <div class="card-body">
+        <p class="mb-2"><strong>{{ d.hangfireFailedJobsTotal }}</strong> упавших джоб всего.</p>
+        @if (d.hangfireQueues.length === 0) {
+          <p class="text-muted mb-0">Очереди пусты.</p>
+        } @else {
+          <table class="table">
+            <thead><tr><th>Очередь</th><th>В очереди</th></tr></thead>
+            <tbody>
+              @for (q of d.hangfireQueues; track q.name) {
+                <tr><td>{{ q.name }}</td><td>{{ q.enqueuedCount }}</td></tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+  }
+}

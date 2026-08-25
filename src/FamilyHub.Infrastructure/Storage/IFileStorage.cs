@@ -16,4 +16,16 @@ public interface IFileStorage
 
     /// <summary>Удаляет блоб; отсутствие объекта не считается ошибкой (идемпотентно — для erasure).</summary>
     Task DeleteAsync(string storageKey, CancellationToken ct = default);
+
+    /// <summary>
+    /// Перечисляет объекты бакета (ключ + размер) — только для админ-статистики (ADR-0009,
+    /// сверка занятого места и осиротевших блобов). Не используется в обычном прикладном пути:
+    /// ключи хранилища принципиально непрозрачны (StorageKeyFactory), листинг сам по себе не
+    /// раскрывает содержимого/владельца, но перечисление всего бакета — дорогая операция, вызывать
+    /// только из редко дёргаемой статистики, не из горячего пути запроса.
+    /// </summary>
+    IAsyncEnumerable<StorageObjectInfo> ListAsync(CancellationToken ct = default);
 }
+
+/// <summary>Один объект бакета, как его видит листинг (ADR-0009) — без содержимого.</summary>
+public record StorageObjectInfo(string Key, long SizeBytes);

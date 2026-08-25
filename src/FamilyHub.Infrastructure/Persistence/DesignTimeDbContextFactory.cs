@@ -1,7 +1,6 @@
 using FamilyHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Infrastructure.Persistence;
 
@@ -16,9 +15,9 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     /// <summary>32 байта в base64 — общий dev/design-ключ (НЕ для прода).</summary>
     public const string DevMasterKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
-    /// <summary>Cipher с dev-ключом — для design-time и тестовых фабрик.</summary>
+    /// <summary>Cipher с dev-ключом (связка из одного ключа) — для design-time и тестовых фабрик.</summary>
     public static IFieldCipher CreateDevCipher() =>
-        new AesGcmFieldCipher(Options.Create(new EncryptionOptions { MasterKey = DevMasterKey }));
+        new AesGcmFieldCipher(new EncryptionKeyRing(new EncryptionOptions { MasterKey = DevMasterKey }));
 
     public AppDbContext CreateDbContext(string[] args)
     {

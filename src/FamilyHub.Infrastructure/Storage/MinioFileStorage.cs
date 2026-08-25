@@ -50,6 +50,18 @@ public class MinioFileStorage(IMinioClient minioClient, IOptions<MinioOptions> o
             .WithObject(storageKey), ct);
     }
 
+    public async IAsyncEnumerable<StorageObjectInfo> ListAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await EnsureBucketAsync(ct);
+
+        var args = new ListObjectsArgs().WithBucket(options.Value.Bucket).WithRecursive(true);
+        await foreach (var item in minioClient.ListObjectsEnumAsync(args, ct))
+        {
+            if (item.IsDir) continue;
+            yield return new StorageObjectInfo(item.Key, (long)item.Size);
+        }
+    }
+
     private async Task EnsureBucketAsync(CancellationToken ct)
     {
         if (_bucketEnsured) return;
