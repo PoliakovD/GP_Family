@@ -1,0 +1,14 @@
+<div class="admin-shell">
+  <div class="d-flex justify-content-between mb-3" style="align-items: center;">
+    <h1 class="mb-0">Админ-панель</h1>
+    <button type="button" class="btn btn-secondary btn-sm" (click)="logout()">Выйти</button>
+  </div>
+
+  <div class="seg mb-3">
+    @for (s of sections; track s.path) {
+      <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active">{{ s.label }}</a>
+    }
+  </div>
+
+  <router-outlet></router-outlet>
+</div>

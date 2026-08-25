@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using FamilyHub.Api.Configuration;
+using FamilyHub.Api.Features.Admin;
 using FamilyHub.Api.Features.Auth;
 using FamilyHub.Api.Features.Account;
 using FamilyHub.Api.Features.Bot;
@@ -33,6 +34,7 @@ using FamilyHub.Infrastructure.Notifications.Consumers;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Security;
+using FamilyHub.Infrastructure.Security.Rotation;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.Modules.Birthdays;
@@ -117,10 +119,24 @@ if (devToolsOptions.AdminUiEnabled
         "DevTools:AdminUiEnabled=true, но DevTools:AdminUser/AdminPassword (env DevTools__AdminUser/" +
         "DevTools__AdminPassword) не заданы — Hangfire-дашборд и Swagger были бы доступны без пароля.");
 
-// --- At-rest шифрование (этап 2, 152-ФЗ): ключ вне БД, fail-fast при отсутствии ---
-// Синглтоны обязательны: EF кэширует модель с конвертером, захватившим первый cipher.
-var encryptionMasterKey = builder.Configuration["Encryption:MasterKey"];
-if (string.IsNullOrWhiteSpace(encryptionMasterKey))
+// --- Админ-панель (ADR-0009): статистика + ротация ключей на отдельном домене за периметром ---
+// --- WireGuard/Caddy (admin.{PUBLIC_DOMAIN}:4059). Отдельная секция от DevTools:AdminUser/  ---
+// --- Password — см. AdminOptions.                                                            ---
+builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
+var adminOptions = builder.Configuration.GetSection(AdminOptions.SectionName).Get<AdminOptions>()
+    ?? new AdminOptions();
+if (adminOptions.Enabled
+    && (string.IsNullOrWhiteSpace(adminOptions.User) || string.IsNullOrWhiteSpace(adminOptions.Password)))
+    throw new InvalidOperationException(
+        "Admin:Enabled=true, но Admin:User/Password (env Admin__User/Admin__Password) не заданы — " +
+        "форма входа админ-панели была бы недостижима (сравнение всегда отклонит любой ввод).");
+
+// --- At-rest шифрование (этап 2, 152-ФЗ; ротация ключей — ADR-0009): связка ключей вне БД, ---
+// --- fail-fast при отсутствии/битой конфигурации. Синглтоны обязательны: EF кэширует модель ---
+// --- с конвертером, захватившим первый cipher. ---
+var encryptionOptions = builder.Configuration.GetSection(EncryptionOptions.SectionName).Get<EncryptionOptions>()
+    ?? new EncryptionOptions();
+if (string.IsNullOrWhiteSpace(encryptionOptions.MasterKey))
     throw new InvalidOperationException(
         "Encryption:MasterKey не задан (env Encryption__MasterKey) — at-rest шифрование обязательно.");
 // appsettings.Development.json и docker-compose.yml больше НЕ содержат дефолт этого ключа —
@@ -130,11 +146,23 @@ if (string.IsNullOrWhiteSpace(encryptionMasterKey))
 // равно навсегда осталась в истории git — этот guard блокирует её случайное копирование в
 // реальное окружение. Условие теперь завязано на DevTools:DevAuthEnabled, а не на
 // ASPNETCORE_ENVIRONMENT — контур на VPS дев по защите, но Production по среде (см. выше).
-if (!devToolsOptions.DevAuthEnabled && encryptionMasterKey == DesignTimeDbContextFactory.DevMasterKey)
+// Проверяется и активный ключ, и каждый отставной (Encryption:PreviousKeys, ADR-0009) — иначе
+// утёкший dev-ключ можно было бы протащить в связку как "отставной" в обход guard'а.
+var leakedDevKeyIds = new List<string>();
+if (encryptionOptions.MasterKey == DesignTimeDbContextFactory.DevMasterKey)
+    leakedDevKeyIds.Add(encryptionOptions.ActiveKeyId);
+leakedDevKeyIds.AddRange(encryptionOptions.PreviousKeys
+    .Where(k => k.Material == DesignTimeDbContextFactory.DevMasterKey)
+    .Select(k => k.Id));
+if (!devToolsOptions.DevAuthEnabled && leakedDevKeyIds.Count > 0)
     throw new InvalidOperationException(
-        "Encryption:MasterKey равен design-time/тестовому dev-ключу из истории репозитория — " +
-        "при выключенном DevTools:DevAuthEnabled это недопустимо. Сгенерировать реальный ключ: " +
-        "`openssl rand -base64 32`.");
+        $"Ключ(и) шифрования с keyId {string.Join(", ", leakedDevKeyIds)} равны design-time/тестовому " +
+        "dev-ключу из истории репозитория — при выключенном DevTools:DevAuthEnabled это недопустимо. " +
+        "Сгенерировать реальный ключ: `openssl rand -base64 32`.");
+// Связка строится здесь (не лениво в DI) — битая конфигурация (дубли keyId, некорректный
+// base64/длина ключа) валит старт хоста сразу, а не первый запрос, коснувшийся [Encrypted]-поля.
+var encryptionKeyRing = new EncryptionKeyRing(encryptionOptions);
+builder.Services.AddSingleton<IEncryptionKeyRing>(encryptionKeyRing);
 builder.Services.AddSingleton<IFieldCipher, AesGcmFieldCipher>();
 builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
 builder.Services.AddSingleton<DownloadTokenService>();
@@ -231,33 +259,23 @@ builder.Services.AddAuthorization(options =>
 {
     // Защита по умолчанию: любой эндпоинт без явной политики всё равно требует аутентификации.
     options.FallbackPolicy = options.DefaultPolicy;
+
+    // Админ-панель (ADR-0009): единственная политика, допускающая схему AuthSchemes.Admin — она
+    // никогда не участвует в FallbackPolicy/Smart-селекторе выше, поэтому обычные PWA/Telegram-
+    // запросы её не видят вовсе, а /api/admin/* без этой политики не открылся бы ни одной схемой.
+    options.AddPolicy("PlatformAdmin", policy => policy
+        .AddAuthenticationSchemes(AuthSchemes.Admin)
+        .RequireAuthenticatedUser());
 });
 
-// --- JWT PWA-сессия: access-токен в httpOnly cookie + refresh-токен в БД (ротация,   ---
-// --- reuse-detection, revoke-all). Fail-fast: ключ подписи обязателен во всех средах. ---
+// --- JWT PWA-сессия: access-токен в httpOnly cookie + refresh-токен в БД (ротация,      ---
+// --- reuse-detection, revoke-all). Fail-fast: ключ подписи обязателен во всех средах.   ---
+// --- Ротация ключа подписи — ADR-0009: активный подписывает НОВЫЕ токены, отставные     ---
+// --- (Jwt:PreviousSigningKeys) принимаются только на ВАЛИДАЦИЮ уже выданных.            ---
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey))
-    throw new InvalidOperationException("Jwt:SigningKey не задан (env Jwt__SigningKey) — JWT-сессии PWA невозможны.");
-
-byte[] jwtSigningKeyBytes;
-try
-{
-    jwtSigningKeyBytes = Convert.FromBase64String(jwtOptions.SigningKey);
-}
-catch (FormatException ex)
-{
-    // Без этой проверки ошибка проявлялась бы не при старте, а лениво — на первый же
-    // входящий запрос, внутри IOptionsFactory для JwtBearer (см. AddJwtBearer ниже), и
-    // валила бы 500 АБСОЛЮТНО любой запрос (включая AllowAnonymous — аутентификация
-    // пытается резолвить дефолтную схему до authorization независимо от эндпоинта). Самый
-    // частый источник — незаменённый плейсхолдер `Jwt__SigningKey=CHANGE_ME` из .env.example
-    // (не валиден как Base64: недопустимый символ `_` и некорректная длина).
-    throw new InvalidOperationException(
-        "Jwt:SigningKey (env Jwt__SigningKey) задан, но не является корректной Base64-строкой — " +
-        "похоже на незаменённый плейсхолдер из .env.example. Сгенерировать реальный ключ: " +
-        "`openssl rand -base64 32` (или PowerShell: " +
-        "[Convert]::ToBase64String((1..32|%{Get-Random -Max 256}))).", ex);
-}
+// Связка строится здесь (не лениво в DI/JwtBearer options factory) — битая конфигурация
+// (дубли keyId, некорректный base64) валит старт хоста сразу, см. JwtSigningKeyRing.
+var jwtSigningKeys = JwtSigningKeyRing.Build(jwtOptions);
 builder.Services.AddScoped<ITokenService, TokenService>();
 
 // --- CSRF: double-submit антифорджери-токен поверх SameSite=Lax для PWA-cookie сессии (аудит
@@ -301,7 +319,10 @@ authBuilder.AddJwtBearer(AuthSchemes.PwaCookie, jwtBearerOptions =>
         ValidateAudience = true,
         ValidAudience = jwtOptions.Audience,
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(jwtSigningKeyBytes),
+        // Множественное число (ADR-0009): валидация пробует каждый ключ связки, а не только
+        // активный — уже выданный токен, подписанный отставным ключом, остаётся валиден до
+        // истечения AccessTokenLifetime, даже если Jwt:SigningKey уже сменился.
+        IssuerSigningKeys = jwtSigningKeys,
         ValidateLifetime = true,
         ClockSkew = jwtOptions.ClockSkew,
     };
@@ -329,6 +350,16 @@ if (devToolsOptions.DevAuthEnabled)
 {
     authBuilder.AddScheme<AuthenticationSchemeOptions, DevAuthenticationHandler>(AuthSchemes.Dev, null);
 }
+
+// Регистрируется только если панель включена — та же осторожность, что у DevAuthenticationHandler
+// выше: без Admin:Enabled эндпоинты /api/admin/* вообще не примапятся (см. ниже после
+// app.Build()), поэтому без регистрации схемы не остаётся вообще никакого пути её вызвать.
+if (adminOptions.Enabled)
+{
+    authBuilder.AddScheme<AuthenticationSchemeOptions, AdminAuthenticationHandler>(AuthSchemes.Admin, null);
+}
+builder.Services.AddScoped<AdminStatsService>();
+builder.Services.AddScoped<AdminKeysService>();
 
 authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions =>
 {
@@ -477,6 +508,19 @@ builder.Services.AddHangfireServer(o =>
     o.WorkerCount = 1;
     o.ServerName = "enrichment-server";
 });
+// Третий сервер, выделенная очередь "rotation" (ADR-0009) с ОДНИМ воркером — та же причина, что
+// у enrichment-server: перешифровка данных при ротации ключа не должна отъедать пропускную
+// способность у остальных джоб. WorkerCount=1 попутно гарантирует, что одновременно исполняется
+// НЕ БОЛЕЕ ОДНОЙ EncryptionRotationJob — ручной клик "Перешифровать" из админки и тик ночного
+// добивателя просто встают в очередь друг за другом, конкурентной записи в
+// EncryptionRotationRun не возникает (см. EncryptionRotationJob, doc-комментарий).
+builder.Services.AddHangfireServer(o =>
+{
+    o.Queues = ["rotation"];
+    o.WorkerCount = 1;
+    o.ServerName = "rotation-server";
+});
+builder.Services.AddScoped<EncryptionRotationJob>();
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<NotificationSendingService>();
@@ -809,6 +853,11 @@ if (internalBotApiConfigured)
 {
     app.MapInternalBotEndpoints();
 }
+if (adminOptions.Enabled)
+{
+    app.MapAdminSessionEndpoints();
+    app.MapAdminEndpoints();
+}
 
 // SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).
 // AllowAnonymous обязателен — иначе FallbackPolicy потребует аутентификацию и до React
@@ -893,6 +942,17 @@ app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<AuditRetenti
     "audit-retention",
     job => job.RunAsync(CancellationToken.None),
     "0 3 1 * *");
+
+// Ночной добиватель ротации ключа (ADR-0009), ежедневно в 04:00: EncryptionRotationJob.RunAsync
+// сам по себе no-op, если нет строки EncryptionRotationRun в статусе Running — этот тик НИКОГДА
+// не запускает новый прогон (это делает только AdminKeysService по клику администратора), а лишь
+// резюмирует уже идущий, если предыдущее исполнение оборвалось (рестарт контейнера/редеплой,
+// транзиентный сбой сети до MinIO/Postgres) до того, как Hangfire исчерпал собственные ретраи
+// ([AutomaticRetry] на самом классе джобы).
+app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<EncryptionRotationJob>(
+    "encryption-rotation-catchup",
+    job => job.RunAsync(CancellationToken.None),
+    "0 4 * * *");
 
 
 // Применение миграций с retry для transient-ошибок при старте (race-condition нескольких реплик)

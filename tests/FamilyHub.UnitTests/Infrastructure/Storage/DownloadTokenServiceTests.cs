@@ -73,4 +73,57 @@ public class DownloadTokenServiceTests
 
         sut.Validate(id, expires + 3600, sig).Should().BeFalse();
     }
+
+    // --- Ротация ключа (ADR-0009) ---
+
+    [Fact]
+    public void Validate_SignatureFromPreviousKey_StillValid()
+    {
+        // Ссылка выдана до ротации старым ключом...
+        var oldKeySut = CreateSut();
+        var attachmentId = Guid.NewGuid();
+        var (id, expires, sig) = ParseUrl(oldKeySut.CreateUrl(attachmentId), attachmentId);
+
+        // ...после ротации активен новый ключ, старый — в отставных: ссылка всё ещё валидна.
+        var rotatedSut = new DownloadTokenService(Options.Create(new AttachmentDownloadOptions
+        {
+            DownloadSigningKey = "new-download-signing-key",
+            PreviousSigningKeys = ["test-download-signing-key"],
+        }));
+
+        rotatedSut.Validate(id, expires, sig).Should().BeTrue();
+    }
+
+    [Fact]
+    public void CreateUrl_AfterRotation_SignsWithNewActiveKeyOnly()
+    {
+        var rotatedSut = new DownloadTokenService(Options.Create(new AttachmentDownloadOptions
+        {
+            DownloadSigningKey = "new-download-signing-key",
+            PreviousSigningKeys = ["test-download-signing-key"],
+        }));
+        var attachmentId = Guid.NewGuid();
+        var (id, expires, sig) = ParseUrl(rotatedSut.CreateUrl(attachmentId), attachmentId);
+
+        // Старый ключ больше не подписывает — подпись новой ссылки им не совпадёт.
+        var oldKeyOnlySut = CreateSut();
+        oldKeyOnlySut.Validate(id, expires, sig).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_SignatureFromKeyNotInRing_Fails()
+    {
+        var sut = CreateSut();
+        var attachmentId = Guid.NewGuid();
+        var (id, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId), attachmentId);
+
+        // Ни активный, ни отставные ключи получателя не совпадают с тем, что подписал ссылку.
+        var unrelatedSut = new DownloadTokenService(Options.Create(new AttachmentDownloadOptions
+        {
+            DownloadSigningKey = "completely-unrelated-key",
+            PreviousSigningKeys = ["also-unrelated"],
+        }));
+
+        unrelatedSut.Validate(id, expires, sig).Should().BeFalse();
+    }
 }

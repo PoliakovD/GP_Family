@@ -10,8 +10,9 @@ import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.componen
 import { LoadingSpinnerComponent } from './shared/loading-spinner/loading-spinner.component';
 import { CookieBannerComponent } from './shared/cookie-banner/cookie-banner.component';
 
-/** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран. */
-const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind'];
+/** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
+ * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения. */
+const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin'];
 
 @Component({
   selector: 'app-root',

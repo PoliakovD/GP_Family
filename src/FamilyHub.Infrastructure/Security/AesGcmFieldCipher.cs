@@ -1,13 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Infrastructure.Security;
 
 /// <summary>
 /// AES-256-GCM для строковых полей: случайный 12-байтовый nonce на каждое значение,
 /// 16-байтовый тег аутентичности. Подмена/порча шифротекста ломает тег → исключение,
-/// а не тихое чтение мусора.
+/// а не тихое чтение мусора. Ключ на запись/чтение резолвится через <see cref="IEncryptionKeyRing"/>
+/// (ADR-0009) — пишет всегда активным, читает по keyId, зашитому в само значение.
 /// </summary>
 public class AesGcmFieldCipher : IFieldCipher
 {
@@ -15,35 +15,11 @@ public class AesGcmFieldCipher : IFieldCipher
     private const int NonceSize = 12;
     private const int TagSize = 16;
 
-    private readonly byte[] _key;
-    private readonly string _keyId;
+    private readonly IEncryptionKeyRing _keyRing;
 
-    public AesGcmFieldCipher(IOptions<EncryptionOptions> options)
+    public AesGcmFieldCipher(IEncryptionKeyRing keyRing)
     {
-        var opts = options.Value;
-        _key = DecodeKey(opts.MasterKey);
-        _keyId = opts.ActiveKeyId;
-    }
-
-    internal static byte[] DecodeKey(string masterKeyBase64)
-    {
-        if (string.IsNullOrWhiteSpace(masterKeyBase64))
-            throw new InvalidOperationException("Encryption:MasterKey не задан — at-rest шифрование невозможно.");
-
-        byte[] key;
-        try
-        {
-            key = Convert.FromBase64String(masterKeyBase64);
-        }
-        catch (FormatException ex)
-        {
-            throw new InvalidOperationException("Encryption:MasterKey не является корректным base64.", ex);
-        }
-
-        if (key.Length != 32)
-            throw new InvalidOperationException(
-                $"Encryption:MasterKey должен быть 32 байта (AES-256), получено {key.Length}.");
-        return key;
+        _keyRing = keyRing;
     }
 
     public string Protect(string plaintext)
@@ -53,7 +29,7 @@ public class AesGcmFieldCipher : IFieldCipher
         var tag = new byte[TagSize];
         var cipherBytes = new byte[plainBytes.Length];
 
-        using var aes = new AesGcm(_key, TagSize);
+        using var aes = new AesGcm(_keyRing.ActiveKey, TagSize);
         aes.Encrypt(nonce, plainBytes, cipherBytes, tag);
 
         var packed = new byte[NonceSize + TagSize + cipherBytes.Length];
@@ -61,7 +37,7 @@ public class AesGcmFieldCipher : IFieldCipher
         tag.CopyTo(packed, NonceSize);
         cipherBytes.CopyTo(packed, NonceSize + TagSize);
 
-        return $"{Prefix}:{_keyId}:{Convert.ToBase64String(packed)}";
+        return $"{Prefix}:{_keyRing.ActiveKeyId}:{Convert.ToBase64String(packed)}";
     }
 
     public string Unprotect(string stored)
@@ -72,9 +48,8 @@ public class AesGcmFieldCipher : IFieldCipher
         var parts = stored.Split(':', 3);
         if (parts.Length != 3)
             throw new InvalidOperationException("Повреждённый формат зашифрованного значения.");
-        if (parts[1] != _keyId)
-            throw new InvalidOperationException(
-                $"Значение зашифровано ключом «{parts[1]}», активен «{_keyId}» — требуется ротационная перешифровка.");
+
+        var key = _keyRing.ForKeyId(parts[1]);
 
         var packed = Convert.FromBase64String(parts[2]);
         var nonce = packed.AsSpan(0, NonceSize);
@@ -82,7 +57,7 @@ public class AesGcmFieldCipher : IFieldCipher
         var cipherBytes = packed.AsSpan(NonceSize + TagSize);
         var plainBytes = new byte[cipherBytes.Length];
 
-        using var aes = new AesGcm(_key, TagSize);
+        using var aes = new AesGcm(key, TagSize);
         aes.Decrypt(nonce, cipherBytes, tag, plainBytes);
 
         return Encoding.UTF8.GetString(plainBytes);

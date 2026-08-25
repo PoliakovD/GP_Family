@@ -1,0 +1,46 @@
+@if (loading()) {
+  <p class="text-muted">Загрузка…</p>
+} @else if (error()) {
+  <div class="alert-danger">{{ error() }}</div>
+} @else {
+  @if (data(); as d) {
+    <div class="d-flex justify-content-between mb-2" style="align-items: center;">
+      <p class="text-muted mb-0">По состоянию на {{ d.computedAt | date: 'dd.MM.yyyy HH:mm' }}</p>
+      <button type="button" class="btn btn-secondary btn-sm" [disabled]="recalculating()" (click)="load(true)">
+        {{ recalculating() ? 'Считаем…' : 'Пересчитать' }}
+      </button>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-title">Место</div>
+      <div class="card-body">
+        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+          <div><strong>{{ toMib(d.bucketSizeBytes) | number: '1.1-1' }} МиБ</strong><div class="text-muted">бакет MinIO ({{ d.bucketObjectCount }} объектов)</div></div>
+          <div><strong>{{ toMib(d.attachmentsSizeBytesInDb) | number: '1.1-1' }} МиБ</strong><div class="text-muted">по БД, открытый размер ({{ d.attachmentsCountInDb }} вложений)</div></div>
+        </div>
+        <p class="text-muted mb-0" style="margin-top: 0.5rem;">
+          Размер бакета больше размера в БД — это ожидаемо: в БД хранится размер исходного файла,
+          в бакете лежит зашифрованный блоб (шифротекст длиннее открытого текста).
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Сверка</div>
+      <div class="card-body">
+        @if (d.reconciliation.orphanedBlobs === 0 && d.reconciliation.brokenAttachments === 0) {
+          <p class="mb-0">Расхождений не найдено.</p>
+        } @else {
+          <div class="d-flex gap-3" style="flex-wrap: wrap;">
+            @if (d.reconciliation.orphanedBlobs > 0) {
+              <div><strong>{{ d.reconciliation.orphanedBlobs }}</strong><div class="text-muted">осиротевших блобов (нет строки в БД)</div></div>
+            }
+            @if (d.reconciliation.brokenAttachments > 0) {
+              <div><strong>{{ d.reconciliation.brokenAttachments }}</strong><div class="text-muted">битых вложений (нет блоба в хранилище)</div></div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+}

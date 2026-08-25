@@ -1,8 +1,56 @@
 import { Routes } from '@angular/router';
 import { authGuard, consentGuard } from './services/auth.guards';
+import { adminGuard } from './services/admin.guards';
 import { pendingCodeGuard } from './services/pending-code.guard';
 
 export const routes: Routes = [
+  // Админ-панель (ADR-0009) — полностью отдельная от остального приложения поверхность:
+  // своя сессия (adminGuard, cookie familyhub.admin), не участвует в authGuard/consentGuard.
+  // В проде публичный домен блокирует /admin* на уровне Caddy (защита в глубину) — доступен
+  // только с admin.{PUBLIC_DOMAIN}, но роут остаётся частью общего SPA-бандла (см. деплой-план).
+  {
+    path: 'admin/login',
+    loadComponent: () =>
+      import('./components/admin/admin-login/admin-login.component').then((m) => m.AdminLoginComponent),
+  },
+  {
+    path: 'admin',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('./components/admin/admin-hub/admin-hub.component').then((m) => m.AdminHubComponent),
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      {
+        path: 'overview',
+        loadComponent: () =>
+          import('./components/admin/admin-overview/admin-overview.component').then(
+            (m) => m.AdminOverviewComponent,
+          ),
+      },
+      {
+        path: 'storage',
+        loadComponent: () =>
+          import('./components/admin/admin-storage/admin-storage.component').then(
+            (m) => m.AdminStorageComponent,
+          ),
+      },
+      {
+        path: 'system',
+        loadComponent: () =>
+          import('./components/admin/admin-system/admin-system.component').then(
+            (m) => m.AdminSystemComponent,
+          ),
+      },
+      {
+        path: 'keys',
+        loadComponent: () =>
+          import('./components/admin/admin-keys/admin-keys.component').then(
+            (m) => m.AdminKeysComponent,
+          ),
+      },
+    ],
+  },
+
   // Публичные / служебные маршруты (без гардов).
   {
     path: 'login',

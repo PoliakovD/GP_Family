@@ -28,5 +28,14 @@ public class FileAttachment
     /// <summary>Блоб в хранилище зашифрован IFileCipher (этап 2); false — legacy-файлы до шифрования.</summary>
     public bool IsEncrypted { get; set; }
 
+    /// <summary>
+    /// keyId, которым зашифрован блоб (тот же, что зашит в заголовок FHE1 внутри самого блоба —
+    /// см. AesGcmFileCipher) — null для незашифрованных вложений (IsEncrypted=false). Денормализация
+    /// ради ADR-0009: без неё «сколько блобов ещё не перешифровано» требовало бы скачивать и
+    /// парсить заголовок каждого объекта из MinIO вместо SELECT по колонке.
+    /// EncryptionRotationJob обновляет её вместе с перезаливкой блоба под новым активным ключом.
+    /// </summary>
+    public string? KeyId { get; set; }
+
     public DateTime UploadedAt { get; set; }
 }

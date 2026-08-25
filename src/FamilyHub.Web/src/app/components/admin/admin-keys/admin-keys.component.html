@@ -1,0 +1,95 @@
+@if (loading()) {
+  <p class="text-muted">Загрузка…</p>
+} @else if (error()) {
+  <div class="alert-danger">{{ error() }}</div>
+} @else {
+  @if (rings(); as r) {
+    <div class="card mb-3">
+      <div class="card-title">Связки ключей</div>
+      <div class="card-body">
+        <table class="table">
+          <thead><tr><th>Назначение</th><th>Активен</th><th>Отставные</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Шифрование данных (Encryption)</td>
+              <td>{{ r.encryption.activeKeyId }}</td>
+              <td>{{ r.encryption.previousKeyIds.length === 0 ? '—' : r.encryption.previousKeyIds.join(', ') }}</td>
+            </tr>
+            <tr>
+              <td>Подпись сессий (JWT)</td>
+              <td>{{ r.jwt.activeKeyId }}</td>
+              <td>{{ r.jwt.previousKeyIds.length === 0 ? '—' : r.jwt.previousKeyIds.join(', ') }}</td>
+            </tr>
+            <tr>
+              <td>Ссылки на скачивание (Attachments)</td>
+              <td>активный</td>
+              <td>{{ r.attachments.previousKeyCount === 0 ? '—' : r.attachments.previousKeyCount + ' шт.' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <div class="card mb-3">
+    <div class="card-title">Перешифровка (Encryption)</div>
+    <div class="card-body">
+      @if (rotation(); as run) {
+        @if (run.status === 'Running') {
+          <p class="mb-2">
+            Идёт перешифровка на ключ <strong>{{ run.targetKeyId }}</strong>
+            (запущена {{ run.startedAt | date: 'dd.MM.yyyy HH:mm' }}).
+          </p>
+          <p class="mb-1">
+            Поля: {{ run.fieldsProcessed }} / {{ run.fieldsTotal }} ({{ progressPercent(run.fieldsProcessed, run.fieldsTotal) }}%)
+          </p>
+          <p class="mb-2">
+            Блобы: {{ run.blobsProcessed }} / {{ run.blobsTotal }} ({{ progressPercent(run.blobsProcessed, run.blobsTotal) }}%)
+          </p>
+          <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="cancelRotation()">Остановить</button>
+        } @else {
+          @if (run.status) {
+            <p class="mb-2 text-muted">
+              Последний прогон ({{ run.targetKeyId }}): {{ run.status }}
+              @if (run.finishedAt) { , завершён {{ run.finishedAt | date: 'dd.MM.yyyy HH:mm' }} }
+              @if (run.lastError) { — {{ run.lastError }} }
+            </p>
+          }
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="startRotation()">Перешифровать</button>
+        }
+      }
+    </div>
+  </div>
+
+  @if (security(); as s) {
+    <div class="card mb-3">
+      <div class="card-title">Распределение по ключам</div>
+      <div class="card-body">
+        <p class="mb-1 text-muted">Поля БД:</p>
+        <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
+          @for (kv of s.encryptionDistribution.fieldValues; track kv.keyId) {
+            <span class="tag tag-neutral">{{ kv.keyId }}: {{ kv.count }}</span>
+          }
+        </div>
+        <p class="mb-1 text-muted">Вложения (блобы MinIO):</p>
+        <div class="d-flex gap-2" style="flex-wrap: wrap;">
+          @for (kv of s.encryptionDistribution.attachmentBlobs; track kv.keyId) {
+            <span class="tag tag-neutral">{{ kv.keyId }}: {{ kv.count }}</span>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Безопасность</div>
+      <div class="card-body">
+        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+          <div><strong>{{ s.crossUserMedicalAccessLast30Days }}</strong><div class="text-muted">обращений к чужим медданным за 30д</div></div>
+          <div><strong>{{ s.usersWithoutCurrentConsent }}</strong><div class="text-muted">без актуального согласия</div></div>
+          <div><strong>{{ s.activeSessions }}</strong><div class="text-muted">активных сессий PWA</div></div>
+          <div><strong>{{ s.dataProtectionKeyCount }}</strong><div class="text-muted">ключей DataProtection</div></div>
+        </div>
+      </div>
+    </div>
+  }
+}
