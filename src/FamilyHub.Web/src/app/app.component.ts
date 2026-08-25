@@ -103,6 +103,12 @@ export class AppComponent implements OnInit {
   }
 
   private async initAuth(): Promise<void> {
+    // Админ-панель (ADR-0009) — отдельная identity-система, не PWA/Telegram. window.location,
+    // не this.router.url: ngOnInit может выполниться до того, как роутер зафиксировал первую
+    // навигацию, а этот вызов должен НИКОГДА не уйти в /api/auth/me на /admin/* — именно этот
+    // фоновый 401 и уводил с /admin/login на обычный /login (см. auth.interceptor.ts).
+    if (window.location.pathname.startsWith('/admin')) return;
+
     if (this.auth.mode === 'telegram') {
       // Реальный Telegram Mini App: TelegramId может быть ещё не привязан ни к одному
       // аккаунту (TelegramMiniAppAuthenticationHandler — lookup-only, отклонит любой запрос

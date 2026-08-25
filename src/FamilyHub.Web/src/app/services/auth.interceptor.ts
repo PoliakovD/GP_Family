@@ -78,8 +78,14 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
       const isPwaMode = !initData && !tg.getDevTelegramId();
       const isSessionLessPath = SESSION_LESS_AUTH_PATHS.some((p) => req.url.startsWith(p));
+      // Админ-панель (ADR-0009) — полностью отдельная identity-система (cookie familyhub.admin,
+      // AuthSchemes.Admin), не PWA-сессия. Без этого исключения 401 от /api/admin/* (например,
+      // от AdminApiService.checkSession() при неавторизованном заходе) запускал бы PWA-refresh
+      // и после его провала уводил на /login — затирая /admin/login, на который должен был
+      // отправить adminGuard. AdminApiService/adminGuard сами решают, что делать с 401 отсюда.
+      const isAdminPath = req.url.startsWith('/api/admin');
 
-      if (error.status === 401 && isPwaMode && !isSessionLessPath) {
+      if (error.status === 401 && isPwaMode && !isSessionLessPath && !isAdminPath) {
         return from(ensureRefreshed(http)).pipe(
           switchMap((refreshed) =>
             refreshed ? next(req.clone({ headers, withCredentials: true })) : throwError(() => error)),
