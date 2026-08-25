@@ -23,4 +23,7 @@ public enum NotificationType
 
     /// <summary>Справочник пополнен данными о препарате, сохранённом пользователем (этап 4).</summary>
     MedicationEnriched = 6,
+
+    /// <summary>Распознавание вложения (анализ/выписка врача) завершено (ветка medicalrecords).</summary>
+    MedicalDocumentExtracted = 7,
 }

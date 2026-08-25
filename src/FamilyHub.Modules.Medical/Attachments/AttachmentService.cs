@@ -2,6 +2,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
@@ -32,14 +33,14 @@ public class AttachmentService(
     /// module-review-2026-08-02/03-medical-records-attachments.md, находка 2).</summary>
     public const long MaxSizeBytes = 30 * 1024 * 1024;
 
-    /// <summary>Сканы мед-документов: изображения + PDF. Defense-in-depth — проверка по
-    /// заявленному ContentType, не по magic bytes (тело всё равно скачивается с
+    /// <summary>Сканы мед-документов: изображения, PDF, офисные форматы, текст (ветка
+    /// medicalrecords расширила список под конвейер извлечения — см.
+    /// FamilyHub.Infrastructure.Documents.DocumentContentTypes, единая точка правды и для
+    /// допустимой загрузки, и для того, что конвейер умеет распознать). Defense-in-depth —
+    /// проверка по заявленному ContentType, не по magic bytes (тело всё равно скачивается с
     /// Content-Disposition: attachment, см. AttachmentEndpoints — снижает риск даже при
     /// подделке заголовка).</summary>
-    public static readonly IReadOnlySet<string> AllowedContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf",
-    };
+    public static readonly IReadOnlySet<string> AllowedContentTypes = DocumentContentTypes.All;
 
     /// <summary>Прикладывать сканы к анализу может только владелец записи — тот же барьер, что и для шаринга.</summary>
     public async Task<(AttachmentAccessResult Result, AttachmentDto? Item)> UploadForMedicalRecordAsync(

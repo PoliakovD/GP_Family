@@ -26,9 +26,16 @@ public static class MedicalModule
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<MedicationOcrService>();
-        // Заготовка под OCR анализов/заключений (задачи 5.2/5.3 — не реализованы). По умолчанию
-        // Null: ни очереди, ни эндпоинта, вызывающего этот сервис, ещё нет.
+        // Ветка medicalrecords (задачи 5.2/5.3): конвейер извлечения показателей анализов и
+        // заключений врача. IMedicalDocumentExtractor регистрируется в Program.cs (переключатель
+        // Extraction:Enabled, тот же паттерн, что Enrichment:Provider — не здесь, чтобы модуль не
+        // решал, какая реализация активна) — по умолчанию Null, если хост её не переопределил.
         services.AddScoped<IMedicalDocumentExtractor, NullMedicalDocumentExtractor>();
+        services.AddScoped<LabAnalyteKbLookupService>();
+        services.AddScoped<LabSummarizer>();
+        services.AddScoped<ExtractionRequestService>();
+        services.AddScoped<ExtractionQueryService>();
+        services.AddScoped<MedicalDocumentExtractionProcessor>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();
@@ -56,6 +63,7 @@ public static class MedicalModule
         module.MapMedicalRecordEndpoints();
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
+        module.MapExtractionEndpoints();
         module.MapSearchEndpoints();
         module.MapKbEndpoints();
     }

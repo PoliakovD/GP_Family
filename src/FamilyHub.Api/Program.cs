@@ -24,6 +24,7 @@ using FamilyHub.Infrastructure.CurrentUser;
 using Amazon.SimpleEmailV2;
 using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Email.Templates;
+using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Contracts.Events;
@@ -39,6 +40,7 @@ using FamilyHub.Modules.Birthdays;
 using FamilyHub.Modules.Medical;
 using FamilyHub.Modules.Medical.Consumers;
 using FamilyHub.Modules.Medical.Enrichment;
+using FamilyHub.Modules.Medical.Extraction;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Antiforgery;
@@ -97,6 +99,7 @@ builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioO
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
 builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(EnrichmentOptions.SectionName));
+builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection(ExtractionOptions.SectionName));
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
@@ -182,6 +185,7 @@ var kafkaConsumers = new KafkaConsumerRegistration[]
     new(typeof(MedicationExpiringEvent), typeof(MedicationExpiringNotificationConsumer), "notifications-medication-expiring"),
     new(typeof(BirthdayApproachingEvent), typeof(BirthdayApproachingNotificationConsumer), "notifications-birthday-approaching"),
     new(typeof(MedicationEnrichedEvent), typeof(MedicationEnrichedNotificationConsumer), "notifications-medication-enriched"),
+    new(typeof(MedicalDocumentExtractedEvent), typeof(MedicalDocumentExtractedNotificationConsumer), "notifications-medical-document-extracted"),
 };
 builder.Services.AddFamilyHubMessaging(builder.Configuration, kafkaConsumers,
     typeof(DomainEventPublisher).Assembly,
@@ -477,6 +481,16 @@ builder.Services.AddHangfireServer(o =>
     o.WorkerCount = 1;
     o.ServerName = "enrichment-server";
 });
+// Четвёртый сервер, выделенная очередь "extraction" (ветка medicalrecords) с ОДНИМ воркером —
+// та же причина, что у enrichment-server: LM Studio — один ноутбук за WireGuard, параллельных
+// запросов к нему быть не может физически, отдельная очередь просто не даёт распознаванию
+// анализов конкурировать за воркеров с ReminderScanJob/AuditRetentionJob/обогащением справочника.
+builder.Services.AddHangfireServer(o =>
+{
+    o.Queues = ["extraction"];
+    o.WorkerCount = 1;
+    o.ServerName = "extraction-server";
+});
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<NotificationSendingService>();
@@ -539,6 +553,11 @@ builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, cli
     client.Timeout = TimeSpan.FromSeconds(lmStudioOptions.TimeoutSeconds);
 });
 
+// --- Документы: декодирование вложений под конвейер извлечения (ветка medicalrecords) ---
+builder.Services.AddScoped<PdfDocumentReader>();
+builder.Services.AddScoped<OfficeDocumentReader>();
+builder.Services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
+
 // --- Enrichment: внешний веб-поиск для обогащения справочника препаратов (этап 4, ADR-0005) ---
 // Переключатель Enrichment:Provider = Null|Brave|Yandex (тот же паттерн конфиг-переключателя,
 // что раньше был у FileStorage:Provider, пока хранилище не свели к единственной реализации).
@@ -581,6 +600,19 @@ switch (enrichmentOptions.Provider)
 
 // --- Medical-модуль ---
 builder.Services.AddMedicalModule();
+
+// --- Extraction: включение реального конвейера (ветка medicalrecords) — тот же паттерн
+// --- переключателя, что Enrichment:Provider выше. ПОСЛЕ AddMedicalModule(): ASP.NET Core DI
+// --- резолвит последнюю регистрацию для одиночного сервиса, эта строка обязана перекрыть
+// --- Null-регистрацию по умолчанию из MedicalModule, не наоборот. Без явного конфига — Null
+// --- (Extraction:Enabled по умолчанию true, но отсутствие LmStudio:Model/BaseUrl просто даст
+// --- Failed на каждой задаче, а не тишину — см. LmStudioHealthCheck).
+var extractionOptions = builder.Configuration.GetSection(ExtractionOptions.SectionName).Get<ExtractionOptions>()
+    ?? new ExtractionOptions();
+if (extractionOptions.Enabled)
+{
+    builder.Services.AddScoped<IMedicalDocumentExtractor, LmStudioMedicalDocumentExtractor>();
+}
 
 // --- Birthdays-модуль (этап 4 п.11) ---
 builder.Services.AddBirthdayModule();
@@ -893,7 +925,6 @@ app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<AuditRetenti
     "audit-retention",
     job => job.RunAsync(CancellationToken.None),
     "0 3 1 * *");
-
 
 // Применение миграций с retry для transient-ошибок при старте (race-condition нескольких реплик)
     using (var scope = app.Services.CreateScope())

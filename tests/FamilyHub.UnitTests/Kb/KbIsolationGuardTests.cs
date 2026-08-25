@@ -52,6 +52,20 @@ public class KbIsolationGuardTests : SqliteTestBase
     }
 
     [Fact]
+    public void GlobalLabAnalyteKb_LivesInKbSchema_WithUniqueNormalizedName()
+    {
+        // Ветка medicalrecords: второй kb-writer (LabAnalyteKbWriter) — тот же инвариант,
+        // что у справочника медикаментов, проверенный отдельно на случай, если общий
+        // reflection-тест выше когда-нибудь ослабят.
+        var entity = Db.Model.FindEntityType(typeof(GlobalLabAnalyteKb))!;
+
+        entity.GetSchema().Should().Be("kb");
+        entity.GetTableName().Should().Be("global_lab_analytes_kb");
+        entity.GetIndexes().Should().Contain(i =>
+            i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name == nameof(GlobalLabAnalyteKb.NormalizedName));
+    }
+
+    [Fact]
     public void PersonalCompatibilityResult_IsUserBound_AndLivesInMedicalSchema()
     {
         var entity = Db.Model.FindEntityType(typeof(PersonalCompatibilityResult))!;

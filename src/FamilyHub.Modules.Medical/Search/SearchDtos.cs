@@ -1,9 +1,10 @@
 namespace FamilyHub.Modules.Medical.Search;
 
-/// <summary>Источник результата поиска — пять независимых контуров доступа (см. SearchService).
-/// Visit — строго последним: фронт сравнивает и присылает числовые значения (models/types.ts),
-/// перенумеровывать существующие нельзя.</summary>
-public enum SearchResultType { Medication, Kb, Record, Birthday, Visit }
+/// <summary>Источник результата поиска — шесть независимых контуров доступа (см. SearchService).
+/// Новые значения — строго в конец: фронт сравнивает и присылает числовые значения
+/// (models/types.ts), перенумеровывать существующие нельзя. Indicator (ветка medicalrecords)
+/// добавлен последним по той же причине, по которой раньше последним был Visit.</summary>
+public enum SearchResultType { Medication, Kb, Record, Birthday, Visit, Indicator }
 
 public record SearchResultItem(
     SearchResultType Type, Guid Id, string Title, string? Snippet, double Score,
@@ -37,5 +38,17 @@ internal sealed class KbSearchRow
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public double Score { get; set; }
+}
+
+/// <summary>Проекция сырого SQL-запроса к medical."LabIndicators" (ветка medicalrecords) —
+/// AnalyteKey/Flag не зашифрованы, поэтому триграммный поиск идёт прямо в SQL, как у медикаментов.</summary>
+internal sealed class IndicatorSearchRow
+{
+    public Guid Id { get; set; }
+    public string AnalyteKey { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public int Flag { get; set; }
+    public DateOnly RecordDate { get; set; }
     public double Score { get; set; }
 }
