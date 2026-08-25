@@ -12,4 +12,11 @@ public static class AuthSchemes
 
     /// <summary>Только для Development — заглушка без бота, авторизация по заголовку X-Dev-TelegramId.</summary>
     public const string Dev = "Dev";
+
+    /// <summary>
+    /// Сессия админ-панели (ADR-0009) — отдельная от Smart-селектора: логин/пароль из
+    /// Admin:User/Password (.env), cookie familyhub.admin. Никогда не участвует в выборе схемы
+    /// по умолчанию — только явно, через политику "PlatformAdmin" на группе /api/admin.
+    /// </summary>
+    public const string Admin = "Admin";
 }

@@ -23,6 +23,7 @@ public class AttachmentService(
     AppDbContext db,
     IFileStorage storage,
     IFileCipher fileCipher,
+    IEncryptionKeyRing keyRing,
     DownloadTokenService downloadTokens,
     MedicalRecordService medicalRecords,
     IFamilyAccessService familyAccess,
@@ -101,6 +102,7 @@ public class AttachmentService(
             ContentType = contentType,
             SizeBytes = sizeBytes,
             IsEncrypted = true,
+            KeyId = keyRing.ActiveKeyId,
             UploadedAt = DateTime.UtcNow,
         };
         db.FileAttachments.Add(attachment);

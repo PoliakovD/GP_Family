@@ -86,6 +86,65 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("EmailVerificationCodes", "identity");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.EncryptionRotationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BlobsCursorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BlobsProcessed")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BlobsTotal")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("FieldsCursorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("FieldsProcessed")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FieldsStepIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FieldsTotal")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetKeyId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt");
+
+                    b.HasIndex("Status")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 0");
+
+                    b.ToTable("EncryptionRotationRuns", (string)null);
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.Family", b =>
                 {
                     b.Property<Guid>("Id")
@@ -290,6 +349,10 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<bool>("IsEncrypted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
 
@@ -308,6 +371,8 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsEncrypted", "KeyId");
 
                     b.HasIndex("OwnerType", "OwnerId");
 

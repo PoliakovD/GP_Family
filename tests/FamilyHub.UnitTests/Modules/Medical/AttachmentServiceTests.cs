@@ -20,8 +20,9 @@ namespace FamilyHub.UnitTests.Modules.Medical;
 public class AttachmentServiceTests : SqliteTestBase
 {
     private readonly IFileStorage _storage = Substitute.For<IFileStorage>();
-    private readonly IFileCipher _fileCipher = new AesGcmFileCipher(
-        Options.Create(new EncryptionOptions { MasterKey = DesignTimeDbContextFactory.DevMasterKey }));
+    private readonly IEncryptionKeyRing _keyRing =
+        new EncryptionKeyRing(new EncryptionOptions { MasterKey = DesignTimeDbContextFactory.DevMasterKey });
+    private readonly IFileCipher _fileCipher;
     private readonly AttachmentService _sut;
 
     /// <summary>Байты, реально ушедшие в storage.SaveAsync (по ключу) — для проверок шифротекста.</summary>
@@ -29,6 +30,7 @@ public class AttachmentServiceTests : SqliteTestBase
 
     public AttachmentServiceTests()
     {
+        _fileCipher = new AesGcmFileCipher(_keyRing);
         _storage.SaveAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
@@ -48,7 +50,7 @@ public class AttachmentServiceTests : SqliteTestBase
         var downloadTokens = new DownloadTokenService(
             Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
         _sut = new AttachmentService(
-            Db, _storage, _fileCipher, downloadTokens, medicalRecords, access, auditWriter, NullLogger<AttachmentService>.Instance);
+            Db, _storage, _fileCipher, _keyRing, downloadTokens, medicalRecords, access, auditWriter, NullLogger<AttachmentService>.Instance);
     }
 
     private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("scan-bytes"));

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using FamilyHub.Api.Configuration;
 
@@ -36,12 +35,7 @@ public static class AdminBasicAuth
         var user = decoded[..separatorIndex];
         var password = decoded[(separatorIndex + 1)..];
 
-        var userMatches = CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(user), Encoding.UTF8.GetBytes(devTools.AdminUser ?? string.Empty));
-        var passwordMatches = CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(password), Encoding.UTF8.GetBytes(devTools.AdminPassword ?? string.Empty));
-
-        return userMatches && passwordMatches;
+        return CredentialComparer.Matches(user, password, devTools.AdminUser, devTools.AdminPassword);
     }
 
     public static void Challenge(HttpContext httpContext)

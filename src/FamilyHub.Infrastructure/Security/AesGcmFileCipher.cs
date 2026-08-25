@@ -1,12 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Infrastructure.Security;
 
 /// <summary>
 /// AES-256-GCM для файлов целиком (сканы/PDF ограничены лимитом загрузки — буферизация в
-/// памяти приемлема и даёт аутентичность всего блоба одним тегом).
+/// памяти приемлема и даёт аутентичность всего блоба одним тегом). Ключ на запись/чтение
+/// резолвится через <see cref="IEncryptionKeyRing"/> (ADR-0009) — пишет всегда активным, читает
+/// по keyId, зашитому в заголовок блоба.
 /// </summary>
 public class AesGcmFileCipher : IFileCipher
 {
@@ -14,16 +15,14 @@ public class AesGcmFileCipher : IFileCipher
     private const int NonceSize = 12;
     private const int TagSize = 16;
 
-    private readonly byte[] _key;
-    private readonly byte[] _keyIdBytes;
-    private readonly string _keyId;
+    private readonly IEncryptionKeyRing _keyRing;
+    private readonly byte[] _activeKeyIdBytes;
 
-    public AesGcmFileCipher(IOptions<EncryptionOptions> options)
+    public AesGcmFileCipher(IEncryptionKeyRing keyRing)
     {
-        _key = AesGcmFieldCipher.DecodeKey(options.Value.MasterKey);
-        _keyId = options.Value.ActiveKeyId;
-        _keyIdBytes = Encoding.UTF8.GetBytes(_keyId);
-        if (_keyIdBytes.Length > byte.MaxValue)
+        _keyRing = keyRing;
+        _activeKeyIdBytes = Encoding.UTF8.GetBytes(keyRing.ActiveKeyId);
+        if (_activeKeyIdBytes.Length > byte.MaxValue)
             throw new InvalidOperationException("Encryption:ActiveKeyId слишком длинный (максимум 255 байт UTF-8).");
     }
 
@@ -36,19 +35,19 @@ public class AesGcmFileCipher : IFileCipher
         var nonce = RandomNumberGenerator.GetBytes(NonceSize);
         var tag = new byte[TagSize];
         var cipherBytes = new byte[plainBytes.Length];
-        using (var aes = new AesGcm(_key, TagSize))
+        using (var aes = new AesGcm(_keyRing.ActiveKey, TagSize))
         {
             aes.Encrypt(nonce, plainBytes, cipherBytes, tag);
         }
 
         await dest.WriteAsync(Magic, ct);
-        dest.WriteByte((byte)_keyIdBytes.Length);
-        await dest.WriteAsync(_keyIdBytes, ct);
+        dest.WriteByte((byte)_activeKeyIdBytes.Length);
+        await dest.WriteAsync(_activeKeyIdBytes, ct);
         await dest.WriteAsync(nonce, ct);
         await dest.WriteAsync(tag, ct);
         await dest.WriteAsync(cipherBytes, ct);
 
-        return Magic.Length + 1 + _keyIdBytes.Length + NonceSize + TagSize + cipherBytes.Length;
+        return Magic.Length + 1 + _activeKeyIdBytes.Length + NonceSize + TagSize + cipherBytes.Length;
     }
 
     public async Task<Stream> DecryptAsync(Stream stored, CancellationToken ct = default)
@@ -65,9 +64,7 @@ public class AesGcmFileCipher : IFileCipher
         int keyIdLength = data[offset++];
         var keyId = Encoding.UTF8.GetString(data, offset, keyIdLength);
         offset += keyIdLength;
-        if (keyId != _keyId)
-            throw new InvalidOperationException(
-                $"Вложение зашифровано ключом «{keyId}», активен «{_keyId}» — требуется ротационная перешифровка.");
+        var key = _keyRing.ForKeyId(keyId);
 
         var nonce = data.AsSpan(offset, NonceSize);
         offset += NonceSize;
@@ -76,7 +73,7 @@ public class AesGcmFileCipher : IFileCipher
         var cipherBytes = data.AsSpan(offset);
         var plainBytes = new byte[cipherBytes.Length];
 
-        using (var aes = new AesGcm(_key, TagSize))
+        using (var aes = new AesGcm(key, TagSize))
         {
             aes.Decrypt(nonce, cipherBytes, tag, plainBytes);
         }

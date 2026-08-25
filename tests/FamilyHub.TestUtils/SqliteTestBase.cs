@@ -2,7 +2,6 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace FamilyHub.TestUtils;
 
@@ -23,7 +22,7 @@ public abstract class SqliteTestBase : IDisposable
     /// захватившим первый экземпляр, — ключ обязан быть стабильным между тестами.
     /// </summary>
     protected static readonly IFieldCipher TestFieldCipher = new AesGcmFieldCipher(
-        Options.Create(new EncryptionOptions { MasterKey = DesignTimeDbContextFactory.DevMasterKey }));
+        new EncryptionKeyRing(new EncryptionOptions { MasterKey = DesignTimeDbContextFactory.DevMasterKey }));
 
     private readonly SqliteConnection _connection;
     private readonly DbContextOptions<AppDbContext> _options;
