@@ -22,5 +22,6 @@ export class HealthHubComponent {
     { path: 'records', label: 'Анализы' },
     { path: 'visits', label: 'Врачи' },
     { path: 'kb', label: 'Справочник' },
+    { path: 'indicators', label: 'Показатели' },
   ];
 }

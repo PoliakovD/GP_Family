@@ -50,7 +50,8 @@ public class AttachmentServiceTests : SqliteTestBase
         var downloadTokens = new DownloadTokenService(
             Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
         _sut = new AttachmentService(
-            Db, _storage, _fileCipher, _keyRing, downloadTokens, medicalRecords, access, auditWriter, NullLogger<AttachmentService>.Instance);
+            Db, _storage, _fileCipher, _keyRing, downloadTokens, medicalRecords, access, auditWriter,
+            Options.Create(new AttachmentUploadOptions()), NullLogger<AttachmentService>.Instance);
     }
 
     private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("scan-bytes"));
@@ -143,6 +144,32 @@ public class AttachmentServiceTests : SqliteTestBase
 
         result.Should().Be(AttachmentAccessResult.NotFound);
         item.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UploadForMedicalRecordAsync_AtFileLimit_ReturnsTooManyFiles()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        await Db.SaveChangesAsync();
+        var options = Options.Create(new AttachmentUploadOptions { MaxFilesPerRecord = 2 });
+        var sut = new AttachmentService(
+            Db, _storage, _fileCipher, _keyRing,
+            new DownloadTokenService(Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" })),
+            new MedicalRecordService(
+                Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), new TestSupport.RecordingDomainEventPublisher(),
+                new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), new RussianTextSearcher(), _storage, NullLogger<MedicalRecordService>.Instance),
+            new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
+            new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), options, NullLogger<AttachmentService>.Instance);
+
+        await sut.UploadForMedicalRecordAsync(record.Id, owner.Id, "a.pdf", "application/pdf", 10, Content());
+        await sut.UploadForMedicalRecordAsync(record.Id, owner.Id, "b.pdf", "application/pdf", 10, Content());
+        var (result, item) = await sut.UploadForMedicalRecordAsync(record.Id, owner.Id, "c.pdf", "application/pdf", 10, Content());
+
+        result.Should().Be(AttachmentAccessResult.TooManyFiles);
+        item.Should().BeNull();
+        Db.FileAttachments.Count().Should().Be(2);
     }
 
     [Fact]

@@ -9,7 +9,6 @@ using FamilyHub.Modules.Medical.Kb;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
 
@@ -32,7 +31,7 @@ public class MedicationEnrichmentProcessor(
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
     IDomainEventPublisher publisher,
-    IOptions<EnrichmentOptions> options,
+    EnrichmentQuotaService quota,
     ILogger<MedicationEnrichmentProcessor> logger)
 {
     /// <summary>Тот же порог, что и pg_trgm.similarity_threshold (см. RussianTextSearcher/KbLookupService) —
@@ -90,7 +89,7 @@ public class MedicationEnrichmentProcessor(
             }
             else
             {
-                if (provider.Name != "Null" && await MonthlyQuotaExceededAsync(ct))
+                if (provider.Name != "Null" && await quota.MonthlyQuotaExceededAsync(ct))
                 {
                     job.Status = EnrichmentJobStatus.Skipped;
                     job.Error = "Месячная квота внешнего поиска исчерпана.";
@@ -100,7 +99,7 @@ public class MedicationEnrichmentProcessor(
                     return;
                 }
 
-                snippets = await provider.SearchAsync(job.NormalizedName, ct);
+                snippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct);
                 if (provider.Name != "Null")
                 {
                     // Считаем реальным внешним запросом только настоящих провайдеров — Null ничего
@@ -164,15 +163,6 @@ public class MedicationEnrichmentProcessor(
             logger.LogError(ex, "MedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;
         }
-    }
-
-    private async Task<bool> MonthlyQuotaExceededAsync(CancellationToken ct)
-    {
-        var now = DateTime.UtcNow;
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var usedThisMonth = await db.MedicationEnrichmentJobs
-            .CountAsync(j => j.ExternalSearchAt != null && j.ExternalSearchAt >= monthStart, ct);
-        return usedThisMonth >= options.Value.MonthlyQuota;
     }
 
     /// <summary>

@@ -10,6 +10,7 @@ using FamilyHub.Modules.Medical.MedicalRecords;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -196,8 +197,9 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateRecordAsync(owner);
+        var maxSizeBytes = Factory.Services.GetRequiredService<IOptions<AttachmentUploadOptions>>().Value.MaxFileSizeBytes;
 
-        var oversized = new byte[AttachmentService.MaxSizeBytes + 1];
+        var oversized = new byte[maxSizeBytes + 1];
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(oversized);
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
@@ -206,5 +208,21 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var response = await owner.PostAsync($"/api/medical-records/{record.Id}/attachments", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge);
+    }
+
+    [Fact]
+    public async Task Upload_AtFileCountLimit_Returns409()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+        var maxFiles = Factory.Services.GetRequiredService<IOptions<AttachmentUploadOptions>>().Value.MaxFilesPerRecord;
+
+        for (var i = 0; i < maxFiles; i++)
+            (await owner.PostAsync($"/api/medical-records/{record.Id}/attachments", BuildUpload(fileName: $"scan-{i}.txt")))
+                .StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var response = await owner.PostAsync($"/api/medical-records/{record.Id}/attachments", BuildUpload(fileName: "one-too-many.txt"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 }

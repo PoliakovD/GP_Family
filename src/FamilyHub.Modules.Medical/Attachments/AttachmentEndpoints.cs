@@ -30,14 +30,21 @@ public static class AttachmentEndpoints
                 AttachmentAccessResult.NotFound => Results.NotFound(),
                 AttachmentAccessResult.Forbidden => Results.Forbid(),
                 AttachmentAccessResult.TooLarge => Results.Json(
-                    new { code = "attachment_too_large", maxSizeBytes = AttachmentService.MaxSizeBytes },
+                    new { code = "attachment_too_large", maxSizeBytes = service.MaxSizeBytes },
                     statusCode: StatusCodes.Status413PayloadTooLarge),
                 AttachmentAccessResult.UnsupportedContentType => Results.Json(
                     new { code = "unsupported_content_type", allowed = AttachmentService.AllowedContentTypes },
                     statusCode: StatusCodes.Status415UnsupportedMediaType),
+                AttachmentAccessResult.TooManyFiles => Results.Json(
+                    new { code = "attachment_limit_reached", maxFilesPerRecord = service.MaxFilesPerRecord },
+                    statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Created($"/api/attachments/{item!.Id}", item),
             };
         }).DisableAntiforgery();
+
+        // Лимиты — до попытки загрузки, чтобы фронт мог дизейблить кнопку/показать
+        // «осталось N из 8» вместо того, чтобы узнавать о лимите только по факту отказа.
+        group.MapGet("/attachments/limits", (AttachmentService service) => Results.Ok(service.Limits));
 
         group.MapGet("/medical-records/{recordId:guid}/attachments", async (
             Guid recordId, AttachmentService service, ICurrentUser currentUser, CancellationToken ct) =>

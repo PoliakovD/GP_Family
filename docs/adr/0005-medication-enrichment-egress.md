@@ -90,6 +90,26 @@ push-релеями (ADR-0004), активный на сегодня хост: *
 умолчанию в `.env.example`; в реальном `.env` дев-окружения активен `Yandex`) ни одно из этих
 правил не задействуется — `NullMedicationSearchProvider` не открывает соединений.
 
+## Расширение на справочник лабораторных показателей (ветка medicalrecords)
+
+Тот же egress-канал (`searchapi.api.cloud.yandex.net`/`api.search.brave.com`, тот же
+`IMedicationSearchProvider`, переключаемый `Enrichment:Provider`) теперь наполняет и второй
+обезличенный справочник — `kb.global_lab_analytes_kb` (референсные диапазоны/пояснения к
+лабораторным показателям, зеркало конвейера выше: `LabAnalyteEnrichmentProcessor` →
+`LabAnalyteKbSummarizer` → `LabAnalyteKbWriter`). Решения 1-9 применяются без изменений — наружу
+уходит только нормализованное имя показателя (`LabAnalyteNormalizer.Normalize`), тот же дедуп по
+`LabAnalyteEnrichmentJobs.NormalizedName`, тот же антигаллюцинационный гейт
+(`LabAnalyteKbSummarizer` требует `usedSourceIndexes`). Два уточнения:
+
+- **Доверенные домены — отдельный список**, `EnrichmentOptions.AnalyteTrustedDomains` (по
+  умолчанию `helix.ru`, `invitro.ru`, `gemotest.ru`, `kdlmed.ru`, `cmd-online.ru`) — реестры
+  лекарств (`TrustedDomains`) бесполезны для референсных диапазонов анализов. Провайдер выбирает
+  список и формулировку запроса по параметру `WebSearchTopic` (`Medication`/`LabAnalyte`).
+- **Месячная квота — общая на оба конвейера** (`EnrichmentQuotaService.MonthlyQuotaExceededAsync`
+  считает `ExternalSearchAt` по ОБЕИМ таблицам задач) — они делят одного и того же внешнего
+  провайдера и один и тот же `Enrichment:MonthlyQuota`, отдельный счётчик на конвейер позволил бы
+  вдвое превысить реальный лимит.
+
 ## Последствия
 
 - Обновлён чек-лист/allowlist ADR-0001 п.3 — добавлен пункт «внешний поиск для обогащения

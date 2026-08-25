@@ -58,18 +58,122 @@
           <p class="mb-0">{{ item.description }}</p>
         }
 
-        <input class="input" type="file" (change)="handleUpload(item.id, $event)" />
+        <input
+          class="input"
+          type="file"
+          multiple
+          [accept]="acceptedFileTypes"
+          [disabled]="uploading || remainingSlots(item.id) === 0"
+          (change)="handleUpload(item.id, $event)"
+        />
+        @if (attachmentLimits; as limits) {
+          <div class="muted" style="font-size:12px">
+            До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
+            @if (remainingSlots(item.id); as room) {
+              — осталось {{ room }}
+            } @else if (remainingSlots(item.id) === 0) {
+              — лимит достигнут
+            }
+          </div>
+        }
+        @if (uploading) {
+          <app-loading-spinner text="Загружаем…" />
+        }
 
         @if (attachmentsFor(item.id).length > 0) {
           <ul class="list-unstyled mb-0">
             @for (a of attachmentsFor(item.id); track a.id) {
-              <li>
-                <button class="btn btn-ghost btn-sm" (click)="handleOpenAttachment(a.id)">
+              <li class="d-flex align-items-center gap-2">
+                <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
                   <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
+                </button>
+                <button
+                  class="btn btn-secondary btn-sm text-nowrap"
+                  [disabled]="recognizingKey === recognizeKeyFor(item.id, a.id)"
+                  (click)="handleRecognize(item, a.id)"
+                >
+                  @if (recognizingKey === recognizeKeyFor(item.id, a.id)) {
+                    <span class="recognize-spinner" aria-hidden="true"></span>
+                  } @else {
+                    <i class="ph ph-magic-wand" aria-hidden="true"></i>
+                  }
+                  Распознать
                 </button>
               </li>
             }
           </ul>
+        }
+
+        @if (extractionStatusByRecord[item.id]; as status) {
+          @if (status.status === ExtractionJobStatus.Running || status.status === ExtractionJobStatus.Pending) {
+            <div class="d-flex align-items-center gap-2 muted" style="font-size:12px">
+              <span class="recognize-spinner" aria-hidden="true"></span> {{ stageLabel[status.stage] ?? 'Обрабатываем…' }}
+            </div>
+          } @else if (status.status === ExtractionJobStatus.Failed) {
+            <div class="alert-danger mb-0" style="font-size:12px">{{ status.error ?? 'Не удалось распознать документ.' }}</div>
+          } @else if (status.status === ExtractionJobStatus.Skipped) {
+            <div class="muted" style="font-size:12px">Распознавание пропущено: {{ status.error }}</div>
+          }
+        }
+
+        @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
+          <div class="table-responsive">
+            <table class="indicators-table">
+              <thead>
+                <tr>
+                  <th>Показатель</th>
+                  <th>Значение</th>
+                  <th>Норма</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (ind of indicatorsFor(item.id); track ind.id) {
+                  <tr>
+                    <td>{{ ind.displayName }}</td>
+                    <td [class]="flagClass(ind.flag)">{{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}</td>
+                    <td class="muted">{{ indicatorReference(ind) ?? '—' }}</td>
+                    <td [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          @if (summaryByRecord[item.id]; as summary) {
+            <div class="card-kicker mt-2">Резюме</div>
+            @if (summary.plainSummary) {
+              <p class="mb-1">{{ summary.plainSummary }}</p>
+            }
+            @if (summary.deviations.length > 0) {
+              <ul class="mb-1" style="font-size:13px">
+                @for (d of summary.deviations; track d.name) {
+                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                }
+              </ul>
+            }
+            @if (summary.questionsForDoctor.length > 0) {
+              <div class="card-kicker mt-2">Вопросы врачу</div>
+              <ul class="mb-1" style="font-size:13px">
+                @for (q of summary.questionsForDoctor; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            }
+            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+          }
+        }
+
+        @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
+          @if (conclusion.diagnosis) {
+            <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
+          }
+          @if (conclusion.recommendations) {
+            <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
+          }
+          @if (conclusion.prescriptions) {
+            <p class="mb-0"><strong>Назначения:</strong> {{ conclusion.prescriptions }}</p>
+          }
         }
       </div>
     }

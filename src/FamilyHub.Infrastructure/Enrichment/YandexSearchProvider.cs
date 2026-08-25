@@ -28,11 +28,15 @@ public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOpti
 
     public string Name => "Yandex";
 
-    public async Task<IReadOnlyList<WebSnippet>> SearchAsync(string normalizedName, CancellationToken ct = default)
+    public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
+        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication, CancellationToken ct = default)
     {
         var opts = options.Value;
+        var messageText = topic == WebSearchTopic.LabAnalyte
+            ? $"{normalizedName}: что показывает анализ, референсные (нормальные) значения, о чём говорит повышение и понижение"
+            : $"{normalizedName}: инструкция по применению, показания, форма выпуска, условия хранения, влияние на управление транспортом";
         var request = new GenSearchRequest(
-            Messages: [new GenSearchMessage($"{normalizedName}: инструкция по применению, показания, форма выпуска, условия хранения, влияние на управление транспортом", "ROLE_USER")],
+            Messages: [new GenSearchMessage(messageText, "ROLE_USER")],
             FolderId: opts.FolderId ?? string.Empty,
             FixMisspell: true,
             SearchType: "SEARCH_TYPE_RU");
@@ -68,7 +72,7 @@ public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOpti
             return [];
         }
 
-        var trustedDomains = opts.TrustedDomains;
+        var trustedDomains = topic == WebSearchTopic.LabAnalyte ? opts.AnalyteTrustedDomains : opts.TrustedDomains;
         var usedTrustedSources = (parsed.Sources ?? [])
             .Where(s => s.Used && !string.IsNullOrWhiteSpace(s.Url) && IsTrustedDomain(s.Url!, trustedDomains))
             .ToList();

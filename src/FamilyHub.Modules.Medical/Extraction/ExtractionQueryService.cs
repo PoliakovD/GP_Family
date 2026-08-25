@@ -47,6 +47,22 @@ public class ExtractionQueryService(AppDbContext db, MedicalRecordService medica
         return (ExtractionQueryResult.Success, items.Select(ToDto).ToList());
     }
 
+    /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
+    /// GetSummaryAsync для показателей анализа (Kind=Analysis использует SummaryJson, не это поле).</summary>
+    public async Task<(ExtractionQueryResult Result, VisitConclusion? Item)> GetConclusionAsync(
+        Guid recordId, Guid userId, CancellationToken ct = default)
+    {
+        var access = await CheckAccessAsync(recordId, userId, ct, writeAudit: true);
+        if (access != ExtractionQueryResult.Success) return (access, null);
+
+        var extractedDataJson = await db.MedicalRecords.AsNoTracking()
+            .Where(r => r.Id == recordId).Select(r => r.ExtractedDataJson).FirstOrDefaultAsync(ct);
+        if (string.IsNullOrEmpty(extractedDataJson)) return (ExtractionQueryResult.NotFound, null);
+
+        var conclusion = JsonSerializer.Deserialize<VisitConclusion>(extractedDataJson);
+        return conclusion is null ? (ExtractionQueryResult.NotFound, null) : (ExtractionQueryResult.Success, conclusion);
+    }
+
     public async Task<(ExtractionQueryResult Result, RecordSummaryResponse? Item)> GetSummaryAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
     {

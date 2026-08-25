@@ -18,9 +18,13 @@ public class BraveSearchProvider(HttpClient httpClient, IOptions<EnrichmentOptio
 {
     public string Name => "Brave";
 
-    public async Task<IReadOnlyList<WebSnippet>> SearchAsync(string normalizedName, CancellationToken ct = default)
+    public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
+        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication, CancellationToken ct = default)
     {
-        var query = Uri.EscapeDataString($"{normalizedName} инструкция по применению");
+        var queryText = topic == WebSearchTopic.LabAnalyte
+            ? $"{normalizedName} анализ норма референсные значения"
+            : $"{normalizedName} инструкция по применению";
+        var query = Uri.EscapeDataString(queryText);
         var url = $"res/v1/web/search?q={query}&country=ru&search_lang=ru&ui_lang=ru&count=10";
 
         BraveSearchResponse? parsed;
@@ -41,7 +45,7 @@ public class BraveSearchProvider(HttpClient httpClient, IOptions<EnrichmentOptio
         }
 
         var results = parsed?.Web?.Results ?? [];
-        var trustedDomains = options.Value.TrustedDomains;
+        var trustedDomains = topic == WebSearchTopic.LabAnalyte ? options.Value.AnalyteTrustedDomains : options.Value.TrustedDomains;
 
         var snippets = results
             .Where(r => !string.IsNullOrWhiteSpace(r.Url) && !string.IsNullOrWhiteSpace(r.Description))

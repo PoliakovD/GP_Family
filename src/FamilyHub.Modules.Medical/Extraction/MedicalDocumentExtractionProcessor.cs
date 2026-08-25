@@ -19,11 +19,13 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// очередь "extraction" с одним воркером (LM Studio — один ноутбук за WireGuard, параллелить
 /// нечего), AutomaticRetry только на настоящие сбои, ожидаемые исходы — Failed без ретрая.
 ///
-/// Известное упрощение этой ветки (см. план): KB-фолбэк референсов (kbFallback в
-/// IndicatorFlagCalculator.Calculate) сейчас всегда null — сам конвейер обогащения справочника
-/// показателей (аналог MedicationEnrichmentProcessor для kb.global_lab_analytes_kb) в этой ветке
-/// не реализован, привязка к KB (KbAnalyteId) только читает то, что уже могло быть туда занесено
-/// вручную/сидом. Референс из самого бланка при этом работает полностью — это основной случай.
+/// KB-фолбэк референсов (kbFallback в IndicatorFlagCalculator.Calculate) — из
+/// GlobalLabAnalyteKb.PayloadJson.refRanges при KB-совпадении, с фильтром по возрасту, если
+/// запись сделана для FamilyDependent (см. ResolveAgeYearsAsync — пол пациента нигде в домене не
+/// хранится, только возраст). Промах поиска (KbLookupKind != Hit) ставит показатель в очередь
+/// обогащения справочника (LabAnalyteEnrichmentRequestService → LabAnalyteEnrichmentProcessor,
+/// зеркало MedicationEnrichmentProcessor этапа 4) — следующий анализ с тем же показателем найдёт
+/// уже готовый диапазон.
 /// </summary>
 [Queue("extraction")]
 [AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
@@ -32,6 +34,7 @@ public class MedicalDocumentExtractionProcessor(
     AttachmentService attachments,
     IMedicalDocumentExtractor extractor,
     LabAnalyteKbLookupService kbLookup,
+    LabAnalyteEnrichmentRequestService enrichmentRequest,
     LabSummarizer summarizer,
     IDomainEventPublisher publisher,
     ILogger<MedicalDocumentExtractionProcessor> logger)
@@ -90,7 +93,7 @@ public class MedicalDocumentExtractionProcessor(
             await db.SaveChangesAsync(ct);
 
             if (record.Kind == MedicalRecordKind.Analysis)
-                await ProcessAnalysisAsync(job, record.Id, record.OwnerUserId, record.RecordDate, result, ct);
+                await ProcessAnalysisAsync(job, record, result, ct);
             else
                 await ProcessVisitAsync(job, record, result, ct);
         }
@@ -104,7 +107,7 @@ public class MedicalDocumentExtractionProcessor(
     }
 
     private async Task ProcessAnalysisAsync(
-        Domain.Entities.MedicalDocumentExtractionJob job, Guid recordId, Guid ownerUserId, DateOnly recordDate,
+        Domain.Entities.MedicalDocumentExtractionJob job, Domain.Entities.MedicalRecord record,
         ExtractionResult result, CancellationToken ct)
     {
         if (result.LabIndicators is null || result.LabIndicators.Count == 0)
@@ -116,21 +119,49 @@ public class MedicalDocumentExtractionProcessor(
         job.Stage = ExtractionStage.Linking;
         await db.SaveChangesAsync(ct);
 
+        var recordId = record.Id;
+        var ownerUserId = record.OwnerUserId;
+        var recordDate = record.RecordDate;
+
         // Повторное распознавание того же вложения полностью заменяет ранее сохранённые
         // показатели этой записи — не накапливаем дубликаты между попытками.
         await db.LabIndicators.Where(i => i.MedicalRecordId == recordId).ExecuteDeleteAsync(ct);
 
+        var normalized = result.LabIndicators
+            .Select(dto => (Dto: dto, AnalyteKey: LabAnalyteNormalizer.Normalize(dto.Name)))
+            .Where(x => x.AnalyteKey.Length > 0)
+            .ToList();
+
+        // Один Lookup на уникальное имя — один и тот же показатель может повторяться на одном бланке.
+        var lookups = new Dictionary<string, Kb.KbLookupResult>();
+        foreach (var (_, analyteKey) in normalized)
+        {
+            if (!lookups.ContainsKey(analyteKey))
+                lookups[analyteKey] = await kbLookup.LookupAsync(analyteKey, ct);
+        }
+
+        var hitIds = lookups.Values.Where(l => l.Kind == Kb.KbLookupKind.Hit).Select(l => l.KbId!.Value).Distinct().ToList();
+        Dictionary<Guid, string> kbPayloads = hitIds.Count == 0
+            ? []
+            : await db.GlobalLabAnalytesKb.AsNoTracking()
+                .Where(k => hitIds.Contains(k.Id))
+                .Select(k => new { k.Id, k.PayloadJson })
+                .ToDictionaryAsync(x => x.Id, x => x.PayloadJson, ct);
+
+        var ageYears = await ResolveAgeYearsAsync(record, ct);
+
         var entities = new List<DomainLabIndicator>();
         var position = 0;
-        foreach (var dto in result.LabIndicators)
+        foreach (var (dto, analyteKey) in normalized)
         {
-            var analyteKey = LabAnalyteNormalizer.Normalize(dto.Name);
-            if (analyteKey.Length == 0) continue;
-
-            var lookup = await kbLookup.LookupAsync(analyteKey, ct);
+            var lookup = lookups[analyteKey];
             var kbAnalyteId = lookup.Kind == Kb.KbLookupKind.Hit ? lookup.KbId : null;
 
-            var flag = IndicatorFlagCalculator.Calculate(dto, kbFallback: null, ageYears: null);
+            KbReferenceRange? kbFallback = null;
+            if (kbAnalyteId is not null && kbPayloads.TryGetValue(kbAnalyteId.Value, out var payloadJson))
+                kbFallback = PickBestRange(LabAnalyteKbPayload.ParseRefRanges(payloadJson), ageYears);
+
+            var flag = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears);
 
             entities.Add(new DomainLabIndicator
             {
@@ -151,13 +182,18 @@ public class MedicalDocumentExtractionProcessor(
                 RefText = dto.RefText,
                 CreatedAt = DateTime.UtcNow,
             });
+
+            // Промах/неуверенный кандидат — ставим показатель в очередь обогащения справочника.
+            // Дедуп на уровне БД (см. LabAnalyteEnrichmentRequestService) — повтор того же
+            // показателя на этом же бланке или в другом анализе не плодит вторую задачу.
+            if (lookup.Kind != Kb.KbLookupKind.Hit)
+                await enrichmentRequest.RequestAsync(analyteKey, dto.Name, null, ownerUserId, ct);
         }
 
         db.LabIndicators.AddRange(entities);
         job.Stage = ExtractionStage.Summarizing;
         await db.SaveChangesAsync(ct);
 
-        var record = await db.MedicalRecords.FirstAsync(r => r.Id == recordId, ct);
         var summarized = await summarizer.SummarizeAsync(entities, ct);
         record.SummaryJson = summarized.Success && summarized.Summary is not null
             ? JsonSerializer.Serialize(summarized.Summary)
@@ -177,6 +213,39 @@ public class MedicalDocumentExtractionProcessor(
         logger.LogInformation(
             "MedicalDocumentExtractionJob {JobId}: распознано {Count} показателей ({Deviations} отклонений).",
             job.Id, entities.Count, deviationCount);
+    }
+
+    /// <summary>Возраст пациента на дату анализа — только если запись сделана для FamilyDependent
+    /// с известной датой рождения (User.BirthDate нигде не хранится, см. IndicatorFlagCalculator).</summary>
+    private async Task<int?> ResolveAgeYearsAsync(Domain.Entities.MedicalRecord record, CancellationToken ct)
+    {
+        if (record.FamilyDependentId is null) return null;
+
+        var birthDate = await db.FamilyDependents.AsNoTracking()
+            .Where(d => d.Id == record.FamilyDependentId).Select(d => d.BirthDate).FirstOrDefaultAsync(ct);
+        if (birthDate is null) return null;
+
+        var age = record.RecordDate.Year - birthDate.Value.Year;
+        if (record.RecordDate < birthDate.Value.AddYears(age)) age--;
+        return age >= 0 ? age : null;
+    }
+
+    /// <summary>Диапазон под конкретный возраст, если есть; иначе общий (без возрастных границ),
+    /// иначе первый попавшийся — лучше приблизительный ориентир, чем никакого.</summary>
+    private static KbReferenceRange? PickBestRange(List<KbReferenceRange> ranges, int? ageYears)
+    {
+        if (ranges.Count == 0) return null;
+
+        if (ageYears is not null)
+        {
+            var ageMatch = ranges.FirstOrDefault(r =>
+                (r.AgeFrom is not null || r.AgeTo is not null) &&
+                (r.AgeFrom is null || ageYears >= r.AgeFrom) &&
+                (r.AgeTo is null || ageYears <= r.AgeTo));
+            if (ageMatch is not null) return ageMatch;
+        }
+
+        return ranges.FirstOrDefault(r => r.AgeFrom is null && r.AgeTo is null) ?? ranges[0];
     }
 
     private async Task ProcessVisitAsync(

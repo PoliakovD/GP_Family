@@ -23,6 +23,7 @@ export const NotificationType = {
     MemberApproved: 4,
     MedicalRecordShared: 5,
     MedicationEnriched: 6,
+    MedicalDocumentExtracted: 7,
 } as const;
 
 export interface FamilySummary {
@@ -138,8 +139,7 @@ export interface BirthdayInput {
 export const MedicalRecordKind = {Analysis: 0, DoctorVisit: 1} as const;
 export type MedicalRecordKind = typeof MedicalRecordKind[keyof typeof MedicalRecordKind];
 
-/** Заготовка под OCR-конвейер (задачи 5.2/5.3 — ещё не реализован): статус распознавания вложения.
- * Сейчас у всех записей всегда None. */
+/** Статус распознавания записи (MedicalRecord.ExtractionStatus) — задачи 5.2/5.3. */
 export const ExtractionStatus = {None: 0, Pending: 1, Ready: 2, Failed: 3} as const;
 export type ExtractionStatus = typeof ExtractionStatus[keyof typeof ExtractionStatus];
 
@@ -303,4 +303,89 @@ export interface AppNotification {
     createdAt: string;
     isRead: boolean;
     readAt: string | null;
+}
+
+// Ветка medicalrecords (задачи 5.2/5.3): конвейер извлечения показателей анализов и заключений
+// врача — см. FamilyHub.Modules.Medical.Extraction.
+
+/** Итог сравнения показателя с референсным диапазоном (бланк приоритетнее справочника). */
+export const IndicatorFlag = { Unknown: 0, Low: 1, Normal: 2, High: 3, Critical: 4 } as const;
+export type IndicatorFlag = typeof IndicatorFlag[keyof typeof IndicatorFlag];
+
+/** Прогресс задачи распознавания внутри одного прогона — детальнее MedicalRecord.extractionStatus. */
+export const ExtractionStage = { Queued: 0, Decoding: 1, Ocr: 2, Structuring: 3, Linking: 4, Summarizing: 5 } as const;
+export type ExtractionStage = typeof ExtractionStage[keyof typeof ExtractionStage];
+
+/** Статус самой задачи Hangfire (не путать с ExtractionStatus на MedicalRecord — тот проще). */
+export const ExtractionJobStatus = { Pending: 0, Running: 1, Completed: 2, Failed: 3, Skipped: 4 } as const;
+export type ExtractionJobStatus = typeof ExtractionJobStatus[keyof typeof ExtractionJobStatus];
+
+export interface ExtractionStatusResponse {
+    status: number; // ExtractionJobStatus
+    stage: number; // ExtractionStage
+    indicatorCount: number;
+    error: string | null;
+    createdAt: string;
+    completedAt: string | null;
+}
+
+export interface IndicatorDto {
+    id: string;
+    analyteKey: string;
+    displayName: string;
+    flag: number; // IndicatorFlag
+    position: number;
+    valueRaw: string;
+    unit: string | null;
+    refLowText: string | null;
+    refHighText: string | null;
+    refText: string | null;
+    recordDate: string; // DateOnly "yyyy-MM-dd"
+    medicalRecordId: string;
+}
+
+/** Одна точка истории показателя (GET /api/indicators/{analyteKey}) — для спарклайна. */
+export interface IndicatorHistoryPoint {
+    recordDate: string;
+    valueRaw: string;
+    /** Только если ValueRaw распарсился как число (invariant-culture) — иначе null (качественный результат). */
+    valueNumericText: string | null;
+    flag: number; // IndicatorFlag
+    medicalRecordId: string;
+}
+
+/** Последнее значение по каждому показателю среди СВОИХ записей (GET /api/indicators). */
+export interface MyIndicatorSummary {
+    analyteKey: string;
+    displayName: string;
+    valueRaw: string;
+    unit: string | null;
+    flag: number; // IndicatorFlag
+    lastRecordDate: string;
+}
+
+/** Заключение врача (Kind=DoctorVisit), GET /api/medical-records/{id}/conclusion — MedicalRecord.ExtractedDataJson. */
+export interface VisitConclusion {
+    diagnosis: string | null;
+    recommendations: string | null;
+    prescriptions: string | null;
+}
+
+export interface LabSummaryDeviation {
+    name: string;
+    meaning: string;
+}
+
+/** Форма MedicalRecord.SummaryJson (GET /api/medical-records/{id}/summary) — LLM-резюме анализа. */
+export interface RecordSummaryResponse {
+    plainSummary: string | null;
+    deviations: LabSummaryDeviation[];
+    questionsForDoctor: string[];
+    disclaimer: string;
+}
+
+/** Лимиты загрузки вложений (GET /api/attachments/limits) — настраиваются в env, см. AttachmentUploadOptions. */
+export interface AttachmentLimits {
+    maxFileSizeBytes: number;
+    maxFilesPerRecord: number;
 }

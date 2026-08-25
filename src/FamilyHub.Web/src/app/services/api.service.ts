@@ -4,12 +4,16 @@ import { firstValueFrom } from 'rxjs';
 import {
   AppNotification,
   Attachment,
+  AttachmentLimits,
   Birthday,
   BirthdayInput, CurrentMember,
   EnrichmentRefreshOutcome,
+  ExtractionStatusResponse,
   FamilyDependent,
   FamilyDependentInput,
   FamilySummary,
+  IndicatorDto,
+  IndicatorHistoryPoint,
   InviteCreated,
   KbListResponse,
   KbMedicationCard,
@@ -21,10 +25,12 @@ import {
   MedicationOcrResponse,
   Medkit,
   MedkitInput,
+  MyIndicatorSummary,
   NotificationPreference,
-  PendingMember, RemoveMemberResult,
+  PendingMember, RecordSummaryResponse, RemoveMemberResult,
   SearchResponse,
   VapidPublicKeyResponse,
+  VisitConclusion,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -258,6 +264,9 @@ export class ApiService {
 
   getAttachmentUrl = (id: string) => this.get<{ url: string }>(`/api/attachments/${id}/url`);
 
+  /** Лимиты загрузки (до попытки — чтобы UI мог дизейблить кнопку/показать «осталось N из 8»). */
+  getAttachmentLimits = () => this.get<AttachmentLimits>('/api/attachments/limits');
+
   async uploadAttachment(recordId: string, file: File): Promise<Attachment> {
     this.log.log('api', 'info', `POST /api/medical-records/${recordId}/attachments (${file.name})`);
     const formData = new FormData();
@@ -274,6 +283,30 @@ export class ApiService {
       throw err;
     }
   }
+
+  // Конвейер извлечения показателей (ветка medicalrecords, задачи 5.2/5.3) — кнопка «Распознать»
+  // на вложении, статус/показатели/резюме конкретной записи, «мои показатели» + история для спарклайна.
+  requestExtraction = (recordId: string, attachmentId: string) =>
+    this.post<void>(`/api/medical-records/${recordId}/attachments/${attachmentId}/extract`);
+
+  getExtractionStatus = (recordId: string) =>
+    this.get<ExtractionStatusResponse>(`/api/medical-records/${recordId}/extraction`);
+
+  getRecordIndicators = (recordId: string) =>
+    this.get<IndicatorDto[]>(`/api/medical-records/${recordId}/indicators`);
+
+  getRecordSummary = (recordId: string) =>
+    this.get<RecordSummaryResponse>(`/api/medical-records/${recordId}/summary`);
+
+  /** Заключение врача (Kind=DoctorVisit) — аналог getRecordSummary для Kind=Analysis. */
+  getRecordConclusion = (recordId: string) =>
+    this.get<VisitConclusion>(`/api/medical-records/${recordId}/conclusion`);
+
+  /** Последнее значение по каждому показателю среди своих записей — /health/indicators. */
+  getMyIndicators = () => this.get<MyIndicatorSummary[]>('/api/indicators');
+
+  getIndicatorHistory = (analyteKey: string) =>
+    this.get<IndicatorHistoryPoint[]>(`/api/indicators/${encodeURIComponent(analyteKey)}`);
 
   // Оповещения
   getNotifications = (unreadOnly: boolean) =>

@@ -40,6 +40,7 @@ using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.Modules.Birthdays;
 using FamilyHub.Modules.Medical;
+using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.Consumers;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Extraction;
@@ -104,6 +105,7 @@ builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(E
 builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection(ExtractionOptions.SectionName));
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
+builder.Services.Configure<AttachmentUploadOptions>(builder.Configuration.GetSection(AttachmentUploadOptions.SectionName));
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -675,11 +677,16 @@ builder.Services.AddHealthChecks()
     .AddCheck<KafkaHealthCheck>("kafka", tags: ["ready"])
     .AddCheck<LmStudioHealthCheck>("llm", tags: ["llm"]);
 
-// Явный запас над AttachmentService.MaxSizeBytes (30 МиБ): без этого implicit-дефолт Kestrel
-// (~28.6 МиБ, 30_000_000 байт) обрубал бы запрос СВОЕЙ, менее информативной ошибкой раньше,
-// чем срабатывала бы наша проверка с понятным телом ответа ({code, maxSizeBytes}) — см. аудит
-// module-review-2026-08-02/03-medical-records-attachments.md, находка 2.
-builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 40 * 1024 * 1024);
+// Явный запас над Attachments:MaxFileSizeBytes: без этого implicit-дефолт Kestrel (~28.6 МиБ,
+// 30_000_000 байт) обрубал бы запрос СВОЕЙ, менее информативной ошибкой раньше, чем срабатывала
+// бы наша проверка с понятным телом ответа ({code, maxSizeBytes}) — см. аудит
+// module-review-2026-08-02/03-medical-records-attachments.md, находка 2. builder.Configuration
+// уже наполнена на этом этапе (до app.Build()), поэтому читаем секцию напрямую, а не через
+// IOptions — сервис-провайдер ещё не построен.
+var attachmentUploadOptions = builder.Configuration.GetSection(AttachmentUploadOptions.SectionName).Get<AttachmentUploadOptions>()
+    ?? new AttachmentUploadOptions();
+builder.WebHost.ConfigureKestrel(kestrel =>
+    kestrel.Limits.MaxRequestBodySize = attachmentUploadOptions.MaxFileSizeBytes + 5 * 1024 * 1024);
 
 var app = builder.Build();
 

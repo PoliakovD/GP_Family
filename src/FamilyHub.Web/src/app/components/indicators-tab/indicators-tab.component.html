@@ -1,0 +1,56 @@
+<div>
+  @if (error) {
+    <div class="alert-danger mb-2">{{ error }}</div>
+  }
+
+  @if (loading) {
+    <app-loading-spinner />
+  } @else if (items.length === 0) {
+    <p class="muted">
+      Показателей пока нет — нажмите «Распознать» на вложении к анализу на вкладке «Анализы»,
+      и они появятся здесь.
+    </p>
+  } @else {
+    @for (item of items; track item.analyteKey) {
+      <div class="card mb-2 card-clickable" (click)="openDetail(item)">
+        <div class="d-flex align-items-center justify-content-between gap-2">
+          <div>
+            <strong class="card-title">{{ item.displayName }}</strong>
+            <div class="card-meta">{{ item.lastRecordDate }}</div>
+          </div>
+          <div [class]="flagClass(item.flag)" style="font-size:15px;font-weight:600;white-space:nowrap">
+            {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
+          </div>
+        </div>
+      </div>
+    }
+  }
+
+  <app-bottom-sheet [title]="selected?.displayName ?? 'Показатель'" [open]="detailOpen" (closed)="closeDetail()">
+    @if (detailLoading) {
+      <app-loading-spinner />
+    } @else if (detailError) {
+      <div class="alert-danger mb-0">{{ detailError }}</div>
+    } @else if (history.length > 0) {
+      <div class="mb-3">
+        <app-sparkline [points]="sparklinePoints" />
+      </div>
+      <table class="indicator-history-table">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Значение</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of history; track p.recordDate + p.medicalRecordId) {
+            <tr>
+              <td>{{ p.recordDate }}</td>
+              <td [class]="flagClass(p.flag)">{{ p.valueRaw }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </app-bottom-sheet>
+</div>

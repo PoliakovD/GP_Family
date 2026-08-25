@@ -1,0 +1,21 @@
+.indicator-flag-ok { color: #2f9e44; }
+.indicator-flag-warning { color: #f08c00; }
+.indicator-flag-danger { color: #e03131; font-weight: 600; }
+.indicator-flag-unknown { color: var(--color-neutral-500); }
+
+.indicator-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  th {
+    color: var(--color-neutral-600);
+    font-weight: 500;
+  }
+}

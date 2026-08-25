@@ -189,6 +189,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/kb-tab/kb-tab.component').then((m) => m.KbTabComponent),
       },
+      {
+        // Ветка medicalrecords (задачи 5.2/5.3): «мои показатели» — последнее значение по каждому
+        // распознанному лабораторному показателю, история со спарклайном по клику.
+        path: 'indicators',
+        loadComponent: () =>
+          import('./components/indicators-tab/indicators-tab.component').then(
+            (m) => m.IndicatorsTabComponent,
+          ),
+      },
     ],
   },
   // Обратная совместимость со старыми прямыми ссылками/букмарками на плоские роуты.

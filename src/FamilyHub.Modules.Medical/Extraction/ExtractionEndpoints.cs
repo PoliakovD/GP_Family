@@ -47,6 +47,13 @@ public static class ExtractionEndpoints
             return MapQueryResult(result, item);
         });
 
+        records.MapGet("/{recordId:guid}/conclusion", async (
+            Guid recordId, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, item) = await service.GetConclusionAsync(recordId, currentUser.UserId, ct);
+            return MapQueryResult(result, item);
+        });
+
         var indicators = app.MapGroup("/api/indicators").RequireAuthorization();
 
         indicators.MapGet("/", async (ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>

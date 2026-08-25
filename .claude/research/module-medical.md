@@ -63,12 +63,40 @@ LLM-сводка `LabSummarizer` (простым языком + отклонен
 `GET /api/indicators`, `GET /api/indicators/{analyteKey}`), видимость — тот же предикат, что у
 самой записи. Поиск по показателям — `SearchService.SearchIndicatorsAsync`
 (`SearchResultType.Indicator`, добавлен последним значением enum).
-**Известный пробел:** конвейер обогащения самого справочника `kb.global_lab_analytes_kb`
-(аналог `MedicationEnrichmentProcessor` для показателей — веб-поиск+суммаризация при промахе)
-не реализован в этой ветке — таблица существует и участвует в каскадном поиске, но заполняется
-только вручную/сидом; `IndicatorFlagCalculator` при этом продолжает работать по референсу из
-самого бланка (основной случай). Общая с медикаментами проверка на персональный контекст в
-payload вынесена в `KbIsolationGuard` (`Kb/`), используется обоими writer'ами.
+Конвейер обогащения справочника `kb.global_lab_analytes_kb` реализован — зеркало
+`MedicationEnrichmentProcessor` на другой предмет: `LabAnalyteEnrichmentRequestService` ставит
+задачу в очередь `enrichment` при промахе `LabAnalyteKbLookupService` (вызывается из
+`MedicalDocumentExtractionProcessor` на этапе Linking для каждого нераспознанного показателя,
+дедуп — частичный уникальный индекс по `NormalizedName` среди Pending/Running), обработка —
+`LabAnalyteEnrichmentProcessor`: повторная проверка kb → `IMedicationSearchProvider.SearchAsync(
+name, WebSearchTopic.LabAnalyte)` (отдельный список доверенных доменов —
+`EnrichmentOptions.AnalyteTrustedDomains`: helix.ru/invitro.ru/gemotest.ru/kdlmed.ru/
+cmd-online.ru, реестры лекарств для лабораторных диапазонов бесполезны) → `LabAnalyteKbSummarizer`
+(тот же антигаллюцинационный гейт, что и `MedicationSummarizer`) → `LabAnalyteKbWriter` (upsert,
+`KbIsolationGuard`). Месячная квота — общая на оба конвейера обогащения
+(`EnrichmentQuotaService`, считает обе таблицы задач: `MedicationEnrichmentJobs` +
+`LabAnalyteEnrichmentJobs`), т.к. оба делят одного и того же внешнего провайдера. При KB-совпадении
+`MedicalDocumentExtractionProcessor` парсит `GlobalLabAnalyteKb.PayloadJson.refRanges`
+(`LabAnalyteKbPayload`) и подставляет диапазон под возраст пациента (только если запись сделана
+для `FamilyDependent` с известной `BirthDate` — пол нигде не хранится) как fallback, когда бланк
+не напечатал собственный референс. См. дополнение к [ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md).
+Общая с медикаментами проверка на персональный контекст в payload — `KbIsolationGuard` (`Kb/`),
+используется обоими writer'ами.
+
+Фронт (`FamilyHub.Web`): кнопка «Распознать» на каждом вложении мед-записи
+(`medical-records-panel.component.ts`) ставит задачу и опрашивает `GET .../extraction` до
+терминального статуса, дальше показывает таблицу показателей с подсветкой отклонений + LLM-резюме
+(Kind=Analysis) либо разобранное заключение врача (Kind=DoctorVisit, `GET .../conclusion` —
+`MedicalRecord.ExtractedDataJson`). Вкладка «Показатели» хаба «Здоровье» (`indicators-tab`,
+`/health/indicators`) — последнее значение по каждому показателю (`GET /api/indicators`), история
+со спарклайном (`shared/sparkline`, inline SVG без библиотек графиков) по клику
+(`GET /api/indicators/{analyteKey}`).
+
+Лимиты вложений мед-записи — `AttachmentUploadOptions` (env `Attachments__MaxFileSizeBytes`/
+`Attachments__MaxFilesPerRecord`, дефолт 5 МиБ/8 файлов на запись): проверка размера — как раньше,
+проверка количества — новая (`AttachmentAccessResult.TooManyFiles` → 409). Фронт грузит лимиты
+заранее (`GET /api/attachments/limits`) для предвалидации и подписи «осталось N из 8», не только
+ловит отказ постфактум; инпут поддерживает `multiple` + `accept` под допустимые форматы.
 
 Два уровня шаринга, реализованные как отдельные таблицы (не флаги на самой записи):
 

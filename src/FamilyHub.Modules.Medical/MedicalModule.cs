@@ -36,6 +36,13 @@ public static class MedicalModule
         services.AddScoped<ExtractionRequestService>();
         services.AddScoped<ExtractionQueryService>();
         services.AddScoped<MedicalDocumentExtractionProcessor>();
+        // Обогащение справочника показателей (kb.global_lab_analytes_kb) — зеркало конвейера
+        // медикаментов ниже, тот же IMedicationSearchProvider (Program.cs), другой topic
+        // (WebSearchTopic.LabAnalyte) и общая с ним EnrichmentQuotaService.
+        services.AddScoped<LabAnalyteKbWriter>();
+        services.AddScoped<LabAnalyteKbSummarizer>();
+        services.AddScoped<LabAnalyteEnrichmentRequestService>();
+        services.AddScoped<LabAnalyteEnrichmentProcessor>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();
@@ -48,6 +55,7 @@ public static class MedicalModule
         services.AddScoped<KbWriter>();
         services.AddScoped<MedicationSummarizer>();
         services.AddScoped<MedicationSearchCacheService>();
+        services.AddScoped<EnrichmentQuotaService>();
         services.AddScoped<IEnrichmentRequestService, EnrichmentRequestService>();
         services.AddScoped<MedicationEnrichmentProcessor>();
         return services;

@@ -21,6 +21,13 @@ public class EnrichmentOptions
     /// </summary>
     public string[] TrustedDomains { get; set; } = ["grls.rosminzdrav.ru", "vidal.ru", "rlsnet.ru"];
 
+    /// <summary>
+    /// Доверенные домены для справочника ЛАБОРАТОРНЫХ ПОКАЗАТЕЛЕЙ (ветка medicalrecords,
+    /// kb.global_lab_analytes_kb) — отдельный список от TrustedDomains: реестры лекарств
+    /// бесполезны для референсных диапазонов анализов, нужны лаборатории/лабораторные справочники.
+    /// </summary>
+    public string[] AnalyteTrustedDomains { get; set; } = ["helix.ru", "invitro.ru", "gemotest.ru", "kdlmed.ru", "cmd-online.ru"];
+
     /// <summary>Месячный лимит внешних запросов (напр. free-tier Brave — 2000/мес; для Yandex —
     /// зависит от тарифа) — считается по Postgres, не в памяти.</summary>
     public int MonthlyQuota { get; set; } = 2000;

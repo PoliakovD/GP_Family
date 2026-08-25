@@ -9,6 +9,7 @@ using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Attachments;
 
@@ -28,11 +29,18 @@ public class AttachmentService(
     MedicalRecordService medicalRecords,
     IFamilyAccessService familyAccess,
     IMedicalAuditWriter audit,
+    IOptions<AttachmentUploadOptions> uploadOptions,
     ILogger<AttachmentService> logger)
 {
     /// <summary>Явный лимит вместо неявного дефолта Kestrel (см. аудит
-    /// module-review-2026-08-02/03-medical-records-attachments.md, находка 2).</summary>
-    public const long MaxSizeBytes = 30 * 1024 * 1024;
+    /// module-review-2026-08-02/03-medical-records-attachments.md, находка 2) — теперь
+    /// настраивается через AttachmentUploadOptions (env Attachments__MaxFileSizeBytes).</summary>
+    public long MaxSizeBytes => uploadOptions.Value.MaxFileSizeBytes;
+
+    /// <summary>Максимум вложений на одну мед-запись (env Attachments__MaxFilesPerRecord).</summary>
+    public int MaxFilesPerRecord => uploadOptions.Value.MaxFilesPerRecord;
+
+    public AttachmentLimitsDto Limits => new(MaxSizeBytes, MaxFilesPerRecord);
 
     /// <summary>Сканы мед-документов: изображения, PDF, офисные форматы, текст (ветка
     /// medicalrecords расширила список под конвейер извлечения — см.
@@ -73,6 +81,16 @@ public class AttachmentService(
             logger.LogWarning(
                 "Загрузка вложения к мед-записи {RecordId} отклонена: {UserId} не владелец", recordId, ownerUserId);
             return (AttachmentAccessResult.Forbidden, null);
+        }
+
+        var existingCount = await db.FileAttachments
+            .CountAsync(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId, ct);
+        if (existingCount >= MaxFilesPerRecord)
+        {
+            logger.LogWarning(
+                "Загрузка вложения к мед-записи {RecordId} отклонена: уже {Count} вложений, лимит {MaxFilesPerRecord}",
+                recordId, existingCount, MaxFilesPerRecord);
+            return (AttachmentAccessResult.TooManyFiles, null);
         }
 
         fileName = FileNameSanitizer.Sanitize(fileName);
