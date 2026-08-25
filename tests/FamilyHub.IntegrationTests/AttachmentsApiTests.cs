@@ -182,8 +182,11 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateRecordAsync(owner);
 
+        // text/html раньше было здесь — ветка medicalrecords расширила allow-list под конвейер
+        // извлечения (DocumentContentTypes.All), html/csv/txt/rtf/docx/xlsx теперь разрешены.
+        // video/mp4 не входит и не должно входить ни в один формат мед-документа.
         var response = await owner.PostAsync(
-            $"/api/medical-records/{record.Id}/attachments", BuildUpload(contentType: "text/html"));
+            $"/api/medical-records/{record.Id}/attachments", BuildUpload(contentType: "video/mp4"));
 
         response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
     }

@@ -152,11 +152,15 @@ public class ApiForBotTestsFactory : WebApplicationFactory<Program>, IAsyncLifet
         await db.Database.MigrateAsync();
     }
 
+    // Хост должен полностью остановиться ПЕРВЫМ, контейнеры — только после (см. подробное
+    // объяснение в FamilyHubWebFactory.DisposeAsync(), тот же баг был продублирован сюда
+    // независимо): пока хост жив, MassTransit-фоновые сервисы продолжают опрашивать Postgres
+    // по таймеру и ловят "Connection refused" на уже убитый Testcontainers-порт.
     public new async Task DisposeAsync()
     {
+        await base.DisposeAsync();
         await _postgres.DisposeAsync();
         await _minio.DisposeAsync();
-        await base.DisposeAsync();
     }
 
     protected override Microsoft.Extensions.Hosting.IHost CreateHost(Microsoft.Extensions.Hosting.IHostBuilder builder)

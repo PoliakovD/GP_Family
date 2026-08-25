@@ -46,11 +46,22 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
     // virtual (не только new) — KafkaWebFactory должна попасть в вызов через override, иначе
     // xUnit (диспетчеризующий через интерфейс IAsyncLifetime) вызвал бы ТОЛЬКО этот метод, минуя
     // _kafka.DisposeAsync() в производном классе (new без virtual не переопределяет слот интерфейса).
+    //
+    // Хост должен полностью остановиться ПЕРВЫМ, контейнеры — только после (тот же принцип, что
+    // KafkaWebFactory.DisposeAsync() уже соблюдает для Kafka, см. её докстринг). base.DisposeAsync()
+    // здесь — это WebApplicationFactory<Program>.DisposeAsync(), которая останавливает хост и все
+    // IHostedService внутри (MassTransit BusOutboxDeliveryService/InboxCleanupService, Hangfire-
+    // серверы). Пока хост жив, эти фоновые сервисы продолжают опрашивать Postgres по таймеру
+    // (Messaging:Outbox:QueryDelay=500ms выше) — если контейнер уже убит, а хост ещё нет, следующий
+    // тик ловит Npgsql "Connection refused" на уже несуществующий динамический порт Testcontainers
+    // (падало в CI: InboxCleanupService/BusOutboxDeliveryService, "Failed to connect to 127.0.0.1:PORT").
+    // Порядок был исторически обратным здесь единственно в базовом классе — Kafka-версию уже
+    // однажды чинили тем же способом, эту следовало починить тогда же.
     public new virtual async Task DisposeAsync()
     {
+        await base.DisposeAsync();
         await _postgres.DisposeAsync();
         await _minio.DisposeAsync();
-        await base.DisposeAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
