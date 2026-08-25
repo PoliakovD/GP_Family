@@ -57,17 +57,7 @@ public static class MassTransitRegistration
         if (!string.IsNullOrWhiteSpace(options.ExtraConsumerAssemblies))
         {
             foreach (var name in options.ExtraConsumerAssemblies.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                try
-                {
-                    extraAssemblies.Add(Assembly.Load(name));
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"[DIAG] Assembly.Load('{name}') failed: {ex.GetType().FullName}: {ex.Message}\n{ex}");
-                    throw;
-                }
-            }
+                extraAssemblies.Add(Assembly.Load(name));
         }
 
         var allAssemblies = consumerAssemblies.Concat(extraAssemblies).ToList();
@@ -135,6 +125,7 @@ public static class MassTransitRegistration
                     r.AddProducer<MedicationExpiringEvent>(KafkaTopics.MedicationExpiring);
                     r.AddProducer<BirthdayApproachingEvent>(KafkaTopics.BirthdayApproaching);
                     r.AddProducer<MedicationEnrichedEvent>(KafkaTopics.MedicationEnriched);
+                    r.AddProducer<MedicalDocumentExtractedEvent>(KafkaTopics.MedicalDocumentExtracted);
                     // Единственный топик, который Api публикует, но НЕ потребляет — читает его
                     // только FamilyHub.TelegramBot (см. TelegramOutboundPublisher/TelegramOutboundConsumer).
                     r.AddProducer<TelegramMessageRequestedEvent>(KafkaTopics.TelegramOutbound);
@@ -173,6 +164,7 @@ public static class MassTransitRegistration
                         WireTopic<MedicationExpiringEvent>(KafkaTopics.MedicationExpiring);
                         WireTopic<BirthdayApproachingEvent>(KafkaTopics.BirthdayApproaching);
                         WireTopic<MedicationEnrichedEvent>(KafkaTopics.MedicationEnriched);
+                        WireTopic<MedicalDocumentExtractedEvent>(KafkaTopics.MedicalDocumentExtracted);
                         // TelegramOutbound сюда намеренно не добавлен: у Api нет записи в
                         // kafkaConsumers для TelegramMessageRequestedEvent (WireTopic просто не
                         // найдёт совпадений в kafkaConsumers.Where(...) и не создаст endpoint) —
@@ -208,15 +200,12 @@ public static class MassTransitRegistration
         }).ToList();
 
         // Ретрай на ЛЮБОЙ сбой (не только CreateTopicsException) — Testcontainers.Kafka репортует
-        // контейнер "started" по факту открытого порта, но embedded-Zookeeper/брокер внутри
-        // confluentinc/cp-kafka может не успеть обслуживать AdminClient-запросы ещё несколько
-        // секунд. Это выполняется синхронно ДО builder.Build() (см. AddFamilyHubMessaging выше) —
-        // необработанный сбой здесь роняет весь хост ДО того, как WebApplicationFactory успевает
-        // его построить, и HostFactoryResolver маскирует реальную причину generic-сообщением
-        // "entry point exited without ever building an IHost" (см. отладку падений
-        // KafkaBridgeFlowTests в интеграционных тестах — не связано с диспозом контейнеров).
-        // В проде Kafka уже поднята docker-compose здоровье-чеком до старта api, поэтому здесь
-        // почти всегда первая попытка успешна — ретраи страхуют только редкий гоnight race.
+        // контейнер "started" по факту открытого порта, но брокер внутри может не успеть
+        // обслуживать AdminClient-запросы ещё несколько секунд. Это выполняется синхронно ДО
+        // builder.Build() (см. AddFamilyHubMessaging выше) — необработанный сбой здесь роняет
+        // весь хост ДО того, как он успевает построиться. В проде Kafka уже поднята
+        // docker-compose здоровье-чеком до старта api, поэтому здесь почти всегда первая попытка
+        // успешна — ретраи страхуют только редкий race при холодном старте/тестах.
         const int maxAttempts = 5;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -230,15 +219,9 @@ public static class MassTransitRegistration
                 // Топики уже созданы предыдущим стартом этого же процесса/другим инстансом — норм.
                 return;
             }
-            catch (Exception ex) when (attempt < maxAttempts)
+            catch when (attempt < maxAttempts)
             {
-                Console.Error.WriteLine($"[DIAG] EnsureTopicsExist attempt {attempt} failed: {ex.GetType().FullName}: {ex.Message}");
                 Thread.Sleep(TimeSpan.FromSeconds(attempt));
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[DIAG] EnsureTopicsExist FINAL attempt {attempt} failed: {ex.GetType().FullName}: {ex.Message}\n{ex}");
-                throw;
             }
         }
     }

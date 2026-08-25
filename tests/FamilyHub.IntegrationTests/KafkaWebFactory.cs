@@ -42,14 +42,6 @@ public class KafkaWebFactory : FamilyHubWebFactory
     {
         base.ConfigureWebHost(builder);
 
-        // DIAG: temporarily disable eager DI validation to check whether "entry point exited
-        // without ever building a host" is masking a real DI graph error in the Kafka Rider path.
-        builder.UseDefaultServiceProvider((context, options) =>
-        {
-            options.ValidateOnBuild = false;
-            options.ValidateScopes = false;
-        });
-
         builder.UseSetting("Messaging:Kafka:Enabled", "true");
         builder.UseSetting("Messaging:Kafka:BootstrapServers", _kafka.GetBootstrapAddress());
 
