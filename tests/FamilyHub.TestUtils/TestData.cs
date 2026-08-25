@@ -8,11 +8,19 @@ public static class TestData
 {
     private static long _nextTelegramId = 1;
 
-    public static User NewUser(string? displayName = null) => new()
+    public static User NewUser(string? lastName = "Testov", string? firstName = "Test") => new()
     {
         Id = Guid.NewGuid(),
         TelegramId = Interlocked.Increment(ref _nextTelegramId),
-        DisplayName = displayName ?? "Test User",
+        LastName = lastName,
+        FirstName = firstName,
+        // ~полгода от "сегодня" (не фиксированная календарная дата) — гарантирует, что дефолтный
+        // ДР никогда не попадёт в окно ReminderScanJob.BirthdayWarningDays (7 дней по умолчанию,
+        // до нескольких десятков дней в редких тестах с явным override) ни в один день года,
+        // включая день прогона теста. Фиксированная дата (напр. 1 января) рано или поздно
+        // случайно совпала бы с окном и сделала бы несвязанные тесты флаки.
+        BirthDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30).AddDays(183)),
+        Gender = Gender.Male,
         CreatedAt = DateTime.UtcNow,
     };
 

@@ -272,7 +272,7 @@ public class TelegramUpdateHandlerTests
     [Fact]
     public async Task HandleAsync_CallbackConfirmLink_Linked_RepliesLinked()
     {
-        _api.ConfirmTelegramLinkAsync("code1", 779, "Ada", null, Arg.Any<CancellationToken>())
+        _api.ConfirmTelegramLinkAsync("code1", 779, null, Arg.Any<CancellationToken>())
             .Returns(new ConfirmLinkResponse(BotLinkOutcome.Linked));
 
         await _sut.HandleAsync(CallbackUpdate(779, 779, 42, "link:code1"), CancellationToken.None);
@@ -286,7 +286,7 @@ public class TelegramUpdateHandlerTests
     [Fact]
     public async Task HandleAsync_CallbackConfirmLink_Merged_RepliesMerged()
     {
-        _api.ConfirmTelegramLinkAsync("code2", 780, "Ada", null, Arg.Any<CancellationToken>())
+        _api.ConfirmTelegramLinkAsync("code2", 780, null, Arg.Any<CancellationToken>())
             .Returns(new ConfirmLinkResponse(BotLinkOutcome.Merged));
 
         await _sut.HandleAsync(CallbackUpdate(780, 780, 43, "link:code2"), CancellationToken.None);
@@ -304,6 +304,6 @@ public class TelegramUpdateHandlerTests
         await _bot.Received(1).SendRequest(
             Arg.Is<EditMessageTextRequest>(r => r.Text.Contains("отменена")),
             Arg.Any<CancellationToken>());
-        await _api.DidNotReceiveWithAnyArgs().ConfirmTelegramLinkAsync(default!, default, default, default, default);
+        await _api.DidNotReceiveWithAnyArgs().ConfirmTelegramLinkAsync(default!, default, default, default);
     }
 }

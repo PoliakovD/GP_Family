@@ -1,13 +1,56 @@
 @if (auth.me(); as me) {
   <section class="mb-2">
     <h3>Аккаунт</h3>
-    <p class="mb-1">{{ me.displayName }}</p>
+    <p class="mb-1"><app-person-name [person]="me" styleOverride="full" /></p>
     <p class="muted">
       @if (me.username) { &#64;{{ me.username }} · }
       Telegram: {{ me.hasTelegram ? (me.tgUsername ? '@' + me.tgUsername : 'привязан') : '—' }} ·
       Email: {{ me.email ?? '—' }} ·
       Вход: {{ me.provider === 'email' ? 'браузер (PWA)' : 'Telegram' }}
     </p>
+
+    @if (!editingProfile()) {
+      <p class="muted mb-1">
+        Дата рождения: {{ me.birthDate ?? '—' }} ·
+        Пол: {{ me.gender === 1 ? 'женский' : 'мужской' }}
+      </p>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="startEditProfile()">
+        Изменить ФИО и дату рождения
+      </button>
+    } @else {
+      <form (ngSubmit)="saveProfile()">
+        <label class="form-label" for="profile-last-name">Фамилия</label>
+        <input
+          id="profile-last-name" class="input mb-2" type="text" name="lastName"
+          [(ngModel)]="profileForm.lastName" required autocomplete="family-name" />
+
+        <label class="form-label" for="profile-first-name">Имя</label>
+        <input
+          id="profile-first-name" class="input mb-2" type="text" name="firstName"
+          [(ngModel)]="profileForm.firstName" required autocomplete="given-name" />
+
+        <label class="form-label" for="profile-middle-name">Отчество (необязательно)</label>
+        <input
+          id="profile-middle-name" class="input mb-2" type="text" name="middleName"
+          [(ngModel)]="profileForm.middleName" autocomplete="additional-name" />
+
+        <label class="form-label" for="profile-birth-date">Дата рождения</label>
+        <input
+          id="profile-birth-date" class="input mb-2" type="date" name="birthDate"
+          [(ngModel)]="profileForm.birthDate" required autocomplete="bday" />
+
+        <label class="form-label" for="profile-gender">Пол</label>
+        <select id="profile-gender" class="input mb-2" name="gender" [(ngModel)]="profileForm.gender" required>
+          <option [ngValue]="0">Мужской</option>
+          <option [ngValue]="1">Женский</option>
+        </select>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm" [disabled]="busy()">Сохранить</button>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="editingProfile.set(false)">Отмена</button>
+        </div>
+      </form>
+    }
   </section>
 
   @if (!me.email) {

@@ -17,7 +17,7 @@ public class UserProvisioningService(AppDbContext db, ILogger<UserProvisioningSe
         return id;
     }
 
-    public async Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? displayName, string? username = null, CancellationToken ct = default)
+    public async Task<Guid> GetOrCreateUserIdAsync(long telegramId, string? username = null, CancellationToken ct = default)
     {
         var existing = await db.Users
             .Where(u => u.TelegramId == telegramId)
@@ -25,26 +25,18 @@ public class UserProvisioningService(AppDbContext db, ILogger<UserProvisioningSe
 
         if (existing is not null)
         {
-            // Имя и хэндл в Telegram могут меняться — держим TgUsername свежим на каждый логин.
+            // Хэндл в Telegram может меняться — держим TgUsername свежим на каждый логин.
             // Видимый (app) Username НЕ трогаем — это отдельный, назначаемый пользователем
             // идентификатор, обновление профиля из Telegram не должно его перезаписывать/угонять.
-            var changed = false;
-            if (!string.IsNullOrWhiteSpace(displayName) && existing.DisplayName != displayName)
-            {
-                existing.DisplayName = displayName;
-                changed = true;
-            }
+            // ФИО/ДР/пол (identity rework) здесь никогда не трогаются — Telegram initData не
+            // источник профиля, его собирает отдельный экран (см. profileGuard на фронте).
             if (existing.TgUsername != username)
             {
                 existing.TgUsername = username;
-                changed = true;
-            }
-            if (changed)
-            {
                 await db.SaveChangesAsync(ct);
                 logger.LogDebug(
-                    "Профиль пользователя {UserId} (TelegramId={TelegramId}) обновлён: DisplayName={DisplayName}, TgUsername={TgUsername}",
-                    existing.Id, telegramId, existing.DisplayName, existing.TgUsername);
+                    "Профиль пользователя {UserId} (TelegramId={TelegramId}) обновлён: TgUsername={TgUsername}",
+                    existing.Id, telegramId, existing.TgUsername);
             }
 
             return existing.Id;
@@ -67,7 +59,6 @@ public class UserProvisioningService(AppDbContext db, ILogger<UserProvisioningSe
         {
             Id = Guid.NewGuid(),
             TelegramId = telegramId,
-            DisplayName = string.IsNullOrWhiteSpace(displayName) ? $"User {telegramId}" : displayName,
             Username = appUsername,
             TgUsername = username,
             CreatedAt = DateTime.UtcNow,
@@ -79,8 +70,7 @@ public class UserProvisioningService(AppDbContext db, ILogger<UserProvisioningSe
         {
             await db.SaveChangesAsync(ct);
             logger.LogInformation(
-                "Создан новый пользователь {UserId} (TelegramId={TelegramId}, DisplayName={DisplayName})",
-                user.Id, telegramId, user.DisplayName);
+                "Создан новый пользователь {UserId} (TelegramId={TelegramId})", user.Id, telegramId);
         }
         catch (DbUpdateException ex)
         {

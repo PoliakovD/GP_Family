@@ -63,7 +63,7 @@ public class TelegramLinkService(AppDbContext db, AccountMergeService merge, ILo
     }
 
     public async Task<LinkTelegramResult> ConfirmAsync(
-        string rawCode, long telegramId, string? tgDisplayName, string? tgUsername, CancellationToken ct = default)
+        string rawCode, long telegramId, string? tgUsername, CancellationToken ct = default)
     {
         var linkCode = await FindActiveCodeAsync(rawCode, ct);
         if (linkCode is null) return LinkTelegramResult.InvalidCode;

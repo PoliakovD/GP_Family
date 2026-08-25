@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Modules.Birthdays.Birthdays;
@@ -28,7 +29,46 @@ public class BirthdayServiceTests : SqliteTestBase
         var (result, items) = await _sut.GetForFamilyAsync(family.Id, admin.Id);
 
         result.Should().Be(BirthdayAccessResult.Success);
-        items.Should().ContainSingle();
+        // Ручная запись — единственная в Birthdays; TestData.NewUser() (см. SeedFamilyWithAdmin)
+        // задаёт BirthDate по умолчанию, поэтому сам admin тоже попадает в список отдельной
+        // Member-строкой (identity rework, см. GetForFamilyAsync_UnionsManualMemberAndDependentSources).
+        items.Should().ContainSingle(b => b.Source == BirthdaySource.Manual);
+    }
+
+    [Fact]
+    public async Task GetForFamilyAsync_UnionsManualMemberAndDependentSources()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin(); // admin.BirthDate задан TestData.NewUser() по умолчанию
+        Db.Birthdays.Add(TestData.NewBirthday(family.Id));
+        Db.FamilyDependents.Add(new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = family.Id, FirstName = "Барсик", IsPet = true,
+            Gender = Gender.Male, BirthDate = new DateOnly(2019, 6, 1), CreatedByUserId = admin.Id, CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var (result, items) = await _sut.GetForFamilyAsync(family.Id, admin.Id);
+
+        result.Should().Be(BirthdayAccessResult.Success);
+        items.Should().HaveCount(3);
+        items.Should().ContainSingle(b => b.Source == BirthdaySource.Manual);
+        items.Should().ContainSingle(b => b.Source == BirthdaySource.Member && b.Id == admin.Id);
+        items.Should().ContainSingle(b => b.Source == BirthdaySource.Dependent && b.PersonName == "Барсик");
+    }
+
+    [Fact]
+    public async Task GetForFamilyAsync_PendingMember_BirthDateNotIncluded()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        Db.AddMember(family.Id, FamilyRole.Member, MemberStatus.PendingApproval);
+        await Db.SaveChangesAsync();
+
+        var (_, items) = await _sut.GetForFamilyAsync(family.Id, admin.Id);
+
+        // Только сам admin (Active) — PendingApproval не даёт доступа ни к чему, в т.ч. не должен
+        // фигурировать в списке дней рождения семьи (тот же инвариант, что и для остальных
+        // семейных ресурсов).
+        items.Should().ContainSingle(b => b.Source == BirthdaySource.Member);
     }
 
     [Fact]

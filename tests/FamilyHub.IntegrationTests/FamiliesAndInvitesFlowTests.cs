@@ -20,7 +20,8 @@ public class FamiliesAndInvitesFlowTests(FamilyHubWebFactory factory) : Integrat
     private record CreateInviteResponseDto(Guid Id, string Code, int MaxUses, DateTime? ExpiresAt);
     private record RedeemResponseDto(string Status);
     private record PendingMemberDto(Guid UserId, FamilyRole Role, DateTime JoinedAt);
-    private record CurrentMemberDto(Guid Id, string DisplayName, string? Username, DateTime JoinedAt, FamilyRole Role);
+    private record CurrentMemberDto(
+        Guid Id, string? LastName, string? FirstName, string? MiddleName, string? Username, DateTime JoinedAt, FamilyRole Role);
 
     private async Task<(Guid FamilyId, HttpClient AdminClient)> CreateFamilyAsAdminAsync()
     {

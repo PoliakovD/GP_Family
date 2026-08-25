@@ -35,7 +35,7 @@ export class FamilyStateService {
                     f.currentMembers.forEach((m) => {
                         this.log.log('state', 'info',
                             `Id:${m.id}\n` +
-                            `displayName:${m.displayName}\n` +
+                            `lastName:${m.lastName} firstName:${m.firstName}\n` +
                             `username:$${m.username}\n` +
                             `role:${m.role}\n` +
                             `joinedAt:${m.joinedAt}`

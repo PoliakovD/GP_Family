@@ -56,7 +56,7 @@
                         @for (p of pendingMembers; track p.userId) {
                             <div class="pending-row d-flex justify-content-between align-items-center gap-2 mb-1">
                                 <span class="pending-name">
-                                    {{ p.displayName }}
+                                    <app-person-name [person]="p" />
                                     @if (p.username) {
                                         <span class="text-muted">&#64;{{ p.username }}</span>
                                     }
@@ -142,7 +142,7 @@
                         @for (m of family.currentMembers; track m.id) {
                             <tr>
                                 <td>
-                                    <span class="card-title" style="font-size:14px">{{ m.displayName }}</span>
+                                    <span class="card-title" style="font-size:14px"><app-person-name [person]="m" /></span>
                                 </td>
                                 <td>
                                     @if (m.username) {

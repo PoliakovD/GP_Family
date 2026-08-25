@@ -39,6 +39,7 @@ export function describeSettingsError(e: unknown): string {
       case 'weak_password': return 'Пароль — минимум 8 символов, обязательно строчная и заглавная латинские буквы и цифра.';
       case 'invalid_credentials': return 'Текущий пароль неверен.';
       case 'no_password': return 'У аккаунта ещё нет пароля — сначала привяжите email на вкладке «Профиль».';
+      case 'invalid_profile': return 'Проверьте ФИО и дату рождения.';
     }
     if (e.status === 429) return 'Слишком много запросов — подождите немного.';
   }

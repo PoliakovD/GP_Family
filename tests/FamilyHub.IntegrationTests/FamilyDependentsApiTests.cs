@@ -50,14 +50,14 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
         var (familyId, admin, member) = await CreateFamilyWithActiveMemberAsync();
 
         var petResponse = await member.PostAsJsonAsync($"/api/families/{familyId}/dependents",
-            new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
         petResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var pet = await petResponse.Content.ReadFromJsonAsync<FamilyDependentDto>(JsonOpts);
         pet!.IsPet.Should().BeTrue();
         pet.PetSpecies.Should().Be("кот");
 
         var childResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/dependents",
-            new CreateFamilyDependentRequest("Ваня", new DateOnly(2018, 5, 1), false, "кот"));
+            new CreateFamilyDependentRequest("Ваня", "Иванов", null, Gender.Male, new DateOnly(2018, 5, 1), false, "кот"));
         var child = await childResponse.Content.ReadFromJsonAsync<FamilyDependentDto>(JsonOpts);
         child!.IsPet.Should().BeFalse();
         child.PetSpecies.Should().BeNull("вид животного не должен просочиться, если IsPet == false");
@@ -76,7 +76,7 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
         var outsider = ClientAs(FreshTelegramId());
 
         var response = await outsider.PostAsJsonAsync($"/api/families/{family!.Id}/dependents",
-            new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -86,7 +86,7 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
     {
         var (familyId, admin, member) = await CreateFamilyWithActiveMemberAsync();
         var dependent = await (await admin.PostAsJsonAsync($"/api/families/{familyId}/dependents",
-                new CreateFamilyDependentRequest("Барсик", null, true, "кот")))
+                new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот")))
             .Content.ReadFromJsonAsync<FamilyDependentDto>(JsonOpts);
 
         var memberAttempt = await member.DeleteAsync($"/api/dependents/{dependent!.Id}");
@@ -111,7 +111,7 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
     {
         var (familyId, admin, member) = await CreateFamilyWithActiveMemberAsync();
         var dependent = await (await admin.PostAsJsonAsync($"/api/families/{familyId}/dependents",
-                new CreateFamilyDependentRequest("Барсик", null, true, "кот")))
+                new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот")))
             .Content.ReadFromJsonAsync<FamilyDependentDto>(JsonOpts);
 
         var record = await (await member.PostAsJsonAsync("/api/medical-records",

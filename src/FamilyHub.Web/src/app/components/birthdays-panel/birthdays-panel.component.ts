@@ -1,7 +1,7 @@
 import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
-import type { Birthday } from '../../models/types';
+import { BirthdaySource, type Birthday } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { matchesQuery } from '../../shared/util/local-filter';
@@ -111,6 +111,20 @@ export class BirthdaysPanelComponent implements OnInit {
 
   metaLabel(item: Birthday): string {
     return birthdayMetaLabel(item.date);
+  }
+
+  /** Только ручные записи (Birthday) редактируемы — участники/подопечные производные из
+   * профиля User/FamilyDependent, правятся там (в настройках/на панели «Близкие и питомцы»). */
+  isManual(item: Birthday): boolean {
+    return item.source === BirthdaySource.Manual;
+  }
+
+  sourceLabel(item: Birthday): string | null {
+    switch (item.source) {
+      case BirthdaySource.Member: return 'участник семьи';
+      case BirthdaySource.Dependent: return 'подопечный';
+      default: return null;
+    }
   }
 
   /** Список, отфильтрованный по имени, — группировка ниже строится уже поверх него. */

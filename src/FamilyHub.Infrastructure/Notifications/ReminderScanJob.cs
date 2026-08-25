@@ -1,5 +1,6 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,11 @@ namespace FamilyHub.Infrastructure.Notifications;
 /// создаёт — публикует MedicationExpiringEvent/BirthdayApproachingEvent через шину (ADR-0006),
 /// фан-аут по получателям делает Notifications-потребитель (идемпотентно, UNIQUE по DedupKey).
 /// SendPendingAsync остаётся ретрай-свипом недоставленных оповещений.
+///
+/// Дни рождения (identity rework) — три независимых источника, каждый публикует тот же тип
+/// события с разным BirthdaySubjectKind: ручные записи Birthday (Manual), активные члены семьи
+/// с заполненным User.BirthDate (Member), подопечные с заполненным FamilyDependent.BirthDate
+/// (Dependent). Общая логика окна/дедупа/переноса 29 февраля вынесена в TryPublishBirthdayAsync.
 /// </summary>
 public class ReminderScanJob(
     AppDbContext db,
@@ -28,7 +34,9 @@ public class ReminderScanJob(
         logger.LogInformation("Запуск ReminderScanJob за {Today}", today);
 
         await ScanMedicationsAsync(today, ct);
-        await ScanBirthdaysAsync(today, ct);
+        await ScanManualBirthdaysAsync(today, ct);
+        await ScanMemberBirthdaysAsync(today, ct);
+        await ScanDependentBirthdaysAsync(today, ct);
         await db.SaveChangesAsync(ct); // фиксация поставленных в outbox строк шины
         await SendPendingAsync(ct);
 
@@ -64,31 +72,102 @@ public class ReminderScanJob(
         }
     }
 
-    private async Task ScanBirthdaysAsync(DateOnly today, CancellationToken ct)
+    private async Task ScanManualBirthdaysAsync(DateOnly today, CancellationToken ct)
     {
         var birthdays = await db.Birthdays.AsNoTracking()
             .Select(b => new { b.Id, b.FamilyId, b.PersonName, b.Date })
             .ToListAsync(ct);
 
-        logger.LogDebug("Скан дней рождения: {Count} записей", birthdays.Count);
+        logger.LogDebug("Скан ручных дней рождения: {Count} записей", birthdays.Count);
 
         foreach (var bday in birthdays)
         {
-            var nextOccurrence = NextOccurrence(bday.Date, today);
-            var daysUntil = nextOccurrence.DayNumber - today.DayNumber;
-            if (daysUntil < 0 || daysUntil > options.Value.BirthdayWarningDays) continue;
-
-            // Год наступающего повтора в суффиксе ключа — иначе ежегодное ДР не получило бы
-            // новое оповещение в следующем году. Префильтр — по тому же суффиксу.
-            var yearSuffix = $":{nextOccurrence.Year}";
-            if (await db.Notifications.AnyAsync(
-                    n => n.RelatedEntityId == bday.Id
-                        && n.Type == NotificationType.BirthdayUpcoming
-                        && n.DedupKey.EndsWith(yearSuffix), ct))
-                continue;
-
-            await publisher.PublishAsync(new BirthdayApproachingEvent(bday.Id, bday.FamilyId, bday.PersonName, nextOccurrence, daysUntil), ct);
+            await TryPublishBirthdayAsync(
+                BirthdaySubjectKind.Manual, bday.Id, bday.FamilyId, bday.PersonName, bday.Date,
+                today, subjectUserId: null, ct);
         }
+    }
+
+    /// <summary>
+    /// Активные члены семьи с заполненным профилем ДР — одно событие на КАЖДУЮ пару
+    /// (пользователь, семья): человек в трёх семьях получает три отдельных напоминания
+    /// (получатели в каждой семье разные). SubjectUserId = сам именинник — потребитель
+    /// (BirthdayApproachingNotificationConsumer) исключает его из получателей.
+    /// </summary>
+    private async Task ScanMemberBirthdaysAsync(DateOnly today, CancellationToken ct)
+    {
+        var members = await db.FamilyMembers.AsNoTracking()
+            .Where(m => m.Status == MemberStatus.Active && m.User.BirthDate != null)
+            .Select(m => new
+            {
+                m.UserId, m.FamilyId, m.User.LastName, m.User.FirstName, m.User.MiddleName,
+                BirthDate = m.User.BirthDate!.Value,
+            })
+            .ToListAsync(ct);
+
+        logger.LogDebug("Скан дней рождения участников: {Count} пар (участник, семья)", members.Count);
+
+        foreach (var m in members)
+        {
+            // BirthDate заполняется только вместе с LastName/FirstName (PersonName.IsCompleteProfile
+            // — единственный путь записи, см. PwaAuthService/ProfileService) — FormatOrDefault
+            // остаётся лишь страховкой на случай рассинхронизации данных.
+            var personName = PersonName.FormatOrDefault(
+                m.LastName, m.FirstName, m.MiddleName, PersonNameStyle.Full, fallback: "Участник семьи");
+            await TryPublishBirthdayAsync(
+                BirthdaySubjectKind.Member, m.UserId, m.FamilyId, personName, m.BirthDate,
+                today, subjectUserId: m.UserId, ct);
+        }
+    }
+
+    private async Task ScanDependentBirthdaysAsync(DateOnly today, CancellationToken ct)
+    {
+        // FirstName/LastName зашифрованы — материализуем сущности и форматируем в памяти (тот же
+        // приём, что FamilyDependentService.GetForFamilyAsync); фильтр BirthDate != null остаётся
+        // в SQL (не шифруется, см. ADR-0002).
+        var dependents = await db.FamilyDependents.AsNoTracking()
+            .Where(d => d.BirthDate != null)
+            .ToListAsync(ct);
+
+        logger.LogDebug("Скан дней рождения подопечных: {Count} записей", dependents.Count);
+
+        foreach (var d in dependents)
+        {
+            // Питомец — кличка (FirstName), без фамилии/отчества. FirstName — тоже фолбэк для
+            // человека без заполненной фамилии (легитимно для FamilyDependent, в отличие от User).
+            var personName = d.IsPet
+                ? d.FirstName
+                : PersonName.FormatOrDefault(d.LastName, d.FirstName, d.MiddleName, PersonNameStyle.Full, fallback: d.FirstName);
+            await TryPublishBirthdayAsync(
+                BirthdaySubjectKind.Dependent, d.Id, d.FamilyId, personName, d.BirthDate!.Value,
+                today, subjectUserId: null, ct);
+        }
+    }
+
+    /// <summary>
+    /// Общая логика для всех трёх источников: окно предупреждения, перенос 29 февраля,
+    /// префильтр от повторной публикации при ежегодном рескане (год наступающего повтора —
+    /// в суффиксе DedupKey, иначе следующее наступление того же ДР не получило бы новое
+    /// оповещение). FamilyId — часть префильтра начиная с identity rework: один и тот же
+    /// SubjectId (участник) теперь легитимно повторяется в нескольких семьях одновременно.
+    /// </summary>
+    private async Task TryPublishBirthdayAsync(
+        BirthdaySubjectKind kind, Guid subjectId, Guid familyId, string personName, DateOnly birthDate,
+        DateOnly today, Guid? subjectUserId, CancellationToken ct)
+    {
+        var nextOccurrence = NextOccurrence(birthDate, today);
+        var daysUntil = nextOccurrence.DayNumber - today.DayNumber;
+        if (daysUntil < 0 || daysUntil > options.Value.BirthdayWarningDays) return;
+
+        var yearSuffix = $":{nextOccurrence.Year}";
+        if (await db.Notifications.AnyAsync(
+                n => n.RelatedEntityId == subjectId && n.FamilyId == familyId
+                    && n.Type == NotificationType.BirthdayUpcoming
+                    && n.DedupKey.EndsWith(yearSuffix), ct))
+            return;
+
+        await publisher.PublishAsync(
+            new BirthdayApproachingEvent(kind, subjectId, familyId, personName, nextOccurrence, daysUntil, subjectUserId), ct);
     }
 
     /// <summary>Ближайшая (в этом или следующем году) календарная дата дня рождения от today.</summary>

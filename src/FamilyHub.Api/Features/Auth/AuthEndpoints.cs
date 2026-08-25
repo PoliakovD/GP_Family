@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using FamilyHub.Contracts.BotApi;
+using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Auth.Jwt;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.CurrentUser;
@@ -12,7 +14,11 @@ using Microsoft.Extensions.Options;
 namespace FamilyHub.Api.Features.Auth;
 
 public record StartCodeRequest(string Email);
-public record ConfirmRegistrationRequest(string Email, string Code, string Password, string Username, string? DisplayName);
+
+public record ConfirmRegistrationRequest(
+    string Email, string Code, string Password, string Username,
+    string LastName, string FirstName, string? MiddleName, DateOnly BirthDate, Gender Gender);
+
 public record LoginRequest(string Email, string Password);
 public record ConfirmLinkEmailRequest(string Email, string Code, string Password);
 public record ConfirmResetPasswordRequest(string Email, string Code, string NewPassword);
@@ -37,7 +43,8 @@ public static class AuthEndpoints
             HttpContext http, CancellationToken ct) =>
         {
             var (result, userId) = await service.ConfirmRegistrationAsync(
-                request.Email, request.Code, request.Password, request.Username, request.DisplayName, ct);
+                request.Email, request.Code, request.Password, request.Username,
+                request.LastName, request.FirstName, request.MiddleName, request.BirthDate, request.Gender, ct);
             if (result != ConfirmRegistrationResult.Success)
             {
                 return result switch
@@ -46,6 +53,7 @@ public static class AuthEndpoints
                     ConfirmRegistrationResult.EmailTaken => Results.BadRequest(new { code = "email_taken" }),
                     ConfirmRegistrationResult.WeakPassword => Results.BadRequest(new { code = "weak_password" }),
                     ConfirmRegistrationResult.InvalidUsername => Results.BadRequest(new { code = "invalid_username" }),
+                    ConfirmRegistrationResult.InvalidProfile => Results.BadRequest(new { code = "invalid_profile" }),
                     _ => Results.BadRequest(new { code = "username_taken" }),
                 };
             }
@@ -161,7 +169,12 @@ public static class AuthEndpoints
             return Results.Ok(new
             {
                 userId = user.Id,
-                displayName = user.DisplayName,
+                lastName = user.LastName,
+                firstName = user.FirstName,
+                middleName = user.MiddleName,
+                birthDate = user.BirthDate,
+                gender = user.Gender,
+                profileComplete = PersonName.IsCompleteProfile(user.LastName, user.FirstName, user.BirthDate, user.Gender),
                 provider,
                 email = user.Email,
                 username = user.Username,
@@ -278,7 +291,7 @@ public static class AuthEndpoints
     }
 
     /// <summary>Выпуск JWT-сессии: access+refresh в httpOnly cookie. UserId/Email/SessionId в
-    /// access-токене — минимум ПДн (только email, без username/displayName), как раньше в
+    /// access-токене — минимум ПДн (только email, без username/ФИО), как раньше в
     /// cookie-тикете.</summary>
     private static async Task<IResult> IssueSessionAsync(
         Guid userId, string email, ITokenService tokenService, HttpContext http, CancellationToken ct)

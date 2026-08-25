@@ -12,7 +12,8 @@ namespace FamilyHub.Api.Features.Invites;
 
 public record CreateInviteRequest(Guid? TargetUserId, FamilyRole AssignedRole, int MaxUses, DateTime? ExpiresAt);
 
-public record PendingMemberDto(Guid UserId, string DisplayName, string? Username, FamilyRole Role, DateTime JoinedAt);
+public record PendingMemberDto(
+    Guid UserId, string? LastName, string? FirstName, string? MiddleName, string? Username, FamilyRole Role, DateTime JoinedAt);
 
 /// <summary>
 /// Приглашения и одобрение заявок — дословно по разделу 8 брифа: гибридное одобрение
@@ -170,7 +171,7 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
         var pending = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == familyId && m.Status == MemberStatus.PendingApproval)
             .Select(m => new PendingMemberDto(
-                m.UserId, m.User.DisplayName, m.User.Username, m.Role, m.JoinedAt))
+                m.UserId, m.User.LastName, m.User.FirstName, m.User.MiddleName, m.User.Username, m.Role, m.JoinedAt))
             .ToListAsync(ct);
 
         return (ApproveRejectResult.Success, pending);

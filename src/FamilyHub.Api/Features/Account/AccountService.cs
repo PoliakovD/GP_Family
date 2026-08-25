@@ -153,7 +153,11 @@ public class AccountService(
         await AddJsonAsync(zip, "profile.json", new
         {
             user.Id,
-            user.DisplayName,
+            user.LastName,
+            user.FirstName,
+            user.MiddleName,
+            user.BirthDate,
+            user.Gender,
             user.Username,
             user.TgUsername,
             user.Email,

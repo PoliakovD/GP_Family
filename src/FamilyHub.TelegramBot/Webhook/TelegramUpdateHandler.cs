@@ -196,14 +196,11 @@ public class TelegramUpdateHandler(
 
         var code = callbackQuery.Data[LinkCallbackPrefix.Length..];
         var from = callbackQuery.From;
-        var displayName = string.Join(' ', new[] { from.FirstName, from.LastName }
-            .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         string reply;
         try
         {
-            var result = await api.ConfirmTelegramLinkAsync(
-                code, from.Id, string.IsNullOrWhiteSpace(displayName) ? null : displayName, from.Username, ct);
+            var result = await api.ConfirmTelegramLinkAsync(code, from.Id, from.Username, ct);
 
             reply = result.Outcome switch
             {

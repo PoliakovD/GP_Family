@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,12 @@ namespace FamilyHub.Modules.Birthdays.Birthdays;
 /// принадлежит семье, видна всем активным членам по роли, Member может добавлять/править.
 /// Списки всегда фильтруются по FamilyId (инвариант 1) — никогда не грузим Birthday по Id
 /// без проверки доступа к его семье.
+///
+/// GetForFamilyAsync (identity rework) отдаёт ОБЪЕДИНЁННЫЙ список из трёх источников —
+/// то же самое, что видит ReminderScanJob (Infrastructure/Notifications), иначе пользователь
+/// получал бы напоминание о ДР, которого нет ни на одном экране. Create/Update/Delete ниже
+/// по-прежнему работают только с ручными записями (Birthday) — производные из User/
+/// FamilyDependent на фронте отображаются без кнопок редактирования (BirthdaySource != Manual).
 /// </summary>
 public class BirthdayService(AppDbContext db, IFamilyAccessService access, ILogger<BirthdayService> logger)
 {
@@ -24,12 +31,37 @@ public class BirthdayService(AppDbContext db, IFamilyAccessService access, ILogg
             return (BirthdayAccessResult.Forbidden, []);
         }
 
-        var items = await db.Birthdays.AsNoTracking()
+        var manual = await db.Birthdays.AsNoTracking()
             .Where(b => b.FamilyId == familyId)
             .Select(b => ToDto(b))
             .ToListAsync(ct);
 
-        logger.LogDebug("Загружено {Count} дней рождения семьи {FamilyId}", items.Count, familyId);
+        var members = await db.FamilyMembers.AsNoTracking()
+            .Where(m => m.FamilyId == familyId && m.Status == MemberStatus.Active && m.User.BirthDate != null)
+            .Select(m => new { m.UserId, m.User.LastName, m.User.FirstName, m.User.MiddleName, BirthDate = m.User.BirthDate!.Value })
+            .ToListAsync(ct);
+        var memberDtos = members.Select(m => new BirthdayDto(
+            m.UserId, familyId,
+            PersonName.FormatOrDefault(m.LastName, m.FirstName, m.MiddleName, PersonNameStyle.Full, fallback: "Участник семьи"),
+            m.BirthDate, BirthdaySource.Member)).ToList();
+
+        // FirstName/LastName зашифрованы — материализуем сущности, форматируем в памяти (тот же
+        // приём, что FamilyDependentService.GetForFamilyAsync).
+        var dependents = await db.FamilyDependents.AsNoTracking()
+            .Where(d => d.FamilyId == familyId && d.BirthDate != null)
+            .ToListAsync(ct);
+        var dependentDtos = dependents.Select(d => new BirthdayDto(
+            d.Id, familyId,
+            d.IsPet ? d.FirstName : PersonName.FormatOrDefault(d.LastName, d.FirstName, d.MiddleName, PersonNameStyle.Full, fallback: d.FirstName),
+            d.BirthDate!.Value, BirthdaySource.Dependent)).ToList();
+
+        var items = manual.Concat(memberDtos).Concat(dependentDtos)
+            .OrderBy(b => b.Date.Month).ThenBy(b => b.Date.Day)
+            .ToList();
+
+        logger.LogDebug(
+            "Загружено {Count} дней рождения семьи {FamilyId} (ручных {Manual}, участников {Members}, подопечных {Dependents})",
+            items.Count, familyId, manual.Count, memberDtos.Count, dependentDtos.Count);
         return (BirthdayAccessResult.Success, items);
     }
 
@@ -109,5 +141,5 @@ public class BirthdayService(AppDbContext db, IFamilyAccessService access, ILogg
     }
 
     private static BirthdayDto ToDto(Birthday b) =>
-        new(b.Id, b.FamilyId, b.PersonName, b.Date);
+        new(b.Id, b.FamilyId, b.PersonName, b.Date, BirthdaySource.Manual);
 }

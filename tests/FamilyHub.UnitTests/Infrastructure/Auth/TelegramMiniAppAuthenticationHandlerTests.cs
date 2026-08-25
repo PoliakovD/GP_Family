@@ -51,7 +51,7 @@ public class TelegramMiniAppAuthenticationHandlerTests
 
         result.Succeeded.Should().BeFalse();
         await _provisioning.DidNotReceive().GetOrCreateUserIdAsync(
-            Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class TelegramMiniAppAuthenticationHandlerTests
         result.Principal!.FindFirst(FamilyHubClaimTypes.UserId)!.Value.Should().Be(userId.ToString());
         result.Principal!.FindFirst(FamilyHubClaimTypes.TelegramId)!.Value.Should().Be("999");
         await _provisioning.DidNotReceive().GetOrCreateUserIdAsync(
-            Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

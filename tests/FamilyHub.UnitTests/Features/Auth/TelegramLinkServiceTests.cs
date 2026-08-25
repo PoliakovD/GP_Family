@@ -29,7 +29,6 @@ public class TelegramLinkServiceTests : SqliteTestBase
             Id = Guid.NewGuid(),
             Email = email ?? $"{Guid.NewGuid():N}@example.com",
             PasswordHash = "hash",
-            DisplayName = "Web User",
             CreatedAt = DateTime.UtcNow,
         };
         Db.Users.Add(user);
@@ -70,10 +69,10 @@ public class TelegramLinkServiceTests : SqliteTestBase
         var (_, firstCode, _) = await _sut.StartAsync(user.Id);
         var (_, secondCode, _) = await _sut.StartAsync(user.Id);
 
-        var confirmWithOldCode = await _sut.ConfirmAsync(firstCode!, 700, "Someone", null);
+        var confirmWithOldCode = await _sut.ConfirmAsync(firstCode!, 700, null);
 
         confirmWithOldCode.Should().Be(LinkTelegramResult.InvalidCode);
-        (await _sut.ConfirmAsync(secondCode!, 700, "Someone", null)).Should().Be(LinkTelegramResult.Linked);
+        (await _sut.ConfirmAsync(secondCode!, 700, null)).Should().Be(LinkTelegramResult.Linked);
     }
 
     [Fact]
@@ -82,7 +81,7 @@ public class TelegramLinkServiceTests : SqliteTestBase
         var user = AddWebUser();
         var (_, code, _) = await _sut.StartAsync(user.Id);
 
-        var result = await _sut.ConfirmAsync(code!, 701, "Ada Lovelace", "ada_handle");
+        var result = await _sut.ConfirmAsync(code!, 701, "ada_handle");
 
         result.Should().Be(LinkTelegramResult.Linked);
         var updated = Db.Users.Single(u => u.Id == user.Id);
@@ -100,14 +99,13 @@ public class TelegramLinkServiceTests : SqliteTestBase
             Id = Guid.NewGuid(),
             TelegramId = 702,
             TgUsername = "tg_handle",
-            DisplayName = "Telegram User",
             CreatedAt = DateTime.UtcNow,
         };
         Db.Users.Add(telegramUser);
         await Db.SaveChangesAsync();
 
         var (_, code, _) = await _sut.StartAsync(webUser.Id);
-        var result = await _sut.ConfirmAsync(code!, 702, "Telegram User", "tg_handle");
+        var result = await _sut.ConfirmAsync(code!, 702, "tg_handle");
 
         result.Should().Be(LinkTelegramResult.Merged);
         Db.Users.Should().NotContain(u => u.Id == telegramUser.Id);
@@ -119,7 +117,7 @@ public class TelegramLinkServiceTests : SqliteTestBase
     [Fact]
     public async Task ConfirmAsync_InvalidCode_ReturnsInvalidCode()
     {
-        var result = await _sut.ConfirmAsync("not-a-real-code", 703, "X", null);
+        var result = await _sut.ConfirmAsync("not-a-real-code", 703, null);
 
         result.Should().Be(LinkTelegramResult.InvalidCode);
     }
@@ -133,7 +131,7 @@ public class TelegramLinkServiceTests : SqliteTestBase
         stored.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.ConfirmAsync(code!, 704, "X", null);
+        var result = await _sut.ConfirmAsync(code!, 704, null);
 
         result.Should().Be(LinkTelegramResult.InvalidCode);
     }
@@ -144,8 +142,8 @@ public class TelegramLinkServiceTests : SqliteTestBase
         var user = AddWebUser();
         var (_, code, _) = await _sut.StartAsync(user.Id);
 
-        (await _sut.ConfirmAsync(code!, 705, "X", null)).Should().Be(LinkTelegramResult.Linked);
-        (await _sut.ConfirmAsync(code!, 706, "Y", null)).Should().Be(LinkTelegramResult.InvalidCode);
+        (await _sut.ConfirmAsync(code!, 705, null)).Should().Be(LinkTelegramResult.Linked);
+        (await _sut.ConfirmAsync(code!, 706, null)).Should().Be(LinkTelegramResult.InvalidCode);
     }
 
     [Fact]
