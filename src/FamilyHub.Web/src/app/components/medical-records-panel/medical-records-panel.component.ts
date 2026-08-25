@@ -89,6 +89,15 @@ interface PatientOption {
 
 const SELF_OPTION: PatientOption = { key: 'self', familyDependentId: null, targetUserId: null, label: 'Я' };
 
+/** Файл, ожидающий загрузки — либо ещё не отправленный (форма создания записи), либо уже
+ * прикреплённый к существующей. previewUrl — только для картинок (см. medications-panel.photos). */
+interface StagedFile {
+  file: File;
+  previewUrl: string | null;
+}
+
+let nextInstanceId = 0;
+
 /**
  * Panel (не Page — своего URL нет, контекст приходит через input): список записей одного вида
  * (анализ/посещение врача — MedicalRecordKind), форма создания, поиск, шторка «Доступ», вложения.
@@ -127,6 +136,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     'application/vnd.ms-excel', 'text/csv', 'text/plain', 'application/rtf', 'text/html',
   ].join(',');
 
+  /** Уникален на инстанс — «Анализы» и «Врачи» держат каждый свой экземпляр панели, а
+   * <label for> должен указывать ровно на "свой" скрытый file input формы создания. */
+  readonly createFileInputId = `medical-record-create-file-input-${nextInstanceId++}`;
+
   items: MedicalRecord[] = [];
   form = {
     personName: '',
@@ -136,6 +149,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     familyDependentId: null as string | null,
     targetUserId: null as string | null,
   };
+  /** Файлы, выбранные в форме создания ДО того, как запись сохранена — грузятся сразу после
+   * успешного handleSubmit (у POST /api/medical-records/{id}/attachments нет смысла без recordId). */
+  pendingFiles: StagedFile[] = [];
   error: string | null = null;
   loading = true;
 
@@ -200,6 +216,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     for (const handle of this.pollHandles.values()) clearInterval(handle);
     this.pollHandles.clear();
+    this.clearPendingFiles();
   }
 
   get labels(): KindLabels {
@@ -316,7 +333,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   async handleSubmit(): Promise<void> {
     if (!this.form.personName.trim() || !this.form.recordDate) return;
     try {
-      await this.api.createMedicalRecord({
+      const created = await this.api.createMedicalRecord({
         kind: this.kind(),
         personName: this.form.personName.trim(),
         recordDate: this.form.recordDate,
@@ -326,11 +343,81 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         familyDependentId: this.form.familyDependentId,
         targetUserId: this.form.targetUserId,
       });
+
+      // Файлы, выбранные ДО сохранения формы — грузим сразу вслед, чтобы не заставлять
+      // пользователя искать свежесозданную запись в списке и повторно нажимать «Прикрепить».
+      let uploadFailed = 0;
+      if (this.pendingFiles.length > 0) {
+        this.uploading = true;
+        try {
+          for (const staged of this.pendingFiles) {
+            try {
+              await this.api.uploadAttachment(created.id, staged.file);
+            } catch {
+              uploadFailed++;
+            }
+          }
+        } finally {
+          this.uploading = false;
+        }
+      }
+
       this.resetForm();
       await this.refresh();
+      this.error = uploadFailed > 0 ? `Запись сохранена, но ${uploadFailed} файлов не загрузилось — прикрепите их к записи ниже.` : null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
     }
+  }
+
+  // --- Файлы формы создания (до сохранения записи) ---
+
+  canAddMorePendingFiles(): boolean {
+    return !this.attachmentLimits || this.pendingFiles.length < this.attachmentLimits.maxFilesPerRecord;
+  }
+
+  onPendingFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (files.length === 0) return;
+
+    const { accepted, skippedByCount, tooLarge } = this.filterAgainstLimits(this.pendingFiles.length, files);
+    for (const file of accepted) {
+      this.pendingFiles.push({ file, previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
+    }
+
+    const problems: string[] = [];
+    if (skippedByCount > 0 && this.attachmentLimits) {
+      problems.push(`не добавлено ${skippedByCount} файлов сверх лимита (${this.attachmentLimits.maxFilesPerRecord} на запись)`);
+    }
+    if (tooLarge.length > 0 && this.attachmentLimits) {
+      problems.push(`${tooLarge.length} файлов превышают ${formatMb(this.attachmentLimits.maxFileSizeBytes)} и не добавлены`);
+    }
+    this.error = problems.length > 0 ? `${problems.join(', ')}.` : null;
+  }
+
+  removePendingFile(index: number): void {
+    const [removed] = this.pendingFiles.splice(index, 1);
+    if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+  }
+
+  private clearPendingFiles(): void {
+    this.pendingFiles.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+    this.pendingFiles = [];
+  }
+
+  /** Общая клиентская предвалидация для формы создания и для дозагрузки к существующей записи —
+   * лимиты те же (AttachmentUploadOptions), сервер всё равно перепроверит независимо. */
+  private filterAgainstLimits(existingCount: number, files: File[]): { accepted: File[]; skippedByCount: number; tooLarge: File[] } {
+    const limits = this.attachmentLimits;
+    if (!limits) return { accepted: files, skippedByCount: 0, tooLarge: [] };
+
+    const room = Math.max(0, limits.maxFilesPerRecord - existingCount);
+    const withinCount = files.slice(0, room);
+    const tooLarge = withinCount.filter((f) => f.size > limits.maxFileSizeBytes);
+    const accepted = withinCount.filter((f) => f.size <= limits.maxFileSizeBytes);
+    return { accepted, skippedByCount: files.length - withinCount.length, tooLarge };
   }
 
   /** Безусловное удаление доступно только владельцу (кто физически загрузил) — сервер
@@ -364,6 +451,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return Math.max(0, this.attachmentLimits.maxFilesPerRecord - this.attachmentsFor(recordId).length);
   }
 
+  canAddMoreAttachments(recordId: string): boolean {
+    return this.remainingSlots(recordId) !== 0;
+  }
+
   /** До 8 файлов за раз (multiple на инпуте) — загружаются последовательно (сервер принимает один
    * файл за запрос), список вложений и остаток слотов обновляются по мере успеха каждого. */
   async handleUpload(recordId: string, event: Event): Promise<void> {
@@ -372,22 +463,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     input.value = ''; // позволяет выбрать те же файлы повторно
     if (files.length === 0) return;
 
-    const limits = this.attachmentLimits;
-    const room = limits ? this.remainingSlots(recordId)! : files.length;
-    if (limits && room <= 0) {
-      this.error = `Достигнут лимит вложений на запись (${limits.maxFilesPerRecord}) — удалите что-нибудь или создайте новую запись.`;
-      return;
-    }
-
-    const accepted = files.slice(0, room);
-    const skippedByCount = files.length - accepted.length;
-    const tooLarge = limits ? accepted.filter((f) => f.size > limits.maxFileSizeBytes) : [];
-    const toUpload = limits ? accepted.filter((f) => f.size <= limits.maxFileSizeBytes) : accepted;
+    const { accepted, skippedByCount, tooLarge } = this.filterAgainstLimits(this.attachmentsFor(recordId).length, files);
 
     this.uploading = true;
     let failed = 0;
     try {
-      for (const file of toUpload) {
+      for (const file of accepted) {
         try {
           const attachment = await this.api.uploadAttachment(recordId, file);
           this.attachmentsByRecord = {
@@ -402,9 +483,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.uploading = false;
     }
 
+    const limits = this.attachmentLimits;
     const problems: string[] = [];
-    if (skippedByCount > 0) problems.push(`не прикреплено ${skippedByCount} файлов сверх лимита (${limits!.maxFilesPerRecord} на запись)`);
-    if (tooLarge.length > 0) problems.push(`${tooLarge.length} файлов превышают ${formatMb(limits!.maxFileSizeBytes)} и не отправлены`);
+    if (skippedByCount > 0 && limits) problems.push(`не прикреплено ${skippedByCount} файлов сверх лимита (${limits.maxFilesPerRecord} на запись)`);
+    if (tooLarge.length > 0 && limits) problems.push(`${tooLarge.length} файлов превышают ${formatMb(limits.maxFileSizeBytes)} и не отправлены`);
     if (failed > 0) problems.push(`${failed} файлов не загрузились`);
     this.error = problems.length > 0 ? `Загрузка завершена частично: ${problems.join(', ')}.` : null;
   }
@@ -612,6 +694,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       familyDependentId: null,
       targetUserId: null,
     };
+    this.clearPendingFiles();
   }
 }
 

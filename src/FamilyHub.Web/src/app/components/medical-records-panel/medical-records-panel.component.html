@@ -18,6 +18,42 @@
       [placeholder]="labels.descriptionPlaceholder"
       rows="2"
     ></textarea>
+
+    <div class="file-chip-grid">
+      @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
+        <div class="file-chip">
+          @if (pf.previewUrl) {
+            <img [src]="pf.previewUrl" alt="" />
+          } @else {
+            <i class="ph ph-file-text" aria-hidden="true"></i>
+            <span class="file-chip-name">{{ pf.file.name }}</span>
+          }
+          <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="removePendingFile(i)">
+            <i class="ph-bold ph-x" aria-hidden="true"></i>
+          </button>
+        </div>
+      }
+      @if (canAddMorePendingFiles()) {
+        <label class="file-chip file-chip-add" [attr.for]="createFileInputId">
+          <i class="ph ph-paperclip" aria-hidden="true"></i>
+          <span>Файлы</span>
+        </label>
+      }
+    </div>
+    <input
+      [id]="createFileInputId"
+      class="visually-hidden-input"
+      type="file"
+      multiple
+      [accept]="acceptedFileTypes"
+      (change)="onPendingFilesSelected($event)"
+    />
+    @if (attachmentLimits; as limits) {
+      <div class="muted mb-2" style="font-size:12px">
+        Можно приложить сканы анализа/выписки сразу — до {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
+      </div>
+    }
+
     <button class="btn btn-primary btn-sm align-self-start" (click)="handleSubmit()">{{ labels.addButtonLabel }}</button>
   </div>
 
@@ -58,8 +94,15 @@
           <p class="mb-0">{{ item.description }}</p>
         }
 
+        @if (canAddMoreAttachments(item.id)) {
+          <label class="file-chip file-chip-add" style="width:auto;height:auto;padding:8px 12px;flex-direction:row" [attr.for]="'attach-file-input-' + item.id">
+            <i class="ph ph-paperclip" aria-hidden="true"></i>
+            <span>Прикрепить файлы</span>
+          </label>
+        }
         <input
-          class="input"
+          [id]="'attach-file-input-' + item.id"
+          class="visually-hidden-input"
           type="file"
           multiple
           [accept]="acceptedFileTypes"
