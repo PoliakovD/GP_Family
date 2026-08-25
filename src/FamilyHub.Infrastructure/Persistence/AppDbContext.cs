@@ -41,6 +41,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<MedicationEnrichmentJob> MedicationEnrichmentJobs => Set<MedicationEnrichmentJob>();
     public DbSet<MedicationSearchCache> MedicationSearchCaches => Set<MedicationSearchCache>();
 
+    /// <summary>Ветка medicalrecords (задачи 5.2/5.3) — конвейер извлечения показателей анализов
+    /// и заключений врача.</summary>
+    public DbSet<LabIndicator> LabIndicators => Set<LabIndicator>();
+    public DbSet<MedicalDocumentExtractionJob> MedicalDocumentExtractionJobs => Set<MedicalDocumentExtractionJob>();
+    public DbSet<GlobalLabAnalyteKb> GlobalLabAnalytesKb => Set<GlobalLabAnalyteKb>();
+    public DbSet<LabAnalyteEnrichmentJob> LabAnalyteEnrichmentJobs => Set<LabAnalyteEnrichmentJob>();
+
     /// <summary>Прогоны перешифровки при ротации ключа (ADR-0009) — см. EncryptionRotationJob.</summary>
     public DbSet<EncryptionRotationRun> EncryptionRotationRuns => Set<EncryptionRotationRun>();
 

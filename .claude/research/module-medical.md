@@ -39,12 +39,36 @@
 передают его насквозь, чтобы `types=visit` не расшифровывал вообще ни одного анализа (и наоборот) —
 это не косметика, а тот же принцип экономии, что и у остальных источников `SearchService`.
 
-Заготовка под будущий OCR-конвейер (задачи 5.2/5.3, `.claude/plans/medical-platform/stage/stage-5`):
-`MedicalRecord.ExtractedDataJson` (`[Encrypted]`) + `ExtractionStatus`, интерфейс
-`IMedicalDocumentExtractor` в `Extraction/` с `NullMedicalDocumentExtractor` по умолчанию (по
-образцу `IMedicationSearchProvider`/`NullMedicationSearchProvider` ниже). Ни очереди, ни
-эндпоинта, вызывающего этот интерфейс, ещё нет — только контракт, чтобы не дёргать схему БД
-второй раз, когда конвейер будет реализован.
+OCR-конвейер (ветка `medicalrecords`, задачи 5.2/5.3) реализован: диспетчер форматов
+`FamilyHub.Infrastructure.Documents.IDocumentTextExtractor` (текстовый слой PDF/офисные форматы
+напрямую через PdfPig/NPOI — дёшево и точно; vision-OCR через `ILmStudioJsonClient` только для
+фото и PDF-сканов без текстового слоя, отрендеренных PDFium/`PDFtoImage`) → доменная структуризация
+`LmStudioMedicalDocumentExtractor` (`Extraction/`, два промпта — анализ/выписка, чанкинг длинных
+документов, антигаллюцинационный гейт: имя показателя обязано встречаться в исходном тексте на
+текстовом пути) → нормализация (`LabAnalyteNormalizer`) → каскадный поиск в
+`kb.global_lab_analytes_kb` (`LabAnalyteKbLookupService`, копия `KbLookupService`) → сравнение с
+референсом (`IndicatorFlagCalculator`, референс из бланка приоритетнее справочника; пол пациента
+нигде не хранится — только возрастные диапазоны) → сохранение в `medical.LabIndicators`
+(`AnalyteKey`/`Flag` plaintext — по ним поиск/тренд, значения/референсы `[Encrypted]`) →
+LLM-сводка `LabSummarizer` (простым языком + отклонения + вопросы врачу, тот же
+антигаллюцинационный гейт, пишется в `MedicalRecord.SummaryJson`) → событие
+`MedicalDocumentExtractedEvent` (только счётчики, не значения) → push владельцу записи.
+Выписки врача (`Kind=DoctorVisit`) — только извлечение (`VisitConclusion` в `ExtractedDataJson`),
+без графика приёма/календаря (вне объёма ветки). Оркестрация —
+`MedicalDocumentExtractionProcessor`, Hangfire-очередь `extraction` с одним воркером (LM Studio —
+один ноутбук за WireGuard, параллелить нечего), тот же паттерн, что
+`MedicationEnrichmentProcessor`. Постановка в очередь — `ExtractionRequestService`
+(`POST /api/medical-records/{recordId}/attachments/{attachmentId}/extract`, только владелец).
+Чтение — `ExtractionQueryService` (`GET .../extraction`, `.../indicators`, `.../summary`,
+`GET /api/indicators`, `GET /api/indicators/{analyteKey}`), видимость — тот же предикат, что у
+самой записи. Поиск по показателям — `SearchService.SearchIndicatorsAsync`
+(`SearchResultType.Indicator`, добавлен последним значением enum).
+**Известный пробел:** конвейер обогащения самого справочника `kb.global_lab_analytes_kb`
+(аналог `MedicationEnrichmentProcessor` для показателей — веб-поиск+суммаризация при промахе)
+не реализован в этой ветке — таблица существует и участвует в каскадном поиске, но заполняется
+только вручную/сидом; `IndicatorFlagCalculator` при этом продолжает работать по референсу из
+самого бланка (основной случай). Общая с медикаментами проверка на персональный контекст в
+payload вынесена в `KbIsolationGuard` (`Kb/`), используется обоими writer'ами.
 
 Два уровня шаринга, реализованные как отдельные таблицы (не флаги на самой записи):
 

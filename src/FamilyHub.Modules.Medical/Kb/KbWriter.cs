@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Enrichment;
@@ -12,26 +11,15 @@ namespace FamilyHub.Modules.Medical.Kb;
 /// Единственная точка записи в kb.global_medications_kb (этап 4 — «писатель», которого явно
 /// ждёт KbIsolationGuardTests.PersonalContext_CannotBeStoredInKbRow). Инвариант изоляции
 /// справочника (задача 2.6) охраняется дважды: структурно (GlobalMedicationKb не имеет полей
-/// под персональный контекст — см. KbIsolationGuardTests) и здесь, на уровне значений — на
-/// случай, если модель случайно подмешает в текст что-то похожее на идентификатор.
+/// под персональный контекст — см. KbIsolationGuardTests) и на уровне значений через общий
+/// <see cref="KbIsolationGuard"/> (ветка medicalrecords: вынесен отсюда при добавлении второго
+/// writer'а — LabAnalyteKbWriter) — на случай, если модель случайно подмешает в текст что-то
+/// похожее на идентификатор.
 /// Upsert по NormalizedName — raw SQL, как и весь остальной доступ к kb (см. KbLookupService):
 /// Aliases/search_vector вне EF-модели.
 /// </summary>
 public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
 {
-    private static readonly Regex GuidPattern = new(
-        @"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly Regex EmailPattern = new(@"[^\s@]+@[^\s@]+\.[^\s@]+", RegexOptions.Compiled);
-
-    /// <summary>7+ подряд идущих цифр — телефон/паспорт/номер карты, не имеет отношения к знанию о препарате.</summary>
-    private static readonly Regex LongDigitsPattern = new(@"\d{7,}", RegexOptions.Compiled);
-
-    /// <summary>То же множество ключевых слов, что и KbIsolationGuardTests.PersonalContextPattern —
-    /// один инвариант, проверяемый на двух уровнях (структура модели + значения payload).</summary>
-    private static readonly Regex PersonalKeywordPattern = new(
-        @"\b(UserId|FamilyId|Person|Owner|Telegram|Email|Phone|Member)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
     /// <param name="extraAliases">Доп. алиасы помимо summary.TradeNames — например, исходное
     /// (искажённое OCR) название, когда запись пишется под исправленным именем (см.
     /// MedicationEnrichmentProcessor): следующее распознавание той же опечатки находит запись
@@ -40,7 +28,7 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         string normalizedName, string displayName, MedicationSummary summary, string source,
         IReadOnlyList<string>? extraAliases = null, CancellationToken ct = default)
     {
-        var violation = FindPersonalContextViolation(displayName, summary, extraAliases);
+        var violation = FindViolation(displayName, summary, extraAliases);
         if (violation is not null)
         {
             logger.LogWarning(
@@ -101,8 +89,7 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         return KbWriteResult.Ok(actualId);
     }
 
-    private static string? FindPersonalContextViolation(
-        string displayName, MedicationSummary summary, IReadOnlyList<string>? extraAliases)
+    private static string? FindViolation(string displayName, MedicationSummary summary, IReadOnlyList<string>? extraAliases)
     {
         var candidates = new List<string?>
         {
@@ -112,15 +99,6 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         candidates.AddRange(summary.TradeNames);
         if (extraAliases is not null) candidates.AddRange(extraAliases);
 
-        foreach (var text in candidates)
-        {
-            if (string.IsNullOrWhiteSpace(text)) continue;
-            if (GuidPattern.IsMatch(text)) return $"похоже на GUID: \"{text}\"";
-            if (EmailPattern.IsMatch(text)) return $"похоже на e-mail: \"{text}\"";
-            if (LongDigitsPattern.IsMatch(text)) return $"длинная числовая последовательность: \"{text}\"";
-            if (PersonalKeywordPattern.IsMatch(text)) return $"персональный ключ в тексте: \"{text}\"";
-        }
-
-        return null;
+        return KbIsolationGuard.FindViolation(candidates);
     }
 }

@@ -40,6 +40,14 @@ public class MedicalRecord
 
     public ExtractionStatus ExtractionStatus { get; set; }
 
+    /// <summary>LLM-сводка по документу (ветка medicalrecords, задача 5.2): простым языком +
+    /// отклонения + вопросы врачу. [Encrypted] — та же логика, что у ExtractedDataJson: SQL по
+    /// содержимому невозможен по построению. Null, пока распознавание не запускалось или
+    /// суммаризатор не прошёл антигаллюцинационный гейт (см. LabSummarizer) — отсутствие summary
+    /// не блокирует отображение самих показателей.</summary>
+    [Encrypted]
+    public string? SummaryJson { get; set; }
+
     /// <summary>Подопечный (ребёнок/питомец/пожилой родственник без своего User), для которого
     /// загружена эта запись. Видна всей активной семье подопечного автоматически — см.
     /// MedicalRecordService.VisibleRecordsQuery. Взаимоисключимо с TargetUserId (проверяется в

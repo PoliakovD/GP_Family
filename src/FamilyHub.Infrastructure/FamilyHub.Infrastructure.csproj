@@ -63,6 +63,27 @@
     <PackageReference Include="Hangfire.PostgreSql" Version="1.21.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- ветка medicalrecords: декодирование вложений для OCR-конвейера анализов/выписок (Documents/) —
+         текстовый слой PDF, рендер PDF-страниц без текстового слоя, офисные форматы, ресайз фото.
+         SkiaSharp НЕ пиннится на последнюю 3.x намеренно: PDFtoImage 4.1.1 скомпилирован против
+         SkiaSharp 2.88.8 (см. его .nuspec) — 3.x менял сигнатуры SKBitmap.Resize/SKImageInfo, и
+         принудительная унификация на 3.x рисковала бы MissingMethodException в рантайме внутри
+         чужой уже скомпилированной сборки. Явные PackageReference ниже на 2.88.8 фиксируют то,
+         что и так резолвится транзитивно от PDFtoImage — чтобы версия не расползлась незаметно
+         при будущем добавлении другого пакета с более широким диапазоном. -->
+    <PackageReference Include="PdfPig" Version="0.1.11" />
+    <PackageReference Include="PDFtoImage" Version="4.1.1" />
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
+    <PackageReference Include="NPOI" Version="2.7.4" />
+    <!-- Явный пиннинг: NPOI 2.7.4 транзитивно тянет SixLabors.ImageSharp 2.1.10, у которого
+         известная DoS-уязвимость (NU1902, GHSA-rxmq-m78w-7wmc) — картинки из офисных файлов мы
+         не извлекаем (нужен только текст), но версию всё равно поднимаем до патченной. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
+  </ItemGroup>
+
   <!-- Authorization/Authentication-абстракции (IAuthorizationHandler, ClaimsPrincipal-расширения и т.п.)
        поставляются с shared framework ASP.NET Core, а не отдельным NuGet-пакетом. -->
   <ItemGroup>

@@ -95,6 +95,13 @@ public class MedicalRecordService(
     public Task<bool> IsVisibleToAsync(Guid recordId, Guid userId, CancellationToken ct = default) =>
         VisibleRecordsQuery(userId).AnyAsync(r => r.Id == recordId, ct);
 
+    /// <summary>Id видимых записей — переиспользуется поиском по показателям (ветка
+    /// medicalrecords, SearchService.SearchIndicatorsAsync): LabIndicators.AnalyteKey не
+    /// зашифрован и фильтруется прямо raw SQL, но сам scope доступа обязан идти через
+    /// тот же единственный предикат видимости, а не собственную копию.</summary>
+    public Task<List<Guid>> GetVisibleRecordIdsAsync(Guid userId, MedicalRecordKind? kind = null, CancellationToken ct = default) =>
+        VisibleRecordsQuery(userId, kind).Select(r => r.Id).ToListAsync(ct);
+
     /// <summary>
     /// Поиск по видимым медкартам (этап 3, ADR-0003). PersonName/Doctor/Description зашифрованы
     /// at-rest (ADR-0002) — Postgres-FTS по ним невозможен, поэтому поиск строится in-memory:

@@ -52,11 +52,15 @@ public class SearchService(
         var birthdayHits = wantsAll || types!.Contains(SearchResultType.Birthday)
             ? await birthdays.SearchAsync(userId, q, PerSourceLimit, ct)
             : [];
+        var indicators = wantsAll || types!.Contains(SearchResultType.Indicator)
+            ? await SearchIndicatorsAsync(userId, q, ct)
+            : [];
 
         var items = medications
             .Concat(kb)
             .Concat(records)
             .Concat(birthdayHits.Select(ToSearchItem))
+            .Concat(indicators)
             .OrderByDescending(i => i.Score)
             .ToList();
 
@@ -159,6 +163,46 @@ public class SearchService(
         var snippet = Truncate(record.Description ?? record.Doctor);
         return new SearchResultItem(SearchResultType.Record, record.Id, title, snippet, hit.Score);
     }
+
+    /// <summary>Показатели анализов (ветка medicalrecords) — AnalyteKey/Flag plaintext,
+    /// триграммный поиск прямо в SQL (как у медикаментов), но scope доступа берётся из того же
+    /// предиката видимости, что и у самих записей (MedicalRecordService.GetVisibleRecordIdsAsync),
+    /// не собственной копии. Один результат на показатель (DISTINCT ON), самая свежая запись —
+    /// у показателя может быть много точек в истории, но найти его в поиске нужно один раз.
+    /// Значение в сниппет НЕ попадает — только факт отклонения (тот же принцип экономии, что и у
+    /// остальных источников: не расшифровывать/не раскрывать больше, чем нужно для навигации).</summary>
+    private async Task<List<SearchResultItem>> SearchIndicatorsAsync(Guid userId, string q, CancellationToken ct)
+    {
+        var recordIds = await medicalRecords.GetVisibleRecordIdsAsync(userId, MedicalRecordKind.Analysis, ct);
+        if (recordIds.Count == 0) return [];
+
+        var rows = await db.Database.SqlQuery<IndicatorSearchRow>($"""
+            SELECT DISTINCT ON ("AnalyteKey")
+                   "Id", "AnalyteKey", "DisplayName", "Flag", "RecordDate",
+                   similarity("AnalyteKey", {q}) AS "Score"
+            FROM medical."LabIndicators"
+            WHERE "MedicalRecordId" = ANY({recordIds.ToArray()})
+              AND similarity("AnalyteKey", {q}) > 0.3
+            ORDER BY "AnalyteKey", "RecordDate" DESC
+            LIMIT {PerSourceLimit}
+            """).ToListAsync(ct);
+
+        return rows
+            .OrderByDescending(r => r.Score)
+            .Select(r => new SearchResultItem(
+                SearchResultType.Indicator, r.Id, r.DisplayName,
+                $"{FlagText((IndicatorFlag)r.Flag)} · {r.RecordDate:dd.MM.yyyy}", r.Score))
+            .ToList();
+    }
+
+    private static string FlagText(IndicatorFlag flag) => flag switch
+    {
+        IndicatorFlag.Low => "ниже нормы",
+        IndicatorFlag.High => "выше нормы",
+        IndicatorFlag.Critical => "критическое отклонение",
+        IndicatorFlag.Normal => "в норме",
+        _ => "норма неизвестна",
+    };
 
     private static string? Truncate(string? snippet) =>
         snippet is { Length: > 160 } ? snippet[..160] + "…" : snippet;

@@ -1,18 +1,25 @@
 namespace FamilyHub.Modules.Medical.Extraction;
 
-/// <summary>Один показатель из бланка анализа (задача 5.2 — не реализована, см.
-/// .claude/plans/medical-platform/stage/stage-5/task-5.2-lab-results.md). RefLow/RefHigh — границы
-/// референсного диапазона, если распознаны; подсветка отклонений строится по ним на фронте.</summary>
-public record LabIndicator(string Name, string Value, string? Unit, double? RefLow, double? RefHigh);
+/// <summary>Один показатель, как его вернула модель — сырой выход LLM ДО нормализации/привязки к
+/// справочнику/сохранения (ветка medicalrecords, реализация LmStudioMedicalDocumentExtractor).
+/// Названа не LabIndicator намеренно: так называется персистентная сущность
+/// (FamilyHub.Domain.Entities.LabIndicator) — коллизия имён в разных неймспейсах компилируется,
+/// но путает при чтении кода конвейера (см. MedicalDocumentExtractionProcessor, который
+/// превращает ExtractedLabIndicator[] в LabIndicator[]). RefLow/RefHigh — границы референсного
+/// диапазона, если распознаны в самом бланке.</summary>
+/// <summary>RefText — референс как напечатан целиком, когда он не раскладывается на
+/// RefLow/RefHigh ("отрицательно", "1-3 в п/зр", "норма"). RefLow/RefHigh заполняются только
+/// когда референс — числовой диапазон.</summary>
+public record ExtractedLabIndicator(string Name, string Value, string? Unit, double? RefLow, double? RefHigh, string? RefText);
 
-/// <summary>Заключение врача из распознанного документа (задача 5.3 — не реализована, см.
-/// .claude/plans/medical-platform/stage/stage-5/task-5.3-doctors-prescriptions.md). Prescriptions —
-/// сырой текст назначений; извлечение структурированного графика приёма в отдельную задачу.</summary>
+/// <summary>Заключение врача из распознанного документа (задача 5.3: только извлечение — график
+/// приёма → календарь → push вне объёма этой ветки, см. план). Prescriptions — сырой текст
+/// назначений.</summary>
 public record VisitConclusion(string? Diagnosis, string? Recommendations, string? Prescriptions);
 
 /// <summary>
 /// Результат распознавания одного вложения. Ровно одно из <see cref="LabIndicators"/>/
-/// <see cref="Conclusion"/> заполнено — по <see cref="FamilyHub.Domain.Enums.MedicalRecordKind"/>
-/// исходной записи. Сериализуется в MedicalRecord.ExtractedDataJson.
+/// <see cref="Conclusion"/> заполнено при Supported — по
+/// <see cref="FamilyHub.Domain.Enums.MedicalRecordKind"/> исходной записи.
 /// </summary>
-public record ExtractionResult(bool Supported, IReadOnlyList<LabIndicator>? LabIndicators, VisitConclusion? Conclusion);
+public record ExtractionResult(bool Supported, IReadOnlyList<ExtractedLabIndicator>? LabIndicators, VisitConclusion? Conclusion, string? FailureReason = null);

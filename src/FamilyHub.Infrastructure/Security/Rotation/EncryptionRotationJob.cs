@@ -55,7 +55,7 @@ public class EncryptionRotationJob(
     public static readonly IReadOnlyList<Type> FieldEntityTypes =
     [
         typeof(MedicalRecord), typeof(Birthday), typeof(FamilyDependent),
-        typeof(PushSubscription), typeof(FileAttachment),
+        typeof(PushSubscription), typeof(FileAttachment), typeof(LabIndicator),
     ];
 
     public async Task RunAsync(CancellationToken ct = default)

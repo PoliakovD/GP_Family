@@ -2,14 +2,18 @@ using FamilyHub.Domain.Enums;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
+/// <summary>Вложение, переданное на распознавание — расшифрованный байты + заявленный ContentType
+/// (нужен диспетчеру FamilyHub.Infrastructure.Documents.IDocumentTextExtractor, чтобы выбрать
+/// текстовый путь или vision-OCR) + имя файла (только для диагностики/логов).</summary>
+public record DocumentSource(byte[] Content, string ContentType, string FileName);
+
 /// <summary>
-/// Абстракция OCR-конвейера бланков анализов и заключений врачей — задачи 5.2/5.3, ПОКА НЕ
-/// РЕАЛИЗОВАНЫ (см. .claude/plans/medical-platform/stage/stage-5). Заготовка контракта нужна
-/// сейчас, чтобы MedicalRecord.ExtractedDataJson/ExtractionStatus не пришлось вводить отдельной
-/// миграцией позже. По образцу IMedicationSearchProvider (этап 4): реализация подключается
-/// конфигом, не кодом; по умолчанию — Null-реализация, наружу не уходит ничего.
+/// Абстракция конвейера извлечения показателей анализов и заключений врачей (ветка
+/// medicalrecords, задачи 5.2/5.3). По образцу IMedicationSearchProvider (этап 4): реализация
+/// подключается конфигом (Extraction:Enabled), не кодом; по умолчанию — Null-реализация, наружу
+/// не уходит ничего.
 /// </summary>
 public interface IMedicalDocumentExtractor
 {
-    Task<ExtractionResult> ExtractAsync(Stream scan, MedicalRecordKind kind, CancellationToken ct = default);
+    Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind kind, CancellationToken ct = default);
 }
