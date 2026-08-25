@@ -1,0 +1,82 @@
+name: Build
+
+# Сборка и публикация образов в GHCR — отдельно от деплоя (см. deploy.yml). Тесты здесь не
+# гоняются: ci.yml уже прогоняет их на каждый push (все ветки) и PR — дублировать незачем.
+# Не трогает VPS вообще, только пушит образы в реестр; go-live — отдельный ручной клик (deploy.yml).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image refs (lowercase owner — GHCR требует lowercase)
+        id: meta
+        run: |
+          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${owner}/gp_family-api" >> "$GITHUB_OUTPUT"
+          echo "image_bot=ghcr.io/${owner}/gp_family-telegrambot" >> "$GITHUB_OUTPUT"
+          echo "image_wg=ghcr.io/${owner}/gp_family-wg-client" >> "$GITHUB_OUTPUT"
+          echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # api — включает сборку Angular (FamilyHub.Web) как одну из стадий Dockerfile (см. её
+      # комментарий) — отдельного образа/workflow под "web" не заводим, SPA всегда едет вместе с api.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/FamilyHub.Api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Собрать и запушить образ FamilyHub.TelegramBot (ADR-0008)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/FamilyHub.TelegramBot/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_bot }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image_bot }}:latest
+          cache-from: type=gha,scope=bot
+          cache-to: type=gha,scope=bot,mode=max
+
+      - name: Собрать и запушить образ AmneziaWG-сайдкара (ADR-0008)
+        # Собирается с нуля из исходников amneziawg-go/amneziawg-tools (deploy/wg/Dockerfile) —
+        # тегами AMNEZIAWG_GO_COMMIT/AWGTOOLS_COMMIT (по умолчанию master) можно закрепить
+        # конкретный коммит после проверки, см. комментарии в самом Dockerfile. Собирается
+        # ВСЕГДА (не под условием "bot" профиля) — так образ уже готов в GHCR к моменту, когда вы
+        # решите включить COMPOSE_PROFILES=bot; собирать редко меняющийся сайдкар из исходников
+        # безопаснее, чем полагаться на непроверенный community-образ.
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/wg
+          file: deploy/wg/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_wg }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image_wg }}:latest
+          cache-from: type=gha,scope=wg
+          cache-to: type=gha,scope=wg,mode=max

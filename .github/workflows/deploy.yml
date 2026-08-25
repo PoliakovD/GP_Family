@@ -2,18 +2,13 @@ name: Deploy
 
 # Только вручную (workflow_dispatch) — деплой-план фиксирует это как решение: контур дев по
 # защите (Hangfire/Debug-логи), но никакой автомерж не должен уезжать на VPS без явного клика.
+# Ветка/тег/SHA выбирается на самом экране запуска (селектор "Use workflow from" в Actions UI) —
+# от неё берутся только файлы deploy/ (Caddyfile, docker-compose.prod.yml), само приложение
+# ВСЕГДА разворачивается образом :latest, собранным build.yml (см. его — push в master).
+# Тестов и сборки образов здесь больше нет: build.yml публикует образы отдельно и заранее,
+# ci.yml прогоняет тесты на каждый push — дублировать оба на каждый деплой было незачем.
 on:
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: 'Ветка/тег/SHA для деплоя'
-        required: false
-        default: master
-      run_tests:
-        description: 'Прогнать юнит-тесты перед сборкой образа'
-        required: false
-        default: true
-        type: boolean
+  workflow_dispatch: {}
 
 concurrency:
   # Один деплой за раз — второй запуск ждёт, не отменяет первый (cancel-in-progress: false),
@@ -22,101 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    if: ${{ inputs.run_tests }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Unit tests
-        run: dotnet test tests/FamilyHub.UnitTests/FamilyHub.UnitTests.csproj -c Release
-
-  build-push:
-    needs: test
-    # Пропущенный test (run_tests=false) не должен блокировать сборку — только реальный провал.
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
-      image: ${{ steps.meta.outputs.image }}
-      image_bot: ${{ steps.meta.outputs.image_bot }}
-      image_wg: ${{ steps.meta.outputs.image_wg }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
-
-      - name: Resolve image refs (lowercase owner — GHCR требует lowercase)
-        id: meta
-        run: |
-          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          echo "image=ghcr.io/${owner}/gp_family-api" >> "$GITHUB_OUTPUT"
-          echo "image_bot=ghcr.io/${owner}/gp_family-telegrambot" >> "$GITHUB_OUTPUT"
-          echo "image_wg=ghcr.io/${owner}/gp_family-wg-client" >> "$GITHUB_OUTPUT"
-          echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: src/FamilyHub.Api/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.image }}:latest
-          # Разные scope кэша GHA для api/bot — общий ключ заставил бы две сборки конкурировать
-          # за один и тот же кэш вместо использования каждой своего.
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-
-      - name: Собрать и запушить образ FamilyHub.TelegramBot (ADR-0008)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: src/FamilyHub.TelegramBot/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.image_bot }}:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.image_bot }}:latest
-          cache-from: type=gha,scope=bot
-          cache-to: type=gha,scope=bot,mode=max
-
-      - name: Собрать и запушить образ AmneziaWG-сайдкара (ADR-0008)
-        # Собирается с нуля из исходников amneziawg-go/amneziawg-tools (deploy/wg/Dockerfile) —
-        # тегами AMNEZIAWG_GO_COMMIT/AWGTOOLS_COMMIT (по умолчанию master) можно закрепить
-        # конкретный коммит после проверки, см. комментарии в самом Dockerfile. Собирается
-        # ВСЕГДА (не под условием "bot" профиля) — так образ уже готов в GHCR к моменту, когда вы
-        # решите включить COMPOSE_PROFILES=bot; собирать редко меняющийся сайдкар из исходников
-        # безопаснее, чем полагаться на непроверенный community-образ.
-        uses: docker/build-push-action@v6
-        with:
-          context: deploy/wg
-          file: deploy/wg/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.image_wg }}:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.image_wg }}:latest
-          cache-from: type=gha,scope=wg
-          cache-to: type=gha,scope=wg,mode=max
-
   deploy:
-    needs: build-push
     runs-on: ubuntu-latest
     # "production" environment — отдельные секреты + возможность включить required reviewers
     # в настройках репозитория (Settings → Environments) поверх самого workflow_dispatch.
@@ -127,10 +28,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
           sparse-checkout: |
             deploy
           sparse-checkout-cone-mode: false
+
+      - name: Resolve image refs (lowercase owner — GHCR требует lowercase)
+        id: meta
+        run: |
+          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${owner}/gp_family-api" >> "$GITHUB_OUTPUT"
+          echo "image_bot=ghcr.io/${owner}/gp_family-telegrambot" >> "$GITHUB_OUTPUT"
+          echo "image_wg=ghcr.io/${owner}/gp_family-wg-client" >> "$GITHUB_OUTPUT"
 
       - name: Снять passphrase с ключа
         # webfactory/ssh-agent не умеет passphrase-protected ключи — ssh-add пытается
@@ -179,14 +87,13 @@ jobs:
           PROD_ENV: ${{ secrets.PROD_ENV }}
         run: |
           printf '%s\n' "$PROD_ENV" > env.rendered
-          # Тег образа — из пайплайна (build-push), не из секрета: секрет не должен решать,
-          # какой именно билд разворачивается.
-          echo "IMAGE=${{ needs.build-push.outputs.image }}" >> env.rendered
-          echo "IMAGE_TAG=${{ needs.build-push.outputs.image_tag }}" >> env.rendered
-          echo "IMAGE_BOT=${{ needs.build-push.outputs.image_bot }}" >> env.rendered
-          # WG_IMAGE — тоже из пайплайна, не из PROD_ENV: сайдкар собирается из исходников
-          # amneziawg-go/amneziawg-tools тем же job'ом (см. шаг выше), секрету незачем это решать.
-          echo "WG_IMAGE=${{ needs.build-push.outputs.image_wg }}:${{ needs.build-push.outputs.image_tag }}" >> env.rendered
+          echo "IMAGE=${{ steps.meta.outputs.image }}" >> env.rendered
+          # Всегда latest — build.yml публикует его при каждом push в master; этот workflow
+          # ничего не собирает и не выбирает конкретный SHA (см. шапку файла и deploy/README.md
+          # про откат на конкретный тег вручную, если он когда-нибудь понадобится).
+          echo "IMAGE_TAG=latest" >> env.rendered
+          echo "IMAGE_BOT=${{ steps.meta.outputs.image_bot }}" >> env.rendered
+          echo "WG_IMAGE=${{ steps.meta.outputs.image_wg }}:latest" >> env.rendered
 
       - name: Render конфиг Amnezia WG из секрета WG_CONF (ADR-0008)
         # Приватный ключ тоннеля — секрет, в git ему нельзя. Пустой WG_CONF допустим (бот тогда
@@ -264,5 +171,6 @@ jobs:
 # Откат (не требует нового workflow_dispatch — см. deploy/README.md):
 #   ssh -p <SSH_PORT> deploy@<host>
 #   cd /opt/familyhub
-#   sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<предыдущий sha>/' .env
+#   sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<предыдущий sha, см. теги в GHCR>/' .env
 #   docker compose up -d api telegrambot   # IMAGE_BOT использует тот же IMAGE_TAG, что и api
+#   # Чтобы вернуться на latest — sed обратно на IMAGE_TAG=latest и снова docker compose up -d.
