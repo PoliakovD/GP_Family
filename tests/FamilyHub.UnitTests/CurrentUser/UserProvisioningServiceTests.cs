@@ -19,27 +19,22 @@ public class UserProvisioningServiceTests : SqliteTestBase
     [Fact]
     public async Task GetOrCreateUserIdAsync_NewTelegramId_CreatesUser()
     {
-        var userId = await _sut.GetOrCreateUserIdAsync(123456, "Alice");
+        var userId = await _sut.GetOrCreateUserIdAsync(123456);
 
         var user = Db.Users.Single(u => u.Id == userId);
         user.TelegramId.Should().Be(123456);
-        user.DisplayName.Should().Be("Alice");
-    }
-
-    [Fact]
-    public async Task GetOrCreateUserIdAsync_NoDisplayName_FallsBackToGeneratedName()
-    {
-        var userId = await _sut.GetOrCreateUserIdAsync(777, null);
-
-        Db.Users.Single(u => u.Id == userId).DisplayName.Should().Be("User 777");
+        // Идентити (ФИО/ДР/пол) отдельным экраном после привязки — Telegram initData не
+        // источник профиля (identity rework), см. profileGuard на фронте.
+        user.LastName.Should().BeNull();
+        user.FirstName.Should().BeNull();
     }
 
     [Fact]
     public async Task GetOrCreateUserIdAsync_ExistingTelegramId_ReturnsSameUserIdIdempotently()
     {
-        var firstId = await _sut.GetOrCreateUserIdAsync(42, "Bob");
+        var firstId = await _sut.GetOrCreateUserIdAsync(42, "bob");
 
-        var secondId = await _sut.GetOrCreateUserIdAsync(42, "Bob (renamed, ignored)");
+        var secondId = await _sut.GetOrCreateUserIdAsync(42, "bob");
 
         secondId.Should().Be(firstId);
         Db.Users.Count(u => u.TelegramId == 42).Should().Be(1);
@@ -52,7 +47,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
         // (как если бы параллельный запрос успел вставить между нашим SELECT и INSERT) —
         // SaveChangesAsync внутри сервиса упадёт на UNIQUE-индексе, сервис должен перечитать,
         // а не выбросить исключение наружу.
-        var existing = new User { Id = Guid.NewGuid(), TelegramId = 999, DisplayName = "Already here", CreatedAt = DateTime.UtcNow };
+        var existing = new User { Id = Guid.NewGuid(), TelegramId = 999, CreatedAt = DateTime.UtcNow };
 
         // Кладём напрямую через отдельный контекст той же БД, чтобы не "увидеть" её в трекере sut'а заранее.
         using (var seedDb = NewContext())
@@ -66,7 +61,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
         // попытки вставки. Это покрывает "счастливый путь" идемпотентности; чтобы явно
         // спровоцировать ветку catch(DbUpdateException), нужно было бы гонять параллельные
         // вызовы — здесь достаточно проверить результирующую идемпотентность.
-        var userId = await _sut.GetOrCreateUserIdAsync(999, "Different name attempt");
+        var userId = await _sut.GetOrCreateUserIdAsync(999, "different_handle");
 
         userId.Should().Be(existing.Id);
         Db.Users.Count(u => u.TelegramId == 999).Should().Be(1);
@@ -75,7 +70,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
     [Fact]
     public async Task GetOrCreateUserIdAsync_NewUser_CopiesHandleToTgUsernameAndUsername_WhenValidAndFree()
     {
-        var userId = await _sut.GetOrCreateUserIdAsync(111, "Ada", "ada_lovelace");
+        var userId = await _sut.GetOrCreateUserIdAsync(111, "ada_lovelace");
 
         var user = Db.Users.Single(u => u.Id == userId);
         user.TgUsername.Should().Be("ada_lovelace");
@@ -87,7 +82,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
     {
         // Формат Username требует 5-32 симв.; короткие TG-хэндлы (тут — 3 симв.) зеркалятся
         // в TgUsername как есть, но не переносятся в видимый Username.
-        var userId = await _sut.GetOrCreateUserIdAsync(112, "Bo", "bob");
+        var userId = await _sut.GetOrCreateUserIdAsync(112, "bob");
 
         var user = Db.Users.Single(u => u.Id == userId);
         user.TgUsername.Should().Be("bob");
@@ -103,12 +98,11 @@ public class UserProvisioningServiceTests : SqliteTestBase
             Id = Guid.NewGuid(),
             Email = "taken@example.com",
             Username = "shared_handle",
-            DisplayName = "Taken",
             CreatedAt = DateTime.UtcNow,
         });
         await Db.SaveChangesAsync();
 
-        var userId = await _sut.GetOrCreateUserIdAsync(113, "Cy", "Shared_Handle"); // разный регистр — коллизия по normalize
+        var userId = await _sut.GetOrCreateUserIdAsync(113, "Shared_Handle"); // разный регистр — коллизия по normalize
 
         var user = Db.Users.Single(u => u.Id == userId);
         user.TgUsername.Should().Be("Shared_Handle");
@@ -118,7 +112,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
     [Fact]
     public async Task GetOrCreateUserIdAsync_ExistingUser_RefreshesOnlyTgUsername_NeverTouchesAppUsername()
     {
-        var firstId = await _sut.GetOrCreateUserIdAsync(114, "Dana", "dana_handle");
+        var firstId = await _sut.GetOrCreateUserIdAsync(114, "dana_handle");
         var user = Db.Users.Single(u => u.Id == firstId);
         user.Username.Should().Be("dana_handle");
 
@@ -128,7 +122,7 @@ public class UserProvisioningServiceTests : SqliteTestBase
         user.Username = "custom_chosen_name";
         await Db.SaveChangesAsync();
 
-        var secondId = await _sut.GetOrCreateUserIdAsync(114, "Dana", "dana_new_handle");
+        var secondId = await _sut.GetOrCreateUserIdAsync(114, "dana_new_handle");
 
         secondId.Should().Be(firstId);
         var refreshed = Db.Users.Single(u => u.Id == firstId);

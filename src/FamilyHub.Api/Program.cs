@@ -491,6 +491,9 @@ builder.Services.AddScoped<ConsentService>();
 // --- Права субъекта ПДн (задача 2.3): удаление аккаунта + экспорт ---
 builder.Services.AddScoped<AccountService>();
 
+// --- Профиль (identity rework): ФИО/ДР/пол после создания User ---
+builder.Services.AddScoped<ProfileService>();
+
 // --- Привязка Telegram к веб-аккаунту с подтверждением от бота + слияние аккаунтов ---
 builder.Services.AddScoped<AccountMergeService>();
 builder.Services.AddScoped<TelegramLinkService>();

@@ -6,7 +6,17 @@ import { DevLoggerService } from './dev-logger.service';
 
 export interface Me {
   userId: string;
-  displayName: string;
+  /** ФИО/ДР/пол (identity rework) — все nullable: профиль может быть ещё не заполнен сразу
+   * после Telegram-привязки (см. profileComplete/profileGuard). Отчество — единственное
+   * реально опциональное поле и после заполнения профиля (есть не у всех). */
+  lastName: string | null;
+  firstName: string | null;
+  middleName: string | null;
+  birthDate: string | null;
+  /** Gender: 0 = Male, 1 = Female (см. FamilyHub.Domain.Enums.Gender). */
+  gender: number | null;
+  /** true, когда lastName/firstName/birthDate/gender все заполнены — см. profileGuard. */
+  profileComplete: boolean;
   provider: 'telegram' | 'email' | 'dev';
   email: string | null;
   /** Видимый уникальный username (задаётся при PWA-регистрации либо копируется из Telegram при первом входе). */
@@ -15,6 +25,15 @@ export interface Me {
   tgUsername: string | null;
   hasTelegram: boolean;
   hasPassword: boolean;
+}
+
+/** Профиль, задаваемый на регистрации/в настройках — см. FamilyHub.Domain.ValueObjects.PersonName. */
+export interface ProfileInput {
+  lastName: string;
+  firstName: string;
+  middleName: string | null;
+  birthDate: string;
+  gender: number;
 }
 
 export interface LinkTelegramStart {
@@ -119,11 +138,21 @@ export class AuthService {
   }
 
   async registerConfirm(
-    email: string, code: string, password: string, username: string, displayName: string | null,
+    email: string, code: string, password: string, username: string, profile: ProfileInput,
   ): Promise<void> {
     await firstValueFrom(
-      this.http.post<void>('/api/auth/register/confirm', { email, code, password, username, displayName }),
+      this.http.post<void>('/api/auth/register/confirm', { email, code, password, username, ...profile }),
     );
+    await this.loadMe();
+  }
+
+  /**
+   * Единственный путь записи ФИО/ДР/пола после создания User (identity rework) — используется
+   * и настройками (SettingsProfileComponent), и первичным экраном сбора профиля после
+   * Telegram-привязки (ProfileSetupComponent).
+   */
+  async updateProfile(profile: ProfileInput): Promise<void> {
+    await firstValueFrom(this.http.put<void>('/api/account/profile', profile));
     await this.loadMe();
   }
 
@@ -208,11 +237,15 @@ export class AuthService {
     );
   }
 
-  async telegramBind(email: string, code: string): Promise<void> {
-    await firstValueFrom(
-      this.http.post<void>('/api/auth/telegram/bind', { email, code, initData: this.tg.getInitData() }),
+  /** Возвращает profileRequired — true, если после привязки экрану нужно собрать ФИО/ДР/пол. */
+  async telegramBind(email: string, code: string): Promise<boolean> {
+    const result = await firstValueFrom(
+      this.http.post<{ profileRequired: boolean }>(
+        '/api/auth/telegram/bind', { email, code, initData: this.tg.getInitData() },
+      ),
     );
     this.telegramBound.set(true);
+    return result.profileRequired;
   }
 
   /**

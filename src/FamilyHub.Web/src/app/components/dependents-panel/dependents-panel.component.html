@@ -4,17 +4,26 @@
   }
 
   <div class="card mb-3">
-    <input class="input" [(ngModel)]="form.name" placeholder="Имя" />
-    <input class="input" type="date" [(ngModel)]="form.birthDate" placeholder="Дата рождения" />
-
     <label class="checkbox-row">
       <input type="checkbox" [(ngModel)]="form.isPet" />
       <span>Это питомец</span>
     </label>
 
     @if (form.isPet) {
+      <input class="input" [(ngModel)]="form.firstName" placeholder="Кличка" />
       <input class="input" [(ngModel)]="form.petSpecies" placeholder="Вид животного (кот, собака…)" />
+    } @else {
+      <input class="input" [(ngModel)]="form.lastName" placeholder="Фамилия" />
+      <input class="input" [(ngModel)]="form.firstName" placeholder="Имя" />
+      <input class="input" [(ngModel)]="form.middleName" placeholder="Отчество (необязательно)" />
     }
+
+    <select class="input" [(ngModel)]="form.gender">
+      <option [ngValue]="Gender.Male">Мужской</option>
+      <option [ngValue]="Gender.Female">Женский</option>
+    </select>
+
+    <input class="input" type="date" [(ngModel)]="form.birthDate" placeholder="Дата рождения" />
 
     <div class="d-flex gap-2">
       <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
@@ -38,7 +47,13 @@
             aria-hidden="true"
           ></i>
           <div class="flex-fill">
-            <strong class="card-title">{{ item.name }}</strong>
+            <strong class="card-title">
+              @if (item.isPet) {
+                {{ item.firstName }}
+              } @else {
+                <app-person-name [person]="item" />
+              }
+            </strong>
             <div class="card-meta">
               @if (item.isPet) {
                 {{ item.petSpecies || 'Питомец' }}

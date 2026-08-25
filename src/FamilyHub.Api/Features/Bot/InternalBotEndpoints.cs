@@ -55,7 +55,7 @@ public static class InternalBotEndpoints
         group.MapPost("/telegram-link/confirm", async (
             ConfirmLinkRequest request, TelegramLinkService links, CancellationToken ct) =>
         {
-            var result = await links.ConfirmAsync(request.Code, request.TelegramId, request.DisplayName, request.Username, ct);
+            var result = await links.ConfirmAsync(request.Code, request.TelegramId, request.Username, ct);
             return Results.Ok(new ConfirmLinkResponse(MapLinkOutcome(result)));
         });
     }

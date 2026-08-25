@@ -21,8 +21,9 @@ namespace FamilyHub.Modules.Medical.Extraction;
 ///
 /// KB-фолбэк референсов (kbFallback в IndicatorFlagCalculator.Calculate) — из
 /// GlobalLabAnalyteKb.PayloadJson.refRanges при KB-совпадении, с фильтром по возрасту, если
-/// запись сделана для FamilyDependent (см. ResolveAgeYearsAsync — пол пациента нигде в домене не
-/// хранится, только возраст). Промах поиска (KbLookupKind != Hit) ставит показатель в очередь
+/// запись сделана для FamilyDependent (см. ResolveAgeYearsAsync — пол пациента, хоть и хранится
+/// в домене с identity rework, здесь пока не используется, только возраст). Промах поиска
+/// (KbLookupKind != Hit) ставит показатель в очередь
 /// обогащения справочника (LabAnalyteEnrichmentRequestService → LabAnalyteEnrichmentProcessor,
 /// зеркало MedicationEnrichmentProcessor этапа 4) — следующий анализ с тем же показателем найдёт
 /// уже готовый диапазон.
@@ -216,7 +217,9 @@ public class MedicalDocumentExtractionProcessor(
     }
 
     /// <summary>Возраст пациента на дату анализа — только если запись сделана для FamilyDependent
-    /// с известной датой рождения (User.BirthDate нигде не хранится, см. IndicatorFlagCalculator).</summary>
+    /// с известной датой рождения. User.BirthDate (identity rework) здесь намеренно не читается —
+    /// записи с TargetUserId возраст пока не резолвят, вне объёма identity rework (см.
+    /// IndicatorFlagCalculator).</summary>
     private async Task<int?> ResolveAgeYearsAsync(Domain.Entities.MedicalRecord record, CancellationToken ct)
     {
         if (record.FamilyDependentId is null) return null;

@@ -20,6 +20,7 @@ import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.com
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { DebouncedSearch, SEARCH_MIN_QUERY_LENGTH } from '../../shared/util/debounced-search';
+import { formatPersonName } from '../../shared/util/person-name';
 
 /** Терминальные статусы задачи распознавания — опрос останавливается. */
 const EXTRACTION_TERMINAL_STATUSES: number[] = [
@@ -236,7 +237,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           key: `dep:${dep.id}`,
           familyDependentId: dep.id,
           targetUserId: null,
-          label: `${dep.name} (${family.name})`,
+          label: `${dep.isPet ? dep.firstName : formatPersonName(dep, 'full')} (${family.name})`,
         });
       }
       for (const member of family.currentMembers ?? []) {
@@ -246,7 +247,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           key: `user:${member.id}`,
           familyDependentId: null,
           targetUserId: member.id,
-          label: `${member.displayName} (${family.name})`,
+          label: `${formatPersonName(member, 'full')} (${family.name})`,
         });
       }
     }

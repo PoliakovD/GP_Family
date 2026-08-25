@@ -70,7 +70,6 @@ public class TelegramBindingServiceTests : SqliteTestBase
             Email = email,
             TelegramId = telegramId,
             PasswordHash = email is not null && withPassword ? "hash" : null,
-            DisplayName = "Existing User",
             CreatedAt = DateTime.UtcNow,
         };
         Db.Users.Add(user);
@@ -113,7 +112,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         var code = LastCode("danil@example.com");
         _sent.Clear(); // письмо с OTP-кодом больше не интересно — проверяем именно ОТСУТСТВИЕ следующего
 
-        var result = await _sut.ConfirmBindAsync("danil@example.com", code, ValidInitData);
+        var (result, _) = await _sut.ConfirmBindAsync("danil@example.com", code, ValidInitData);
 
         result.Should().Be(TelegramBindResult.Success);
         Db.Users.Count().Should().Be(1, "должен привязаться к существующему аккаунту, а не создать новый");
@@ -131,12 +130,16 @@ public class TelegramBindingServiceTests : SqliteTestBase
         await _sut.SendCodeAsync("newperson@example.com", ValidInitData);
         var code = LastCode("newperson@example.com");
 
-        var result = await _sut.ConfirmBindAsync("newperson@example.com", code, ValidInitData);
+        var (result, profileRequired) = await _sut.ConfirmBindAsync("newperson@example.com", code, ValidInitData);
 
         result.Should().Be(TelegramBindResult.Success);
+        // ФИО/ДР/пол (identity rework) НЕ заполняются из Telegram initData — профиль собирается
+        // отдельным экраном после привязки (см. profileGuard на фронте).
+        profileRequired.Should().BeTrue();
         var created = Db.Users.Single(u => u.TelegramId == 201);
         created.Email.Should().Be("newperson@example.com");
-        created.DisplayName.Should().Be("New Guy");
+        created.LastName.Should().BeNull();
+        created.FirstName.Should().BeNull();
         created.PasswordHash.Should().NotBeNull("без пароля новый аккаунт не смог бы потом войти в PWA");
 
         var temporaryPassword = LastTemporaryPassword("newperson@example.com");
@@ -156,7 +159,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         await _sut.SendCodeAsync("orphan@example.com", ValidInitData);
         var code = LastCode("orphan@example.com");
 
-        var result = await _sut.ConfirmBindAsync("orphan@example.com", code, ValidInitData);
+        var (result, _) = await _sut.ConfirmBindAsync("orphan@example.com", code, ValidInitData);
 
         result.Should().Be(TelegramBindResult.Success);
         var updated = Db.Users.Single(u => u.Id == orphan.Id);
@@ -177,7 +180,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         _email.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailBody>(), Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("SMTP недоступен")));
 
-        var result = await _sut.ConfirmBindAsync("resilient@example.com", code, ValidInitData);
+        var (result, _) = await _sut.ConfirmBindAsync("resilient@example.com", code, ValidInitData);
 
         result.Should().Be(TelegramBindResult.Success);
         Db.Users.Single(u => u.TelegramId == 211).PasswordHash.Should().NotBeNull();
@@ -188,7 +191,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
     {
         SetupValidInitData(202);
 
-        (await _sut.ConfirmBindAsync("someone@example.com", "000000", ValidInitData)).Should().Be(TelegramBindResult.InvalidCode);
+        (await _sut.ConfirmBindAsync("someone@example.com", "000000", ValidInitData)).Result.Should().Be(TelegramBindResult.InvalidCode);
     }
 
     [Fact]
@@ -196,7 +199,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
     {
         _validator.Validate("garbage").Returns((TelegramInitDataResult?)null);
 
-        (await _sut.ConfirmBindAsync("someone@example.com", "123456", "garbage")).Should().Be(TelegramBindResult.InvalidInitData);
+        (await _sut.ConfirmBindAsync("someone@example.com", "123456", "garbage")).Result.Should().Be(TelegramBindResult.InvalidInitData);
     }
 
     [Fact]
@@ -207,7 +210,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         await _sut.SendCodeAsync("taken@example.com", ValidInitData);
         var code = LastCode("taken@example.com");
 
-        (await _sut.ConfirmBindAsync("taken@example.com", code, ValidInitData)).Should().Be(TelegramBindResult.EmailLinkedToDifferentTelegram);
+        (await _sut.ConfirmBindAsync("taken@example.com", code, ValidInitData)).Result.Should().Be(TelegramBindResult.EmailLinkedToDifferentTelegram);
     }
 
     [Fact]
@@ -218,7 +221,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         await _sut.SendCodeAsync("newmail@example.com", ValidInitData);
         var code = LastCode("newmail@example.com");
 
-        (await _sut.ConfirmBindAsync("newmail@example.com", code, ValidInitData)).Should().Be(TelegramBindResult.TelegramAlreadyBound);
+        (await _sut.ConfirmBindAsync("newmail@example.com", code, ValidInitData)).Result.Should().Be(TelegramBindResult.TelegramAlreadyBound);
     }
 
     [Fact]
@@ -228,7 +231,7 @@ public class TelegramBindingServiceTests : SqliteTestBase
         await _sut.SendCodeAsync("repeat@example.com", ValidInitData);
         var code = LastCode("repeat@example.com");
 
-        (await _sut.ConfirmBindAsync("repeat@example.com", code, ValidInitData)).Should().Be(TelegramBindResult.Success);
-        (await _sut.ConfirmBindAsync("repeat@example.com", code, ValidInitData)).Should().Be(TelegramBindResult.InvalidCode);
+        (await _sut.ConfirmBindAsync("repeat@example.com", code, ValidInitData)).Result.Should().Be(TelegramBindResult.Success);
+        (await _sut.ConfirmBindAsync("repeat@example.com", code, ValidInitData)).Result.Should().Be(TelegramBindResult.InvalidCode);
     }
 }

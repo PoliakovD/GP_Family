@@ -1,0 +1,41 @@
+<div class="auth-shell">
+  <div class="card auth-card elev-md">
+    <div class="auth-brand">
+      <div class="card-kicker">FamilyHub</div>
+      <h2 class="card-title mb-0">Расскажите о себе</h2>
+    </div>
+    <p class="muted mb-2">
+      Это нужно для отображения в списке участников семьи и для напоминаний о днях рождения.
+    </p>
+
+    <form (ngSubmit)="submit()">
+      <label class="form-label" for="ps-last-name">Фамилия</label>
+      <input
+        id="ps-last-name" class="input mb-2" type="text" name="lastName"
+        [(ngModel)]="lastName" required autocomplete="family-name" placeholder="Иванов" />
+
+      <label class="form-label" for="ps-first-name">Имя</label>
+      <input
+        id="ps-first-name" class="input mb-2" type="text" name="firstName"
+        [(ngModel)]="firstName" required autocomplete="given-name" placeholder="Иван" />
+
+      <label class="form-label" for="ps-middle-name">Отчество (необязательно)</label>
+      <input
+        id="ps-middle-name" class="input mb-2" type="text" name="middleName"
+        [(ngModel)]="middleName" autocomplete="additional-name" placeholder="Иванович" />
+
+      <label class="form-label" for="ps-birth-date">Дата рождения</label>
+      <input
+        id="ps-birth-date" class="input mb-2" type="date" name="birthDate"
+        [(ngModel)]="birthDate" required autocomplete="bday" />
+
+      <label class="form-label" for="ps-gender">Пол</label>
+      <select id="ps-gender" class="input mb-3" name="gender" [(ngModel)]="gender" required>
+        <option [ngValue]="0">Мужской</option>
+        <option [ngValue]="1">Женский</option>
+      </select>
+
+      <button type="submit" class="btn btn-primary btn-block" [disabled]="!canSubmit">Продолжить</button>
+    </form>
+  </div>
+</div>

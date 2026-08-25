@@ -82,7 +82,11 @@ public class TelegramBindingFlowTests(TelegramBindingWebFactory factory)
             code,
             password = "Passw0rd",
             username = $"tguser{Guid.NewGuid():N}"[..20],
-            displayName = "TG Bind PWA User",
+            lastName = "Пользователев",
+            firstName = "TG Bind",
+            middleName = (string?)null,
+            birthDate = new DateOnly(1990, 1, 1),
+            gender = 0,
         });
         confirm.StatusCode.Should().Be(HttpStatusCode.OK);
         await CsrfTestHelper.CaptureCsrfTokenAsync(client);
@@ -136,6 +140,8 @@ public class TelegramBindingFlowTests(TelegramBindingWebFactory factory)
         var bindResponse = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/telegram/bind", new { email, code, initData = BuildSignedInitData(telegramId) });
         bindResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var bindResult = await bindResponse.Content.ReadFromJsonAsync<BindResultDto>(JsonOpts);
+        bindResult!.ProfileRequired.Should().BeFalse("у PWA-аккаунта, к которому привязались, уже есть заполненный профиль");
 
         // Тот же аккаунт: Telegram-запрос видит СЕМЬЮ, созданную ранее через PWA-сессию.
         var telegramClient = TelegramClient(telegramId);
@@ -166,14 +172,17 @@ public class TelegramBindingFlowTests(TelegramBindingWebFactory factory)
             .StatusCode.Should().Be(HttpStatusCode.OK);
         var code = factory.Emails.LastCodeFor(email);
 
-        (await factory.CreateClient().PostAsJsonAsync(
-            "/api/auth/telegram/bind", new { email, code, initData = BuildSignedInitData(telegramId) }))
-            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var bindResponse = await factory.CreateClient().PostAsJsonAsync(
+            "/api/auth/telegram/bind", new { email, code, initData = BuildSignedInitData(telegramId) });
+        bindResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var bindResult = await bindResponse.Content.ReadFromJsonAsync<BindResultDto>(JsonOpts);
+        bindResult!.ProfileRequired.Should().BeTrue("новый аккаунт создаётся без ФИО/ДР/пола — их собирает отдельный экран после привязки");
 
         var me = await TelegramClient(telegramId).GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
         me!.Email.Should().Be(email);
         me.HasTelegram.Should().BeTrue();
         me.HasPassword.Should().BeTrue("новый аккаунт должен получить сгенерированный сервером временный пароль, иначе вход в PWA станет невозможен");
+        me.LastName.Should().BeNull();
 
         // Сервер сам сгенерировал пароль и прислал его на почту — извлекаем его из письма и
         // проверяем, что им реально можно войти (а не только что письмо ушло).
@@ -233,5 +242,8 @@ public class TelegramBindingFlowTests(TelegramBindingWebFactory factory)
     private record BoundDto(bool Bound);
     private record CreatedFamilyDto(Guid Id);
     private record FamilyDto(Guid Id, string Name);
-    private record MeDto(Guid UserId, string DisplayName, string Provider, string? Email, bool HasTelegram, bool HasPassword);
+    private record MeDto(
+        Guid UserId, string? LastName, string? FirstName, string? MiddleName,
+        string Provider, string? Email, bool HasTelegram, bool HasPassword);
+    private record BindResultDto(bool ProfileRequired);
 }

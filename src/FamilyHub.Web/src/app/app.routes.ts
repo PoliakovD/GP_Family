@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, consentGuard } from './services/auth.guards';
+import { authGuard, consentGuard, profileGuard } from './services/auth.guards';
 import { adminGuard } from './services/admin.guards';
 import { pendingCodeGuard } from './services/pending-code.guard';
 
@@ -66,6 +66,15 @@ export const routes: Routes = [
       import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
   },
   {
+    // Сбор ФИО/ДР/пола (identity rework) — единственный путь сюда: profileGuard на данных
+    // роутах ниже, куда попадает свежепривязанный Telegram-аккаунт без профиля. authGuard, а не
+    // profileGuard/consentGuard — экран сам и есть цель редиректа, требует только вход.
+    path: 'profile-setup',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/profile-setup/profile-setup.component').then((m) => m.ProfileSetupComponent),
+  },
+  {
     path: 'privacy',
     loadComponent: () =>
       import('./components/privacy/privacy.component').then((m) => m.PrivacyComponent),
@@ -130,7 +139,7 @@ export const routes: Routes = [
   {
     // Главная (редизайн навигации): глобальный поиск + вход в «Семьи» + виджет дней рождения.
     path: 'home',
-    canActivate: [authGuard, consentGuard],
+    canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/home/home.component').then((m) => m.HomeComponent),
   },
@@ -139,7 +148,7 @@ export const routes: Routes = [
   { path: 'search', redirectTo: 'home' },
   {
     path: 'families',
-    canActivate: [authGuard, consentGuard],
+    canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/families-tab/families-tab.component').then(
         (m) => m.FamiliesTabComponent,
@@ -147,7 +156,7 @@ export const routes: Routes = [
   },
   {
     path: 'families/:id',
-    canActivate: [authGuard, consentGuard],
+    canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/family-details/family-details.component').then(
         (m) => m.FamilyDetailsComponent,
@@ -157,7 +166,7 @@ export const routes: Routes = [
     // Хаб «Здоровье» (редизайн навигации): Аптечка + Анализы под одним табом, настоящие
     // вложенные роуты (не in-page state) — переживают refresh, работают с browser back.
     path: 'health',
-    canActivate: [authGuard, consentGuard],
+    canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/health-hub/health-hub.component').then((m) => m.HealthHubComponent),
     children: [
@@ -205,7 +214,7 @@ export const routes: Routes = [
   { path: 'records', redirectTo: 'health/records' },
   {
     path: 'birthdays',
-    canActivate: [authGuard, consentGuard],
+    canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/birthdays-tab/birthdays-tab.component').then(
         (m) => m.BirthdaysTabComponent,
@@ -213,7 +222,7 @@ export const routes: Routes = [
   },
   {
     path: 'notifications',
-    canActivate: [authGuard, consentGuard],
+    canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/notifications-tab/notifications-tab.component').then(
         (m) => m.NotificationsTabComponent,

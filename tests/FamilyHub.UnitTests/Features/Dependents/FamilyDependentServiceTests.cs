@@ -29,10 +29,10 @@ public class FamilyDependentServiceTests : SqliteTestBase
         var (family, admin) = Db.SeedFamilyWithAdmin();
 
         var (result, item) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         result.Should().Be(FamilyDependentAccessResult.Success);
-        item!.Name.Should().Be("Барсик");
+        item!.FirstName.Should().Be("Барсик");
         item.IsPet.Should().BeTrue();
         item.PetSpecies.Should().Be("кот");
     }
@@ -44,7 +44,7 @@ public class FamilyDependentServiceTests : SqliteTestBase
         var outsider = Db.AddUser();
 
         var (result, item) = await _sut.CreateAsync(
-            family.Id, outsider.Id, new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            family.Id, outsider.Id, new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         result.Should().Be(FamilyDependentAccessResult.Forbidden);
         item.Should().BeNull();
@@ -56,7 +56,8 @@ public class FamilyDependentServiceTests : SqliteTestBase
         var (family, admin) = Db.SeedFamilyWithAdmin();
 
         var (_, item) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Ваня", new DateOnly(2015, 3, 1), false, "кот"));
+            family.Id, admin.Id,
+            new CreateFamilyDependentRequest("Ваня", "Иванов", null, Gender.Male, new DateOnly(2015, 3, 1), false, "кот"));
 
         item!.IsPet.Should().BeFalse();
         item.PetSpecies.Should().BeNull("вид животного не должен просочиться, если IsPet == false");
@@ -67,14 +68,15 @@ public class FamilyDependentServiceTests : SqliteTestBase
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
         var (_, created) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         var result = await _sut.UpdateAsync(
-            created!.Id, admin.Id, new UpdateFamilyDependentRequest("Барсик Второй", null, true, "кот британский"));
+            created!.Id, admin.Id,
+            new UpdateFamilyDependentRequest("Барсик Второй", null, null, Gender.Male, null, true, "кот британский"));
 
         result.Should().Be(FamilyDependentAccessResult.Success);
         var updated = await Db.FamilyDependents.AsNoTracking().SingleAsync(d => d.Id == created.Id);
-        updated.Name.Should().Be("Барсик Второй");
+        updated.FirstName.Should().Be("Барсик Второй");
         updated.PetSpecies.Should().Be("кот британский");
     }
 
@@ -84,10 +86,10 @@ public class FamilyDependentServiceTests : SqliteTestBase
         var (family, admin) = Db.SeedFamilyWithAdmin();
         var outsider = Db.AddUser();
         var (_, created) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         var result = await _sut.UpdateAsync(
-            created!.Id, outsider.Id, new UpdateFamilyDependentRequest("Хакнуто", null, true, "кот"));
+            created!.Id, outsider.Id, new UpdateFamilyDependentRequest("Хакнуто", null, null, Gender.Male, null, true, "кот"));
 
         result.Should().Be(FamilyDependentAccessResult.Forbidden);
     }
@@ -98,7 +100,7 @@ public class FamilyDependentServiceTests : SqliteTestBase
         var (family, admin) = Db.SeedFamilyWithAdmin();
         var member = Db.AddMember(family.Id);
         var (_, created) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         var result = await _sut.DeleteAsync(created!.Id, member.Id);
 
@@ -111,7 +113,7 @@ public class FamilyDependentServiceTests : SqliteTestBase
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
         var (_, dependent) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, true, "кот"));
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Барсик", null, null, Gender.Male, null, true, "кот"));
 
         var record = new MedicalRecord
         {

@@ -20,9 +20,9 @@ public class FamilyHubApiClient(HttpClient http) : IFamilyHubApiClient
         PostAsync<PeekLinkRequest, PeekLinkResponse>("/internal/bot/telegram-link/peek", new(code), ct);
 
     public Task<ConfirmLinkResponse> ConfirmTelegramLinkAsync(
-        string code, long telegramId, string? displayName, string? username, CancellationToken ct) =>
+        string code, long telegramId, string? username, CancellationToken ct) =>
         PostAsync<ConfirmLinkRequest, ConfirmLinkResponse>(
-            "/internal/bot/telegram-link/confirm", new(code, telegramId, displayName, username), ct);
+            "/internal/bot/telegram-link/confirm", new(code, telegramId, username), ct);
 
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string path, TRequest request, CancellationToken ct)
     {

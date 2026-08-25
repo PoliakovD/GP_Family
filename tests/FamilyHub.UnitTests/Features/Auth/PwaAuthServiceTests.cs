@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using FamilyHub.Api.Features.Auth;
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Security;
@@ -33,13 +34,20 @@ public class PwaAuthServiceTests : SqliteTestBase
         _sut = new PwaAuthService(Db, otp, NullLogger<PwaAuthService>.Instance);
     }
 
+    // Профиль (identity rework) — ФИО/ДР/пол обязательны на регистрации, никакого фолбэка
+    // на локальную часть email больше нет (это было поведением DisplayName, удалённого поля).
+    private const string TestLastName = "Иванов";
+    private const string TestFirstName = "Иван";
+    private static readonly DateOnly TestBirthDate = new(1990, 1, 1);
+
     private string LastCode() => Regex.Match(_lastSentBody!, @"\d{6}").Value;
 
     private async Task<(string Email, Guid UserId)> RegisterAsync(
         string email = "user@example.com", string password = "Passw0rd", string username = "testuser")
     {
         (await _sut.StartRegistrationAsync(email)).Should().Be(StartCodeResult.Sent);
-        var (result, userId) = await _sut.ConfirmRegistrationAsync(email, LastCode(), password, username, "Тестовый");
+        var (result, userId) = await _sut.ConfirmRegistrationAsync(
+            email, LastCode(), password, username, TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
         result.Should().Be(ConfirmRegistrationResult.Success);
         return (email, userId);
     }
@@ -48,7 +56,8 @@ public class PwaAuthServiceTests : SqliteTestBase
     public async Task RegisterFlow_CreatesUserWithNormalizedEmailAndPassword()
     {
         await _sut.StartRegistrationAsync("  MiXeD@Example.COM ");
-        var (result, userId) = await _sut.ConfirmRegistrationAsync("mixed@example.com", LastCode(), "Str0ngPw", "mixeduser", null);
+        var (result, userId) = await _sut.ConfirmRegistrationAsync(
+            "mixed@example.com", LastCode(), "Str0ngPw", "mixeduser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
 
         result.Should().Be(ConfirmRegistrationResult.Success);
         var user = Db.Users.Single(u => u.Id == userId);
@@ -56,7 +65,8 @@ public class PwaAuthServiceTests : SqliteTestBase
         user.Username.Should().Be("mixeduser");
         user.TelegramId.Should().BeNull();
         user.PasswordHash.Should().NotBeNull();
-        user.DisplayName.Should().Be("mixed", "имя по умолчанию — локальная часть адреса");
+        user.LastName.Should().Be(TestLastName);
+        user.FirstName.Should().Be(TestFirstName);
     }
 
     [Fact]
@@ -67,12 +77,12 @@ public class PwaAuthServiceTests : SqliteTestBase
 
         for (var i = 0; i < 5; i++)
         {
-            var (result, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", "000000", "Passw0rd", "bruteuser", null);
+            var (result, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", "000000", "Passw0rd", "bruteuser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
             result.Should().Be(ConfirmRegistrationResult.InvalidCode);
         }
 
         // После 5 неверных попыток даже настоящий код недействителен.
-        var (finalResult, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", realCode, "Passw0rd", "bruteuser", null);
+        var (finalResult, _) = await _sut.ConfirmRegistrationAsync("brute@example.com", realCode, "Passw0rd", "bruteuser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
         finalResult.Should().Be(ConfirmRegistrationResult.InvalidCode);
     }
 
@@ -82,11 +92,11 @@ public class PwaAuthServiceTests : SqliteTestBase
         await _sut.StartRegistrationAsync("badname@example.com");
         var code = LastCode();
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "Passw0rd", "ab", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "Passw0rd", "ab", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
         result.Should().Be(ConfirmRegistrationResult.InvalidUsername);
 
         // Код не потреблён — тот же код всё ещё годится с валидным username.
-        var (retry, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "Passw0rd", "goodname", null);
+        var (retry, _) = await _sut.ConfirmRegistrationAsync("badname@example.com", code, "Passw0rd", "goodname", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
         retry.Should().Be(ConfirmRegistrationResult.Success);
     }
 
@@ -98,11 +108,11 @@ public class PwaAuthServiceTests : SqliteTestBase
         await _sut.StartRegistrationAsync("second@example.com");
         var code = LastCode();
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "Passw0rd", "takenname", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "Passw0rd", "takenname", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
         result.Should().Be(ConfirmRegistrationResult.UsernameTaken);
 
         // Код не потреблён — тот же код всё ещё годится с другим username.
-        var (retry, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "Passw0rd", "freename", null);
+        var (retry, _) = await _sut.ConfirmRegistrationAsync("second@example.com", code, "Passw0rd", "freename", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
         retry.Should().Be(ConfirmRegistrationResult.Success);
     }
 
@@ -123,7 +133,7 @@ public class PwaAuthServiceTests : SqliteTestBase
         code.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
         await Db.SaveChangesAsync();
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("late@example.com", LastCode(), "Passw0rd", "lateuser", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("late@example.com", LastCode(), "Passw0rd", "lateuser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
 
         result.Should().Be(ConfirmRegistrationResult.InvalidCode);
     }
@@ -138,9 +148,39 @@ public class PwaAuthServiceTests : SqliteTestBase
     {
         await _sut.StartRegistrationAsync("weak@example.com");
 
-        var (result, _) = await _sut.ConfirmRegistrationAsync("weak@example.com", LastCode(), weakPassword, "weakuser", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync("weak@example.com", LastCode(), weakPassword, "weakuser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
 
         result.Should().Be(ConfirmRegistrationResult.WeakPassword);
+    }
+
+    [Fact]
+    public async Task ConfirmRegistration_EmptyLastName_IsRejected_AndDoesNotConsumeCode()
+    {
+        // Профиль валидируется ДО потребления OTP-кода (тот же принцип, что и username выше) —
+        // пустая фамилия не должна сжигать 10-минутный код.
+        await _sut.StartRegistrationAsync("noprofile@example.com");
+        var code = LastCode();
+
+        var (result, _) = await _sut.ConfirmRegistrationAsync(
+            "noprofile@example.com", code, "Passw0rd", "noprofileuser", "  ", TestFirstName, null, TestBirthDate, Gender.Male);
+        result.Should().Be(ConfirmRegistrationResult.InvalidProfile);
+
+        // Код не потреблён — тот же код всё ещё годится с валидным профилем.
+        var (retry, _) = await _sut.ConfirmRegistrationAsync(
+            "noprofile@example.com", code, "Passw0rd", "noprofileuser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
+        retry.Should().Be(ConfirmRegistrationResult.Success);
+    }
+
+    [Fact]
+    public async Task ConfirmRegistration_FutureBirthDate_IsRejected()
+    {
+        await _sut.StartRegistrationAsync("futuredate@example.com");
+
+        var (result, _) = await _sut.ConfirmRegistrationAsync(
+            "futuredate@example.com", LastCode(), "Passw0rd", "futureuser",
+            TestLastName, TestFirstName, null, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Gender.Male);
+
+        result.Should().Be(ConfirmRegistrationResult.InvalidProfile);
     }
 
     [Fact]
@@ -194,7 +234,6 @@ public class PwaAuthServiceTests : SqliteTestBase
             Id = Guid.NewGuid(),
             Email = "legacy@example.com",
             PasswordHash = PasswordHasher.Hash("1234"),
-            DisplayName = "Legacy",
             CreatedAt = DateTime.UtcNow,
         };
         Db.Users.Add(user);
@@ -240,7 +279,7 @@ public class PwaAuthServiceTests : SqliteTestBase
         var (email, _) = await RegisterAsync();
 
         await _sut.StartRegistrationAsync(email);
-        var (result, _) = await _sut.ConfirmRegistrationAsync(email, LastCode(), "Passw0rd", "anotheruser", null);
+        var (result, _) = await _sut.ConfirmRegistrationAsync(email, LastCode(), "Passw0rd", "anotheruser", TestLastName, TestFirstName, null, TestBirthDate, Gender.Male);
 
         result.Should().Be(ConfirmRegistrationResult.EmailTaken);
     }

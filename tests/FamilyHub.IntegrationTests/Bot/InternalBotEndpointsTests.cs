@@ -73,7 +73,6 @@ public class InternalBotEndpointsTests(BotIntegrationFixture fixture)
             {
                 Id = Guid.NewGuid(),
                 TelegramId = telegramId,
-                DisplayName = "Resolved",
                 CreatedAt = DateTime.UtcNow,
             });
             await db.SaveChangesAsync();

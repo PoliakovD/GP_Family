@@ -36,7 +36,7 @@ public record PeekLinkRequest(string Code);
 
 public record PeekLinkResponse(bool Found, string? MaskedEmail);
 
-public record ConfirmLinkRequest(string Code, long TelegramId, string? DisplayName, string? Username);
+public record ConfirmLinkRequest(string Code, long TelegramId, string? Username);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum BotLinkOutcome

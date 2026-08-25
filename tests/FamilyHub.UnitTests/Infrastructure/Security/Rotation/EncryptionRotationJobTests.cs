@@ -140,7 +140,7 @@ public class EncryptionRotationJobTests : IDisposable
             });
             seedDb.FamilyDependents.Add(new FamilyDependent
             {
-                Id = Guid.NewGuid(), FamilyId = familyId, Name = "Кот Барсик",
+                Id = Guid.NewGuid(), FamilyId = familyId, FirstName = "Кот Барсик", IsPet = true, Gender = Gender.Male,
                 CreatedByUserId = Guid.NewGuid(), CreatedAt = DateTime.UtcNow,
             });
             seedDb.PushSubscriptions.Add(new PushSubscription

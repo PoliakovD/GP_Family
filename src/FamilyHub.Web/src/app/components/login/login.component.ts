@@ -68,7 +68,11 @@ export class LoginComponent implements HasPendingCodeEntry {
   password = '';
   code = '';
   username = '';
-  displayName = '';
+  lastName = '';
+  firstName = '';
+  middleName = '';
+  birthDate = '';
+  gender = 0;
   privacyAccepted = false;
   /** Согласие на обработку ПДн (общее) — отдельно от privacyAccepted выше: политика
    * конфиденциальности и согласие на обработку ПДн — разные документы (ст. 9 152-ФЗ). */
@@ -88,7 +92,8 @@ export class LoginComponent implements HasPendingCodeEntry {
 
   get canSubmitDetails(): boolean {
     return !this.busy() && this.privacyAccepted && this.pdnConsentAgreed && this.pdnSpecialCategoryAgreed
-      && this.usernameStatus() === 'free' && this.isPasswordValid;
+      && this.usernameStatus() === 'free' && this.isPasswordValid
+      && !!this.lastName.trim() && !!this.firstName.trim() && !!this.birthDate;
   }
 
   get canSubmitNewPassword(): boolean {
@@ -146,7 +151,13 @@ export class LoginComponent implements HasPendingCodeEntry {
 
   async confirmRegistration(): Promise<void> {
     await this.run(async () => {
-      await this.auth.registerConfirm(this.email, this.code, this.password, this.username, this.displayName || null);
+      await this.auth.registerConfirm(this.email, this.code, this.password, this.username, {
+        lastName: this.lastName.trim(),
+        firstName: this.firstName.trim(),
+        middleName: this.middleName.trim() || null,
+        birthDate: this.birthDate,
+        gender: this.gender,
+      });
       this.completed.set(true);
       // Оба обязательных чекбокса ПДн-согласия отмечены на предыдущем шаге (register-details,
       // см. canSubmitDetails) — записываем принятие сразу же, пока сессия свежая, той версией
@@ -277,6 +288,7 @@ export class LoginComponent implements HasPendingCodeEntry {
         case 'weak_password': return 'Пароль — минимум 8 символов, обязательно строчная и заглавная латинские буквы и цифра.';
         case 'invalid_username': return 'Некорректный username — 5–32 символа: латиница, цифры, «_», с буквы.';
         case 'username_taken': return 'Этот username уже занят — выберите другой.';
+        case 'invalid_profile': return 'Проверьте ФИО и дату рождения.';
       }
       if (e.status === 429) return 'Слишком много запросов — подождите немного.';
     }

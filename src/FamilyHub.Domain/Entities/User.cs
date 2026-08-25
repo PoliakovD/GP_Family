@@ -1,3 +1,5 @@
+using FamilyHub.Domain.Enums;
+
 namespace FamilyHub.Domain.Entities;
 
 /// <summary>
@@ -12,7 +14,23 @@ public class User
     /// <summary>Telegram user id; null — пользователь зарегистрирован только через PWA.</summary>
     public long? TelegramId { get; set; }
 
-    public string DisplayName { get; set; } = string.Empty;
+    /// <summary>
+    /// Профиль (ФИО/ДР/пол) — все пять nullable, хотя вместе взятые обязательны для завершённого
+    /// профиля (см. ValueObjects.PersonName.IsCompleteProfile). Не NOT NULL на колонках: строка
+    /// User легитимно существует до заполнения профиля — создаётся сразу после email-OTP
+    /// (PwaAuthService/TelegramBindingService), профиль собирается отдельным экраном
+    /// (см. profileGuard на фронте). MiddleName — единственное реально опциональное поле
+    /// (отчество есть не у всех).
+    /// </summary>
+    public string? LastName { get; set; }
+
+    public string? FirstName { get; set; }
+
+    public string? MiddleName { get; set; }
+
+    public DateOnly? BirthDate { get; set; }
+
+    public Gender? Gender { get; set; }
 
     /// <summary>
     /// Видимый username аккаунта (уникальный, формат — см. UsernameRules), задаётся при

@@ -3,6 +3,10 @@
 
 export const FamilyRole = {Member: 0, Admin: 1} as const;
 
+/** Зеркалит FamilyHub.Domain.Enums.Gender. */
+export const Gender = {Male: 0, Female: 1} as const;
+export type Gender = typeof Gender[keyof typeof Gender];
+
 /** Зеркалит FamilyService.MaxFamiliesPerUser — макс. семей, которые может СОЗДАТЬ один
  * пользователь (см. аудит module-review-2026-08-02/02, находка 4). */
 export const MAX_FAMILIES_PER_USER = 25;
@@ -37,7 +41,11 @@ export interface FamilySummary {
 
 export interface PendingMember {
     userId: string;
-    displayName: string;
+    // ФИО тремя полями, не готовой строкой — форматирование под ширину экрана делает
+    // shared/util/person-name.ts (person-name.component.ts).
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
     username: string | null;
     role: number; // FamilyRole
     joinedAt: string;
@@ -46,7 +54,9 @@ export interface PendingMember {
 
 export interface CurrentMember {
     id: string;
-    displayName: string;
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
     username: string | null;
     role: number; // FamilyRole
     joinedAt: string;
@@ -62,11 +72,17 @@ export interface InviteCreated {
 }
 
 /** Подопечный без своего User — ребёнок, питомец или пожилой родственник (семейный ресурс,
- * см. FamilyHub.Api.Features.Dependents). Не заводим фейковый User с синтетическим email. */
+ * см. FamilyHub.Api.Features.Dependents). Не заводим фейковый User с синтетическим email.
+ * firstName — имя человека или кличка питомца; lastName/middleName — только для людей (сервис
+ * зануляет их при isPet === true). gender обязателен для всех, включая питомцев — используется
+ * в напоминаниях о ДР (ReminderScanJob). */
 export interface FamilyDependent {
     id: string;
     familyId: string;
-    name: string;
+    firstName: string;
+    lastName: string | null;
+    middleName: string | null;
+    gender: number; // Gender
     birthDate: string | null;
     isPet: boolean;
     petSpecies: string | null;
@@ -75,7 +91,10 @@ export interface FamilyDependent {
 }
 
 export interface FamilyDependentInput {
-    name: string;
+    firstName: string;
+    lastName: string | null;
+    middleName: string | null;
+    gender: number; // Gender
     birthDate: string | null;
     isPet: boolean;
     petSpecies: string | null;
@@ -123,11 +142,17 @@ export interface MedicationOcrResponse {
     error: string | null;
 }
 
+/** Источник записи (identity rework) — Manual редактируема, Member/Dependent — производные
+ * из профиля User/FamilyDependent, только для чтения (см. BirthdayService.GetForFamilyAsync). */
+export const BirthdaySource = {Manual: 0, Member: 1, Dependent: 2} as const;
+export type BirthdaySource = typeof BirthdaySource[keyof typeof BirthdaySource];
+
 export interface Birthday {
     id: string;
     familyId: string;
     personName: string;
     date: string; // DateOnly "yyyy-MM-dd"
+    source: number; // BirthdaySource
 }
 
 export interface BirthdayInput {

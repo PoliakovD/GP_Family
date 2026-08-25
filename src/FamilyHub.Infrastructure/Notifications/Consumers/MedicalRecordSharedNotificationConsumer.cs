@@ -1,5 +1,6 @@
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -25,10 +26,13 @@ public class MedicalRecordSharedNotificationConsumer(
             .FirstOrDefaultAsync(ct);
         if (familyName is null) return;
 
-        var ownerName = await db.Users.AsNoTracking()
+        var owner = await db.Users.AsNoTracking()
             .Where(u => u.Id == notification.OwnerUserId)
-            .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(ct) ?? "Участник";
+            .Select(u => new { u.LastName, u.FirstName, u.MiddleName })
+            .FirstOrDefaultAsync(ct);
+        var ownerName = owner is null
+            ? "Участник"
+            : PersonName.FormatOrDefault(owner.LastName, owner.FirstName, owner.MiddleName, PersonNameStyle.Full, "Участник");
 
         var recipientIds = await db.FamilyMembers.AsNoTracking()
             .Where(m => m.FamilyId == notification.FamilyId

@@ -29,7 +29,6 @@ public class AccountMergeServiceTests : SqliteTestBase
             Email = $"{Guid.NewGuid():N}@example.com",
             PasswordHash = "hash",
             Username = username,
-            DisplayName = "Target",
             CreatedAt = DateTime.UtcNow,
         };
         Db.Users.Add(user);
@@ -45,7 +44,6 @@ public class AccountMergeServiceTests : SqliteTestBase
             TelegramId = telegramId,
             TgUsername = tgUsername,
             Username = appUsername,
-            DisplayName = "Source",
             CreatedAt = DateTime.UtcNow,
         };
         Db.Users.Add(user);

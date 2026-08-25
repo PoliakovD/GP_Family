@@ -12,7 +12,9 @@ public class FamilyDependentConfiguration : IEntityTypeConfiguration<FamilyDepen
 
         builder.HasKey(d => d.Id);
 
-        builder.Property(d => d.Name).HasMaxLength(200).IsRequired();
+        builder.Property(d => d.FirstName).HasMaxLength(100).IsRequired();
+        builder.Property(d => d.LastName).HasMaxLength(100);
+        builder.Property(d => d.MiddleName).HasMaxLength(100);
         builder.Property(d => d.PetSpecies).HasMaxLength(100);
 
         builder.HasIndex(d => d.FamilyId);

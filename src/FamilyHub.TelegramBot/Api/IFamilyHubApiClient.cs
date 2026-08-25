@@ -16,5 +16,5 @@ public interface IFamilyHubApiClient
     Task<PeekLinkResponse> PeekTelegramLinkAsync(string code, CancellationToken ct);
 
     Task<ConfirmLinkResponse> ConfirmTelegramLinkAsync(
-        string code, long telegramId, string? displayName, string? username, CancellationToken ct);
+        string code, long telegramId, string? username, CancellationToken ct);
 }

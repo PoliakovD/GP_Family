@@ -131,7 +131,7 @@ public class AdminStatsService(
                 UNION ALL
                 SELECT split_part("PersonName", ':', 2), COUNT(*) FROM identity."Birthdays" GROUP BY 1
                 UNION ALL
-                SELECT split_part("Name", ':', 2), COUNT(*) FROM identity."FamilyDependents" GROUP BY 1
+                SELECT split_part("FirstName", ':', 2), COUNT(*) FROM identity."FamilyDependents" GROUP BY 1
                 UNION ALL
                 SELECT split_part("Endpoint", ':', 2), COUNT(*) FROM identity."PushSubscriptions" GROUP BY 1
                 UNION ALL

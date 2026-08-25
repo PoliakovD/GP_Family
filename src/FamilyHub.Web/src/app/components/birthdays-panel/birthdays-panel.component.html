@@ -31,13 +31,20 @@
             <i class="ph-fill ph-cake" style="font-size:20px;color:var(--color-accent)" aria-hidden="true"></i>
             <div class="flex-fill">
               <strong class="card-title">{{ urgencyLabel(item) }}</strong>
-              <div class="card-meta">{{ metaLabel(item) }}</div>
+              <div class="card-meta">
+                {{ metaLabel(item) }}
+                @if (sourceLabel(item); as label) {
+                  · {{ label }}
+                }
+              </div>
             </div>
           </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-ghost btn-sm" (click)="startEdit(item)">Изменить</button>
-            <button class="btn btn-ghost btn-sm" (click)="handleDelete(item.id)">Удалить</button>
-          </div>
+          @if (isManual(item)) {
+            <div class="d-flex gap-2">
+              <button class="btn btn-ghost btn-sm" (click)="startEdit(item)">Изменить</button>
+              <button class="btn btn-ghost btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+            </div>
+          }
         </div>
       }
     }

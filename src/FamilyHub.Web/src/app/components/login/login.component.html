@@ -79,10 +79,31 @@
             @default { <span class="field-hint field-hint-muted">5–32 симв.: латиница, цифры, «_», с буквы</span> }
           }
 
-          <label class="form-label mt-2" for="reg-display-name">Отображаемое имя (необязательно)</label>
+          <label class="form-label mt-2" for="reg-last-name">Фамилия</label>
           <input
-            id="reg-display-name" class="input mb-2" type="text" name="displayName"
-            [(ngModel)]="displayName" autocomplete="name" placeholder="Иван Петров" />
+            id="reg-last-name" class="input mb-2" type="text" name="lastName"
+            [(ngModel)]="lastName" required autocomplete="family-name" placeholder="Иванов" />
+
+          <label class="form-label" for="reg-first-name">Имя</label>
+          <input
+            id="reg-first-name" class="input mb-2" type="text" name="firstName"
+            [(ngModel)]="firstName" required autocomplete="given-name" placeholder="Иван" />
+
+          <label class="form-label" for="reg-middle-name">Отчество (необязательно)</label>
+          <input
+            id="reg-middle-name" class="input mb-2" type="text" name="middleName"
+            [(ngModel)]="middleName" autocomplete="additional-name" placeholder="Иванович" />
+
+          <label class="form-label" for="reg-birth-date">Дата рождения</label>
+          <input
+            id="reg-birth-date" class="input mb-2" type="date" name="birthDate"
+            [(ngModel)]="birthDate" required autocomplete="bday" />
+
+          <label class="form-label" for="reg-gender">Пол</label>
+          <select id="reg-gender" class="input mb-2" name="gender" [(ngModel)]="gender" required>
+            <option [ngValue]="0">Мужской</option>
+            <option [ngValue]="1">Женский</option>
+          </select>
 
           <label class="form-label" for="reg-password">Пароль</label>
           <input

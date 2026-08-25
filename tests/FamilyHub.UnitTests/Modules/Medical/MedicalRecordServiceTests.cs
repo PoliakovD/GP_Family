@@ -271,7 +271,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var (family, _) = Db.SeedFamilyWithAdmin();
         var dependent = new FamilyDependent
         {
-            Id = Guid.NewGuid(), FamilyId = family.Id, Name = "Барсик", IsPet = true, CreatedByUserId = owner.Id,
+            Id = Guid.NewGuid(), FamilyId = family.Id, FirstName = "Барсик", IsPet = true, Gender = Gender.Male, CreatedByUserId = owner.Id,
             CreatedAt = DateTime.UtcNow,
         };
         Db.FamilyDependents.Add(dependent);
@@ -292,7 +292,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var otherMember = Db.AddMember(family.Id);
         var dependent = new FamilyDependent
         {
-            Id = Guid.NewGuid(), FamilyId = family.Id, Name = "Барсик", IsPet = true, CreatedByUserId = owner.Id,
+            Id = Guid.NewGuid(), FamilyId = family.Id, FirstName = "Барсик", IsPet = true, Gender = Gender.Male, CreatedByUserId = owner.Id,
             CreatedAt = DateTime.UtcNow,
         };
         Db.FamilyDependents.Add(dependent);
@@ -313,7 +313,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var (otherFamily, otherAdmin) = Db.SeedFamilyWithAdmin();
         var dependent = new FamilyDependent
         {
-            Id = Guid.NewGuid(), FamilyId = otherFamily.Id, Name = "Чужой", IsPet = false, CreatedByUserId = otherAdmin.Id,
+            Id = Guid.NewGuid(), FamilyId = otherFamily.Id, FirstName = "Чужой", IsPet = false, Gender = Gender.Male, CreatedByUserId = otherAdmin.Id,
             CreatedAt = DateTime.UtcNow,
         };
         Db.FamilyDependents.Add(dependent);

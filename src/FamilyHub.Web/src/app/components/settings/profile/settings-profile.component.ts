@@ -5,6 +5,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService, LinkTelegramStart } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { runBusy } from '../settings-task';
+import { PersonNameComponent } from '../../../shared/person-name/person-name.component';
 
 const LINK_POLL_INTERVAL_MS = 4000;
 
@@ -15,7 +16,7 @@ const LINK_POLL_INTERVAL_MS = 4000;
 @Component({
   selector: 'app-settings-profile',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, PersonNameComponent],
   templateUrl: './settings-profile.component.html',
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
@@ -25,15 +26,44 @@ export class SettingsProfileComponent implements OnInit, OnDestroy {
   readonly busy = signal(false);
   readonly linkStep = signal<'idle' | 'code'>('idle');
   readonly telegramLink = signal<LinkTelegramStart | null>(null);
+  readonly editingProfile = signal(false);
 
   linkEmail = '';
   linkCode = '';
   linkPassword = '';
 
+  profileForm = { lastName: '', firstName: '', middleName: '', birthDate: '', gender: 0 };
+
   private pollHandle?: ReturnType<typeof setInterval>;
 
   async ngOnInit(): Promise<void> {
     await this.auth.loadMe();
+  }
+
+  startEditProfile(): void {
+    const me = this.auth.me();
+    this.profileForm = {
+      lastName: me?.lastName ?? '',
+      firstName: me?.firstName ?? '',
+      middleName: me?.middleName ?? '',
+      birthDate: me?.birthDate ?? '',
+      gender: me?.gender ?? 0,
+    };
+    this.editingProfile.set(true);
+  }
+
+  async saveProfile(): Promise<void> {
+    await runBusy(this.busy, this.toast, async () => {
+      await this.auth.updateProfile({
+        lastName: this.profileForm.lastName.trim(),
+        firstName: this.profileForm.firstName.trim(),
+        middleName: this.profileForm.middleName.trim() || null,
+        birthDate: this.profileForm.birthDate,
+        gender: this.profileForm.gender,
+      });
+      this.editingProfile.set(false);
+      this.toast.success('Профиль обновлён');
+    });
   }
 
   ngOnDestroy(): void {

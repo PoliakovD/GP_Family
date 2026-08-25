@@ -29,7 +29,8 @@ public class Notification
 
     /// <summary>
     /// Ключ идемпотентности повторных прогонов джобы (UNIQUE), например
-    /// "med-exp:{medId}:{userId}" или "bday:{bdayId}:{userId}:{year}".
+    /// "med-exp:{medId}:{userId}" или "bday:{subjectKind}:{subjectId}:{familyId}:{userId}:{year}"
+    /// (FamilyId — с identity rework: subjectId участника легитимно повторяется в разных семьях).
     /// </summary>
     public string DedupKey { get; set; } = string.Empty;
 
