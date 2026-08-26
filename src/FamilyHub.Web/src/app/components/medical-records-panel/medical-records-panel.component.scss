@@ -1,3 +1,48 @@
+// UX-редизайн: заголовок карточки в одну строку "Дата · Название · Пациент" — компактнее прежней
+// двухстрочной шапки (card-title + card-meta), больше карточек влезает на экран телефона.
+.record-card-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 15px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Иконки действий записи — крупнее прежних btn-sm (по обратной связи их было сложно попадать
+// пальцем) и сгруппированы в один ряд вместе с «Файлы», а не разбросаны по краям карточки.
+.record-card-actions {
+  display: flex;
+  gap: 6px;
+
+  .btn-icon {
+    position: relative;
+    width: 40px;
+    height: 40px;
+
+    i {
+      font-size: 20px;
+    }
+  }
+}
+
+.icon-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
 // Флаги показателей (IndicatorFlag) — те же цвета, что expiry-danger/warning/ok в medications-panel.
 // Все веса подняты до 700 (было 400/600) — по обратной связи значения и статус должны "брать на
 // себя" внимание в таблице, не теряться на фоне остального текста карточки.

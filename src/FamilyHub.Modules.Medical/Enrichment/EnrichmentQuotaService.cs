@@ -6,12 +6,12 @@ using Microsoft.Extensions.Options;
 namespace FamilyHub.Modules.Medical.Enrichment;
 
 /// <summary>
-/// Месячная квота внешнего платного поиска (EnrichmentOptions.MonthlyQuota) — общая на ОБА
-/// конвейера обогащения (медикаменты + ветка medicalrecords: лабораторные показатели), потому что
-/// оба тратят одну и ту же квоту одного и того же провайдера (Brave/Yandex). Вынесено из
-/// MedicationEnrichmentProcessor.MonthlyQuotaExceededAsync при добавлении второго потребителя —
-/// раньше каждый конвейер считал свою таблицу задач независимо, что позволяло вдвое превысить
-/// реальный лимит провайдера.
+/// Месячная квота внешнего платного поиска (EnrichmentOptions.MonthlyQuota) — общая на ВСЕ
+/// конвейеры обогащения (медикаменты аптечки + лабораторные показатели + медикаменты из
+/// заключений врача, UX-редизайн), потому что все тратят одну и ту же квоту одного и того же
+/// провайдера (Brave/Yandex). Вынесено из MedicationEnrichmentProcessor.MonthlyQuotaExceededAsync
+/// при добавлении второго потребителя — раньше каждый конвейер считал свою таблицу задач
+/// независимо, что позволяло превысить реальный лимит провайдера.
 /// </summary>
 public class EnrichmentQuotaService(AppDbContext db, IOptions<EnrichmentOptions> options)
 {
@@ -24,7 +24,9 @@ public class EnrichmentQuotaService(AppDbContext db, IOptions<EnrichmentOptions>
             .CountAsync(j => j.ExternalSearchAt != null && j.ExternalSearchAt >= monthStart, ct);
         var analyteCount = await db.LabAnalyteEnrichmentJobs
             .CountAsync(j => j.ExternalSearchAt != null && j.ExternalSearchAt >= monthStart, ct);
+        var visitMedicationCount = await db.VisitMedicationEnrichmentJobs
+            .CountAsync(j => j.ExternalSearchAt != null && j.ExternalSearchAt >= monthStart, ct);
 
-        return medicationCount + analyteCount >= options.Value.MonthlyQuota;
+        return medicationCount + analyteCount + visitMedicationCount >= options.Value.MonthlyQuota;
     }
 }

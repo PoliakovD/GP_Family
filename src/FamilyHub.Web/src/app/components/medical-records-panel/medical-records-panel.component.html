@@ -127,94 +127,39 @@
   } @else {
     @for (item of items; track item.id) {
       <div class="card mb-2">
-        <div class="d-flex align-items-start justify-content-between gap-2">
-          <div>
-            <strong class="card-title">{{ item.title ?? item.personName }}</strong>
-            <div class="card-meta">
-              {{ item.recordDate }}
-              @if (item.title) { · {{ item.personName }} }
-            </div>
-          </div>
-          <div class="d-flex gap-2">
-            @if (canDelete(item)) {
-              <button class="btn btn-ghost btn-sm text-nowrap" title="Редактировать" (click)="openEditSheet(item)">
-                <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-              </button>
+        <!-- UX-редизайн: "Дата · Название · Пациент" в длину, чтобы карточка не тратила высоту
+             на многострочную шапку — на телефоне помещается больше записей на экран. -->
+        <div class="record-card-title">
+          {{ item.recordDate }} · {{ shortName(item) }} · {{ item.personName }}
+        </div>
+
+        <!-- UX-редизайн: иконки покрупнее и в одном ряду с «Файлы» (было — «Доступ» с текстом
+             отдельно, «Удалить» отдельно). Файлы теперь открывают модалку, не растягивают карточку. -->
+        <div class="record-card-actions">
+          <button class="btn btn-ghost btn-icon" title="Файлы" (click)="openFilesModal(item)">
+            <i class="ph ph-paperclip" aria-hidden="true"></i>
+            @if (item.attachmentCount > 0) {
+              <span class="icon-badge">{{ item.attachmentCount }}</span>
             }
-            <button class="btn btn-secondary btn-sm text-nowrap" (click)="openAccessSheet(item)">
-              <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
+          </button>
+          @if (canDelete(item)) {
+            <button class="btn btn-ghost btn-icon" title="Редактировать" (click)="openEditSheet(item)">
+              <i class="ph ph-pencil-simple" aria-hidden="true"></i>
             </button>
-            @if (canDelete(item)) {
-              <button class="btn btn-ghost btn-sm text-nowrap" title="Удалить" (click)="handleDelete(item)">
-                <i class="ph ph-trash" aria-hidden="true"></i>
-              </button>
-            }
-          </div>
+          }
+          <button class="btn btn-ghost btn-icon" title="Доступ" (click)="openAccessSheet(item)">
+            <i class="ph ph-share-network" aria-hidden="true"></i>
+          </button>
+          @if (canDelete(item)) {
+            <button class="btn btn-ghost btn-icon" title="Удалить" (click)="handleDelete(item)">
+              <i class="ph ph-trash" aria-hidden="true"></i>
+            </button>
+          }
         </div>
 
         <div class="d-flex align-items-center gap-2" style="font-size:12px;color:var(--color-accent)">
           <i class="ph-duotone ph-users-three" aria-hidden="true"></i> {{ accessSummary(item) }}
         </div>
-
-        <!-- UX-редизайн: врач/пациент/описание — всегда видны (было спрятано за «Подробнее»,
-             из-за чего терялась основная информация о записи). -->
-        <p class="muted mb-0" style="font-size:13px">
-          Пациент: {{ item.personName }}
-          @if (item.doctor) { · Врач: {{ item.doctor }} }
-        </p>
-        @if (item.description) {
-          <p class="mb-0" style="font-size:13px">{{ item.description }}</p>
-        }
-
-        <!-- UX-редизайн: содержимое грузится лениво при первом раскрытии. -->
-        <app-expandable title="Файлы" [count]="item.attachmentCount" (openChange)="onFilesToggle(item, $event)">
-          @if (canAddMoreAttachments(item.id)) {
-            <label
-              class="file-chip file-chip-add"
-              style="width:auto;height:auto;padding:8px 12px;flex-direction:row"
-              [attr.for]="'attach-file-input-' + item.id"
-            >
-              <i class="ph ph-paperclip" aria-hidden="true"></i>
-              <span>Прикрепить файлы</span>
-            </label>
-          }
-          <input
-            [id]="'attach-file-input-' + item.id"
-            class="visually-hidden-input"
-            type="file"
-            multiple
-            [accept]="acceptedFileTypes"
-            [disabled]="uploadingRecordId === item.id || remainingSlots(item.id) === 0"
-            (change)="handleUpload(item, $event)"
-          />
-          @if (attachmentLimits; as limits) {
-            <div class="muted" style="font-size:12px">
-              До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
-              @if (remainingSlots(item.id); as room) {
-                — осталось {{ room }}
-              } @else if (remainingSlots(item.id) === 0) {
-                — лимит достигнут
-              }
-            </div>
-          }
-          @if (uploadingRecordId === item.id) {
-            <app-loading-spinner text="Загружаем…" />
-          }
-          @if (attachmentsFor(item.id).length > 0) {
-            <ul class="list-unstyled mb-0">
-              @for (a of attachmentsFor(item.id); track a.id) {
-                <li class="d-flex align-items-center gap-2">
-                  <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
-                    <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
-                  </button>
-                  @if (a.extractedAt) {
-                    <i class="ph ph-check-circle" style="color:var(--color-accent)" title="Распознано" aria-hidden="true"></i>
-                  }
-                </li>
-              }
-            </ul>
-          }
-        </app-expandable>
 
         @if (hasUnrecognizedAttachments(item)) {
           <button
@@ -239,10 +184,19 @@
           <div class="muted" style="font-size:12px">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
         }
 
-        @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
-          <!-- UX-редизайн: «Подробнее» теперь скрывает/показывает ИМЕННО таблицу показателей
-               (было — врач/пациент/дата, которые должны быть видны всегда). -->
-          <app-expandable title="Подробнее" [count]="indicatorsFor(item.id).length">
+        <!-- UX-редизайн: одна «Подробнее» на карточку — врач/описание + (для анализа) таблица
+             показателей и резюме, (для визита) диагноз/анамнез/назначения. Ширина строки заголовка
+             карточки экономится именно за счёт того, что всё это внутри одной свёртки. -->
+        <app-expandable title="Подробнее">
+          @if (item.doctor) {
+            <p class="muted mb-1">Врач: {{ item.doctor }}</p>
+          }
+          @if (item.description) {
+            <p class="mb-1">{{ item.description }}</p>
+          }
+
+          @if (item.kind === Kind.Analysis) {
+          @if (indicatorsFor(item.id).length > 0) {
           <div class="table-responsive">
             <table class="indicators-table">
               <thead>
@@ -383,48 +337,65 @@
               </tbody>
             </table>
           </div>
-          </app-expandable>
+          } @else {
+            <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+          }
 
           @if (summaryByRecord[item.id]; as summary) {
-            <app-expandable title="Резюме">
-              @if (summary.plainSummary) {
-                <p class="mb-1">{{ summary.plainSummary }}</p>
-              }
-              @if (summary.deviations.length > 0) {
-                <ul class="mb-1" style="font-size:13px">
-                  @for (d of summary.deviations; track d.name) {
-                    <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                  }
-                </ul>
-              }
-              @if (summary.questionsForDoctor.length > 0) {
-                <div class="card-kicker mt-2">Вопросы врачу</div>
-                <ul class="mb-1" style="font-size:13px">
-                  @for (q of summary.questionsForDoctor; track q) {
-                    <li>{{ q }}</li>
-                  }
-                </ul>
-              }
-              <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
-            </app-expandable>
+            <div class="card-kicker mt-2">Резюме</div>
+            @if (summary.plainSummary) {
+              <p class="mb-1">{{ summary.plainSummary }}</p>
+            }
+            @if (summary.deviations.length > 0) {
+              <ul class="mb-1" style="font-size:13px">
+                @for (d of summary.deviations; track d.name) {
+                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                }
+              </ul>
+            }
+            @if (summary.questionsForDoctor.length > 0) {
+              <div class="card-kicker mt-2">Вопросы врачу</div>
+              <ul class="mb-1" style="font-size:13px">
+                @for (q of summary.questionsForDoctor; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            }
+            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
           }
-        } @else if (item.kind === Kind.Analysis && creatingIndicatorRecordId !== item.id) {
-          <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
-        }
+          }
 
-        @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
-          <app-expandable title="Резюме">
+          @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
             @if (conclusion.diagnosis) {
               <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
+            }
+            @if (conclusion.anamnesis) {
+              <p class="mb-1"><strong>Анамнез:</strong> {{ conclusion.anamnesis }}</p>
+            }
+            @if (conclusion.proceduresPerformed) {
+              <p class="mb-1"><strong>Проведено на приёме:</strong> {{ conclusion.proceduresPerformed }}</p>
             }
             @if (conclusion.recommendations) {
               <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
             }
-            @if (conclusion.prescriptions) {
-              <p class="mb-0"><strong>Назначения:</strong> {{ conclusion.prescriptions }}</p>
+            @if (conclusion.prescribedMedications.length > 0) {
+              <div class="card-kicker mt-2">Назначенные лекарства</div>
+              <ul class="list-unstyled mb-0">
+                @for (med of conclusion.prescribedMedications; track med.name) {
+                  <li class="mb-1">
+                    <strong>{{ med.name }}</strong>
+                    @if (med.dosageInstructions) { — {{ med.dosageInstructions }} }
+                    @if (med.kbMedicationId; as kbId) {
+                      <button type="button" class="btn-link" (click)="openKbCard(kbId)">Справка</button>
+                    } @else {
+                      <span class="muted" style="font-size:12px">— справка уточняется</span>
+                    }
+                  </li>
+                }
+              </ul>
             }
-          </app-expandable>
-        }
+          }
+        </app-expandable>
       </div>
     }
 
@@ -503,5 +474,70 @@
         <button class="btn btn-ghost btn-sm" [disabled]="savingRecord" (click)="closeEditSheet()">Отмена</button>
       </div>
     </app-bottom-sheet>
+  }
+
+  <app-bottom-sheet title="Справка о препарате" [open]="kbCardOpen" (closed)="closeKbCard()">
+    @if (kbCardLoading) {
+      <app-loading-spinner />
+    } @else if (kbCardError) {
+      <div class="alert-danger mb-0">{{ kbCardError }}</div>
+    } @else if (selectedKbCard) {
+      <app-kb-card [card]="selectedKbCard" />
+    }
+  </app-bottom-sheet>
+
+  <!-- UX-редизайн: файлы — модалка по клику на иконку, а не раскрывающийся блок в самой
+       карточке (растягивал список анализов по высоте). -->
+  @if (filesModalRecord; as record) {
+    <app-modal title="Файлы" [open]="true" (closed)="closeFilesModal()">
+      @if (canAddMoreAttachments(record.id)) {
+        <label
+          class="file-chip file-chip-add"
+          style="width:auto;height:auto;padding:8px 12px;flex-direction:row"
+          [attr.for]="'attach-file-input-' + record.id"
+        >
+          <i class="ph ph-paperclip" aria-hidden="true"></i>
+          <span>Прикрепить файлы</span>
+        </label>
+      }
+      <input
+        [id]="'attach-file-input-' + record.id"
+        class="visually-hidden-input"
+        type="file"
+        multiple
+        [accept]="acceptedFileTypes"
+        [disabled]="uploadingRecordId === record.id || remainingSlots(record.id) === 0"
+        (change)="handleUpload(record, $event)"
+      />
+      @if (attachmentLimits; as limits) {
+        <div class="muted" style="font-size:12px">
+          До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
+          @if (remainingSlots(record.id); as room) {
+            — осталось {{ room }}
+          } @else if (remainingSlots(record.id) === 0) {
+            — лимит достигнут
+          }
+        </div>
+      }
+      @if (uploadingRecordId === record.id) {
+        <app-loading-spinner text="Загружаем…" />
+      }
+      @if (attachmentsFor(record.id).length > 0) {
+        <ul class="list-unstyled mb-0">
+          @for (a of attachmentsFor(record.id); track a.id) {
+            <li class="d-flex align-items-center gap-2">
+              <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
+                <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
+              </button>
+              @if (a.extractedAt) {
+                <i class="ph ph-check-circle" style="color:var(--color-accent)" title="Распознано" aria-hidden="true"></i>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted mb-0">Файлов пока нет.</p>
+      }
+    </app-modal>
   }
 </div>

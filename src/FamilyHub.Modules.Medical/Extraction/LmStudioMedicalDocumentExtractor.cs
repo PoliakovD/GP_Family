@@ -49,7 +49,8 @@ public class LmStudioMedicalDocumentExtractor(
           ],
           "specimen": "биоматериал бланка — один из: blood, urine, stool, vaginalSwab, saliva, other — или null, если не указан/непонятен",
           "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
-          "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай"
+          "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай",
+          "doctor": "ФИО и/или специальность врача, назначившего анализ, если указаны в бланке — иначе null, не придумывай"
         }
 
         Правила:
@@ -64,9 +65,9 @@ public class LmStudioMedicalDocumentExtractor(
         - "refLow"/"refHigh" — числа, только если референс — числовой диапазон (например,
           "130-160"). Если так — "refText" оставь null. Если референс не числовой — заполни
           только "refText", "refLow"/"refHigh" оставь null.
-        - "specimen"/"documentDate"/"suggestedTitle" — заполняй, только если это ДЕЙСТВИТЕЛЬНО
-          есть в этом фрагменте (обычно в шапке документа); если фрагмент — просто таблица
-          показателей без шапки, оставь все три null.
+        - "specimen"/"documentDate"/"suggestedTitle"/"doctor" — заполняй, только если это
+          ДЕЙСТВИТЕЛЬНО есть в этом фрагменте (обычно в шапке документа); если фрагмент — просто
+          таблица показателей без шапки, оставь все четыре null.
         - Если во фрагменте нет ни одного показателя анализа (это шапка документа, подпись врача,
           пояснительный текст и т.п.) — indicators пустой массив, но specimen/documentDate/
           suggestedTitle всё равно заполни, если они есть в этом фрагменте.
@@ -75,22 +76,31 @@ public class LmStudioMedicalDocumentExtractor(
 
     private const string VisitSystemPrompt = """
         Ты — оцифровщик заключений и выписок врача. На входе — текст или фото документа (может
-        быть только часть документа, если он большой). Извлеки диагноз, рекомендации и назначения
+        быть только часть документа, если он большой). Извлеки структурированное содержимое приёма
         и верни ТОЛЬКО валидный JSON, без пояснений, без markdown, без блока <think>.
 
         Формат ответа:
         {
           "diagnosis": "диагноз как указан в документе или null",
-          "recommendations": "рекомендации врача или null",
-          "prescriptions": "назначенные препараты/процедуры как написано в документе (сырой текст) или null",
+          "anamnesis": "анамнез — жалобы, история заболевания со слов пациента, если записаны врачом, или null",
+          "proceduresPerformed": "манипуляции/анализы, выполненные ПРЯМО НА ЭТОМ приёме (осмотр, измерения, взятые пробы и т.п.) или null",
+          "recommendations": "рекомендации врача (немедикаментозные — режим, диета, повторный визит и т.п.) или null",
+          "prescriptions": [
+            {
+              "name": "название назначенного препарата как написано в документе",
+              "dosageInstructions": "как принимать — доза, кратность, длительность, как написано в документе, или null, если не указано"
+            }
+          ],
           "documentDate": "дата приёма/выписки, как указана в документе, в формате YYYY-MM-DD, или null",
-          "suggestedTitle": "короткое название документа, если оно прямо напечатано (например, \"Выписка невролога\") — иначе null, не придумывай"
+          "suggestedTitle": "короткое название документа, если оно прямо напечатано (например, \"Выписка невролога\") — иначе null, не придумывай",
+          "doctor": "ФИО и/или специальность принимавшего врача, если указаны в документе — иначе null, не придумывай"
         }
 
         Правила:
         - Заполняй поле только если соответствующая информация реально есть в этом фрагменте —
-          иначе null. Не додумывай.
-        - "prescriptions" — переноси как написано в документе, не структурируй и не сокращай.
+          иначе null (для "prescriptions" — пустой массив). Не додумывай.
+        - "prescriptions" — только препараты, реально НАЗНАЧЕННЫЕ в этом документе, не путай с
+          "anamnesis" (что пациент уже принимал раньше) или "proceduresPerformed".
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
@@ -119,12 +129,14 @@ public class LmStudioMedicalDocumentExtractor(
         SpecimenType? specimen = null;
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
+        string? doctor = null;
 
         void CaptureDocumentFields(Dictionary<string, JsonElement> payload)
         {
             specimen ??= ParseSpecimen(ReadString(payload, "specimen"));
             documentDate ??= ParseDate(ReadString(payload, "documentDate"));
             suggestedTitle ??= ReadString(payload, "suggestedTitle");
+            doctor ??= ReadString(payload, "doctor");
         }
 
         if (content.Kind == DocumentSourceKind.Text)
@@ -160,10 +172,12 @@ public class LmStudioMedicalDocumentExtractor(
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
         {
-            return new ExtractionResult(true, [], null, "Не удалось распознать ни одного показателя.", specimen, documentDate, suggestedTitle);
+            return new ExtractionResult(
+                true, [], null, "Не удалось распознать ни одного показателя.", specimen, documentDate, suggestedTitle, doctor);
         }
 
-        return new ExtractionResult(true, deduped, null, Specimen: specimen, DocumentDate: documentDate, SuggestedTitle: suggestedTitle);
+        return new ExtractionResult(
+            true, deduped, null, Specimen: specimen, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor);
     }
 
     private static SpecimenType? ParseSpecimen(string? value) => value?.Trim().ToLowerInvariant() switch
@@ -197,7 +211,8 @@ public class LmStudioMedicalDocumentExtractor(
                     return new ExtractionResult(
                         true, null, conclusion,
                         DocumentDate: ParseDate(ReadString(result.Payload, "documentDate")),
-                        SuggestedTitle: ReadString(result.Payload, "suggestedTitle"));
+                        SuggestedTitle: ReadString(result.Payload, "suggestedTitle"),
+                        Doctor: ReadString(result.Payload, "doctor"));
                 }
             }
         }
@@ -215,7 +230,8 @@ public class LmStudioMedicalDocumentExtractor(
                     return new ExtractionResult(
                         true, null, conclusion,
                         DocumentDate: ParseDate(ReadString(result.Payload, "documentDate")),
-                        SuggestedTitle: ReadString(result.Payload, "suggestedTitle"));
+                        SuggestedTitle: ReadString(result.Payload, "suggestedTitle"),
+                        Doctor: ReadString(result.Payload, "doctor"));
                 }
             }
         }
@@ -223,10 +239,6 @@ public class LmStudioMedicalDocumentExtractor(
         return new ExtractionResult(true, null, null, "Не удалось распознать заключение врача.");
     }
 
-    /// <summary>Плейсхолдеры "нет данных", которые модель иногда подставляет вместо ПРОПУСКА
-    /// показателя с пустой ячейкой (см. правило гейта в AnalysisSystemPrompt) — намеренно НЕ
-    /// включает "-"/"—"/"отсутствуют"/"не обнаружено"/"отрицательно": это осмысленные значения
-    /// бланка, а не признак пустой строки.</summary>
     /// <summary>Плейсхолдеры "нет данных" — включает голый прочерк: в бланке он означает "поле не
     /// заполнено", а не результат анализа, хранить его незачем — график/тренд по нему всё равно
     /// не построить. Словесные "отсутствуют"/"не обнаружено"/"отрицательно" сюда НЕ входят — это
@@ -265,10 +277,29 @@ public class LmStudioMedicalDocumentExtractor(
     private static VisitConclusion ParseConclusion(Dictionary<string, JsonElement> payload) => new(
         ReadString(payload, "diagnosis"),
         ReadString(payload, "recommendations"),
-        ReadString(payload, "prescriptions"));
+        ReadString(payload, "anamnesis"),
+        ReadString(payload, "proceduresPerformed"),
+        ParsePrescribedMedications(payload));
+
+    private static List<PrescribedMedication> ParsePrescribedMedications(Dictionary<string, JsonElement> payload)
+    {
+        if (!TryGetValue(payload, "prescriptions", out var arr) || arr.ValueKind != JsonValueKind.Array) return [];
+
+        var result = new List<PrescribedMedication>();
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            var name = ReadString(item, "name")?.Trim();
+            if (string.IsNullOrEmpty(name) || name.Length > 200) continue;
+            result.Add(new PrescribedMedication(name, ReadString(item, "dosageInstructions")));
+        }
+        return result;
+    }
 
     private static bool HasContent(VisitConclusion c) =>
-        !string.IsNullOrWhiteSpace(c.Diagnosis) || !string.IsNullOrWhiteSpace(c.Recommendations) || !string.IsNullOrWhiteSpace(c.Prescriptions);
+        !string.IsNullOrWhiteSpace(c.Diagnosis) || !string.IsNullOrWhiteSpace(c.Recommendations) ||
+        !string.IsNullOrWhiteSpace(c.Anamnesis) || !string.IsNullOrWhiteSpace(c.ProceduresPerformed) ||
+        (c.PrescribedMedications is { Count: > 0 });
 
     /// <summary>Первое вхождение имени побеждает — куски идут по порядку документа, повторное
     /// упоминание того же показателя дальше в тексте (например, в итоговой таблице после

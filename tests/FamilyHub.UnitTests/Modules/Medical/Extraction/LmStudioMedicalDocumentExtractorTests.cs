@@ -86,4 +86,45 @@ public class LmStudioMedicalDocumentExtractorTests
 
         result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин", "Эритроциты"]);
     }
+
+    [Fact]
+    public async Task ExtractAsync_Analysis_CapturesDoctorFromDocument()
+    {
+        SetUpTextChunk("Гемоглобин 118 г/л\nВрач: Петрова И.И.");
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["indicators"] = JsonSerializer.SerializeToElement(new[] { new { name = "Гемоглобин", value = "118" } }),
+            ["doctor"] = JsonSerializer.SerializeToElement("Петрова И.И."),
+        };
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LmStudioJsonResult(true, payload, null));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.Doctor.Should().Be("Петрова И.И.");
+    }
+
+    [Fact]
+    public async Task ExtractAsync_Visit_CapturesDoctorAndStructuredPrescriptions()
+    {
+        SetUpTextChunk("Диагноз: ОРВИ. Врач: Иванов А.А. Назначено: Парацетамол по 1 таблетке 3 раза в день.");
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["diagnosis"] = JsonSerializer.SerializeToElement("ОРВИ"),
+            ["doctor"] = JsonSerializer.SerializeToElement("Иванов А.А."),
+            ["prescriptions"] = JsonSerializer.SerializeToElement(new[]
+            {
+                new { name = "Парацетамол", dosageInstructions = "по 1 таблетке 3 раза в день" },
+            }),
+        };
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LmStudioJsonResult(true, payload, null));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.DoctorVisit);
+
+        result.Doctor.Should().Be("Иванов А.А.");
+        result.Conclusion!.Diagnosis.Should().Be("ОРВИ");
+        result.Conclusion.PrescribedMedications.Should().ContainSingle(
+            m => m.Name == "Парацетамол" && m.DosageInstructions == "по 1 таблетке 3 раза в день");
+    }
 }

@@ -17,7 +17,8 @@ public enum ExtractionQueryResult { Success, NotFound, Forbidden }
 /// наследуют видимость родительской мед-записи — своей у них нет, тот же принцип, что у вложений
 /// (см. AttachmentService.GetForMedicalRecordAsync): просмотр чужой расшаренной записи пишет аудит.
 /// </summary>
-public class ExtractionQueryService(AppDbContext db, MedicalRecordService medicalRecords, IMedicalAuditWriter audit)
+public class ExtractionQueryService(
+    AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup, IMedicalAuditWriter audit)
 {
     public async Task<(ExtractionQueryResult Result, ExtractionStatusResponse? Item)> GetStatusAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
@@ -50,8 +51,11 @@ public class ExtractionQueryService(AppDbContext db, MedicalRecordService medica
     }
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
-    /// GetSummaryAsync для показателей анализа (Kind=Analysis использует SummaryJson, не это поле).</summary>
-    public async Task<(ExtractionQueryResult Result, VisitConclusion? Item)> GetConclusionAsync(
+    /// GetSummaryAsync для показателей анализа (Kind=Analysis использует SummaryJson, не это поле).
+    /// Ссылки на справочник медикаментов (KbMedicationId) резолвятся ЖИВЫМ поиском на каждое
+    /// чтение (см. PrescribedMedicationDto) — так подхватывается результат обогащения, даже если
+    /// оно завершилось уже после первого просмотра заключения, без отдельного бэкофилла.</summary>
+    public async Task<(ExtractionQueryResult Result, VisitConclusionResponse? Item)> GetConclusionAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
     {
         var access = await CheckAccessAsync(recordId, userId, ct, writeAudit: true);
@@ -62,7 +66,23 @@ public class ExtractionQueryService(AppDbContext db, MedicalRecordService medica
         if (string.IsNullOrEmpty(extractedDataJson)) return (ExtractionQueryResult.NotFound, null);
 
         var conclusion = JsonSerializer.Deserialize<VisitConclusion>(extractedDataJson);
-        return conclusion is null ? (ExtractionQueryResult.NotFound, null) : (ExtractionQueryResult.Success, conclusion);
+        if (conclusion is null) return (ExtractionQueryResult.NotFound, null);
+
+        var medications = new List<PrescribedMedicationDto>();
+        foreach (var med in conclusion.PrescribedMedications ?? [])
+        {
+            var normalizedName = MedicationNameNormalizer.Normalize(med.Name);
+            Guid? kbMedicationId = null;
+            if (normalizedName.Length > 0)
+            {
+                var lookup = await medicationKbLookup.LookupAsync(normalizedName, ct);
+                if (lookup.Kind == Kb.KbLookupKind.Hit) kbMedicationId = lookup.KbId;
+            }
+            medications.Add(new PrescribedMedicationDto(med.Name, med.DosageInstructions, kbMedicationId));
+        }
+
+        return (ExtractionQueryResult.Success, new VisitConclusionResponse(
+            conclusion.Diagnosis, conclusion.Recommendations, conclusion.Anamnesis, conclusion.ProceduresPerformed, medications));
     }
 
     public async Task<(ExtractionQueryResult Result, RecordSummaryResponse? Item)> GetSummaryAsync(

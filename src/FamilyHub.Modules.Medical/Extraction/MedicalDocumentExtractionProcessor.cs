@@ -6,6 +6,7 @@ using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Attachments;
+using FamilyHub.Modules.Medical.Enrichment;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -43,6 +44,8 @@ public class MedicalDocumentExtractionProcessor(
     LabAnalyteEnrichmentRequestService enrichmentRequest,
     PatientReferenceCalculator referenceCalculator,
     LabSummarizer summarizer,
+    Kb.KbLookupService medicationKbLookup,
+    VisitMedicationEnrichmentRequestService visitMedicationEnrichment,
     IDomainEventPublisher publisher,
     ILogger<MedicalDocumentExtractionProcessor> logger)
 {
@@ -152,12 +155,14 @@ public class MedicalDocumentExtractionProcessor(
     {
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
+        string? doctor = null;
         var rawIndicators = new List<(ExtractedLabIndicator Dto, SpecimenType Specimen)>();
 
         foreach (var result in results)
         {
             if (result.DocumentDate is not null) documentDate = result.DocumentDate;
             if (suggestedTitle is null && !string.IsNullOrWhiteSpace(result.SuggestedTitle)) suggestedTitle = result.SuggestedTitle;
+            if (doctor is null && !string.IsNullOrWhiteSpace(result.Doctor)) doctor = result.Doctor;
             if (result.LabIndicators is null) continue;
 
             var specimen = result.Specimen ?? SpecimenType.Unknown;
@@ -175,10 +180,11 @@ public class MedicalDocumentExtractionProcessor(
         await db.SaveChangesAsync(ct);
 
         // Дата документа, если распозналась в бланке, — переопределяет дефолт "сегодня"
-        // (проставленный при создании записи). Короткое название — только если ещё не задано
-        // (не затираем то, что пользователь мог ввести вручную).
+        // (проставленный при создании записи). Короткое название/врач — только если ещё не заданы
+        // (не затираем то, что пользователь мог ввести вручную в форме создания).
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
+        if (record.Doctor is null && doctor is not null) record.Doctor = doctor;
 
         var recordId = record.Id;
         var ownerUserId = record.OwnerUserId;
@@ -323,8 +329,25 @@ public class MedicalDocumentExtractionProcessor(
 
         var documentDate = results.Select(r => r.DocumentDate).FirstOrDefault(d => d is not null);
         var suggestedTitle = results.Select(r => r.SuggestedTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+        var doctor = results.Select(r => r.Doctor).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
+        if (record.Doctor is null && doctor is not null) record.Doctor = doctor;
+
+        // Назначенные препараты — сверяем со справочником медикаментов (тот же, что у аптечки);
+        // промах ставит обогащение в очередь (UX-редизайн, см. VisitMedicationEnrichmentRequestService).
+        // Ссылка на найденную запись справочника НЕ сохраняется здесь — резолвится на чтение
+        // (ExtractionQueryService.GetConclusionAsync), чтобы не требовать бэкофилла, когда
+        // обогащение завершится уже после первого просмотра заключения.
+        foreach (var med in conclusion.PrescribedMedications ?? [])
+        {
+            var normalizedName = MedicationNameNormalizer.Normalize(med.Name);
+            if (normalizedName.Length == 0) continue;
+
+            var lookup = await medicationKbLookup.LookupAsync(normalizedName, ct);
+            if (lookup.Kind != Kb.KbLookupKind.Hit)
+                await visitMedicationEnrichment.RequestAsync(normalizedName, med.Name, record.Id, record.OwnerUserId, ct);
+        }
 
         record.ExtractedDataJson = JsonSerializer.Serialize(conclusion);
         record.ExtractionStatus = ExtractionStatus.Ready;

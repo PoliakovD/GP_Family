@@ -12,6 +12,7 @@ import type {
   AttachmentLimits,
   ExtractionStatusResponse,
   IndicatorDto,
+  KbMedicationCard,
   MedicalRecord,
   MedicalRecordFilter,
   RecordSummaryResponse,
@@ -22,9 +23,11 @@ import type {
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
+import { ModalComponent } from '../../shared/modal/modal.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
+import { KbCardComponent } from '../kb-card/kb-card.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { formatPersonName } from '../../shared/util/person-name';
 import { SPECIMEN_OPTIONS, specimenLabel } from '../../shared/util/specimen';
@@ -118,8 +121,8 @@ let nextInstanceId = 0;
   selector: 'app-medical-records-panel',
   standalone: true,
   imports: [
-    FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
-    ExpandableComponent, PipelineProgressComponent,
+    FormsModule, LoadingSpinnerComponent, BottomSheetComponent, ModalComponent, SearchFieldComponent,
+    ExpandableComponent, PipelineProgressComponent, KbCardComponent,
   ],
   templateUrl: './medical-records-panel.component.html',
   styleUrl: './medical-records-panel.component.scss',
@@ -242,6 +245,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '' };
   savingRecord = false;
 
+  // --- Справка по назначенному лекарству (заключение врача, UX-редизайн) — та же карточка и
+  // тот же bottom-sheet, что во вкладке «Справочник» (kb-tab.component.ts). ---
+  kbCardOpen = false;
+  kbCardLoading = false;
+  kbCardError: string | null = null;
+  selectedKbCard: KbMedicationCard | null = null;
+
   // undefined — ещё ни разу не загружали.
   private loadedKind: MedicalRecordKind | undefined = undefined;
 
@@ -289,6 +299,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   get labels(): KindLabels {
     return KIND_LABELS[this.kind()];
+  }
+
+  /** Короткое название для заголовка карточки «Дата · Название · Пациент» (UX-редизайн) —
+   * item.title, если уже распознан/введён, иначе нейтральная подпись по виду записи. */
+  shortName(item: MedicalRecord): string {
+    return item.title ?? (item.kind === MedicalRecordKind.Analysis ? 'Анализ' : 'Приём врача');
   }
 
   /** «Я» + все подопечные и все другие активные участники из моих активных семей (дедуп по
@@ -558,11 +574,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Файлы карточки (лениво — при первом раскрытии «Файлы», UX-редизайн) ---
+  // --- Файлы записи (модалка, UX-редизайн — раньше раскрывающийся блок в самой карточке;
+  // вынесено в модалку, чтобы не растягивать карточку и высвободить место под остальное). ---
 
-  /** Раскрытие/сворачивание «Файлы» на карточке — грузит вложения только один раз. */
-  async onFilesToggle(record: MedicalRecord, open: boolean): Promise<void> {
-    if (!open || this.attachmentsLoadedFor.has(record.id)) return;
+  /** Запись, для которой сейчас открыта модалка «Файлы» (null — закрыта). */
+  filesModalRecord: MedicalRecord | null = null;
+
+  async openFilesModal(record: MedicalRecord): Promise<void> {
+    this.filesModalRecord = record;
+    if (this.attachmentsLoadedFor.has(record.id)) return;
     this.attachmentsLoadedFor.add(record.id);
     try {
       const attachments = await this.api.getRecordAttachments(record.id);
@@ -571,6 +591,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.attachmentsLoadedFor.delete(record.id);
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить вложения.';
     }
+  }
+
+  closeFilesModal(): void {
+    this.filesModalRecord = null;
   }
 
   /** Сколько ещё файлов можно приложить к этой записи — null, пока список вложений ещё не
@@ -1027,6 +1051,26 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } finally {
       this.savingRecord = false;
     }
+  }
+
+  // --- Справка по назначенному лекарству ---
+
+  async openKbCard(kbMedicationId: string): Promise<void> {
+    this.kbCardOpen = true;
+    this.kbCardLoading = true;
+    this.kbCardError = null;
+    this.selectedKbCard = null;
+    try {
+      this.selectedKbCard = await this.api.getKbMedication(kbMedicationId);
+    } catch (err) {
+      this.kbCardError = err instanceof ApiError ? err.message : 'Не удалось загрузить карточку препарата.';
+    } finally {
+      this.kbCardLoading = false;
+    }
+  }
+
+  closeKbCard(): void {
+    this.kbCardOpen = false;
   }
 
   /** Видна ли КОНКРЕТНАЯ запись данной семье: (L1 share есть) И (L2 hide нет). */

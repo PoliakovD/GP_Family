@@ -482,11 +482,22 @@ export interface UserSpecimen {
     createdAt: string;
 }
 
-/** Заключение врача (Kind=DoctorVisit), GET /api/medical-records/{id}/conclusion — MedicalRecord.ExtractedDataJson. */
+/** Назначенный препарат (UX-редизайн) — kbMedicationId резолвится сервером живым поиском по
+ * справочнику на каждое чтение (null, пока обогащение справочника ещё не завершилось). */
+export interface PrescribedMedication {
+    name: string;
+    dosageInstructions: string | null;
+    kbMedicationId: string | null;
+}
+
+/** Заключение врача (Kind=DoctorVisit), GET /api/medical-records/{id}/conclusion — MedicalRecord.ExtractedDataJson
+ * + живой резолв ссылок на справочник медикаментов (UX-редизайн). */
 export interface VisitConclusion {
     diagnosis: string | null;
     recommendations: string | null;
-    prescriptions: string | null;
+    anamnesis: string | null;
+    proceduresPerformed: string | null;
+    prescribedMedications: PrescribedMedication[];
 }
 
 export interface LabSummaryDeviation {

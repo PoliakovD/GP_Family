@@ -21,6 +21,23 @@ public record MyIndicatorSummary(
 /// для десериализации на чтении.</summary>
 public record RecordSummaryResponse(string? PlainSummary, IReadOnlyList<LabSummaryDeviation> Deviations, IReadOnlyList<string> QuestionsForDoctor, string Disclaimer);
 
+/// <summary>Назначенный препарат — ответ на чтение (GET .../conclusion, UX-редизайн). KbMedicationId
+/// резолвится ЖИВЫМ поиском по kb.global_medications_kb при каждом чтении (см.
+/// ExtractionQueryService.GetConclusionAsync), не хранится вместе с заключением — обогащение
+/// справочника может завершиться уже после того, как заключение впервые сохранено, и тогда
+/// сохранённая ссылка была бы навсегда null без отдельного бэкофилла.</summary>
+public record PrescribedMedicationDto(string Name, string? DosageInstructions, Guid? KbMedicationId);
+
+/// <summary>Заключение врача — ответ на чтение (GET .../conclusion, UX-редизайн). Собирается из
+/// сохранённого FamilyHub.Modules.Medical.Extraction.VisitConclusion (см. ExtractionDtos.cs) +
+/// живого резолва ссылок на справочник медикаментов.</summary>
+public record VisitConclusionResponse(
+    string? Diagnosis,
+    string? Recommendations,
+    string? Anamnesis,
+    string? ProceduresPerformed,
+    IReadOnlyList<PrescribedMedicationDto> PrescribedMedications);
+
 /// <summary>Ручная правка показателя (ошибка OCR) — только владелец записи, см. ExtractionQueryService.
 /// Все поля — новое значение целиком (не патч), Flag пересчитывается сервером после сохранения по
 /// тому же IndicatorFlagCalculator, что и при распознавании (референс из формы приоритетнее KB,

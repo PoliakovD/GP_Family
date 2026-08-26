@@ -14,10 +14,24 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// когда референс — числовой диапазон.</summary>
 public record ExtractedLabIndicator(string Name, string Value, string? Unit, double? RefLow, double? RefHigh, string? RefText);
 
-/// <summary>Заключение врача из распознанного документа (задача 5.3: только извлечение — график
-/// приёма → календарь → push вне объёма этой ветки, см. план). Prescriptions — сырой текст
-/// назначений.</summary>
-public record VisitConclusion(string? Diagnosis, string? Recommendations, string? Prescriptions);
+/// <summary>Один назначенный препарат из заключения врача (UX-редизайн) — DosageInstructions как
+/// написано в документе ("по 1 таблетке 2 раза в день после еды"), не структурировано дальше.
+/// Ссылка на общий справочник (KbMedicationId) НЕ хранится здесь — резолвится на чтение
+/// (см. ExtractionQueryService.GetConclusionAsync), чтобы не требовать бэкофилла старых записей,
+/// когда обогащение справочника завершится позже первого просмотра.</summary>
+public record PrescribedMedication(string Name, string? DosageInstructions);
+
+/// <summary>Заключение врача из распознанного документа (задача 5.3 + UX-редизайн). Anamnesis —
+/// анамнез (жалобы, история болезни со слов пациента); ProceduresPerformed — проведённые на
+/// приёме манипуляции/анализы (не путать с LabIndicator — это текст заключения, не структурные
+/// показатели); PrescribedMedications — назначенные препараты с дозировкой, каждый по возможности
+/// связывается со справочником kb.global_medications_kb.</summary>
+public record VisitConclusion(
+    string? Diagnosis,
+    string? Recommendations,
+    string? Anamnesis,
+    string? ProceduresPerformed,
+    IReadOnlyList<PrescribedMedication>? PrescribedMedications);
 
 /// <summary>
 /// Результат распознавания одного вложения. Ровно одно из <see cref="LabIndicators"/>/
@@ -32,6 +46,9 @@ public record VisitConclusion(string? Diagnosis, string? Recommendations, string
 /// процессор обновляет MedicalRecord.RecordDate (по умолчанию — дата создания записи).
 /// <see cref="SuggestedTitle"/> — короткое название документа ("Общий анализ крови"), если оно
 /// прямо напечатано в шапке бланка — процессор пишет в MedicalRecord.Title, если оно ещё пустое.
+/// <see cref="Doctor"/> — врач/специалист, если указан в документе (для анализа — "кто назначил",
+/// для визита — принимавший врач) — процессор пишет в MedicalRecord.Doctor, если оно ещё пустое
+/// (не затирает то, что пользователь мог ввести вручную в форме создания).
 /// </summary>
 public record ExtractionResult(
     bool Supported,
@@ -40,4 +57,5 @@ public record ExtractionResult(
     string? FailureReason = null,
     SpecimenType? Specimen = null,
     DateOnly? DocumentDate = null,
-    string? SuggestedTitle = null);
+    string? SuggestedTitle = null,
+    string? Doctor = null);

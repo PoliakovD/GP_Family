@@ -51,6 +51,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
     public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();
 
+    /// <summary>Обогащение kb.global_medications_kb для препаратов из заключений врача
+    /// (UX-редизайн) — см. VisitMedicationEnrichmentProcessor.</summary>
+    public DbSet<VisitMedicationEnrichmentJob> VisitMedicationEnrichmentJobs => Set<VisitMedicationEnrichmentJob>();
+
     /// <summary>Прогоны перешифровки при ротации ключа (ADR-0009) — см. EncryptionRotationJob.</summary>
     public DbSet<EncryptionRotationRun> EncryptionRotationRuns => Set<EncryptionRotationRun>();
 

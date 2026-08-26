@@ -61,6 +61,10 @@ public static class MedicalModule
         services.AddScoped<EnrichmentQuotaService>();
         services.AddScoped<IEnrichmentRequestService, EnrichmentRequestService>();
         services.AddScoped<MedicationEnrichmentProcessor>();
+        // Обогащение справочника медикаментов из заключений врача (UX-редизайн) — отдельный
+        // конвейер задач (не FamilyId-скоуп, см. VisitMedicationEnrichmentJob), тот же справочник.
+        services.AddScoped<VisitMedicationEnrichmentRequestService>();
+        services.AddScoped<VisitMedicationEnrichmentProcessor>();
         return services;
     }
 
