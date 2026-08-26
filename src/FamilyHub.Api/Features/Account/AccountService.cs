@@ -182,7 +182,11 @@ public class AccountService(
             .Where(r => r.OwnerUserId == userId)
             .ToListAsync(ct);
         await AddJsonAsync(zip, "medical-records.json",
-            records.Select(r => new { r.Id, r.PersonName, r.RecordDate, r.Doctor, r.Description, r.CreatedAt }),
+            records.Select(r => new
+            {
+                r.Id, r.Title, r.RecordDate, r.Doctor, r.Description,
+                r.FamilyDependentId, r.TargetUserId, r.CreatedAt,
+            }),
             jsonOptions, ct);
 
         var recordIds = records.Select(r => r.Id).ToList();

@@ -57,7 +57,7 @@ public class AccountErasureTests(FamilyHubWebFactory factory) : IntegrationTestB
 
         // Член семьи создаёт медзапись с вложением и расшаривает семье.
         var record = await (await member.PostAsJsonAsync("/api/medical-records",
-                new CreateMedicalRecordRequest("Пациент Удаляемый", DateOnly.FromDateTime(DateTime.UtcNow), "Врач", "Диагноз", null)))
+                new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), "Врач", "Диагноз", null)))
             .Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts);
         (await member.PostAsync($"/api/medical-records/{record!.Id}/attachments", BuildUpload("private-bytes")))
             .StatusCode.Should().Be(HttpStatusCode.Created);
@@ -134,7 +134,7 @@ public class AccountErasureTests(FamilyHubWebFactory factory) : IntegrationTestB
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await (await owner.PostAsJsonAsync("/api/medical-records",
-                new CreateMedicalRecordRequest("Экспортируемый Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, "Диагноз-текст", null)))
+                new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, "Диагноз-текст", null)))
             .Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts);
         (await owner.PostAsync($"/api/medical-records/{record!.Id}/attachments", BuildUpload("export-file-bytes")))
             .StatusCode.Should().Be(HttpStatusCode.Created);
@@ -148,8 +148,7 @@ public class AccountErasureTests(FamilyHubWebFactory factory) : IntegrationTestB
 
         using var recordsReader = new StreamReader(zip.GetEntry("medical-records.json")!.Open());
         var recordsJson = await recordsReader.ReadToEndAsync();
-        recordsJson.Should().Contain("Экспортируемый Пациент", "экспорт содержит расшифрованные поля");
-        recordsJson.Should().Contain("Диагноз-текст");
+        recordsJson.Should().Contain("Диагноз-текст", "экспорт содержит расшифрованные поля");
 
         var attachmentEntry = zip.Entries.Single(e => e.FullName.StartsWith("attachments/"));
         using var attachmentReader = new StreamReader(attachmentEntry.Open());

@@ -2,6 +2,8 @@ using FamilyHub.Domain.Enums;
 
 namespace FamilyHub.Modules.Medical.MedicalRecords;
 
+/// <summary>PersonName — резолвится на чтение из OwnerUserId/FamilyDependentId/TargetUserId
+/// (см. MedicalRecordService.ResolvePersonNamesAsync), не хранится (v2, "пациента убрать").</summary>
 public record MedicalRecordDto(
     Guid Id,
     Guid OwnerUserId,
@@ -9,6 +11,7 @@ public record MedicalRecordDto(
     string PersonName,
     DateOnly RecordDate,
     string? Doctor,
+    string? Title,
     string? Description,
     ExtractionStatus ExtractionStatus,
     DateTime CreatedAt,
@@ -18,8 +21,9 @@ public record MedicalRecordDto(
 
 // Kind/FamilyDependentId/TargetUserId — последними и с дефолтом: существующие позиционные вызовы
 // (тесты, ранее написанный код) остаются исходно совместимыми и создают личный анализ, как раньше.
+// PersonName убран (v2) — идентичность пациента выражается целиком через
+// FamilyDependentId/TargetUserId/владельца, отдельного текстового поля больше нет.
 public record CreateMedicalRecordRequest(
-    string PersonName,
     DateOnly RecordDate,
     string? Doctor,
     string? Description,

@@ -16,13 +16,13 @@ public class MedicalDocumentExtractionJobConfiguration : IEntityTypeConfiguratio
         builder.Property(j => j.Stage).HasConversion<int>();
         builder.Property(j => j.Error).HasMaxLength(2000);
 
-        // Дедуп повторного клика «Распознать» на одном вложении, пока задача жива — тот же
-        // приём, что частичный индекс по NormalizedName у MedicationEnrichmentJob.
-        builder.HasIndex(j => j.AttachmentId)
+        // Дедуп повторного клика «Распознать» на одной ЗАПИСИ (v2 — задача больше не про одно
+        // вложение), пока задача жива — тот же приём, что частичный индекс по NormalizedName
+        // у MedicationEnrichmentJob.
+        builder.HasIndex(j => j.MedicalRecordId)
             .IsUnique()
             .HasFilter("\"Status\" IN (0, 1)");
 
-        builder.HasIndex(j => j.MedicalRecordId);
         builder.HasIndex(j => new { j.Status, j.CreatedAt });
     }
 }

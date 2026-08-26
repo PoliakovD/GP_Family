@@ -40,9 +40,9 @@ public class SearchServiceTests : SqliteTestBase
     {
         var owner = Db.AddUser();
         var analysis = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.Analysis);
-        analysis.PersonName = "Иванов";
+        analysis.Doctor = "Иванов";
         var visit = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit);
-        visit.PersonName = "Иванов";
+        visit.Doctor = "Иванов";
         Db.MedicalRecords.AddRange(analysis, visit);
         await Db.SaveChangesAsync();
 
@@ -59,7 +59,7 @@ public class SearchServiceTests : SqliteTestBase
     {
         var owner = Db.AddUser();
         var visit = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit);
-        visit.PersonName = "Петров";
+        visit.Doctor = "Петров";
         Db.MedicalRecords.Add(visit);
         await Db.SaveChangesAsync();
 
@@ -74,7 +74,7 @@ public class SearchServiceTests : SqliteTestBase
     {
         var owner = Db.AddUser();
         var analysis = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.Analysis);
-        analysis.PersonName = "Сидоров";
+        analysis.Doctor = "Сидоров";
         Db.MedicalRecords.Add(analysis);
         await Db.SaveChangesAsync();
 
@@ -89,14 +89,15 @@ public class SearchServiceTests : SqliteTestBase
     {
         var owner = Db.AddUser();
         var visit = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit);
-        visit.PersonName = "Смирнов";
         visit.Doctor = "Кардиолог Петрова";
         Db.MedicalRecords.Add(visit);
         await Db.SaveChangesAsync();
 
         var response = await _sut.SearchAsync(
-            owner.Id, "Смирнов", new HashSet<SearchResultType> { SearchResultType.Visit });
+            owner.Id, "Петрова", new HashSet<SearchResultType> { SearchResultType.Visit });
 
-        response.Items.Should().ContainSingle().Which.Title.Should().Be("Смирнов · Кардиолог Петрова");
+        // PersonName убран (v2) — self-запись резолвится из профиля владельца
+        // (TestData.NewUser() сеет LastName="Testov", FirstName="Test" по умолчанию).
+        response.Items.Should().ContainSingle().Which.Title.Should().Be("Testov Test · Кардиолог Петрова");
     }
 }

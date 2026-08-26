@@ -29,6 +29,7 @@ import {
   NotificationPreference,
   PendingMember, RecordSummaryResponse, RemoveMemberResult,
   SearchResponse,
+  UpdateIndicatorRequest,
   VapidPublicKeyResponse,
   VisitConclusion,
 } from '../models/types';
@@ -244,6 +245,9 @@ export class ApiService {
   /** L1-семьи (расшарены глобально владельцем) — состояние для тумблеров в bottom-sheet «Доступ». */
   getMedicalRecordShares = () => this.get<string[]>('/api/medical-records/shares');
 
+  /** Автоподсказка «Врач» (v2) — доктора, которых пользователь уже вводил в СВОИХ записях. */
+  getDoctorSuggestions = () => this.get<string[]>('/api/medical-records/doctors');
+
   createMedicalRecord = (input: MedicalRecordInput) =>
     this.post<MedicalRecord>('/api/medical-records', input);
 
@@ -284,10 +288,11 @@ export class ApiService {
     }
   }
 
-  // Конвейер извлечения показателей (ветка medicalrecords, задачи 5.2/5.3) — кнопка «Распознать»
-  // на вложении, статус/показатели/резюме конкретной записи, «мои показатели» + история для спарклайна.
-  requestExtraction = (recordId: string, attachmentId: string) =>
-    this.post<void>(`/api/medical-records/${recordId}/attachments/${attachmentId}/extract`);
+  // Конвейер извлечения показателей (ветка medicalrecords, редизайн v2) — одна кнопка
+  // «Распознать» на ЗАПИСИ (обрабатывает все ещё не распознанные вложения последовательно),
+  // статус/показатели/резюме записи, «мои показатели» + история для спарклайна.
+  requestExtraction = (recordId: string) =>
+    this.post<void>(`/api/medical-records/${recordId}/extract`);
 
   getExtractionStatus = (recordId: string) =>
     this.get<ExtractionStatusResponse>(`/api/medical-records/${recordId}/extraction`);
@@ -302,11 +307,15 @@ export class ApiService {
   getRecordConclusion = (recordId: string) =>
     this.get<VisitConclusion>(`/api/medical-records/${recordId}/conclusion`);
 
-  /** Последнее значение по каждому показателю среди своих записей — /health/indicators. */
+  /** Ручная правка показателя (ошибка OCR) — пересчитывает Flag на сервере. */
+  updateIndicator = (id: string, patch: UpdateIndicatorRequest) =>
+    this.put<void>(`/api/indicators/${id}`, patch);
+
+  /** Последнее значение по каждому (показателю, биоматериалу) среди своих записей — /health/indicators. */
   getMyIndicators = () => this.get<MyIndicatorSummary[]>('/api/indicators');
 
-  getIndicatorHistory = (analyteKey: string) =>
-    this.get<IndicatorHistoryPoint[]>(`/api/indicators/${encodeURIComponent(analyteKey)}`);
+  getIndicatorHistory = (analyteKey: string, specimen: number) =>
+    this.get<IndicatorHistoryPoint[]>(`/api/indicators/${encodeURIComponent(analyteKey)}/${specimen}`);
 
   // Оповещения
   getNotifications = (unreadOnly: boolean) =>

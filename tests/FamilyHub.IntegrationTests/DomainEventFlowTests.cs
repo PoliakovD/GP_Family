@@ -68,7 +68,7 @@ public class DomainEventFlowTests(FamilyHubWebFactory factory) : IntegrationTest
         // Критичный инвариант: выход из семьи → отзыв FamilyMedicalShare через событие шины.
         var (familyId, admin, member, _) = await CreateFamilyWithActiveMemberAsync();
         await member.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest("Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
         (await member.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(familyId)))
             .StatusCode.Should().Be(HttpStatusCode.NoContent);
 
@@ -112,7 +112,7 @@ public class DomainEventFlowTests(FamilyHubWebFactory factory) : IntegrationTest
         // его единственный эффект — ровно одно оповещение у получателей.
         var (familyId, admin, member, _) = await CreateFamilyWithActiveMemberAsync();
         await member.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest("Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
 
         (await member.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(familyId)))
             .StatusCode.Should().Be(HttpStatusCode.NoContent);

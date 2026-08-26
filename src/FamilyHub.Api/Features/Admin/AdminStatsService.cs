@@ -121,13 +121,16 @@ public class AdminStatsService(
     public async Task<AdminSecurityStatsDto> GetSecurityStatsAsync(CancellationToken ct = default)
     {
         // Префикс "enc:{keyId}:" — открытый текст (см. ADR-0002/0009), split_part читает его без
-        // расшифровки. UNION по всем [Encrypted]-колонкам, которые реально несут PersonName-класс
-        // данных — по одной репрезентативной колонке на сущность достаточно для распределения по
-        // ключу (все колонки одной строки пишутся одним SaveChanges, тем же активным ключом).
+        // расшифровки. UNION по одной репрезентативной [Encrypted]-колонке на сущность — этого
+        // достаточно для распределения по ключу (все колонки одной строки пишутся одним
+        // SaveChanges, тем же активным ключом). MedicalRecords.Doctor — nullable (v2, PersonName
+        // убран, у записи больше нет НИ ОДНОЙ обязательной [Encrypted]-колонки) — записи, где
+        // Doctor не заполнен, здесь не посчитаны; для диагностической панели ротации это
+        // приемлемое приближение, не источник истины о полноте перешифровки.
         var fieldRows = await db.Database.SqlQueryRaw<KeyIdCountRow>(
             """
             SELECT "KeyId", SUM("Cnt")::int AS "Cnt" FROM (
-                SELECT split_part("PersonName", ':', 2) AS "KeyId", COUNT(*) AS "Cnt" FROM medical."MedicalRecords" GROUP BY 1
+                SELECT split_part("Doctor", ':', 2) AS "KeyId", COUNT(*) AS "Cnt" FROM medical."MedicalRecords" WHERE "Doctor" IS NOT NULL GROUP BY 1
                 UNION ALL
                 SELECT split_part("PersonName", ':', 2), COUNT(*) FROM identity."Birthdays" GROUP BY 1
                 UNION ALL

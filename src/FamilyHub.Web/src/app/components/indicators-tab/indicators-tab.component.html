@@ -11,12 +11,12 @@
       и они появятся здесь.
     </p>
   } @else {
-    @for (item of items; track item.analyteKey) {
+    @for (item of items; track item.analyteKey + ':' + item.specimen) {
       <div class="card mb-2 card-clickable" (click)="openDetail(item)">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>
             <strong class="card-title">{{ item.displayName }}</strong>
-            <div class="card-meta">{{ item.lastRecordDate }}</div>
+            <div class="card-meta">{{ specimenLabel(item.specimen) }} · {{ item.lastRecordDate }}</div>
           </div>
           <div [class]="flagClass(item.flag)" style="font-size:15px;font-weight:600;white-space:nowrap">
             {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
@@ -26,7 +26,11 @@
     }
   }
 
-  <app-bottom-sheet [title]="selected?.displayName ?? 'Показатель'" [open]="detailOpen" (closed)="closeDetail()">
+  <app-bottom-sheet
+    [title]="selected ? selected.displayName + ' (' + specimenLabel(selected.specimen) + ')' : 'Показатель'"
+    [open]="detailOpen"
+    (closed)="closeDetail()"
+  >
     @if (detailLoading) {
       <app-loading-spinner />
     } @else if (detailError) {

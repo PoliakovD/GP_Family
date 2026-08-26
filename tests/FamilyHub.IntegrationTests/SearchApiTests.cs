@@ -144,7 +144,7 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var owner = ClientAs(FreshTelegramId());
         await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Иван Иванов", DateOnly.FromDateTime(DateTime.UtcNow), "Терапевт",
+                DateOnly.FromDateTime(DateTime.UtcNow), "Терапевт",
                 "Общий анализ крови: гемоглобин снижен", null));
 
         // Поле Description зашифровано at-rest (ADR-0002) — Postgres-FTS по нему невозможен;
@@ -160,7 +160,7 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var owner = ClientAs(FreshTelegramId());
         await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Пётр Петров", DateOnly.FromDateTime(DateTime.UtcNow), null,
+                DateOnly.FromDateTime(DateTime.UtcNow), null,
                 "Направление к эндокринологу, подозрение на диабет", null));
         var stranger = ClientAs(FreshTelegramId());
 
@@ -176,7 +176,7 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var familyId = await CreateFamilyAsync(admin);
         await admin.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Семейный Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null,
+                DateOnly.FromDateTime(DateTime.UtcNow), null,
                 "Консультация кардиолога по поводу давления", null));
 
         var beforeShare = await SearchAsync(admin, "кардиолог");
@@ -198,14 +198,16 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         var owner = ClientAs(FreshTelegramId());
         await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Мария Кузнецова", DateOnly.FromDateTime(DateTime.UtcNow), "Невролог Смирнова",
+                DateOnly.FromDateTime(DateTime.UtcNow), "Невролог Смирнова",
                 "Жалобы на мигрень", null, MedicalRecordKind.DoctorVisit));
 
         var response = await SearchAsync(owner, "мигрень");
 
         var item = response!.Items.Should().ContainSingle().Subject;
         item.Type.Should().Be(SearchResultType.Visit);
-        item.Title.Should().Be("Мария Кузнецова · Невролог Смирнова");
+        // PersonName убран (v2) — для записи "на себя" без заполненного профиля резолвится "Я"
+        // (см. MedicalRecordService.ResolvePersonNamesAsync).
+        item.Title.Should().Be("Я · Невролог Смирнова");
     }
 
     [Fact]
@@ -215,11 +217,11 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
         const string token = "уникальныйтокен888";
         await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Анализ Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null,
+                DateOnly.FromDateTime(DateTime.UtcNow), null, token, null,
                 MedicalRecordKind.Analysis));
         await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Врач Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null,
+                DateOnly.FromDateTime(DateTime.UtcNow), null, token, null,
                 MedicalRecordKind.DoctorVisit));
 
         var recordOnly = await SearchAsync(owner, token, types: "record");
@@ -290,7 +292,7 @@ public class SearchApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(f
             new CreateMedicationRequest(token, null, null));
         await admin.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Тестовый Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, token, null));
+                DateOnly.FromDateTime(DateTime.UtcNow), null, token, null));
         await admin.PostAsJsonAsync($"/api/families/{familyId}/birthdays",
             new CreateBirthdayRequest(token, new DateOnly(2000, 1, 1)));
 

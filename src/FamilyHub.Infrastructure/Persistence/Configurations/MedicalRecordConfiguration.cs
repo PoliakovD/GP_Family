@@ -12,7 +12,6 @@ public class MedicalRecordConfiguration : IEntityTypeConfiguration<MedicalRecord
 
         builder.HasKey(r => r.Id);
 
-        builder.Property(r => r.PersonName).HasMaxLength(200).IsRequired();
         builder.Property(r => r.Kind).HasConversion<int>();
         builder.Property(r => r.ExtractionStatus).HasConversion<int>();
 

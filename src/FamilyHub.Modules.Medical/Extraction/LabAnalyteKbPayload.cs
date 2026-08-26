@@ -1,11 +1,12 @@
 using System.Text.Json;
+using FamilyHub.Domain.Enums;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
 /// <summary>
 /// Сериализация/чтение GlobalLabAnalyteKb.PayloadJson — единственное место, которое знает форму
 /// этого jsonb-поля (пишет LabAnalyteKbWriter, читает MedicalDocumentExtractionProcessor при
-/// подстановке референсного диапазона из справочника).
+/// подстановке референсного диапазона из справочника / PatientReferenceCalculator при расчёте).
 /// </summary>
 public static class LabAnalyteKbPayload
 {
@@ -18,9 +19,10 @@ public static class LabAnalyteKbPayload
         whyMeasured = summary.WhyMeasured,
         highMeans = summary.HighMeans,
         lowMeans = summary.LowMeans,
+        calculationInstructions = summary.CalculationInstructions,
         refRanges = summary.RefRanges.Select(r => new
         {
-            ageFrom = r.AgeFrom, ageTo = r.AgeTo, low = r.Low, high = r.High, unit = r.Unit,
+            ageFrom = r.AgeFrom, ageTo = r.AgeTo, sex = SexToString(r.Sex), low = r.Low, high = r.High, unit = r.Unit,
         }),
     });
 
@@ -41,6 +43,7 @@ public static class LabAnalyteKbPayload
                 result.Add(new KbReferenceRange(
                     AgeFrom: ReadInt(el, "ageFrom"),
                     AgeTo: ReadInt(el, "ageTo"),
+                    Sex: ParseSex(el.TryGetProperty("sex", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null),
                     Low: ReadDouble(el, "low"),
                     High: ReadDouble(el, "high"),
                     Unit: el.TryGetProperty("unit", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null));
@@ -52,6 +55,37 @@ public static class LabAnalyteKbPayload
             return [];
         }
     }
+
+    /// <summary>Null, если справочник не даёт числового диапазона — PatientReferenceCalculator
+    /// пробует расчёт по методике, ParseRefRanges на это не отвечает (см. Build выше).</summary>
+    public static string? ParseCalculationInstructions(string payloadJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            return doc.RootElement.TryGetProperty("calculationInstructions", out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? SexToString(Gender? sex) => sex switch
+    {
+        Gender.Male => "male",
+        Gender.Female => "female",
+        _ => null,
+    };
+
+    private static Gender? ParseSex(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "male" => Gender.Male,
+        "female" => Gender.Female,
+        _ => null,
+    };
 
     private static int? ReadInt(JsonElement el, string prop) =>
         el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i) ? i : null;

@@ -9,9 +9,13 @@
         <option [value]="opt.key">{{ opt.label }}</option>
       }
     </select>
-    <input class="input" [(ngModel)]="form.personName" [placeholder]="labels.personPlaceholder" />
     <input class="input" type="date" [(ngModel)]="form.recordDate" />
-    <input class="input" [(ngModel)]="form.doctor" [placeholder]="labels.doctorPlaceholder" />
+    <input class="input" [attr.list]="doctorsDatalistId" [(ngModel)]="form.doctor" [placeholder]="labels.doctorPlaceholder" />
+    <datalist [id]="doctorsDatalistId">
+      @for (d of doctorSuggestions; track d) {
+        <option [value]="d"></option>
+      }
+    </datalist>
     <textarea
       class="input"
       [(ngModel)]="form.description"
@@ -68,8 +72,11 @@
       <div class="card mb-2">
         <div class="d-flex align-items-start justify-content-between gap-2">
           <div>
-            <strong class="card-title">{{ item.personName }}</strong>
-            <div class="card-meta">{{ item.recordDate }}</div>
+            <strong class="card-title">{{ item.title ?? item.personName }}</strong>
+            <div class="card-meta">
+              {{ item.recordDate }}
+              @if (item.title) { · {{ item.personName }} }
+            </div>
           </div>
           <div class="d-flex gap-2">
             <button class="btn btn-secondary btn-sm text-nowrap" (click)="openAccessSheet(item)">
@@ -130,32 +137,42 @@
                 <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
                   <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
                 </button>
-                <button
-                  class="btn btn-secondary btn-sm text-nowrap"
-                  [disabled]="recognizingKey === recognizeKeyFor(item.id, a.id)"
-                  (click)="handleRecognize(item, a.id)"
-                >
-                  @if (recognizingKey === recognizeKeyFor(item.id, a.id)) {
-                    <span class="recognize-spinner" aria-hidden="true"></span>
-                  } @else {
-                    <i class="ph ph-magic-wand" aria-hidden="true"></i>
-                  }
-                  Распознать
-                </button>
+                @if (a.extractedAt) {
+                  <i class="ph ph-check-circle" style="color:var(--color-accent)" title="Распознано" aria-hidden="true"></i>
+                }
               </li>
             }
           </ul>
         }
 
+        @if (hasUnrecognizedAttachments(item.id)) {
+          <button
+            class="btn btn-secondary btn-sm align-self-start mt-1"
+            [disabled]="recognizingRecordId === item.id"
+            (click)="handleRecognize(item)"
+          >
+            @if (recognizingRecordId === item.id) {
+              <span class="recognize-spinner" aria-hidden="true"></span>
+            } @else {
+              <i class="ph ph-magic-wand" aria-hidden="true"></i>
+            }
+            Распознать
+          </button>
+        }
+
         @if (extractionStatusByRecord[item.id]; as status) {
           @if (status.status === ExtractionJobStatus.Running || status.status === ExtractionJobStatus.Pending) {
             <div class="d-flex align-items-center gap-2 muted" style="font-size:12px">
-              <span class="recognize-spinner" aria-hidden="true"></span> {{ stageLabel[status.stage] ?? 'Обрабатываем…' }}
+              <span class="recognize-spinner" aria-hidden="true"></span>
+              {{ stageLabel[status.stage] ?? 'Обрабатываем…' }}
+              @if (status.totalFiles > 1) { — файл {{ currentFileNumber(status) }} из {{ status.totalFiles }} }
             </div>
           } @else if (status.status === ExtractionJobStatus.Failed) {
             <div class="alert-danger mb-0" style="font-size:12px">{{ status.error ?? 'Не удалось распознать документ.' }}</div>
           } @else if (status.status === ExtractionJobStatus.Skipped) {
             <div class="muted" style="font-size:12px">Распознавание пропущено: {{ status.error }}</div>
+          } @else if (status.status === ExtractionJobStatus.Completed && status.error) {
+            <div class="muted" style="font-size:12px">Частично: {{ status.error }}</div>
           }
         }
 
@@ -165,19 +182,60 @@
               <thead>
                 <tr>
                   <th>Показатель</th>
+                  <th>Откуда</th>
                   <th>Значение</th>
                   <th>Норма</th>
+                  <th></th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 @for (ind of indicatorsFor(item.id); track ind.id) {
-                  <tr>
-                    <td>{{ ind.displayName }}</td>
-                    <td [class]="flagClass(ind.flag)">{{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}</td>
-                    <td class="muted">{{ indicatorReference(ind) ?? '—' }}</td>
-                    <td [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
-                  </tr>
+                  @if (editingIndicatorId === ind.id) {
+                    <tr class="indicator-edit-row">
+                      <td colspan="6">
+                        <div class="d-flex flex-column gap-1">
+                          <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
+                          <div class="d-flex gap-1">
+                            <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                            <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+                          </div>
+                          <select class="input" [(ngModel)]="editIndicatorForm.specimen">
+                            @for (opt of specimenOptions; track opt.value) {
+                              <option [ngValue]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                          <div class="d-flex gap-1">
+                            <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                            <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+                          </div>
+                          <input class="input" [ngModel]="editIndicatorForm.refText" (ngModelChange)="editIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+                          <div class="d-flex gap-2">
+                            <button class="btn btn-primary btn-sm" [disabled]="savingIndicator" (click)="saveEditIndicator(item.id)">Сохранить</button>
+                            <button class="btn btn-ghost btn-sm" [disabled]="savingIndicator" (click)="cancelEditIndicator()">Отмена</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  } @else {
+                    <tr>
+                      <td>{{ ind.displayName }}</td>
+                      <td class="muted">{{ specimenLabel(ind.specimen) }}</td>
+                      <td [class]="flagClass(ind.flag)">{{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}</td>
+                      <td class="muted">
+                        {{ indicatorReference(ind) ?? '—' }}
+                        @if (isCalculatedRef(ind)) {
+                          <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
+                        }
+                      </td>
+                      <td [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
+                      <td>
+                        <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
+                          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  }
                 }
               </tbody>
             </table>
@@ -230,7 +288,7 @@
 
   @if (accessRecord; as record) {
     <app-bottom-sheet title="Настройки доступа" [open]="true" (closed)="closeAccessSheet()">
-      <p class="muted mb-3">{{ record.personName }} · {{ record.recordDate }}</p>
+      <p class="muted mb-3">{{ record.title ?? record.personName }} · {{ record.recordDate }}</p>
 
       <div class="seg w-100 mb-3">
         <label class="seg-opt" style="flex:1;justify-content:center">

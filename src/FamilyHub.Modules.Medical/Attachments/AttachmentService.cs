@@ -245,5 +245,5 @@ public class AttachmentService(
     }
 
     private static AttachmentDto ToDto(FileAttachment a) =>
-        new(a.Id, a.FileName, a.ContentType, a.SizeBytes, a.UploadedAt);
+        new(a.Id, a.FileName, a.ContentType, a.SizeBytes, a.UploadedAt, a.ExtractedAt);
 }

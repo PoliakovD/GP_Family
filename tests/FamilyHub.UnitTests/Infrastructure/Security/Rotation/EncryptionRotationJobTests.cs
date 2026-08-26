@@ -128,7 +128,7 @@ public class EncryptionRotationJobTests : IDisposable
                 Id = medicalRecordId,
                 OwnerUserId = Guid.NewGuid(),
                 Kind = MedicalRecordKind.Analysis,
-                PersonName = "Иванов Иван",
+                Title = "Иванов Иван",
                 Doctor = "Петров",
                 Description = "плановый анализ",
                 RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
@@ -187,12 +187,12 @@ public class EncryptionRotationJobTests : IDisposable
 
         // Открытые значения читаются как прежде (round-trip через связку не сломан)...
         var reloadedRecord = await db.MedicalRecords.AsNoTracking().SingleAsync(r => r.Id == medicalRecordId);
-        reloadedRecord.PersonName.Should().Be("Иванов Иван");
+        reloadedRecord.Title.Should().Be("Иванов Иван");
         reloadedRecord.Doctor.Should().Be("Петров");
 
         // ...но физически перезаписаны активным ключом, не просто остались читаемы старым.
-        var rawPersonName = await ReadRawColumnAsync("MedicalRecords", "PersonName", medicalRecordId);
-        rawPersonName.Should().StartWith("enc:v2:");
+        var rawTitle = await ReadRawColumnAsync("MedicalRecords", "Title", medicalRecordId);
+        rawTitle.Should().StartWith("enc:v2:");
 
         var reloadedAttachment = await db.FileAttachments.AsNoTracking().SingleAsync(a => a.Id == attachmentId);
         reloadedAttachment.KeyId.Should().Be("v2");
@@ -217,7 +217,7 @@ public class EncryptionRotationJobTests : IDisposable
             seedDb.MedicalRecords.Add(new MedicalRecord
             {
                 Id = Guid.NewGuid(), OwnerUserId = Guid.NewGuid(), Kind = MedicalRecordKind.Analysis,
-                PersonName = "Не должно перешифроваться", RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Title = "Не должно перешифроваться", RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 CreatedAt = DateTime.UtcNow,
             });
             await seedDb.SaveChangesAsync();
@@ -252,12 +252,12 @@ public class EncryptionRotationJobTests : IDisposable
             var a = new MedicalRecord
             {
                 Id = Guid.NewGuid(), OwnerUserId = Guid.NewGuid(), Kind = MedicalRecordKind.Analysis,
-                PersonName = "Запись A", RecordDate = DateOnly.FromDateTime(DateTime.UtcNow), CreatedAt = DateTime.UtcNow,
+                Title = "Запись A", RecordDate = DateOnly.FromDateTime(DateTime.UtcNow), CreatedAt = DateTime.UtcNow,
             };
             var b = new MedicalRecord
             {
                 Id = Guid.NewGuid(), OwnerUserId = Guid.NewGuid(), Kind = MedicalRecordKind.Analysis,
-                PersonName = "Запись B", RecordDate = DateOnly.FromDateTime(DateTime.UtcNow), CreatedAt = DateTime.UtcNow,
+                Title = "Запись B", RecordDate = DateOnly.FromDateTime(DateTime.UtcNow), CreatedAt = DateTime.UtcNow,
             };
             seedDb.MedicalRecords.AddRange(a, b);
             await seedDb.SaveChangesAsync();
@@ -288,9 +288,9 @@ public class EncryptionRotationJobTests : IDisposable
         finished.FieldsProcessed.Should().Be(2); // 1 «унаследованный» + 1 реально обработанный сейчас
 
         // Запись ДО курсора не тронута — осталась на v1.
-        (await ReadRawColumnAsync("MedicalRecords", "PersonName", firstId)).Should().StartWith("enc:v1:");
+        (await ReadRawColumnAsync("MedicalRecords", "Title", firstId)).Should().StartWith("enc:v1:");
         // Запись ПОСЛЕ курсора — перешифрована.
-        (await ReadRawColumnAsync("MedicalRecords", "PersonName", secondId)).Should().StartWith("enc:v2:");
+        (await ReadRawColumnAsync("MedicalRecords", "Title", secondId)).Should().StartWith("enc:v2:");
     }
 
     /// <summary>

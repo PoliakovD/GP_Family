@@ -20,6 +20,11 @@ public static class MedicalRecordEndpoints
         group.MapGet("/shares", async (MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.GetSharedFamilyIdsAsync(currentUser.UserId, ct)));
 
+        // Автоподсказка «Врач» в форме создания (v2) — только доктора, которых пользователь уже
+        // вводил в СВОИХ записях.
+        group.MapGet("/doctors", async (MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.GetDoctorSuggestionsAsync(currentUser.UserId, ct)));
+
         group.MapPost("/", async (
             CreateMedicalRecordRequest request, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
         {

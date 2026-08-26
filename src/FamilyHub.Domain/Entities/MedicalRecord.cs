@@ -20,21 +20,24 @@ public class MedicalRecord
     /// <summary>Анализ или посещение врача. Не шифруется — по нему фильтруются списки и поиск в SQL.</summary>
     public MedicalRecordKind Kind { get; set; }
 
-    [Encrypted]
-    public string PersonName { get; set; } = string.Empty;
-
     public DateOnly RecordDate { get; set; }
 
     [Encrypted]
     public string? Doctor { get; set; }
 
+    /// <summary>Короткое название записи ("Общий анализ крови") — ветка medicalrecords, редизайн
+    /// v2. Заполняется распознаванием (ExtractionResult.SuggestedTitle, экстрактор видит шапку
+    /// бланка и обычно может назвать анализ прямо оттуда) либо вручную; null, пока не распознано
+    /// и не введено. [Encrypted] по той же причине, что Doctor/Description.</summary>
+    [Encrypted]
+    public string? Title { get; set; }
+
     [Encrypted]
     public string? Description { get; set; }
 
-    /// <summary>Заготовка под OCR-конвейер (задачи 5.2/5.3 — пока не реализован): структурированный
-    /// результат распознавания бланка анализа/заключения врача. [Encrypted] ⇒ хранится строкой,
-    /// не jsonb: SQL-фильтрация по содержимому невозможна по построению (ADR-0002). Индексация
-    /// показателей для поиска — отдельная задача.</summary>
+    /// <summary>Структурированный результат распознавания заключения врача (Kind=DoctorVisit,
+    /// VisitConclusion). [Encrypted] ⇒ хранится строкой, не jsonb: SQL-фильтрация по содержимому
+    /// невозможна по построению (ADR-0002).</summary>
     [Encrypted]
     public string? ExtractedDataJson { get; set; }
 

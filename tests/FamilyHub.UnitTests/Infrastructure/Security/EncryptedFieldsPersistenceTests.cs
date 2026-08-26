@@ -14,24 +14,24 @@ namespace FamilyHub.UnitTests.Infrastructure.Security;
 public class EncryptedFieldsPersistenceTests : SqliteTestBase
 {
     [Fact]
-    public async Task MedicalRecordPersonName_IsCiphertextInDb_PlaintextViaEf()
+    public async Task MedicalRecordTitle_IsCiphertextInDb_PlaintextViaEf()
     {
         var owner = Db.AddUser();
         var record = TestData.NewMedicalRecord(owner.Id);
-        record.PersonName = "Иванов Иван";
+        record.Title = "Общий анализ крови";
         record.Doctor = "Доктор Айболит";
         Db.MedicalRecords.Add(record);
         await Db.SaveChangesAsync();
 
         // Таблица в тестовой БД содержит единственную строку — WHERE по Guid не нужен
         // (формат хранения Guid в SQLite — деталь провайдера).
-        var raw = await ReadRawAsync("SELECT PersonName || '|' || Doctor FROM MedicalRecords");
-        raw.Should().NotContain("Иванов", "в БД должен лежать шифротекст");
+        var raw = await ReadRawAsync("SELECT Title || '|' || Doctor FROM MedicalRecords");
+        raw.Should().NotContain("Общий анализ", "в БД должен лежать шифротекст");
         raw.Should().NotContain("Айболит");
         raw.Should().Contain("enc:v1:");
 
         var viaEf = await NewContext().MedicalRecords.AsNoTracking().SingleAsync(r => r.Id == record.Id);
-        viaEf.PersonName.Should().Be("Иванов Иван");
+        viaEf.Title.Should().Be("Общий анализ крови");
         viaEf.Doctor.Should().Be("Доктор Айболит");
     }
 

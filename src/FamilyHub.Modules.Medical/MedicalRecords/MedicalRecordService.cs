@@ -85,10 +85,85 @@ public class MedicalRecordService(
             .GroupBy(h => h.MedicalRecordId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(h => h.FamilyId).ToList());
 
+        var personNames = await ResolvePersonNamesAsync(records, userId, ct);
+
         return records
             .Select(r => ToDto(
                 r,
-                r.OwnerUserId == userId && hiddenByRecord.TryGetValue(r.Id, out var ids) ? ids : []))
+                r.OwnerUserId == userId && hiddenByRecord.TryGetValue(r.Id, out var ids) ? ids : [],
+                personNames[r.Id]))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Отображаемое имя пациента (v2 — MedicalRecord.PersonName убран, идентичность выражается
+    /// целиком через OwnerUserId/FamilyDependentId/TargetUserId) — резолвится на чтение, а не
+    /// хранится: подопечный/участник семьи может переименоваться в профиле, и отображение должно
+    /// это подхватывать, а не хранить устаревшую копию. Батч на весь список записей — одним
+    /// запросом на FamilyDependent и одним на User, а не N+1.
+    /// </summary>
+    public async Task<Dictionary<Guid, string>> ResolvePersonNamesAsync(
+        IReadOnlyList<MedicalRecord> records, Guid viewerUserId, CancellationToken ct = default)
+    {
+        var dependentIds = records.Where(r => r.FamilyDependentId is not null)
+            .Select(r => r.FamilyDependentId!.Value).Distinct().ToList();
+        var userIds = records.Where(r => r.FamilyDependentId is null)
+            .Select(r => r.TargetUserId ?? r.OwnerUserId).Distinct().ToList();
+
+        var dependentNames = dependentIds.Count == 0
+            ? []
+            : (await db.FamilyDependents.AsNoTracking().Where(d => dependentIds.Contains(d.Id)).ToListAsync(ct))
+                .ToDictionary(d => d.Id, d => FormatName(d.FirstName, d.LastName, null));
+
+        var userNames = userIds.Count == 0
+            ? []
+            : (await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToListAsync(ct))
+                .ToDictionary(u => u.Id, u => FormatName(u.FirstName, u.LastName, u.MiddleName));
+
+        var result = new Dictionary<Guid, string>();
+        foreach (var r in records)
+        {
+            if (r.FamilyDependentId is { } depId)
+            {
+                result[r.Id] = dependentNames.TryGetValue(depId, out var dn) ? dn : "Без имени";
+                continue;
+            }
+
+            var uid = r.TargetUserId ?? r.OwnerUserId;
+            var name = userNames.TryGetValue(uid, out var un) ? un : string.Empty;
+            if (name.Length > 0) { result[r.Id] = name; continue; }
+
+            // Профиль не заполнен: для себя — понятная подпись, для чужого участника — нейтральная.
+            result[r.Id] = r.TargetUserId is null ? "Я" : "Без имени";
+        }
+        return result;
+    }
+
+    private static string FormatName(string? firstName, string? lastName, string? middleName)
+    {
+        var parts = new[] { lastName, firstName, middleName }.Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join(' ', parts);
+    }
+
+    /// <summary>Автоподсказка «Врач» в форме создания записи — только доктора, которых ЭТОТ
+    /// пользователь уже вводил в СВОИХ записях (v2). In-memory Distinct после расшифровки, не SQL
+    /// DISTINCT: Doctor — [Encrypted], шифротекст недетерминирован (ADR-0002), SQL DISTINCT по нему
+    /// бессмыслен. Объём — собственные записи одного человека, расшифровка всех подряд безопасна
+    /// (тот же приём, что SearchAsync). Только СВОИ (не VisibleRecordsQuery) — это подсказка про
+    /// «кого я уже вводил», а не про всех врачей, которых пользователь когда-либо видел в чужих
+    /// расшаренных записях.</summary>
+    public async Task<List<string>> GetDoctorSuggestionsAsync(Guid ownerUserId, CancellationToken ct = default)
+    {
+        var doctors = await db.MedicalRecords.AsNoTracking()
+            .Where(r => r.OwnerUserId == ownerUserId && r.Doctor != null)
+            .Select(r => r.Doctor!)
+            .ToListAsync(ct);
+
+        return doctors
+            .Where(d => !string.IsNullOrWhiteSpace(d))
+            .Select(d => d.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(d => d, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
 
@@ -129,15 +204,17 @@ public class MedicalRecordService(
             await db.SaveChangesAsync(ct);
         }
 
+        var personNames = await ResolvePersonNamesAsync(records, userId, ct);
+
         var hits = new List<MedicalRecordSearchHit>();
         foreach (var record in records)
         {
             var haystack = string.Join(
-                ' ', new[] { record.PersonName, record.Doctor, record.Description }
+                ' ', new[] { personNames[record.Id], record.Doctor, record.Title, record.Description }
                     .Where(s => !string.IsNullOrWhiteSpace(s)));
             var score = searcher.Score(haystack, query);
             if (score > 0)
-                hits.Add(new MedicalRecordSearchHit(ToDto(record, []), score));
+                hits.Add(new MedicalRecordSearchHit(ToDto(record, [], personNames[record.Id]), score));
         }
 
         logger.LogDebug(
@@ -216,7 +293,6 @@ public class MedicalRecordService(
             Id = Guid.NewGuid(),
             OwnerUserId = ownerUserId,
             Kind = request.Kind,
-            PersonName = request.PersonName,
             RecordDate = request.RecordDate,
             Doctor = request.Doctor,
             Description = request.Description,
@@ -250,7 +326,8 @@ public class MedicalRecordService(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Мед-запись {RecordId} создана владельцем {OwnerUserId}", record.Id, ownerUserId);
-        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds));
+        var personName = (await ResolvePersonNamesAsync([record], ownerUserId, ct))[record.Id];
+        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName));
     }
 
     /// <summary>УРОВЕНЬ 1: владелец открывает ВСЕ свои анализы выбранной семье одним действием.</summary>
@@ -436,7 +513,7 @@ public class MedicalRecordService(
         return MedicalRecordAccessResult.Success;
     }
 
-    private static MedicalRecordDto ToDto(MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds) =>
-        new(r.Id, r.OwnerUserId, r.Kind, r.PersonName, r.RecordDate, r.Doctor, r.Description,
+    private static MedicalRecordDto ToDto(MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds, string personName) =>
+        new(r.Id, r.OwnerUserId, r.Kind, personName, r.RecordDate, r.Doctor, r.Title, r.Description,
             r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId);
 }

@@ -7,14 +7,16 @@ using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
-public enum ExtractionRequestResult { Success, NotFound, Forbidden, AlreadyQueued }
+public enum ExtractionRequestResult { Success, NotFound, Forbidden, AlreadyQueued, NothingToDo }
 
 /// <summary>
-/// Постановка вложения в очередь распознавания (ветка medicalrecords) — по образцу
-/// EnrichmentRequestService.EnqueueAsync (этап 4): Pending-строка и Hangfire-энкью в одной явной
-/// транзакции, дедуп через частичный уникальный индекс + catch DbUpdateException. Вызывается
-/// только владельцем записи (см. MedicalDocumentExtractionEndpoints) — тот же барьер, что и для
-/// загрузки/шаринга вложений.
+/// Постановка ЗАПИСИ в очередь распознавания (ветка medicalrecords, редизайн v2 — раньше был
+/// per-attachment: за один клик обрабатывается ОДНО вложение, теперь одна кнопка «Распознать»
+/// обрабатывает все ещё не распознанные вложения записи последовательно, см.
+/// MedicalDocumentExtractionProcessor). По образцу EnrichmentRequestService.EnqueueAsync (этап 4):
+/// Pending-строка и Hangfire-энкью в одной явной транзакции, дедуп через частичный уникальный
+/// индекс по MedicalRecordId + catch DbUpdateException. Вызывается только владельцем записи (см.
+/// ExtractionEndpoints) — тот же барьер, что и для загрузки/шаринга вложений.
 /// </summary>
 public class ExtractionRequestService(
     AppDbContext db,
@@ -22,7 +24,7 @@ public class ExtractionRequestService(
     ILogger<ExtractionRequestService> logger)
 {
     public async Task<ExtractionRequestResult> RequestAsync(
-        Guid recordId, Guid attachmentId, Guid requestedByUserId, CancellationToken ct = default)
+        Guid recordId, Guid requestedByUserId, CancellationToken ct = default)
     {
         var record = await db.MedicalRecords.AsNoTracking()
             .Where(r => r.Id == recordId)
@@ -31,15 +33,14 @@ public class ExtractionRequestService(
         if (record is null) return ExtractionRequestResult.NotFound;
         if (record.OwnerUserId != requestedByUserId) return ExtractionRequestResult.Forbidden;
 
-        var attachmentExists = await db.FileAttachments.AsNoTracking()
-            .AnyAsync(a => a.Id == attachmentId && a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId, ct);
-        if (!attachmentExists) return ExtractionRequestResult.NotFound;
+        var hasPendingAttachments = await db.FileAttachments.AsNoTracking()
+            .AnyAsync(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId && a.ExtractedAt == null, ct);
+        if (!hasPendingAttachments) return ExtractionRequestResult.NothingToDo;
 
         var job = new MedicalDocumentExtractionJob
         {
             Id = Guid.NewGuid(),
             MedicalRecordId = recordId,
-            AttachmentId = attachmentId,
             RequestedByUserId = requestedByUserId,
             Status = EnrichmentJobStatus.Pending,
             Stage = ExtractionStage.Queued,
@@ -49,7 +50,7 @@ public class ExtractionRequestService(
 
         // Та же причина явной транзакции, что в EnrichmentRequestService.EnqueueAsync: Hangfire
         // использует отдельное соединение, сбой энкью не должен оставлять "висячую" Pending-строку,
-        // которая навсегда заблокирует дедупом повторные попытки для этого вложения.
+        // которая навсегда заблокирует дедупом повторные попытки для этой записи.
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
@@ -60,19 +61,19 @@ public class ExtractionRequestService(
         catch (DbUpdateException ex)
         {
             await tx.RollbackAsync(ct);
-            logger.LogDebug(ex, "Распознавание вложения {AttachmentId} уже в очереди, пропускаем.", attachmentId);
+            logger.LogDebug(ex, "Распознавание мед-записи {RecordId} уже в очереди, пропускаем.", recordId);
             db.Entry(job).State = EntityState.Detached;
             return ExtractionRequestResult.AlreadyQueued;
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(ct);
-            logger.LogWarning(ex, "Не удалось поставить распознавание вложения {AttachmentId} в очередь.", attachmentId);
+            logger.LogWarning(ex, "Не удалось поставить распознавание мед-записи {RecordId} в очередь.", recordId);
             db.Entry(job).State = EntityState.Detached;
             throw;
         }
 
-        logger.LogInformation("Распознавание вложения {AttachmentId} мед-записи {RecordId} поставлено в очередь.", attachmentId, recordId);
+        logger.LogInformation("Распознавание мед-записи {RecordId} поставлено в очередь.", recordId);
         return ExtractionRequestResult.Success;
     }
 }

@@ -111,7 +111,7 @@ public class MessagingFailureIsolationTests(MessagingFailureWebFactory factory)
             .EnsureSuccessStatusCode();
 
         await member.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest("Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
         (await member.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(family.Id)))
             .StatusCode.Should().Be(HttpStatusCode.NoContent);
 

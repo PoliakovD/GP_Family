@@ -116,7 +116,7 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
 
         var record = await (await member.PostAsJsonAsync("/api/medical-records",
                 new CreateMedicalRecordRequest(
-                    "Барсик", DateOnly.FromDateTime(DateTime.UtcNow), "Ветеринар", null, null,
+                    DateOnly.FromDateTime(DateTime.UtcNow), "Ветеринар", null, null,
                     FamilyDependentId: dependent!.Id)))
             .Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts);
         record!.FamilyDependentId.Should().Be(dependent.Id);

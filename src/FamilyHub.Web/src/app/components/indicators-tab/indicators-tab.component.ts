@@ -5,6 +5,7 @@ import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/typ
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
+import { specimenLabel } from '../../shared/util/specimen';
 
 /**
  * Page (таксономия — patterns/frontend_web.md): «мои показатели» — последнее значение по каждому
@@ -23,6 +24,7 @@ export class IndicatorsTabComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   readonly IndicatorFlag = IndicatorFlag;
+  specimenLabel = specimenLabel;
 
   loading = true;
   error: string | null = null;
@@ -75,7 +77,7 @@ export class IndicatorsTabComponent implements OnInit {
     this.selected = item;
     this.history = [];
     try {
-      this.history = await this.api.getIndicatorHistory(item.analyteKey);
+      this.history = await this.api.getIndicatorHistory(item.analyteKey, item.specimen);
     } catch (err) {
       this.detailError = err instanceof ApiError ? err.message : 'Не удалось загрузить историю показателя.';
     } finally {

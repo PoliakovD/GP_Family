@@ -43,7 +43,7 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
     private static async Task<MedicalRecordDto> CreateRecordAsync(HttpClient owner)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest("Иван", DateOnly.FromDateTime(DateTime.UtcNow), "Доктор", "Описание", null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), "Доктор", "Описание", null));
         return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
     }
 

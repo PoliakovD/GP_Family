@@ -46,7 +46,10 @@ public class LmStudioMedicalDocumentExtractor(
               "refHigh": 160,
               "refText": "референсный диапазон текстом или null — заполняй ТОЛЬКО если референс НЕ раскладывается на refLow/refHigh (например, \"отрицательно\", \"1-3 в п/зр\")"
             }
-          ]
+          ],
+          "specimen": "биоматериал бланка — один из: blood, urine, stool, vaginalSwab, saliva, other — или null, если не указан/непонятен",
+          "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
+          "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай"
         }
 
         Правила:
@@ -55,8 +58,12 @@ public class LmStudioMedicalDocumentExtractor(
         - "refLow"/"refHigh" — числа, только если референс — числовой диапазон (например,
           "130-160"). Если так — "refText" оставь null. Если референс не числовой — заполни
           только "refText", "refLow"/"refHigh" оставь null.
+        - "specimen"/"documentDate"/"suggestedTitle" — заполняй, только если это ДЕЙСТВИТЕЛЬНО
+          есть в этом фрагменте (обычно в шапке документа); если фрагмент — просто таблица
+          показателей без шапки, оставь все три null.
         - Если во фрагменте нет ни одного показателя анализа (это шапка документа, подпись врача,
-          пояснительный текст и т.п.) — верни {"indicators": []}.
+          пояснительный текст и т.п.) — indicators пустой массив, но specimen/documentDate/
+          suggestedTitle всё равно заполни, если они есть в этом фрагменте.
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
@@ -69,7 +76,9 @@ public class LmStudioMedicalDocumentExtractor(
         {
           "diagnosis": "диагноз как указан в документе или null",
           "recommendations": "рекомендации врача или null",
-          "prescriptions": "назначенные препараты/процедуры как написано в документе (сырой текст) или null"
+          "prescriptions": "назначенные препараты/процедуры как написано в документе (сырой текст) или null",
+          "documentDate": "дата приёма/выписки, как указана в документе, в формате YYYY-MM-DD, или null",
+          "suggestedTitle": "короткое название документа, если оно прямо напечатано (например, \"Выписка невролога\") — иначе null, не придумывай"
         }
 
         Правила:
@@ -98,6 +107,20 @@ public class LmStudioMedicalDocumentExtractor(
     {
         var indicators = new List<ExtractedLabIndicator>();
 
+        // Поля уровня документа (specimen/documentDate/suggestedTitle) обычно есть только в
+        // ШАПКЕ бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные
+        // куски (таблица показателей без шапки) просто не заполняют эти поля повторно.
+        SpecimenType? specimen = null;
+        DateOnly? documentDate = null;
+        string? suggestedTitle = null;
+
+        void CaptureDocumentFields(Dictionary<string, JsonElement> payload)
+        {
+            specimen ??= ParseSpecimen(ReadString(payload, "specimen"));
+            documentDate ??= ParseDate(ReadString(payload, "documentDate"));
+            suggestedTitle ??= ReadString(payload, "suggestedTitle");
+        }
+
         if (content.Kind == DocumentSourceKind.Text)
         {
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
@@ -105,6 +128,7 @@ public class LmStudioMedicalDocumentExtractor(
                 var result = await lmStudioClient.ExtractJsonAsync(AnalysisSystemPrompt, chunk, ct);
                 if (!result.Success || result.Payload is null) continue;
 
+                CaptureDocumentFields(result.Payload);
                 foreach (var indicator in ParseIndicators(result.Payload))
                 {
                     // Антигаллюцинационный гейт (текстовый путь): имя показателя обязано
@@ -122,6 +146,7 @@ public class LmStudioMedicalDocumentExtractor(
                     AnalysisSystemPrompt, "Распознай показатели анализа на этом изображении.", [(image.Bytes, image.ContentType)], ct);
                 if (!result.Success || result.Payload is null) continue;
 
+                CaptureDocumentFields(result.Payload);
                 indicators.AddRange(ParseIndicators(result.Payload));
             }
         }
@@ -129,11 +154,27 @@ public class LmStudioMedicalDocumentExtractor(
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
         {
-            return new ExtractionResult(true, [], null, "Не удалось распознать ни одного показателя.");
+            return new ExtractionResult(true, [], null, "Не удалось распознать ни одного показателя.", specimen, documentDate, suggestedTitle);
         }
 
-        return new ExtractionResult(true, deduped, null);
+        return new ExtractionResult(true, deduped, null, Specimen: specimen, DocumentDate: documentDate, SuggestedTitle: suggestedTitle);
     }
+
+    private static SpecimenType? ParseSpecimen(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "blood" => SpecimenType.Blood,
+        "urine" => SpecimenType.Urine,
+        "stool" => SpecimenType.Stool,
+        "vaginalswab" => SpecimenType.VaginalSwab,
+        "saliva" => SpecimenType.Saliva,
+        "other" => SpecimenType.Other,
+        _ => null,
+    };
+
+    private static DateOnly? ParseDate(string? value) =>
+        DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)
+            ? d
+            : null;
 
     private async Task<ExtractionResult> ExtractVisitAsync(DocumentContent content, CancellationToken ct)
     {
@@ -145,7 +186,13 @@ public class LmStudioMedicalDocumentExtractor(
                 if (!result.Success || result.Payload is null) continue;
 
                 var conclusion = ParseConclusion(result.Payload);
-                if (HasContent(conclusion)) return new ExtractionResult(true, null, conclusion);
+                if (HasContent(conclusion))
+                {
+                    return new ExtractionResult(
+                        true, null, conclusion,
+                        DocumentDate: ParseDate(ReadString(result.Payload, "documentDate")),
+                        SuggestedTitle: ReadString(result.Payload, "suggestedTitle"));
+                }
             }
         }
         else
@@ -157,7 +204,13 @@ public class LmStudioMedicalDocumentExtractor(
                 if (!result.Success || result.Payload is null) continue;
 
                 var conclusion = ParseConclusion(result.Payload);
-                if (HasContent(conclusion)) return new ExtractionResult(true, null, conclusion);
+                if (HasContent(conclusion))
+                {
+                    return new ExtractionResult(
+                        true, null, conclusion,
+                        DocumentDate: ParseDate(ReadString(result.Payload, "documentDate")),
+                        SuggestedTitle: ReadString(result.Payload, "suggestedTitle"));
+                }
             }
         }
 

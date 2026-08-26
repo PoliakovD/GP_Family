@@ -172,9 +172,13 @@ export interface MedicalRecord {
     id: string;
     ownerUserId: string;
     kind: MedicalRecordKind;
+    /** Резолвится сервером из familyDependentId/targetUserId/владельца (v2) — не хранится,
+     * не редактируется напрямую (см. MedicalRecordService.ResolvePersonNamesAsync). */
     personName: string;
     recordDate: string;
     doctor: string | null;
+    /** Короткое название ("Общий анализ крови") — из распознавания или введено вручную. */
+    title: string | null;
     description: string | null;
     extractionStatus: ExtractionStatus;
     createdAt: string;
@@ -189,9 +193,10 @@ export interface MedicalRecord {
     targetUserId: string | null;
 }
 
+// personName убран (v2) — идентичность пациента выражается целиком через
+// familyDependentId/targetUserId/владельца, отдельного текстового поля больше нет.
 export interface MedicalRecordInput {
     kind: MedicalRecordKind;
-    personName: string;
     recordDate: string;
     doctor: string | null;
     description: string | null;
@@ -206,6 +211,9 @@ export interface Attachment {
     contentType: string;
     sizeBytes: number;
     uploadedAt: string;
+    /** Когда конвейер извлечения последний раз успешно распознал этот файл — null, если ещё
+     * ни разу (v2: определяет, есть ли записи нечего распознавать кнопкой «Распознать»). */
+    extractedAt: string | null;
 }
 
 /** Этап 3: пять источников с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService.
@@ -337,6 +345,16 @@ export interface AppNotification {
 export const IndicatorFlag = { Unknown: 0, Low: 1, Normal: 2, High: 3, Critical: 4 } as const;
 export type IndicatorFlag = typeof IndicatorFlag[keyof typeof IndicatorFlag];
 
+/** Откуда взят референс (v2, каскад приоритетов) — KbCalculated показывается на фронте
+ * бэйджем «рассчитано ИИ». См. FamilyHub.Domain.Enums.RefSource. */
+export const RefSource = { None: 0, Blank: 1, KbFixed: 2, KbCalculated: 3 } as const;
+export type RefSource = typeof RefSource[keyof typeof RefSource];
+
+/** Биоматериал показателя (v2) — часть ключа группировки вместе с analyteKey, иначе лейкоциты
+ * крови и мочи слились бы на одном графике. См. FamilyHub.Domain.Enums.SpecimenType. */
+export const SpecimenType = { Unknown: 0, Blood: 1, Urine: 2, Stool: 3, VaginalSwab: 4, Saliva: 5, Other: 6 } as const;
+export type SpecimenType = typeof SpecimenType[keyof typeof SpecimenType];
+
 /** Прогресс задачи распознавания внутри одного прогона — детальнее MedicalRecord.extractionStatus. */
 export const ExtractionStage = { Queued: 0, Decoding: 1, Ocr: 2, Structuring: 3, Linking: 4, Summarizing: 5 } as const;
 export type ExtractionStage = typeof ExtractionStage[keyof typeof ExtractionStage];
@@ -350,6 +368,10 @@ export interface ExtractionStatusResponse {
     stage: number; // ExtractionStage
     indicatorCount: number;
     error: string | null;
+    /** v2: одна задача теперь обрабатывает ВСЕ ещё не распознанные вложения записи
+     * последовательно — прогресс «файл N из totalFiles». */
+    totalFiles: number;
+    processedFiles: number;
     createdAt: string;
     completedAt: string | null;
 }
@@ -359,6 +381,8 @@ export interface IndicatorDto {
     analyteKey: string;
     displayName: string;
     flag: number; // IndicatorFlag
+    refSource: number; // RefSource
+    specimen: number; // SpecimenType
     position: number;
     valueRaw: string;
     unit: string | null;
@@ -369,7 +393,18 @@ export interface IndicatorDto {
     medicalRecordId: string;
 }
 
-/** Одна точка истории показателя (GET /api/indicators/{analyteKey}) — для спарклайна. */
+/** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч. */
+export interface UpdateIndicatorRequest {
+    displayName: string;
+    valueRaw: string;
+    unit: string | null;
+    specimen: SpecimenType;
+    refLowText: string | null;
+    refHighText: string | null;
+    refText: string | null;
+}
+
+/** Одна точка истории показателя (GET /api/indicators/{analyteKey}/{specimen}) — для спарклайна. */
 export interface IndicatorHistoryPoint {
     recordDate: string;
     valueRaw: string;
@@ -379,10 +414,11 @@ export interface IndicatorHistoryPoint {
     medicalRecordId: string;
 }
 
-/** Последнее значение по каждому показателю среди СВОИХ записей (GET /api/indicators). */
+/** Последнее значение по каждому (показателю, биоматериалу) среди СВОИХ записей (GET /api/indicators). */
 export interface MyIndicatorSummary {
     analyteKey: string;
     displayName: string;
+    specimen: number; // SpecimenType
     valueRaw: string;
     unit: string | null;
     flag: number; // IndicatorFlag

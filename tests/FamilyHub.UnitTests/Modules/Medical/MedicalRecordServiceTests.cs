@@ -206,7 +206,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         var (_, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Self", new DateOnly(2024, 1, 1), null, null, [myFamily.Id, otherFamily.Id]));
+            new DateOnly(2024, 1, 1), null, null, [myFamily.Id, otherFamily.Id]));
 
         var hidden = Db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == dto!.Id).Select(h => h.FamilyId).ToList();
         hidden.Should().ContainSingle().Which.Should().Be(myFamily.Id);
@@ -236,9 +236,9 @@ public class MedicalRecordServiceTests : SqliteTestBase
         // ключевая гарантия для SearchService.SearchMedicalRecordsAsync.
         var owner = Db.AddUser();
         var analysis = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.Analysis);
-        analysis.PersonName = "Иванов";
+        analysis.Doctor = "Иванов";
         var visit = TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit);
-        visit.PersonName = "Иванов";
+        visit.Doctor = "Иванов";
         Db.MedicalRecords.AddRange(analysis, visit);
         await Db.SaveChangesAsync();
 
@@ -257,7 +257,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var owner = Db.AddUser();
 
         var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Пациент", new DateOnly(2024, 1, 1), "Доктор", null, null, MedicalRecordKind.DoctorVisit));
+            new DateOnly(2024, 1, 1), "Доктор", null, null, MedicalRecordKind.DoctorVisit));
 
         result.Should().Be(MedicalRecordAccessResult.Success);
         dto!.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
@@ -278,7 +278,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Пациент", new DateOnly(2024, 1, 1), null, null, null,
+            new DateOnly(2024, 1, 1), null, null, null,
             FamilyDependentId: dependent.Id, TargetUserId: Guid.NewGuid()));
 
         result.Should().Be(MedicalRecordAccessResult.InvalidTarget);
@@ -299,7 +299,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Барсик", new DateOnly(2024, 1, 1), "Ветеринар", null, null, FamilyDependentId: dependent.Id));
+            new DateOnly(2024, 1, 1), "Ветеринар", null, null, FamilyDependentId: dependent.Id));
 
         result.Should().Be(MedicalRecordAccessResult.Success);
         dto!.OwnerUserId.Should().Be(owner.Id, "владелец — тот, кто физически загрузил, а не подопечный");
@@ -320,7 +320,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Чужой", new DateOnly(2024, 1, 1), null, null, null, FamilyDependentId: dependent.Id));
+            new DateOnly(2024, 1, 1), null, null, null, FamilyDependentId: dependent.Id));
 
         result.Should().Be(MedicalRecordAccessResult.Forbidden);
         dto.Should().BeNull();
@@ -333,7 +333,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var stranger = Db.AddUser();
 
         var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Пациент", new DateOnly(2024, 1, 1), null, null, null, TargetUserId: stranger.Id));
+            new DateOnly(2024, 1, 1), null, null, null, TargetUserId: stranger.Id));
 
         result.Should().Be(MedicalRecordAccessResult.Forbidden);
         dto.Should().BeNull();
@@ -347,7 +347,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         await Db.SaveChangesAsync();
 
         var (result, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Пациент", new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
+            new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
 
         result.Should().Be(MedicalRecordAccessResult.Success);
         dto!.OwnerUserId.Should().Be(owner.Id);
@@ -380,7 +380,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var target = Db.AddMember(family.Id);
         await Db.SaveChangesAsync();
         var (_, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
-            "Пациент", new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
+            new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
 
         var result = await _sut.DeleteAsync(target.Id, dto!.Id);
 

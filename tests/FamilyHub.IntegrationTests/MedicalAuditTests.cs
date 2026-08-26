@@ -40,9 +40,8 @@ public class MedicalAuditTests(FamilyHubWebFactory factory) : IntegrationTestBas
         var ownerUserId = pending!.Single().UserId;
         await admin.PostAsync($"/api/families/{family.Id}/members/{ownerUserId}/approve", null);
 
-        const string secretName = "Аудируемый Пациент";
         var record = await (await owner.PostAsJsonAsync("/api/medical-records",
-                new CreateMedicalRecordRequest(secretName, DateOnly.FromDateTime(DateTime.UtcNow), null, "Секретный диагноз", null)))
+                new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, "Секретный диагноз", null)))
             .Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts);
 
         var upload = new MultipartFormDataContent();
@@ -90,7 +89,7 @@ public class MedicalAuditTests(FamilyHubWebFactory factory) : IntegrationTestBas
     {
         var owner = ClientAs(FreshTelegramId());
         await owner.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest("Свой Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
 
         // Просмотр СВОИХ записей аудитом не считается (фиксируется доступ к чужим данным).
         (await owner.GetAsync("/api/medical-records")).StatusCode.Should().Be(HttpStatusCode.OK);

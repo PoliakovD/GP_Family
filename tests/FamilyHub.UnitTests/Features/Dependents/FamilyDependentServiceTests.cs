@@ -120,7 +120,6 @@ public class FamilyDependentServiceTests : SqliteTestBase
             Id = Guid.NewGuid(),
             OwnerUserId = admin.Id,
             Kind = MedicalRecordKind.Analysis,
-            PersonName = "Барсик",
             RecordDate = new DateOnly(2024, 1, 1),
             FamilyDependentId = dependent!.Id,
             CreatedAt = DateTime.UtcNow,

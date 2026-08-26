@@ -206,7 +206,7 @@ public class KafkaBridgeFlowTests(KafkaWebFactory factory) : IAsyncDisposable
         await admin.PostAsync($"/api/families/{family.Id}/members/{memberUserId}/approve", null);
 
         await member.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest("Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
         (await member.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(family.Id)))
             .StatusCode.Should().Be(HttpStatusCode.NoContent);
         var sharesBefore = await (await member.GetAsync("/api/medical-records/shares")).Content.ReadFromJsonAsync<List<Guid>>(JsonOpts);

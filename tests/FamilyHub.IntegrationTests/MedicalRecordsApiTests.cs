@@ -34,10 +34,10 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         return (family.Id, admin, member);
     }
 
-    private static async Task<MedicalRecordDto> CreateRecordAsync(HttpClient owner, string personName = "Иван")
+    private static async Task<MedicalRecordDto> CreateRecordAsync(HttpClient owner)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records",
-            new CreateMedicalRecordRequest(personName, DateOnly.FromDateTime(DateTime.UtcNow), "Доктор", "Описание", null));
+            new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), "Доктор", "Описание", null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
     }
@@ -140,10 +140,10 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
     public async Task Create_DoctorVisit_And_KindQueryParam_FiltersList()
     {
         var owner = ClientAs(FreshTelegramId());
-        var analysis = await CreateRecordAsync(owner, "Анализ Пациент");
+        var analysis = await CreateRecordAsync(owner);
         var visitResponse = await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Врач Пациент", DateOnly.FromDateTime(DateTime.UtcNow), "Кардиолог", null, null, MedicalRecordKind.DoctorVisit));
+                DateOnly.FromDateTime(DateTime.UtcNow), "Кардиолог", null, null, MedicalRecordKind.DoctorVisit));
         visitResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var visit = (await visitResponse.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
         visit.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
@@ -183,7 +183,7 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
 
         var response = await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null, TargetUserId: strangerUserId));
+                DateOnly.FromDateTime(DateTime.UtcNow), null, null, null, TargetUserId: strangerUserId));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -196,7 +196,7 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
 
         var response = await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null,
+                DateOnly.FromDateTime(DateTime.UtcNow), null, null, null,
                 FamilyDependentId: Guid.NewGuid(), TargetUserId: targetUserId));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -239,7 +239,7 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(
-                "Пациент", DateOnly.FromDateTime(DateTime.UtcNow), null, null, null, TargetUserId: targetUserId));
+                DateOnly.FromDateTime(DateTime.UtcNow), null, null, null, TargetUserId: targetUserId));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts))!;
     }

@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
 
 namespace FamilyHub.Modules.Medical.Extraction;
@@ -8,15 +9,19 @@ public static class ExtractionEndpoints
     {
         var records = app.MapGroup("/api/medical-records").RequireAuthorization();
 
-        records.MapPost("/{recordId:guid}/attachments/{attachmentId:guid}/extract", async (
-            Guid recordId, Guid attachmentId, ExtractionRequestService service, ICurrentUser currentUser, CancellationToken ct) =>
+        // v2: одна кнопка «Распознать» на ЗАПИСЬ — обрабатывает все ещё не распознанные вложения
+        // последовательно (см. ExtractionRequestService/MedicalDocumentExtractionProcessor), не
+        // по клику на каждый файл.
+        records.MapPost("/{recordId:guid}/extract", async (
+            Guid recordId, ExtractionRequestService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var result = await service.RequestAsync(recordId, attachmentId, currentUser.UserId, ct);
+            var result = await service.RequestAsync(recordId, currentUser.UserId, ct);
             return result switch
             {
                 ExtractionRequestResult.NotFound => Results.NotFound(),
                 ExtractionRequestResult.Forbidden => Results.Forbid(),
-                ExtractionRequestResult.AlreadyQueued => Results.Accepted(),
+                ExtractionRequestResult.NothingToDo => Results.Json(
+                    new { code = "nothing_to_extract" }, statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Accepted(),
             };
         });
@@ -59,9 +64,25 @@ public static class ExtractionEndpoints
         indicators.MapGet("/", async (ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.GetMyIndicatorsAsync(currentUser.UserId, ct)));
 
-        indicators.MapGet("/{analyteKey}", async (
-            string analyteKey, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
-            Results.Ok(await service.GetHistoryAsync(currentUser.UserId, analyteKey, ct)));
+        // Specimen в маршруте (v2) — иначе история "лейкоцитов" смешала бы кровь и мочу.
+        indicators.MapGet("/{analyteKey}/{specimen:int}", async (
+            string analyteKey, int specimen, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.GetHistoryAsync(currentUser.UserId, analyteKey, (SpecimenType)specimen, ct)));
+
+        // Правка показателя вручную (ошибка OCR) — только владелец записи.
+        indicators.MapPut("/{id:guid}", async (
+            Guid id, UpdateIndicatorRequest body, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var result = await service.UpdateIndicatorAsync(id, currentUser.UserId, body, ct);
+            return result switch
+            {
+                UpdateIndicatorResult.NotFound => Results.NotFound(),
+                UpdateIndicatorResult.Forbidden => Results.Forbid(),
+                UpdateIndicatorResult.Conflict => Results.Json(
+                    new { code = "indicator_conflict" }, statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NoContent(),
+            };
+        });
     }
 
     private static IResult MapQueryResult<T>(ExtractionQueryResult result, T? item) => result switch

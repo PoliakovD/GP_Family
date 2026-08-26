@@ -29,6 +29,7 @@ public class LabAnalyteEnrichmentProcessor(
     LabAnalyteKbSummarizer summarizer,
     LabAnalyteKbWriter kbWriter,
     EnrichmentQuotaService quota,
+    IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
 {
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
@@ -59,6 +60,7 @@ public class LabAnalyteEnrichmentProcessor(
                 logger.LogInformation(
                     "LabAnalyteEnrichmentJob {JobId}: «{Name}» уже есть в справочнике, внешний запрос не понадобился.",
                     job.Id, job.NormalizedName);
+                backgroundJobs.Enqueue<RecalculateIndicatorFlagsJob>(j => j.RunAsync(existing.KbId!.Value, CancellationToken.None));
                 return;
             }
 
@@ -109,6 +111,10 @@ public class LabAnalyteEnrichmentProcessor(
             job.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // Дозаполнение задним числом (каскад п.1a) — показатели, распознанные до того, как
+            // справочник узнал этот аналит, сейчас застряли на RefSource.None.
+            backgroundJobs.Enqueue<RecalculateIndicatorFlagsJob>(j => j.RunAsync(writeResult.KbId!.Value, CancellationToken.None));
 
             logger.LogInformation(
                 "LabAnalyteEnrichmentJob {JobId}: справочник показателей пополнен, «{Name}».", job.Id, job.SourceDisplayName);

@@ -38,4 +38,11 @@ public class FileAttachment
     public string? KeyId { get; set; }
 
     public DateTime UploadedAt { get; set; }
+
+    /// <summary>Когда конвейер извлечения (ветка medicalrecords) последний раз успешно распознал
+    /// этот файл — null, если ещё ни разу. Повторный клик «Распознать» на записи обрабатывает
+    /// только вложения с ExtractedAt=null, не гоняет OCR по уже разобранным файлам заново (см.
+    /// MedicalDocumentExtractionProcessor). Не про MedicalRecord.ExtractionStatus — тот про запись
+    /// целиком, это — про конкретный файл.</summary>
+    public DateTime? ExtractedAt { get; set; }
 }

@@ -39,64 +39,98 @@
 передают его насквозь, чтобы `types=visit` не расшифровывал вообще ни одного анализа (и наоборот) —
 это не косметика, а тот же принцип экономии, что и у остальных источников `SearchService`.
 
-OCR-конвейер (ветка `medicalrecords`, задачи 5.2/5.3) реализован: диспетчер форматов
-`FamilyHub.Infrastructure.Documents.IDocumentTextExtractor` (текстовый слой PDF/офисные форматы
-напрямую через PdfPig/NPOI — дёшево и точно; vision-OCR через `ILmStudioJsonClient` только для
+OCR-конвейер (ветка `medicalrecords`, редизайн v2 — после `ReworkPersonIdentity`) реализован:
+диспетчер форматов `FamilyHub.Infrastructure.Documents.IDocumentTextExtractor` (текстовый слой
+PDF/офисные форматы напрямую через PdfPig/NPOI; vision-OCR через `ILmStudioJsonClient` только для
 фото и PDF-сканов без текстового слоя, отрендеренных PDFium/`PDFtoImage`) → доменная структуризация
-`LmStudioMedicalDocumentExtractor` (`Extraction/`, два промпта — анализ/выписка, чанкинг длинных
-документов, антигаллюцинационный гейт: имя показателя обязано встречаться в исходном тексте на
-текстовом пути) → нормализация (`LabAnalyteNormalizer`) → каскадный поиск в
-`kb.global_lab_analytes_kb` (`LabAnalyteKbLookupService`, копия `KbLookupService`) → сравнение с
-референсом (`IndicatorFlagCalculator`, референс из бланка приоритетнее справочника; пол пациента
-нигде не хранится — только возрастные диапазоны) → сохранение в `medical.LabIndicators`
-(`AnalyteKey`/`Flag` plaintext — по ним поиск/тренд, значения/референсы `[Encrypted]`) →
-LLM-сводка `LabSummarizer` (простым языком + отклонения + вопросы врачу, тот же
-антигаллюцинационный гейт, пишется в `MedicalRecord.SummaryJson`) → событие
-`MedicalDocumentExtractedEvent` (только счётчики, не значения) → push владельцу записи.
-Выписки врача (`Kind=DoctorVisit`) — только извлечение (`VisitConclusion` в `ExtractedDataJson`),
-без графика приёма/календаря (вне объёма ветки). Оркестрация —
-`MedicalDocumentExtractionProcessor`, Hangfire-очередь `extraction` с одним воркером (LM Studio —
-один ноутбук за WireGuard, параллелить нечего), тот же паттерн, что
-`MedicationEnrichmentProcessor`. Постановка в очередь — `ExtractionRequestService`
-(`POST /api/medical-records/{recordId}/attachments/{attachmentId}/extract`, только владелец).
-Чтение — `ExtractionQueryService` (`GET .../extraction`, `.../indicators`, `.../summary`,
-`GET /api/indicators`, `GET /api/indicators/{analyteKey}`), видимость — тот же предикат, что у
-самой записи. Поиск по показателям — `SearchService.SearchIndicatorsAsync`
-(`SearchResultType.Indicator`, добавлен последним значением enum).
-Конвейер обогащения справочника `kb.global_lab_analytes_kb` реализован — зеркало
-`MedicationEnrichmentProcessor` на другой предмет: `LabAnalyteEnrichmentRequestService` ставит
-задачу в очередь `enrichment` при промахе `LabAnalyteKbLookupService` (вызывается из
-`MedicalDocumentExtractionProcessor` на этапе Linking для каждого нераспознанного показателя,
-дедуп — частичный уникальный индекс по `NormalizedName` среди Pending/Running), обработка —
-`LabAnalyteEnrichmentProcessor`: повторная проверка kb → `IMedicationSearchProvider.SearchAsync(
-name, WebSearchTopic.LabAnalyte)` (отдельный список доверенных доменов —
-`EnrichmentOptions.AnalyteTrustedDomains`: helix.ru/invitro.ru/gemotest.ru/kdlmed.ru/
-cmd-online.ru, реестры лекарств для лабораторных диапазонов бесполезны) → `LabAnalyteKbSummarizer`
-(тот же антигаллюцинационный гейт, что и `MedicationSummarizer`) → `LabAnalyteKbWriter` (upsert,
-`KbIsolationGuard`). Месячная квота — общая на оба конвейера обогащения
-(`EnrichmentQuotaService`, считает обе таблицы задач: `MedicationEnrichmentJobs` +
-`LabAnalyteEnrichmentJobs`), т.к. оба делят одного и того же внешнего провайдера. При KB-совпадении
-`MedicalDocumentExtractionProcessor` парсит `GlobalLabAnalyteKb.PayloadJson.refRanges`
-(`LabAnalyteKbPayload`) и подставляет диапазон под возраст пациента (только если запись сделана
-для `FamilyDependent` с известной `BirthDate` — пол нигде не хранится) как fallback, когда бланк
-не напечатал собственный референс. См. дополнение к [ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md).
-Общая с медикаментами проверка на персональный контекст в payload — `KbIsolationGuard` (`Kb/`),
-используется обоими writer'ами.
+`LmStudioMedicalDocumentExtractor` (`Extraction/`, два промпта — анализ/выписка; для анализа модель
+также отдаёт `specimen`/`documentDate`/`suggestedTitle` уровня документа, не индикатора —
+дешевле для модели, чем спрашивать на каждый показатель) → нормализация (`LabAnalyteNormalizer`) →
+каскадный поиск в `kb.global_lab_analytes_kb` (`LabAnalyteKbLookupService`).
 
-Фронт (`FamilyHub.Web`): кнопка «Распознать» на каждом вложении мед-записи
-(`medical-records-panel.component.ts`) ставит задачу и опрашивает `GET .../extraction` до
-терминального статуса, дальше показывает таблицу показателей с подсветкой отклонений + LLM-резюме
-(Kind=Analysis) либо разобранное заключение врача (Kind=DoctorVisit, `GET .../conclusion` —
-`MedicalRecord.ExtractedDataJson`). Вкладка «Показатели» хаба «Здоровье» (`indicators-tab`,
-`/health/indicators`) — последнее значение по каждому показателю (`GET /api/indicators`), история
-со спарклайном (`shared/sparkline`, inline SVG без библиотек графиков) по клику
-(`GET /api/indicators/{analyteKey}`).
+**v2: задача на ЗАПИСЬ, не на вложение.** Кнопка «Распознать» — одна на записи (не на файле),
+`POST /api/medical-records/{recordId}/extract` ставит ОДНУ задачу
+(`MedicalDocumentExtractionJob`, дедуп-индекс теперь по `MedicalRecordId`), которая
+последовательно обрабатывает ВСЕ ещё не распознанные вложения (`FileAttachment.ExtractedAt`
+— null у необработанных, проставляется сразу после чтения файла, до финального сохранения —
+повтор клика после сбоя не гоняет OCR по уже прочитанным файлам). Показатели из разных файлов
+МЕРЖАТСЯ upsert'ом по `(MedicalRecordId, AnalyteKey, Specimen)`, не blanket-delete — повторный
+клик «Распознать» после добавления нового файла не стирает результаты уже разобранных. Один
+проход `LabSummarizer` по полному смерженному набору — не по каждому файлу.
+
+**Каскад референса** (`FamilyHub.Domain.Enums.RefSource`, `IndicatorFlagCalculator`):
+1. `Blank` — референс из самого бланка (или из ручной правки, см. ниже) — высший приоритет.
+2. `KbFixed` — фиксированный диапазон `GlobalLabAnalyteKb.PayloadJson.refRanges`, подобранный по
+   полу (`Gender`, из `User`/`FamilyDependent` — identity rework сделал это возможным) и возрасту
+   (`PatientIdentityResolver.ResolveAsync`, общий для процессора и джобы ниже).
+3. `KbCalculated` — фиксированного диапазона нет, но у KB-записи есть `CalculationInstructions`
+   (словесная методика — например, клиренс креатинина): `PatientReferenceCalculator` просит
+   локальную LLM посчитать low/high под конкретного пациента (возраст+пол; вес/рост НЕ
+   запрашиваются — профильных полей под них нет, осознанное решение при планировании v2), строго
+   в единице измерения бланка — несовпадение единиц отбрасывает результат.
+4. `None` — промах KB целиком → `LabAnalyteEnrichmentRequestService` ставит `LabAnalyteEnrichmentJob`
+   в очередь `enrichment` (дедуп — частичный индекс по `NormalizedName`); `Flag=Unknown` до тех пор.
+
+Показатель хранится в `medical.LabIndicators` (`AnalyteKey`/`Flag`/`RefSource`/`Specimen`
+plaintext — по ним поиск/тренд/группировка, значения/референсы `[Encrypted]`).
+**`Specimen`** (`SpecimenType`: Blood/Urine/Stool/VaginalSwab/Saliva/Other/Unknown) — биоматериал,
+часть ключа группировки вместе с `AnalyteKey` везде (`GET /api/indicators`,
+`GET /api/indicators/{analyteKey}/{specimen}`, upsert-ключ) — без него лейкоциты крови и мочи
+слились бы на одном графике. Редактируется вручную (`PUT /api/indicators/{id}`, только владелец —
+исправление ошибок OCR; ref-поля из запроса становятся новым `RefSource.Blank`, Flag
+пересчитывается тем же компаратором).
+
+**Дозаполнение задним числом.** Когда `LabAnalyteEnrichmentProcessor` наполняет
+`kb.global_lab_analytes_kb` (после промаха выше), он ставит `RecalculateIndicatorFlagsJob` —
+проходит по `LabIndicators` с `RefSource=None` и тем же `AnalyteKey`/`KbAnalyteId`, прогоняет
+каскад заново. Без этого пользователь, распознавший анализ первым (когда KB ещё пуст), навсегда
+остался бы с `Unknown`.
+
+Событие `MedicalDocumentExtractedEvent` (только счётчики) → push владельцу. Выписки врача
+(`Kind=DoctorVisit`) — `VisitConclusion` в `ExtractedDataJson`, без графика приёма/календаря (вне
+объёма). Оркестрация — `MedicalDocumentExtractionProcessor`, Hangfire-очередь `extraction`, один
+воркер (LM Studio — один ноутбук за WireGuard). Чтение — `ExtractionQueryService`
+(`GET .../extraction` — включает `totalFiles`/`processedFiles` для прогресса «файл N из M»,
+`.../indicators`, `.../summary`, `.../conclusion`, `GET /api/indicators`,
+`GET /api/indicators/{analyteKey}/{specimen}`), видимость — тот же предикат, что у записи.
+
+Конвейер обогащения `kb.global_lab_analytes_kb` — зеркало `MedicationEnrichmentProcessor`:
+`IMedicationSearchProvider.SearchAsync(name, WebSearchTopic.LabAnalyte)` (отдельный список
+доверенных доменов — `EnrichmentOptions.AnalyteTrustedDomains`: helix.ru/invitro.ru/gemotest.ru/
+kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антигаллюцинационный гейт; v2 —
+промпт также просит `sex` на каждый диапазон и `calculationInstructions`) → `LabAnalyteKbWriter`
+(upsert, `KbIsolationGuard`). Месячная квота — общая на оба конвейера (`EnrichmentQuotaService`).
+См. дополнение к [ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md).
+
+**`MedicalRecord` — структура (v2).** `PersonName` убран целиком — идентичность пациента
+выражается только через `FamilyDependentId`/`TargetUserId`/владельца, отображаемое имя резолвится
+на чтение (`MedicalRecordService.ResolvePersonNamesAsync`, батч на список — не N+1), не хранится
+(подопечный/участник может переименоваться в профиле, отображение это подхватывает). Добавлено
+`Title` (`[Encrypted] string?`) — короткое название ("Общий анализ крови"), из
+`ExtractionResult.SuggestedTitle` (модель видит шапку бланка) либо введено вручную; не
+затирается повторным распознаванием, если уже задано. `RecordDate` по умолчанию — дата создания
+(фронт), может быть переопределена `ExtractionResult.DocumentDate`, если бланк её печатает.
+`Doctor` — теперь с автоподсказкой (`GET /api/medical-records/doctors`, in-memory `Distinct()`
+по СВОИМ записям пользователя после расшифровки — `Doctor` `[Encrypted]`, SQL DISTINCT по
+шифротексту бессмыслен, ADR-0002).
+
+Фронт (`FamilyHub.Web`): одна кнопка «Распознать» на записи (не на вложении) —
+`medical-records-panel.component.ts` показывает прогресс «файл N из M», после `Completed` —
+таблицу показателей (специмен, значение, норма, бэйдж «ИИ» для `RefSource.KbCalculated`,
+инлайн-правка через карандаш) + LLM-резюме (Kind=Analysis) либо заключение врача
+(Kind=DoctorVisit, `GET .../conclusion`). Форма создания — только выбор пациента из
+self/подопечный/участник (без свободного поля имени), дата по умолчанию сегодня, врач — `<input
+list>`/`<datalist>` с подсказками (в проекте нет typeahead-компонента, нативный datalist —
+осознанный выбор). Вкладка «Показатели» хаба «Здоровье» (`indicators-tab`, `/health/indicators`)
+группирует по `(analyteKey, specimen)` — история/спарклайн (`shared/sparkline`, inline SVG) по
+клику. Специмен-подписи — общий `shared/util/specimen.ts`.
 
 Лимиты вложений мед-записи — `AttachmentUploadOptions` (env `Attachments__MaxFileSizeBytes`/
 `Attachments__MaxFilesPerRecord`, дефолт 5 МиБ/8 файлов на запись): проверка размера — как раньше,
-проверка количества — новая (`AttachmentAccessResult.TooManyFiles` → 409). Фронт грузит лимиты
-заранее (`GET /api/attachments/limits`) для предвалидации и подписи «осталось N из 8», не только
-ловит отказ постфактум; инпут поддерживает `multiple` + `accept` под допустимые форматы.
+проверка количества — `AttachmentAccessResult.TooManyFiles` → 409. Фронт грузит лимиты заранее
+(`GET /api/attachments/limits`) для предвалидации и подписи «осталось N из 8»; инпут поддерживает
+`multiple` + `accept`. `AttachmentDto.ExtractedAt` — фронт определяет по нему, есть ли у записи
+ещё нераспознанные файлы (показывать ли кнопку «Распознать» вообще).
 
 Два уровня шаринга, реализованные как отдельные таблицы (не флаги на самой записи):
 

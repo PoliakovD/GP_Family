@@ -4,7 +4,9 @@ import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
-import { ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind } from '../../models/types';
+import {
+  ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource, SpecimenType,
+} from '../../models/types';
 import type {
   Attachment,
   AttachmentLimits,
@@ -13,6 +15,7 @@ import type {
   MedicalRecord,
   RecordSummaryResponse,
   SearchResultItem,
+  UpdateIndicatorRequest,
   VisitConclusion,
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -21,6 +24,7 @@ import { SearchFieldComponent } from '../../shared/search-field/search-field.com
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { DebouncedSearch, SEARCH_MIN_QUERY_LENGTH } from '../../shared/util/debounced-search';
 import { formatPersonName } from '../../shared/util/person-name';
+import { SPECIMEN_OPTIONS, specimenLabel } from '../../shared/util/specimen';
 
 /** Терминальные статусы задачи распознавания — опрос останавливается. */
 const EXTRACTION_TERMINAL_STATUSES: number[] = [
@@ -40,7 +44,6 @@ const STAGE_LABEL: Partial<Record<number, string>> = {
 
 interface KindLabels {
   addButtonLabel: string;
-  personPlaceholder: string;
   doctorPlaceholder: string;
   descriptionPlaceholder: string;
   searchPlaceholder: string;
@@ -51,7 +54,6 @@ interface KindLabels {
 const KIND_LABELS: Record<MedicalRecordKind, KindLabels> = {
   [MedicalRecordKind.Analysis]: {
     addButtonLabel: 'Добавить запись',
-    personPlaceholder: 'Пациент',
     doctorPlaceholder: 'Врач (необязательно)',
     descriptionPlaceholder: 'Описание (необязательно)',
     searchPlaceholder: 'Поиск по анализам…',
@@ -59,7 +61,6 @@ const KIND_LABELS: Record<MedicalRecordKind, KindLabels> = {
   },
   [MedicalRecordKind.DoctorVisit]: {
     addButtonLabel: 'Добавить посещение',
-    personPlaceholder: 'Пациент',
     doctorPlaceholder: 'Врач / специальность',
     descriptionPlaceholder: 'Заключение (необязательно)',
     searchPlaceholder: 'Поиск по посещениям…',
@@ -139,17 +140,20 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   /** Уникален на инстанс — «Анализы» и «Врачи» держат каждый свой экземпляр панели, а
    * <label for> должен указывать ровно на "свой" скрытый file input формы создания. */
-  readonly createFileInputId = `medical-record-create-file-input-${nextInstanceId++}`;
+  readonly createFileInputId = `medical-record-create-file-input-${nextInstanceId}`;
+  readonly doctorsDatalistId = `medical-record-doctors-datalist-${nextInstanceId++}`;
 
   items: MedicalRecord[] = [];
   form = {
-    personName: '',
-    recordDate: '',
+    recordDate: todayIso(),
     doctor: '',
     description: '',
     familyDependentId: null as string | null,
     targetUserId: null as string | null,
   };
+  /** Автоподсказка «Врач» (v2) — доктора, которых пользователь уже вводил в своих записях;
+   * грузится один раз, независимо от вида записи (общий пул для «Анализов» и «Врачей»). */
+  doctorSuggestions: string[] = [];
   /** Файлы, выбранные в форме создания ДО того, как запись сохранена — грузятся сразу после
    * успешного handleSubmit (у POST /api/medical-records/{id}/attachments нет смысла без recordId). */
   pendingFiles: StagedFile[] = [];
@@ -174,9 +178,19 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   indicatorsByRecord: Record<string, IndicatorDto[]> = {};
   summaryByRecord: Record<string, RecordSummaryResponse | null> = {};
   conclusionByRecord: Record<string, VisitConclusion | null> = {};
-  /** `${recordId}:${attachmentId}` вложения, для которого сейчас идёт запрос «Распознать» — дизейблит именно эту кнопку. */
-  recognizingKey: string | null = null;
+  /** Id записи, для которой сейчас идёт запрос «Распознать» — дизейблит кнопку именно этой записи.
+   * v2: кнопка на уровне ЗАПИСИ (обрабатывает все ещё не распознанные вложения последовательно),
+   * не на уровне отдельного вложения. */
+  recognizingRecordId: string | null = null;
   private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
+
+  // --- Правка показателя вручную (ошибка OCR, v2) ---
+  readonly SpecimenType = SpecimenType;
+  readonly RefSource = RefSource;
+  readonly specimenOptions = SPECIMEN_OPTIONS;
+  editingIndicatorId: string | null = null;
+  editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
+  savingIndicator = false;
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
@@ -209,6 +223,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
     if (!this.attachmentLimits) {
       void this.api.getAttachmentLimits().then((limits) => (this.attachmentLimits = limits));
+    }
+    if (this.doctorSuggestions.length === 0) {
+      void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
     }
   }
 
@@ -260,15 +277,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return 'self';
   }
 
-  /** Меняет familyDependentId/targetUserId по выбору и подставляет имя в форму для удобства —
-   * поле остаётся редактируемым вручную дальше. */
+  /** v2: пациент — только выбор из self/подопечный/участник семьи, без свободного текстового
+   * поля (личность полностью выражается familyDependentId/targetUserId, имя резолвится на
+   * чтение из профиля — см. MedicalRecordService.ResolvePersonNamesAsync). */
   set selectedPatientKey(key: string) {
     const option = this.patientOptions.find((o) => o.key === key);
     this.form.familyDependentId = option?.familyDependentId ?? null;
     this.form.targetUserId = option?.targetUserId ?? null;
-    if (option && option !== SELF_OPTION) {
-      this.form.personName = option.label.replace(/\s*\([^)]*\)$/, '');
-    }
   }
 
   private buildSearch(kind: MedicalRecordKind): DebouncedSearch<SearchResultItem> {
@@ -332,11 +347,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.personName.trim() || !this.form.recordDate) return;
+    if (!this.form.recordDate) return;
     try {
       const created = await this.api.createMedicalRecord({
         kind: this.kind(),
-        personName: this.form.personName.trim(),
         recordDate: this.form.recordDate,
         doctor: this.form.doctor.trim() || null,
         description: this.form.description.trim() || null,
@@ -492,23 +506,25 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.error = problems.length > 0 ? `Загрузка завершена частично: ${problems.join(', ')}.` : null;
   }
 
-  // --- Распознавание (кнопка «Распознать», задачи 5.2/5.3) ---
+  // --- Распознавание (кнопка «Распознать» на записи, v2 — обрабатывает все ещё не
+  // распознанные вложения последовательно за один прогон, не по клику на каждый файл) ---
 
-  recognizeKeyFor(recordId: string, attachmentId: string): string {
-    return `${recordId}:${attachmentId}`;
+  /** Есть хотя бы одно вложение, которое ещё ни разу не распознавалось — определяет, показывать
+   * ли кнопку «Распознать» вообще (пусто/уже всё распознано — кнопке нечего делать). */
+  hasUnrecognizedAttachments(recordId: string): boolean {
+    return this.attachmentsFor(recordId).some((a) => a.extractedAt === null);
   }
 
-  async handleRecognize(record: MedicalRecord, attachmentId: string): Promise<void> {
-    const key = this.recognizeKeyFor(record.id, attachmentId);
-    this.recognizingKey = key;
+  async handleRecognize(record: MedicalRecord): Promise<void> {
+    this.recognizingRecordId = record.id;
     try {
-      await this.api.requestExtraction(record.id, attachmentId);
+      await this.api.requestExtraction(record.id);
       this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: null };
       this.startPolling(record);
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось запустить распознавание.';
-      this.recognizingKey = null;
+      this.recognizingRecordId = null;
     }
   }
 
@@ -522,22 +538,34 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
         if (EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
           this.stopPolling(record.id);
-          this.recognizingKey = null;
+          this.recognizingRecordId = null;
           if (status.status === ExtractionJobStatus.Completed) {
             await this.loadExtractionResult(record);
+            await this.refreshAttachmentsFor(record.id);
           } else if (status.error) {
             this.error = status.error;
           }
         }
       } catch (err) {
         this.stopPolling(record.id);
-        this.recognizingKey = null;
+        this.recognizingRecordId = null;
         this.error = err instanceof ApiError ? err.message : 'Не удалось получить статус распознавания.';
       }
     };
 
     void tick();
     this.pollHandles.set(record.id, setInterval(() => void tick(), EXTRACTION_POLL_INTERVAL_MS));
+  }
+
+  /** После завершения распознавания — перезагрузить список вложений записи: ExtractedAt
+   * изменился у обработанных файлов (влияет на hasUnrecognizedAttachments/кнопку). */
+  private async refreshAttachmentsFor(recordId: string): Promise<void> {
+    try {
+      const attachments = await this.api.getRecordAttachments(recordId);
+      this.attachmentsByRecord = { ...this.attachmentsByRecord, [recordId]: attachments };
+    } catch {
+      // Не критично — список просто останется чуть устаревшим до следующего refresh().
+    }
   }
 
   private stopPolling(recordId: string): void {
@@ -600,6 +628,64 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (indicator.refHighText) return `< ${indicator.refHighText}`;
     if (indicator.refLowText) return `> ${indicator.refLowText}`;
     return null;
+  }
+
+  /** «Файл N из totalFiles» в процессе распознавания — processedFiles уже завершены, текущий —
+   * следующий по счёту (капнуто totalFiles на случай отставания статуса от факта). */
+  currentFileNumber(status: ExtractionStatusResponse): number {
+    return Math.min(status.processedFiles + 1, status.totalFiles);
+  }
+
+  specimenLabel = specimenLabel;
+
+  /** Бэйдж «рассчитано ИИ» — только для диапазона, посчитанного локальной LLM по методике из
+   * справочника (каскад п.1a, RefSource.KbCalculated), не для фиксированного диапазона/бланка. */
+  isCalculatedRef(indicator: IndicatorDto): boolean {
+    return indicator.refSource === RefSource.KbCalculated;
+  }
+
+  // --- Правка показателя вручную (ошибка OCR, v2) ---
+
+  startEditIndicator(indicator: IndicatorDto): void {
+    this.editingIndicatorId = indicator.id;
+    this.editIndicatorForm = {
+      displayName: indicator.displayName,
+      valueRaw: indicator.valueRaw,
+      unit: indicator.unit,
+      specimen: indicator.specimen as SpecimenType,
+      refLowText: indicator.refLowText,
+      refHighText: indicator.refHighText,
+      refText: indicator.refText,
+    };
+  }
+
+  cancelEditIndicator(): void {
+    this.editingIndicatorId = null;
+    this.editIndicatorForm = emptyIndicatorEdit();
+  }
+
+  async saveEditIndicator(recordId: string): Promise<void> {
+    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
+    this.savingIndicator = true;
+    try {
+      await this.api.updateIndicator(this.editingIndicatorId, {
+        ...this.editIndicatorForm,
+        displayName: this.editIndicatorForm.displayName.trim(),
+        valueRaw: this.editIndicatorForm.valueRaw.trim(),
+        unit: this.editIndicatorForm.unit?.trim() || null,
+        refLowText: this.editIndicatorForm.refLowText?.trim() || null,
+        refHighText: this.editIndicatorForm.refHighText?.trim() || null,
+        refText: this.editIndicatorForm.refText?.trim() || null,
+      });
+      const indicators = await this.api.getRecordIndicators(recordId);
+      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      this.cancelEditIndicator();
+      this.error = null;
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
+    } finally {
+      this.savingIndicator = false;
+    }
   }
 
   async handleOpenAttachment(attachmentId: string): Promise<void> {
@@ -688,8 +774,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   private resetForm(): void {
     this.form = {
-      personName: '',
-      recordDate: '',
+      recordDate: todayIso(),
       doctor: '',
       description: '',
       familyDependentId: null,
@@ -701,4 +786,14 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
 function formatMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+/** Сегодняшняя дата в формате input[type=date] — v2: дефолт формы создания, распознавание может
+ * позже переопределить её датой, найденной в самом документе (record.recordDate обновится). */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function emptyIndicatorEdit(): UpdateIndicatorRequest {
+  return { displayName: '', valueRaw: '', unit: null, specimen: SpecimenType.Unknown, refLowText: null, refHighText: null, refText: null };
 }

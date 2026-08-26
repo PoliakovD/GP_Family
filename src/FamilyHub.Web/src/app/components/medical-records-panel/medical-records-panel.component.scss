@@ -21,6 +21,25 @@
   }
 }
 
+.indicator-edit-row td {
+  background: var(--color-bg);
+}
+
+// Бэйдж «рассчитано ИИ» (RefSource.KbCalculated) — норма посчитана локальной LLM по методике из
+// справочника под возраст/пол пациента, не фиксированный диапазон и не напечатана в бланке.
+.badge-ai {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  vertical-align: middle;
+}
+
 .recognize-spinner {
   display: inline-block;
   width: 12px;

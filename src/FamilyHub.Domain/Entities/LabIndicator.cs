@@ -40,6 +40,14 @@ public class LabIndicator
 
     public IndicatorFlag Flag { get; set; } = IndicatorFlag.Unknown;
 
+    /// <summary>Откуда взят референс, использованный для Flag — каскад приоритетов, см. RefSource.</summary>
+    public RefSource RefSource { get; set; } = RefSource.None;
+
+    /// <summary>Биоматериал (кровь/моча/кал и т.д.) — часть ключа группировки на графике/в списке
+    /// "мои показатели" вместе с AnalyteKey, иначе одноимённые показатели из разных биоматериалов
+    /// (лейкоциты крови и мочи) смешались бы на одном тренде. См. FamilyHub.Domain.Enums.SpecimenType.</summary>
+    public SpecimenType Specimen { get; set; } = SpecimenType.Unknown;
+
     /// <summary>Порядок в бланке — таблица показателей на фронте отображается в исходном порядке,
     /// не алфавитном.</summary>
     public int Position { get; set; }

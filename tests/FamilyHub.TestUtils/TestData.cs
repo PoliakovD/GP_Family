@@ -93,7 +93,6 @@ public static class TestData
         Id = Guid.NewGuid(),
         OwnerUserId = ownerUserId,
         Kind = kind,
-        PersonName = "Test Patient",
         RecordDate = DateOnly.FromDateTime(DateTime.UtcNow),
         CreatedAt = DateTime.UtcNow,
     };

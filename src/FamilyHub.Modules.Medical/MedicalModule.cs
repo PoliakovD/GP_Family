@@ -32,6 +32,7 @@ public static class MedicalModule
         // решал, какая реализация активна) — по умолчанию Null, если хост её не переопределил.
         services.AddScoped<IMedicalDocumentExtractor, NullMedicalDocumentExtractor>();
         services.AddScoped<LabAnalyteKbLookupService>();
+        services.AddScoped<PatientReferenceCalculator>();
         services.AddScoped<LabSummarizer>();
         services.AddScoped<ExtractionRequestService>();
         services.AddScoped<ExtractionQueryService>();
@@ -43,6 +44,7 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteKbSummarizer>();
         services.AddScoped<LabAnalyteEnrichmentRequestService>();
         services.AddScoped<LabAnalyteEnrichmentProcessor>();
+        services.AddScoped<RecalculateIndicatorFlagsJob>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();
