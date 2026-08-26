@@ -1,0 +1,12 @@
+<div class="expandable" [class.open]="open">
+  <button type="button" class="expandable-header" (click)="toggle()" [attr.aria-expanded]="open">
+    <span class="expandable-title">{{ title }}{{ count !== null ? ' (' + count + ')' : '' }}</span>
+    <i class="ph ph-caret-down expandable-chevron" aria-hidden="true"></i>
+  </button>
+
+  <div class="expandable-body">
+    <div class="expandable-body-inner">
+      <ng-content />
+    </div>
+  </div>
+</div>

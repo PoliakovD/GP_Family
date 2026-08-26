@@ -1,0 +1,57 @@
+.expandable-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-accent);
+  text-align: left;
+}
+
+.expandable-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.expandable-chevron {
+  flex-shrink: 0;
+  font-size: 16px;
+  transition: transform 0.25s ease;
+}
+
+.expandable.open .expandable-chevron {
+  transform: rotate(180deg);
+}
+
+// Та же техника, что medkit-card: grid-трек 0fr -> 1fr вместо мгновенного @if — плавное
+// раскрытие без знания итоговой высоты содержимого заранее.
+.expandable-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.expandable.open .expandable-body {
+  grid-template-rows: 1fr;
+}
+
+.expandable-body-inner {
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expandable-chevron,
+  .expandable-body {
+    transition: none;
+  }
+}

@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, effect, inject, input } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -13,16 +14,18 @@ import type {
   ExtractionStatusResponse,
   IndicatorDto,
   MedicalRecord,
+  MedicalRecordFilter,
   RecordSummaryResponse,
-  SearchResultItem,
   UpdateIndicatorRequest,
+  UserSpecimen,
   VisitConclusion,
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { ExpandableComponent } from '../../shared/expandable/expandable.component';
+import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { DebouncedSearch, SEARCH_MIN_QUERY_LENGTH } from '../../shared/util/debounced-search';
 import { formatPersonName } from '../../shared/util/person-name';
 import { SPECIMEN_OPTIONS, specimenLabel } from '../../shared/util/specimen';
 
@@ -32,6 +35,10 @@ const EXTRACTION_TERMINAL_STATUSES: number[] = [
 ];
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
+const SEARCH_DEBOUNCE_MS = 300;
+/** Сколько ждать после Completed, прежде чем убрать живой прогресс — успевает мигнуть галочка
+ * «Готово», не исчезает мгновенно. */
+const PIPELINE_CLEAR_DELAY_MS = 2500;
 
 const STAGE_LABEL: Partial<Record<number, string>> = {
   [ExtractionStage.Queued]: 'В очереди',
@@ -74,12 +81,6 @@ const LIST_KIND_TOKEN: Record<MedicalRecordKind, 'analysis' | 'visit'> = {
   [MedicalRecordKind.DoctorVisit]: 'visit',
 };
 
-/** Токен для GET /api/search?types= (SearchDtos.SearchResultType, регистр не важен). */
-const SEARCH_TYPE_TOKEN: Record<MedicalRecordKind, string> = {
-  [MedicalRecordKind.Analysis]: 'record',
-  [MedicalRecordKind.DoctorVisit]: 'visit',
-};
-
 /** Одна опция дропдауна "Кто пациент?" — либо «Я» (оба id null), либо подопечный семьи, либо
  * другой активный участник. Составной строковый key нужен для [(ngModel)] на <select>. */
 interface PatientOption {
@@ -102,14 +103,22 @@ let nextInstanceId = 0;
 
 /**
  * Panel (не Page — своего URL нет, контекст приходит через input): список записей одного вида
- * (анализ/посещение врача — MedicalRecordKind), форма создания, поиск, шторка «Доступ», вложения.
- * Переиспользуется двумя тонкими Page-обёртками: medical-records-tab («Анализы») и
- * doctor-visits-tab («Врачи») — см. .claude/patterns/frontend_web.md про таксономию Page/Panel.
+ * (анализ/посещение врача — MedicalRecordKind), форма создания, серверные фильтры + пагинация,
+ * шторка «Доступ», вложения. Переиспользуется двумя тонкими Page-обёртками: medical-records-tab
+ * («Анализы») и doctor-visits-tab («Врачи») — см. .claude/patterns/frontend_web.md про таксономию
+ * Page/Panel.
+ *
+ * UX-редизайн: форма создания скрыта за «+ Добавить» (была всегда развёрнута над списком),
+ * список серверно фильтруется/пагинируется (было — голый список без сортировки), live-прогресс
+ * распознавания вместо статичной строки.
  */
 @Component({
   selector: 'app-medical-records-panel',
   standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent],
+  imports: [
+    FormsModule, DatePipe, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
+    ExpandableComponent, PipelineProgressComponent,
+  ],
   templateUrl: './medical-records-panel.component.html',
   styleUrl: './medical-records-panel.component.scss',
 })
@@ -144,6 +153,24 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly doctorsDatalistId = `medical-record-doctors-datalist-${nextInstanceId++}`;
 
   items: MedicalRecord[] = [];
+  loading = true;
+  error: string | null = null;
+
+  // --- Пагинация (UX-редизайн: раньше список отдавался целиком, без сортировки) ---
+  page = 1;
+  readonly pageSize = 15;
+  totalCount = 0;
+  totalPages = 0;
+
+  // --- Фильтры (UX-редизайн) — серверные, любое изменение сбрасывает страницу на 1. ---
+  filtersOpen = false;
+  filters = { from: '', to: '', patientKey: 'all', doctor: '' };
+  searchQuery = '';
+  private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+
+  // --- Форма создания (UX-редизайн: скрыта за «+ Добавить», раньше всегда развёрнута) ---
+  createOpen = false;
+  saving = false;
   form = {
     recordDate: todayIso(),
     doctor: '',
@@ -157,40 +184,50 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Файлы, выбранные в форме создания ДО того, как запись сохранена — грузятся сразу после
    * успешного handleSubmit (у POST /api/medical-records/{id}/attachments нет смысла без recordId). */
   pendingFiles: StagedFile[] = [];
-  error: string | null = null;
-  loading = true;
 
-  search!: DebouncedSearch<SearchResultItem>;
-
-  // Вложения — с сервера (GET /api/medical-records/{id}/attachments), не из памяти сессии:
-  // раньше список не переживал перезагрузку страницы (см. TECH_DEBT).
+  // Вложения — лениво, по первому раскрытию «Файлы» на карточке (UX-редизайн: раньше грузились
+  // для ВСЕХ записей страницы сразу в refresh(), самый большой источник N+1).
   attachmentsByRecord: Record<string, Attachment[]> = {};
-
-  // Лимиты загрузки (env-настраиваемые, AttachmentUploadOptions) — грузятся один раз, используются
-  // и для клиентской предвалидации, и для подписи «до 8 файлов, 5 МБ каждый» в форме.
+  private readonly attachmentsLoadedFor = new Set<string>();
   attachmentLimits: AttachmentLimits | null = null;
-  uploading = false;
+  /** Id записи, к которой сейчас идёт загрузка файла — раньше был один булев на всю панель
+   * (спиннер «Загружаем…» рисовался в КАЖДОЙ карточке одновременно). */
+  uploadingRecordId: string | null = null;
 
-  // Распознавание (кнопка «Распознать» на вложении, задачи 5.2/5.3) — результат живёт на уровне
-  // ЗАПИСИ (не вложения): повторное распознавание любого вложения записи полностью заменяет
-  // предыдущие показатели/резюме этой записи (см. MedicalDocumentExtractionProcessor).
+  // Распознавание — результат живёт на уровне ЗАПИСИ (не вложения): повторное распознавание
+  // любого вложения записи полностью заменяет предыдущие показатели/резюме этой записи (см.
+  // MedicalDocumentExtractionProcessor). Индикаторы/резюме/заключение грузятся сразу в refresh()
+  // для Ready-записей ТЕКУЩЕЙ СТРАНИЦЫ (не более pageSize, было — не более общего числа записей).
   extractionStatusByRecord: Record<string, ExtractionStatusResponse | null> = {};
   indicatorsByRecord: Record<string, IndicatorDto[]> = {};
   summaryByRecord: Record<string, RecordSummaryResponse | null> = {};
   conclusionByRecord: Record<string, VisitConclusion | null> = {};
-  /** Id записи, для которой сейчас идёт запрос «Распознать» — дизейблит кнопку именно этой записи.
-   * v2: кнопка на уровне ЗАПИСИ (обрабатывает все ещё не распознанные вложения последовательно),
-   * не на уровне отдельного вложения. */
+  /** Id записи, для которой сейчас идёт запрос «Распознать» — дизейблит кнопку именно этой записи. */
   recognizingRecordId: string | null = null;
+  /** Живой список шагов на карточку (UX-редизайн) — история, не только текущая стадия, см.
+   * shared/pipeline-progress. */
+  pipelineStepsByRecord: Record<string, PipelineStep[]> = {};
   private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly pipelineClearHandles = new Map<string, ReturnType<typeof setTimeout>>();
 
-  // --- Правка показателя вручную (ошибка OCR, v2) ---
+  // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
   readonly SpecimenType = SpecimenType;
   readonly RefSource = RefSource;
   readonly specimenOptions = SPECIMEN_OPTIONS;
   editingIndicatorId: string | null = null;
   editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
   savingIndicator = false;
+  /** Id записи, для которой сейчас открыта строка «+ Добавить показатель» (null — закрыта). */
+  creatingIndicatorRecordId: string | null = null;
+  newIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
+  savingNewIndicator = false;
+
+  // --- Кастомный биоматериал (UX-редизайн) — свой справочник + LLM-валидация при создании. ---
+  customSpecimens: UserSpecimen[] = [];
+  addingCustomSpecimen = false;
+  customSpecimenInput = '';
+  customSpecimenError: string | null = null;
+  savingCustomSpecimen = false;
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
@@ -208,8 +245,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       const kind = this.kind();
       if (kind === this.loadedKind) return;
       this.resetForm();
+      this.resetFilters();
       this.accessRecord = null;
-      this.search = this.buildSearch(kind);
+      this.page = 1;
       void this.refresh();
     });
   }
@@ -218,7 +256,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     // Первичная загрузка — здесь, а не только в effect(): effect выполняется на следующем цикле
     // change detection и может не успеть отработать до первого рендера шаблона.
     if (this.kind() !== this.loadedKind) {
-      this.search = this.buildSearch(this.kind());
       void this.refresh();
     }
     if (!this.attachmentLimits) {
@@ -227,6 +264,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
     }
+    if (this.customSpecimens.length === 0) {
+      void this.api.getSpecimens().then((s) => (this.customSpecimens = s));
+    }
   }
 
   /** Опрос статуса распознавания использует setInterval — без явной остановки таймеры
@@ -234,6 +274,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     for (const handle of this.pollHandles.values()) clearInterval(handle);
     this.pollHandles.clear();
+    for (const handle of this.pipelineClearHandles.values()) clearTimeout(handle);
+    this.pipelineClearHandles.clear();
+    if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
     this.clearPendingFiles();
   }
 
@@ -271,6 +314,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return options;
   }
 
+  /** Фильтр «Пациент» — те же опции + «Все» сверху (форма создания «Все» не предлагает,
+   * там пациент обязателен). */
+  get filterPatientOptions(): PatientOption[] {
+    return [{ key: 'all', familyDependentId: null, targetUserId: null, label: 'Все' }, ...this.patientOptions];
+  }
+
   get selectedPatientKey(): string {
     if (this.form.familyDependentId) return `dep:${this.form.familyDependentId}`;
     if (this.form.targetUserId) return `user:${this.form.targetUserId}`;
@@ -286,28 +335,69 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.form.targetUserId = option?.targetUserId ?? null;
   }
 
-  private buildSearch(kind: MedicalRecordKind): DebouncedSearch<SearchResultItem> {
-    return new DebouncedSearch<SearchResultItem>(
-      (q) => this.api.search(q, SEARCH_TYPE_TOKEN[kind]).then((r) => r.items),
-      (err) => (err instanceof ApiError ? err.message : 'Не удалось выполнить поиск.'),
-    );
+  // --- Фильтры/поиск/пагинация ---
+
+  /** Сколько фильтров сейчас активно — счётчик на заголовке кнопки «Фильтры». */
+  get activeFilterCount(): number {
+    let count = 0;
+    if (this.filters.from) count++;
+    if (this.filters.to) count++;
+    if (this.filters.patientKey !== 'all') count++;
+    if (this.filters.doctor.trim()) count++;
+    return count;
+  }
+
+  onFilterChange(): void {
+    this.page = 1;
+    void this.refresh();
+  }
+
+  resetFilters(): void {
+    this.filters = { from: '', to: '', patientKey: 'all', doctor: '' };
+    this.searchQuery = '';
+    this.page = 1;
+    void this.refresh();
   }
 
   onSearchQueryChange(value: string): void {
-    this.search.query = value;
-    this.search.onQueryChange();
+    this.searchQuery = value;
+    if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
+    this.searchDebounceHandle = setTimeout(() => {
+      this.page = 1;
+      void this.refresh();
+    }, SEARCH_DEBOUNCE_MS);
   }
 
-  /** Поиск отдаёт только id + score (шифрованные поля не индексируются в БД) — рендерим уже
-   * загруженные items, отфильтрованные и упорядоченные по совпавшим id. */
-  get displayedItems(): MedicalRecord[] {
-    if (this.search.query.trim().length < SEARCH_MIN_QUERY_LENGTH || !this.search.searched) {
-      return this.items;
-    }
-    const scoreById = new Map(this.search.items.map((i) => [i.id, i.score]));
-    return this.items
-      .filter((r) => scoreById.has(r.id))
-      .sort((a, b) => scoreById.get(b.id)! - scoreById.get(a.id)!);
+  get canGoPrev(): boolean {
+    return this.page > 1;
+  }
+
+  get canGoNext(): boolean {
+    return this.page < this.totalPages;
+  }
+
+  goToPage(page: number): void {
+    if (page < 1 || page > this.totalPages || page === this.page) return;
+    this.page = page;
+    void this.refresh();
+  }
+
+  private buildFilter(): MedicalRecordFilter {
+    const opt = this.filters.patientKey === 'all' || this.filters.patientKey === 'self'
+      ? null
+      : this.patientOptions.find((o) => o.key === this.filters.patientKey);
+    return {
+      kind: LIST_KIND_TOKEN[this.kind()],
+      from: this.filters.from || undefined,
+      to: this.filters.to || undefined,
+      dependentId: opt?.familyDependentId ?? undefined,
+      targetUserId: opt?.targetUserId ?? undefined,
+      self: this.filters.patientKey === 'self' ? true : undefined,
+      doctor: this.filters.doctor.trim() || undefined,
+      q: this.searchQuery.trim() || undefined,
+      page: this.page,
+      pageSize: this.pageSize,
+    };
   }
 
   async refresh(): Promise<void> {
@@ -315,27 +405,24 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.loadedKind = kind;
     this.loading = true;
     try {
-      const [items, shares] = await Promise.all([
-        this.api.getMedicalRecords(LIST_KIND_TOKEN[kind]),
+      const [page, shares] = await Promise.all([
+        this.api.getMedicalRecords(this.buildFilter()),
         this.api.getMedicalRecordShares(),
       ]);
-      this.items = items;
+      this.items = page.items;
+      this.totalCount = page.totalCount;
+      this.totalPages = page.totalPages;
       this.shares = shares;
       // Открытая шторка должна остаться синхронной с перезагруженным состоянием записи.
       if (this.accessRecord) {
         this.accessRecord = this.items.find((r) => r.id === this.accessRecord!.id) ?? null;
       }
-
-      const pairs = await Promise.all(
-        items.map(async (item) => [item.id, await this.api.getRecordAttachments(item.id)] as const),
-      );
-      this.attachmentsByRecord = Object.fromEntries(pairs);
       this.error = null;
 
-      // Уже распознанные ранее записи — подгружаем результат сразу, без повторного клика
-      // «Распознать» (переживает перезагрузку страницы, в отличие от старого TECH_DEBT со вложениями).
+      // Показатели/резюме/заключение — только для готовых записей ТЕКУЩЕЙ страницы (≤15), не
+      // для всего списка сразу (UX-редизайн — было главным источником N+1 вместе со вложениями).
       await Promise.all(
-        items
+        this.items
           .filter((item) => item.extractionStatus === ExtractionStatus.Ready)
           .map((item) => this.loadExtractionResult(item)),
       );
@@ -347,7 +434,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.recordDate) return;
+    if (!this.form.recordDate || this.saving) return;
+    this.saving = true;
     try {
       const created = await this.api.createMedicalRecord({
         kind: this.kind(),
@@ -363,7 +451,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // пользователя искать свежесозданную запись в списке и повторно нажимать «Прикрепить».
       let uploadFailed = 0;
       if (this.pendingFiles.length > 0) {
-        this.uploading = true;
+        this.uploadingRecordId = created.id;
         try {
           for (const staged of this.pendingFiles) {
             try {
@@ -373,15 +461,19 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
             }
           }
         } finally {
-          this.uploading = false;
+          this.uploadingRecordId = null;
         }
       }
 
       this.resetForm();
+      this.createOpen = false;
+      this.page = 1;
       await this.refresh();
       this.error = uploadFailed > 0 ? `Запись сохранена, но ${uploadFailed} файлов не загрузилось — прикрепите их к записи ниже.` : null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
+    } finally {
+      this.saving = false;
     }
   }
 
@@ -459,10 +551,25 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Сколько ещё файлов можно приложить к этой записи (для подписи под инпутом и клиентской
-   * предвалидации) — null, пока лимиты ещё не загружены (GET /api/attachments/limits в ngOnInit). */
+  // --- Файлы карточки (лениво — при первом раскрытии «Файлы», UX-редизайн) ---
+
+  /** Раскрытие/сворачивание «Файлы» на карточке — грузит вложения только один раз. */
+  async onFilesToggle(record: MedicalRecord, open: boolean): Promise<void> {
+    if (!open || this.attachmentsLoadedFor.has(record.id)) return;
+    this.attachmentsLoadedFor.add(record.id);
+    try {
+      const attachments = await this.api.getRecordAttachments(record.id);
+      this.attachmentsByRecord = { ...this.attachmentsByRecord, [record.id]: attachments };
+    } catch (err) {
+      this.attachmentsLoadedFor.delete(record.id);
+      this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить вложения.';
+    }
+  }
+
+  /** Сколько ещё файлов можно приложить к этой записи — null, пока список вложений ещё не
+   * загружен (карточка ни разу не раскрывалась) ЛИБО лимиты ещё не пришли. */
   remainingSlots(recordId: string): number | null {
-    if (!this.attachmentLimits) return null;
+    if (!this.attachmentLimits || !this.attachmentsLoadedFor.has(recordId)) return null;
     return Math.max(0, this.attachmentLimits.maxFilesPerRecord - this.attachmentsFor(recordId).length);
   }
 
@@ -472,15 +579,17 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   /** До 8 файлов за раз (multiple на инпуте) — загружаются последовательно (сервер принимает один
    * файл за запрос), список вложений и остаток слотов обновляются по мере успеха каждого. */
-  async handleUpload(recordId: string, event: Event): Promise<void> {
+  async handleUpload(record: MedicalRecord, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
     input.value = ''; // позволяет выбрать те же файлы повторно
     if (files.length === 0) return;
 
+    const recordId = record.id;
+    this.attachmentsLoadedFor.add(recordId); // на случай, если «Файлы» ещё не раскрывали
     const { accepted, skippedByCount, tooLarge } = this.filterAgainstLimits(this.attachmentsFor(recordId).length, files);
 
-    this.uploading = true;
+    this.uploadingRecordId = recordId;
     let failed = 0;
     try {
       for (const file of accepted) {
@@ -495,8 +604,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         }
       }
     } finally {
-      this.uploading = false;
+      this.uploadingRecordId = null;
     }
+
+    // Счётчики на DTO записи (attachmentCount/unrecognizedAttachmentCount) устарели после
+    // загрузки — перечитываем список, чтобы кнопка «Распознать» и подпись «Файлы (N)» сошлись.
+    await this.refresh();
 
     const limits = this.attachmentLimits;
     const problems: string[] = [];
@@ -509,14 +622,18 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // --- Распознавание (кнопка «Распознать» на записи, v2 — обрабатывает все ещё не
   // распознанные вложения последовательно за один прогон, не по клику на каждый файл) ---
 
-  /** Есть хотя бы одно вложение, которое ещё ни разу не распознавалось — определяет, показывать
-   * ли кнопку «Распознать» вообще (пусто/уже всё распознано — кнопке нечего делать). */
-  hasUnrecognizedAttachments(recordId: string): boolean {
-    return this.attachmentsFor(recordId).some((a) => a.extractedAt === null);
+  /** Видимость кнопки «Распознать» — по счётчику из DTO, БЕЗ загрузки списка вложений. */
+  hasUnrecognizedAttachments(record: MedicalRecord): boolean {
+    return record.unrecognizedAttachmentCount > 0;
   }
 
   async handleRecognize(record: MedicalRecord): Promise<void> {
     this.recognizingRecordId = record.id;
+    this.clearPipelineTimer(record.id);
+    this.pipelineStepsByRecord = {
+      ...this.pipelineStepsByRecord,
+      [record.id]: [{ id: 'queued', label: 'В очереди', state: 'active' }],
+    };
     try {
       await this.api.requestExtraction(record.id);
       this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: null };
@@ -534,17 +651,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
     const tick = async () => {
       try {
+        const prev = this.extractionStatusByRecord[record.id] ?? null;
         const status = await this.api.getExtractionStatus(record.id);
         this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
+        this.updatePipelineSteps(record.id, status, prev);
+
         if (EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
           this.stopPolling(record.id);
           this.recognizingRecordId = null;
           if (status.status === ExtractionJobStatus.Completed) {
             await this.loadExtractionResult(record);
-            await this.refreshAttachmentsFor(record.id);
+            await this.refresh();
           } else if (status.error) {
             this.error = status.error;
           }
+          this.schedulePipelineClear(record.id);
         }
       } catch (err) {
         this.stopPolling(record.id);
@@ -557,14 +678,54 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.pollHandles.set(record.id, setInterval(() => void tick(), EXTRACTION_POLL_INTERVAL_MS));
   }
 
-  /** После завершения распознавания — перезагрузить список вложений записи: ExtractedAt
-   * изменился у обработанных файлов (влияет на hasUnrecognizedAttachments/кнопку). */
-  private async refreshAttachmentsFor(recordId: string): Promise<void> {
-    try {
-      const attachments = await this.api.getRecordAttachments(recordId);
-      this.attachmentsByRecord = { ...this.attachmentsByRecord, [recordId]: attachments };
-    } catch {
-      // Не критично — список просто останется чуть устаревшим до следующего refresh().
+  /** Живой список шагов (UX-редизайн) — растущий список «уже сделано» + текущий пульсирующий
+   * шаг, не статичная строка. Только выполненные + активный: будущие шаги не показываем, конвейер
+   * может их пропустить (текстовый путь не заходит в OCR). */
+  private updatePipelineSteps(recordId: string, status: ExtractionStatusResponse, prev: ExtractionStatusResponse | null): void {
+    const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
+    const markLastDone = () => {
+      const last = steps[steps.length - 1];
+      if (last && last.state === 'active') steps[steps.length - 1] = { ...last, state: 'done' };
+    };
+
+    if (status.status === ExtractionJobStatus.Failed || status.status === ExtractionJobStatus.Skipped) {
+      markLastDone();
+      steps.push({ id: `outcome-${steps.length}`, label: status.error ?? 'Не удалось распознать документ.', state: 'error' });
+    } else if (status.status === ExtractionJobStatus.Completed) {
+      markLastDone();
+      steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
+    } else {
+      // Новый обработанный файл — отдельная строка с галочкой, до перехода к следующей стадии.
+      if (prev && status.processedFiles > prev.processedFiles) {
+        markLastDone();
+        steps.push({ id: `file-${status.processedFiles}`, label: `Файл ${status.processedFiles} распознан`, state: 'done' });
+      }
+      if (!prev || prev.stage !== status.stage || steps.length === 0) {
+        markLastDone();
+        const base = this.stageLabel[status.stage] ?? 'Обрабатываем…';
+        const label = status.totalFiles > 1 ? `${base} — файл ${this.currentFileNumber(status)} из ${status.totalFiles}` : base;
+        steps.push({ id: `stage-${status.stage}-${steps.length}`, label, state: 'active' });
+      }
+    }
+
+    this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
+  }
+
+  private schedulePipelineClear(recordId: string): void {
+    this.clearPipelineTimer(recordId);
+    const handle = setTimeout(() => {
+      const { [recordId]: _removed, ...rest } = this.pipelineStepsByRecord;
+      this.pipelineStepsByRecord = rest;
+      this.pipelineClearHandles.delete(recordId);
+    }, PIPELINE_CLEAR_DELAY_MS);
+    this.pipelineClearHandles.set(recordId, handle);
+  }
+
+  private clearPipelineTimer(recordId: string): void {
+    const handle = this.pipelineClearHandles.get(recordId);
+    if (handle) {
+      clearTimeout(handle);
+      this.pipelineClearHandles.delete(recordId);
     }
   }
 
@@ -636,7 +797,35 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return Math.min(status.processedFiles + 1, status.totalFiles);
   }
 
-  specimenLabel = specimenLabel;
+  /** Короткое имя показателя для строки таблицы — нормализованный analyteKey с заглавной буквы
+   * (UX-редизайн: полное имя из бланка показывается только при раскрытии строки). */
+  shortIndicatorName(indicator: IndicatorDto): string {
+    const key = indicator.analyteKey.trim();
+    return key.length > 0 ? key[0].toUpperCase() + key.slice(1) : indicator.displayName;
+  }
+
+  /** Комбинированный ключ (specimen[:customId]) для одиночного <select> формы правки/создания —
+   * нативный <option> не даёт слушать (click) внутри <select> кроссбраузерно, поэтому системные и
+   * кастомные значения кодируются одной строкой, а не отдельным обработчиком клика по опции. */
+  specimenKey(form: UpdateIndicatorRequest): string {
+    return form.specimen === SpecimenType.Other && form.specimenCustomId
+      ? `${form.specimen}:${form.specimenCustomId}`
+      : `${form.specimen}`;
+  }
+
+  applySpecimenKey(form: UpdateIndicatorRequest, key: string): void {
+    const [specimenPart, customId] = key.split(':');
+    form.specimen = Number(specimenPart) as SpecimenType;
+    form.specimenCustomId = customId ?? null;
+  }
+
+  specimenLabelFor(indicator: { specimen: number; specimenCustomId: string | null }): string {
+    if (indicator.specimen === SpecimenType.Other && indicator.specimenCustomId) {
+      const custom = this.customSpecimens.find((c) => c.id === indicator.specimenCustomId);
+      if (custom) return custom.displayName;
+    }
+    return specimenLabel(indicator.specimen);
+  }
 
   /** Бэйдж «рассчитано ИИ» — только для диапазона, посчитанного локальной LLM по методике из
    * справочника (каскад п.1a, RefSource.KbCalculated), не для фиксированного диапазона/бланка. */
@@ -644,9 +833,18 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return indicator.refSource === RefSource.KbCalculated;
   }
 
+  // --- Раскрытая строка показателя (полное имя из бланка + подробности) ---
+
+  expandedIndicatorId: string | null = null;
+
+  toggleIndicatorRow(indicator: IndicatorDto): void {
+    this.expandedIndicatorId = this.expandedIndicatorId === indicator.id ? null : indicator.id;
+  }
+
   // --- Правка показателя вручную (ошибка OCR, v2) ---
 
   startEditIndicator(indicator: IndicatorDto): void {
+    this.creatingIndicatorRecordId = null;
     this.editingIndicatorId = indicator.id;
     this.editIndicatorForm = {
       displayName: indicator.displayName,
@@ -656,27 +854,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       refLowText: indicator.refLowText,
       refHighText: indicator.refHighText,
       refText: indicator.refText,
+      specimenCustomId: indicator.specimenCustomId,
     };
   }
 
   cancelEditIndicator(): void {
     this.editingIndicatorId = null;
     this.editIndicatorForm = emptyIndicatorEdit();
+    this.addingCustomSpecimen = false;
   }
 
   async saveEditIndicator(recordId: string): Promise<void> {
     if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
     this.savingIndicator = true;
     try {
-      await this.api.updateIndicator(this.editingIndicatorId, {
-        ...this.editIndicatorForm,
-        displayName: this.editIndicatorForm.displayName.trim(),
-        valueRaw: this.editIndicatorForm.valueRaw.trim(),
-        unit: this.editIndicatorForm.unit?.trim() || null,
-        refLowText: this.editIndicatorForm.refLowText?.trim() || null,
-        refHighText: this.editIndicatorForm.refHighText?.trim() || null,
-        refText: this.editIndicatorForm.refText?.trim() || null,
-      });
+      await this.api.updateIndicator(this.editingIndicatorId, sanitizeIndicatorForm(this.editIndicatorForm));
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.cancelEditIndicator();
@@ -685,6 +877,95 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
     } finally {
       this.savingIndicator = false;
+    }
+  }
+
+  async deleteIndicatorRow(recordId: string, indicator: IndicatorDto): Promise<void> {
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить показатель?',
+      message: `«${indicator.displayName}» будет удалён из записи безвозвратно.`,
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await this.api.deleteIndicator(indicator.id);
+      const indicators = await this.api.getRecordIndicators(recordId);
+      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      if (this.expandedIndicatorId === indicator.id) this.expandedIndicatorId = null;
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось удалить показатель.';
+    }
+  }
+
+  // --- Ручное добавление показателя (UX-редизайн) ---
+
+  startCreateIndicator(recordId: string): void {
+    this.editingIndicatorId = null;
+    this.creatingIndicatorRecordId = recordId;
+    this.newIndicatorForm = emptyIndicatorEdit();
+  }
+
+  cancelCreateIndicator(): void {
+    this.creatingIndicatorRecordId = null;
+    this.newIndicatorForm = emptyIndicatorEdit();
+    this.addingCustomSpecimen = false;
+  }
+
+  async saveNewIndicator(): Promise<void> {
+    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim()) return;
+    const recordId = this.creatingIndicatorRecordId;
+    this.savingNewIndicator = true;
+    try {
+      await this.api.createIndicator(recordId, sanitizeIndicatorForm(this.newIndicatorForm));
+      const indicators = await this.api.getRecordIndicators(recordId);
+      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      await this.refresh();
+      this.cancelCreateIndicator();
+      this.error = null;
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.';
+    } finally {
+      this.savingNewIndicator = false;
+    }
+  }
+
+  // --- Кастомный биоматериал ---
+
+  startAddCustomSpecimen(): void {
+    this.addingCustomSpecimen = true;
+    this.customSpecimenInput = '';
+    this.customSpecimenError = null;
+  }
+
+  cancelAddCustomSpecimen(): void {
+    this.addingCustomSpecimen = false;
+    this.customSpecimenInput = '';
+    this.customSpecimenError = null;
+  }
+
+  /** Проверяет и добавляет биоматериал через LLM-валидацию (UserSpecimenService), затем сразу
+   * подставляет его в текущую форму (правку или создание — то, что сейчас открыто). */
+  async submitCustomSpecimen(): Promise<void> {
+    const name = this.customSpecimenInput.trim();
+    if (!name || this.savingCustomSpecimen) return;
+    this.savingCustomSpecimen = true;
+    this.customSpecimenError = null;
+    try {
+      const created = await this.api.createSpecimen(name);
+      if (!this.customSpecimens.some((s) => s.id === created.id)) {
+        this.customSpecimens = [...this.customSpecimens, created].sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
+      }
+      const target = this.creatingIndicatorRecordId ? this.newIndicatorForm : this.editIndicatorForm;
+      target.specimen = SpecimenType.Other;
+      target.specimenCustomId = created.id;
+      this.addingCustomSpecimen = false;
+      this.customSpecimenInput = '';
+    } catch (err) {
+      this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить биоматериал.';
+    } finally {
+      this.savingCustomSpecimen = false;
     }
   }
 
@@ -795,5 +1076,23 @@ function todayIso(): string {
 }
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {
-  return { displayName: '', valueRaw: '', unit: null, specimen: SpecimenType.Unknown, refLowText: null, refHighText: null, refText: null };
+  return {
+    displayName: '', valueRaw: '', unit: null, specimen: SpecimenType.Unknown,
+    refLowText: null, refHighText: null, refText: null, specimenCustomId: null,
+  };
+}
+
+/** Обрезка пробелов + пустая строка → null — общий шаг перед отправкой формы показателя
+ * (правка и создание используют одну и ту же форму). */
+function sanitizeIndicatorForm(form: UpdateIndicatorRequest): UpdateIndicatorRequest {
+  return {
+    ...form,
+    displayName: form.displayName.trim(),
+    valueRaw: form.valueRaw.trim(),
+    unit: form.unit?.trim() || null,
+    refLowText: form.refLowText?.trim() || null,
+    refHighText: form.refHighText?.trim() || null,
+    refText: form.refText?.trim() || null,
+    specimenCustomId: form.specimen === SpecimenType.Other ? (form.specimenCustomId ?? null) : null,
+  };
 }

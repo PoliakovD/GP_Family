@@ -11,8 +11,10 @@ public static class SearchEndpoints
         // Пустой/короткий q — пустой результат без 400 (см. SearchService.MinQueryLength):
         // фронт может дергать поиск по мере набора текста без спец-обработки первых символов.
         group.MapGet("/", async (
-            string? q, string? types, SearchService service, ICurrentUser currentUser, CancellationToken ct) =>
-            Results.Ok(await service.SearchAsync(currentUser.UserId, q, ParseTypes(types), ct)));
+            string? q, string? types, int? page, int? pageSize,
+            SearchService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.SearchAsync(
+                currentUser.UserId, q, ParseTypes(types), page ?? 1, pageSize ?? 15, ct)));
     }
 
     /// <summary>

@@ -12,8 +12,17 @@ public static class MedicalRecordEndpoints
         var group = app.MapGroup("/api/medical-records").RequireAuthorization();
 
         // kind опционален: без него отдаются оба вида (обратная совместимость со старыми клиентами).
-        group.MapGet("/", async (string? kind, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
-            Results.Ok(await service.GetVisibleRecordsAsync(currentUser.UserId, ParseKind(kind), ct)));
+        // UX-редизайн: серверные фильтры + пагинация (дефолт 15/стр.) вместо голого списка.
+        group.MapGet("/", async (
+            string? kind, DateOnly? from, DateOnly? to, Guid? dependentId, Guid? targetUserId, bool? self,
+            string? doctor, string? q, int? page, int? pageSize,
+            MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var filter = new MedicalRecordFilter(
+                ParseKind(kind), from, to, dependentId, targetUserId, self ?? false, doctor, q,
+                page ?? 1, pageSize ?? 15);
+            return Results.Ok(await service.GetVisibleRecordsAsync(currentUser.UserId, filter, ct));
+        });
 
         // L1-семьи текущего пользователя (владельца) — нужны клиенту, чтобы отрисовать состояние
         // тумблеров доступа в bottom-sheet «Доступ», не запрашивая его отдельно на каждую запись.

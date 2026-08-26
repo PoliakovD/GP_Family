@@ -23,7 +23,13 @@ public class SearchService(
     AppDbContext db, IFamilyAccessService access, MedicalRecordService medicalRecords, IBirthdaySearchSource birthdays)
 {
     private const int MinQueryLength = 2;
-    private const int PerSourceLimit = 20;
+    private const int MinPerSourceLimit = 20;
+    private const int MaxPerSourceLimit = 200;
+
+    /// <summary>Пагинация (UX-редизайн) — на конкретной странице должно хватить материала из
+    /// КАЖДОГО источника, иначе глубокая страница могла бы недобрать элементы, даже если они
+    /// есть. Растёт с page*pageSize, с потолком — не наружу как саморегулирующийся DoS-вектор.</summary>
+    private int perSourceLimit;
 
     /// <param name="types">
     /// Ограничить источники (например, только «Лекарства»). <c>null</c>/пустой набор — все
@@ -32,11 +38,16 @@ public class SearchService(
     /// MedicalRecordService.SearchAsync); не запрошенный источник не трогает БД вовсе.
     /// </param>
     public async Task<SearchResponse> SearchAsync(
-        Guid userId, string? query, IReadOnlySet<SearchResultType>? types = null, CancellationToken ct = default)
+        Guid userId, string? query, IReadOnlySet<SearchResultType>? types = null,
+        int page = 1, int pageSize = 15, CancellationToken ct = default)
     {
         var q = query?.Trim();
         if (string.IsNullOrEmpty(q) || q.Length < MinQueryLength)
-            return new SearchResponse([]);
+            return new SearchResponse([], page, pageSize, 0);
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        perSourceLimit = Math.Clamp(page * pageSize, MinPerSourceLimit, MaxPerSourceLimit);
 
         var wantsAll = types is null || types.Count == 0;
 
@@ -50,13 +61,13 @@ public class SearchService(
             : [];
         var records = await SearchMedicalRecordsAsync(userId, q, wantsAll, types, ct);
         var birthdayHits = wantsAll || types!.Contains(SearchResultType.Birthday)
-            ? await birthdays.SearchAsync(userId, q, PerSourceLimit, ct)
+            ? await birthdays.SearchAsync(userId, q, perSourceLimit, ct)
             : [];
         var indicators = wantsAll || types!.Contains(SearchResultType.Indicator)
             ? await SearchIndicatorsAsync(userId, q, ct)
             : [];
 
-        var items = medications
+        var all = medications
             .Concat(kb)
             .Concat(records)
             .Concat(birthdayHits.Select(ToSearchItem))
@@ -64,7 +75,8 @@ public class SearchService(
             .OrderByDescending(i => i.Score)
             .ToList();
 
-        return new SearchResponse(items);
+        var pageItems = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new SearchResponse(pageItems, page, pageSize, all.Count);
     }
 
     /// <summary>Скоуп — только семьи, где пользователь активный член (инвариант 1: списки фильтруются по FamilyId).</summary>
@@ -89,7 +101,7 @@ public class SearchService(
             WHERE m."FamilyId" = ANY({familyIds.ToArray()})
               AND (m.search_vector @@ plainto_tsquery('russian', {q}) OR similarity(m."Name", {q}) > 0.3)
             ORDER BY "Score" DESC
-            LIMIT {PerSourceLimit}
+            LIMIT {perSourceLimit}
             """).ToListAsync(ct);
 
         return rows.Select(r => new SearchResultItem(
@@ -117,7 +129,7 @@ public class SearchService(
                OR similarity("DisplayName", {q}) > 0.3
                OR lower({q}) = ANY("Aliases")
             ORDER BY "Score" DESC
-            LIMIT {PerSourceLimit}
+            LIMIT {perSourceLimit}
             """).ToListAsync(ct);
 
         return rows.Select(r => new SearchResultItem(SearchResultType.Kb, r.Id, r.DisplayName, null, r.Score)).ToList();
@@ -143,7 +155,7 @@ public class SearchService(
             _ => MedicalRecordKind.DoctorVisit,
         };
 
-        var hits = await medicalRecords.SearchAsync(userId, q, kind, PerSourceLimit, ct);
+        var hits = await medicalRecords.SearchAsync(userId, q, kind, perSourceLimit, ct);
         return hits.Select(ToSearchItem).ToList();
     }
 
@@ -184,7 +196,7 @@ public class SearchService(
             WHERE "MedicalRecordId" = ANY({recordIds.ToArray()})
               AND similarity("AnalyteKey", {q}) > 0.3
             ORDER BY "AnalyteKey", "RecordDate" DESC
-            LIMIT {PerSourceLimit}
+            LIMIT {perSourceLimit}
             """).ToListAsync(ct);
 
         return rows

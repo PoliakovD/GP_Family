@@ -1,0 +1,23 @@
+<div class="pipeline-progress">
+  @for (step of steps; track step.id) {
+    <div class="pipeline-step" [class]="'step-' + step.state">
+      <span class="pipeline-step-icon" aria-hidden="true">
+        @if (step.state === 'done') {
+          <i class="ph-bold ph-check"></i>
+        } @else if (step.state === 'error') {
+          <i class="ph-bold ph-x"></i>
+        } @else {
+          <span class="pipeline-step-spinner"></span>
+        }
+      </span>
+      <span class="pipeline-step-label">
+        {{ step.label }}
+        @if (step.state === 'active') {
+          <span class="pipeline-step-ellipsis" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </span>
+        }
+      </span>
+    </div>
+  }
+</div>

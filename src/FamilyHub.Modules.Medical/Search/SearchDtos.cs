@@ -18,7 +18,10 @@ public record MedicationContext(
 /// <summary>Контекст дня рождения: в какой семье он записан и когда.</summary>
 public record BirthdayContext(Guid FamilyId, string FamilyName, DateOnly Date);
 
-public record SearchResponse(IReadOnlyList<SearchResultItem> Items);
+/// <summary>Пагинация (UX-редизайн) — шесть контуров уже сливаются и сортируются по Score в
+/// памяти (SearchService.SearchAsync), страница режется после сортировки, TotalCount — по
+/// набранному полному результату (см. PerSourceLimit).</summary>
+public record SearchResponse(IReadOnlyList<SearchResultItem> Items, int Page, int PageSize, int TotalCount);
 
 /// <summary>Проекция сырого SQL-запроса к medical."Medications" (search_vector/similarity — вне EF-модели).</summary>
 internal sealed class MedicationSearchRow

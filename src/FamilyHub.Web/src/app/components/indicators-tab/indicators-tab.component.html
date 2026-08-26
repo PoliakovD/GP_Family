@@ -7,7 +7,7 @@
     <app-loading-spinner />
   } @else if (items.length === 0) {
     <p class="muted">
-      Показателей пока нет — нажмите «Распознать» на вложении к анализу на вкладке «Анализы»,
+      Показателей пока нет — добавьте анализ и нажмите «Распознать» на вкладке «Анализы»,
       и они появятся здесь.
     </p>
   } @else {
@@ -16,7 +16,7 @@
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>
             <strong class="card-title">{{ item.displayName }}</strong>
-            <div class="card-meta">{{ specimenLabel(item.specimen) }} · {{ item.lastRecordDate }}</div>
+            <div class="card-meta">{{ specimenLabel(item) }} · {{ item.lastRecordDate }}</div>
           </div>
           <div [class]="flagClass(item.flag)" style="font-size:15px;font-weight:600;white-space:nowrap">
             {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
@@ -27,7 +27,7 @@
   }
 
   <app-bottom-sheet
-    [title]="selected ? selected.displayName + ' (' + specimenLabel(selected.specimen) + ')' : 'Показатель'"
+    [title]="selected ? selected.displayName + ' (' + specimenLabel(selected) + ')' : 'Показатель'"
     [open]="detailOpen"
     (closed)="closeDetail()"
   >

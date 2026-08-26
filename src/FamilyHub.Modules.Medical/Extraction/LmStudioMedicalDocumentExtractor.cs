@@ -55,6 +55,10 @@ public class LmStudioMedicalDocumentExtractor(
         Правила:
         - Извлекай ТОЛЬКО то, что реально написано в этом фрагменте — ничего не добавляй от себя
           и не переноси показатели из общих знаний о медицине.
+        - Если в строке бланка нет значения (пустая ячейка, только название показателя без цифры
+          или текста напротив) — НЕ включай этот показатель в ответ вообще, пропусти его. Если же
+          в бланке явно напечатано "-", "—", "отсутствуют", "не обнаружено", "отрицательно" — это
+          ЗНАЧЕНИЕ, а не пустая ячейка: включай показатель с ним как есть.
         - "refLow"/"refHigh" — числа, только если референс — числовой диапазон (например,
           "130-160"). Если так — "refText" оставь null. Если референс не числовой — заполни
           только "refText", "refLow"/"refHigh" оставь null.
@@ -217,6 +221,15 @@ public class LmStudioMedicalDocumentExtractor(
         return new ExtractionResult(true, null, null, "Не удалось распознать заключение врача.");
     }
 
+    /// <summary>Плейсхолдеры "нет данных", которые модель иногда подставляет вместо ПРОПУСКА
+    /// показателя с пустой ячейкой (см. правило гейта в AnalysisSystemPrompt) — намеренно НЕ
+    /// включает "-"/"—"/"отсутствуют"/"не обнаружено"/"отрицательно": это осмысленные значения
+    /// бланка, а не признак пустой строки.</summary>
+    private static readonly HashSet<string> EmptyValuePlaceholders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "null", "n/a", "na", "нет данных", "не указано", "неизвестно", "?", ".",
+    };
+
     private static IEnumerable<ExtractedLabIndicator> ParseIndicators(Dictionary<string, JsonElement> payload)
     {
         if (!TryGetValue(payload, "indicators", out var arr) || arr.ValueKind != JsonValueKind.Array) yield break;
@@ -227,9 +240,11 @@ public class LmStudioMedicalDocumentExtractor(
 
             var name = ReadString(item, "name")?.Trim();
             var value = ReadString(item, "value")?.Trim();
-            // Показатель без имени/значения или с неправдоподобно длинным именем (модель
-            // сгенерировала предложение, не название показателя) — отбрасываем.
+            // Показатель без имени/значения, с неправдоподобно длинным именем (модель
+            // сгенерировала предложение, не название показателя), или со значением-плейсхолдером
+            // "нет данных" вместо реального пропуска ячейки — отбрасываем.
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(value) || name.Length > 80) continue;
+            if (EmptyValuePlaceholders.Contains(value)) continue;
 
             yield return new ExtractedLabIndicator(
                 Name: name,

@@ -59,17 +59,87 @@ public class MedicalRecordService(
         return kind is null ? query : query.Where(r => r.Kind == kind);
     }
 
+    /// <summary>Фильтры, которые не требуют расшифровки — все plaintext-колонки (RecordDate/
+    /// FamilyDependentId/TargetUserId), применяются прямо в SQL, до материализации.</summary>
+    private static IQueryable<MedicalRecord> ApplySqlFilters(IQueryable<MedicalRecord> query, MedicalRecordFilter filter)
+    {
+        if (filter.From is { } from) query = query.Where(r => r.RecordDate >= from);
+        if (filter.To is { } to) query = query.Where(r => r.RecordDate <= to);
+        if (filter.SelfOnly) query = query.Where(r => r.FamilyDependentId == null && r.TargetUserId == null);
+        if (filter.FamilyDependentId is { } depId) query = query.Where(r => r.FamilyDependentId == depId);
+        if (filter.TargetUserId is { } targetId) query = query.Where(r => r.TargetUserId == targetId);
+        return query;
+    }
+
     /// <summary>
     /// HiddenFamilyIds (L2) отдаётся только владельцу записи — это его личная настройка доступа,
     /// а не то, что должны видеть другие члены семьи, которым запись расшарена.
+    ///
+    /// Два пути (UX-редизайн): Doctor/Query — [Encrypted]/in-memory-scored, SQL-фильтр по ним
+    /// невозможен (ADR-0002). Без них — быстрый путь: сортировка/подсчёт/пагинация целиком в SQL.
+    /// С ними — материализуем срез, отфильтрованный по остальным условиям, расшифровываем и
+    /// фильтруем/скорим в памяти (тот же приём, что SearchAsync/GetDoctorSuggestionsAsync), считаем
+    /// total и режем страницу уже на C#-стороне.
     /// </summary>
-    public async Task<List<MedicalRecordDto>> GetVisibleRecordsAsync(
-        Guid userId, MedicalRecordKind? kind = null, CancellationToken ct = default)
+    public async Task<PagedResult<MedicalRecordDto>> GetVisibleRecordsAsync(
+        Guid userId, MedicalRecordFilter filter, CancellationToken ct = default)
     {
-        var records = await VisibleRecordsQuery(userId, kind).ToListAsync(ct);
+        var page = Math.Max(1, filter.Page);
+        var pageSize = Math.Clamp(filter.PageSize, 1, MedicalRecordFilter.MaxPageSize);
+        var doctorQuery = string.IsNullOrWhiteSpace(filter.Doctor) ? null : filter.Doctor.Trim();
+        var textQuery = string.IsNullOrWhiteSpace(filter.Query) ? null : filter.Query.Trim();
 
-        // Аудит (задача 2.7): факт просмотра ЧУЖИХ (расшаренных) записей — по владельцу.
-        var foreignOwnerIds = records.Select(r => r.OwnerUserId).Where(o => o != userId).Distinct().ToList();
+        var baseQuery = ApplySqlFilters(VisibleRecordsQuery(userId, filter.Kind), filter);
+
+        List<MedicalRecord> pageRecords;
+        List<MedicalRecord> forAudit;
+        int totalCount;
+
+        if (doctorQuery is null && textQuery is null)
+        {
+            totalCount = await baseQuery.CountAsync(ct);
+            pageRecords = await baseQuery
+                .OrderByDescending(r => r.RecordDate).ThenByDescending(r => r.CreatedAt)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .ToListAsync(ct);
+            forAudit = pageRecords;
+        }
+        else
+        {
+            var all = await baseQuery.ToListAsync(ct);
+            forAudit = all;
+
+            IEnumerable<(MedicalRecord Record, double Score)> scored = all.Select(r => (r, Score: 1.0));
+            if (doctorQuery is not null)
+                scored = scored.Where(x => x.Record.Doctor is not null &&
+                    x.Record.Doctor.Contains(doctorQuery, StringComparison.OrdinalIgnoreCase));
+            if (textQuery is not null)
+            {
+                var names = await ResolvePersonNamesAsync(all, userId, ct);
+                scored = scored
+                    .Select(x =>
+                    {
+                        var haystack = string.Join(' ', new[] { names[x.Record.Id], x.Record.Doctor, x.Record.Title, x.Record.Description }
+                            .Where(s => !string.IsNullOrWhiteSpace(s)));
+                        return (x.Record, Score: searcher.Score(haystack, textQuery));
+                    })
+                    .Where(x => x.Score > 0);
+            }
+
+            var matched = scored
+                .OrderByDescending(x => x.Score)
+                .ThenByDescending(x => x.Record.RecordDate).ThenByDescending(x => x.Record.CreatedAt)
+                .Select(x => x.Record)
+                .ToList();
+
+            totalCount = matched.Count;
+            pageRecords = matched.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        }
+
+        // Аудит (задача 2.7): факт просмотра ЧУЖИХ (расшаренных) записей — по владельцу. Считается
+        // по всему отфильтрованному срезу (forAudit), не только по отданной странице — доступ к
+        // чужим данным проверялся SQL-предикатом видимости независимо от пагинации.
+        var foreignOwnerIds = forAudit.Select(r => r.OwnerUserId).Where(o => o != userId).Distinct().ToList();
         if (foreignOwnerIds.Count > 0)
         {
             foreach (var ownerId in foreignOwnerIds)
@@ -77,7 +147,9 @@ public class MedicalRecordService(
             await db.SaveChangesAsync(ct);
         }
 
-        var ownRecordIds = records.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToList();
+        var pageRecordIds = pageRecords.Select(r => r.Id).ToList();
+
+        var ownRecordIds = pageRecords.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToList();
         var hiddenRows = await db.MedicalRecordHiddens
             .Where(h => ownRecordIds.Contains(h.MedicalRecordId))
             .ToListAsync(ct);
@@ -85,14 +157,39 @@ public class MedicalRecordService(
             .GroupBy(h => h.MedicalRecordId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(h => h.FamilyId).ToList());
 
-        var personNames = await ResolvePersonNamesAsync(records, userId, ct);
+        var personNames = await ResolvePersonNamesAsync(pageRecords, userId, ct);
 
-        return records
-            .Select(r => ToDto(
-                r,
-                r.OwnerUserId == userId && hiddenByRecord.TryGetValue(r.Id, out var ids) ? ids : [],
-                personNames[r.Id]))
+        // Счётчики вложений/показателей (UX-редизайн) — двумя GroupBy по 15 id страницы, вместо
+        // 15 отдельных GET /attachments, которые раньше делал refresh() на фронте (N+1).
+        var attachmentCounts = await db.FileAttachments
+            .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && pageRecordIds.Contains(a.OwnerId))
+            .GroupBy(a => a.OwnerId)
+            .Select(g => new { RecordId = g.Key, Total = g.Count(), Unrecognized = g.Count(a => a.ExtractedAt == null) })
+            .ToListAsync(ct);
+        var attachmentCountsById = attachmentCounts.ToDictionary(x => x.RecordId, x => x);
+
+        var indicatorCounts = await db.LabIndicators
+            .Where(i => pageRecordIds.Contains(i.MedicalRecordId))
+            .GroupBy(i => i.MedicalRecordId)
+            .Select(g => new { RecordId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        var indicatorCountsById = indicatorCounts.ToDictionary(x => x.RecordId, x => x.Count);
+
+        var items = pageRecords
+            .Select(r =>
+            {
+                var counts = attachmentCountsById.GetValueOrDefault(r.Id);
+                return ToDto(
+                    r,
+                    r.OwnerUserId == userId && hiddenByRecord.TryGetValue(r.Id, out var ids) ? ids : [],
+                    personNames[r.Id],
+                    counts?.Total ?? 0,
+                    counts?.Unrecognized ?? 0,
+                    indicatorCountsById.GetValueOrDefault(r.Id));
+            })
             .ToList();
+
+        return PagedResult<MedicalRecordDto>.Create(items, page, pageSize, totalCount);
     }
 
     /// <summary>
@@ -513,7 +610,10 @@ public class MedicalRecordService(
         return MedicalRecordAccessResult.Success;
     }
 
-    private static MedicalRecordDto ToDto(MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds, string personName) =>
+    private static MedicalRecordDto ToDto(
+        MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds, string personName,
+        int attachmentCount = 0, int unrecognizedAttachmentCount = 0, int indicatorCount = 0) =>
         new(r.Id, r.OwnerUserId, r.Kind, personName, r.RecordDate, r.Doctor, r.Title, r.Description,
-            r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId);
+            r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId,
+            attachmentCount, unrecognizedAttachmentCount, indicatorCount);
 }

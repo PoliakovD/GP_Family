@@ -1,11 +1,11 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import { IndicatorFlag } from '../../models/types';
-import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/types';
+import type { IndicatorHistoryPoint, MyIndicatorSummary, UserSpecimen } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
-import { specimenLabel } from '../../shared/util/specimen';
+import { specimenLabelWithCustom } from '../../shared/util/specimen';
 
 /**
  * Page (таксономия — patterns/frontend_web.md): «мои показатели» — последнее значение по каждому
@@ -24,11 +24,11 @@ export class IndicatorsTabComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   readonly IndicatorFlag = IndicatorFlag;
-  specimenLabel = specimenLabel;
 
   loading = true;
   error: string | null = null;
   items: MyIndicatorSummary[] = [];
+  private customSpecimens: UserSpecimen[] = [];
 
   detailOpen = false;
   detailLoading = false;
@@ -39,13 +39,19 @@ export class IndicatorsTabComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.loading = true;
     try {
-      this.items = await this.api.getMyIndicators();
+      const [items, customSpecimens] = await Promise.all([this.api.getMyIndicators(), this.api.getSpecimens()]);
+      this.items = items;
+      this.customSpecimens = customSpecimens;
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить показатели.';
     } finally {
       this.loading = false;
     }
+  }
+
+  specimenLabel(item: { specimen: number; specimenCustomId: string | null }): string {
+    return specimenLabelWithCustom(item.specimen, item.specimenCustomId, this.customSpecimens);
   }
 
   flagClass(flag: number): string {
@@ -77,7 +83,7 @@ export class IndicatorsTabComponent implements OnInit {
     this.selected = item;
     this.history = [];
     try {
-      this.history = await this.api.getIndicatorHistory(item.analyteKey, item.specimen);
+      this.history = await this.api.getIndicatorHistory(item.analyteKey, item.specimen, item.specimenCustomId);
     } catch (err) {
       this.detailError = err instanceof ApiError ? err.message : 'Не удалось загрузить историю показателя.';
     } finally {

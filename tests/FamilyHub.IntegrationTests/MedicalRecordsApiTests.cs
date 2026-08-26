@@ -34,6 +34,17 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         return (family.Id, admin, member);
     }
 
+    /// <summary>UX-редизайн: GET /api/medical-records теперь пагинирован
+    /// (PagedResult&lt;MedicalRecordDto&gt;) — обёртка возвращает голый список, как раньше
+    /// делали тесты напрямую; PageSize=100 достаточен для всех сценариев этого файла.</summary>
+    private static async Task<List<MedicalRecordDto>> GetRecordsAsync(HttpClient client, string query = "")
+    {
+        var separator = query.Length > 0 ? "&" : "?";
+        var response = await client.GetAsync($"/api/medical-records{query}{separator}pageSize=100");
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<MedicalRecordDto>>();
+        return [.. page!.Items];
+    }
+
     private static async Task<MedicalRecordDto> CreateRecordAsync(HttpClient owner)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records",
@@ -49,10 +60,10 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         var record = await CreateRecordAsync(owner);
         var stranger = ClientAs(FreshTelegramId());
 
-        var ownerList = await (await owner.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var ownerList = await GetRecordsAsync(owner);
         ownerList.Should().ContainSingle(r => r.Id == record.Id);
 
-        var strangerList = await (await stranger.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var strangerList = await GetRecordsAsync(stranger);
         strangerList.Should().NotContain(r => r.Id == record.Id);
     }
 
@@ -62,27 +73,27 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         var (familyId, owner, member) = await CreateFamilyWithActiveMemberAsync();
         var record = await CreateRecordAsync(owner);
 
-        var memberListBeforeShare = await (await member.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var memberListBeforeShare = await GetRecordsAsync(member);
         memberListBeforeShare.Should().NotContain(r => r.Id == record.Id);
 
         var shareResponse = await owner.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(familyId));
         shareResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var memberListAfterShare = await (await member.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var memberListAfterShare = await GetRecordsAsync(member);
         memberListAfterShare.Should().ContainSingle(r => r.Id == record.Id);
 
         var hideResponse = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/hide", new FamilyIdsRequest([familyId]));
         hideResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var memberListAfterHide = await (await member.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var memberListAfterHide = await GetRecordsAsync(member);
         memberListAfterHide.Should().NotContain(r => r.Id == record.Id);
-        var ownerListAfterHide = await (await owner.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var ownerListAfterHide = await GetRecordsAsync(owner);
         ownerListAfterHide.Should().ContainSingle(r => r.Id == record.Id);
 
         var unhideResponse = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/unhide", new FamilyIdsRequest([familyId]));
         unhideResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var memberListAfterUnhide = await (await member.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var memberListAfterUnhide = await GetRecordsAsync(member);
         memberListAfterUnhide.Should().ContainSingle(r => r.Id == record.Id);
     }
 
@@ -148,14 +159,14 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         var visit = (await visitResponse.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
         visit.Kind.Should().Be(MedicalRecordKind.DoctorVisit);
 
-        var all = await (await owner.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var all = await GetRecordsAsync(owner);
         all.Should().Contain(r => r.Id == analysis.Id).And.Contain(r => r.Id == visit.Id);
 
-        var analysesOnly = await (await owner.GetAsync("/api/medical-records?kind=analysis")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var analysesOnly = await GetRecordsAsync(owner, "?kind=analysis");
         analysesOnly.Should().ContainSingle(r => r.Id == analysis.Id);
         analysesOnly.Should().NotContain(r => r.Id == visit.Id);
 
-        var visitsOnly = await (await owner.GetAsync("/api/medical-records?kind=visit")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var visitsOnly = await GetRecordsAsync(owner, "?kind=visit");
         visitsOnly.Should().ContainSingle(r => r.Id == visit.Id);
         visitsOnly.Should().NotContain(r => r.Id == analysis.Id);
     }
@@ -170,8 +181,7 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
 
         record.TargetUserId.Should().Be(targetUserId);
         record.OwnerUserId.Should().NotBe(targetUserId, "владелец — тот, кто физически загрузил, а не получатель");
-        (await (await target.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>())!
-            .Should().ContainSingle(r => r.Id == record.Id);
+        (await GetRecordsAsync(target)).Should().ContainSingle(r => r.Id == record.Id);
     }
 
     [Fact]
@@ -216,7 +226,7 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         ownerAttempt.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         (await target.GetAsync("/api/medical-records")).StatusCode.Should().Be(HttpStatusCode.OK);
-        var targetListAfter = await (await target.GetAsync("/api/medical-records")).Content.ReadFromJsonAsync<List<MedicalRecordDto>>();
+        var targetListAfter = await GetRecordsAsync(target);
         targetListAfter.Should().NotContain(r => r.Id == record.Id);
     }
 

@@ -137,9 +137,10 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
         }
 
         // Активный участник семьи подопечного видит запись автоматически, без L1-шаринга.
-        var beforeDelete = await (await admin.GetAsync("/api/medical-records"))
-            .Content.ReadFromJsonAsync<List<MedicalRecordDto>>(JsonOpts);
-        beforeDelete.Should().ContainSingle(r => r.Id == record.Id);
+        // UX-редизайн: GET /api/medical-records теперь пагинирован (PagedResult<MedicalRecordDto>).
+        var beforeDeletePage = await (await admin.GetAsync("/api/medical-records"))
+            .Content.ReadFromJsonAsync<PagedResult<MedicalRecordDto>>(JsonOpts);
+        beforeDeletePage!.Items.Should().ContainSingle(r => r.Id == record.Id);
 
         (await admin.DeleteAsync($"/api/dependents/{dependent.Id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 

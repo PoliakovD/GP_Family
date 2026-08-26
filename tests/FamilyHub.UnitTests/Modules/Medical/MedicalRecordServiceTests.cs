@@ -28,6 +28,14 @@ public class MedicalRecordServiceTests : SqliteTestBase
             NullLogger<MedicalRecordService>.Instance);
     }
 
+    /// <summary>Обёртка над пагинированным GetVisibleRecordsAsync (UX-редизайн) — PageSize=100
+    /// достаточен для всех сценариев этого файла (тестовые списки — единицы записей).</summary>
+    private async Task<List<MedicalRecordDto>> GetRecordsAsync(Guid userId, MedicalRecordKind? kind = null)
+    {
+        var page = await _sut.GetVisibleRecordsAsync(userId, new MedicalRecordFilter(kind, PageSize: 100));
+        return [.. page.Items];
+    }
+
     [Fact]
     public async Task GetVisibleRecordsAsync_Owner_AlwaysSeesOwnRecord()
     {
@@ -35,7 +43,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         Db.MedicalRecords.Add(TestData.NewMedicalRecord(owner.Id));
         await Db.SaveChangesAsync();
 
-        var result = await _sut.GetVisibleRecordsAsync(owner.Id);
+        var result = await GetRecordsAsync(owner.Id);
 
         result.Should().ContainSingle();
     }
@@ -50,7 +58,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var familyMate = Db.AddMember(family.Id);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.GetVisibleRecordsAsync(familyMate.Id);
+        var result = await GetRecordsAsync(familyMate.Id);
 
         result.Should().BeEmpty();
     }
@@ -68,7 +76,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var shareResult = await _sut.ShareWithFamilyAsync(owner.Id, family.Id);
 
         shareResult.Should().Be(MedicalRecordAccessResult.Success);
-        var result = await _sut.GetVisibleRecordsAsync(familyMate.Id);
+        var result = await GetRecordsAsync(familyMate.Id);
         result.Should().ContainSingle(r => r.Id == record.Id);
     }
 
@@ -100,7 +108,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var pending = Db.AddMember(family.Id, FamilyRole.Member, MemberStatus.PendingApproval);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.GetVisibleRecordsAsync(pending.Id);
+        var result = await GetRecordsAsync(pending.Id);
 
         result.Should().BeEmpty();
     }
@@ -125,8 +133,8 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var hideResult = await _sut.HideFromFamiliesAsync(owner.Id, record.Id, [family.Id]);
 
         hideResult.Should().Be(MedicalRecordAccessResult.Success);
-        (await _sut.GetVisibleRecordsAsync(familyMate.Id)).Should().BeEmpty();
-        (await _sut.GetVisibleRecordsAsync(owner.Id)).Should().ContainSingle();
+        (await GetRecordsAsync(familyMate.Id)).Should().BeEmpty();
+        (await GetRecordsAsync(owner.Id)).Should().ContainSingle();
     }
 
     [Fact]
@@ -164,7 +172,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var result = await _sut.UnhideFromFamiliesAsync(owner.Id, record.Id, [family.Id]);
 
         result.Should().Be(MedicalRecordAccessResult.Success);
-        (await _sut.GetVisibleRecordsAsync(familyMate.Id)).Should().ContainSingle();
+        (await GetRecordsAsync(familyMate.Id)).Should().ContainSingle();
     }
 
     [Fact]
@@ -185,7 +193,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         reshareResult.Should().Be(MedicalRecordAccessResult.Success);
 
         var familyMate = Db.AddMember(family.Id);
-        (await _sut.GetVisibleRecordsAsync(familyMate.Id)).Should().BeEmpty();
+        (await GetRecordsAsync(familyMate.Id)).Should().BeEmpty();
     }
 
     [Fact]
@@ -220,9 +228,9 @@ public class MedicalRecordServiceTests : SqliteTestBase
         Db.MedicalRecords.Add(TestData.NewMedicalRecord(owner.Id, MedicalRecordKind.DoctorVisit));
         await Db.SaveChangesAsync();
 
-        var analyses = await _sut.GetVisibleRecordsAsync(owner.Id, MedicalRecordKind.Analysis);
-        var visits = await _sut.GetVisibleRecordsAsync(owner.Id, MedicalRecordKind.DoctorVisit);
-        var all = await _sut.GetVisibleRecordsAsync(owner.Id);
+        var analyses = await GetRecordsAsync(owner.Id, MedicalRecordKind.Analysis);
+        var visits = await GetRecordsAsync(owner.Id, MedicalRecordKind.DoctorVisit);
+        var all = await GetRecordsAsync(owner.Id);
 
         analyses.Should().ContainSingle(r => r.Kind == MedicalRecordKind.Analysis);
         visits.Should().ContainSingle(r => r.Kind == MedicalRecordKind.DoctorVisit);
@@ -303,7 +311,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
 
         result.Should().Be(MedicalRecordAccessResult.Success);
         dto!.OwnerUserId.Should().Be(owner.Id, "владелец — тот, кто физически загрузил, а не подопечный");
-        (await _sut.GetVisibleRecordsAsync(otherMember.Id)).Should().ContainSingle(r => r.Id == dto.Id);
+        (await GetRecordsAsync(otherMember.Id)).Should().ContainSingle(r => r.Id == dto.Id);
     }
 
     [Fact]
@@ -352,7 +360,7 @@ public class MedicalRecordServiceTests : SqliteTestBase
         result.Should().Be(MedicalRecordAccessResult.Success);
         dto!.OwnerUserId.Should().Be(owner.Id);
         dto.TargetUserId.Should().Be(target.Id);
-        (await _sut.GetVisibleRecordsAsync(target.Id)).Should().ContainSingle(r => r.Id == dto.Id);
+        (await GetRecordsAsync(target.Id)).Should().ContainSingle(r => r.Id == dto.Id);
     }
 
     [Fact]
@@ -396,5 +404,111 @@ public class MedicalRecordServiceTests : SqliteTestBase
         var result = await _sut.DeleteAsync(owner.Id, Guid.NewGuid());
 
         result.Should().Be(MedicalRecordAccessResult.NotFound);
+    }
+
+    // --- UX-редизайн: сортировка/пагинация/фильтры ---
+
+    [Fact]
+    public async Task GetVisibleRecordsAsync_OrdersByRecordDateDescending_NotByCreatedAt()
+    {
+        var owner = Db.AddUser();
+        var older = TestData.NewMedicalRecord(owner.Id);
+        older.RecordDate = new DateOnly(2024, 1, 1);
+        older.CreatedAt = DateTime.UtcNow; // создана позже, но дата анализа раньше
+        var newer = TestData.NewMedicalRecord(owner.Id);
+        newer.RecordDate = new DateOnly(2025, 6, 1);
+        newer.CreatedAt = DateTime.UtcNow.AddDays(-30);
+        Db.MedicalRecords.AddRange(older, newer);
+        await Db.SaveChangesAsync();
+
+        var page = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(PageSize: 100));
+
+        page.Items.Select(r => r.Id).Should().Equal(newer.Id, older.Id);
+    }
+
+    [Fact]
+    public async Task GetVisibleRecordsAsync_Pagination_SplitsIntoPagesWithCorrectTotals()
+    {
+        var owner = Db.AddUser();
+        for (var i = 0; i < 23; i++)
+        {
+            var record = TestData.NewMedicalRecord(owner.Id);
+            record.RecordDate = new DateOnly(2024, 1, 1).AddDays(i);
+            Db.MedicalRecords.Add(record);
+        }
+        await Db.SaveChangesAsync();
+
+        var page1 = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(Page: 1, PageSize: 15));
+        var page2 = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(Page: 2, PageSize: 15));
+
+        page1.TotalCount.Should().Be(23);
+        page1.TotalPages.Should().Be(2);
+        page1.Items.Should().HaveCount(15);
+        page2.Items.Should().HaveCount(8);
+        page1.Items.Select(r => r.Id).Should().NotIntersectWith(page2.Items.Select(r => r.Id));
+    }
+
+    [Fact]
+    public async Task GetVisibleRecordsAsync_FilterByDateRange_ExcludesOutOfRange()
+    {
+        var owner = Db.AddUser();
+        var inRange = TestData.NewMedicalRecord(owner.Id);
+        inRange.RecordDate = new DateOnly(2024, 6, 15);
+        var before = TestData.NewMedicalRecord(owner.Id);
+        before.RecordDate = new DateOnly(2024, 1, 1);
+        var after = TestData.NewMedicalRecord(owner.Id);
+        after.RecordDate = new DateOnly(2024, 12, 31);
+        Db.MedicalRecords.AddRange(inRange, before, after);
+        await Db.SaveChangesAsync();
+
+        var page = await _sut.GetVisibleRecordsAsync(
+            owner.Id, new MedicalRecordFilter(From: new DateOnly(2024, 3, 1), To: new DateOnly(2024, 9, 1), PageSize: 100));
+
+        page.Items.Should().ContainSingle(r => r.Id == inRange.Id);
+    }
+
+    [Fact]
+    public async Task GetVisibleRecordsAsync_FilterByDoctor_MatchesCaseInsensitiveSubstring_InMemoryPath()
+    {
+        var owner = Db.AddUser();
+        var petrov = TestData.NewMedicalRecord(owner.Id);
+        petrov.Doctor = "Кардиолог Петрова";
+        var ivanov = TestData.NewMedicalRecord(owner.Id);
+        ivanov.Doctor = "Терапевт Иванов";
+        Db.MedicalRecords.AddRange(petrov, ivanov);
+        await Db.SaveChangesAsync();
+
+        var page = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(Doctor: "петров", PageSize: 100));
+
+        page.Items.Should().ContainSingle(r => r.Id == petrov.Id);
+        page.TotalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetVisibleRecordsAsync_AttachmentAndIndicatorCounts_ReflectActualData()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        await Db.SaveChangesAsync();
+        Db.FileAttachments.Add(new FileAttachment
+        {
+            Id = Guid.NewGuid(), OwnerType = FileOwnerType.MedicalRecord, OwnerId = record.Id,
+            StorageKey = "k1", FileName = "a.pdf", ContentType = "application/pdf", SizeBytes = 1,
+            UploadedAt = DateTime.UtcNow, ExtractedAt = null,
+        });
+        Db.FileAttachments.Add(new FileAttachment
+        {
+            Id = Guid.NewGuid(), OwnerType = FileOwnerType.MedicalRecord, OwnerId = record.Id,
+            StorageKey = "k2", FileName = "b.pdf", ContentType = "application/pdf", SizeBytes = 1,
+            UploadedAt = DateTime.UtcNow, ExtractedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var page = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(PageSize: 100));
+
+        var dto = page.Items.Should().ContainSingle(r => r.Id == record.Id).Which;
+        dto.AttachmentCount.Should().Be(2);
+        dto.UnrecognizedAttachmentCount.Should().Be(1);
     }
 }

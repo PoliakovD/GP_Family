@@ -48,6 +48,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<GlobalLabAnalyteKb> GlobalLabAnalytesKb => Set<GlobalLabAnalyteKb>();
     public DbSet<LabAnalyteEnrichmentJob> LabAnalyteEnrichmentJobs => Set<LabAnalyteEnrichmentJob>();
 
+    /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
+    public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();
+
     /// <summary>Прогоны перешифровки при ротации ключа (ADR-0009) — см. EncryptionRotationJob.</summary>
     public DbSet<EncryptionRotationRun> EncryptionRotationRuns => Set<EncryptionRotationRun>();
 

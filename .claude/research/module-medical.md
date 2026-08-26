@@ -34,10 +34,27 @@
                 И эта конкретная запись не скрыта именно от неё)
 ```
 
-`GetVisibleRecordsAsync`/`SearchAsync` принимают опциональный `MedicalRecordKind? kind` —
-`GET /api/medical-records?kind=analysis|visit` и `SearchService` (источники `Record`/`Visit`)
-передают его насквозь, чтобы `types=visit` не расшифровывал вообще ни одного анализа (и наоборот) —
-это не косметика, а тот же принцип экономии, что и у остальных источников `SearchService`.
+`SearchAsync` принимает опциональный `MedicalRecordKind? kind` — `SearchService` (источники
+`Record`/`Visit`) передаёт его насквозь, чтобы `types=visit` не расшифровывал вообще ни одного
+анализа (и наоборот) — это не косметика, а тот же принцип экономии, что и у остальных источников
+`SearchService`.
+
+**UX-редизайн (после v2): сортировка/фильтры/пагинация.** `GetVisibleRecordsAsync` больше не
+принимает голый `kind` — берёт `MedicalRecordFilter` (`Kind`/`From`/`To`/`FamilyDependentId`/
+`TargetUserId`/`SelfOnly`/`Doctor`/`Query`/`Page`/`PageSize`) и отдаёт `PagedResult<MedicalRecordDto>`
+(дефолт 15/стр., потолок 100). Список сортируется строго по `RecordDate` (было — не
+сортировался вообще), `CreatedAt` — только tiebreaker. Два пути выборки: без `Doctor`/`Query` —
+целиком в SQL (`Skip/Take`, `CountAsync`); с ними — материализация SQL-отфильтрованного среза,
+расшифровка, фильтр/скоринг в памяти, пагинация на C#-стороне (тот же приём, что уже был в
+`SearchAsync`/`GetDoctorSuggestionsAsync` — `Doctor`/`Title`/`Description` `[Encrypted]`, SQL по
+ним невозможен, ADR-0002). `MedicalRecordDto` несёt три счётчика (`AttachmentCount`,
+`UnrecognizedAttachmentCount`, `IndicatorCount`), посчитанных двумя `GroupBy` по id страницы —
+фронт больше не делает `GET /attachments` на каждую запись при открытии вкладки (было N+1: до
+редизайна `refresh()` грузил вложения для ВСЕХ записей плюс показатели/резюме для всех Ready-
+записей сразу, без пагинации — десятки-сотни запросов на открытие). `GET /api/search` получил ту
+же пагинацию (`page`/`pageSize`, дефолт 15) — `SearchService.perSourceLimit` растёт с
+`page * pageSize` (потолок 200), чтобы глубокая страница не недобрала элементы ни от одного из
+шести источников.
 
 OCR-конвейер (ветка `medicalrecords`, редизайн v2 — после `ReworkPersonIdentity`) реализован:
 диспетчер форматов `FamilyHub.Infrastructure.Documents.IDocumentTextExtractor` (текстовый слой
@@ -75,10 +92,29 @@ PDF/офисные форматы напрямую через PdfPig/NPOI; visio
 plaintext — по ним поиск/тренд/группировка, значения/референсы `[Encrypted]`).
 **`Specimen`** (`SpecimenType`: Blood/Urine/Stool/VaginalSwab/Saliva/Other/Unknown) — биоматериал,
 часть ключа группировки вместе с `AnalyteKey` везде (`GET /api/indicators`,
-`GET /api/indicators/{analyteKey}/{specimen}`, upsert-ключ) — без него лейкоциты крови и мочи
-слились бы на одном графике. Редактируется вручную (`PUT /api/indicators/{id}`, только владелец —
-исправление ошибок OCR; ref-поля из запроса становятся новым `RefSource.Blank`, Flag
-пересчитывается тем же компаратором).
+`GET /api/indicators/{analyteKey}?specimen=&customId=`, upsert-ключ) — без него лейкоциты крови и
+мочи слились бы на одном графике. Редактируется вручную (`PUT /api/indicators/{id}`, только
+владелец — исправление ошибок OCR; ref-поля из запроса становятся новым `RefSource.Blank`, Flag
+пересчитывается тем же компаратором) либо добавляется с нуля
+(`POST /api/medical-records/{recordId}/indicators` — UX-редизайн, тот же расчёт `RefSource.Blank`,
+без повторного каскада KB) либо удаляется (`DELETE /api/indicators/{id}`) — обе мутации только
+владелец записи.
+
+**Кастомный биоматериал (UX-редизайн).** `SpecimenType.Other` может нести
+`LabIndicator.SpecimenCustomId` (FK на `medical.UserSpecimens`, `DeleteBehavior.Restrict`) — личный
+справочник пользователя для значений вне фиксированного enum ("ликвор", "мокрота"). Ключ
+группировки везде расширен до `(AnalyteKey, Specimen, SpecimenCustomId)`, уникальный индекс
+`LabIndicators` объявлен с `.AreNullsDistinct(false)` (Npgsql 10 fluent API,
+`Npgsql:NullsDistinct` в миграции) — иначе Postgres по умолчанию считает `NULL != NULL`, и upsert-
+дедуп процессора (у большинства показателей `SpecimenCustomId=null`) сломался бы молча.
+`UserSpecimenService.CreateAsync` — рамки по длине/символам до вызова модели → дедуп в своём
+справочнике/против системных русских названий (без обращения к LLM) → один вызов
+`ILmStudioJsonClient` (запрет markdown/`<think>`, формат `{"valid","displayName","reason"}`) →
+**детерминированное вето поверх ответа модели**, тот же приём, что
+`MedicationEnrichmentProcessor.ResolveCorrectedName`: `TrigramSimilarity.Similarity` между
+нормализованными введённым и предложенным именем `< 0.3` → отклонить (модель подменила понятие,
+а не поправила орфографию). LM Studio недоступен → `Unavailable`, не "принять на веру" — запись
+ушла бы в справочник навсегда. `POST /api/specimens` / `GET /api/specimens`.
 
 **Дозаполнение задним числом.** Когда `LabAnalyteEnrichmentProcessor` наполняет
 `kb.global_lab_analytes_kb` (после промаха выше), он ставит `RecalculateIndicatorFlagsJob` —
@@ -115,15 +151,24 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 шифротексту бессмыслен, ADR-0002).
 
 Фронт (`FamilyHub.Web`): одна кнопка «Распознать» на записи (не на вложении) —
-`medical-records-panel.component.ts` показывает прогресс «файл N из M», после `Completed` —
-таблицу показателей (специмен, значение, норма, бэйдж «ИИ» для `RefSource.KbCalculated`,
-инлайн-правка через карандаш) + LLM-резюме (Kind=Analysis) либо заключение врача
-(Kind=DoctorVisit, `GET .../conclusion`). Форма создания — только выбор пациента из
-self/подопечный/участник (без свободного поля имени), дата по умолчанию сегодня, врач — `<input
-list>`/`<datalist>` с подсказками (в проекте нет typeahead-компонента, нативный datalist —
-осознанный выбор). Вкладка «Показатели» хаба «Здоровье» (`indicators-tab`, `/health/indicators`)
-группирует по `(analyteKey, specimen)` — история/спарклайн (`shared/sparkline`, inline SVG) по
-клику. Специмен-подписи — общий `shared/util/specimen.ts`.
+`medical-records-panel.component.ts` показывает живой прогресс (`shared/pipeline-progress` —
+растущий список выполненных шагов с галочками + пульсирующий текущий, не статичная строка), после
+`Completed` — таблицу показателей (Показатель/Значение/Единицы/Биоматериал/Норма — колонки
+разведены UX-редизайном, было слитно; бэйдж «ИИ» для `RefSource.KbCalculated`; строка
+раскрывается кликом — короткое `analyteKey` в ячейке, полное имя из бланка при раскрытии;
+инлайн-правка и удаление через карандаш/корзину; «+ Добавить показатель» — ручной ввод без
+распознавания) + LLM-резюме (Kind=Analysis) либо заключение врача (Kind=DoctorVisit,
+`GET .../conclusion`) — оба под `shared/expandable` («Резюме»), вместе с «Подробнее»/«Файлы»
+(вложения грузятся лениво при первом раскрытии «Файлы», не для всех записей страницы сразу).
+Форма создания — скрыта за широкой кнопкой «+ Добавить» (UX-редизайн, была всегда развёрнута),
+внутри — выбор пациента из self/подопечный/участник (без свободного поля имени), дата по
+умолчанию сегодня, врач — `<input list>`/`<datalist>` с подсказками (в проекте нет typeahead-
+компонента, нативный datalist — осознанный выбор). Список записей — сворачиваемая панель
+«Фильтры» (период/пациент/врач) + пагинация по 15 (UX-редизайн, было — нефильтруемый
+неотсортированный список целиком). Вкладка «Показатели» хаба «Здоровье» (`indicators-tab`,
+`/health/indicators`) группирует по `(analyteKey, specimen, specimenCustomId)` — история/спарклайн
+(`shared/sparkline`, inline SVG) по клику. Специмен-подписи — общий `shared/util/specimen.ts`
+(`specimenLabelWithCustom` учитывает личный справочник биоматериалов, `GET /api/specimens`).
 
 Лимиты вложений мед-записи — `AttachmentUploadOptions` (env `Attachments__MaxFileSizeBytes`/
 `Attachments__MaxFilesPerRecord`, дефолт 5 МиБ/8 файлов на запись): проверка размера — как раньше,

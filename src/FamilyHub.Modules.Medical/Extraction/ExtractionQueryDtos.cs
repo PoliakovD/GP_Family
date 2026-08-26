@@ -9,11 +9,13 @@ public record ExtractionStatusResponse(
 public record IndicatorDto(
     Guid Id, string AnalyteKey, string DisplayName, IndicatorFlag Flag, RefSource RefSource, SpecimenType Specimen, int Position,
     string ValueRaw, string? Unit, string? RefLowText, string? RefHighText, string? RefText,
-    DateOnly RecordDate, Guid MedicalRecordId);
+    DateOnly RecordDate, Guid MedicalRecordId, Guid? SpecimenCustomId = null);
 
 public record IndicatorHistoryPoint(DateOnly RecordDate, string ValueRaw, string? ValueNumericText, IndicatorFlag Flag, Guid MedicalRecordId);
 
-public record MyIndicatorSummary(string AnalyteKey, string DisplayName, SpecimenType Specimen, string ValueRaw, string? Unit, IndicatorFlag Flag, DateOnly LastRecordDate);
+public record MyIndicatorSummary(
+    string AnalyteKey, string DisplayName, SpecimenType Specimen, string ValueRaw, string? Unit,
+    IndicatorFlag Flag, DateOnly LastRecordDate, Guid? SpecimenCustomId = null);
 
 /// <summary>Форма MedicalRecord.SummaryJson, которую пишет LabSummarizer — используется только
 /// для десериализации на чтении.</summary>
@@ -25,6 +27,18 @@ public record RecordSummaryResponse(string? PlainSummary, IReadOnlyList<LabSumma
 /// как и раньше — правка вручную это ещё один источник "из бланка").</summary>
 public record UpdateIndicatorRequest(
     string DisplayName, string ValueRaw, string? Unit, SpecimenType Specimen,
-    string? RefLowText, string? RefHighText, string? RefText);
+    string? RefLowText, string? RefHighText, string? RefText, Guid? SpecimenCustomId = null);
 
 public enum UpdateIndicatorResult { Success, NotFound, Forbidden, Conflict }
+
+/// <summary>Ручное добавление показателя (UX-редизайн, задел сверх плана — без него редактируемая
+/// таблица бесполезна для распространённого сценария "модель ничего не увидела на этой строке
+/// бланка"). Та же форма, что UpdateIndicatorRequest — владелец записи, флаг считается тем же
+/// компаратором, RefSource.Blank.</summary>
+public record CreateIndicatorRequest(
+    string DisplayName, string ValueRaw, string? Unit, SpecimenType Specimen,
+    string? RefLowText, string? RefHighText, string? RefText, Guid? SpecimenCustomId = null);
+
+public enum CreateIndicatorResult { Success, NotFound, Forbidden, Conflict }
+
+public enum DeleteIndicatorResult { Success, NotFound, Forbidden }

@@ -48,6 +48,13 @@ public class LabIndicator
     /// (лейкоциты крови и мочи) смешались бы на одном тренде. См. FamilyHub.Domain.Enums.SpecimenType.</summary>
     public SpecimenType Specimen { get; set; } = SpecimenType.Unknown;
 
+    /// <summary>Заполняется только когда Specimen == SpecimenType.Other — ссылка на запись
+    /// пользовательского справочника (см. UserSpecimen). Сервис принудительно обнуляет поле, если
+    /// Specimen != Other (тот же приём, что FamilyDependent.PetSpecies). Часть ключа группировки
+    /// вместе с (AnalyteKey, Specimen) — без него два разных кастомных биоматериала оба хранились
+    /// бы как просто "Other" и схлопывались на одном графике.</summary>
+    public Guid? SpecimenCustomId { get; set; }
+
     /// <summary>Порядок в бланке — таблица показателей на фронте отображается в исходном порядке,
     /// не алфавитном.</summary>
     public int Position { get; set; }

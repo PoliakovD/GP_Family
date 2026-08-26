@@ -191,6 +191,34 @@ export interface MedicalRecord {
      * ownerUserId при этом остаётся за тем, кто физически загрузил (только он может удалить —
      * см. api.deleteMedicalRecord). Взаимоисключимо с familyDependentId. */
     targetUserId: string | null;
+    /** Счётчики (UX-редизайн) — считаются сервером одним GroupBy на страницу, чтобы карточка
+     * знала, показывать ли «Распознать»/«Файлы (N)» БЕЗ отдельного GET /attachments на запись. */
+    attachmentCount: number;
+    unrecognizedAttachmentCount: number;
+    indicatorCount: number;
+}
+
+/** Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для поиска. */
+export interface PagedResult<T> {
+    items: T[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+}
+
+/** Серверные фильтры списка мед-записей (UX-редизайн, GET /api/medical-records) — все опциональны. */
+export interface MedicalRecordFilter {
+    kind?: 'analysis' | 'visit';
+    from?: string; // DateOnly "yyyy-MM-dd"
+    to?: string;
+    dependentId?: string;
+    targetUserId?: string;
+    self?: boolean;
+    doctor?: string;
+    q?: string;
+    page?: number;
+    pageSize?: number;
 }
 
 // personName убран (v2) — идентичность пациента выражается целиком через
@@ -251,6 +279,9 @@ export interface SearchResultItem {
 
 export interface SearchResponse {
     items: SearchResultItem[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
 }
 
 export interface VapidPublicKeyResponse {
@@ -391,6 +422,8 @@ export interface IndicatorDto {
     refText: string | null;
     recordDate: string; // DateOnly "yyyy-MM-dd"
     medicalRecordId: string;
+    /** Заполнено только при specimen === SpecimenType.Other — ссылка на UserSpecimen. */
+    specimenCustomId: string | null;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч. */
@@ -402,9 +435,14 @@ export interface UpdateIndicatorRequest {
     refLowText: string | null;
     refHighText: string | null;
     refText: string | null;
+    specimenCustomId?: string | null;
 }
 
-/** Одна точка истории показателя (GET /api/indicators/{analyteKey}/{specimen}) — для спарклайна. */
+/** Ручное добавление показателя, POST /api/medical-records/{recordId}/indicators — та же форма,
+ * что UpdateIndicatorRequest. */
+export type CreateIndicatorRequest = UpdateIndicatorRequest;
+
+/** Одна точка истории показателя (GET /api/indicators/{analyteKey}?specimen=&customId=) — для спарклайна. */
 export interface IndicatorHistoryPoint {
     recordDate: string;
     valueRaw: string;
@@ -423,6 +461,17 @@ export interface MyIndicatorSummary {
     unit: string | null;
     flag: number; // IndicatorFlag
     lastRecordDate: string;
+    specimenCustomId: string | null;
+}
+
+/** Биоматериал, которого нет в фиксированном SpecimenType — свой справочник пользователя
+ * (UX-редизайн), провалидированный LLM один раз при создании (POST /api/specimens). */
+export interface UserSpecimen {
+    id: string;
+    ownerUserId: string;
+    normalizedName: string;
+    displayName: string;
+    createdAt: string;
 }
 
 /** Заключение врача (Kind=DoctorVisit), GET /api/medical-records/{id}/conclusion — MedicalRecord.ExtractedDataJson. */

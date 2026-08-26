@@ -7,6 +7,7 @@ import {
   AttachmentLimits,
   Birthday,
   BirthdayInput, CurrentMember,
+  CreateIndicatorRequest,
   EnrichmentRefreshOutcome,
   ExtractionStatusResponse,
   FamilyDependent,
@@ -18,6 +19,7 @@ import {
   KbListResponse,
   KbMedicationCard,
   MedicalRecord,
+  MedicalRecordFilter,
   MedicalRecordInput,
   Medication,
   MedicationInput,
@@ -27,14 +29,26 @@ import {
   MedkitInput,
   MyIndicatorSummary,
   NotificationPreference,
+  PagedResult,
   PendingMember, RecordSummaryResponse, RemoveMemberResult,
   SearchResponse,
   UpdateIndicatorRequest,
+  UserSpecimen,
   VapidPublicKeyResponse,
   VisitConclusion,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
+
+/** Сериализует плоский объект фильтров в "?a=1&b=2" — undefined/null/'' поля пропускаются
+ * (серверные MedicalRecordFilter/GetHistoryAsync все параметры опциональны). booleans/numbers
+ * приводятся к строке как есть. */
+function buildQuery(params: object): string {
+  const parts = Object.entries(params as Record<string, string | number | boolean | undefined | null>)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+  return parts.length > 0 ? `?${parts.join('&')}` : '';
+}
 
 export class ApiError extends Error {
   constructor(
@@ -105,7 +119,14 @@ export class ApiService {
 
   private toApiError(e: unknown): ApiError {
     if (e instanceof HttpErrorResponse) {
-      const msg = typeof e.error === 'string' ? e.error : e.statusText;
+      // JSON-тело ошибки ({code, reason} — напр. UserSpecimenEndpoints) несёт человекочитаемую
+      // причину от LLM-гейта; раньше она терялась (msg падал на generic e.statusText, т.к.
+      // e.error — объект, не строка).
+      const body: unknown = e.error;
+      const reason = typeof body === 'object' && body !== null
+        ? ((body as { reason?: string; message?: string }).reason ?? (body as { message?: string }).message)
+        : undefined;
+      const msg = typeof body === 'string' ? body : (reason ?? e.statusText);
       return new ApiError(e.status, msg);
     }
     return new ApiError(0, 'Неизвестная ошибка');
@@ -235,9 +256,10 @@ export class ApiService {
   deleteBirthday = (id: string) => this.del<void>(`/api/birthdays/${id}`);
 
   // Анализы и посещения врачей — единая таблица на бэкенде (MedicalRecordKind), kind опционален
-  // ("analysis"/"visit") — без него отдаются оба вида.
-  getMedicalRecords = (kind?: 'analysis' | 'visit') =>
-    this.get<MedicalRecord[]>(`/api/medical-records${kind ? `?kind=${kind}` : ''}`);
+  // ("analysis"/"visit") — без него отдаются оба вида. UX-редизайн: серверные фильтры +
+  // пагинация (дефолт 15/стр.) вместо голого списка.
+  getMedicalRecords = (filter: MedicalRecordFilter = {}) =>
+    this.get<PagedResult<MedicalRecord>>(`/api/medical-records${buildQuery(filter)}`);
 
   /** Список вложений записи — грузится с сервера (не копится в памяти сессии, как раньше). */
   getRecordAttachments = (recordId: string) => this.get<Attachment[]>(`/api/medical-records/${recordId}/attachments`);
@@ -311,11 +333,26 @@ export class ApiService {
   updateIndicator = (id: string, patch: UpdateIndicatorRequest) =>
     this.put<void>(`/api/indicators/${id}`, patch);
 
+  /** Ручное добавление показателя — без ожидания следующего «Распознать». */
+  createIndicator = (recordId: string, body: CreateIndicatorRequest) =>
+    this.post<IndicatorDto>(`/api/medical-records/${recordId}/indicators`, body);
+
+  deleteIndicator = (id: string) => this.del<void>(`/api/indicators/${id}`);
+
   /** Последнее значение по каждому (показателю, биоматериалу) среди своих записей — /health/indicators. */
   getMyIndicators = () => this.get<MyIndicatorSummary[]>('/api/indicators');
 
-  getIndicatorHistory = (analyteKey: string, specimen: number) =>
-    this.get<IndicatorHistoryPoint[]>(`/api/indicators/${encodeURIComponent(analyteKey)}/${specimen}`);
+  /** specimen/customId — query (не path), см. ExtractionEndpoints: второй ключ группировки не
+   * помещается в path-сегмент. */
+  getIndicatorHistory = (analyteKey: string, specimen: number, customId?: string | null) =>
+    this.get<IndicatorHistoryPoint[]>(
+      `/api/indicators/${encodeURIComponent(analyteKey)}${buildQuery({ specimen, customId: customId ?? undefined })}`,
+    );
+
+  // Пользовательский справочник биоматериалов (UX-редизайн) — LLM-валидация один раз при создании.
+  getSpecimens = () => this.get<UserSpecimen[]>('/api/specimens');
+
+  createSpecimen = (name: string) => this.post<UserSpecimen>('/api/specimens', { name });
 
   // Оповещения
   getNotifications = (unreadOnly: boolean) =>
@@ -330,9 +367,11 @@ export class ApiService {
   // Поиск (этап 3): гибрид Postgres-FTS (лекарства, справочник) + in-memory (анализы) — см. SearchService.
   // types — опциональный серверный фильтр источников ("medication"/"kb"/"record", можно через
   // запятую); не запрошенный источник бэкенд вообще не трогает (см. SearchService.SearchAsync).
-  search = (q: string, types?: string) => {
+  search = (q: string, types?: string, page = 1, pageSize = 15) => {
     const typesQuery = types ? `&types=${encodeURIComponent(types)}` : '';
-    return this.get<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}${typesQuery}`);
+    return this.get<SearchResponse>(
+      `/api/search?q=${encodeURIComponent(q)}${typesQuery}&page=${page}&pageSize=${pageSize}`,
+    );
   };
 
   // Справочник препаратов (этап 4) — общий обезличенный, наполняется AI-конвейером обогащения.

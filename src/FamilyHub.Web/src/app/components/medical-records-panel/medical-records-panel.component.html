@@ -3,72 +3,129 @@
     <div class="alert-danger mb-2">{{ error }}</div>
   }
 
-  <div class="card mb-3">
-    <select class="input" [ngModel]="selectedPatientKey" (ngModelChange)="selectedPatientKey = $event">
-      @for (opt of patientOptions; track opt.key) {
+  <!-- UX-редизайн: форма создания скрыта за широкой кнопкой, раньше была всегда развёрнута
+       над списком. -->
+  <button type="button" class="btn btn-primary btn-block mb-2" (click)="createOpen = !createOpen">
+    @if (createOpen) {
+      <i class="ph-bold ph-x" aria-hidden="true"></i> Отмена
+    } @else {
+      <i class="ph-bold ph-plus" aria-hidden="true"></i> {{ labels.addButtonLabel }}
+    }
+  </button>
+
+  @if (createOpen) {
+    <div class="card mb-3">
+      <label class="form-label" for="{{ createFileInputId }}-patient">Пациент</label>
+      <select id="{{ createFileInputId }}-patient" class="input" [ngModel]="selectedPatientKey" (ngModelChange)="selectedPatientKey = $event">
+        @for (opt of patientOptions; track opt.key) {
+          <option [value]="opt.key">{{ opt.label }}</option>
+        }
+      </select>
+
+      <label class="form-label" for="{{ createFileInputId }}-date">Дата</label>
+      <input id="{{ createFileInputId }}-date" class="input" type="date" [(ngModel)]="form.recordDate" />
+
+      <label class="form-label" for="{{ createFileInputId }}-doctor">Врач</label>
+      <input
+        id="{{ createFileInputId }}-doctor"
+        class="input"
+        [attr.list]="doctorsDatalistId"
+        [(ngModel)]="form.doctor"
+        [placeholder]="labels.doctorPlaceholder"
+      />
+      <datalist [id]="doctorsDatalistId">
+        @for (d of doctorSuggestions; track d) {
+          <option [value]="d"></option>
+        }
+      </datalist>
+
+      <label class="form-label" for="{{ createFileInputId }}-description">Описание</label>
+      <textarea
+        id="{{ createFileInputId }}-description"
+        class="input"
+        [(ngModel)]="form.description"
+        [placeholder]="labels.descriptionPlaceholder"
+        rows="2"
+      ></textarea>
+
+      <div class="file-chip-grid">
+        @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
+          <div class="file-chip">
+            @if (pf.previewUrl) {
+              <img [src]="pf.previewUrl" alt="" />
+            } @else {
+              <i class="ph ph-file-text" aria-hidden="true"></i>
+              <span class="file-chip-name">{{ pf.file.name }}</span>
+            }
+            <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="removePendingFile(i)">
+              <i class="ph-bold ph-x" aria-hidden="true"></i>
+            </button>
+          </div>
+        }
+        @if (canAddMorePendingFiles()) {
+          <label class="file-chip file-chip-add" [attr.for]="createFileInputId">
+            <i class="ph ph-paperclip" aria-hidden="true"></i>
+            <span>Файлы</span>
+          </label>
+        }
+      </div>
+      <input
+        [id]="createFileInputId"
+        class="visually-hidden-input"
+        type="file"
+        multiple
+        [accept]="acceptedFileTypes"
+        (change)="onPendingFilesSelected($event)"
+      />
+      @if (attachmentLimits; as limits) {
+        <div class="muted mb-2" style="font-size:12px">
+          Можно приложить сканы анализа/выписки сразу — до {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
+        </div>
+      }
+
+      <button class="btn btn-primary btn-sm align-self-start" [disabled]="saving" (click)="handleSubmit()">
+        {{ saving ? 'Сохраняем…' : labels.addButtonLabel }}
+      </button>
+    </div>
+  }
+
+  <!-- UX-редизайн: серверные фильтры (были — только поиск), сворачиваемая панель. -->
+  <app-expandable title="Фильтры" [count]="activeFilterCount || null" class="mb-2">
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      <div class="flex-fill" style="min-width:130px">
+        <label class="form-label">С даты</label>
+        <input class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
+      </div>
+      <div class="flex-fill" style="min-width:130px">
+        <label class="form-label">По дату</label>
+        <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
+      </div>
+    </div>
+    <label class="form-label">Пациент</label>
+    <select class="input mb-2" [(ngModel)]="filters.patientKey" (ngModelChange)="onFilterChange()">
+      @for (opt of filterPatientOptions; track opt.key) {
         <option [value]="opt.key">{{ opt.label }}</option>
       }
     </select>
-    <input class="input" type="date" [(ngModel)]="form.recordDate" />
-    <input class="input" [attr.list]="doctorsDatalistId" [(ngModel)]="form.doctor" [placeholder]="labels.doctorPlaceholder" />
-    <datalist [id]="doctorsDatalistId">
-      @for (d of doctorSuggestions; track d) {
-        <option [value]="d"></option>
-      }
-    </datalist>
-    <textarea
-      class="input"
-      [(ngModel)]="form.description"
-      [placeholder]="labels.descriptionPlaceholder"
-      rows="2"
-    ></textarea>
-
-    <div class="file-chip-grid">
-      @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
-        <div class="file-chip">
-          @if (pf.previewUrl) {
-            <img [src]="pf.previewUrl" alt="" />
-          } @else {
-            <i class="ph ph-file-text" aria-hidden="true"></i>
-            <span class="file-chip-name">{{ pf.file.name }}</span>
-          }
-          <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="removePendingFile(i)">
-            <i class="ph-bold ph-x" aria-hidden="true"></i>
-          </button>
-        </div>
-      }
-      @if (canAddMorePendingFiles()) {
-        <label class="file-chip file-chip-add" [attr.for]="createFileInputId">
-          <i class="ph ph-paperclip" aria-hidden="true"></i>
-          <span>Файлы</span>
-        </label>
-      }
-    </div>
+    <label class="form-label">Врач</label>
     <input
-      [id]="createFileInputId"
-      class="visually-hidden-input"
-      type="file"
-      multiple
-      [accept]="acceptedFileTypes"
-      (change)="onPendingFilesSelected($event)"
+      class="input mb-2"
+      [attr.list]="doctorsDatalistId"
+      [(ngModel)]="filters.doctor"
+      (ngModelChange)="onFilterChange()"
+      placeholder="Начните вводить имя врача…"
     />
-    @if (attachmentLimits; as limits) {
-      <div class="muted mb-2" style="font-size:12px">
-        Можно приложить сканы анализа/выписки сразу — до {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
-      </div>
+    @if (activeFilterCount > 0) {
+      <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
     }
+  </app-expandable>
 
-    <button class="btn btn-primary btn-sm align-self-start" (click)="handleSubmit()">{{ labels.addButtonLabel }}</button>
-  </div>
-
-  @if (!loading && items.length > 0) {
-    <app-search-field [placeholder]="labels.searchPlaceholder" [value]="search.query" (valueChange)="onSearchQueryChange($event)" />
-  }
+  <app-search-field [placeholder]="labels.searchPlaceholder" [value]="searchQuery" (valueChange)="onSearchQueryChange($event)" />
 
   @if (loading) {
     <app-loading-spinner />
   } @else {
-    @for (item of displayedItems; track item.id) {
+    @for (item of items; track item.id) {
       <div class="card mb-2">
         <div class="d-flex align-items-start justify-content-between gap-2">
           <div>
@@ -94,58 +151,69 @@
           <i class="ph-duotone ph-users-three" aria-hidden="true"></i> {{ accessSummary(item) }}
         </div>
 
-        @if (item.doctor) {
-          <p class="muted mb-0">Врач: {{ item.doctor }}</p>
-        }
-        @if (item.description) {
-          <p class="mb-0">{{ item.description }}</p>
-        }
+        <!-- UX-редизайн: врач/пациент/описание — свёрнуты, раньше выводились всегда. -->
+        <app-expandable title="Подробнее">
+          @if (item.doctor) {
+            <p class="muted mb-1">Врач: {{ item.doctor }}</p>
+          }
+          <p class="muted mb-1">Пациент: {{ item.personName }}</p>
+          @if (item.description) {
+            <p class="mb-1">{{ item.description }}</p>
+          }
+          <p class="muted mb-0" style="font-size:11px">Добавлено: {{ item.createdAt | date: 'dd.MM.yyyy HH:mm' }}</p>
+        </app-expandable>
 
-        @if (canAddMoreAttachments(item.id)) {
-          <label class="file-chip file-chip-add" style="width:auto;height:auto;padding:8px 12px;flex-direction:row" [attr.for]="'attach-file-input-' + item.id">
-            <i class="ph ph-paperclip" aria-hidden="true"></i>
-            <span>Прикрепить файлы</span>
-          </label>
-        }
-        <input
-          [id]="'attach-file-input-' + item.id"
-          class="visually-hidden-input"
-          type="file"
-          multiple
-          [accept]="acceptedFileTypes"
-          [disabled]="uploading || remainingSlots(item.id) === 0"
-          (change)="handleUpload(item.id, $event)"
-        />
-        @if (attachmentLimits; as limits) {
-          <div class="muted" style="font-size:12px">
-            До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
-            @if (remainingSlots(item.id); as room) {
-              — осталось {{ room }}
-            } @else if (remainingSlots(item.id) === 0) {
-              — лимит достигнут
-            }
-          </div>
-        }
-        @if (uploading) {
-          <app-loading-spinner text="Загружаем…" />
-        }
+        <!-- UX-редизайн: содержимое грузится лениво при первом раскрытии. -->
+        <app-expandable title="Файлы" [count]="item.attachmentCount" (openChange)="onFilesToggle(item, $event)">
+          @if (canAddMoreAttachments(item.id)) {
+            <label
+              class="file-chip file-chip-add"
+              style="width:auto;height:auto;padding:8px 12px;flex-direction:row"
+              [attr.for]="'attach-file-input-' + item.id"
+            >
+              <i class="ph ph-paperclip" aria-hidden="true"></i>
+              <span>Прикрепить файлы</span>
+            </label>
+          }
+          <input
+            [id]="'attach-file-input-' + item.id"
+            class="visually-hidden-input"
+            type="file"
+            multiple
+            [accept]="acceptedFileTypes"
+            [disabled]="uploadingRecordId === item.id || remainingSlots(item.id) === 0"
+            (change)="handleUpload(item, $event)"
+          />
+          @if (attachmentLimits; as limits) {
+            <div class="muted" style="font-size:12px">
+              До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
+              @if (remainingSlots(item.id); as room) {
+                — осталось {{ room }}
+              } @else if (remainingSlots(item.id) === 0) {
+                — лимит достигнут
+              }
+            </div>
+          }
+          @if (uploadingRecordId === item.id) {
+            <app-loading-spinner text="Загружаем…" />
+          }
+          @if (attachmentsFor(item.id).length > 0) {
+            <ul class="list-unstyled mb-0">
+              @for (a of attachmentsFor(item.id); track a.id) {
+                <li class="d-flex align-items-center gap-2">
+                  <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
+                    <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
+                  </button>
+                  @if (a.extractedAt) {
+                    <i class="ph ph-check-circle" style="color:var(--color-accent)" title="Распознано" aria-hidden="true"></i>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </app-expandable>
 
-        @if (attachmentsFor(item.id).length > 0) {
-          <ul class="list-unstyled mb-0">
-            @for (a of attachmentsFor(item.id); track a.id) {
-              <li class="d-flex align-items-center gap-2">
-                <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
-                  <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
-                </button>
-                @if (a.extractedAt) {
-                  <i class="ph ph-check-circle" style="color:var(--color-accent)" title="Распознано" aria-hidden="true"></i>
-                }
-              </li>
-            }
-          </ul>
-        }
-
-        @if (hasUnrecognizedAttachments(item.id)) {
+        @if (hasUnrecognizedAttachments(item)) {
           <button
             class="btn btn-secondary btn-sm align-self-start mt-1"
             [disabled]="recognizingRecordId === item.id"
@@ -160,20 +228,12 @@
           </button>
         }
 
-        @if (extractionStatusByRecord[item.id]; as status) {
-          @if (status.status === ExtractionJobStatus.Running || status.status === ExtractionJobStatus.Pending) {
-            <div class="d-flex align-items-center gap-2 muted" style="font-size:12px">
-              <span class="recognize-spinner" aria-hidden="true"></span>
-              {{ stageLabel[status.stage] ?? 'Обрабатываем…' }}
-              @if (status.totalFiles > 1) { — файл {{ currentFileNumber(status) }} из {{ status.totalFiles }} }
-            </div>
-          } @else if (status.status === ExtractionJobStatus.Failed) {
-            <div class="alert-danger mb-0" style="font-size:12px">{{ status.error ?? 'Не удалось распознать документ.' }}</div>
-          } @else if (status.status === ExtractionJobStatus.Skipped) {
-            <div class="muted" style="font-size:12px">Распознавание пропущено: {{ status.error }}</div>
-          } @else if (status.status === ExtractionJobStatus.Completed && status.error) {
-            <div class="muted" style="font-size:12px">Частично: {{ status.error }}</div>
-          }
+        @if (pipelineStepsByRecord[item.id]; as steps) {
+          <app-pipeline-progress [steps]="steps" />
+        }
+
+        @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
+          <div class="muted" style="font-size:12px">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
         }
 
         @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
@@ -182,8 +242,9 @@
               <thead>
                 <tr>
                   <th>Показатель</th>
-                  <th>Откуда</th>
                   <th>Значение</th>
+                  <th>Единицы</th>
+                  <th>Биоматериал</th>
                   <th>Норма</th>
                   <th></th>
                   <th></th>
@@ -193,18 +254,34 @@
                 @for (ind of indicatorsFor(item.id); track ind.id) {
                   @if (editingIndicatorId === ind.id) {
                     <tr class="indicator-edit-row">
-                      <td colspan="6">
+                      <td colspan="7">
                         <div class="d-flex flex-column gap-1">
                           <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
                           <div class="d-flex gap-1">
                             <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
                             <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
                           </div>
-                          <select class="input" [(ngModel)]="editIndicatorForm.specimen">
+                          <select class="input" [ngModel]="specimenKey(editIndicatorForm)" (ngModelChange)="applySpecimenKey(editIndicatorForm, $event)">
                             @for (opt of specimenOptions; track opt.value) {
-                              <option [ngValue]="opt.value">{{ opt.label }}</option>
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                            @for (custom of customSpecimens; track custom.id) {
+                              <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
                             }
                           </select>
+                          @if (editIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
+                            <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
+                          }
+                          @if (addingCustomSpecimen) {
+                            <div class="d-flex gap-1 align-items-center">
+                              <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
+                              <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
+                              <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
+                            </div>
+                            @if (customSpecimenError) {
+                              <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+                            }
+                          }
                           <div class="d-flex gap-1">
                             <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
                             <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
@@ -218,10 +295,16 @@
                       </td>
                     </tr>
                   } @else {
-                    <tr>
-                      <td>{{ ind.displayName }}</td>
-                      <td class="muted">{{ specimenLabel(ind.specimen) }}</td>
-                      <td [class]="flagClass(ind.flag)">{{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}</td>
+                    <tr class="indicator-row" (click)="toggleIndicatorRow(ind)">
+                      <td>
+                        {{ shortIndicatorName(ind) }}
+                        @if (expandedIndicatorId === ind.id) {
+                          <div class="muted" style="font-size:11px">в бланке: {{ ind.displayName }}</div>
+                        }
+                      </td>
+                      <td [class]="flagClass(ind.flag)">{{ ind.valueRaw }}</td>
+                      <td class="muted">{{ ind.unit ?? '—' }}</td>
+                      <td class="muted">{{ specimenLabelFor(ind) }}</td>
                       <td class="muted">
                         {{ indicatorReference(ind) ?? '—' }}
                         @if (isCalculatedRef(ind)) {
@@ -229,60 +312,123 @@
                         }
                       </td>
                       <td [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
-                      <td>
+                      <td class="d-flex gap-1" (click)="$event.stopPropagation()">
                         <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
                           <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                        </button>
+                        <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
+                          <i class="ph ph-trash" aria-hidden="true"></i>
                         </button>
                       </td>
                     </tr>
                   }
+                }
+                @if (creatingIndicatorRecordId === item.id) {
+                  <tr class="indicator-edit-row">
+                    <td colspan="7">
+                      <div class="d-flex flex-column gap-1">
+                        <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+                        <div class="d-flex gap-1">
+                          <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                          <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+                        </div>
+                        <select class="input" [ngModel]="specimenKey(newIndicatorForm)" (ngModelChange)="applySpecimenKey(newIndicatorForm, $event)">
+                          @for (opt of specimenOptions; track opt.value) {
+                            <option [value]="opt.value">{{ opt.label }}</option>
+                          }
+                          @for (custom of customSpecimens; track custom.id) {
+                            <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
+                          }
+                        </select>
+                        @if (newIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
+                          <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
+                        }
+                        @if (addingCustomSpecimen) {
+                          <div class="d-flex gap-1 align-items-center">
+                            <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
+                            <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
+                            <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
+                          </div>
+                          @if (customSpecimenError) {
+                            <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+                          }
+                        }
+                        <div class="d-flex gap-1">
+                          <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                          <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+                        </div>
+                        <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+                        <div class="d-flex gap-2">
+                          <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
+                          <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                } @else {
+                  <tr>
+                    <td colspan="7">
+                      <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+                    </td>
+                  </tr>
                 }
               </tbody>
             </table>
           </div>
 
           @if (summaryByRecord[item.id]; as summary) {
-            <div class="card-kicker mt-2">Резюме</div>
-            @if (summary.plainSummary) {
-              <p class="mb-1">{{ summary.plainSummary }}</p>
-            }
-            @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:13px">
-                @for (d of summary.deviations; track d.name) {
-                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                }
-              </ul>
-            }
-            @if (summary.questionsForDoctor.length > 0) {
-              <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:13px">
-                @for (q of summary.questionsForDoctor; track q) {
-                  <li>{{ q }}</li>
-                }
-              </ul>
-            }
-            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+            <app-expandable title="Резюме">
+              @if (summary.plainSummary) {
+                <p class="mb-1">{{ summary.plainSummary }}</p>
+              }
+              @if (summary.deviations.length > 0) {
+                <ul class="mb-1" style="font-size:13px">
+                  @for (d of summary.deviations; track d.name) {
+                    <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                  }
+                </ul>
+              }
+              @if (summary.questionsForDoctor.length > 0) {
+                <div class="card-kicker mt-2">Вопросы врачу</div>
+                <ul class="mb-1" style="font-size:13px">
+                  @for (q of summary.questionsForDoctor; track q) {
+                    <li>{{ q }}</li>
+                  }
+                </ul>
+              }
+              <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+            </app-expandable>
           }
+        } @else if (item.kind === Kind.Analysis && creatingIndicatorRecordId !== item.id) {
+          <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
         }
 
         @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
-          @if (conclusion.diagnosis) {
-            <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
-          }
-          @if (conclusion.recommendations) {
-            <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
-          }
-          @if (conclusion.prescriptions) {
-            <p class="mb-0"><strong>Назначения:</strong> {{ conclusion.prescriptions }}</p>
-          }
+          <app-expandable title="Резюме">
+            @if (conclusion.diagnosis) {
+              <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
+            }
+            @if (conclusion.recommendations) {
+              <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
+            }
+            @if (conclusion.prescriptions) {
+              <p class="mb-0"><strong>Назначения:</strong> {{ conclusion.prescriptions }}</p>
+            }
+          </app-expandable>
         }
       </div>
     }
 
-    @if (items.length === 0) {
+    @if (items.length === 0 && totalCount === 0) {
       <p class="muted">{{ labels.emptyLabel }}</p>
-    } @else if (displayedItems.length === 0) {
-      <p class="muted">Ничего не найдено.</p>
+    }
+
+    @if (totalPages > 1) {
+      <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+        <button class="btn btn-secondary btn-sm" [disabled]="!canGoPrev" (click)="goToPage(page - 1)">‹ Назад</button>
+        <span class="muted" style="font-size:12px">Стр. {{ page }} из {{ totalPages }} ({{ totalCount }})</span>
+        <button class="btn btn-secondary btn-sm" [disabled]="!canGoNext" (click)="goToPage(page + 1)">Вперёд ›</button>
+      </div>
     }
   }
 

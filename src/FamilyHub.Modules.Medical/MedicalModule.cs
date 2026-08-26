@@ -45,6 +45,7 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteEnrichmentRequestService>();
         services.AddScoped<LabAnalyteEnrichmentProcessor>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
+        services.AddScoped<UserSpecimenService>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
         services.AddScoped<SearchService>();
@@ -74,6 +75,7 @@ public static class MedicalModule
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
         module.MapExtractionEndpoints();
+        module.MapUserSpecimenEndpoints();
         module.MapSearchEndpoints();
         module.MapKbEndpoints();
     }
