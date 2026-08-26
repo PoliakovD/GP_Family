@@ -231,6 +231,35 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
     }
 
     [Fact]
+    public async Task UpdateRecord_Owner_ChangesDateDoctorDescription()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+        var newDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-3);
+
+        var response = await owner.PutAsJsonAsync($"/api/medical-records/{record.Id}",
+            new UpdateMedicalRecordRequest(newDate, "Новый врач", "Новое описание"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<MedicalRecordDto>();
+        updated!.RecordDate.Should().Be(newDate);
+        updated.Doctor.Should().Be("Новый врач");
+        updated.Description.Should().Be("Новое описание");
+    }
+
+    [Fact]
+    public async Task UpdateRecord_NotOwner_ReturnsForbidden_UnknownRecord_ReturnsNotFound()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+        var stranger = ClientAs(FreshTelegramId());
+        var patch = new UpdateMedicalRecordRequest(record.RecordDate, "X", null);
+
+        (await stranger.PutAsJsonAsync($"/api/medical-records/{record.Id}", patch)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/medical-records/{Guid.NewGuid()}", patch)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Delete_UnknownRecord_ReturnsNotFound()
     {
         var owner = ClientAs(FreshTelegramId());

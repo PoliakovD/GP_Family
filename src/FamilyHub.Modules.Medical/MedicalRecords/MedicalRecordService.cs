@@ -427,6 +427,41 @@ public class MedicalRecordService(
         return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName));
     }
 
+    /// <summary>
+    /// Правка полей записи (UX-редизайн — кнопка «Редактировать» на карточке): дата/врач/
+    /// описание. Пациент (FamilyDependentId/TargetUserId) и Kind НЕ редактируются — смена
+    /// пациента задним числом переписала бы историю доступа (та же логика, что и у "владелец не
+    /// меняется"); Kind определяет саму вкладку, в которой запись отображается. Title не трогаем
+    /// здесь — он либо приходит из распознавания, либо это отдельная забота (не запрошено).
+    /// </summary>
+    public async Task<(MedicalRecordAccessResult Result, MedicalRecordDto? Item)> UpdateAsync(
+        Guid ownerUserId, Guid recordId, UpdateMedicalRecordRequest request, CancellationToken ct = default)
+    {
+        var record = await db.MedicalRecords.FirstOrDefaultAsync(r => r.Id == recordId, ct);
+        if (record is null)
+        {
+            logger.LogWarning("Правка мед-записи {RecordId}: не найдена (запросил {UserId})", recordId, ownerUserId);
+            return (MedicalRecordAccessResult.NotFound, null);
+        }
+        if (record.OwnerUserId != ownerUserId)
+        {
+            logger.LogWarning("Правка мед-записи {RecordId} отклонена: {UserId} не владелец", recordId, ownerUserId);
+            return (MedicalRecordAccessResult.Forbidden, null);
+        }
+
+        record.RecordDate = request.RecordDate;
+        record.Doctor = string.IsNullOrWhiteSpace(request.Doctor) ? null : request.Doctor.Trim();
+        record.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Мед-запись {RecordId} отредактирована владельцем {OwnerUserId}", recordId, ownerUserId);
+
+        var hiddenFamilyIds = await db.MedicalRecordHiddens
+            .Where(h => h.MedicalRecordId == recordId).Select(h => h.FamilyId).ToListAsync(ct);
+        var personName = (await ResolvePersonNamesAsync([record], ownerUserId, ct))[record.Id];
+        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName));
+    }
+
     /// <summary>УРОВЕНЬ 1: владелец открывает ВСЕ свои анализы выбранной семье одним действием.</summary>
     public async Task<MedicalRecordAccessResult> ShareWithFamilyAsync(Guid ownerUserId, Guid familyId, CancellationToken ct = default)
     {

@@ -13,8 +13,9 @@ namespace FamilyHub.UnitTests.Modules.Medical.Extraction;
 
 /// <summary>UX-редизайн: гейт "пустая ячейка бланка не должна стать показателем" — модель иногда
 /// подставляет плейсхолдер ("нет данных" и т.п.) вместо честного пропуска строки без значения
-/// (см. правило в AnalysisSystemPrompt + EmptyValuePlaceholders). Прочерк/"отсутствуют" — это
-/// РЕАЛЬНОЕ значение бланка, должны сохраняться.</summary>
+/// (см. правило в AnalysisSystemPrompt + EmptyValuePlaceholders). Голый прочерк "-"/"—" тоже
+/// считается пустой ячейкой и отбрасывается (график по нему не построить); словесные
+/// "отсутствуют"/"не обнаружено"/"отрицательно" — настоящие качественные результаты, сохраняются.</summary>
 public class LmStudioMedicalDocumentExtractorTests
 {
     private readonly IDocumentTextExtractor _textExtractor = Substitute.For<IDocumentTextExtractor>();
@@ -43,11 +44,14 @@ public class LmStudioMedicalDocumentExtractorTests
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
-    [Fact]
-    public async Task ExtractAsync_PlaceholderValue_IsDropped()
+    [Theory]
+    [InlineData("нет данных")]
+    [InlineData("-")]
+    [InlineData("—")]
+    public async Task ExtractAsync_PlaceholderOrDashValue_IsDropped(string value)
     {
-        SetUpTextChunk("Лейкоциты нет данных");
-        SetUpModelResponse(("Лейкоциты", "нет данных"));
+        SetUpTextChunk($"Лейкоциты {value}");
+        SetUpModelResponse(("Лейкоциты", value));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
 
@@ -55,12 +59,10 @@ public class LmStudioMedicalDocumentExtractorTests
     }
 
     [Theory]
-    [InlineData("-")]
-    [InlineData("—")]
     [InlineData("отсутствуют")]
     [InlineData("не обнаружено")]
     [InlineData("отрицательно")]
-    public async Task ExtractAsync_ExplicitDashOrAbsentValue_IsKept(string value)
+    public async Task ExtractAsync_QualitativeNegativeResult_IsKept(string value)
     {
         SetUpTextChunk($"Глюкоза {value}");
         SetUpModelResponse(("Глюкоза", value));
@@ -82,6 +84,6 @@ public class LmStudioMedicalDocumentExtractorTests
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
 
-        result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин", "Тромбоциты", "Эритроциты"]);
+        result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин", "Эритроциты"]);
     }
 }

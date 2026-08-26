@@ -1,28 +1,71 @@
 // Флаги показателей (IndicatorFlag) — те же цвета, что expiry-danger/warning/ok в medications-panel.
-.indicator-flag-ok { color: #2f9e44; }
-.indicator-flag-warning { color: #f08c00; }
-.indicator-flag-danger { color: #e03131; font-weight: 600; }
-.indicator-flag-unknown { color: var(--color-neutral-500); }
+// Все веса подняты до 700 (было 400/600) — по обратной связи значения и статус должны "брать на
+// себя" внимание в таблице, не теряться на фоне остального текста карточки.
+.indicator-flag-ok { color: #2f9e44; font-weight: 700; }
+.indicator-flag-warning { color: #d47a00; font-weight: 700; }
+.indicator-flag-danger { color: #e03131; font-weight: 700; }
+.indicator-flag-unknown { color: var(--color-neutral-700); font-weight: 700; }
 
 .indicators-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  table-layout: fixed;
 
   th, td {
     text-align: left;
     padding: 6px 8px;
     border-bottom: 1px solid var(--color-divider);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
+  // Контрастнее прежнего neutral-600 — заголовки терялись на фоне карточки.
   th {
-    color: var(--color-neutral-600);
-    font-weight: 500;
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
   }
+
+  // Явные доли ширины (table-layout:fixed берёт их из первой строки — thead) — иначе с fixed-
+  // раскладкой все колонки получили бы поровну места независимо от содержимого.
+  th:nth-child(1), td:nth-child(1) { width: 32%; }
+  th:nth-child(2), td:nth-child(2) { width: 13%; }
+  th:nth-child(3), td:nth-child(3) { width: 11%; }
+  th:nth-child(4), td:nth-child(4) { width: 15%; }
+  th:nth-child(5), td:nth-child(5) { width: 17%; }
+  th:nth-child(6), td:nth-child(6) { width: 12%; }
+}
+
+// Значение показателя — крупнее и контрастнее соседних колонок, это главное число в строке.
+.indicator-value-cell {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.indicator-flag-cell {
+  white-space: nowrap;
+}
+
+// table-layout:fixed делает ширины колонок стабильными между строками — без него блок с кнопками
+// "съезжал" по горизонтали от строки к строке (ширина последней колонки гуляла вместе с длиной
+// текста в соседних ячейках). Колонка действий — фиксированная и не сжимается.
+.indicator-actions-cell {
+  width: 64px;
+  white-space: nowrap;
+}
+
+.indicator-actions {
+  display: inline-flex;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 .indicator-edit-row td {
   background: var(--color-bg);
+  overflow: visible;
 }
 
 // Строка показателя раскрывается по клику (короткое нормализованное имя в ячейке, полное имя из

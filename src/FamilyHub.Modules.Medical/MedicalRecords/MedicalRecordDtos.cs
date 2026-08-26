@@ -65,6 +65,10 @@ public record CreateMedicalRecordRequest(
     Guid? FamilyDependentId = null,
     Guid? TargetUserId = null);
 
+/// <summary>Правка даты/врача/описания существующей записи (UX-редизайн) — пациент и вид записи
+/// не редактируются, см. MedicalRecordService.UpdateAsync.</summary>
+public record UpdateMedicalRecordRequest(DateOnly RecordDate, string? Doctor, string? Description);
+
 public record FamilyIdsRequest(List<Guid> FamilyIds);
 
 /// <summary>Результат in-memory поиска (этап 3, ADR-0003) — запись + релевантность запросу (0..1].</summary>

@@ -47,6 +47,19 @@ public static class MedicalRecordEndpoints
             };
         });
 
+        // Правка даты/врача/описания (UX-редизайн) — только владелец.
+        group.MapPut("/{recordId:guid}", async (
+            Guid recordId, UpdateMedicalRecordRequest request, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, updated) = await service.UpdateAsync(currentUser.UserId, recordId, request, ct);
+            return result switch
+            {
+                MedicalRecordAccessResult.NotFound => Results.NotFound(),
+                MedicalRecordAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(updated),
+            };
+        });
+
         // Безусловное удаление — только владелец (кто физически загрузил), см.
         // MedicalRecordService.DeleteAsync.
         group.MapDelete("/{recordId:guid}", async (

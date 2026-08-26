@@ -21,6 +21,7 @@ import {
   MedicalRecord,
   MedicalRecordFilter,
   MedicalRecordInput,
+  UpdateMedicalRecordRequest,
   Medication,
   MedicationInput,
   MedicationKbResponse,
@@ -272,6 +273,10 @@ export class ApiService {
 
   createMedicalRecord = (input: MedicalRecordInput) =>
     this.post<MedicalRecord>('/api/medical-records', input);
+
+  /** Правка даты/врача/описания (UX-редизайн) — только владелец, пациент/вид записи неизменны. */
+  updateMedicalRecord = (id: string, patch: UpdateMedicalRecordRequest) =>
+    this.put<MedicalRecord>(`/api/medical-records/${id}`, patch);
 
   shareMedicalRecord = (familyId: string) =>
     this.post<void>('/api/medical-records/share', { familyId });

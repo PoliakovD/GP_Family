@@ -1,5 +1,4 @@
 import { Component, OnDestroy, OnInit, effect, inject, input } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -17,6 +16,7 @@ import type {
   MedicalRecordFilter,
   RecordSummaryResponse,
   UpdateIndicatorRequest,
+  UpdateMedicalRecordRequest,
   UserSpecimen,
   VisitConclusion,
 } from '../../models/types';
@@ -40,13 +40,15 @@ const SEARCH_DEBOUNCE_MS = 300;
  * «Готово», не исчезает мгновенно. */
 const PIPELINE_CLEAR_DELAY_MS = 2500;
 
+// Информативнее прежних коротких подписей ("Распознаём"/"Извлекаем данные") — пользователь просил
+// видеть, что именно сейчас происходит на каждом шаге, а не общие слова.
 const STAGE_LABEL: Partial<Record<number, string>> = {
   [ExtractionStage.Queued]: 'В очереди',
   [ExtractionStage.Decoding]: 'Открываем файл',
-  [ExtractionStage.Ocr]: 'Распознаём',
-  [ExtractionStage.Structuring]: 'Извлекаем данные',
-  [ExtractionStage.Linking]: 'Сверяем со справочником',
-  [ExtractionStage.Summarizing]: 'Готовим резюме',
+  [ExtractionStage.Ocr]: 'Распознаём текст',
+  [ExtractionStage.Structuring]: 'Считываем показатели',
+  [ExtractionStage.Linking]: 'Сверяем со справочником показателей',
+  [ExtractionStage.Summarizing]: 'Готовим резюме анализа',
 };
 
 interface KindLabels {
@@ -116,7 +118,7 @@ let nextInstanceId = 0;
   selector: 'app-medical-records-panel',
   standalone: true,
   imports: [
-    FormsModule, DatePipe, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
+    FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
     ExpandableComponent, PipelineProgressComponent,
   ],
   templateUrl: './medical-records-panel.component.html',
@@ -234,6 +236,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // Запись, для которой сейчас открыта шторка «Доступ» (null — шторка закрыта).
   accessRecord: MedicalRecord | null = null;
+
+  // --- Правка даты/врача/описания записи (кнопка «Редактировать», UX-редизайн) ---
+  editRecord: MedicalRecord | null = null;
+  editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '' };
+  savingRecord = false;
 
   // undefined — ещё ни разу не загружали.
   private loadedKind: MedicalRecordKind | undefined = undefined;
@@ -990,6 +997,36 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   closeAccessSheet(): void {
     this.accessRecord = null;
+  }
+
+  // --- Правка записи (bottom-sheet «Редактировать») ---
+
+  openEditSheet(record: MedicalRecord): void {
+    this.editRecord = record;
+    this.editRecordForm = { recordDate: record.recordDate, doctor: record.doctor ?? '', description: record.description ?? '' };
+  }
+
+  closeEditSheet(): void {
+    this.editRecord = null;
+  }
+
+  async saveEditRecord(): Promise<void> {
+    if (!this.editRecord || !this.editRecordForm.recordDate || this.savingRecord) return;
+    this.savingRecord = true;
+    try {
+      await this.api.updateMedicalRecord(this.editRecord.id, {
+        recordDate: this.editRecordForm.recordDate,
+        doctor: this.editRecordForm.doctor?.trim() || null,
+        description: this.editRecordForm.description?.trim() || null,
+      });
+      this.closeEditSheet();
+      await this.refresh();
+      this.error = null;
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.';
+    } finally {
+      this.savingRecord = false;
+    }
   }
 
   /** Видна ли КОНКРЕТНАЯ запись данной семье: (L1 share есть) И (L2 hide нет). */

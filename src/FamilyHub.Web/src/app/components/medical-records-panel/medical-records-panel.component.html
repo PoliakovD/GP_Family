@@ -136,11 +136,16 @@
             </div>
           </div>
           <div class="d-flex gap-2">
+            @if (canDelete(item)) {
+              <button class="btn btn-ghost btn-sm text-nowrap" title="Редактировать" (click)="openEditSheet(item)">
+                <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+              </button>
+            }
             <button class="btn btn-secondary btn-sm text-nowrap" (click)="openAccessSheet(item)">
               <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
             </button>
             @if (canDelete(item)) {
-              <button class="btn btn-ghost btn-sm text-nowrap" (click)="handleDelete(item)">
+              <button class="btn btn-ghost btn-sm text-nowrap" title="Удалить" (click)="handleDelete(item)">
                 <i class="ph ph-trash" aria-hidden="true"></i>
               </button>
             }
@@ -151,17 +156,15 @@
           <i class="ph-duotone ph-users-three" aria-hidden="true"></i> {{ accessSummary(item) }}
         </div>
 
-        <!-- UX-редизайн: врач/пациент/описание — свёрнуты, раньше выводились всегда. -->
-        <app-expandable title="Подробнее">
-          @if (item.doctor) {
-            <p class="muted mb-1">Врач: {{ item.doctor }}</p>
-          }
-          <p class="muted mb-1">Пациент: {{ item.personName }}</p>
-          @if (item.description) {
-            <p class="mb-1">{{ item.description }}</p>
-          }
-          <p class="muted mb-0" style="font-size:11px">Добавлено: {{ item.createdAt | date: 'dd.MM.yyyy HH:mm' }}</p>
-        </app-expandable>
+        <!-- UX-редизайн: врач/пациент/описание — всегда видны (было спрятано за «Подробнее»,
+             из-за чего терялась основная информация о записи). -->
+        <p class="muted mb-0" style="font-size:13px">
+          Пациент: {{ item.personName }}
+          @if (item.doctor) { · Врач: {{ item.doctor }} }
+        </p>
+        @if (item.description) {
+          <p class="mb-0" style="font-size:13px">{{ item.description }}</p>
+        }
 
         <!-- UX-редизайн: содержимое грузится лениво при первом раскрытии. -->
         <app-expandable title="Файлы" [count]="item.attachmentCount" (openChange)="onFilesToggle(item, $event)">
@@ -237,6 +240,9 @@
         }
 
         @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
+          <!-- UX-редизайн: «Подробнее» теперь скрывает/показывает ИМЕННО таблицу показателей
+               (было — врач/пациент/дата, которые должны быть видны всегда). -->
+          <app-expandable title="Подробнее" [count]="indicatorsFor(item.id).length">
           <div class="table-responsive">
             <table class="indicators-table">
               <thead>
@@ -302,23 +308,25 @@
                           <div class="muted" style="font-size:11px">в бланке: {{ ind.displayName }}</div>
                         }
                       </td>
-                      <td [class]="flagClass(ind.flag)">{{ ind.valueRaw }}</td>
-                      <td class="muted">{{ ind.unit ?? '—' }}</td>
-                      <td class="muted">{{ specimenLabelFor(ind) }}</td>
-                      <td class="muted">
+                      <td class="indicator-value-cell" [class]="flagClass(ind.flag)">{{ ind.valueRaw }}</td>
+                      <td class="muted text-nowrap">{{ ind.unit ?? '—' }}</td>
+                      <td class="muted text-nowrap">{{ specimenLabelFor(ind) }}</td>
+                      <td class="muted text-nowrap">
                         {{ indicatorReference(ind) ?? '—' }}
                         @if (isCalculatedRef(ind)) {
                           <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
                         }
                       </td>
-                      <td [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
-                      <td class="d-flex gap-1" (click)="$event.stopPropagation()">
-                        <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
-                          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-                        </button>
-                        <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
-                          <i class="ph ph-trash" aria-hidden="true"></i>
-                        </button>
+                      <td class="indicator-flag-cell" [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
+                      <td class="indicator-actions-cell" (click)="$event.stopPropagation()">
+                        <span class="indicator-actions">
+                          <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
+                            <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                          </button>
+                          <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
+                            <i class="ph ph-trash" aria-hidden="true"></i>
+                          </button>
+                        </span>
                       </td>
                     </tr>
                   }
@@ -375,6 +383,7 @@
               </tbody>
             </table>
           </div>
+          </app-expandable>
 
           @if (summaryByRecord[item.id]; as summary) {
             <app-expandable title="Резюме">
@@ -473,6 +482,26 @@
       } @else {
         <p class="muted mb-0">Нет ни одной активной семьи, чтобы расшарить доступ.</p>
       }
+    </app-bottom-sheet>
+  }
+
+  @if (editRecord; as record) {
+    <app-bottom-sheet title="Редактировать запись" [open]="true" (closed)="closeEditSheet()">
+      <label class="form-label">Дата</label>
+      <input class="input mb-2" type="date" [(ngModel)]="editRecordForm.recordDate" />
+
+      <label class="form-label">Врач</label>
+      <input class="input mb-2" [attr.list]="doctorsDatalistId" [(ngModel)]="editRecordForm.doctor" [placeholder]="labels.doctorPlaceholder" />
+
+      <label class="form-label">Описание</label>
+      <textarea class="input mb-2" [(ngModel)]="editRecordForm.description" [placeholder]="labels.descriptionPlaceholder" rows="2"></textarea>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" [disabled]="savingRecord || !editRecordForm.recordDate" (click)="saveEditRecord()">
+          {{ savingRecord ? 'Сохраняем…' : 'Сохранить' }}
+        </button>
+        <button class="btn btn-ghost btn-sm" [disabled]="savingRecord" (click)="closeEditSheet()">Отмена</button>
+      </div>
     </app-bottom-sheet>
   }
 </div>

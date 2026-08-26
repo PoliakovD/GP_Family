@@ -223,6 +223,14 @@ export interface MedicalRecordFilter {
 
 // personName убран (v2) — идентичность пациента выражается целиком через
 // familyDependentId/targetUserId/владельца, отдельного текстового поля больше нет.
+/** Правка существующей записи (UX-редизайн, кнопка «Редактировать») — только дата/врач/описание,
+ * PUT /api/medical-records/{id}. Пациент и вид записи не редактируются. */
+export interface UpdateMedicalRecordRequest {
+    recordDate: string;
+    doctor: string | null;
+    description: string | null;
+}
+
 export interface MedicalRecordInput {
     kind: MedicalRecordKind;
     recordDate: string;
