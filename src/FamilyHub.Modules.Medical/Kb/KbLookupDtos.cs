@@ -24,3 +24,13 @@ internal sealed class KbLookupRow
     public string DisplayName { get; set; } = string.Empty;
     public double Score { get; set; }
 }
+
+/// <summary>Проекция батч-запроса точного совпадения (см. KbLookupService.LookupExactManyAsync) —
+/// MatchedName несёт, КАКОЕ из входных названий совпало (в отличие от KbLookupRow, где это всегда
+/// подразумевается единственным параметром запроса).</summary>
+internal sealed class KbExactBatchRow
+{
+    public string MatchedName { get; set; } = string.Empty;
+    public Guid Id { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+}

@@ -18,7 +18,7 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// сам справочник или его качество, только контур учёта задачи.
 /// </summary>
 [Queue("enrichment")]
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
+[AutomaticRetry(Attempts = VisitMedicationEnrichmentProcessor.MaxAttempts, DelaysInSeconds = [60, 600, 3600])]
 public class VisitMedicationEnrichmentProcessor(
     AppDbContext db,
     KbLookupService kbLookup,
@@ -32,6 +32,9 @@ public class VisitMedicationEnrichmentProcessor(
     /// <summary>Тот же порог, что MedicationEnrichmentProcessor — исправленное название должно
     /// быть очевидной опечаткой исходного, а не другим препаратом.</summary>
     private const double MinCorrectionSimilarity = 0.3;
+
+    /// <summary>Должно совпадать с Attempts в [AutomaticRetry] — см. MedicalDocumentExtractionProcessor.MaxAttempts.</summary>
+    public const int MaxAttempts = 3;
 
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
     {
@@ -134,6 +137,11 @@ public class VisitMedicationEnrichmentProcessor(
         catch (Exception ex)
         {
             job.Error = ex.Message;
+            if (job.Attempts >= MaxAttempts)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.CompletedAt = DateTime.UtcNow;
+            }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "VisitMedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;

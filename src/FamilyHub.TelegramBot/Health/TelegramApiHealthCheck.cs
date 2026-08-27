@@ -15,8 +15,16 @@ namespace FamilyHub.TelegramBot.Health;
 public class TelegramApiHealthCheck(IServiceProvider services) : IHealthCheck
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
-    private static DateTime _cachedAt = DateTime.MinValue;
-    private static HealthCheckResult _cached = HealthCheckResult.Unhealthy("Ещё не проверялось.");
+
+    /// <summary>Результат + момент пробы — одной парой за один атомарный обмен ссылки (аудит,
+    /// находка Medium #8). Раньше это были два раздельных static-поля (_cachedAt/_cached):
+    /// быстрый путь читал их вне семафора без volatile/барьера, запись внутри семафора шла
+    /// не атомарно по паре — параллельные health-пробы теоретически могли увидеть
+    /// рассинхронизированные значения (свежий _cachedAt со старым _cached, или наоборот).
+    /// volatile-ссылка на неизменяемый record читается/пишется как единое целое.</summary>
+    private sealed record CachedProbe(HealthCheckResult Result, DateTime CachedAt);
+
+    private static volatile CachedProbe? _snapshot;
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
     public async Task<HealthCheckResult> CheckHealthAsync(
@@ -26,18 +34,20 @@ public class TelegramApiHealthCheck(IServiceProvider services) : IHealthCheck
         if (bot is null)
             return HealthCheckResult.Healthy("Telegram:BotToken не задан — бот не сконфигурирован (локальный dev).");
 
-        if (DateTime.UtcNow - _cachedAt < CacheTtl)
-            return _cached;
+        var snapshot = _snapshot;
+        if (snapshot is not null && DateTime.UtcNow - snapshot.CachedAt < CacheTtl)
+            return snapshot.Result;
 
         await Gate.WaitAsync(cancellationToken);
         try
         {
-            if (DateTime.UtcNow - _cachedAt < CacheTtl)
-                return _cached;
+            snapshot = _snapshot;
+            if (snapshot is not null && DateTime.UtcNow - snapshot.CachedAt < CacheTtl)
+                return snapshot.Result;
 
-            _cached = await ProbeAsync(bot, cancellationToken);
-            _cachedAt = DateTime.UtcNow;
-            return _cached;
+            var result = await ProbeAsync(bot, cancellationToken);
+            _snapshot = new CachedProbe(result, DateTime.UtcNow);
+            return result;
         }
         finally
         {

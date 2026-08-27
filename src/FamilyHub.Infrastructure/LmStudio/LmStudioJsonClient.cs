@@ -18,7 +18,8 @@ namespace FamilyHub.Infrastructure.LmStudio;
 /// Вырезание &lt;think&gt;...&lt;/think&gt; из content — подстраховка на случай бэкенда, который
 /// вкладывает рассуждение прямо в основной текст ответа, а не в отдельное поле reasoning_content.
 /// </summary>
-public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions> options, ILogger<LmStudioJsonClient> logger)
+public class LmStudioJsonClient(
+    HttpClient httpClient, IOptions<LmStudioOptions> options, LmStudioConcurrencyGate gate, ILogger<LmStudioJsonClient> logger)
     : ILmStudioJsonClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -70,6 +71,11 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
             Stream: false);
 
         string? rawContent;
+        // Единая точка сериализации всех вызовов LM Studio (аудит, находка High #2) — физически
+        // единственный инстанс модели за WireGuard не выдержит параллельных запросов; раньше это
+        // соблюдалось только фоновым конвейером (WorkerCount=1 на Hangfire-очередях), но не
+        // синхронным OCR-эндпоинтом, который шёл сюда напрямую из HTTP-запроса.
+        await gate.WaitAsync(ct);
         try
         {
             using var response = await httpClient.PostAsJsonAsync("v1/chat/completions", request, JsonOptions, ct);
@@ -87,10 +93,21 @@ public class LmStudioJsonClient(HttpClient httpClient, IOptions<LmStudioOptions>
             var parsed = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, ct);
             rawContent = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        // !ct.IsCancellationRequested исключает из этого catch отмену САМИМ вызывающим (аудит,
+        // находка Medium #1) — TaskCanceledException прилетает и от клиентского HttpClient.Timeout
+        // (внутренний, не наш ct), и от отмены переданным ct (остановка хоста, обрыв запроса).
+        // Раньше оба случая превращались в одинаковый "Локальный сервер недоступен" — бизнес-исход,
+        // который Hangfire НЕ ретраит (RunAsync завершается штатно, без исключения). Из-за этого
+        // редеплой API посреди распознавания молча терял попытку вместо того, чтобы дать Hangfire
+        // повторить задачу: отмена нашим ct теперь просто пробрасывается дальше как есть.
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
         {
             logger.LogWarning(ex, "LM Studio недоступен или запрос по фото препарата превысил таймаут");
             return LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.");
+        }
+        finally
+        {
+            gate.Release();
         }
 
         if (string.IsNullOrWhiteSpace(rawContent))

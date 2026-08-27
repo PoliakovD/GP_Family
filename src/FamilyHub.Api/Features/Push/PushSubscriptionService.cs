@@ -34,29 +34,55 @@ public class PushSubscriptionService(
         var existing = await db.PushSubscriptions.FirstOrDefaultAsync(s => s.EndpointHash == hash, ct);
         if (existing is not null)
         {
-            existing.UserId = userId;
-            existing.Endpoint = endpoint;
-            existing.P256dh = p256dh;
-            existing.Auth = auth;
-            existing.LastUsedAt = now;
-        }
-        else
-        {
-            db.PushSubscriptions.Add(new PushSubscription
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                EndpointHash = hash,
-                Endpoint = endpoint,
-                P256dh = p256dh,
-                Auth = auth,
-                CreatedAt = now,
-                LastUsedAt = now,
-            });
+            ApplySubscription(existing, userId, endpoint, p256dh, auth, now);
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("Push-подписка сохранена для пользователя {UserId}", userId);
+            return;
         }
 
-        await db.SaveChangesAsync(ct);
+        var subscription = new PushSubscription
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            EndpointHash = hash,
+            Endpoint = endpoint,
+            P256dh = p256dh,
+            Auth = auth,
+            CreatedAt = now,
+            LastUsedAt = now,
+        };
+        db.PushSubscriptions.Add(subscription);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Гонка на уникальном индексе EndpointHash (аудит, находка High #3) — параллельный
+            // запрос (например, две вкладки того же браузера переподписываются одновременно)
+            // вставил ту же подписку раньше нас. Раньше это падало необработанным исключением
+            // (500) вместо мягкого отказа — тот же паттерн detach-и-переиграть, что уже
+            // используется в PwaAuthService/NotificationSendingService для аналогичных гонок.
+            logger.LogDebug(ex, "Push-подписка: гонка на EndpointHash, переигрываем как обновление");
+            db.Entry(subscription).State = EntityState.Detached;
+
+            var existingAfterRace = await db.PushSubscriptions.SingleAsync(s => s.EndpointHash == hash, ct);
+            ApplySubscription(existingAfterRace, userId, endpoint, p256dh, auth, now);
+            await db.SaveChangesAsync(ct);
+        }
+
         logger.LogInformation("Push-подписка сохранена для пользователя {UserId}", userId);
+    }
+
+    private static void ApplySubscription(
+        PushSubscription subscription, Guid userId, string endpoint, string p256dh, string auth, DateTime now)
+    {
+        subscription.UserId = userId;
+        subscription.Endpoint = endpoint;
+        subscription.P256dh = p256dh;
+        subscription.Auth = auth;
+        subscription.LastUsedAt = now;
     }
 
     /// <summary>Отписка — только своя (по UserId), даже если тот же endpoint теперь принадлежит другому пользователю.</summary>

@@ -3,9 +3,12 @@ using FamilyHub.Domain.Enums;
 namespace FamilyHub.Infrastructure.Authorization;
 
 /// <summary>
-/// Императивные проверки доступа по familyId, взятому из роута — для эндпоинтов, где
-/// ресурс ещё не загружен (например, создание нового Medication в семье). Когда ресурс
-/// уже загружен из БД, предпочтительнее resource-based авторизация через FamilyRoleHandler.
+/// Императивные проверки доступа по familyId — единственный реальный путь авторизации
+/// семейных ресурсов в проекте, что для эндпоинтов, где ресурс ещё не загружен (например,
+/// создание нового Medication в семье), что для уже загруженного из БД: каждый сервис вызывает
+/// HasRoleAsync сам, явно, в точке мутации/чтения (см. любой *Service.cs в Api/Features и
+/// Modules.Medical/Modules.Birthdays). Декларативной resource-based авторизации через
+/// ASP.NET Core IAuthorizationHandler в проекте нет.
 /// </summary>
 public interface IFamilyAccessService
 {

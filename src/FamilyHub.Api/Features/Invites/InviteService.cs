@@ -105,8 +105,29 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
             ? MemberStatus.Active
             : MemberStatus.PendingApproval;
 
-        // Вступление + инкремент в ОДНОЙ транзакции (защита от гонки на MaxUses).
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Атомарный инкремент-с-условием (аудит, находка Critical #1): проверка UsedCount выше
+        // сама по себе не защищает от гонки — под READ COMMITTED (дефолт PostgreSQL) два
+        // одновременных погашения одного и того же инвайта оба могли прочитать один и тот же
+        // UsedCount ДО того, как любое из них закоммитило инкремент, и оба пройти проверку лимита
+        // (обычная транзакция вокруг обычного `invite.UsedCount++` этого не предотвращает — она
+        // лишь гарантирует атомарность СВОИХ собственных операций, а не видимость чужих).
+        // ExecuteUpdateAsync с условием в WHERE компилируется в один UPDATE ... WHERE, атомарный
+        // на уровне БД: второй конкурентный UPDATE над той же строкой блокируется до коммита
+        // первого и видит уже увеличенный счётчик — affected == 0 означает, что лимит был
+        // исчерпан параллельным запросом между нашей проверкой выше и этим моментом.
+        var affected = await db.FamilyInvites
+            .Where(i => i.Id == invite.Id && i.UsedCount < i.MaxUses)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.UsedCount, i => i.UsedCount + 1), ct);
+        if (affected == 0)
+        {
+            await tx.RollbackAsync(ct);
+            logger.LogWarning(
+                "Погашение инвайта {InviteId} отклонено: лимит исчерпан параллельным запросом (пользователь {UserId})",
+                invite.Id, userId);
+            return RedeemResult.Exhausted;
+        }
 
         db.FamilyMembers.Add(new FamilyMember
         {
@@ -124,7 +145,6 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
             UserId = userId,
             RedeemedAt = DateTime.UtcNow,
         });
-        invite.UsedCount++;
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

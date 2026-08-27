@@ -258,9 +258,17 @@ builder.Services.AddScoped<InviteService>();
 builder.Services.AddScoped<MembershipService>();
 builder.Services.AddScoped<FamilyDependentService>();
 
-// --- Авторизация по ролям в семье ---
+// --- Авторизация по ролям в семье --- Единственный реальный путь — ручные вызовы
+// IFamilyAccessService.HasRoleAsync внутри сервисов (см. каждый *Service.cs в Api/Features и
+// Modules.Medical/Modules.Birthdays). Раньше здесь же регистрировался FamilyRoleHandler —
+// resource-based IAuthorizationHandler<FamilyRoleRequirement, IFamilyOwned> — но ни один
+// эндпоинт/политика нигде не ссылались на FamilyRoleRequirement (аудит, находка High #5):
+// зарегистрированный, но нигде не вызываемый handler создавал ложное впечатление, что часть
+// защиты идёт декларативно через ASP.NET Core policy-инфраструктуру, и мог заставить будущего
+// автора нового эндпоинта пропустить ручную проверку HasRoleAsync, понадеявшись на несуществующую
+// декларативную защиту. Удалён вместе с FamilyRoleRequirement — реальная защита не изменилась,
+// она и раньше была только в HasRoleAsync.
 builder.Services.AddScoped<IFamilyAccessService, FamilyAccessService>();
-builder.Services.AddScoped<IAuthorizationHandler, FamilyRoleHandler>();
 builder.Services.AddAuthorization(options =>
 {
     // Защита по умолчанию: любой эндпоинт без явной политики всё равно требует аутентификации.
@@ -595,6 +603,11 @@ if (!telegramBotConfigured && !webPushConfigured)
 
 // --- LM Studio: локальная LLM (текст + vision) — оцифровка медикаментов по фото (не хранит
 // --- фото) и суммаризация веб-сниппетов для справочника (этап 4) ---
+// Singleton-гейт (аудит, находка High #2): единственная точка сериализации всех вызовов LM
+// Studio (LmStudioJsonClient) — физически один ноутбук за WireGuard, второй одновременный запрос
+// прежде мог прийти в обход дисциплины WorkerCount=1 фоновых Hangfire-очередей через синхронный
+// OCR-эндпоинт (POST /api/medications/ocr).
+builder.Services.AddSingleton<LmStudioConcurrencyGate>();
 builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, client) =>
 {
     var lmStudioOptions = sp.GetRequiredService<IOptions<LmStudioOptions>>().Value;
@@ -928,11 +941,17 @@ if (devTools.AdminUiEnabled)
 if (devTools.DevEndpointsEnabled)
 {
     // Ручной запуск джобы оповещений без ожидания cron/UI дашборда — для локальной проверки.
+    // .DisableAntiforgery() — документирует явно (аудит, находка Medium #9), а не как случайный
+    // побочный эффект того, что путь лежит вне /api: глобальный CSRF-гейт в Program.cs проверяет
+    // мутирующие запросы только под /api, поэтому /dev/* и без атрибута фактически не защищён им
+    // (app.UseAntiforgery() в этом приложении не подключён вовсе — см. AttachmentEndpoints/
+    // MedicationOcrEndpoints, тот же паттерн). Риск невысок: DevEndpointsEnabled на VPS всегда
+    // false (см. DevToolsOptions), но исключение должно быть видимым, а не случайным.
     app.MapPost("/dev/trigger-reminder-scan", async (ReminderScanJob job, CancellationToken ct) =>
     {
         await job.RunAsync(ct);
         return Results.Ok();
-    });
+    }).DisableAntiforgery();
 
     // /dev/trigger-outbox-dispatch удалён (ADR-0006): у MassTransit нет поддерживаемого API
     // "прогнать доставку сейчас" — UseBusOutbox будит delivery service сразу после SaveChanges,
@@ -940,12 +959,13 @@ if (devTools.DevEndpointsEnabled)
 
     // Синхронный прогон конкретной задачи обогащения справочника (этап 4) — минуя очередь
     // Hangfire, для локальной проверки конвейера без ожидания воркера enrichment-server.
+    // .DisableAntiforgery() — та же причина, что у /dev/trigger-reminder-scan выше.
     app.MapPost("/dev/trigger-enrichment/{jobId:guid}", async (
         Guid jobId, MedicationEnrichmentProcessor processor, CancellationToken ct) =>
     {
         await processor.RunAsync(jobId, ct);
         return Results.Ok();
-    });
+    }).DisableAntiforgery();
 
     // Просмотр вёрстки email-писем в браузере: LoggingEmailSender печатает в лог только
     // текстовую часть, а SMTP в dev обычно не настроен, поэтому иначе HTML не увидеть без

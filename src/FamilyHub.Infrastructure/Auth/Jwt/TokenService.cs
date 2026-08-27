@@ -46,6 +46,13 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
         var email = await db.Users.Where(u => u.Id == session.UserId).Select(u => u.Email).SingleOrDefaultAsync(ct);
         if (email is null) return null; // аккаунт удалён/аномалия — рефреш недействителен
 
+        // Выпуск новой сессии и отзыв старой — одна транзакция (аудит, находка Medium #3):
+        // CreateSessionAsync коммитит собственным SaveChangesAsync, отзыв старой — отдельным
+        // ниже. Без общей транзакции крах между ними оставлял бы либо две одновременно живые
+        // сессии на устройство (новая выпущена, старая не отозвана), либо отозванную старую без
+        // записанной новой (клиент теряет сессию совсем).
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
         var (refreshToken, refreshExpiresAt, replacementId) =
             await CreateSessionAsync(session.UserId, createdByIp, deviceInfo, ct);
         var (accessToken, accessExpiresAt) = CreateAccessToken(session.UserId, email, replacementId);
@@ -53,6 +60,7 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
         session.RevokedAt = now;
         session.ReplacedByTokenId = replacementId;
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         return new IssuedSession(accessToken, accessExpiresAt, refreshToken, refreshExpiresAt);
     }

@@ -68,15 +68,35 @@ public class ExtractionQueryService(
         var conclusion = JsonSerializer.Deserialize<VisitConclusion>(extractedDataJson);
         if (conclusion is null) return (ExtractionQueryResult.NotFound, null);
 
+        var prescribed = conclusion.PrescribedMedications ?? [];
+
+        // Батч точного совпадения на ВСЕ названия заключения одним запросом (аудит, находка
+        // High #1) — покрывает частый случай (препарат уже в справочнике под тем же именем) без
+        // кэша, поэтому "живой поиск на каждое чтение" из докстринга выше не нарушается: если
+        // обогащение завершилось между двумя просмотрами, второй просмотр по-прежнему видит его
+        // сразу. Для промахов — прежний поштучный каскад алиас/нечёткое совпадение ниже.
+        var namesToResolve = prescribed
+            .Select(m => MedicationNameNormalizer.Normalize(m.Name))
+            .Where(n => n.Length > 0)
+            .ToList();
+        var exactHits = await medicationKbLookup.LookupExactManyAsync(namesToResolve, ct);
+
         var medications = new List<PrescribedMedicationDto>();
-        foreach (var med in conclusion.PrescribedMedications ?? [])
+        foreach (var med in prescribed)
         {
             var normalizedName = MedicationNameNormalizer.Normalize(med.Name);
             Guid? kbMedicationId = null;
             if (normalizedName.Length > 0)
             {
-                var lookup = await medicationKbLookup.LookupAsync(normalizedName, ct);
-                if (lookup.Kind == Kb.KbLookupKind.Hit) kbMedicationId = lookup.KbId;
+                if (exactHits.TryGetValue(normalizedName, out var exactHit))
+                {
+                    kbMedicationId = exactHit.KbId;
+                }
+                else
+                {
+                    var lookup = await medicationKbLookup.LookupAsync(normalizedName, ct);
+                    if (lookup.Kind == Kb.KbLookupKind.Hit) kbMedicationId = lookup.KbId;
+                }
             }
             medications.Add(new PrescribedMedicationDto(med.Name, med.DosageInstructions, kbMedicationId));
         }

@@ -74,7 +74,13 @@ public class ReminderScanJob(
 
     private async Task ScanManualBirthdaysAsync(DateOnly today, CancellationToken ct)
     {
+        // Предфильтр по месяцу (аудит, находка High #4) — без него грузилась ВСЯ таблица целиком
+        // каждую ночь, независимо от того, у скольких записей ДР вообще попадает в окно
+        // предупреждения. Точная граница (перенос 29 февраля, daysUntil) по-прежнему считается
+        // ниже в TryPublishBirthdayAsync — это лишь дешёвая отсечка по месяцу в SQL.
+        var monthsInWindow = MonthsInWindow(today, options.Value.BirthdayWarningDays);
         var birthdays = await db.Birthdays.AsNoTracking()
+            .Where(b => monthsInWindow.Contains(b.Date.Month))
             .Select(b => new { b.Id, b.FamilyId, b.PersonName, b.Date })
             .ToListAsync(ct);
 
@@ -96,8 +102,10 @@ public class ReminderScanJob(
     /// </summary>
     private async Task ScanMemberBirthdaysAsync(DateOnly today, CancellationToken ct)
     {
+        var monthsInWindow = MonthsInWindow(today, options.Value.BirthdayWarningDays);
         var members = await db.FamilyMembers.AsNoTracking()
-            .Where(m => m.Status == MemberStatus.Active && m.User.BirthDate != null)
+            .Where(m => m.Status == MemberStatus.Active && m.User.BirthDate != null
+                && monthsInWindow.Contains(m.User.BirthDate!.Value.Month))
             .Select(m => new
             {
                 m.UserId, m.FamilyId, m.User.LastName, m.User.FirstName, m.User.MiddleName,
@@ -123,10 +131,12 @@ public class ReminderScanJob(
     private async Task ScanDependentBirthdaysAsync(DateOnly today, CancellationToken ct)
     {
         // FirstName/LastName зашифрованы — материализуем сущности и форматируем в памяти (тот же
-        // приём, что FamilyDependentService.GetForFamilyAsync); фильтр BirthDate != null остаётся
-        // в SQL (не шифруется, см. ADR-0002).
+        // приём, что FamilyDependentService.GetForFamilyAsync); фильтр BirthDate != null и по
+        // месяцу окна (аудит, находка High #4) остаётся в SQL — BirthDate сама не шифруется
+        // (ADR-0002), можно фильтровать по ней до материализации.
+        var monthsInWindow = MonthsInWindow(today, options.Value.BirthdayWarningDays);
         var dependents = await db.FamilyDependents.AsNoTracking()
-            .Where(d => d.BirthDate != null)
+            .Where(d => d.BirthDate != null && monthsInWindow.Contains(d.BirthDate!.Value.Month))
             .ToListAsync(ct);
 
         logger.LogDebug("Скан дней рождения подопечных: {Count} записей", dependents.Count);
@@ -168,6 +178,23 @@ public class ReminderScanJob(
 
         await publisher.PublishAsync(
             new BirthdayApproachingEvent(kind, subjectId, familyId, personName, nextOccurrence, daysUntil, subjectUserId), ct);
+    }
+
+    /// <summary>
+    /// Месяцы, которые может задеть окно предупреждения [today, today + warningDays] — дешёвый
+    /// SQL-предфильтр (аудит, находка High #4): раньше все три скана дней рождения грузили ВСЮ
+    /// таблицу целиком каждую ночь, независимо от того, у скольких строк ДР вообще попадает в
+    /// окно. Специально ГРУБЕЕ точной границы (день, а не месяц) — сверхмножество, безопасное по
+    /// построению: точная проверка (daysUntil, перенос 29 февраля) всё равно выполняется потом в
+    /// TryPublishBirthdayAsync/NextOccurrence/SafeDate над уже отфильтрованными строками, эта
+    /// отсечка лишь сокращает объём материализации/расшифровки, не подменяет точную логику.
+    /// </summary>
+    private static List<int> MonthsInWindow(DateOnly today, int warningDays)
+    {
+        var months = new HashSet<int>();
+        for (var offset = 0; offset <= warningDays; offset++)
+            months.Add(today.AddDays(offset).Month);
+        return months.ToList();
     }
 
     /// <summary>Ближайшая (в этом или следующем году) календарная дата дня рождения от today.</summary>

@@ -57,14 +57,15 @@ public class ConsentService(AppDbContext db, IMemoryCache cache, IOptions<Consen
             c => c.UserId == userId && c.Kind == kind && c.Version == version, ct);
         if (exists) return;
 
-        db.Set<UserConsent>().Add(new UserConsent
+        var consent = new UserConsent
         {
             Id = Guid.NewGuid(),
             UserId = userId,
             Kind = kind,
             Version = version,
             AcceptedAt = DateTime.UtcNow,
-        });
+        };
+        db.Set<UserConsent>().Add(consent);
 
         try
         {
@@ -73,7 +74,12 @@ public class ConsentService(AppDbContext db, IMemoryCache cache, IOptions<Consen
         catch (DbUpdateException)
         {
             // Гонка двойного клика: UNIQUE(UserId, Kind, Version) — согласие уже записано.
-            db.ChangeTracker.Clear();
+            // Детач только своей записи (аудит, находка Medium #5), не ChangeTracker.Clear() —
+            // тот сбрасывал бы ВСЕ отслеживаемые изменения на разделяемом scoped AppDbContext,
+            // включая несвязанные сущности, которые мог успеть затрекать тот же запрос (тот же
+            // риск, из-за которого NotificationSendingService.AddIfNewAsync намеренно детачит
+            // только свою сущность — см. её комментарий).
+            db.Entry(consent).State = EntityState.Detached;
         }
     }
 }

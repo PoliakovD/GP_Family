@@ -21,7 +21,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// одна на оба конвейера, они делят одного и того же внешнего провайдера).
 /// </summary>
 [Queue("enrichment")]
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
+[AutomaticRetry(Attempts = LabAnalyteEnrichmentProcessor.MaxAttempts, DelaysInSeconds = [60, 600, 3600])]
 public class LabAnalyteEnrichmentProcessor(
     AppDbContext db,
     LabAnalyteKbLookupService kbLookup,
@@ -32,6 +32,9 @@ public class LabAnalyteEnrichmentProcessor(
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
 {
+    /// <summary>Должно совпадать с Attempts в [AutomaticRetry] — см. MedicalDocumentExtractionProcessor.MaxAttempts.</summary>
+    public const int MaxAttempts = 3;
+
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await db.LabAnalyteEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
@@ -122,6 +125,11 @@ public class LabAnalyteEnrichmentProcessor(
         catch (Exception ex)
         {
             job.Error = ex.Message;
+            if (job.Attempts >= MaxAttempts)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.CompletedAt = DateTime.UtcNow;
+            }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "LabAnalyteEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;

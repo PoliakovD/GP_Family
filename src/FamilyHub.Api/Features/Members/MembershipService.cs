@@ -72,15 +72,24 @@ public class MembershipService(AppDbContext db, IFamilyAccessService access, IDo
 
     private async Task<CoreOutcome> RemoveMembershipCoreAsync(Guid familyId, Guid targetUserId, CancellationToken ct)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
         var member = await db.FamilyMembers
             .FirstOrDefaultAsync(m => m.FamilyId == familyId && m.UserId == targetUserId, ct);
-        if (member is null) return CoreOutcome.NotFound;
+        if (member is null)
+        {
+            await tx.RollbackAsync(ct);
+            return CoreOutcome.NotFound;
+        }
 
         if (member.Role == FamilyRole.Admin && member.Status == MemberStatus.Active)
         {
-            var adminCount = await db.FamilyMembers.CountAsync(m =>
-                m.FamilyId == familyId && m.Role == FamilyRole.Admin && m.Status == MemberStatus.Active, ct);
-            if (adminCount <= 1) return CoreOutcome.LastAdmin;
+            var activeAdminCount = await CountActiveAdminsLockedAsync(familyId, ct);
+            if (activeAdminCount <= 1)
+            {
+                await tx.RollbackAsync(ct);
+                return CoreOutcome.LastAdmin;
+            }
         }
 
         db.FamilyMembers.Remove(member);
@@ -88,6 +97,39 @@ public class MembershipService(AppDbContext db, IFamilyAccessService access, IDo
         // события; сами записи и сканы остаются у владельца), а админов оповестит Notifications.
         await publisher.PublishAsync(new UserLeftFamilyEvent(familyId, targetUserId), ct);
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return CoreOutcome.Removed;
+    }
+
+    /// <summary>
+    /// Считает активных админов семьи, заблокировав их строки на время транзакции (аудит,
+    /// находка Critical #4): без FOR UPDATE обычный CountAsync не защищает от гонки — два
+    /// одновременных выхода/выгона двух РАЗНЫХ последних админов могли оба прочитать
+    /// adminCount == 2 до того, как любой из них закоммитил своё удаление, и оба пройти проверку.
+    /// В продукте нет промоушена участника в Admin постфактум (см. FamilyService) — семья
+    /// осталась бы без единого админа безвозвратно. FOR UPDATE сериализует: второй запрос ждёт
+    /// коммита первого и пересчитывает уже по факту его удаления.
+    ///
+    /// PostgreSQL (прод, см. Program.cs — UseNpgsql безусловно) — единственная реальная цель
+    /// деплоя; SQLite (только юнит-тесты, см. SqliteTestBase) не понимает синтаксис FOR UPDATE
+    /// вовсе, но и не нуждается в нём для тестовой корректности — SQLite по умолчанию
+    /// сериализует ПИСАТЕЛЕЙ на уровне всего файла БД (BEGIN IMMEDIATE/EXCLUSIVE), это более
+    /// грубая, но для юнит-тестов достаточная гарантия.
+    /// </summary>
+    private async Task<int> CountActiveAdminsLockedAsync(Guid familyId, CancellationToken ct)
+    {
+        if (db.Database.IsNpgsql())
+        {
+            return (await db.FamilyMembers
+                .FromSqlInterpolated($"""
+                    SELECT * FROM identity."FamilyMembers"
+                    WHERE "FamilyId" = {familyId} AND "Role" = {(int)FamilyRole.Admin} AND "Status" = {(int)MemberStatus.Active}
+                    FOR UPDATE
+                    """)
+                .ToListAsync(ct)).Count;
+        }
+
+        return await db.FamilyMembers.CountAsync(
+            m => m.FamilyId == familyId && m.Role == FamilyRole.Admin && m.Status == MemberStatus.Active, ct);
     }
 }

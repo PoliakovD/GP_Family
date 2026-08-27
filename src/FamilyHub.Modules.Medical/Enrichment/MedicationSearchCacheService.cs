@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
@@ -24,7 +25,8 @@ public record CachedSearch(IReadOnlyList<WebSnippet> Snippets, string Provider, 
 /// скормить суммаризатору без нового платного запроса (например, при доработке промпта/схемы
 /// полей MedicationSummary в разработке — см. MedicationEnrichmentProcessor).
 /// </summary>
-public class MedicationSearchCacheService(AppDbContext db, IOptions<EnrichmentOptions> options)
+public class MedicationSearchCacheService(
+    AppDbContext db, IOptions<EnrichmentOptions> options, ILogger<MedicationSearchCacheService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -51,26 +53,49 @@ public class MedicationSearchCacheService(AppDbContext db, IOptions<EnrichmentOp
         var snippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
 
         var existing = await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
-        if (existing is null)
+        if (existing is not null)
         {
-            db.MedicationSearchCaches.Add(new MedicationSearchCache
-            {
-                Id = Guid.NewGuid(),
-                NormalizedName = normalizedName,
-                Provider = provider,
-                LastUpdatedAt = now,
-                CanBeUpdatedAfter = canBeUpdatedAfter,
-                SnippetsJson = snippetsJson,
-            });
-        }
-        else
-        {
-            existing.Provider = provider;
-            existing.LastUpdatedAt = now;
-            existing.CanBeUpdatedAfter = canBeUpdatedAfter;
-            existing.SnippetsJson = snippetsJson;
+            ApplyRecord(existing, provider, now, canBeUpdatedAfter, snippetsJson);
+            await db.SaveChangesAsync(ct);
+            return;
         }
 
-        await db.SaveChangesAsync(ct);
+        var cache = new MedicationSearchCache
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = normalizedName,
+            Provider = provider,
+            LastUpdatedAt = now,
+            CanBeUpdatedAfter = canBeUpdatedAfter,
+            SnippetsJson = snippetsJson,
+        };
+        db.MedicationSearchCaches.Add(cache);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Гонка на уникальном индексе NormalizedName (аудит, находка High #3) — тот же
+            // препарат мог обогащаться параллельно через конвейер аптечки и конвейер заключений
+            // врача (см. VisitMedicationEnrichmentRequestService, где эта гонка уже описана как
+            // ожидаемая, но раньше некому было её здесь поймать — падало необработанным 500).
+            logger.LogDebug(ex, "Кэш поиска «{Name}»: гонка на NormalizedName, переигрываем как обновление", normalizedName);
+            db.Entry(cache).State = EntityState.Detached;
+
+            var existingAfterRace = await db.MedicationSearchCaches.SingleAsync(c => c.NormalizedName == normalizedName, ct);
+            ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, snippetsJson);
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    private static void ApplyRecord(
+        MedicationSearchCache cache, string provider, DateTime now, DateTime canBeUpdatedAfter, string snippetsJson)
+    {
+        cache.Provider = provider;
+        cache.LastUpdatedAt = now;
+        cache.CanBeUpdatedAfter = canBeUpdatedAfter;
+        cache.SnippetsJson = snippetsJson;
     }
 }

@@ -35,7 +35,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// наполнится).
 /// </summary>
 [Queue("extraction")]
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
+[AutomaticRetry(Attempts = MedicalDocumentExtractionProcessor.MaxAttempts, DelaysInSeconds = [60, 600, 3600])]
 public class MedicalDocumentExtractionProcessor(
     AppDbContext db,
     AttachmentService attachments,
@@ -49,6 +49,12 @@ public class MedicalDocumentExtractionProcessor(
     IDomainEventPublisher publisher,
     ILogger<MedicalDocumentExtractionProcessor> logger)
 {
+    /// <summary>Должно совпадать с Attempts в [AutomaticRetry] на классе — на последней попытке
+    /// catch-блок ниже переводит job в Failed сам, т.к. после неё Hangfire сдаётся молча и
+    /// строка иначе осталась бы в Running навсегда, перманентно блокируя запись частичным
+    /// уникальным индексом (Status IN (0,1)) — см. аудит, находка Critical #3.</summary>
+    public const int MaxAttempts = 3;
+
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
@@ -69,7 +75,7 @@ public class MedicalDocumentExtractionProcessor(
             var record = await db.MedicalRecords.FirstOrDefaultAsync(r => r.Id == job.MedicalRecordId, ct);
             if (record is null)
             {
-                await FailAsync(job, "Мед-запись не найдена (возможно, удалена).", ct);
+                await FailAsync(job, "Мед-запись не найдена (возможно, удалена).", [], ct);
                 return;
             }
 
@@ -80,7 +86,7 @@ public class MedicalDocumentExtractionProcessor(
 
             if (pending.Count == 0)
             {
-                await FailAsync(job, "Нет новых вложений для распознавания — все уже распознаны.", ct);
+                await FailAsync(job, "Нет новых вложений для распознавания — все уже распознаны.", [], ct);
                 return;
             }
 
@@ -89,6 +95,15 @@ public class MedicalDocumentExtractionProcessor(
 
             var results = new List<ExtractionResult>();
             var fileErrors = new List<string>();
+            // Собираем id прочитанных вложений, но НЕ проставляем ExtractedAt здесь — раньше это
+            // делалось отдельным ExecuteUpdateAsync прямо в цикле (собственный неявный коммит,
+            // вне последующей транзакции с показателями/summary): крах процесса между этой
+            // строкой и финальным SaveChangesAsync навсегда терял файл — ExtractedAt уже
+            // проставлен, повторный клик «Распознать» видит его как уже обработанный и
+            // пропускает, а извлечённые из него данные так и не сохранились (см. аудит,
+            // находка Critical #2). Теперь пометка идёт одной транзакцией с результатом —
+            // см. MarkAttachmentsExtractedAsync, вызывается из Process*Async/FailAsync ниже.
+            var readAttachmentIds = new List<Guid>();
 
             foreach (var attachment in pending)
             {
@@ -125,9 +140,9 @@ public class MedicalDocumentExtractionProcessor(
 
                 // Файл прочитан (успешно или с понятной причиной отказа) — не пытаемся снова при
                 // следующем клике «Распознать»; необработанное исключение (ниже, вне цикла) не
-                // доходит сюда, и файл останется в очереди на повтор.
-                await db.FileAttachments.Where(a => a.Id == attachment.Id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(a => a.ExtractedAt, DateTime.UtcNow), ct);
+                // доходит сюда, и файл останется в очереди на повтор. Сама пометка ExtractedAt —
+                // ниже, одной транзакцией с результатом (см. комментарий у readAttachmentIds).
+                readAttachmentIds.Add(attachment.Id);
                 job.ProcessedFiles++;
                 await db.SaveChangesAsync(ct);
             }
@@ -136,13 +151,22 @@ public class MedicalDocumentExtractionProcessor(
             await db.SaveChangesAsync(ct);
 
             if (record.Kind == MedicalRecordKind.Analysis)
-                await ProcessAnalysisAsync(job, record, results, fileErrors, ct);
+                await ProcessAnalysisAsync(job, record, results, fileErrors, readAttachmentIds, ct);
             else
-                await ProcessVisitAsync(job, record, results, fileErrors, ct);
+                await ProcessVisitAsync(job, record, results, fileErrors, readAttachmentIds, ct);
         }
         catch (Exception ex)
         {
             job.Error = ex.Message;
+            if (job.Attempts >= MaxAttempts)
+            {
+                // Это была последняя попытка [AutomaticRetry] — Hangfire сдаётся молча, дальше
+                // никто не переведёт задачу в терминальный статус. Без этого строка осталась бы
+                // в Running навсегда и частичный уникальный индекс (Status IN (0,1)) перманентно
+                // блокировал бы повторную постановку в очередь для этой же записи.
+                job.Status = EnrichmentJobStatus.Failed;
+                job.CompletedAt = DateTime.UtcNow;
+            }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicalDocumentExtractionJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;
@@ -151,7 +175,7 @@ public class MedicalDocumentExtractionProcessor(
 
     private async Task ProcessAnalysisAsync(
         Domain.Entities.MedicalDocumentExtractionJob job, Domain.Entities.MedicalRecord record,
-        List<ExtractionResult> results, List<string> fileErrors, CancellationToken ct)
+        List<ExtractionResult> results, List<string> fileErrors, List<Guid> readAttachmentIds, CancellationToken ct)
     {
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
@@ -172,7 +196,7 @@ public class MedicalDocumentExtractionProcessor(
         if (rawIndicators.Count == 0)
         {
             var reason = fileErrors.Count > 0 ? string.Join("; ", fileErrors) : "Не удалось распознать ни одного показателя.";
-            await FailAsync(job, reason, ct);
+            await FailAsync(job, reason, readAttachmentIds, ct);
             return;
         }
 
@@ -306,6 +330,9 @@ public class MedicalDocumentExtractionProcessor(
         job.CompletedAt = DateTime.UtcNow;
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        // ExtractedAt проставляется здесь же — одной транзакцией с показателями/summary (см.
+        // комментарий у readAttachmentIds в RunAsync): либо оба сохраняются, либо оба откатываются.
+        await MarkAttachmentsExtractedAsync(readAttachmentIds, ct);
         await publisher.PublishAsync(new MedicalDocumentExtractedEvent(job.Id, recordId, ownerUserId, allIndicators.Count, deviationCount), ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -317,13 +344,13 @@ public class MedicalDocumentExtractionProcessor(
 
     private async Task ProcessVisitAsync(
         Domain.Entities.MedicalDocumentExtractionJob job, Domain.Entities.MedicalRecord record,
-        List<ExtractionResult> results, List<string> fileErrors, CancellationToken ct)
+        List<ExtractionResult> results, List<string> fileErrors, List<Guid> readAttachmentIds, CancellationToken ct)
     {
         var conclusion = results.Select(r => r.Conclusion).FirstOrDefault(c => c is not null);
         if (conclusion is null)
         {
             var reason = fileErrors.Count > 0 ? string.Join("; ", fileErrors) : "Не удалось распознать заключение врача.";
-            await FailAsync(job, reason, ct);
+            await FailAsync(job, reason, readAttachmentIds, ct);
             return;
         }
 
@@ -358,6 +385,7 @@ public class MedicalDocumentExtractionProcessor(
         job.CompletedAt = DateTime.UtcNow;
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await MarkAttachmentsExtractedAsync(readAttachmentIds, ct);
         await publisher.PublishAsync(new MedicalDocumentExtractedEvent(job.Id, record.Id, record.OwnerUserId, 0, 0), ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -365,12 +393,37 @@ public class MedicalDocumentExtractionProcessor(
         logger.LogInformation("MedicalDocumentExtractionJob {JobId}: заключение врача распознано.", job.Id);
     }
 
-    private async Task FailAsync(Domain.Entities.MedicalDocumentExtractionJob job, string reason, CancellationToken ct)
+    /// <summary>Проставляет FileAttachment.ExtractedAt для успешно прочитанных вложений — вызывается
+    /// либо внутри финальной транзакции успеха (см. Process*Async выше), либо здесь, при отказе:
+    /// в обоих случаях это одна транзакция с решением по задаче, а не отдельный неявный коммит
+    /// посреди цикла (см. аудит, находка Critical #2).</summary>
+    private async Task MarkAttachmentsExtractedAsync(IReadOnlyList<Guid> attachmentIds, CancellationToken ct)
+    {
+        if (attachmentIds.Count == 0) return;
+        await db.FileAttachments.Where(a => attachmentIds.Contains(a.Id))
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.ExtractedAt, DateTime.UtcNow), ct);
+    }
+
+    private async Task FailAsync(
+        Domain.Entities.MedicalDocumentExtractionJob job, string reason,
+        List<Guid> readAttachmentIds, CancellationToken ct)
     {
         job.Status = EnrichmentJobStatus.Failed;
         job.Error = reason;
         job.CompletedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+
+        if (readAttachmentIds.Count > 0)
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await MarkAttachmentsExtractedAsync(readAttachmentIds, ct);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
+
         logger.LogInformation("MedicalDocumentExtractionJob {JobId}: {Reason}", job.Id, reason);
     }
 

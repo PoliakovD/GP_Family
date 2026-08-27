@@ -90,7 +90,24 @@ public class TelegramLinkService(AppDbContext db, AccountMergeService merge, ILo
                     target.Username = normalized;
             }
             linkCode.ConsumedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(ct);
+
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex)
+            {
+                // Гонка на уникальном индексе Username (аудит, находка High #3) — между проверкой
+                // AnyAsync выше и этим SaveChangesAsync кто-то параллельно занял то же имя.
+                // Раньше это ронялось необработанным исключением (500), теряя саму привязку
+                // Telegram, хотя единственная реальная причина конфликта — необязательная
+                // автоподстановка username из tgUsername. Откатываем только её и повторяем один
+                // раз; если и это не помогло — проблема не в username, перебрасываем как есть.
+                logger.LogDebug(ex, "Привязка Telegram {TelegramId}: гонка на Username, повтор без автоподстановки", telegramId);
+                target.Username = null;
+                await db.SaveChangesAsync(ct);
+            }
+
             outcome = LinkTelegramResult.Linked;
             logger.LogInformation("Telegram {TelegramId} привязан к аккаунту {UserId}", telegramId, target.Id);
         }

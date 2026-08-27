@@ -22,7 +22,7 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// return — Hangfire не должен их ретраить.
 /// </summary>
 [Queue("enrichment")]
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
+[AutomaticRetry(Attempts = MedicationEnrichmentProcessor.MaxAttempts, DelaysInSeconds = [60, 600, 3600])]
 public class MedicationEnrichmentProcessor(
     AppDbContext db,
     KbLookupService kbLookup,
@@ -37,6 +37,12 @@ public class MedicationEnrichmentProcessor(
     /// <summary>Тот же порог, что и pg_trgm.similarity_threshold (см. RussianTextSearcher/KbLookupService) —
     /// исправленное название должно быть очевидной опечаткой исходного, а не другим препаратом.</summary>
     private const double MinCorrectionSimilarity = 0.3;
+
+    /// <summary>Должно совпадать с Attempts в [AutomaticRetry] — на последней попытке catch-блок
+    /// ниже сам переводит job в Failed, иначе строка навсегда остаётся в Running и частичный
+    /// уникальный индекс (Status IN (0,1)) перманентно блокирует повторную постановку в очередь
+    /// (см. аудит, находка Critical #3).</summary>
+    public const int MaxAttempts = 3;
 
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
     {
@@ -159,6 +165,11 @@ public class MedicationEnrichmentProcessor(
         catch (Exception ex)
         {
             job.Error = ex.Message;
+            if (job.Attempts >= MaxAttempts)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.CompletedAt = DateTime.UtcNow;
+            }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;

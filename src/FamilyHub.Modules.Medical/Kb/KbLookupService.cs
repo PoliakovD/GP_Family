@@ -9,6 +9,15 @@ namespace FamilyHub.Modules.Medical.Kb;
 /// работает raw SQL — search_vector и Aliases намеренно вне EF-модели (см. миграцию AddMedicationEnrichment).
 /// Пороги увереннее общего поиска (там 0.3): ошибочная автопривязка в медицинском справочнике
 /// дороже промаха, поэтому средняя полоса уверенности возвращается как кандидат, а не как хит.
+///
+/// Намеренно БЕЗ кэша: несколько вызывающих (MedicationKbStatusService.BuildStatusAsync — фронт
+/// поллит его каждые ~300мс в ожидании результата фонового обогащения;
+/// MedicationEnrichmentProcessor.RunAsync — проверяет "не наполнил ли справочник уже сосед" прямо
+/// перед платным запросом) специально читают АКТУАЛЬНОЕ состояние прямо сейчас — TTL-кэш здесь
+/// один раз уже незаметно ломал именно это (первый промах "залипал" на весь TTL, статус переставал
+/// когда-либо доходить до Ready). Вместо кэша — LookupExactManyAsync ниже: батч точного совпадения
+/// на N названий разом, БЕЗ хранения между вызовами — свежесть сохраняется, круглые поездки к БД
+/// сокращаются только за счёт объединения в одном запросе.
 /// </summary>
 public class KbLookupService(AppDbContext db)
 {
@@ -21,6 +30,35 @@ public class KbLookupService(AppDbContext db)
     /// <summary>Тот же порог, что и pg_trgm.similarity_threshold (см. RussianTextSearcher) — ниже него
     /// в выборку кандидатов на ранжирование не берём вовсе.</summary>
     private const double TrigramFloor = 0.3;
+
+    /// <summary>
+    /// Батч точного совпадения — один SQL-запрос на ВСЕ уникальные названия сразу, вместо
+    /// последовательных вызовов LookupAsync по одному на каждое (аудит, находка High #1):
+    /// заключение врача с несколькими препаратами делало до 3 round-trip'ов на КАЖДОЕ название на
+    /// каждый просмотр экрана (см. ExtractionQueryService.GetConclusionAsync). Покрывает самый
+    /// частый случай — препарат уже в справочнике под тем же нормализованным именем; для
+    /// алиасов/нечёткого совпадения вызывающий код падает обратно на LookupAsync поштучно (тот же
+    /// код, что и раньше, без изменений — переписывать каскад алиас/нечёткое совпадение в батч не
+    /// оправдано этой находкой). Без хранения между вызовами — не кэш, просто объединение запроса.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, KbLookupResult>> LookupExactManyAsync(
+        IReadOnlyCollection<string> normalizedNames, CancellationToken ct = default)
+    {
+        var distinct = normalizedNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToArray();
+        var result = new Dictionary<string, KbLookupResult>();
+        if (distinct.Length == 0) return result;
+
+        var rows = await db.Database.SqlQuery<KbExactBatchRow>($"""
+            SELECT "NormalizedName" AS "MatchedName", "Id", "DisplayName"
+            FROM kb.global_medications_kb
+            WHERE "NormalizedName" = ANY({distinct})
+            """).ToListAsync(ct);
+
+        foreach (var row in rows)
+            result[row.MatchedName] = KbLookupResult.Hit(row.Id, row.DisplayName, 1.0);
+
+        return result;
+    }
 
     public async Task<KbLookupResult> LookupAsync(string normalizedName, CancellationToken ct = default)
     {

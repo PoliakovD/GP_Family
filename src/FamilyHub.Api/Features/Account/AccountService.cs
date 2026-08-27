@@ -39,6 +39,9 @@ public class AccountService(
         // Пользователь должен сначала передать админство или удалить семью целиком.
         var blocking = new List<LastAdminFamily>();
         var soleMemberFamilyIds = new List<Guid>();
+        // Семьи, где юзер — активный админ и не единственный член (кандидаты на повторную,
+        // авторитетную проверку под блокировкой строк — см. ниже).
+        var sharedAdminFamilies = new List<(Guid FamilyId, string FamilyName)>();
         foreach (var membership in memberships)
         {
             var otherMembers = await db.FamilyMembers.AsNoTracking()
@@ -51,6 +54,7 @@ public class AccountService(
 
             if (membership is { Role: FamilyRole.Admin, Status: MemberStatus.Active })
             {
+                sharedAdminFamilies.Add((membership.FamilyId, membership.FamilyName));
                 var otherActiveAdmins = await db.FamilyMembers.AsNoTracking().CountAsync(
                     m => m.FamilyId == membership.FamilyId && m.UserId != userId
                         && m.Role == FamilyRole.Admin && m.Status == MemberStatus.Active, ct);
@@ -71,6 +75,26 @@ public class AccountService(
             .ToListAsync(ct);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Авторитетная повторная проверка «последнего админа» под блокировкой строк (аудит,
+        // находка Critical #4, зеркало фикса в MembershipService): гвард выше — обычный
+        // CountAsync без локов, и между ним и этой транзакцией пользователь мог перестать быть
+        // последним/стать последним админом параллельной операцией (например, второй последний
+        // админ той же семьи одновременно нажал «Выйти» или тоже удаляет аккаунт). FOR UPDATE
+        // блокирует строки активных админов семьи на время транзакции — конкурирующая операция
+        // ждёт её коммита и пересчитывает уже по факту.
+        foreach (var (familyId, familyName) in sharedAdminFamilies)
+        {
+            var activeAdminCount = await CountActiveAdminsLockedAsync(familyId, ct);
+            if (activeAdminCount <= 1)
+            {
+                await tx.RollbackAsync(ct);
+                logger.LogWarning(
+                    "Удаление аккаунта {UserId} отклонено: {FamilyId} осталась без другого активного админа " +
+                    "между проверкой и транзакцией", userId, familyId);
+                return new DeleteAccountOutcome(false, [new LastAdminFamily(familyId, familyName)]);
+            }
+        }
 
         // Семьи, где пользователь один: удаляются целиком (каскад БД + явная чистка
         // shares/hidden — тот же порядок, что в FamilyService.DeleteFamilyAsync).
@@ -131,12 +155,28 @@ public class AccountService(
     {
         await audit.WriteAsync(userId, MedicalAccessAction.Export, ownerUserId: userId, ct: ct);
 
-        // ZipArchive финализирует записи синхронным Write — Kestrel запрещает sync-IO в ответ.
-        // Объёмы персонального экспорта невелики: собираем архив в памяти, затем отдаём async.
-        using var buffer = new MemoryStream();
-        await BuildZipAsync(userId, buffer, attachments, ct);
-        buffer.Position = 0;
-        await buffer.CopyToAsync(destination, ct);
+        // ZipArchive финализирует записи синхронным Write — Kestrel запрещает sync-IO в ответ,
+        // поэтому архив сначала собирается в промежуточный поток, затем копируется в ответ уже
+        // асинхронно. Промежуточный поток — временный файл на диске, не MemoryStream (аудит,
+        // находка High #6): раньше весь экспорт, включая РАСШИФРОВАННЫЕ вложения, буферизовался
+        // целиком в памяти процесса без верхнего предела — у пользователя с большим количеством
+        // сканов анализов за годы это могли быть сотни мегабайт на один HTTP-запрос. FileStream
+        // поддерживает синхронный Write точно так же, как MemoryStream (ограничение — только у
+        // Kestrel-потока ответа), но не давит на RAM процесса.
+        var tempPath = Path.GetTempFileName();
+        try
+        {
+            await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.ReadWrite))
+            {
+                await BuildZipAsync(userId, fileStream, attachments, ct);
+                fileStream.Position = 0;
+                await fileStream.CopyToAsync(destination, ct);
+            }
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
     }
 
     private async Task BuildZipAsync(Guid userId, Stream destination, AttachmentService attachments, CancellationToken ct)
@@ -216,5 +256,31 @@ public class AccountService(
         var entry = zip.CreateEntry(name);
         await using var stream = entry.Open();
         await stream.WriteAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload, options)), ct);
+    }
+
+    /// <summary>
+    /// Считает активных админов семьи, заблокировав их строки на время транзакции (аудит,
+    /// находка Critical #4, зеркало MembershipService.CountActiveAdminsLockedAsync) — без
+    /// FOR UPDATE обычный CountAsync не защищает от гонки: два одновременных удаления аккаунта
+    /// двух РАЗНЫХ последних админов могли оба прочитать adminCount == 2 до того, как любое из
+    /// них закоммитило, и оба пройти проверку. PostgreSQL (прод) — единственная реальная цель
+    /// деплоя; SQLite (только юнит-тесты) не понимает FOR UPDATE, но и не нуждается в нём для
+    /// тестовой корректности — сериализует писателей на уровне всего файла БД по умолчанию.
+    /// </summary>
+    private async Task<int> CountActiveAdminsLockedAsync(Guid familyId, CancellationToken ct)
+    {
+        if (db.Database.IsNpgsql())
+        {
+            return (await db.FamilyMembers
+                .FromSqlInterpolated($"""
+                    SELECT * FROM identity."FamilyMembers"
+                    WHERE "FamilyId" = {familyId} AND "Role" = {(int)FamilyRole.Admin} AND "Status" = {(int)MemberStatus.Active}
+                    FOR UPDATE
+                    """)
+                .ToListAsync(ct)).Count;
+        }
+
+        return await db.FamilyMembers.CountAsync(
+            m => m.FamilyId == familyId && m.Role == FamilyRole.Admin && m.Status == MemberStatus.Active, ct);
     }
 }

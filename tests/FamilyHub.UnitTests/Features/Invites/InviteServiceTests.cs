@@ -148,7 +148,13 @@ public class InviteServiceTests : SqliteTestBase
         result.Should().Be(RedeemResult.Joined);
         var member = Db.FamilyMembers.Single(m => m.FamilyId == family.Id && m.UserId == targetUser.Id);
         member.Status.Should().Be(MemberStatus.Active);
-        Db.FamilyInvites.Single(i => i.Id == invite.Id).UsedCount.Should().Be(1);
+
+        // Свежий контекст — RedeemInviteAsync теперь инкрементирует UsedCount через
+        // ExecuteUpdateAsync (атомарный UPDATE ... WHERE, см. аудит находка Critical #1), который
+        // обходит change tracker: тот же трекнутый экземпляр invite в Db остался бы со старым
+        // значением в памяти, хотя в БД оно уже обновлено (см. SqliteTestBase.NewContext).
+        using var freshDb = NewContext();
+        freshDb.FamilyInvites.Single(i => i.Id == invite.Id).UsedCount.Should().Be(1);
     }
 
     [Fact]
