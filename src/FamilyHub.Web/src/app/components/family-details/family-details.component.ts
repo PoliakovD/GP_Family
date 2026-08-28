@@ -1,7 +1,9 @@
-import {Component, Input, OnInit, inject, signal, WritableSignal} from '@angular/core';
-import {Router, RouterLink} from '@angular/router';
+import {Component, Input, OnDestroy, OnInit, effect, inject, signal, WritableSignal} from '@angular/core';
+import {ActivatedRoute, Router, RouterLink} from '@angular/router';
+import {Subscription} from 'rxjs';
 import {ApiService, ApiError} from '../../services/api.service';
 import {FamilyStateService} from '../../services/family-state.service';
+import {AuthService} from '../../services/auth.service';
 import {
     FamilyRole,
     MemberStatus,
@@ -18,6 +20,8 @@ import {ConfirmService} from '../../shared/confirm/confirm.service';
 import {ModalComponent} from '../../shared/modal/modal.component';
 import {TelegramService} from '../../services/telegram.service';
 import {PersonNameComponent} from '../../shared/person-name/person-name.component';
+import {AvatarComponent} from '../../shared/avatar/avatar.component';
+import {ActionMenuComponent, type ActionMenuItem} from '../../shared/action-menu/action-menu.component';
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
 
@@ -26,19 +30,21 @@ type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
     standalone: true,
     imports: [
         RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent,
-        DatePipe, ModalComponent, PersonNameComponent,
+        DatePipe, ModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent,
     ],
     templateUrl: './family-details.component.html',
     styleUrl: './family-details.component.scss',
 })
-export class FamilyDetailsComponent implements OnInit {
+export class FamilyDetailsComponent implements OnInit, OnDestroy {
     @Input() id!: string;
 
     readonly state = inject(FamilyStateService);
+    readonly auth = inject(AuthService);
     private readonly api = inject(ApiService);
     private readonly toast = inject(ToastService);
     private readonly confirm = inject(ConfirmService);
     private readonly router = inject(Router);
+    private readonly route = inject(ActivatedRoute);
     private readonly tg = inject(TelegramService);
 
     pendingMembers: PendingMember[] | undefined = undefined;
@@ -46,6 +52,10 @@ export class FamilyDetailsComponent implements OnInit {
     activeSubTab: FamilySubTab = 'members';
     showInviteModal = false;
     creatingInvite = false;
+    /** Семьи, которым Я (владелец записей) открыл(а) все свои анализы — редизайн v2, карточка
+     * "это вы" в списке участников. Не путать с доступом ДРУГИХ участников — это видит только
+     * сам владелец (тот же принцип, что и в medical-records-panel). */
+    myMedicalShares: string[] = [];
 
     readonly FamilyRole = FamilyRole;
     readonly MemberStatus = MemberStatus;
@@ -57,8 +67,31 @@ export class FamilyDetailsComponent implements OnInit {
         {id: 'dependents', label: 'Близкие и питомцы'},
     ];
 
+    private paramsSub?: Subscription;
+    private pendingAutoLoaded = false;
+
     get family(): FamilySummary | undefined {
         return this.state.families().find((f) => f.id === this.id);
+    }
+
+    constructor() {
+        // Редизайн v2 — заявки видны сразу над списком участников, без клика по кнопке
+        // «Заявки». state.families() может ещё не быть загружен на момент ngOnInit (refresh()
+        // асинхронный, см. FamilyStateService) — реагируем на сигнал напрямую, тем же приёмом,
+        // что и остальные Panel-компоненты проекта (load-on-input-change через effect() в
+        // конструкторе, см. .claude/patterns/frontend_web.md). Флаг — чтобы не дёргать
+        // /pending повторно на каждое обновление families() (approve/reject сами обновляют
+        // state.refresh(), это не должно повторно вызывать loadPending — она уже вызывается
+        // явно в handleApprove/handleReject).
+        effect(() => {
+            if (this.pendingAutoLoaded) return;
+            const f = this.family;
+            if (!f) return; // ещё не загружено — подождём следующего срабатывания
+            this.pendingAutoLoaded = true;
+            if (f.myRole === FamilyRole.Admin && f.myStatus === MemberStatus.Active) {
+                void this.loadPending();
+            }
+        });
     }
 
     ngOnInit(): void {
@@ -66,6 +99,53 @@ export class FamilyDetailsComponent implements OnInit {
         if (this.state.families().length === 0) {
             void this.state.refresh();
         }
+
+        // Редизайн v2 — подпункты «Семья» в сайдбаре/навигации ведут сюда через ?tab=, а не на
+        // отдельные роуты (FamilyDetailsComponent исторически держит саб-табы in-page, см.
+        // .claude/patterns/frontend_web.md «Хаб-паттерн» — осознанное исключение). URL и
+        // in-page-состояние синхронизированы в обе стороны: неизвестное/отсутствующее значение
+        // молча схлопывается к дефолтной вкладке 'members', а не падает и не показывает пусто.
+        this.paramsSub = this.route.queryParamMap.subscribe((params) => {
+            const requested = params.get('tab');
+            const known = this.subTabs.some((t) => t.id === requested);
+            this.activeSubTab = known ? (requested as FamilySubTab) : 'members';
+        });
+
+        void this.loadMyShares();
+    }
+
+    private async loadMyShares(): Promise<void> {
+        try {
+            this.myMedicalShares = await this.api.getMedicalRecordShares();
+        } catch {
+            // Не критично для этой страницы — карточка "это вы" просто не покажет строку доступа.
+        }
+    }
+
+    hasSharedWithThisFamily(): boolean {
+        return this.myMedicalShares.includes(this.id);
+    }
+
+    get deleteFamilyMenuActions(): ActionMenuItem[] {
+        return [
+            {label: 'Удалить семью', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDeleteFamily()},
+        ];
+    }
+
+    ngOnDestroy(): void {
+        this.paramsSub?.unsubscribe();
+    }
+
+    /** Клик по саб-табу — навигация с queryParamsHandling:'merge' вместо прямого присваивания
+     * activeSubTab: URL остаётся источником истины (переживает refresh, работает browser back),
+     * сам activeSubTab обновится реактивно из подписки выше. */
+    selectSubTab(tab: FamilySubTab): void {
+        void this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: {tab},
+            queryParamsHandling: 'merge',
+            replaceUrl: true,
+        });
     }
 
     statusLabel(status: number): string {

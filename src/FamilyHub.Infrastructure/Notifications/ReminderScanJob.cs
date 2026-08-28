@@ -45,16 +45,14 @@ public class ReminderScanJob(
 
     private async Task ScanMedicationsAsync(DateOnly today, CancellationToken ct)
     {
-        var warningCutoff = today.AddDays(options.Value.ExpiryWarningDays);
-
-        // Запрос покрывает и уже просроченные (ExpiryDate < today), и приближающиеся
-        // (today <= ExpiryDate <= warningCutoff) — различаем тип ниже по дате.
+        // Предикат общий с HomeSummaryService (блок «Требует внимания» на Главной, редизайн v2) —
+        // см. MedicationExpiryPolicy, чтобы пуш-джоба и Главная не разъехались по порогам.
         var medications = await db.Medications.AsNoTracking()
-            .Where(m => m.ExpiryDate != null && m.ExpiryDate <= warningCutoff)
+            .WhereExpiringOrExpired(today, options.Value.ExpiryWarningDays)
             .Select(m => new { m.Id, m.FamilyId, m.Name, ExpiryDate = m.ExpiryDate!.Value })
             .ToListAsync(ct);
 
-        logger.LogDebug("Скан медикаментов: {Count} кандидатов до {WarningCutoff}", medications.Count, warningCutoff);
+        logger.LogDebug("Скан медикаментов: {Count} кандидатов до {WarningDays} дн.", medications.Count, options.Value.ExpiryWarningDays);
 
         foreach (var med in medications)
         {
@@ -165,7 +163,7 @@ public class ReminderScanJob(
         BirthdaySubjectKind kind, Guid subjectId, Guid familyId, string personName, DateOnly birthDate,
         DateOnly today, Guid? subjectUserId, CancellationToken ct)
     {
-        var nextOccurrence = NextOccurrence(birthDate, today);
+        var nextOccurrence = BirthdayOccurrence.NextOccurrence(birthDate, today);
         var daysUntil = nextOccurrence.DayNumber - today.DayNumber;
         if (daysUntil < 0 || daysUntil > options.Value.BirthdayWarningDays) return;
 
@@ -196,17 +194,6 @@ public class ReminderScanJob(
             months.Add(today.AddDays(offset).Month);
         return months.ToList();
     }
-
-    /// <summary>Ближайшая (в этом или следующем году) календарная дата дня рождения от today.</summary>
-    private static DateOnly NextOccurrence(DateOnly birthDate, DateOnly today)
-    {
-        var candidate = SafeDate(today.Year, birthDate.Month, birthDate.Day);
-        return candidate < today ? SafeDate(today.Year + 1, birthDate.Month, birthDate.Day) : candidate;
-    }
-
-    /// <summary>29 февраля в невисокосный год переносим на 28 февраля, а не падаем с исключением.</summary>
-    private static DateOnly SafeDate(int year, int month, int day) =>
-        new(year, month, Math.Min(day, DateTime.DaysInMonth(year, month)));
 
     private async Task SendPendingAsync(CancellationToken ct)
     {

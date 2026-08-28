@@ -13,9 +13,13 @@ import {
   FamilyDependent,
   FamilyDependentInput,
   FamilySummary,
+  HomeSummaryResponse,
+  IndicatorArticleResponse,
   IndicatorDto,
   IndicatorHistoryPoint,
   InviteCreated,
+  KbAnalyteCard,
+  KbAnalyteListResponse,
   KbListResponse,
   KbMedicationCard,
   MedicalRecord,
@@ -132,6 +136,9 @@ export class ApiService {
     }
     return new ApiError(0, 'Неизвестная ошибка');
   }
+
+  // Редизайн v2 — агрегат Главной, одним запросом вместо 3-4 отдельных.
+  getHomeSummary = () => this.get<HomeSummaryResponse>('/api/home/summary');
 
   // Семьи
   getFamilies = () => this.get<FamilySummary[]>('/api/families');
@@ -354,6 +361,25 @@ export class ApiService {
       `/api/indicators/${encodeURIComponent(analyteKey)}${buildQuery({ specimen, customId: customId ?? undefined })}`,
     );
 
+  /** Персонализированная статья справочника — панель/шторка справки по клику на показатель
+   * (редизайн v2). */
+  getIndicatorArticle = (indicatorId: string) =>
+    this.get<IndicatorArticleResponse>(`/api/indicators/${indicatorId}/article`);
+
+  /** Тренд показателя для КОНКРЕТНОЙ записи (редизайн v2) — в отличие от getIndicatorHistory
+   * выше (строго "свои"), работает и для расшаренной чужой записи (двойной фильтр видимости
+   * на сервере — см. GetRecordIndicatorHistoryAsync). */
+  getRecordIndicatorHistory = (recordId: string, indicatorId: string) =>
+    this.get<IndicatorHistoryPoint[]>(`/api/medical-records/${recordId}/indicators/${indicatorId}/history`);
+
+  // Справочник показателей (редизайн v2) — зеркало searchKb/getKbMedication выше на другую таблицу.
+  searchKbAnalytes = (q?: string, skip = 0, take = 20) => {
+    const qQuery = q ? `&q=${encodeURIComponent(q)}` : '';
+    return this.get<KbAnalyteListResponse>(`/api/kb/analytes?skip=${skip}&take=${take}${qQuery}`);
+  };
+
+  getKbAnalyte = (id: string) => this.get<KbAnalyteCard>(`/api/kb/analytes/${id}`);
+
   // Пользовательский справочник биоматериалов (UX-редизайн) — LLM-валидация один раз при создании.
   getSpecimens = () => this.get<UserSpecimen[]>('/api/specimens');
 
@@ -363,6 +389,11 @@ export class ApiService {
   getNotifications = (unreadOnly: boolean) =>
     this.get<AppNotification[]>(`/api/notifications?unreadOnly=${unreadOnly}`);
   markNotificationRead = (id: string) => this.post<void>(`/api/notifications/${id}/read`);
+
+  /** Редизайн v2 — только счётчик для бейджа сайдбара/таба «Ещё». Отдельный эндпоинт вместо
+   * getNotifications(true).length: список тянет полные (частично шифрованные) тела ради одного
+   * числа, а бейдж опрашивается на каждом экране (см. NotificationStateService). */
+  getUnreadNotificationCount = () => this.get<{ count: number }>('/api/notifications/unread-count');
 
   // Предпочтения доставки по типу оповещения (вкладка «Настройки → Уведомления»).
   getNotificationPreferences = () => this.get<NotificationPreference[]>('/api/notifications/preferences');

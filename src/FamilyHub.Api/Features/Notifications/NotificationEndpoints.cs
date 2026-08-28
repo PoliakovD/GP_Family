@@ -17,6 +17,11 @@ public static class NotificationEndpoints
         group.MapGet("/", async (bool? unreadOnly, NotificationService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.GetMyNotificationsAsync(currentUser.UserId, unreadOnly ?? false, ct)));
 
+        // Редизайн v2 — только счётчик для бейджа сайдбара/таба «Ещё» (опрашивается на каждой
+        // навигации, см. NotificationStateService на фронте) — не тянуть полный список ради числа.
+        group.MapGet("/unread-count", async (NotificationService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(new { count = await service.GetUnreadCountAsync(currentUser.UserId, ct) }));
+
         group.MapPost("/{id:guid}/read", async (Guid id, NotificationService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
             var result = await service.MarkReadAsync(id, currentUser.UserId, ct);

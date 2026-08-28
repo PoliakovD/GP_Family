@@ -1,18 +1,7 @@
-// Тот же приём горизонтальной прокрутки, что и в settings.component.scss/family-details —
-// ярлыки вкладок не влезают в узкий экран.
+// Редизайн v2 — горизонтальная прокрутка .seg теперь глобальная (styles.scss), локальный
+// дубль этого фикса убран (было 4 идентичные копии, см. риск Р1 плана редизайна).
 .admin-shell {
   max-width: 960px;
   margin: 1rem auto;
   padding: 0 1rem;
-}
-
-.seg {
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-
-  .seg-opt {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
 }

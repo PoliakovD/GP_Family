@@ -7,6 +7,7 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { pluralizeRu } from '../../shared/util/pluralize';
 
 @Component({
   selector: 'app-medkits-panel',
@@ -160,17 +161,7 @@ export class MedkitsPanelComponent implements OnInit {
 
   /** Склонение "N медикамент/медикамента/медикаментов" для счётчика в свёрнутой карточке. */
   medicationCountLabel(count: number): string {
-    const mod100 = count % 100;
-    const mod10 = count % 10;
-    const word =
-      mod100 >= 11 && mod100 <= 14
-        ? 'медикаментов'
-        : mod10 === 1
-          ? 'медикамент'
-          : mod10 >= 2 && mod10 <= 4
-            ? 'медикамента'
-            : 'медикаментов';
-    return `${count} ${word}`;
+    return `${count} ${pluralizeRu(count, 'медикамент', 'медикамента', 'медикаментов')}`;
   }
 
   resetForm(): void {

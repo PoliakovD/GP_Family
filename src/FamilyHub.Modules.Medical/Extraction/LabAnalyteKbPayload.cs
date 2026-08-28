@@ -20,6 +20,7 @@ public static class LabAnalyteKbPayload
         highMeans = summary.HighMeans,
         lowMeans = summary.LowMeans,
         calculationInstructions = summary.CalculationInstructions,
+        relatedNames = summary.RelatedAnalytes ?? [],
         refRanges = summary.RefRanges.Select(r => new
         {
             ageFrom = r.AgeFrom, ageTo = r.AgeTo, sex = SexToString(r.Sex), low = r.Low, high = r.High, unit = r.Unit,
@@ -70,6 +71,28 @@ public static class LabAnalyteKbPayload
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    /// <summary>Пустой список у строк v1/v2 (поле появилось только в v3) — не ошибка, просто
+    /// "Что смотрят вместе" пока не заполнено для этого показателя (см. схема выше).</summary>
+    public static List<string> ParseRelatedNames(string payloadJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty("relatedNames", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return [];
+
+            return arr.EnumerateArray()
+                .Where(el => el.ValueKind == JsonValueKind.String)
+                .Select(el => el.GetString()!)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+        }
+        catch (JsonException)
+        {
+            return [];
         }
     }
 

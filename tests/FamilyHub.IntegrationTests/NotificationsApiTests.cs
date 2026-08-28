@@ -87,4 +87,42 @@ public class NotificationsApiTests(FamilyHubWebFactory factory) : IntegrationTes
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    /// <summary>Редизайн v2 — GET /api/notifications/unread-count для бейджа сайдбара/таба «Ещё»:
+    /// не тянет полные тела, только число, и оно строго по получателю (не видно чужого счётчика).</summary>
+    [Fact]
+    public async Task UnreadCount_TracksMarkRead_AndIsPerRecipient()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var stranger = ClientAs(FreshTelegramId());
+
+        var initialCount = await GetUnreadCountAsync(admin);
+        initialCount.Should().Be(0);
+
+        var familyId = await CreateFamilyAsync(admin);
+        var medkit = await (await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits", new CreateMedkitRequest("Аптечка")))
+            .Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+        (await admin.PostAsJsonAsync($"/api/medkits/{medkit!.Id}/medications",
+                new CreateMedicationRequest("Скоро истекающее", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)),
+                    new Dictionary<string, string> { ["quantity"] = "5" })))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
+
+        await TriggerAsync(admin, "/dev/trigger-reminder-scan");
+        await WaitForAsync(async () => await GetUnreadCountAsync(admin) == 1,
+            "скан должен породить ровно одно непрочитанное оповещение");
+
+        (await GetUnreadCountAsync(stranger)).Should().Be(0, "счётчик считается строго по получателю");
+
+        var notifications = await (await admin.GetAsync("/api/notifications")).Content.ReadFromJsonAsync<List<NotificationDto>>(JsonOpts);
+        var notification = notifications!.Single(n => n.Type == NotificationType.MedicationExpiringSoon);
+        (await admin.PostAsync($"/api/notifications/{notification.Id}/read", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await GetUnreadCountAsync(admin)).Should().Be(0);
+    }
+
+    private async Task<int> GetUnreadCountAsync(HttpClient client)
+    {
+        var body = await (await client.GetAsync("/api/notifications/unread-count")).Content.ReadFromJsonAsync<Dictionary<string, int>>(JsonOpts);
+        return body!["count"];
+    }
 }

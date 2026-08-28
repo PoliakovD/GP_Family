@@ -1,73 +1,139 @@
 <div>
-  <h3 class="mb-3">Главная</h3>
-
-  <app-search-field
-    placeholder="Лекарство, анализ, врач…"
-    [value]="search.query"
-    (valueChange)="onQueryChange($event)"
-  />
-
-  <div class="seg mb-3">
-    @for (chip of filterChips; track chip.value) {
-      <label class="seg-opt">
-        <input
-          type="radio"
-          name="searchFilter"
-          [checked]="activeFilter === chip.value"
-          (change)="setFilter(chip.value)"
-        />
-        {{ chip.label }}
-      </label>
-    }
-  </div>
-
-  @if (search.error) {
-    <div class="alert-danger mb-2">{{ search.error }}</div>
+  @if (error) {
+    <div class="alert-danger mb-2">{{ error }}</div>
   }
+  @if (loading) {
+    <app-loading-spinner />
+  } @else if (summary) {
+    <div class="home-header mb-3">
+      <h2 class="mb-1">Здравствуйте{{ summary.greetingName ? ', ' + summary.greetingName : '' }}</h2>
+      <div class="muted">{{ dateLine }}</div>
+    </div>
 
-  @if (search.loading) {
-    <app-loading-spinner text="Ищем…" />
-  } @else if (search.query.trim().length > 0) {
-    @for (item of search.items; track item.type + ':' + item.id) {
-      <div class="card mb-2" [class.card-clickable]="isNavigable(item)" (click)="open(item)">
-        <div class="d-flex align-items-start gap-2">
-          <i [class]="typeIcon(item.type)" style="font-size:20px;color:var(--color-accent)" aria-hidden="true"></i>
-          <div class="flex-fill">
-            <div class="name-with-tags mb-1">
-              <strong class="card-title">{{ item.title }}</strong>
-              <span class="tag">{{ typeLabel(item.type) }}</span>
+    <div class="home-grid">
+      <!-- ЛЕВАЯ КОЛОНКА -->
+      <div class="d-flex flex-column gap-3">
+        @if (visibleCardCount > 0) {
+          <div class="home-section-kicker">
+            <span>Требует внимания</span>
+            <span class="home-section-line"></span>
+            <span class="muted" style="font-size:13px">{{ visibleCardCount }}</span>
+          </div>
+
+          @if (medicationSummary; as m) {
+            <app-attention-card
+              icon="ph-duotone ph-pill"
+              [color]="m.severity === 'expired' ? 'var(--color-status-danger)' : 'var(--color-status-warning)'"
+              [title]="m.title"
+              [subtitle]="m.subtitle"
+            >
+              <div actions>
+                <button class="btn btn-primary" (click)="goToMedkit(m.first)">Разобрать аптечку</button>
+              </div>
+            </app-attention-card>
+          }
+
+          @for (req of summary.joinRequests; track req.userId + req.familyId) {
+            <app-attention-card
+              icon="ph-duotone ph-user-plus"
+              color="var(--color-accent)"
+              [title]="req.firstName ? req.firstName + ' просит вступить в семью «' + req.familyName + '»' : 'Заявка на вступление в семью «' + req.familyName + '»'"
+              [subtitle]="req.username ? '@' + req.username : null"
+            >
+              <div actions>
+                <button class="btn btn-primary" (click)="approve(req)">Принять</button>
+                <button class="btn btn-secondary" (click)="reject(req)">Отклонить</button>
+              </div>
+            </app-attention-card>
+          }
+
+          @if (birthdaySummary; as b) {
+            <app-attention-card
+              icon="ph-duotone ph-cake"
+              color="var(--color-accent-2)"
+              [title]="b.title"
+              [subtitle]="b.subtitle"
+            >
+              <div actions>
+                <a class="btn btn-secondary" routerLink="/birthdays">Все дни рождения</a>
+              </div>
+            </app-attention-card>
+          }
+        }
+
+        <div class="home-section-kicker" [class.mt-2]="visibleCardCount > 0">
+          <span>В порядке</span>
+          <span class="home-section-line"></span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="home-ok-chip">
+            <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
+            Аптечка: {{ summary.ok.medicationsInDate }} из {{ summary.ok.medicationsTotal }} в сроке
+          </span>
+          <span class="home-ok-chip">
+            <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
+            Анализы: {{ summary.ok.analysesTotal }} записей
+            @if (summary.ok.analysesAbnormal > 0) {
+              , {{ summary.ok.analysesAbnormal }} с отклонениями
+            }
+          </span>
+          <span class="home-ok-chip">
+            <i [class]="summary.ok.pushEnabled ? 'ph ph-bell' : 'ph ph-bell-slash'"
+               [style.color]="summary.ok.pushEnabled ? 'var(--color-status-ok)' : 'var(--color-neutral-600)'"
+               aria-hidden="true"></i>
+            @if (summary.ok.pushEnabled) {
+              Push включён
+            } @else {
+              Push выключен — <a routerLink="/settings/notifications">включить</a>
+            }
+          </span>
+        </div>
+      </div>
+
+      <!-- ПРАВАЯ КОЛОНКА -->
+      <div class="d-flex flex-column gap-3 home-right-col">
+        @if (state.selectedFamily(); as fam) {
+          <div class="card">
+            <div class="d-flex align-items-baseline justify-content-between mb-2">
+              <div class="home-section-kicker" style="margin:0"><span>Кто в семье</span></div>
+              <a [routerLink]="['/families', fam.id]" style="font-size:13px">Открыть семью</a>
             </div>
-            @if (item.medication) {
-              <p class="muted mb-0">{{ item.medication.familyName }} · {{ item.medication.medkitName }}</p>
-            }
-            @if (item.birthday) {
-              <p class="muted mb-0">{{ item.birthday.familyName }} · {{ item.birthday.date }}</p>
-            }
-            @if (item.snippet) {
-              <p class="muted mb-0">{{ item.snippet }}</p>
+            @for (m of fam.currentMembers ?? []; track m.id) {
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <app-avatar [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" />
+                <div class="flex-fill" style="min-width:0">
+                  <div class="card-title" style="font-size:16px"><app-person-name [person]="m" /></div>
+                  @if (isPending(m.id)) {
+                    <div style="font-size:13px;color:var(--color-accent-2)">ждёт подтверждения</div>
+                  } @else if (m.id === auth.me()?.userId) {
+                    <div class="muted" style="font-size:13px">вы{{ m.role === 1 ? ' · админ' : '' }}</div>
+                  } @else {
+                    <div class="muted" style="font-size:13px">{{ m.role === 1 ? 'админ' : 'участник' }}</div>
+                  }
+                </div>
+              </div>
             }
           </div>
-          @if (isNavigable(item)) {
-            <i class="ph ph-caret-right" style="color:var(--color-neutral-500)" aria-hidden="true"></i>
-          }
-        </div>
-      </div>
-    }
+        }
 
-    @if (search.searched && search.items.length === 0) {
-      <p class="muted">Ничего не найдено.</p>
-    }
-  } @else {
-    <a class="card elev-sm mb-3" style="text-decoration:none;color:inherit" routerLink="/families">
-      <div class="d-flex align-items-center justify-content-between gap-2">
-        <div class="d-flex align-items-center gap-2">
-          <i class="ph-duotone ph-users-three" style="font-size:24px;color:var(--color-accent)" aria-hidden="true"></i>
-          <strong class="card-title">Семьи</strong>
-        </div>
-        <i class="ph ph-caret-right" style="color:var(--color-neutral-500)" aria-hidden="true"></i>
+        @if (summary.birthdays.length > 0) {
+          <div class="card">
+            <div class="home-section-kicker" style="margin-bottom:12px"><span>Ближайшие дни рождения</span></div>
+            @for (b of summary.birthdays; track b.personName + b.date) {
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="home-birthday-date">
+                  <div class="home-birthday-day">{{ dayOfMonth(b.date) }}</div>
+                  <div class="home-birthday-month">{{ monthShort(b.date) }}</div>
+                </div>
+                <div class="flex-fill">
+                  <div class="card-title" style="font-size:16px">{{ b.personName }}</div>
+                  <div class="muted" style="font-size:13px">через {{ b.daysUntil }} · {{ b.turningAge }} лет</div>
+                </div>
+              </div>
+            }
+          </div>
+        }
       </div>
-    </a>
-
-    <app-birthday-widget />
+    </div>
   }
 </div>

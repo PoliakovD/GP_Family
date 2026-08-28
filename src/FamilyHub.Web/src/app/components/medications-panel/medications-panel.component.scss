@@ -76,27 +76,31 @@
 // Цветовая индикация по сроку годности (см. MedicationsPanelComponent.expiryClass):
 // ≤1 мес — красный, 2-4 мес — жёлтый, дальше — зелёный, без даты — фиолетовый.
 // Семантические цвета срока годности — независимы от акцентных cyan/magenta бренда.
+// Редизайн v2 — это КАНОНИЧЕСКИЙ источник --color-status-*: значения не изменились, только
+// вынесены в переменные styles.scss, откуда их переиспользуют medical-records-panel/
+// indicators-tab/sparkline (см. риск Р6 плана редизайна — было 2 расхождения между копиями).
+// Подложка карточки — на --color-paper (карточки теперь белее фона), не --color-surface.
 .medication-card {
   border-left: 4px solid transparent;
 
   &.expiry-danger {
-    border-left-color: #e03131;
-    background: color-mix(in srgb, #e03131 8%, var(--color-surface));
+    border-left-color: var(--color-status-danger);
+    background: color-mix(in srgb, var(--color-status-danger) 8%, var(--color-paper));
   }
 
   &.expiry-warning {
-    border-left-color: #f08c00;
-    background: color-mix(in srgb, #f08c00 8%, var(--color-surface));
+    border-left-color: var(--color-status-warning);
+    background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-paper));
   }
 
   &.expiry-ok {
-    border-left-color: #2f9e44;
-    background: color-mix(in srgb, #2f9e44 6%, var(--color-surface));
+    border-left-color: var(--color-status-ok);
+    background: color-mix(in srgb, var(--color-status-ok) 6%, var(--color-paper));
   }
 
   &.expiry-none {
-    border-left-color: #9c36b5;
-    background: color-mix(in srgb, #9c36b5 8%, var(--color-surface));
+    border-left-color: var(--color-status-none);
+    background: color-mix(in srgb, var(--color-status-none) 8%, var(--color-paper));
   }
 }
 
@@ -218,10 +222,10 @@
   margin-right: 5px;
   flex-shrink: 0;
 
-  &.expiry-danger { background: #e03131; }
-  &.expiry-warning { background: #f08c00; }
-  &.expiry-ok { background: #2f9e44; }
-  &.expiry-none { background: #9c36b5; }
+  &.expiry-danger { background: var(--color-status-danger); }
+  &.expiry-warning { background: var(--color-status-warning); }
+  &.expiry-ok { background: var(--color-status-ok); }
+  &.expiry-none { background: var(--color-status-none); }
 }
 
 // Скрывает нативный <input type="file"> визуально, но оставляет доступным для <label for>

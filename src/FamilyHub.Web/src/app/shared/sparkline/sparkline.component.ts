@@ -6,12 +6,17 @@ export interface SparklinePoint {
   flag: number; // IndicatorFlag
 }
 
+// Редизайн v2 — дублирует --color-status-* из styles.scss (канонический источник —
+// medications-panel.component.scss). Хардкод намеренный: SVG рисуется в TS, а
+// getComputedStyle() на каждый рендер спарклайна — лишний layout ради константы, которая
+// меняется на порядки реже, чем рендерится график (тот же приём, что PASSWORD_PATTERN
+// зеркалит PasswordRules). При смене любого --color-status-* — поправить и здесь.
 const FLAG_COLOR: Record<number, string> = {
-  0: '#adb5bd', // Unknown — нейтральный серый
-  1: '#f08c00', // Low — тот же оранжевый, что expiry-warning (medications-panel)
-  2: '#2f9e44', // Normal — тот же зелёный, что expiry-ok
-  3: '#f08c00', // High
-  4: '#e03131', // Critical — тот же красный, что expiry-danger
+  0: '#9c36b5', // Unknown — было отдельным #adb5bd, теперь --color-status-none (третье расхождение)
+  1: '#f08c00', // Low — --color-status-warning
+  2: '#2f9e44', // Normal — --color-status-ok
+  3: '#f08c00', // High — --color-status-warning
+  4: '#e03131', // Critical — --color-status-danger
 };
 
 const WIDTH = 240;

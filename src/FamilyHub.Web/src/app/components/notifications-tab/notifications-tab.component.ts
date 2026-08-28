@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
+import { NotificationStateService } from '../../services/notification-state.service';
 import { type AppNotification } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { notificationTypeIcon, notificationTypeLabel } from '../../shared/util/notification-type-labels';
@@ -18,6 +19,7 @@ const MONTHS_GEN = [
 })
 export class NotificationsTabComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly notificationState = inject(NotificationStateService);
 
   items: AppNotification[] = [];
   unreadOnly = false;
@@ -43,6 +45,7 @@ export class NotificationsTabComponent implements OnInit {
   async handleMarkRead(id: string): Promise<void> {
     try {
       await this.api.markNotificationRead(id);
+      this.notificationState.decrementLocal();
       await this.refresh();
     } catch (err) {
       this.error =
@@ -56,6 +59,7 @@ export class NotificationsTabComponent implements OnInit {
     if (unread.length === 0) return;
     try {
       await Promise.all(unread.map((n) => this.api.markNotificationRead(n.id)));
+      await this.notificationState.refresh();
       await this.refresh();
     } catch (err) {
       this.error =

@@ -1,30 +1,143 @@
-<div class="app-wrapper">
-  <header class="app-header">
-    <h1>FamilyHub</h1>
-  </header>
+<div class="app-shell" [class.app-shell-wide]="isWide()">
+  @if (showTabs() && isWide()) {
+    <aside class="app-sidebar">
+      <div class="app-sidebar-brand">FamilyHub</div>
 
-  <main class="app-content">
-    @if (showTabs() && state.error()) {
-      <div class="alert-danger mb-2">{{ state.error() }}</div>
+      <nav class="app-sidebar-nav">
+        @for (item of sidebarItems; track item.id) {
+          <a
+            class="app-sidebar-link"
+            [class.active]="isSidebarItemActive(item.id)"
+            [routerLink]="item.id === 'family' ? familyHref() : item.path"
+          >
+            <i [class]="(isSidebarItemActive(item.id) ? 'ph-fill ' : 'ph ') + item.icon" aria-hidden="true"></i>
+            <span class="flex-fill">{{ item.label }}</span>
+            @if (item.id === 'notifications' && notifications.unread() > 0) {
+              <span class="app-sidebar-badge">{{ notifications.unread() }}</span>
+            }
+          </a>
+
+          @if (item.id === 'health' && isHealthActive()) {
+            <div class="app-sidebar-children">
+              @for (sub of item.children ?? []; track sub.path) {
+                <a class="app-sidebar-child" [routerLink]="sub.path" [class.active]="currentUrl().startsWith(sub.path)">
+                  {{ sub.label }}
+                </a>
+              }
+            </div>
+          }
+
+          @if (item.id === 'family' && isFamilyActive()) {
+            <div class="app-sidebar-children">
+              @for (sub of familySubItems; track sub.tab) {
+                <a class="app-sidebar-child" [routerLink]="familyHref()" [queryParams]="{tab: sub.tab}">
+                  {{ sub.label }}
+                </a>
+              }
+            </div>
+          }
+        }
+      </nav>
+
+      <div class="app-sidebar-footer">
+        <div class="app-sidebar-kicker">Текущая семья</div>
+
+        @if (state.selectedFamily(); as fam) {
+          <button type="button" class="app-family-switch" (click)="toggleFamilySwitcher()">
+            <app-avatar [person]="{key: fam.id, firstName: fam.name}" size="sm" />
+            <span class="flex-fill text-nowrap" style="overflow:hidden;text-overflow:ellipsis">{{ fam.name }}</span>
+            <i class="ph ph-caret-up-down" aria-hidden="true"></i>
+          </button>
+
+          @if (familySwitcherOpen()) {
+            <div class="app-family-switch-list">
+              @for (f of state.activeFamilies(); track f.id) {
+                <button type="button" class="app-family-switch-item" (click)="selectFamilyAndClose(f.id)">
+                  {{ f.name }}
+                </button>
+              }
+              <a class="app-family-switch-item" routerLink="/families" (click)="familySwitcherOpen.set(false)">
+                Все семьи
+              </a>
+            </div>
+          }
+        } @else {
+          <a class="app-family-switch" routerLink="/families">
+            <i class="ph-bold ph-plus" aria-hidden="true"></i>
+            <span>Создать семью</span>
+          </a>
+        }
+      </div>
+    </aside>
+  }
+
+  <div class="app-main">
+    @if (showTabs()) {
+      <header class="app-topbar">
+        <app-search />
+        @if (pageAction.action(); as action) {
+          <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
+            @if (action.icon) {
+              <i [class]="action.icon" aria-hidden="true"></i>
+            }
+            {{ action.label }}
+          </button>
+        }
+      </header>
     }
-    @if (showTabs() && state.loading()) {
-      <app-loading-spinner />
-    }
 
-    <router-outlet></router-outlet>
-  </main>
-
-  @if (showTabs()) {
-    <nav class="tab-bar">
-      @for (t of tabs; track t.id) {
-        <button [routerLink]="['/', t.id]" routerLinkActive="active" #rla="routerLinkActive">
-          <i [class]="(rla.isActive ? 'ph-fill ' : 'ph ') + t.icon" aria-hidden="true"></i>
-          <span>{{ t.label }}</span>
-        </button>
+    <main class="app-content">
+      @if (showTabs() && state.error()) {
+        <div class="alert-danger mb-2">{{ state.error() }}</div>
       }
+      @if (showTabs() && state.loading()) {
+        <app-loading-spinner />
+      }
+
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+
+  @if (showTabs() && !isWide()) {
+    <nav class="tab-bar">
+      <button type="button" [routerLink]="'/home'" [class.active]="isHomeActive()">
+        <i [class]="(isHomeActive() ? 'ph-fill ' : 'ph ') + 'ph-house'" aria-hidden="true"></i>
+        <span>Главная</span>
+      </button>
+      <button type="button" [routerLink]="'/health'" [class.active]="isHealthActive()">
+        <i [class]="(isHealthActive() ? 'ph-fill ' : 'ph ') + 'ph-heartbeat'" aria-hidden="true"></i>
+        <span>Здоровье</span>
+      </button>
+      <button type="button" [routerLink]="familyHref()" [class.active]="isFamilyActive()">
+        <i [class]="(isFamilyActive() ? 'ph-fill ' : 'ph ') + 'ph-users-three'" aria-hidden="true"></i>
+        <span>Семья</span>
+      </button>
+      <button type="button" (click)="moreSheetOpen.set(true)">
+        <span class="tab-bar-more-icon">
+          <i class="ph ph-dots-three-outline" aria-hidden="true"></i>
+          @if (notifications.unread() > 0) {
+            <span class="tab-bar-dot"></span>
+          }
+        </span>
+        <span>Ещё</span>
+      </button>
     </nav>
   }
 </div>
+
+<app-bottom-sheet title="Ещё" [open]="moreSheetOpen()" (closed)="moreSheetOpen.set(false)">
+  <a class="app-more-item" routerLink="/notifications" (click)="moreSheetOpen.set(false)">
+    <i class="ph ph-bell" aria-hidden="true"></i>
+    <span class="flex-fill">Уведомления</span>
+    @if (notifications.unread() > 0) {
+      <span class="tag tag-accent-2">{{ notifications.unread() }}</span>
+    }
+  </a>
+  <a class="app-more-item" routerLink="/settings" (click)="moreSheetOpen.set(false)">
+    <i class="ph ph-user" aria-hidden="true"></i>
+    <span class="flex-fill">Профиль</span>
+  </a>
+</app-bottom-sheet>
 
 <app-dev-panel></app-dev-panel>
 <app-toast-container></app-toast-container>

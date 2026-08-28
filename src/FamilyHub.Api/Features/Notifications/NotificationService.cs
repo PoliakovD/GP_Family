@@ -36,6 +36,12 @@ public class NotificationService(AppDbContext db, ILogger<NotificationService> l
         return result;
     }
 
+    /// <summary>Только счётчик — редизайн v2, бейдж сайдбара/таба «Ещё». Отдельно от
+    /// GetMyNotificationsAsync: тот тянет и расшифровывает полные тела ради одного числа, здесь —
+    /// один COUNT-запрос без выборки строк.</summary>
+    public Task<int> GetUnreadCountAsync(Guid userId, CancellationToken ct = default) =>
+        db.Notifications.AsNoTracking().CountAsync(n => n.UserId == userId && !n.IsRead, ct);
+
     /// <summary>Отметить прочитанным — только если оповещение принадлежит текущему пользователю.</summary>
     public async Task<MarkReadResult> MarkReadAsync(Guid notificationId, Guid userId, CancellationToken ct = default)
     {
