@@ -164,8 +164,10 @@ curl -i -H 'X-Dev-TelegramId: 1' https://<домен>/api/families # 401, не 2
 - `https://seq.<домен>:8443` — логи Debug-уровня.
 - `https://admin.<домен>:8443/hangfire` — спрашивает BasicAuth (`DevTools__AdminUser/Password`).
 - `https://s3.<домен>:8443` — консоль MinIO.
+- Postgres (не через Caddy, голый TCP на `10.8.0.1:5432`):
+  `psql "host=10.8.0.1 port=5432 dbname=<POSTGRES_DB> user=<POSTGRES_USER> password=<POSTGRES_PASSWORD>"`.
 
-Без WireGuard все три недостижимы (порт `8443` привязан к `10.8.0.1`, см.
+Без WireGuard всё это недостижимо (порт `8443`/`5432` привязаны к `10.8.0.1`, см.
 [`README.md` §8](README.md#8-проверка-после-деплоя) — почему).
 
 ## Шаг 7 — откат

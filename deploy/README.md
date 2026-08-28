@@ -200,6 +200,17 @@ curl -i -H 'X-Dev-TelegramId: 1' https://gp-family.ru/api/families   # 401, не
   `admin.`, что и `:8443` — Caddy различает их по порту (см. deploy/Caddyfile), путаница в
   адресной строке возможна, если открывать оба одновременно.
 
+Postgres — не HTTP, поэтому без Caddy: контейнер публикует `5432` напрямую на `10.8.0.1`
+(host-IP-scoped, как и `8443`/`4059` выше). Подключение любым клиентом (DBeaver/pgAdmin/psql)
+после поднятия WireGuard:
+
+```
+psql "host=10.8.0.1 port=5432 dbname=<POSTGRES_DB> user=<POSTGRES_USER> password=<POSTGRES_PASSWORD>"
+```
+
+Значения — из `.env` на VPS (или `PROD_ENV` в GitHub Secrets). TLS не настроен (трафик и так
+идёт внутри WG-туннеля), поэтому в клиенте отключите/не включайте SSL-режим `require`.
+
 Без WireGuard всё недостижимо (проверьте с мобильного интернета, не с WG-подключённого Wi-Fi).
 С публичного домена `curl -i https://gp-family.ru/admin` и `.../api/admin/session` должны
 отвечать 404 (см. `@blocked` в Caddyfile) — панель существует только на `:4059`.
