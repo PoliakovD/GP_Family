@@ -34,6 +34,13 @@ services:
       - shared_buffers=512MB
       - -c
       - max_connections=100
+    # Проброс для подключения клиентом (DBeaver/pgAdmin/psql) через WireGuard — тот же приём,
+    # что у caddy ниже: host-IP-scoped порт на 10.8.0.1, а не 0.0.0.0. Postgres — голый TCP,
+    # не HTTP, поэтому Caddy тут не нужен (ему нечего реверс-проксировать на уровне протокола) —
+    # порт публикуется напрямую с контейнера. ufw уже пропускает весь трафик с wg0 (bootstrap.sh:
+    # "ufw allow in on wg0"), доп. правило не требуется.
+    ports:
+      - "10.8.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
