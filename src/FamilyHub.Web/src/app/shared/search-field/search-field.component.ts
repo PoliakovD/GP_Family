@@ -21,6 +21,9 @@ import { FormsModule } from '@angular/forms';
 export class SearchFieldComponent {
   @Input() placeholder = 'Поиск…';
   @Input() value = '';
+  /** Редизайн v2 — без нижнего отступа для мест, где поле стоит само по себе в строке (топбар
+   * каркаса), а не как первый элемент страницы над остальным контентом. */
+  @Input() compact = false;
   @Output() readonly valueChange = new EventEmitter<string>();
 
   onInput(value: string): void {

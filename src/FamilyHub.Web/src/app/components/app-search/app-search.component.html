@@ -1,0 +1,64 @@
+<div class="app-search">
+  <app-search-field
+    placeholder="Лекарство, анализ, врач, человек…"
+    [value]="search.query"
+    [compact]="true"
+    (valueChange)="onQueryChange($event)"
+  />
+
+  @if (search.query.trim().length > 0) {
+    <div class="app-search-dropdown elev-lg">
+      <div class="seg mb-2">
+        @for (chip of filterChips; track chip.value) {
+          <label class="seg-opt">
+            <input
+              type="radio"
+              name="appSearchFilter"
+              [checked]="activeFilter === chip.value"
+              (change)="setFilter(chip.value)"
+            />
+            {{ chip.label }}
+          </label>
+        }
+      </div>
+
+      @if (search.error) {
+        <div class="alert-danger mb-2">{{ search.error }}</div>
+      }
+
+      @if (search.loading) {
+        <app-loading-spinner text="Ищем…" />
+      } @else {
+        @for (item of search.items; track item.type + ':' + item.id) {
+          <div class="card mb-2" [class.card-clickable]="isNavigable(item)" (click)="open(item)">
+            <div class="d-flex align-items-start gap-2">
+              <i [class]="typeIcon(item.type)" style="font-size:20px;color:var(--color-accent)" aria-hidden="true"></i>
+              <div class="flex-fill">
+                <div class="name-with-tags mb-1">
+                  <strong class="card-title">{{ item.title }}</strong>
+                  <span class="tag">{{ typeLabel(item.type) }}</span>
+                </div>
+                @if (item.medication) {
+                  <p class="muted mb-0">{{ item.medication.familyName }} · {{ item.medication.medkitName }}</p>
+                }
+                @if (item.birthday) {
+                  <p class="muted mb-0">{{ item.birthday.familyName }} · {{ item.birthday.date }}</p>
+                }
+                @if (item.snippet) {
+                  <p class="muted mb-0">{{ item.snippet }}</p>
+                }
+              </div>
+              @if (isNavigable(item)) {
+                <i class="ph ph-caret-right" style="color:var(--color-neutral-500)" aria-hidden="true"></i>
+              }
+            </div>
+          </div>
+        }
+
+        @if (search.searched && search.items.length === 0) {
+          <p class="muted mb-0">Ничего не найдено.</p>
+        }
+      }
+    </div>
+  }
+</div>

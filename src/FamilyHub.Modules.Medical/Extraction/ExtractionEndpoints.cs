@@ -117,6 +117,30 @@ public static class ExtractionEndpoints
                 _ => Results.NoContent(),
             };
         });
+
+        // Персонализированная статья справочника (редизайн v2) — панель/шторка справки по клику
+        // на строку показателя.
+        indicators.MapGet("/{id:guid}/article", async (
+            Guid id, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, item) = await service.GetArticleAsync(id, currentUser.UserId, ct);
+            return MapQueryResult(result, item);
+        });
+
+        // Тренд показателя для КОНКРЕТНОЙ записи (редизайн v2) — в отличие от
+        // GET /api/indicators/{analyteKey} выше (строго "свои"), работает и для расшаренной чужой
+        // записи, с двойным фильтром видимости (см. GetRecordIndicatorHistoryAsync).
+        records.MapGet("/{recordId:guid}/indicators/{indicatorId:guid}/history", async (
+            Guid recordId, Guid indicatorId, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, items) = await service.GetRecordIndicatorHistoryAsync(recordId, indicatorId, currentUser.UserId, ct);
+            return result switch
+            {
+                ExtractionQueryResult.NotFound => Results.NotFound(),
+                ExtractionQueryResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(items),
+            };
+        });
     }
 
     private static IResult MapQueryResult<T>(ExtractionQueryResult result, T? item) => result switch

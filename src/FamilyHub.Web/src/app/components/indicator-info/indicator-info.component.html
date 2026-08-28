@@ -1,0 +1,92 @@
+<div>
+  <h4 class="mb-1">{{ title() }}</h4>
+
+  @if (reading(); as r) {
+    <div class="mb-2">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <span style="font-size:var(--font-size-record-title);font-weight:600">
+          {{ r.valueRaw }}{{ r.unit ? ' ' + r.unit : '' }}
+        </span>
+        <app-status-chip [flag]="r.flag" />
+      </div>
+      @if (scaleLow() !== null && scaleHigh() !== null) {
+        <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" />
+        @if (deviationLabel(); as d) {
+          <p class="muted mb-0" style="font-size:13px">{{ d }}</p>
+        }
+      }
+    </div>
+  }
+
+  @if (article(); as a) {
+    @if (a.plainExplanation) {
+      <div class="card-kicker mt-2">Что это</div>
+      <p class="mb-1">{{ a.plainExplanation }}</p>
+    }
+
+    @if (a.refRanges.length > 0) {
+      <div class="card-kicker mt-2">Нормы</div>
+      @if (matchedRange(); as mr) {
+        <p class="mb-1" style="font-weight:600">{{ rangeLabel(mr) }}</p>
+        @if (otherRanges().length > 0) {
+          <app-expandable title="Другие диапазоны" [count]="otherRanges().length">
+            @for (r of otherRanges(); track $index) {
+              <p class="muted mb-1">{{ rangeLabel(r) }}</p>
+            }
+          </app-expandable>
+        }
+      } @else {
+        @for (r of a.refRanges; track $index) {
+          <p class="mb-1">{{ rangeLabel(r) }}</p>
+        }
+      }
+    }
+
+    @if (a.whyMeasured) {
+      <div class="card-kicker mt-2">На что влияет</div>
+      <p class="mb-1">{{ a.whyMeasured }}</p>
+    }
+    @if (a.highMeans) {
+      <p class="mb-1"><strong>Выше нормы:</strong> {{ a.highMeans }}</p>
+    }
+    @if (a.lowMeans) {
+      <p class="mb-1"><strong>Ниже нормы:</strong> {{ a.lowMeans }}</p>
+    }
+
+    @if (a.related.length > 0) {
+      <div class="card-kicker mt-2">Что смотрят вместе</div>
+      <div class="d-flex flex-wrap gap-1 mb-2">
+        @for (rel of a.related; track rel.displayName) {
+          @if (rel.id) {
+            <button type="button" class="tag tag-neutral" style="cursor:pointer;border:none" (click)="openRelated.emit(rel.id)">
+              {{ rel.displayName }}
+            </button>
+          } @else {
+            <span class="tag tag-neutral" style="opacity:0.6">{{ rel.displayName }}</span>
+          }
+        }
+      </div>
+    }
+  } @else {
+    <p class="muted mb-2">Справка по этому показателю пока не заполнена.</p>
+  }
+
+  @if (hasEnoughHistory() || (reading() && article())) {
+    <div class="mt-2">
+      @if (hasEnoughHistory()) {
+        <div class="card-kicker mb-1">Динамика</div>
+        <app-sparkline [points]="sparklinePoints()" />
+      }
+      @if (reading() && article()) {
+        <button type="button" class="btn-link mt-1" (click)="openInCatalog.emit()">Открыть в справочнике</button>
+      }
+    </div>
+  }
+
+  @if (article(); as a) {
+    <div class="alert-info mt-2 mb-0">
+      Информация из общего справочника, не является медицинской консультацией и не заменяет
+      осмотр врача. Обновлено {{ a.updatedAt | date: 'dd.MM.yyyy' }}.
+    </div>
+  }
+</div>

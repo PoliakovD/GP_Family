@@ -54,6 +54,8 @@ public static class MedicalModule
         // в Program.cs (переключатель Enrichment:Provider, зеркало LmStudio/FileStorage выше).
         services.AddScoped<KbLookupService>();
         services.AddScoped<KbCatalogService>();
+        // Справочник показателей (редизайн v2) — зеркало KbCatalogService выше на другую таблицу.
+        services.AddScoped<KbAnalyteCatalogService>();
         services.AddScoped<MedicationKbStatusService>();
         services.AddScoped<KbWriter>();
         services.AddScoped<MedicationSummarizer>();

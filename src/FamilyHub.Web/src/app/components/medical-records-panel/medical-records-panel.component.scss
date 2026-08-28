@@ -1,54 +1,70 @@
-// UX-редизайн: заголовок карточки в одну строку "Дата · Название · Пациент" — компактнее прежней
-// двухстрочной шапки (card-title + card-meta), больше карточек влезает на экран телефона.
-.record-card-title {
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 15px;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+// Редизайн v2 — группа = человек (аватар + имя + счётчик, шапка) и таймлайн записей внутри.
+.record-group-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-divider);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
-// Иконки действий записи — крупнее прежних btn-sm (по обратной связи их было сложно попадать
-// пальцем) и сгруппированы в один ряд вместе с «Файлы», а не разбросаны по краям карточки.
+.record-timeline-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.record-timeline-date {
+  flex: none;
+  width: 72px;
+  text-align: right;
+  padding-top: 14px;
+  font-size: 13px;
+  color: var(--color-neutral-600);
+}
+
+.record-timeline-rail {
+  flex: none;
+  width: 2px;
+  background: var(--color-divider);
+  position: relative;
+}
+
+.record-timeline-dot {
+  position: absolute;
+  top: 18px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+// Чипы-метаданные записи вместо 4 безымянных иконок.
+.record-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+
 .record-card-actions {
   display: flex;
-  gap: 6px;
-
-  .btn-icon {
-    position: relative;
-    width: 40px;
-    height: 40px;
-
-    i {
-      font-size: 20px;
-    }
-  }
+  align-items: center;
+  gap: 8px;
 }
 
-.icon-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  border-radius: var(--radius-sm, 4px);
-  background: var(--color-accent);
-  color: var(--color-bg);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 15px;
-  text-align: center;
-}
-
-// Флаги показателей (IndicatorFlag) — те же цвета, что expiry-danger/warning/ok в medications-panel.
-// Все веса подняты до 700 (было 400/600) — по обратной связи значения и статус должны "брать на
-// себя" внимание в таблице, не теряться на фоне остального текста карточки.
-.indicator-flag-ok { color: #2f9e44; font-weight: 700; }
-.indicator-flag-warning { color: #d47a00; font-weight: 700; }
-.indicator-flag-danger { color: #e03131; font-weight: 700; }
+// Цвет значения показателя (ячейка "Значение") — редизайн v2: канонизировано из --color-status-*
+// (единый источник — medications-panel.component.scss), было отдельным #d47a00 для warning
+// (расхождение с indicators-tab, который использовал #f08c00 — теперь оба совпадают). Статус
+// (ячейка "Статус") больше не красится этими классами — см. <app-status-chip> в шаблоне.
+// Все веса подняты до 700 (было 400/600) — по обратной связи значения должны "брать на себя"
+// внимание в таблице, не теряться на фоне остального текста карточки.
+.indicator-flag-ok { color: var(--color-status-ok-text); font-weight: 700; }
+.indicator-flag-warning { color: var(--color-status-warning-text); font-weight: 700; }
+.indicator-flag-danger { color: var(--color-status-danger-text); font-weight: 700; }
 .indicator-flag-unknown { color: var(--color-neutral-700); font-weight: 700; }
 
 .indicators-table {

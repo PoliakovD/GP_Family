@@ -58,21 +58,35 @@ public static class IndicatorFlagCalculator
     /// (дозаполнение задним числом после того, как справочник наполнился).</summary>
     public static KbReferenceRange? PickBestRange(List<KbReferenceRange> ranges, int? ageYears, Gender? sex)
     {
+        var index = PickBestRangeIndex(ranges, ageYears, sex);
+        return index is null ? null : ranges[index.Value];
+    }
+
+    /// <summary>Тот же выбор, что PickBestRange, но возвращает ИНДЕКС в исходном списке — нужен
+    /// панели справки (редизайн v2, PR4-BE), которая подсвечивает строку "Нормы" в статье
+    /// справочника (KbAnalyteCard.RefRanges — тот же порядок, что здесь). Индекс, а не сам
+    /// объект: KbReferenceRange/KbRefRangeDto — разные типы (первый для каскада расчёта статуса,
+    /// второй — DTO ответа), сравнивать их по значению было бы лишней связкой между слоями.</summary>
+    public static int? PickBestRangeIndex(List<KbReferenceRange> ranges, int? ageYears, Gender? sex)
+    {
         if (ranges.Count == 0) return null;
 
-        var bySex = sex is null ? ranges : ranges.Where(r => r.Sex is null || r.Sex == sex).ToList();
-        if (bySex.Count == 0) bySex = ranges;
+        var bySexIndexed = sex is null
+            ? ranges.Select((r, i) => (Range: r, Index: i)).ToList()
+            : ranges.Select((r, i) => (Range: r, Index: i)).Where(x => x.Range.Sex is null || x.Range.Sex == sex).ToList();
+        if (bySexIndexed.Count == 0) bySexIndexed = ranges.Select((r, i) => (Range: r, Index: i)).ToList();
 
         if (ageYears is not null)
         {
-            var ageMatch = bySex.FirstOrDefault(r =>
-                (r.AgeFrom is not null || r.AgeTo is not null) &&
-                (r.AgeFrom is null || ageYears >= r.AgeFrom) &&
-                (r.AgeTo is null || ageYears <= r.AgeTo));
-            if (ageMatch is not null) return ageMatch;
+            var ageMatch = bySexIndexed.FirstOrDefault(x =>
+                (x.Range.AgeFrom is not null || x.Range.AgeTo is not null) &&
+                (x.Range.AgeFrom is null || ageYears >= x.Range.AgeFrom) &&
+                (x.Range.AgeTo is null || ageYears <= x.Range.AgeTo));
+            if (ageMatch.Range is not null) return ageMatch.Index;
         }
 
-        return bySex.FirstOrDefault(r => r.AgeFrom is null && r.AgeTo is null) ?? bySex[0];
+        var generalMatch = bySexIndexed.FirstOrDefault(x => x.Range.AgeFrom is null && x.Range.AgeTo is null);
+        return generalMatch.Range is not null ? generalMatch.Index : bySexIndexed[0].Index;
     }
 
     private static IndicatorFlag CompareToRange(double? numericValue, double? refLow, double? refHigh)

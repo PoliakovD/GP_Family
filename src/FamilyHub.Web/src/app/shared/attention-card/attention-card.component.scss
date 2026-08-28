@@ -1,0 +1,43 @@
+.attention-card {
+  display: flex;
+  gap: 16px;
+  padding: var(--space-4);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-left: 4px solid transparent;
+  border-radius: var(--radius-md);
+
+  > i {
+    font-size: 28px;
+    flex: none;
+  }
+}
+
+.attention-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.attention-card-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: var(--font-size-record-title);
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+
+.attention-card-subtitle {
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-meta);
+  margin-bottom: 12px;
+}
+
+.attention-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  &:empty {
+    display: none;
+  }
+}

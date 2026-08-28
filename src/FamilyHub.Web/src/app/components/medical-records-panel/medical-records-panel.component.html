@@ -3,16 +3,8 @@
     <div class="alert-danger mb-2">{{ error }}</div>
   }
 
-  <!-- UX-редизайн: форма создания скрыта за широкой кнопкой, раньше была всегда развёрнута
-       над списком. -->
-  <button type="button" class="btn btn-primary btn-block mb-2" (click)="createOpen = !createOpen">
-    @if (createOpen) {
-      <i class="ph-bold ph-x" aria-hidden="true"></i> Отмена
-    } @else {
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> {{ labels.addButtonLabel }}
-    }
-  </button>
-
+  <!-- Редизайн v2: кнопка «Добавить» теперь в топбаре каркаса (PageActionService) — здесь
+       остаётся только сама форма, открытая/закрытая через createOpen. -->
   @if (createOpen) {
     <div class="card mb-3">
       <label class="form-label" for="{{ createFileInputId }}-patient">Пациент</label>
@@ -83,9 +75,12 @@
         </div>
       }
 
-      <button class="btn btn-primary btn-sm align-self-start" [disabled]="saving" (click)="handleSubmit()">
-        {{ saving ? 'Сохраняем…' : labels.addButtonLabel }}
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm align-self-start" [disabled]="saving" (click)="handleSubmit()">
+          {{ saving ? 'Сохраняем…' : labels.addButtonLabel }}
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="saving" (click)="createOpen = false">Отмена</button>
+      </div>
     </div>
   }
 
@@ -101,12 +96,6 @@
         <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
       </div>
     </div>
-    <label class="form-label">Пациент</label>
-    <select class="input mb-2" [(ngModel)]="filters.patientKey" (ngModelChange)="onFilterChange()">
-      @for (opt of filterPatientOptions; track opt.key) {
-        <option [value]="opt.key">{{ opt.label }}</option>
-      }
-    </select>
     <label class="form-label">Врач</label>
     <input
       class="input mb-2"
@@ -122,43 +111,85 @@
 
   <app-search-field [placeholder]="labels.searchPlaceholder" [value]="searchQuery" (valueChange)="onSearchQueryChange($event)" />
 
+  <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры"). -->
+  <div class="d-flex flex-wrap gap-2 mb-2">
+    @for (opt of filterPatientOptions; track opt.key) {
+      <button
+        type="button"
+        class="tag"
+        [class.tag-accent]="filters.patientKey === opt.key"
+        style="cursor:pointer;border:none;font:inherit"
+        (click)="selectPatientFilter(opt.key)"
+      >
+        {{ opt.label }}
+      </button>
+    }
+  </div>
+
   @if (loading) {
     <app-loading-spinner />
   } @else {
-    @for (item of items; track item.id) {
-      <div class="card mb-2">
-        <!-- UX-редизайн: "Дата · Название · Пациент" в длину, чтобы карточка не тратила высоту
-             на многострочную шапку — на телефоне помещается больше записей на экран. -->
-        <div class="record-card-title">
-          {{ item.recordDate }} · {{ shortName(item) }} · {{ item.personName }}
-        </div>
-
-        <!-- UX-редизайн: иконки покрупнее и в одном ряду с «Файлы» (было — «Доступ» с текстом
-             отдельно, «Удалить» отдельно). Файлы теперь открывают модалку, не растягивают карточку. -->
-        <div class="record-card-actions">
-          <button class="btn btn-ghost btn-icon" title="Файлы" (click)="openFilesModal(item)">
-            <i class="ph ph-paperclip" aria-hidden="true"></i>
-            @if (item.attachmentCount > 0) {
-              <span class="icon-badge">{{ item.attachmentCount }}</span>
+    @for (group of groupedItems; track group.key) {
+      <!-- Редизайн v2 — группа = человек: аватар, имя, "N анализов · последний {дата}", доступ
+           словами на уровне группы (не под каждой записью), таймлайн записей по датам внутри. -->
+      <div class="record-group mb-3">
+        <div class="record-group-header">
+          <app-avatar [person]="{key: group.key, firstName: personAvatarParts(group.personName).firstName, lastName: personAvatarParts(group.personName).lastName}" size="lg" />
+          <div class="flex-fill" style="min-width:0">
+            <div class="card-title" style="font-size:19px">{{ group.personName }}</div>
+            <div class="muted" style="font-size:14px">
+              {{ group.records.length }} {{ pluralizeRu(group.records.length, kind() === Kind.Analysis ? 'анализ' : 'посещение', kind() === Kind.Analysis ? 'анализа' : 'посещения', kind() === Kind.Analysis ? 'анализов' : 'посещений') }}
+              · последний {{ group.records[0].recordDate }}
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:13px">
+            <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
+              <i class="ph-duotone ph-eye" aria-hidden="true"></i> {{ groupAccessLabel(group) }}
+            </span>
+            @if (groupCanChangeAccess(group)) {
+              <button type="button" class="btn-link" (click)="openGroupAccess(group)">Изменить доступ</button>
             }
-          </button>
-          @if (canDelete(item)) {
-            <button class="btn btn-ghost btn-icon" title="Редактировать" (click)="openEditSheet(item)">
-              <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-            </button>
+          </div>
+        </div>
+
+        <div class="record-timeline">
+          @for (item of group.records; track item.id) {
+            <div class="record-timeline-row">
+              <div class="record-timeline-date">
+                <div class="record-timeline-day">{{ item.recordDate }}</div>
+              </div>
+              <div class="record-timeline-rail"><span class="record-timeline-dot"></span></div>
+
+              <div class="card record-card flex-fill">
+        <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
+
+        <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок. -->
+        <div class="record-chips">
+          @if (item.attachmentCount > 0) {
+            <span class="tag tag-neutral">{{ attachmentCountLabel(item) }}</span>
           }
-          <button class="btn btn-ghost btn-icon" title="Доступ" (click)="openAccessSheet(item)">
-            <i class="ph ph-share-network" aria-hidden="true"></i>
-          </button>
-          @if (canDelete(item)) {
-            <button class="btn btn-ghost btn-icon" title="Удалить" (click)="handleDelete(item)">
-              <i class="ph ph-trash" aria-hidden="true"></i>
-            </button>
+          @if (item.indicatorCount > 0) {
+            <span class="tag tag-neutral">{{ indicatorCountLabel(item) }}</span>
+          }
+          @if (item.abnormalIndicatorCount > 0) {
+            <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));color:var(--color-status-danger-text)">
+              {{ item.abnormalIndicatorCount }} вне нормы
+            </span>
+          } @else if (item.normalIndicatorCount > 0) {
+            <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));color:var(--color-status-ok-text)">
+              {{ item.normalIndicatorCount }} в норме
+            </span>
+          }
+          @if (item.doctor) {
+            <span class="muted" style="font-size:13px">Врач: {{ item.doctor }}</span>
           }
         </div>
 
-        <div class="d-flex align-items-center gap-2" style="font-size:12px;color:var(--color-accent)">
-          <i class="ph-duotone ph-users-three" aria-hidden="true"></i> {{ accessSummary(item) }}
+        <div class="record-card-actions">
+          <button class="btn btn-secondary" (click)="toggleExpandedRecord(item)">
+            {{ expandedRecordId === item.id ? 'Свернуть' : 'Открыть' }}
+          </button>
+          <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
         </div>
 
         @if (hasUnrecognizedAttachments(item)) {
@@ -187,12 +218,41 @@
         <!-- UX-редизайн: одна «Подробнее» на карточку — врач/описание + (для анализа) таблица
              показателей и резюме, (для визита) диагноз/анамнез/назначения. Ширина строки заголовка
              карточки экономится именно за счёт того, что всё это внутри одной свёртки. -->
-        <app-expandable title="Подробнее">
+        <app-expandable
+          title="Подробнее"
+          [open]="expandedRecordId === item.id"
+          (openChange)="expandedRecordId = $event ? item.id : null"
+        >
           @if (item.doctor) {
             <p class="muted mb-1">Врач: {{ item.doctor }}</p>
           }
           @if (item.description) {
             <p class="mb-1">{{ item.description }}</p>
+          }
+
+          <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
+               читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
+          @if (summaryByRecord[item.id]; as summary) {
+            <div class="card-kicker mt-2">Резюме</div>
+            @if (summary.plainSummary) {
+              <p class="mb-1">{{ summary.plainSummary }}</p>
+            }
+            @if (summary.deviations.length > 0) {
+              <ul class="mb-1" style="font-size:13px">
+                @for (d of summary.deviations; track d.name) {
+                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                }
+              </ul>
+            }
+            @if (summary.questionsForDoctor.length > 0) {
+              <div class="card-kicker mt-2">Вопросы врачу</div>
+              <ul class="mb-1" style="font-size:13px">
+                @for (q of summary.questionsForDoctor; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            }
+            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
           }
 
           @if (item.kind === Kind.Analysis) {
@@ -203,10 +263,8 @@
                 <tr>
                   <th>Показатель</th>
                   <th>Значение</th>
-                  <th>Единицы</th>
-                  <th>Биоматериал</th>
                   <th>Норма</th>
-                  <th></th>
+                  <th>Статус</th>
                   <th></th>
                 </tr>
               </thead>
@@ -214,7 +272,7 @@
                 @for (ind of indicatorsFor(item.id); track ind.id) {
                   @if (editingIndicatorId === ind.id) {
                     <tr class="indicator-edit-row">
-                      <td colspan="7">
+                      <td colspan="5">
                         <div class="d-flex flex-column gap-1">
                           <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
                           <div class="d-flex gap-1">
@@ -255,23 +313,35 @@
                       </td>
                     </tr>
                   } @else {
-                    <tr class="indicator-row" (click)="toggleIndicatorRow(ind)">
+                    <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
+                         шкала-референс / статус), клик по строке открывает панель справки; правка
+                         и удаление — компактные иконки-аффордансы, не отдельные "колонки данных". -->
+                    <tr class="indicator-row" (click)="openIndicatorInfo(ind)">
                       <td>
                         {{ shortIndicatorName(ind) }}
-                        @if (expandedIndicatorId === ind.id) {
-                          <div class="muted" style="font-size:11px">в бланке: {{ ind.displayName }}</div>
+                        @if (indicatorReference(ind); as ref) {
+                          <div class="muted" style="font-size:11px">
+                            {{ ref }}
+                            @if (isCalculatedRef(ind)) {
+                              <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
+                            }
+                          </div>
                         }
                       </td>
-                      <td class="indicator-value-cell" [class]="flagClass(ind.flag)">{{ ind.valueRaw }}</td>
-                      <td class="muted text-nowrap">{{ ind.unit ?? '—' }}</td>
-                      <td class="muted text-nowrap">{{ specimenLabelFor(ind) }}</td>
-                      <td class="muted text-nowrap">
-                        {{ indicatorReference(ind) ?? '—' }}
-                        @if (isCalculatedRef(ind)) {
-                          <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
+                      <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
+                        {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
+                      </td>
+                      <td>
+                        @if (scaleBounds(ind); as b) {
+                          <app-reference-scale
+                            [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
+                            [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                          />
+                        } @else {
+                          <span class="muted" style="font-size:12px">—</span>
                         }
                       </td>
-                      <td class="indicator-flag-cell" [class]="flagClass(ind.flag)">{{ flagLabel(ind.flag) }}</td>
+                      <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
                       <td class="indicator-actions-cell" (click)="$event.stopPropagation()">
                         <span class="indicator-actions">
                           <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
@@ -287,7 +357,7 @@
                 }
                 @if (creatingIndicatorRecordId === item.id) {
                   <tr class="indicator-edit-row">
-                    <td colspan="7">
+                    <td colspan="5">
                       <div class="d-flex flex-column gap-1">
                         <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
                         <div class="d-flex gap-1">
@@ -329,7 +399,7 @@
                   </tr>
                 } @else {
                   <tr>
-                    <td colspan="7">
+                    <td colspan="5">
                       <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
                     </td>
                   </tr>
@@ -339,29 +409,6 @@
           </div>
           } @else {
             <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
-          }
-
-          @if (summaryByRecord[item.id]; as summary) {
-            <div class="card-kicker mt-2">Резюме</div>
-            @if (summary.plainSummary) {
-              <p class="mb-1">{{ summary.plainSummary }}</p>
-            }
-            @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:13px">
-                @for (d of summary.deviations; track d.name) {
-                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                }
-              </ul>
-            }
-            @if (summary.questionsForDoctor.length > 0) {
-              <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:13px">
-                @for (q of summary.questionsForDoctor; track q) {
-                  <li>{{ q }}</li>
-                }
-              </ul>
-            }
-            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
           }
           }
 
@@ -396,6 +443,10 @@
             }
           }
         </app-expandable>
+              </div>
+            </div>
+          }
+        </div>
       </div>
     }
 
@@ -403,12 +454,20 @@
       <p class="muted">{{ labels.emptyLabel }}</p>
     }
 
-    @if (totalPages > 1) {
-      <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
-        <button class="btn btn-secondary btn-sm" [disabled]="!canGoPrev" (click)="goToPage(page - 1)">‹ Назад</button>
-        <span class="muted" style="font-size:12px">Стр. {{ page }} из {{ totalPages }} ({{ totalCount }})</span>
-        <button class="btn btn-secondary btn-sm" [disabled]="!canGoNext" (click)="goToPage(page + 1)">Вперёд ›</button>
+    <!-- Редизайн v2 — бесконечная прокрутка вместо нумерованных страниц: группировка по
+         человеку несовместима с "страницей N из M" (см. риск Р2 плана редизайна). Счётчик —
+         пассивная обратная связь, не элемент управления. На in-memory пути (поиск/врач) сервер
+         и так уже отдал всё за один раз (см. usingTextFilter) — сентинел не нужен. -->
+    @if (items.length > 0) {
+      <div class="muted mb-2" style="font-size:12px;text-align:center">
+        Показано {{ items.length }} из {{ totalCount }}
       </div>
+    }
+    @if (hasMore()) {
+      <app-infinite-scroll-sentinel (visible)="loadMore()" />
+    }
+    @if (loadingMore) {
+      <app-loading-spinner />
     }
   }
 
@@ -456,6 +515,24 @@
     </app-bottom-sheet>
   }
 
+  <!-- Редизайн v2 — «Изменить доступ» на уровне человека: у группы из нескольких записей
+       сначала выбор конкретной записи (доступ по-прежнему настраивается по одной, механику
+       шаринга не меняем), группа из одной записи открывает её шторку напрямую (см. openGroupAccess). -->
+  @if (groupAccessPickerKey) {
+    <app-bottom-sheet title="Изменить доступ" [open]="true" (closed)="closeGroupAccessPicker()">
+      <p class="muted mb-3">Доступ настраивается по каждой записи отдельно — выберите, какую открыть.</p>
+      @for (group of groupedItems; track group.key) {
+        @if (group.key === groupAccessPickerKey) {
+          @for (r of group.records; track r.id) {
+            <button type="button" class="btn btn-secondary btn-block mb-1 text-start" (click)="pickRecordForAccess(r)">
+              {{ r.recordDate }} · {{ shortName(r) }} — {{ accessSummary(r) }}
+            </button>
+          }
+        }
+      }
+    </app-bottom-sheet>
+  }
+
   @if (editRecord; as record) {
     <app-bottom-sheet title="Редактировать запись" [open]="true" (closed)="closeEditSheet()">
       <label class="form-label">Дата</label>
@@ -485,6 +562,36 @@
       <app-kb-card [card]="selectedKbCard" />
     }
   </app-bottom-sheet>
+
+  <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель; узкие экраны:
+       та же существующая шторка, что и остальные (тот же приём, что shared/action-menu). -->
+  @if (infoOpen && isWide) {
+    <app-indicator-info-panel [title]="infoDisplayName || 'Показатель'" (closed)="closeIndicatorInfo()">
+      @if (infoLoading) {
+        <app-loading-spinner />
+      } @else if (infoError) {
+        <div class="alert-danger mb-0">{{ infoError }}</div>
+      } @else {
+        <app-indicator-info
+          [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
+          (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
+        />
+      }
+    </app-indicator-info-panel>
+  } @else {
+    <app-bottom-sheet [title]="infoDisplayName || 'Показатель'" [open]="infoOpen" (closed)="closeIndicatorInfo()">
+      @if (infoLoading) {
+        <app-loading-spinner />
+      } @else if (infoError) {
+        <div class="alert-danger mb-0">{{ infoError }}</div>
+      } @else {
+        <app-indicator-info
+          [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
+          (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
+        />
+      }
+    </app-bottom-sheet>
+  }
 
   <!-- UX-редизайн: файлы — модалка по клику на иконку, а не раскрывающийся блок в самой
        карточке (растягивал список анализов по высоте). -->

@@ -50,5 +50,19 @@ public static class KbEndpoints
                 _ => Results.Ok(outcome),
             };
         });
+
+        // Справочник показателей (редизайн v2) — зеркало /api/kb/medications выше. Обезличен и
+        // глобален, как и справочник медикаментов — та же логика, ничего доп. проверять не нужно.
+        var analyteGroup = app.MapGroup("/api/kb/analytes").RequireAuthorization();
+
+        analyteGroup.MapGet("/", async (
+            string? q, int skip, int take, KbAnalyteCatalogService catalog, CancellationToken ct) =>
+            Results.Ok(await catalog.SearchAsync(q, skip, take, ct)));
+
+        analyteGroup.MapGet("/{id:guid}", async (Guid id, KbAnalyteCatalogService catalog, CancellationToken ct) =>
+        {
+            var card = await catalog.GetByIdAsync(id, ct);
+            return card is null ? Results.NotFound() : Results.Ok(card);
+        });
     }
 }

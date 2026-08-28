@@ -193,10 +193,27 @@ export const routes: Routes = [
           ),
       },
       {
-        // Общий обезличенный справочник препаратов (этап 4) — наполняется AI-конвейером обогащения.
+        // Мини-хаб «Справочник» (редизайн v2, PR4) — тот же паттерн вложенности, что у health-hub
+        // самого. medications — прежний KbTabComponent без изменений содержимого, просто
+        // перемонтирован под дочерний роут; indicators — новый справочник показателей.
         path: 'kb',
         loadComponent: () =>
-          import('./components/kb-tab/kb-tab.component').then((m) => m.KbTabComponent),
+          import('./components/kb-hub/kb-hub.component').then((m) => m.KbHubComponent),
+        children: [
+          { path: '', redirectTo: 'medications', pathMatch: 'full' },
+          {
+            path: 'medications',
+            loadComponent: () =>
+              import('./components/kb-tab/kb-tab.component').then((m) => m.KbTabComponent),
+          },
+          {
+            path: 'indicators',
+            loadComponent: () =>
+              import('./components/kb-analyte-tab/kb-analyte-tab.component').then(
+                (m) => m.KbAnalyteTabComponent,
+              ),
+          },
+        ],
       },
       {
         // Ветка medicalrecords (задачи 5.2/5.3): «мои показатели» — последнее значение по каждому
