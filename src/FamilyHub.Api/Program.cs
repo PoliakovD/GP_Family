@@ -7,6 +7,7 @@ using FamilyHub.Api.Features.Bot;
 using FamilyHub.Api.Features.Consents;
 using FamilyHub.Api.Features.Dependents;
 using FamilyHub.Api.Features.Families;
+using FamilyHub.Api.Features.Home;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Members;
 using FamilyHub.Api.Health;
@@ -679,6 +680,10 @@ if (extractionOptions.Enabled)
 // --- Birthdays-модуль (этап 4 п.11) ---
 builder.Services.AddBirthdayModule();
 
+// --- Агрегат Главной (редизайн v2) — в хосте, не в модуле: собирает Medical+Birthdays,
+// --- которые не могут зависеть друг от друга напрямую (см. HomeSummaryService). ---
+builder.Services.AddScoped<HomeSummaryService>();
+
 // --- Swagger (ручное тестирование) ---
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -902,6 +907,8 @@ app.MapMemberEndpoints();
 app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapFamilyDependentEndpoints();
 app.MapMedicalModule();
 app.MapBirthdayModule();
+// Агрегат Главной содержит медданные (статус анализов) — та же консент-гарантия (редизайн v2).
+app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapHomeEndpoints();
 app.MapNotificationEndpoints();
 app.MapPushEndpoints();
 if (internalBotApiConfigured)

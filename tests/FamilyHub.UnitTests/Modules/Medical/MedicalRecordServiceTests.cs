@@ -511,4 +511,45 @@ public class MedicalRecordServiceTests : SqliteTestBase
         dto.AttachmentCount.Should().Be(2);
         dto.UnrecognizedAttachmentCount.Should().Be(1);
     }
+
+    /// <summary>Редизайн v2 — AbnormalIndicatorCount/NormalIndicatorCount на карточке списка
+    /// («2 вне нормы»/«12 в норме»): тот же GroupBy, что и уже существующий IndicatorCount,
+    /// доп. Count() по Flag. Critical и High/Low оба считаются "вне нормы", Unknown — ни туда,
+    /// ни туда ("без нормы" на фронте = IndicatorCount − Abnormal − Normal).</summary>
+    [Fact]
+    public async Task GetVisibleRecordsAsync_IndicatorCounts_SplitByFlag()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        Db.LabIndicators.AddRange(
+            NewIndicator(record, owner.Id, IndicatorFlag.High),
+            NewIndicator(record, owner.Id, IndicatorFlag.Critical),
+            NewIndicator(record, owner.Id, IndicatorFlag.Normal),
+            NewIndicator(record, owner.Id, IndicatorFlag.Unknown));
+        await Db.SaveChangesAsync();
+
+        var page = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(PageSize: 100));
+
+        var dto = page.Items.Should().ContainSingle(r => r.Id == record.Id).Which;
+        dto.IndicatorCount.Should().Be(4);
+        dto.AbnormalIndicatorCount.Should().Be(2, "High и Critical оба считаются отклонением");
+        dto.NormalIndicatorCount.Should().Be(1);
+    }
+
+    private static LabIndicator NewIndicator(MedicalRecord record, Guid ownerUserId, IndicatorFlag flag) => new()
+    {
+        Id = Guid.NewGuid(),
+        MedicalRecordId = record.Id,
+        RecordDate = record.RecordDate,
+        OwnerUserId = ownerUserId,
+        AnalyteKey = $"analyte-{Guid.NewGuid():N}",
+        DisplayName = "Тестовый показатель",
+        Flag = flag,
+        RefSource = RefSource.Blank,
+        Specimen = SpecimenType.Blood,
+        Position = 0,
+        ValueRaw = "1",
+        CreatedAt = DateTime.UtcNow,
+    };
 }

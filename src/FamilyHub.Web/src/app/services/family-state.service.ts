@@ -3,6 +3,10 @@ import {ApiService, ApiError} from './api.service';
 import {DevLoggerService} from './dev-logger.service';
 import {MemberStatus, type FamilySummary, PendingMember} from '../models/types';
 
+/** Ключ localStorage для запомненного выбора «текущей семьи» (редизайн v2, каркас навигации) —
+ * чисто навигационное удобство, не переезд остального приложения на «одна активная семья». */
+const SELECTED_FAMILY_STORAGE_KEY = 'familyhub.selectedFamilyId';
+
 @Injectable({providedIn: 'root'})
 export class FamilyStateService {
     private readonly api = inject(ApiService);
@@ -15,6 +19,29 @@ export class FamilyStateService {
     readonly activeFamilies = computed(() =>
         this.families().filter((f) => f.myStatus === MemberStatus.Active),
     );
+
+    /** Текущая выбранная семья (редизайн v2) — пункт «Семья» в сайдбаре/табе ведёт прямо сюда,
+     * переключатель семьи в сайдбаре её меняет. Персистится в localStorage, дефолт — первая
+     * активная семья. Ни один существующий компонент не обязан на неё переходить — это новый
+     * чисто навигационный UI-элемент (см. план редизайна, PR2). */
+    private readonly selectedFamilyIdRaw = signal<string | null>(
+        typeof localStorage !== 'undefined' ? localStorage.getItem(SELECTED_FAMILY_STORAGE_KEY) : null,
+    );
+
+    readonly selectedFamily = computed(() => {
+        const active = this.activeFamilies();
+        return active.find((f) => f.id === this.selectedFamilyIdRaw()) ?? active[0] ?? null;
+    });
+
+    selectFamily(id: string): void {
+        this.selectedFamilyIdRaw.set(id);
+        try {
+            localStorage.setItem(SELECTED_FAMILY_STORAGE_KEY, id);
+        } catch {
+            // localStorage недоступен (приватный режим и т.п.) — выбор просто не переживёт
+            // перезагрузку страницы, не критично для навигационного удобства.
+        }
+    }
 
     async refresh(): Promise<void> {
         this.log.log('state', 'info', 'refresh()');

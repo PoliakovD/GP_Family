@@ -1,9 +1,12 @@
 import { Component, OnDestroy, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
+import { PageActionService } from '../../services/page-action.service';
+import { BreakpointService } from '../../services/breakpoint.service';
 import {
   ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource, SpecimenType,
 } from '../../models/types';
@@ -12,6 +15,8 @@ import type {
   AttachmentLimits,
   ExtractionStatusResponse,
   IndicatorDto,
+  IndicatorHistoryPoint,
+  KbAnalyteCard,
   KbMedicationCard,
   MedicalRecord,
   MedicalRecordFilter,
@@ -28,8 +33,16 @@ import { SearchFieldComponent } from '../../shared/search-field/search-field.com
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
+import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
+import { AvatarComponent } from '../../shared/avatar/avatar.component';
+import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
+import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
+import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
+import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
+import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { formatPersonName } from '../../shared/util/person-name';
+import { pluralizeRu } from '../../shared/util/pluralize';
 import { SPECIMEN_OPTIONS, specimenLabel } from '../../shared/util/specimen';
 
 /** Терминальные статусы задачи распознавания — опрос останавливается. */
@@ -97,6 +110,13 @@ interface PatientOption {
 
 const SELF_OPTION: PatientOption = { key: 'self', familyDependentId: null, targetUserId: null, label: 'Я' };
 
+/** Группа записей одного человека (редизайн v2, PR3b) — ключ тот же, что у PatientOption. */
+interface RecordGroup {
+  key: string;
+  personName: string;
+  records: MedicalRecord[];
+}
+
 /** Файл, ожидающий загрузки — либо ещё не отправленный (форма создания записи), либо уже
  * прикреплённый к существующей. previewUrl — только для картинок (см. medications-panel.photos). */
 interface StagedFile {
@@ -122,7 +142,9 @@ let nextInstanceId = 0;
   standalone: true,
   imports: [
     FormsModule, LoadingSpinnerComponent, BottomSheetComponent, ModalComponent, SearchFieldComponent,
-    ExpandableComponent, PipelineProgressComponent, KbCardComponent,
+    ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
+    AvatarComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
+    ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
   ],
   templateUrl: './medical-records-panel.component.html',
   styleUrl: './medical-records-panel.component.scss',
@@ -135,12 +157,16 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly tg = inject(TelegramService);
   private readonly auth = inject(AuthService);
   private readonly confirm = inject(ConfirmService);
+  private readonly pageAction = inject(PageActionService);
+  private readonly router = inject(Router);
+  private readonly breakpoints = inject(BreakpointService);
 
   /** Доступен в шаблоне для сравнения с this.kind(). */
   readonly Kind = MedicalRecordKind;
   readonly ExtractionJobStatus = ExtractionJobStatus;
   readonly IndicatorFlag = IndicatorFlag;
   readonly stageLabel = STAGE_LABEL;
+  readonly pluralizeRu = pluralizeRu;
 
   /** Зеркало FamilyHub.Infrastructure.Documents.DocumentContentTypes.All — то, что конвейер
    * умеет распознать (плюс .doc — хранится, но не распознаётся, см. докстринг там же). */
@@ -161,11 +187,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   loading = true;
   error: string | null = null;
 
-  // --- Пагинация (UX-редизайн: раньше список отдавался целиком, без сортировки) ---
+  // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
+  // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
+  // см. риск Р2 плана редизайна). pageSize 50 (было 15); при активном текстовом поиске/фильтре
+  // по врачу сервер и так уходит на in-memory путь (материализует весь видимый срез) — тогда
+  // сразу просим 100 и не заводим сентинел (см. usingTextFilter/hasMore ниже).
   page = 1;
-  readonly pageSize = 15;
+  readonly pageSize = 50;
   totalCount = 0;
-  totalPages = 0;
+  loadingMore = false;
 
   // --- Фильтры (UX-редизайн) — серверные, любое изменение сбрасывает страницу на 1. ---
   filtersOpen = false;
@@ -240,6 +270,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // Запись, для которой сейчас открыта шторка «Доступ» (null — шторка закрыта).
   accessRecord: MedicalRecord | null = null;
 
+  /** Группа (по ключу человека), для которой сейчас открыт список-пикер «какую запись
+   * настроить» — редизайн v2, «Изменить доступ» теперь на уровне человека, а сама мутация
+   * доступа по-прежнему делается по одной записи (механику шаринга не меняем). Группа из одной
+   * записи пропускает пикер и сразу открывает её собственную шторку — см. openGroupAccess(). */
+  groupAccessPickerKey: string | null = null;
+
   // --- Правка даты/врача/описания записи (кнопка «Редактировать», UX-редизайн) ---
   editRecord: MedicalRecord | null = null;
   editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '' };
@@ -266,15 +302,30 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.accessRecord = null;
       this.page = 1;
       void this.refresh();
+      // Редизайн v2 — кнопка «Добавить» теперь в топбаре каркаса (PageActionService), не
+      // отдельной widget-кнопкой над списком. Открывает ту же форму создания, что и раньше;
+      // закрывается изнутри самой формы («Отмена»), топбар всегда открывает, не тумблер.
+      this.pageAction.set({
+        label: this.labels.addButtonLabel,
+        icon: 'ph-bold ph-plus',
+        handler: () => { this.createOpen = true; },
+      });
     });
   }
 
   ngOnInit(): void {
     // Первичная загрузка — здесь, а не только в effect(): effect выполняется на следующем цикле
-    // change detection и может не успеть отработать до первого рендера шаблона.
+    // change detection и может не успеть отработать до первого рендера шаблона. Та же причина —
+    // почему кнопка топбара тоже дублируется явно здесь (иначе на первом рендере топбар недолго
+    // показывался бы без действия).
     if (this.kind() !== this.loadedKind) {
       void this.refresh();
     }
+    this.pageAction.set({
+      label: this.labels.addButtonLabel,
+      icon: 'ph-bold ph-plus',
+      handler: () => { this.createOpen = true; },
+    });
     if (!this.attachmentLimits) {
       void this.api.getAttachmentLimits().then((limits) => (this.attachmentLimits = limits));
     }
@@ -295,6 +346,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.pipelineClearHandles.clear();
     if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
     this.clearPendingFiles();
+    this.pageAction.clear();
   }
 
   get labels(): KindLabels {
@@ -305,6 +357,124 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * item.title, если уже распознан/введён, иначе нейтральная подпись по виду записи. */
   shortName(item: MedicalRecord): string {
     return item.title ?? (item.kind === MedicalRecordKind.Analysis ? 'Анализ' : 'Приём врача');
+  }
+
+  // --- Группировка по человеку + таймлайн (редизайн v2, PR3b) ---
+
+  /** Тот же ключ, что уже использует фильтр «Пациент» (patientOptions) — группа-человек и
+   * чип-фильтр относятся к одному и тому же понятию "человек", не два независимых. */
+  personKey(item: MedicalRecord): string {
+    if (item.familyDependentId) return `dep:${item.familyDependentId}`;
+    return `user:${item.targetUserId ?? item.ownerUserId}`;
+  }
+
+  /** items уже отсортированы сервером по RecordDate DESC — группировка Map'ом сохраняет порядок
+   * первого появления, поэтому группы идут в порядке даты самой свежей записи каждого человека,
+   * а записи внутри группы остаются в исходном (тоже дата-убывающем) порядке сервера. */
+  get groupedItems(): RecordGroup[] {
+    const groups = new Map<string, RecordGroup>();
+    for (const item of this.items) {
+      const key = this.personKey(item);
+      let group = groups.get(key);
+      if (!group) {
+        group = { key, personName: item.personName, records: [] };
+        groups.set(key, group);
+      }
+      group.records.push(item);
+    }
+    return [...groups.values()];
+  }
+
+  /** Инициалы аватара — из уже отформатированной строки personName (бэк не отдаёт ФИО отдельными
+   * полями для мед-записи, только резолвленное отображаемое имя, см. ResolvePersonNamesAsync).
+   * Первые два токена в том порядке, в каком они есть в строке — точный порядок (Фамилия/Имя)
+   * для инициалов не критичен, это чисто декоративный аватар. */
+  personAvatarParts(name: string): { firstName: string; lastName: string | null } {
+    const parts = name.trim().split(/\s+/);
+    return { firstName: parts[0] ?? '', lastName: parts[1] ?? null };
+  }
+
+  private dependentFamilyName(dependentId: string): string | null {
+    for (const family of this.state.activeFamilies()) {
+      if ((family.dependents ?? []).some((d) => d.id === dependentId)) return family.name;
+    }
+    return null;
+  }
+
+  /** Доступ на уровне человека, а не под каждой записью (см. ТЗ редизайна) — четыре случая:
+   * подопечный (структурно видит вся семья подопечного), чужая запись (расшарено/назначено
+   * мне — менять нечего), мои записи с одинаковым accessSummary (показываем его), мои записи с
+   * разным accessSummary («Доступ настроен по-разному» — правится по одной через пикер). */
+  groupAccessLabel(group: RecordGroup): string {
+    const first = group.records[0];
+
+    if (first.familyDependentId) {
+      const familyName = this.dependentFamilyName(first.familyDependentId);
+      return familyName ? `Видит вся семья «${familyName}»` : 'Видит семья подопечного';
+    }
+
+    const myUserId = this.auth.me()?.userId;
+    if (first.ownerUserId !== myUserId) {
+      return 'Вам открыл(а) доступ';
+    }
+
+    const summaries = new Set(group.records.map((r) => this.accessSummary(r)));
+    return summaries.size === 1 ? [...summaries][0] : 'Доступ настроен по-разному';
+  }
+
+  /** Доступ подопечного структурный (видимость всей семье по модели, не по L1/L2-шарингу) —
+   * менять через «Доступ» нечего, ссылка скрывается. Чужие записи — то же самое: только владелец
+   * управляет своим шарингом (инвариант 2 брифа), не мы. */
+  groupCanChangeAccess(group: RecordGroup): boolean {
+    const first = group.records[0];
+    return !first.familyDependentId && first.ownerUserId === this.auth.me()?.userId;
+  }
+
+  /** Группа из одной записи — сразу её шторка, без лишнего промежуточного пикера. Несколько
+   * записей — пикер «какую запись настроить» (см. groupAccessPickerKey), сама мутация доступа
+   * по-прежнему делается по одной записи существующими openAccessSheet/setFamilyAccess. */
+  openGroupAccess(group: RecordGroup): void {
+    if (group.records.length === 1) {
+      this.openAccessSheet(group.records[0]);
+    } else {
+      this.groupAccessPickerKey = group.key;
+    }
+  }
+
+  closeGroupAccessPicker(): void {
+    this.groupAccessPickerKey = null;
+  }
+
+  pickRecordForAccess(record: MedicalRecord): void {
+    this.groupAccessPickerKey = null;
+    this.openAccessSheet(record);
+  }
+
+  /** Действия меню «…» карточки — заменяет 4 безымянные иконки (редизайн v2). */
+  recordMenuActions(item: MedicalRecord): ActionMenuItem[] {
+    const actions: ActionMenuItem[] = [
+      { label: 'Файлы', icon: 'ph ph-paperclip', handler: () => void this.openFilesModal(item) },
+    ];
+    if (this.canDelete(item)) {
+      actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
+    }
+    actions.push({ label: 'Доступ', icon: 'ph ph-share-network', handler: () => this.openAccessSheet(item) });
+    if (this.canDelete(item)) {
+      actions.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDelete(item) });
+    }
+    return actions;
+  }
+
+  toggleExpandedRecord(item: MedicalRecord): void {
+    this.expandedRecordId = this.expandedRecordId === item.id ? null : item.id;
+  }
+
+  attachmentCountLabel(item: MedicalRecord): string {
+    return `${item.attachmentCount} ${pluralizeRu(item.attachmentCount, 'скан', 'скана', 'сканов')}`;
+  }
+
+  indicatorCountLabel(item: MedicalRecord): string {
+    return `${item.indicatorCount} ${pluralizeRu(item.indicatorCount, 'показатель', 'показателя', 'показателей')}`;
   }
 
   /** «Я» + все подопечные и все другие активные участники из моих активных семей (дедуп по
@@ -375,6 +545,16 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     void this.refresh();
   }
 
+  /** Редизайн v2 — чипы-фильтр по человеку наверху экрана (было — только внутри "Фильтры",
+   * дропдауном). Тот же filters.patientKey/onFilterChange, что и раньше — фильтр один, просто
+   * теперь у него два входа (заметный чип + всё ещё доступный список внутри "Фильтры" не нужен,
+   * убран как дублирующий). */
+  selectPatientFilter(key: string): void {
+    if (this.filters.patientKey === key) return;
+    this.filters.patientKey = key;
+    this.onFilterChange();
+  }
+
   resetFilters(): void {
     this.filters = { from: '', to: '', patientKey: 'all', doctor: '' };
     this.searchQuery = '';
@@ -391,18 +571,16 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }, SEARCH_DEBOUNCE_MS);
   }
 
-  get canGoPrev(): boolean {
-    return this.page > 1;
+  /** На in-memory пути (поиск/фильтр по врачу — Doctor/Title/Description зашифрованы, SQL по ним
+   * невозможен, ADR-0002) сервер и так материализует весь видимый срез перед фильтрацией —
+   * бесконечная прокрутка на этом пути только пересчитывала бы его на каждую подгрузку. Вместо
+   * этого просим сразу до MaxPageSize=100 и не заводим сентинел (см. hasMore/loadMore). */
+  get usingTextFilter(): boolean {
+    return !!(this.searchQuery.trim() || this.filters.doctor.trim());
   }
 
-  get canGoNext(): boolean {
-    return this.page < this.totalPages;
-  }
-
-  goToPage(page: number): void {
-    if (page < 1 || page > this.totalPages || page === this.page) return;
-    this.page = page;
-    void this.refresh();
+  hasMore(): boolean {
+    return !this.usingTextFilter && this.items.length < this.totalCount;
   }
 
   private buildFilter(): MedicalRecordFilter {
@@ -419,13 +597,17 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       doctor: this.filters.doctor.trim() || undefined,
       q: this.searchQuery.trim() || undefined,
       page: this.page,
-      pageSize: this.pageSize,
+      pageSize: this.usingTextFilter ? 100 : this.pageSize,
     };
   }
 
+  /** Полная перезагрузка с первой страницы — вызывается на смену фильтров/вида/после
+   * создания-удаления записи. Подгрузку СЛЕДУЮЩИХ страниц при скролле делает loadMore(), которая
+   * дозаписывает в items, а не заменяет их. */
   async refresh(): Promise<void> {
     const kind = this.kind();
     this.loadedKind = kind;
+    this.page = 1;
     this.loading = true;
     try {
       const [page, shares] = await Promise.all([
@@ -434,7 +616,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       ]);
       this.items = page.items;
       this.totalCount = page.totalCount;
-      this.totalPages = page.totalPages;
       this.shares = shares;
       // Открытая шторка должна остаться синхронной с перезагруженным состоянием записи.
       if (this.accessRecord) {
@@ -442,8 +623,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       }
       this.error = null;
 
-      // Показатели/резюме/заключение — только для готовых записей ТЕКУЩЕЙ страницы (≤15), не
-      // для всего списка сразу (UX-редизайн — было главным источником N+1 вместе со вложениями).
+      // Показатели/резюме/заключение — только для готовых записей ТЕКУЩЕЙ страницы, не для
+      // всего списка сразу (UX-редизайн — было главным источником N+1 вместе со вложениями).
       await Promise.all(
         this.items
           .filter((item) => item.extractionStatus === ExtractionStatus.Ready)
@@ -453,6 +634,29 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить данные.';
     } finally {
       this.loading = false;
+    }
+  }
+
+  /** Подгрузка следующей «страницы» при появлении сентинела в вьюпорте — дозаписывает в items,
+   * сохраняя уже раскрытые/загруженные показатели существующих карточек нетронутыми. */
+  async loadMore(): Promise<void> {
+    if (this.loadingMore || !this.hasMore()) return;
+    this.loadingMore = true;
+    this.page++;
+    try {
+      const page = await this.api.getMedicalRecords(this.buildFilter());
+      this.items = [...this.items, ...page.items];
+      this.totalCount = page.totalCount;
+      await Promise.all(
+        page.items
+          .filter((item) => item.extractionStatus === ExtractionStatus.Ready)
+          .map((item) => this.loadExtractionResult(item)),
+      );
+    } catch (err) {
+      this.page--; // откат — иначе следующая попытка пропустит эту страницу
+      this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить ещё записи.';
+    } finally {
+      this.loadingMore = false;
     }
   }
 
@@ -790,6 +994,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return this.indicatorsByRecord[recordId] ?? [];
   }
 
+  /** Только для окраски ячейки "Значение" — статус-чип со стрелкой/текстом теперь рендерит
+   * <app-status-chip> (shared/status-chip, редизайн v2), эта функция больше не отвечает за
+   * подпись статуса. */
   flagClass(flag: number): string {
     switch (flag) {
       case IndicatorFlag.Low:
@@ -804,22 +1011,25 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  flagLabel(flag: number): string {
-    switch (flag) {
-      case IndicatorFlag.Low: return 'ниже нормы';
-      case IndicatorFlag.High: return 'выше нормы';
-      case IndicatorFlag.Critical: return 'критично';
-      case IndicatorFlag.Normal: return 'норма';
-      default: return '';
-    }
-  }
-
   indicatorReference(indicator: IndicatorDto): string | null {
     if (indicator.refText) return indicator.refText;
     if (indicator.refLowText && indicator.refHighText) return `${indicator.refLowText}–${indicator.refHighText}`;
     if (indicator.refHighText) return `< ${indicator.refHighText}`;
     if (indicator.refLowText) return `> ${indicator.refLowText}`;
     return null;
+  }
+
+  /** Числовые границы для <app-reference-scale> (редизайн v2) — только когда ОБЕ границы заданы
+   * числом; RefLowText/RefHighText гарантированно InvariantCulture double либо null (см. XML-доку
+   * на IndicatorDto), parseFloat без нормализации запятых. Односторонний диапазон/качественный
+   * RefText/RefSource.None — шкала не рендерится, вызывающая сторона показывает indicatorReference(). */
+  scaleBounds(indicator: IndicatorDto): { low: number; high: number } | null {
+    if (!indicator.refLowText || !indicator.refHighText) return null;
+    return { low: parseFloat(indicator.refLowText), high: parseFloat(indicator.refHighText) };
+  }
+
+  scaleValue(indicator: IndicatorDto): number | null {
+    return indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null;
   }
 
   /** «Файл N из totalFiles» в процессе распознавания — processedFiles уже завершены, текущий —
@@ -864,13 +1074,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return indicator.refSource === RefSource.KbCalculated;
   }
 
-  // --- Раскрытая строка показателя (полное имя из бланка + подробности) ---
+  // --- «Открыть» на карточке (редизайн v2) — раскрывает ту же «Подробнее», что раньше
+  // открывалась только кликом по самому заголовку свёртки; теперь ещё и явной кнопкой рядом с
+  // меню «…» (см. record-card-actions в шаблоне). Один id — раскрыта максимум одна карточка.
+  expandedRecordId: string | null = null;
 
-  expandedIndicatorId: string | null = null;
-
-  toggleIndicatorRow(indicator: IndicatorDto): void {
-    this.expandedIndicatorId = this.expandedIndicatorId === indicator.id ? null : indicator.id;
-  }
+  // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
+  // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
 
   // --- Правка показателя вручную (ошибка OCR, v2) ---
 
@@ -924,7 +1134,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       await this.api.deleteIndicator(indicator.id);
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
-      if (this.expandedIndicatorId === indicator.id) this.expandedIndicatorId = null;
+      if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить показатель.';
     }
@@ -1071,6 +1281,90 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   closeKbCard(): void {
     this.kbCardOpen = false;
+  }
+
+  get isWide(): boolean {
+    return this.breakpoints.tier() === 'wide';
+  }
+
+  // --- Справка по показателю (редизайн v2, PR4) — два пути открытия делят одно состояние:
+  // клик по строке показателя записи (reading+history заданы, персонализировано под пациента
+  // записи) и клик по чипу "что смотрят вместе" внутри уже открытой статьи (только карточка,
+  // тот же путь, что каталог /health/kb/indicators).
+
+  infoOpen = false;
+  infoLoading = false;
+  infoError: string | null = null;
+  infoCard: KbAnalyteCard | null = null;
+  infoDisplayName = '';
+  infoReading: IndicatorInfoReading | null = null;
+  infoHistory: IndicatorHistoryPoint[] | null = null;
+  /** Id показателя, чья статья сейчас открыта reading-веткой — null, когда панель открыта чипом
+   * "что смотрят вместе" (там нет конкретного показателя записи). Только для closeIndicatorInfo
+   * при удалении строки — не путать с infoCard.id (это id статьи справочника, другое значение). */
+  private infoIndicatorId: string | null = null;
+
+  async openIndicatorInfo(indicator: IndicatorDto): Promise<void> {
+    this.infoOpen = true;
+    this.infoLoading = true;
+    this.infoError = null;
+    this.infoCard = null;
+    this.infoHistory = null;
+    this.infoIndicatorId = indicator.id;
+    this.infoDisplayName = this.shortIndicatorName(indicator);
+    this.infoReading = {
+      valueRaw: indicator.valueRaw,
+      valueNumeric: indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null,
+      unit: indicator.unit,
+      flag: indicator.flag,
+      matchedRefRangeIndex: null,
+    };
+    try {
+      const response = await this.api.getIndicatorArticle(indicator.id);
+      this.infoCard = response.article;
+      this.infoReading = { ...this.infoReading, matchedRefRangeIndex: response.matchedRefRangeIndex };
+      if (response.historyAvailable) {
+        this.infoHistory = await this.api.getRecordIndicatorHistory(indicator.medicalRecordId, indicator.id);
+      }
+    } catch (err) {
+      this.infoError = err instanceof ApiError ? err.message : 'Не удалось загрузить справку по показателю.';
+    } finally {
+      this.infoLoading = false;
+    }
+  }
+
+  /** Чип "что смотрят вместе" внутри уже открытой статьи — переоткрываем панель БЕЗ
+   * персонального контекста (это другой показатель, не тот, что открывал панель изначально). */
+  async openRelatedAnalyte(kbAnalyteId: string): Promise<void> {
+    this.infoOpen = true;
+    this.infoLoading = true;
+    this.infoError = null;
+    this.infoCard = null;
+    this.infoReading = null;
+    this.infoHistory = null;
+    this.infoDisplayName = '';
+    this.infoIndicatorId = null;
+    try {
+      this.infoCard = await this.api.getKbAnalyte(kbAnalyteId);
+    } catch (err) {
+      this.infoError = err instanceof ApiError ? err.message : 'Не удалось загрузить статью справочника.';
+    } finally {
+      this.infoLoading = false;
+    }
+  }
+
+  closeIndicatorInfo(): void {
+    this.infoOpen = false;
+    this.infoIndicatorId = null;
+  }
+
+  /** Футер "Открыть в справочнике" — уходит на мини-хаб /health/kb/indicators с ?id=, тот же
+   * экран сам откроет статью (см. KbAnalyteTabComponent.ngOnInit). */
+  openIndicatorInCatalog(): void {
+    if (!this.infoCard) return;
+    const id = this.infoCard.id;
+    this.closeIndicatorInfo();
+    void this.router.navigate(['/health/kb/indicators'], { queryParams: { id } });
   }
 
   /** Видна ли КОНКРЕТНАЯ запись данной семье: (L1 share есть) И (L2 hide нет). */

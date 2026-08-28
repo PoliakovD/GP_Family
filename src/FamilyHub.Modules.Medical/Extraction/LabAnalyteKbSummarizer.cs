@@ -31,6 +31,7 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
           "refRanges": [{"ageFrom": null, "ageTo": null, "sex": null, "low": 120, "high": 160, "unit": "г/л"}],
           "calculationInstructions": "если норма зависит от веса/роста/срока беременности/фазы цикла и т.п. и НЕ сводится к фиксированным диапазонам — словами, как её вычислить, иначе null",
           "aliases": ["другое название/сокращение показателя", "..."],
+          "relatedAnalytes": ["показатель, который обычно смотрят вместе с этим", "..."],
           "usedSourceIndexes": [0, 2]
         }
 
@@ -52,6 +53,11 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
           диапазон в "refRanges".
         - "aliases" — другие названия/сокращения ТОГО ЖЕ показателя, встреченные в сниппетах
           (например, "Hb", "HGB" для гемоглобина). Пустой массив, если не встречались.
+        - "relatedAnalytes" — 2-5 ДРУГИХ показателей (не синонимов этого же), которые лаборатории
+          и врачи обычно интерпретируют вместе с этим (например, для гемоглобина — ферритин,
+          железо сыворотки, эритроциты, гематокрит), ТОЛЬКО если это явно следует из сниппетов —
+          не придумывай по общим медицинским знаниям. Пустой массив, если сниппеты не называют
+          связанные показатели.
         - "usedSourceIndexes" — индексы (из подписи "[N]" перед каждым сниппетом) источников, на
           которые реально опирается ответ. Если ни один сниппет не содержит полезной информации о
           показателе — верни пустой массив и null во всех текстовых полях, пустые массивы в refRanges/aliases.
@@ -91,6 +97,7 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
         var refRanges = ReadRefRanges(result.Payload);
         var aliases = ReadStringArray(result.Payload, "aliases");
         var calculationInstructions = ReadString(result.Payload, "calculationInstructions");
+        var relatedAnalytes = ReadStringArray(result.Payload, "relatedAnalytes");
 
         var summary = new LabAnalyteSummary(
             LoincCode: ReadString(result.Payload, "loincCode"),
@@ -102,7 +109,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
             RefRanges: refRanges,
             Aliases: aliases,
             UsedSourceIndexes: usedIndexes,
-            CalculationInstructions: calculationInstructions);
+            CalculationInstructions: calculationInstructions,
+            RelatedAnalytes: relatedAnalytes);
 
         var hasContent = refRanges.Count > 0 || aliases.Count > 0 || !string.IsNullOrWhiteSpace(calculationInstructions) || new[]
         {

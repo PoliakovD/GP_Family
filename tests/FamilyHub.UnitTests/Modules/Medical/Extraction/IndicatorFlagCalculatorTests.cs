@@ -1,3 +1,4 @@
+using System.Globalization;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Modules.Medical.Extraction;
 using FluentAssertions;
@@ -102,5 +103,38 @@ public class IndicatorFlagCalculatorTests
         var (flag, source, _, _) = IndicatorFlagCalculator.Calculate(indicator, kbFallback: kbRange, ageYears: null, sex: Gender.Female);
         flag.Should().Be(IndicatorFlag.Unknown);
         source.Should().Be(RefSource.None);
+    }
+
+    /// <summary>Редизайн v2 — тест-страж контракта IndicatorDto.RefLowText/RefHighText (см.
+    /// XML-докстринг там же): все три места записи (MedicalDocumentExtractionProcessor,
+    /// ExtractionQueryService, RecalculateIndicatorFlagsJob) пишут EffectiveLow/EffectiveHigh как
+    /// `.ToString(CultureInfo.InvariantCulture)` — фронт вправе делать parseFloat без
+    /// нормализации запятых для шкалы-референса (PR4). Если это соглашение когда-нибудь
+    /// разойдётся (например, кто-то начнёт форматировать текущей культурой с запятой), эта строка
+    /// перестанет парситься на фронте молча — тест ловит расхождение здесь, на бэке.</summary>
+    [Theory]
+    [InlineData(130, 160)]
+    [InlineData(3.3, 5.5)]
+    [InlineData(0, 0.4)]
+    [InlineData(-5, 10)]
+    public void Calculate_BlankRange_EffectiveLowHigh_RoundTripThroughInvariantCultureString(double low, double high)
+    {
+        var indicator = new ExtractedLabIndicator("Показатель", "5", null, low, high, null);
+        var (_, _, effLow, effHigh) = IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null);
+
+        effLow.Should().NotBeNull();
+        effHigh.Should().NotBeNull();
+
+        var lowText = effLow!.Value.ToString(CultureInfo.InvariantCulture);
+        var highText = effHigh!.Value.ToString(CultureInfo.InvariantCulture);
+
+        // Запятая как разделитель сломала бы фронтовый parseFloat() ("5,6" → NaN).
+        lowText.Should().NotContain(",");
+        highText.Should().NotContain(",");
+
+        double.TryParse(lowText, NumberStyles.Float, CultureInfo.InvariantCulture, out var roundTrippedLow).Should().BeTrue();
+        double.TryParse(highText, NumberStyles.Float, CultureInfo.InvariantCulture, out var roundTrippedHigh).Should().BeTrue();
+        roundTrippedLow.Should().Be(low);
+        roundTrippedHigh.Should().Be(high);
     }
 }

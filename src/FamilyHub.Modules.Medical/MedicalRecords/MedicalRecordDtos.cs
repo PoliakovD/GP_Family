@@ -6,7 +6,11 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 /// (см. MedicalRecordService.ResolvePersonNamesAsync), не хранится (v2, "пациента убрать").
 /// AttachmentCount/UnrecognizedAttachmentCount/IndicatorCount (UX-редизайн) — считаются одним
 /// GroupBy по странице записей на сервере, чтобы фронт решал, показывать ли «Распознать» и
-/// заголовок «Файлы (N)» БЕЗ отдельного GET /attachments на каждую запись (был N+1 в refresh()).</summary>
+/// заголовок «Файлы (N)» БЕЗ отдельного GET /attachments на каждую запись (был N+1 в refresh()).
+/// AbnormalIndicatorCount/NormalIndicatorCount (редизайн v2) — тот же GroupBy, доп. Count() по
+/// Flag; «без нормы» на фронте = IndicatorCount − Abnormal − Normal. Как и остальные счётчики,
+/// достоверны только в списке (GetVisibleRecordsAsync) — на create/update/search дефолт 0, как и
+/// у уже существующего IndicatorCount (см. ToDto).</summary>
 public record MedicalRecordDto(
     Guid Id,
     Guid OwnerUserId,
@@ -23,7 +27,9 @@ public record MedicalRecordDto(
     Guid? TargetUserId,
     int AttachmentCount = 0,
     int UnrecognizedAttachmentCount = 0,
-    int IndicatorCount = 0);
+    int IndicatorCount = 0,
+    int AbnormalIndicatorCount = 0,
+    int NormalIndicatorCount = 0);
 
 /// <summary>Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для
 /// глобального поиска. TotalPages вычисляется на сервере, а не на фронте, чтобы не дублировать

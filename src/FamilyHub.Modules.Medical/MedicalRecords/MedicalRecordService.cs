@@ -168,24 +168,36 @@ public class MedicalRecordService(
             .ToListAsync(ct);
         var attachmentCountsById = attachmentCounts.ToDictionary(x => x.RecordId, x => x);
 
+        // Абнормал/норм — редизайн v2 (чипы «N вне нормы»/«N в норме» на карточке списка), тот же
+        // GroupBy, что и общий счётчик — ноль новых запросов. «Без нормы» на фронте = Count −
+        // Abnormal − Normal, отдельно не считаем.
         var indicatorCounts = await db.LabIndicators
             .Where(i => pageRecordIds.Contains(i.MedicalRecordId))
             .GroupBy(i => i.MedicalRecordId)
-            .Select(g => new { RecordId = g.Key, Count = g.Count() })
+            .Select(g => new
+            {
+                RecordId = g.Key,
+                Count = g.Count(),
+                Abnormal = g.Count(i => i.Flag == IndicatorFlag.Low || i.Flag == IndicatorFlag.High || i.Flag == IndicatorFlag.Critical),
+                Normal = g.Count(i => i.Flag == IndicatorFlag.Normal),
+            })
             .ToListAsync(ct);
-        var indicatorCountsById = indicatorCounts.ToDictionary(x => x.RecordId, x => x.Count);
+        var indicatorCountsById = indicatorCounts.ToDictionary(x => x.RecordId, x => x);
 
         var items = pageRecords
             .Select(r =>
             {
                 var counts = attachmentCountsById.GetValueOrDefault(r.Id);
+                var indicators = indicatorCountsById.GetValueOrDefault(r.Id);
                 return ToDto(
                     r,
                     r.OwnerUserId == userId && hiddenByRecord.TryGetValue(r.Id, out var ids) ? ids : [],
                     personNames[r.Id],
                     counts?.Total ?? 0,
                     counts?.Unrecognized ?? 0,
-                    indicatorCountsById.GetValueOrDefault(r.Id));
+                    indicators?.Count ?? 0,
+                    indicators?.Abnormal ?? 0,
+                    indicators?.Normal ?? 0);
             })
             .ToList();
 
@@ -647,8 +659,10 @@ public class MedicalRecordService(
 
     private static MedicalRecordDto ToDto(
         MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds, string personName,
-        int attachmentCount = 0, int unrecognizedAttachmentCount = 0, int indicatorCount = 0) =>
+        int attachmentCount = 0, int unrecognizedAttachmentCount = 0, int indicatorCount = 0,
+        int abnormalIndicatorCount = 0, int normalIndicatorCount = 0) =>
         new(r.Id, r.OwnerUserId, r.Kind, personName, r.RecordDate, r.Doctor, r.Title, r.Description,
             r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId,
-            attachmentCount, unrecognizedAttachmentCount, indicatorCount);
+            attachmentCount, unrecognizedAttachmentCount, indicatorCount,
+            abnormalIndicatorCount, normalIndicatorCount);
 }

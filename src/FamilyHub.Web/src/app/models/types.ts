@@ -196,6 +196,10 @@ export interface MedicalRecord {
     attachmentCount: number;
     unrecognizedAttachmentCount: number;
     indicatorCount: number;
+    /** Редизайн v2 — чипы «N вне нормы»/«N в норме» на карточке списка (components/medical-records-panel).
+     * «Без нормы» на фронте = indicatorCount − abnormalIndicatorCount − normalIndicatorCount. */
+    abnormalIndicatorCount: number;
+    normalIndicatorCount: number;
 }
 
 /** Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для поиска. */
@@ -432,6 +436,11 @@ export interface IndicatorDto {
     medicalRecordId: string;
     /** Заполнено только при specimen === SpecimenType.Other — ссылка на UserSpecimen. */
     specimenCustomId: string | null;
+    /** Редизайн v2 — invariant-culture double либо null (качественный результат без числа).
+     * Гарантия та же, что у refLowText/refHighText: parseFloat без нормализации запятых. */
+    valueNumericText: string | null;
+    /** Редизайн v2 — ключ статьи справочника показателей; null, пока обогащение до него не дошло. */
+    kbAnalyteId: string | null;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч. */
@@ -513,8 +522,134 @@ export interface RecordSummaryResponse {
     disclaimer: string;
 }
 
+// Редизайн v2 — справочник показателей анализов (GET /api/kb/analytes[/{id}]), зеркало
+// KbListItem/KbMedicationCard выше на другую таблицу (kb.global_lab_analytes_kb).
+
+export interface KbAnalyteListItem {
+    id: string;
+    displayName: string;
+    plainExplanation: string | null;
+}
+
+export interface KbAnalyteListResponse {
+    items: KbAnalyteListItem[];
+    hasMore: boolean;
+}
+
+export interface KbRefRangeDto {
+    ageFrom: number | null;
+    ageTo: number | null;
+    sex: number | null; // Gender | null — null означает "для обоих полов"
+    low: number | null;
+    high: number | null;
+    unit: string | null;
+}
+
+/** id=null — статьи по этому имени пока нет в справочнике (обогащение ещё не дошло) — чип
+ * рендерится, но некликабелен. */
+export interface KbRelatedAnalyte {
+    id: string | null;
+    displayName: string;
+}
+
+/** Aliases сознательно не отдаётся — тот же выбор, что у KbMedicationCard. */
+export interface KbAnalyteCard {
+    id: string;
+    displayName: string;
+    loincCode: string | null;
+    defaultUnit: string | null;
+    plainExplanation: string | null;
+    whyMeasured: string | null;
+    highMeans: string | null;
+    lowMeans: string | null;
+    refRanges: KbRefRangeDto[];
+    related: KbRelatedAnalyte[];
+    source: string;
+    updatedAt: string;
+}
+
+/** Возраст (на дату записи)/пол пациента — GET /api/indicators/{id}/article. */
+export interface PatientContextDto {
+    ageYears: number | null;
+    sex: number | null; // Gender | null
+}
+
+/** Ответ GET /api/indicators/{id}/article — показатель + статья справочника + персональная
+ * норма, одним запросом на клик по строке. article=null — показатель ещё не привязан к KB
+ * (панель всё равно открывается, значение+шкала есть всегда). matchedRefRangeIndex — индекс в
+ * article.refRanges, который нужно подсветить как "норма для этого человека". */
+export interface IndicatorArticleResponse {
+    indicator: IndicatorDto;
+    patient: PatientContextDto;
+    matchedRefRangeIndex: number | null;
+    article: KbAnalyteCard | null;
+    historyAvailable: boolean;
+}
+
 /** Лимиты загрузки вложений (GET /api/attachments/limits) — настраиваются в env, см. AttachmentUploadOptions. */
 export interface AttachmentLimits {
     maxFileSizeBytes: number;
     maxFilesPerRecord: number;
+}
+
+// Редизайн v2 — агрегат Главной (GET /api/home/summary), см. FamilyHub.Api.Features.Home.
+
+/** "expired" | "expiring" — считается на бэке (тот же порог, что у ReminderScanJob), фронт не
+ * дублирует пороги. */
+export type HomeMedicationSeverity = 'expired' | 'expiring';
+
+export interface HomeMedicationAlert {
+    medicationId: string;
+    medkitId: string;
+    medkitName: string;
+    familyId: string;
+    familyName: string;
+    name: string;
+    expiryDate: string; // DateOnly "yyyy-MM-dd"
+    daysLeft: number; // отрицательное — просрочено
+    severity: HomeMedicationSeverity;
+}
+
+/** Заявка на вступление в семью, где текущий пользователь — Admin. ФИО тремя полями — под
+ * <app-person-name>, как PendingMember/CurrentMember. */
+export interface HomeJoinRequest {
+    familyId: string;
+    familyName: string;
+    userId: string;
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
+    username: string | null;
+    requestedAt: string;
+}
+
+export interface HomeBirthdayItem {
+    familyId: string;
+    familyName: string;
+    personName: string;
+    date: string; // DateOnly "yyyy-MM-dd"
+    daysUntil: number;
+    turningAge: number;
+    source: number; // BirthdaySource
+}
+
+export interface HomeOkChips {
+    medicationsInDate: number;
+    medicationsTotal: number;
+    analysesTotal: number;
+    analysesAbnormal: number;
+    pushEnabled: boolean;
+}
+
+export interface HomeSummaryResponse {
+    greetingName: string | null;
+    today: string; // DateOnly "yyyy-MM-dd"
+    attentionTotal: number;
+    primaryFamilyId: string | null;
+    primaryFamilyName: string | null;
+    medications: HomeMedicationAlert[];
+    joinRequests: HomeJoinRequest[];
+    birthdays: HomeBirthdayItem[];
+    ok: HomeOkChips;
+    unreadNotifications: number;
 }

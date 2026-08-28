@@ -5,9 +5,7 @@
         </a>
 
         @if (family && family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-            <button class="btn btn-danger btn-sm text-nowrap" (click)="handleDeleteFamily()">
-                Удалить семью
-            </button>
+            <app-action-menu [actions]="deleteFamilyMenuActions" label="Действия с семьёй" />
         }
     </div>
 
@@ -31,7 +29,7 @@
         <div class="seg mb-3">
             @for (t of subTabs; track t.id) {
                 <label class="seg-opt">
-                    <input type="radio" name="familySubTab" [checked]="activeSubTab === t.id" (change)="activeSubTab = t.id" />
+                    <input type="radio" name="familySubTab" [checked]="activeSubTab === t.id" (change)="selectSubTab(t.id)" />
                     {{ t.label }}
                 </label>
             }
@@ -40,37 +38,35 @@
         @if (activeSubTab === 'members') {
             @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
                 <div class="card mb-3">
-                    <div class="d-flex gap-2 mb-2">
-                        <button class="btn btn-secondary btn-sm" (click)="loadPending()">
-                            Заявки
-                        </button>
-                        <button class="btn btn-primary btn-sm" (click)="openInviteModal()">
-                            <i class="ph-bold ph-plus" aria-hidden="true"></i> Пригласить
-                        </button>
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                        <div class="card-kicker" style="margin:0">Заявки на вступление</div>
+                        @if (pendingMembers) {
+                            <span class="muted" style="font-size:13px">{{ pendingMembers.length }}</span>
+                        }
                     </div>
 
-                    @if (pendingMembers !== undefined) {
-                        @if (pendingMembers.length === 0) {
-                            <p class="muted mb-0">Заявок нет.</p>
-                        }
-                        @for (p of pendingMembers; track p.userId) {
-                            <div class="pending-row d-flex justify-content-between align-items-center gap-2 mb-1">
-                                <span class="pending-name">
-                                    <app-person-name [person]="p" />
-                                    @if (p.username) {
-                                        <span class="text-muted">&#64;{{ p.username }}</span>
-                                    }
-                                </span>
-                                <span class="d-flex gap-1 flex-shrink-0">
-                                    <button class="btn btn-primary btn-sm" (click)="handleApprove(p.userId)">
-                                        Принять
-                                    </button>
-                                    <button class="btn btn-secondary btn-sm" (click)="handleReject(p.userId)">
-                                        Отклонить
-                                    </button>
-                                </span>
-                            </div>
-                        }
+                    @if (pendingMembers === undefined) {
+                        <p class="muted mb-0">Загрузка…</p>
+                    } @else if (pendingMembers.length === 0) {
+                        <p class="muted mb-0">Заявок нет.</p>
+                    }
+                    @for (p of pendingMembers; track p.userId) {
+                        <div class="pending-row d-flex justify-content-between align-items-center gap-2 mb-1">
+                            <span class="pending-name">
+                                <app-person-name [person]="p" />
+                                @if (p.username) {
+                                    <span class="text-muted">&#64;{{ p.username }}</span>
+                                }
+                            </span>
+                            <span class="d-flex gap-1 flex-shrink-0">
+                                <button class="btn btn-primary btn-sm" (click)="handleApprove(p.userId)">
+                                    Принять
+                                </button>
+                                <button class="btn btn-secondary btn-sm" (click)="handleReject(p.userId)">
+                                    Отклонить
+                                </button>
+                            </span>
+                        </div>
                     }
                 </div>
 
@@ -125,49 +121,51 @@
             }
 
             <div class="card-kicker mb-2">Участники · {{ family.currentMembers?.length ?? 0 }}</div>
-            <div style="overflow-x:auto">
-                <table class="table">
-                    <thead>
-                    <tr>
-                        <th scope="col">Имя</th>
-                        <th scope="col">Username</th>
-                        <th scope="col">Роль</th>
-                        <th scope="col">Вступил</th>
-                        @if (family.myRole === FamilyRole.Admin) {
-                            <th scope="col"></th>
-                        }
-                    </tr>
-                    </thead>
-                    <tbody>
-                        @for (m of family.currentMembers; track m.id) {
-                            <tr>
-                                <td>
-                                    <span class="card-title" style="font-size:14px"><app-person-name [person]="m" /></span>
-                                </td>
-                                <td>
-                                    @if (m.username) {
-                                        <span class="text-primary">{{ m.username }}</span>
-                                    } @else {
-                                        <span class="text-muted">—</span>
-                                    }
-                                </td>
-                                <td>
-                                    <span class="tag" [class.tag-accent]="m.role === FamilyRole.Admin" [class.tag-neutral]="m.role !== FamilyRole.Admin">
-                                        {{ roleLabel(m.role) }}
-                                    </span>
-                                </td>
-                                <td class="text-muted">
-                                    {{ m.joinedAt | date: 'dd/MM/yyyy' }}
-                                </td>
-                                @if (family.myRole === FamilyRole.Admin) {
-                                    <td>
-                                        <button class="btn btn-ghost btn-sm" (click)="removeMember(m.id)">Выгнать</button>
-                                    </td>
+            <div class="d-flex flex-column gap-2">
+                @for (m of family.currentMembers ?? []; track m.id) {
+                    <div class="card family-member-card">
+                        <app-avatar [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" size="lg" />
+                        <div class="flex-fill" style="min-width:0">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="card-title" style="font-size:19px"><app-person-name [person]="m" /></span>
+                                <span class="tag" [class.tag-accent]="m.role === FamilyRole.Admin" [class.tag-neutral]="m.role !== FamilyRole.Admin">
+                                    {{ roleLabel(m.role) }}
+                                </span>
+                                @if (m.id === auth.me()?.userId) {
+                                    <span class="tag tag-neutral">это вы</span>
                                 }
-                            </tr>
+                            </div>
+                            <div class="muted" style="font-size:14px">
+                                @if (m.username) {
+                                    &#64;{{ m.username }} ·
+                                }
+                                в семье с {{ m.joinedAt | date:'dd MMMM yyyy' }}
+                            </div>
+                            @if (m.id === auth.me()?.userId) {
+                                <div class="d-flex align-items-center gap-2 flex-wrap mt-1" style="font-size:14px">
+                                    <span class="muted">
+                                        {{ hasSharedWithThisFamily() ? 'Свои анализы открыл(а) этой семье' : 'Анализы этой семье не открыты' }}
+                                    </span>
+                                    <a routerLink="/health/records" style="font-size:13px">Настроить доступ</a>
+                                </div>
+                            }
+                        </div>
+                        @if (family.myRole === FamilyRole.Admin) {
+                            <button class="btn btn-ghost btn-sm text-nowrap" (click)="removeMember(m.id)">Выгнать</button>
                         }
-                    </tbody>
-                </table>
+                    </div>
+                }
+
+                <div class="card family-member-card family-invite-tile">
+                    <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
+                    <div class="flex-fill">
+                        <div class="card-title" style="font-size:18px">Пригласить в семью</div>
+                        <div class="muted" style="font-size:14px">
+                            Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary text-nowrap" (click)="openInviteModal()">Создать ссылку</button>
+                </div>
             </div>
         }
 

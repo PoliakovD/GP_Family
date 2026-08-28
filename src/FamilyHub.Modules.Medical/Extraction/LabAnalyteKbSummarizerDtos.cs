@@ -5,10 +5,13 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// <summary>Версия схемы <see cref="LabAnalyteSummary"/> — записывается в GlobalLabAnalyteKb.PayloadVersion
 /// (зеркало MedicationSummarySchema).
 /// v2: добавлены Sex на LabAnalyteReferenceRange и LabAnalyteSummary.CalculationInstructions —
-/// старые строки (v1) читаются как есть, оба поля просто null/отсутствуют.</summary>
+/// старые строки (v1) читаются как есть, оба поля просто null/отсутствуют.
+/// v3 (редизайн v2, PR4-BE): добавлен LabAnalyteSummary.RelatedAnalytes («Что смотрят вместе» в
+/// панели справки) — старые строки (v1/v2) читаются как пустой список, бэкофилл не нужен, поле
+/// дозаполняется при следующем прогоне обогащения/ручного рефреша.</summary>
 public static class LabAnalyteSummarySchema
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 }
 
 /// <summary>Один референсный диапазон из PayloadJson.refRanges. Sex=null — общий диапазон (годится
@@ -38,7 +41,14 @@ public record LabAnalyteSummary(
     /// каскада, когда RefRanges не дал совпадения под конкретного пациента. Null, если
     /// суммаризатор не нашёл такой методики в источниках (большинство показателей — обычный
     /// фиксированный диапазон, этого поля им не требуется).</summary>
-    string? CalculationInstructions = null);
+    string? CalculationInstructions = null,
+    /// <summary>v3 (редизайн v2) — «Что смотрят вместе» в панели справки: 2-5 нормализованных
+    /// имён показателей (тот же LabAnalyteNormalizer.Normalize, что и ключ дедупликации самого
+    /// справочника), которые лаборатории/врачи обычно интерпретируют вместе с этим. Резолвятся в
+    /// Id живым поиском по NormalizedName на чтении (см. ExtractionQueryService.GetArticleAsync/
+    /// KbAnalyteCatalogService), не хранятся как ссылки — статья связанного показателя может
+    /// появиться в справочнике позже, чем эта (тот же приём, что PrescribedMedicationDto.KbMedicationId).</summary>
+    IReadOnlyList<string>? RelatedAnalytes = null);
 
 /// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина отказа записи в справочник.</summary>
 public record LabAnalyteSummarizeResult(bool Success, LabAnalyteSummary? Summary, string? Error)

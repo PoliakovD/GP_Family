@@ -63,6 +63,31 @@
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
   --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  // Редизайн v2 — «бумажная» карточка поверх серого фона (--color-surface остаётся для «хрома»:
+  // таб-бар, .seg, инпуты). Контур карточки на --color-bg почти не читался при --color-surface.
+  --color-paper: #fbfaf9;
+
+  // Статусные цвета (норма/отклонение/нет данных) — канонизированы из уже существующей аптечной
+  // палитры сроков годности (см. shared/util/expiry.ts, medications-panel.component.scss), не
+  // новые смыслы. Единый источник вместо 4 разошедшихся копий (см. commit message/риск Р6).
+  --color-status-ok: #2f9e44;
+  --color-status-warning: #f08c00;
+  --color-status-danger: #e03131;
+  --color-status-none: #9c36b5;
+  // Тёмные текстовые варианты — контраст текста на светлой цветной подложке (плитки-сводки,
+  // карточки «Требует внимания» и т.п.), где сам --color-status-* слишком ярок для текста.
+  --color-status-ok-text: #1f6b2f;
+  --color-status-danger-text: #a01c1c;
+  --color-status-warning-text: #8a5200;
+
+  // Редизайн v2 — базовый кегль поднят под аудиторию, включающую пожилых родителей (17px вместо
+  // 16), плюс отдельные размеры для заголовков записей и минимальная высота интерактивных
+  // элементов. Применяются точечно к существующим селекторам — см. риск Р1 в плане редизайна.
+  --font-size-body: 17px;
+  --font-size-meta: 15px;
+  --font-size-record-title: 19px;
+  --tap-min: 44px;
 }
 
 * {
@@ -74,7 +99,7 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: var(--font-size-body);
   line-height: 1.55;
   font-weight: 400;
 }
@@ -95,7 +120,7 @@ h2 { font-size: 32px; }
 h3 { font-size: 25px; }
 h4 { font-size: 20px; }
 h5 { font-size: 17px; }
-h6 { font-size: 15px; }
+h6 { font-size: 17px; } // редизайн v2: было 15px
 
 p {
   margin: 0 0 var(--space-3);
@@ -134,13 +159,14 @@ a {
   text-decoration: none;
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
-  font-size: 14px;
+  font-size: 15px; // редизайн v2: было 14px
   line-height: 1.2;
   color: var(--color-text);
   background: transparent;
   border: 1px solid transparent;
   padding: var(--space-2) calc(var(--space-3) * 1.2);
   border-radius: var(--radius-md);
+  min-height: var(--tap-min); // редизайн v2 — цель по высоте интерактивных элементов
 
   &:disabled {
     opacity: 0.5;
@@ -178,8 +204,8 @@ a {
 }
 
 .btn-icon {
-  width: 36px;
-  height: 36px;
+  width: var(--tap-min); // редизайн v2: было 36px
+  height: var(--tap-min);
   padding: 0;
 }
 
@@ -232,9 +258,12 @@ a {
 }
 
 // Компактный размер кнопки — как маленькие кнопки в карточках дэка (padding 5/10, 12px).
+// Редизайн v2: намеренно НЕ наследует --tap-min — используется в плотных строках таблиц/
+// инлайн-редакторов, где 44px разорвал бы вёрстку (см. риск Р1 плана редизайна).
 .btn-sm {
   padding: 5px 10px;
   font-size: 12px;
+  min-height: 36px;
 }
 
 // Укрупнённый размер — для одиночного акцентного CTA шага (например, "Открыть Telegram").
@@ -248,10 +277,10 @@ a {
 // ============================================================================
 .input {
   width: 100%;
-  min-height: 36px;
+  min-height: var(--tap-min); // редизайн v2: было 36px
   padding: 6px 10px;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px; // редизайн v2: было 14px
   color: var(--color-text);
   caret-color: var(--color-accent);
   background: var(--color-surface);
@@ -284,9 +313,15 @@ select.input {
 // ============================================================================
 // Сегмент-контрол (радио-переключатель в виде группы кнопок)
 // ============================================================================
+// Редизайн v2 — горизонтальная прокрутка вместо overflow:hidden, консолидировано из 4 разных
+// копий одного и того же фикса (health-hub/family-details/settings/admin-hub.component.scss) —
+// длинные русские ярлыки в 3-5 вкладок не гарантированно влезают в узкий экран (360px), см.
+// .claude/patterns/frontend_web.md «Хаб-паттерн». Один источник вместо пятого дубля.
 .seg {
   display: inline-flex;
-  overflow: hidden;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
 }
@@ -298,6 +333,9 @@ select.input {
   padding: 7px 12px;
   font-size: 13px;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: var(--tap-min); // редизайн v2 — только высота тач-цели; кегль/перенос — в PR2
 
   & + .seg-opt {
     border-left: 1px solid var(--color-divider);
@@ -340,6 +378,10 @@ select.input {
 // ============================================================================
 // Toggle-переключатель (bottom-sheet доступа к анализам и т.п.)
 // ============================================================================
+// Редизайн v2: тач-цель 44px расширяется невидимым псевдоэлементом-«площадкой», а не min-height
+// на самом .switch — .switch-knob позиционируется inset:0 относительно .switch, так что рост
+// высоты .switch растянул бы саму пилюлю в скруглённый прямоугольник вместо капсулы. Приём —
+// стандартное расширение hit-area без изменения видимого размера контрола.
 .switch {
   position: relative;
   display: inline-flex;
@@ -347,6 +389,12 @@ select.input {
   width: 36px;
   height: 21px;
   cursor: pointer;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--tap-min) - 21px) / -2) calc((var(--tap-min) - 36px) / -2);
+  }
 
   input {
     position: absolute;
@@ -400,7 +448,9 @@ select.input {
   gap: var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  // Редизайн v2: было --color-surface — совпадало с фоном страницы, контур карточки почти не
+  // читался. --color-paper белее фона, --color-surface остаётся для «хрома» (таб-бар/.seg/инпуты).
+  background: var(--color-paper);
 }
 
 // Горизонтальная прокрутка для широких таблиц внутри узкой .card (UX-редизайн) — использовался в
@@ -431,13 +481,13 @@ select.input {
 .card-title {
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
-  font-size: 17px;
+  font-size: var(--font-size-record-title); // редизайн v2: было 17px
   line-height: 1.2;
 }
 
 .card-body {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px; // редизайн v2: было 13px
   opacity: 0.8;
   flex: 1;
 }
@@ -446,7 +496,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 13px; // редизайн v2: было 11px
   color: color-mix(in srgb, var(--color-text) 50%, transparent);
 }
 
@@ -460,7 +510,7 @@ select.input {
 .tag {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 13px; // редизайн v2: было 11px
   letter-spacing: 0.02em;
   padding: 3px 10px;
   border-radius: calc(var(--radius-md) * 0.75);
@@ -669,18 +719,208 @@ select.input {
 }
 
 // ============================================================================
-// Оболочка приложения
+// Оболочка приложения — редизайн v2 (каркас навигации, PR2). Было: .app-wrapper (колонка) +
+// .app-header (просто заголовок) + .tab-bar (одинаково на всех ширинах). Стало: десктоп
+// (≥1024px, BreakpointService.tier()==='wide') — боковое меню вместо таб-бара, узкие экраны —
+// прежний таб-бар (теперь Главная/Здоровье/Семья/Ещё). .app-header/.app-header-action удалены —
+// первый заменён шапкой сайдбара/топбаром, второй был мёртвым CSS (поиск давно переехал на
+// Главную и никогда не пользовался этим классом).
 // ============================================================================
-.app-wrapper {
+.app-shell {
   display: flex;
-  flex-direction: column;
   min-height: 100vh;
 }
 
-.app-header {
+// ----------------------------------------------------------------------------
+// Боковое меню (десктоп)
+// ----------------------------------------------------------------------------
+.app-sidebar {
+  --sidebar-w: 256px;
+  flex: none;
+  width: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-divider);
+  overflow-y: auto;
+}
+
+.app-sidebar-brand {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--color-divider);
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+
+.app-sidebar-nav {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.app-sidebar-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid transparent;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: var(--font-size-body);
+  min-height: var(--tap-min);
+
+  i {
+    font-size: 22px;
+    color: var(--color-neutral-600);
+    flex: none;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  }
+
+  &.active {
+    background: var(--color-accent-100);
+    border-left-color: var(--color-accent);
+    color: var(--color-accent-800);
+    font-weight: 600;
+
+    i {
+      color: var(--color-accent);
+    }
+  }
+}
+
+.app-sidebar-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  background: var(--color-accent-2);
+  color: #fff;
+  font: 700 12px/1.5 var(--font-heading);
+  text-align: center;
+  border-radius: var(--radius-sm);
+}
+
+.app-sidebar-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 6px 26px;
+}
+
+.app-sidebar-child {
+  padding: 7px 12px;
+  font-size: 15px;
+  color: var(--color-text);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  }
+
+  &.active {
+    color: var(--color-accent);
+    font-weight: 600;
+    background: var(--color-paper);
+  }
+}
+
+.app-sidebar-footer {
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+
+.app-sidebar-kicker {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+.app-family-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+  cursor: pointer;
+  min-height: var(--tap-min);
+
+  i {
+    color: var(--color-neutral-600);
+    flex: none;
+  }
+}
+
+.app-family-switch-list {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  z-index: 20;
+}
+
+.app-family-switch-item {
+  padding: 10px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  text-decoration: none;
+  cursor: pointer;
+  font: inherit;
+  min-height: var(--tap-min);
+
+  & + .app-family-switch-item {
+    border-top: 1px solid var(--color-divider);
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Основная колонка + верхняя строка (поиск + контекстное действие страницы)
+// ----------------------------------------------------------------------------
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   padding: var(--space-2) var(--space-4);
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-divider);
@@ -689,41 +929,21 @@ select.input {
   z-index: 10;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 18px;
-}
-
-// Иконка поиска в шапке (редизайн навигации — вынесено из таб-бара, см. app.component.html).
-.app-header-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-neutral-600);
-  cursor: pointer;
-
-  i {
-    font-size: 21px;
-  }
-
-  &:hover,
-  &.active {
-    background: color-mix(in srgb, var(--color-text) 7%, transparent);
-    color: var(--color-accent);
-  }
-}
-
 .app-content {
   flex: 1;
   padding: var(--space-3) var(--space-4) 88px;
   overflow-y: auto;
 }
 
+// На десктопе нет нижнего таб-бара — резервировать под него 88px незачем.
+.app-shell-wide .app-content {
+  padding-bottom: var(--space-3);
+}
+
+// ----------------------------------------------------------------------------
+// Нижний таб-бар (узкие экраны) — редизайн v2: Главная/Здоровье/Семья/Ещё вместо
+// Главная/Здоровье/Уведомл./Профиль (Профиль и Уведомления теперь в листе «Ещё»).
+// ----------------------------------------------------------------------------
 .tab-bar {
   position: fixed;
   bottom: 0;
@@ -734,6 +954,43 @@ select.input {
   border-top: 1px solid var(--color-divider);
   z-index: 100;
   padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.tab-bar-more-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.tab-bar-dot {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-2);
+}
+
+// ----------------------------------------------------------------------------
+// Лист «Ещё» (bottom-sheet, узкие экраны) — Уведомления/Профиль, редизайн v2.
+// ----------------------------------------------------------------------------
+.app-more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  color: var(--color-text);
+  text-decoration: none;
+  min-height: var(--tap-min);
+
+  i {
+    font-size: 21px;
+    color: var(--color-neutral-600);
+  }
+
+  & + .app-more-item {
+    border-top: 1px solid var(--color-divider);
+  }
 }
 
 // ============================================================================
@@ -871,20 +1128,22 @@ select.input {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   padding: 8px 2px;
+  min-height: var(--tap-min); // редизайн v2
   border: none;
   background: none;
   cursor: pointer;
   color: var(--color-neutral-600);
 
   i {
-    font-size: 21px;
+    font-size: 22px; // редизайн v2: было 21px
   }
 
   span {
     font-family: var(--font-heading);
-    font-size: 10px;
+    font-size: 11px; // редизайн v2: было 10px
   }
 
   &.active {

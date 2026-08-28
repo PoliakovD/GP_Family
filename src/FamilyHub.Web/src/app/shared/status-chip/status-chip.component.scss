@@ -1,0 +1,34 @@
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: calc(var(--radius-md) * 0.75);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  i {
+    font-size: 12px;
+  }
+}
+
+.status-chip-ok {
+  background: color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));
+  color: var(--color-status-ok-text);
+}
+
+.status-chip-warning {
+  background: color-mix(in srgb, var(--color-status-warning) 14%, var(--color-paper));
+  color: var(--color-status-warning-text);
+}
+
+.status-chip-danger {
+  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));
+  color: var(--color-status-danger-text);
+}
+
+.status-chip-unknown {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+}

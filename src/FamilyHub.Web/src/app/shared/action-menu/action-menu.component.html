@@ -1,0 +1,31 @@
+<div class="action-menu">
+  <button type="button" class="btn btn-ghost btn-icon" [attr.aria-label]="label()" (click)="toggle()">
+    <i class="ph ph-dots-three-outline" aria-hidden="true"></i>
+  </button>
+
+  @if (isWide && open()) {
+    <div class="action-menu-popover elev-md">
+      @for (item of actions(); track item.label) {
+        <button type="button" class="action-menu-item" [class.danger]="item.danger" (click)="select(item)">
+          @if (item.icon) {
+            <i [class]="item.icon" aria-hidden="true"></i>
+          }
+          {{ item.label }}
+        </button>
+      }
+    </div>
+  }
+</div>
+
+@if (!isWide) {
+  <app-bottom-sheet [title]="label()" [open]="open()" (closed)="open.set(false)">
+    @for (item of actions(); track item.label) {
+      <button type="button" class="action-menu-item action-menu-item-sheet" [class.danger]="item.danger" (click)="select(item)">
+        @if (item.icon) {
+          <i [class]="item.icon" aria-hidden="true"></i>
+        }
+        {{ item.label }}
+      </button>
+    }
+  </app-bottom-sheet>
+}

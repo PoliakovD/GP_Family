@@ -1,0 +1,73 @@
+.home-header h2 {
+  font-size: 30px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 28px;
+  align-items: start;
+}
+
+// Мокап мобильного экрана Главной не показывает правую колонку («Кто в семье»/«Ближайшие ДР»)
+// вовсе — только карточки внимания + чипы «В порядке». Тот же брейкпоинт, что у сайдбара шелла.
+@media (max-width: 1023px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-right-col {
+    display: none;
+  }
+}
+
+.home-section-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin-bottom: 4px;
+}
+
+.home-section-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+.home-ok-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-meta);
+  color: var(--color-neutral-800);
+}
+
+.home-birthday-date {
+  width: 44px;
+  flex: none;
+  text-align: center;
+}
+
+.home-birthday-day {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.home-birthday-month {
+  font-size: 11px;
+  color: var(--color-neutral-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}

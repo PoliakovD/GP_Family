@@ -1,7 +1,10 @@
-.indicator-flag-ok { color: #2f9e44; }
-.indicator-flag-warning { color: #f08c00; }
-.indicator-flag-danger { color: #e03131; font-weight: 600; }
-.indicator-flag-unknown { color: var(--color-neutral-500); }
+// Редизайн v2 — цвета канонизированы из --color-status-* (см. medications-panel.component.scss,
+// единый источник). unknown было --color-neutral-500 (расхождение с medical-records-panel,
+// который использовал neutral-700) — теперь оба совпадают на --color-status-none.
+.indicator-flag-ok { color: var(--color-status-ok); }
+.indicator-flag-warning { color: var(--color-status-warning); }
+.indicator-flag-danger { color: var(--color-status-danger); font-weight: 600; }
+.indicator-flag-unknown { color: var(--color-status-none); }
 
 .indicator-history-table {
   width: 100%;

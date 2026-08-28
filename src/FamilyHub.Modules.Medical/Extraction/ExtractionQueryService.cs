@@ -18,7 +18,8 @@ public enum ExtractionQueryResult { Success, NotFound, Forbidden }
 /// (см. AttachmentService.GetForMedicalRecordAsync): просмотр чужой расшаренной записи пишет аудит.
 /// </summary>
 public class ExtractionQueryService(
-    AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup, IMedicalAuditWriter audit)
+    AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup,
+    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit)
 {
     public async Task<(ExtractionQueryResult Result, ExtractionStatusResponse? Item)> GetStatusAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
@@ -148,6 +149,79 @@ public class ExtractionQueryService(
         var items = await db.LabIndicators.AsNoTracking()
             .Where(i => i.OwnerUserId == userId && i.AnalyteKey == analyteKey && i.Specimen == specimen
                 && i.SpecimenCustomId == specimenCustomId)
+            .OrderBy(i => i.RecordDate)
+            .ToListAsync(ct);
+
+        return items.Select(i => new IndicatorHistoryPoint(i.RecordDate, i.ValueRaw, i.ValueNumericText, i.Flag, i.MedicalRecordId)).ToList();
+    }
+
+    /// <summary>Персонализированная статья справочника по показателю (редизайн v2, панель справки) —
+    /// показатель + возраст/пол пациента ЭТОЙ записи (не "сегодня") + подсвеченный диапазон норм +
+    /// доступность "Динамики". Доступ — тот же CheckAccessAsync, что и у остальных чтений
+    /// показателей; аудит не пишем — просмотр уже зафиксирован при GetIndicatorsAsync, статья —
+    /// производный от него клик, не отдельный факт доступа к чужим данным.</summary>
+    public async Task<(ExtractionQueryResult Result, IndicatorArticleResponse? Item)> GetArticleAsync(
+        Guid indicatorId, Guid userId, CancellationToken ct = default)
+    {
+        var indicator = await db.LabIndicators.AsNoTracking().FirstOrDefaultAsync(i => i.Id == indicatorId, ct);
+        if (indicator is null) return (ExtractionQueryResult.NotFound, null);
+
+        var access = await CheckAccessAsync(indicator.MedicalRecordId, userId, ct);
+        if (access != ExtractionQueryResult.Success) return (access, null);
+
+        var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == indicator.MedicalRecordId, ct);
+        if (record is null) return (ExtractionQueryResult.NotFound, null); // защитно — не должно случиться, раз показатель на неё ссылается
+
+        var (ageYears, sex) = await PatientIdentityResolver.ResolveAsync(db, record, ct);
+
+        Kb.KbAnalyteCard? article = null;
+        int? matchedIndex = null;
+        if (indicator.KbAnalyteId is { } kbId)
+        {
+            article = await analyteCatalog.GetByIdAsync(kbId, ct);
+            if (article is not null && article.RefRanges.Count > 0)
+            {
+                // KbRefRangeDto/KbReferenceRange — одинаковые по форме, но разные типы (DTO ответа
+                // vs внутренний тип каскада расчёта статуса) — конвертация, не общий тип специально,
+                // чтобы не тащить зависимость каскада в контракт ответа API.
+                var ranges = article.RefRanges
+                    .Select(r => new KbReferenceRange(r.AgeFrom, r.AgeTo, r.Sex, r.Low, r.High, r.Unit))
+                    .ToList();
+                matchedIndex = IndicatorFlagCalculator.PickBestRangeIndex(ranges, ageYears, sex);
+            }
+        }
+
+        var historyCount = (await QueryVisibleHistoryAsync(indicator, userId, ct)).Count;
+
+        return (ExtractionQueryResult.Success, new IndicatorArticleResponse(
+            ToDto(indicator), new PatientContextDto(ageYears, sex), matchedIndex, article, historyCount >= 2));
+    }
+
+    /// <summary>Тренд показателя для КОНКРЕТНОЙ записи (в отличие от GetHistoryAsync выше, который
+    /// строго "свои" — этот работает и для расшаренной чужой записи). Двойной фильтр обязателен:
+    /// владелец записи (все точки тренда — один и тот же человек, идентичность не размывается) И
+    /// видимость КАЖДОЙ точки лично зрителю — без второго условия тренд по одной расшаренной записи
+    /// обошёл бы точечное скрытие MedicalRecordHidden (L2), см. риск Р5 плана редизайна.</summary>
+    public async Task<(ExtractionQueryResult Result, List<IndicatorHistoryPoint> Items)> GetRecordIndicatorHistoryAsync(
+        Guid recordId, Guid indicatorId, Guid userId, CancellationToken ct = default)
+    {
+        var access = await CheckAccessAsync(recordId, userId, ct);
+        if (access != ExtractionQueryResult.Success) return (access, []);
+
+        var indicator = await db.LabIndicators.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == indicatorId && i.MedicalRecordId == recordId, ct);
+        if (indicator is null) return (ExtractionQueryResult.NotFound, []);
+
+        return (ExtractionQueryResult.Success, await QueryVisibleHistoryAsync(indicator, userId, ct));
+    }
+
+    private async Task<List<IndicatorHistoryPoint>> QueryVisibleHistoryAsync(DomainLabIndicator indicator, Guid userId, CancellationToken ct)
+    {
+        var visibleIds = await medicalRecords.GetVisibleRecordIdsAsync(userId, MedicalRecordKind.Analysis, ct);
+        var items = await db.LabIndicators.AsNoTracking()
+            .Where(i => i.OwnerUserId == indicator.OwnerUserId && i.AnalyteKey == indicator.AnalyteKey
+                && i.Specimen == indicator.Specimen && i.SpecimenCustomId == indicator.SpecimenCustomId
+                && visibleIds.Contains(i.MedicalRecordId))
             .OrderBy(i => i.RecordDate)
             .ToListAsync(ct);
 
@@ -309,7 +383,8 @@ public class ExtractionQueryService(
 
     private static IndicatorDto ToDto(DomainLabIndicator i) => new(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.Specimen, i.Position,
-        i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId, i.SpecimenCustomId);
+        i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId, i.SpecimenCustomId,
+        i.ValueNumericText, i.KbAnalyteId);
 
     private static double? ParseNumeric(string? value)
     {
