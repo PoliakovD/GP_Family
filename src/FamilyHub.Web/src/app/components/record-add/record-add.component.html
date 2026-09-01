@@ -1,0 +1,126 @@
+<ng-template #formContent>
+  <div class="record-add-header">
+    <div>
+      <div class="record-add-kicker">Новая запись</div>
+      <h3 class="mb-0">{{ labels.addButtonLabel }}</h3>
+    </div>
+    <button type="button" class="btn-icon" aria-label="Закрыть" (click)="cancel()">
+      <i class="ph ph-x" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div class="record-add-body">
+    @if (error) {
+      <div class="alert-danger mb-2">{{ error }}</div>
+    }
+
+    <div class="mb-3">
+      <div class="form-label">Чей анализ</div>
+      <div class="d-flex flex-wrap gap-2">
+        @for (opt of patientOptions; track opt.key) {
+          <button
+            type="button"
+            class="tag"
+            [class.tag-accent]="selectedPatientKey === opt.key"
+            style="cursor:pointer;border:none;font:inherit"
+            (click)="selectedPatientKey = opt.key"
+          >
+            {{ opt.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-label">Сканы и файлы</div>
+      <div class="file-chip-grid">
+        @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
+          <div class="file-chip">
+            @if (pf.previewUrl) {
+              <img [src]="pf.previewUrl" alt="" />
+            } @else {
+              <i class="ph ph-file-text" aria-hidden="true"></i>
+              <span class="file-chip-name">{{ pf.file.name }}</span>
+            }
+            <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="removePendingFile(i)">
+              <i class="ph-bold ph-x" aria-hidden="true"></i>
+            </button>
+          </div>
+        }
+        @if (canAddMorePendingFiles()) {
+          <label class="file-chip file-chip-add" [attr.for]="fileInputId">
+            <i class="ph ph-upload-simple" aria-hidden="true"></i>
+            <span>Файлы</span>
+          </label>
+        }
+      </div>
+      <input
+        [id]="fileInputId"
+        class="visually-hidden-input"
+        type="file"
+        multiple
+        [accept]="acceptedFileTypes"
+        (change)="onPendingFilesSelected($event)"
+      />
+      @if (attachmentLimits; as limits) {
+        <div class="muted mb-2" style="font-size:12px">
+          До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
+        </div>
+      }
+    </div>
+
+    <!-- Редизайн v3 (PR7) — тумблер стоит сразу при прикреплении файлов, а не отдельной ручной
+         кнопкой «Распознать» после сохранения: пользователь заранее понимает, что показатели
+         заполнятся сами. -->
+    <div class="record-add-recognize mb-3">
+      <div class="flex-fill">
+        <div style="font-weight:600">Распознать бланк</div>
+        <div class="muted" style="font-size:13px">Название, дата и показатели заполнятся сами — проверите перед сохранением.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" [(ngModel)]="autoRecognize" />
+        <span class="switch-knob"></span>
+      </label>
+    </div>
+
+    <label class="form-label">Дата</label>
+    <input class="input mb-3" type="date" [(ngModel)]="form.recordDate" />
+
+    <app-expandable title="Врач и заметка — необязательно">
+      <label class="form-label">Врач</label>
+      <input
+        class="input mb-2"
+        [attr.list]="doctorsDatalistId"
+        [(ngModel)]="form.doctor"
+        [placeholder]="labels.doctorPlaceholder"
+      />
+      <datalist [id]="doctorsDatalistId">
+        @for (d of doctorSuggestions; track d) {
+          <option [value]="d"></option>
+        }
+      </datalist>
+
+      <label class="form-label">Описание</label>
+      <textarea class="input" [(ngModel)]="form.description" [placeholder]="labels.descriptionPlaceholder" rows="2"></textarea>
+    </app-expandable>
+  </div>
+
+  <div class="record-add-footer">
+    <button class="btn btn-primary flex-fill" [disabled]="saving || !form.recordDate" (click)="handleSubmit()">
+      {{ saving ? 'Сохраняем…' : labels.addButtonLabel }}
+    </button>
+    <button type="button" class="btn btn-ghost" [disabled]="saving" (click)="cancel()">Отмена</button>
+  </div>
+</ng-template>
+
+@if (isWide) {
+  <div class="overlay-backdrop record-add-backdrop" (click)="cancel()">
+    <aside class="record-add-panel" (click)="$event.stopPropagation()">
+      <ng-container *ngTemplateOutlet="formContent" />
+    </aside>
+  </div>
+} @else {
+  <div class="record-add-fullscreen">
+    <ng-container *ngTemplateOutlet="formContent" />
+  </div>
+}

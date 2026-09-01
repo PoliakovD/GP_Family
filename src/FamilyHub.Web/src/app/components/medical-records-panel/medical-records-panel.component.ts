@@ -1,4 +1,5 @@
-import { Component, OnDestroy, OnInit, effect, inject, input } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -41,9 +42,13 @@ import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-
 import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { formatPersonName } from '../../shared/util/person-name';
+import { shortenDisplayName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { SPECIMEN_OPTIONS, specimenLabel } from '../../shared/util/specimen';
+import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
+import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
+import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '../../shared/util/attachment-upload';
+import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 
 /** Терминальные статусы задачи распознавания — опрос останавливается. */
 const EXTRACTION_TERMINAL_STATUSES: number[] = [
@@ -67,61 +72,18 @@ const STAGE_LABEL: Partial<Record<number, string>> = {
   [ExtractionStage.Summarizing]: 'Готовим резюме анализа',
 };
 
-interface KindLabels {
-  addButtonLabel: string;
-  doctorPlaceholder: string;
-  descriptionPlaceholder: string;
-  searchPlaceholder: string;
-  emptyLabel: string;
-}
-
-/** Подписи различаются по виду записи — тот же идиом, что TYPE_LABEL/TYPE_ICON в home.component.ts. */
-const KIND_LABELS: Record<MedicalRecordKind, KindLabels> = {
-  [MedicalRecordKind.Analysis]: {
-    addButtonLabel: 'Добавить запись',
-    doctorPlaceholder: 'Врач (необязательно)',
-    descriptionPlaceholder: 'Описание (необязательно)',
-    searchPlaceholder: 'Поиск по анализам…',
-    emptyLabel: 'Записей нет.',
-  },
-  [MedicalRecordKind.DoctorVisit]: {
-    addButtonLabel: 'Добавить посещение',
-    doctorPlaceholder: 'Врач / специальность',
-    descriptionPlaceholder: 'Заключение (необязательно)',
-    searchPlaceholder: 'Поиск по посещениям…',
-    emptyLabel: 'Посещений нет.',
-  },
-};
-
 /** Токен для GET /api/medical-records?kind=. */
 const LIST_KIND_TOKEN: Record<MedicalRecordKind, 'analysis' | 'visit'> = {
   [MedicalRecordKind.Analysis]: 'analysis',
   [MedicalRecordKind.DoctorVisit]: 'visit',
 };
 
-/** Одна опция дропдауна "Кто пациент?" — либо «Я» (оба id null), либо подопечный семьи, либо
- * другой активный участник. Составной строковый key нужен для [(ngModel)] на <select>. */
-interface PatientOption {
-  key: string;
-  familyDependentId: string | null;
-  targetUserId: string | null;
-  label: string;
-}
-
-const SELF_OPTION: PatientOption = { key: 'self', familyDependentId: null, targetUserId: null, label: 'Я' };
-
-/** Группа записей одного человека (редизайн v2, PR3b) — ключ тот же, что у PatientOption. */
+/** Группа записей одного человека (редизайн v2, PR3b) — ключ тот же, что у PatientOption
+ * (shared/util/patient-options.ts). */
 interface RecordGroup {
   key: string;
   personName: string;
   records: MedicalRecord[];
-}
-
-/** Файл, ожидающий загрузки — либо ещё не отправленный (форма создания записи), либо уже
- * прикреплённый к существующей. previewUrl — только для картинок (см. medications-panel.photos). */
-interface StagedFile {
-  file: File;
-  previewUrl: string | null;
 }
 
 let nextInstanceId = 0;
@@ -141,6 +103,7 @@ let nextInstanceId = 0;
   selector: 'app-medical-records-panel',
   standalone: true,
   imports: [
+    NgTemplateOutlet,
     FormsModule, LoadingSpinnerComponent, BottomSheetComponent, ModalComponent, SearchFieldComponent,
     ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
     AvatarComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
@@ -151,6 +114,15 @@ let nextInstanceId = 0;
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly kind = input.required<MedicalRecordKind>();
+
+  /** Редизайн v3 — «одиночный режим» (PR6 плана): мобильный экран открытой записи
+   * (RecordDetailPageComponent) передаёт сюда id вместо списка — та же панель, но без
+   * пагинации/группировки/фильтров, с одной всегда развёрнутой карточкой. См. refresh()/шаблон
+   * (ветка @if (recordId())) и recordCard-ng-template (singleMode). */
+  readonly recordId = input<string | null>(null);
+  /** ?firstReview=1 (PR7) — сразу после сохранения в record-add.component.ts, показывает
+   * одноразовый баннер-подсказку над карточкой; не персистится (не добавляется обратно). */
+  readonly firstReview = input<string | null>(null);
 
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
@@ -167,20 +139,14 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly IndicatorFlag = IndicatorFlag;
   readonly stageLabel = STAGE_LABEL;
   readonly pluralizeRu = pluralizeRu;
+  readonly shortenDisplayName = shortenDisplayName;
+  readonly formatDayMonth = formatDayMonth;
+  readonly formatDayMonthYear = formatDayMonthYear;
+  readonly formatYear = formatYear;
 
-  /** Зеркало FamilyHub.Infrastructure.Documents.DocumentContentTypes.All — то, что конвейер
-   * умеет распознать (плюс .doc — хранится, но не распознаётся, см. докстринг там же). */
-  readonly acceptedFileTypes = [
-    'image/jpeg', 'image/png', 'image/webp', 'image/heic',
-    'application/pdf', 'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel', 'text/csv', 'text/plain', 'application/rtf', 'text/html',
-  ].join(',');
+  readonly acceptedFileTypes = ACCEPTED_ATTACHMENT_TYPES;
 
-  /** Уникален на инстанс — «Анализы» и «Врачи» держат каждый свой экземпляр панели, а
-   * <label for> должен указывать ровно на "свой" скрытый file input формы создания. */
-  readonly createFileInputId = `medical-record-create-file-input-${nextInstanceId}`;
+  /** Уникален на инстанс — «Анализы» и «Врачи» держат каждый свой экземпляр панели. */
   readonly doctorsDatalistId = `medical-record-doctors-datalist-${nextInstanceId++}`;
 
   items: MedicalRecord[] = [];
@@ -198,27 +164,20 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   loadingMore = false;
 
   // --- Фильтры (UX-редизайн) — серверные, любое изменение сбрасывает страницу на 1. ---
+  // Редизайн v3 — filtersOpen теперь управляет попапом/шторкой у кнопки «Фильтры» (было —
+  // раскрытием app-expandable над списком), см. #filtersAnchor/onDocumentClick ниже.
   filtersOpen = false;
+  @ViewChild('filtersAnchor') private filtersAnchorRef?: ElementRef<HTMLElement>;
   filters = { from: '', to: '', patientKey: 'all', doctor: '' };
   searchQuery = '';
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
-  // --- Форма создания (UX-редизайн: скрыта за «+ Добавить», раньше всегда развёрнута) ---
-  createOpen = false;
-  saving = false;
-  form = {
-    recordDate: todayIso(),
-    doctor: '',
-    description: '',
-    familyDependentId: null as string | null,
-    targetUserId: null as string | null,
-  };
   /** Автоподсказка «Врач» (v2) — доктора, которых пользователь уже вводил в своих записях;
-   * грузится один раз, независимо от вида записи (общий пул для «Анализов» и «Врачей»). */
+   * грузится один раз, независимо от вида записи (общий пул для «Анализов» и «Врачей»). Форма
+   * создания (редизайн v3, PR7) переехала на отдельный роут (record-add.component.ts) и грузит
+   * её независимо — тот же дешёвый идемпотентный GET, дублировать состояние ради одного запроса
+   * не стоит. */
   doctorSuggestions: string[] = [];
-  /** Файлы, выбранные в форме создания ДО того, как запись сохранена — грузятся сразу после
-   * успешного handleSubmit (у POST /api/medical-records/{id}/attachments нет смысла без recordId). */
-  pendingFiles: StagedFile[] = [];
 
   // Вложения — лениво, по первому раскрытию «Файлы» на карточке (UX-редизайн: раньше грузились
   // для ВСЕХ записей страницы сразу в refresh(), самый большой источник N+1).
@@ -278,7 +237,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // --- Правка даты/врача/описания записи (кнопка «Редактировать», UX-редизайн) ---
   editRecord: MedicalRecord | null = null;
-  editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '' };
+  editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '', title: '' };
   savingRecord = false;
 
   // --- Справка по назначенному лекарству (заключение врача, UX-редизайн) — та же карточка и
@@ -290,26 +249,43 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // undefined — ещё ни разу не загружали.
   private loadedKind: MedicalRecordKind | undefined = undefined;
+  /** Редизайн v3 — отдельно от loadedKind: одиночный режим может смениться на другую запись
+   * того же вида (тот же роут, другой :id), не только при смене kind. */
+  private loadedRecordId: string | null | undefined = undefined;
 
   constructor() {
-    // Реагирует на смену вида, пока панель смонтирована (сейчас оба вида монтируются на разных
-    // страницах, но контракт Panel требует этого независимо — см. medkits-panel.component.ts).
+    // Реагирует на смену вида/записи, пока панель смонтирована (сейчас оба вида монтируются на
+    // разных страницах, но контракт Panel требует этого независимо — см.
+    // medkits-panel.component.ts).
     effect(() => {
       const kind = this.kind();
-      if (kind === this.loadedKind) return;
-      this.resetForm();
+      const recordId = this.recordId();
+      if (kind === this.loadedKind && recordId === this.loadedRecordId) return;
+      this.loadedKind = kind;
+      this.loadedRecordId = recordId;
+
+      if (recordId) {
+        // Одиночный режим (PR6) — не список: без пагинации/фильтров/формы создания, кнопка
+        // «Добавить» и общий поиск шапки этому экрану не нужны (см. ngOnInit — та же проверка).
+        void this.refresh();
+        return;
+      }
+
       this.resetFilters();
       this.accessRecord = null;
       this.page = 1;
       void this.refresh();
-      // Редизайн v2 — кнопка «Добавить» теперь в топбаре каркаса (PageActionService), не
-      // отдельной widget-кнопкой над списком. Открывает ту же форму создания, что и раньше;
-      // закрывается изнутри самой формы («Отмена»), топбар всегда открывает, не тумблер.
+      // Редизайн v3 — кнопка «Добавить» уводит на отдельный роут record-add.component.ts
+      // (боковая панель на десктопе, полноэкранно на мобильном), не разворачивает форму инлайн
+      // (было — createOpen, см. PR7 плана).
       this.pageAction.set({
         label: this.labels.addButtonLabel,
         icon: 'ph-bold ph-plus',
-        handler: () => { this.createOpen = true; },
+        handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
+      // Редизайн v3 — своё поле поиска ниже уже покрывает этот экран, общий поиск шапки только
+      // дублировал бы его (см. PageActionService.suppressGlobalSearch).
+      this.pageAction.setSearchSuppressed(true);
     });
   }
 
@@ -318,14 +294,18 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     // change detection и может не успеть отработать до первого рендера шаблона. Та же причина —
     // почему кнопка топбара тоже дублируется явно здесь (иначе на первом рендере топбар недолго
     // показывался бы без действия).
-    if (this.kind() !== this.loadedKind) {
+    if (this.kind() !== this.loadedKind || this.recordId() !== this.loadedRecordId) {
       void this.refresh();
     }
-    this.pageAction.set({
-      label: this.labels.addButtonLabel,
-      icon: 'ph-bold ph-plus',
-      handler: () => { this.createOpen = true; },
-    });
+    // Одиночный режим (PR6) — не список, кнопка «Добавить»/общий поиск шапки этому экрану не нужны.
+    if (!this.recordId()) {
+      this.pageAction.set({
+        label: this.labels.addButtonLabel,
+        icon: 'ph-bold ph-plus',
+        handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
+      });
+      this.pageAction.setSearchSuppressed(true);
+    }
     if (!this.attachmentLimits) {
       void this.api.getAttachmentLimits().then((limits) => (this.attachmentLimits = limits));
     }
@@ -345,18 +325,35 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     for (const handle of this.pipelineClearHandles.values()) clearTimeout(handle);
     this.pipelineClearHandles.clear();
     if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
-    this.clearPendingFiles();
     this.pageAction.clear();
   }
 
-  get labels(): KindLabels {
-    return KIND_LABELS[this.kind()];
+  get labels(): MedicalRecordKindLabels {
+    return MEDICAL_RECORD_KIND_LABELS[this.kind()];
   }
 
   /** Короткое название для заголовка карточки «Дата · Название · Пациент» (UX-редизайн) —
    * item.title, если уже распознан/введён, иначе нейтральная подпись по виду записи. */
   shortName(item: MedicalRecord): string {
     return item.title ?? (item.kind === MedicalRecordKind.Analysis ? 'Анализ' : 'Приём врача');
+  }
+
+  /** Базовый роут вида записи — используется и «Добавить»-навигацией (PR7), и мобильной
+   * навигацией на экран открытой записи (PR6), см. shared/util/medical-record-labels.ts. */
+  kindBasePath(): string {
+    return medicalRecordKindBasePath(this.kind());
+  }
+
+  /** Редизайн v3 — на мобильном списке (не singleMode, не isWide) кнопок «Открыть»/«…» на
+   * карточке нет вообще, вся карточка уводит на экран записи (см. recordCard-ng-template в
+   * шаблоне). На десктопе/в самом экране записи — no-op, там навигация не нужна (см. PR6 плана). */
+  onRecordCardClick(item: MedicalRecord, singleMode: boolean): void {
+    if (singleMode || this.isWide) return;
+    void this.router.navigate([this.kindBasePath(), item.id]);
+  }
+
+  goToList(): void {
+    void this.router.navigate([this.kindBasePath()]);
   }
 
   // --- Группировка по человеку + таймлайн (редизайн v2, PR3b) ---
@@ -477,55 +474,16 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return `${item.indicatorCount} ${pluralizeRu(item.indicatorCount, 'показатель', 'показателя', 'показателей')}`;
   }
 
-  /** «Я» + все подопечные и все другие активные участники из моих активных семей (дедуп по
-   * userId — участник может состоять сразу в нескольких общих со мной семьях). */
+  /** «Я» + все подопечные и все другие активные участники из моих активных семей — общая
+   * реализация с record-add.component.ts (форма создания), см. shared/util/patient-options.ts. */
   get patientOptions(): PatientOption[] {
-    const options: PatientOption[] = [SELF_OPTION];
-    const myUserId = this.auth.me()?.userId;
-    const seenUserIds = new Set<string>(myUserId ? [myUserId] : []);
-
-    for (const family of this.state.activeFamilies()) {
-      for (const dep of family.dependents ?? []) {
-        options.push({
-          key: `dep:${dep.id}`,
-          familyDependentId: dep.id,
-          targetUserId: null,
-          label: `${dep.isPet ? dep.firstName : formatPersonName(dep, 'full')} (${family.name})`,
-        });
-      }
-      for (const member of family.currentMembers ?? []) {
-        if (seenUserIds.has(member.id)) continue;
-        seenUserIds.add(member.id);
-        options.push({
-          key: `user:${member.id}`,
-          familyDependentId: null,
-          targetUserId: member.id,
-          label: `${formatPersonName(member, 'full')} (${family.name})`,
-        });
-      }
-    }
-    return options;
+    return buildPatientOptions(this.state.activeFamilies(), this.auth.me()?.userId);
   }
 
   /** Фильтр «Пациент» — те же опции + «Все» сверху (форма создания «Все» не предлагает,
    * там пациент обязателен). */
   get filterPatientOptions(): PatientOption[] {
     return [{ key: 'all', familyDependentId: null, targetUserId: null, label: 'Все' }, ...this.patientOptions];
-  }
-
-  get selectedPatientKey(): string {
-    if (this.form.familyDependentId) return `dep:${this.form.familyDependentId}`;
-    if (this.form.targetUserId) return `user:${this.form.targetUserId}`;
-    return 'self';
-  }
-
-  /** v2: пациент — только выбор из self/подопечный/участник семьи, без свободного текстового
-   * поля (личность полностью выражается familyDependentId/targetUserId, имя резолвится на
-   * чтение из профиля — см. MedicalRecordService.ResolvePersonNamesAsync). */
-  set selectedPatientKey(key: string) {
-    const option = this.patientOptions.find((o) => o.key === key);
-    this.form.familyDependentId = option?.familyDependentId ?? null;
-    this.form.targetUserId = option?.targetUserId ?? null;
   }
 
   // --- Фильтры/поиск/пагинация ---
@@ -560,6 +518,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.searchQuery = '';
     this.page = 1;
     void this.refresh();
+  }
+
+  /** Закрытие попапа «Фильтры» по клику вне него — тот же приём, что shared/action-menu (мобильная
+   * шторка закрывается сама через popstate/бэкдроп, здесь нужен только десктопный попап). */
+  @HostListener('document:click', ['$event'])
+  onDocumentClickForFilters(event: MouseEvent): void {
+    if (!this.filtersOpen || !this.isWide) return;
+    if (!this.filtersAnchorRef?.nativeElement.contains(event.target as Node)) {
+      this.filtersOpen = false;
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeForFilters(): void {
+    if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }
 
   onSearchQueryChange(value: string): void {
@@ -606,17 +579,30 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * дозаписывает в items, а не заменяет их. */
   async refresh(): Promise<void> {
     const kind = this.kind();
+    const recordId = this.recordId();
     this.loadedKind = kind;
+    this.loadedRecordId = recordId;
     this.page = 1;
     this.loading = true;
     try {
-      const [page, shares] = await Promise.all([
-        this.api.getMedicalRecords(this.buildFilter()),
-        this.api.getMedicalRecordShares(),
-      ]);
-      this.items = page.items;
-      this.totalCount = page.totalCount;
-      this.shares = shares;
+      if (recordId) {
+        // Одиночный режим (PR6) — одна запись по id, без пагинации/фильтров/группировки.
+        const [record, shares] = await Promise.all([
+          this.api.getMedicalRecord(recordId),
+          this.api.getMedicalRecordShares(),
+        ]);
+        this.items = [record];
+        this.totalCount = 1;
+        this.shares = shares;
+      } else {
+        const [page, shares] = await Promise.all([
+          this.api.getMedicalRecords(this.buildFilter()),
+          this.api.getMedicalRecordShares(),
+        ]);
+        this.items = page.items;
+        this.totalCount = page.totalCount;
+        this.shares = shares;
+      }
       // Открытая шторка должна остаться синхронной с перезагруженным состоянием записи.
       if (this.accessRecord) {
         this.accessRecord = this.items.find((r) => r.id === this.accessRecord!.id) ?? null;
@@ -658,100 +644,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } finally {
       this.loadingMore = false;
     }
-  }
-
-  async handleSubmit(): Promise<void> {
-    if (!this.form.recordDate || this.saving) return;
-    this.saving = true;
-    try {
-      const created = await this.api.createMedicalRecord({
-        kind: this.kind(),
-        recordDate: this.form.recordDate,
-        doctor: this.form.doctor.trim() || null,
-        description: this.form.description.trim() || null,
-        hideFromFamilyIds: null,
-        familyDependentId: this.form.familyDependentId,
-        targetUserId: this.form.targetUserId,
-      });
-
-      // Файлы, выбранные ДО сохранения формы — грузим сразу вслед, чтобы не заставлять
-      // пользователя искать свежесозданную запись в списке и повторно нажимать «Прикрепить».
-      let uploadFailed = 0;
-      if (this.pendingFiles.length > 0) {
-        this.uploadingRecordId = created.id;
-        try {
-          for (const staged of this.pendingFiles) {
-            try {
-              await this.api.uploadAttachment(created.id, staged.file);
-            } catch {
-              uploadFailed++;
-            }
-          }
-        } finally {
-          this.uploadingRecordId = null;
-        }
-      }
-
-      this.resetForm();
-      this.createOpen = false;
-      this.page = 1;
-      await this.refresh();
-      this.error = uploadFailed > 0 ? `Запись сохранена, но ${uploadFailed} файлов не загрузилось — прикрепите их к записи ниже.` : null;
-    } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
-    } finally {
-      this.saving = false;
-    }
-  }
-
-  // --- Файлы формы создания (до сохранения записи) ---
-
-  canAddMorePendingFiles(): boolean {
-    return !this.attachmentLimits || this.pendingFiles.length < this.attachmentLimits.maxFilesPerRecord;
-  }
-
-  onPendingFilesSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = '';
-    if (files.length === 0) return;
-
-    const { accepted, skippedByCount, tooLarge } = this.filterAgainstLimits(this.pendingFiles.length, files);
-    for (const file of accepted) {
-      this.pendingFiles.push({ file, previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
-    }
-
-    const problems: string[] = [];
-    if (skippedByCount > 0 && this.attachmentLimits) {
-      problems.push(`не добавлено ${skippedByCount} файлов сверх лимита (${this.attachmentLimits.maxFilesPerRecord} на запись)`);
-    }
-    if (tooLarge.length > 0 && this.attachmentLimits) {
-      problems.push(`${tooLarge.length} файлов превышают ${formatMb(this.attachmentLimits.maxFileSizeBytes)} и не добавлены`);
-    }
-    this.error = problems.length > 0 ? `${problems.join(', ')}.` : null;
-  }
-
-  removePendingFile(index: number): void {
-    const [removed] = this.pendingFiles.splice(index, 1);
-    if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
-  }
-
-  private clearPendingFiles(): void {
-    this.pendingFiles.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
-    this.pendingFiles = [];
-  }
-
-  /** Общая клиентская предвалидация для формы создания и для дозагрузки к существующей записи —
-   * лимиты те же (AttachmentUploadOptions), сервер всё равно перепроверит независимо. */
-  private filterAgainstLimits(existingCount: number, files: File[]): { accepted: File[]; skippedByCount: number; tooLarge: File[] } {
-    const limits = this.attachmentLimits;
-    if (!limits) return { accepted: files, skippedByCount: 0, tooLarge: [] };
-
-    const room = Math.max(0, limits.maxFilesPerRecord - existingCount);
-    const withinCount = files.slice(0, room);
-    const tooLarge = withinCount.filter((f) => f.size > limits.maxFileSizeBytes);
-    const accepted = withinCount.filter((f) => f.size <= limits.maxFileSizeBytes);
-    return { accepted, skippedByCount: files.length - withinCount.length, tooLarge };
   }
 
   /** Безусловное удаление доступно только владельцу (кто физически загрузил) — сервер
@@ -822,7 +714,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
     const recordId = record.id;
     this.attachmentsLoadedFor.add(recordId); // на случай, если «Файлы» ещё не раскрывали
-    const { accepted, skippedByCount, tooLarge } = this.filterAgainstLimits(this.attachmentsFor(recordId).length, files);
+    const { accepted, skippedByCount, tooLarge } = filterFilesAgainstLimits(this.attachmentLimits, this.attachmentsFor(recordId).length, files);
 
     this.uploadingRecordId = recordId;
     let failed = 0;
@@ -1237,7 +1129,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   openEditSheet(record: MedicalRecord): void {
     this.editRecord = record;
-    this.editRecordForm = { recordDate: record.recordDate, doctor: record.doctor ?? '', description: record.description ?? '' };
+    this.editRecordForm = {
+      recordDate: record.recordDate,
+      doctor: record.doctor ?? '',
+      description: record.description ?? '',
+      title: record.title ?? '',
+    };
   }
 
   closeEditSheet(): void {
@@ -1252,6 +1149,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         recordDate: this.editRecordForm.recordDate,
         doctor: this.editRecordForm.doctor?.trim() || null,
         description: this.editRecordForm.description?.trim() || null,
+        title: this.editRecordForm.title?.trim() || null,
       });
       this.closeEditSheet();
       await this.refresh();
@@ -1428,26 +1326,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  private resetForm(): void {
-    this.form = {
-      recordDate: todayIso(),
-      doctor: '',
-      description: '',
-      familyDependentId: null,
-      targetUserId: null,
-    };
-    this.clearPendingFiles();
-  }
-}
-
-function formatMb(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
-}
-
-/** Сегодняшняя дата в формате input[type=date] — v2: дефолт формы создания, распознавание может
- * позже переопределить её датой, найденной в самом документе (record.recordDate обновится). */
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {

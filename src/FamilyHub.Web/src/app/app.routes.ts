@@ -117,7 +117,16 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/settings/settings.component').then((m) => m.SettingsComponent),
     children: [
-      { path: '', redirectTo: 'profile', pathMatch: 'full' },
+      {
+        // Редизайн v3, PR8 — на десктопе редиректит на 'profile' (как раньше), на мобильном
+        // (заход через нижний лист «Ещё» → «Профиль») показывает корневой список разделов с
+        // шевронами вместо мгновенного редиректа, см. settings-menu.component.ts.
+        path: '',
+        loadComponent: () =>
+          import('./components/settings/settings-menu/settings-menu.component').then(
+            (m) => m.SettingsMenuComponent,
+          ),
+      },
       {
         path: 'profile',
         loadComponent: () =>
@@ -201,10 +210,44 @@ export const routes: Routes = [
           ),
       },
       {
+        // Экран добавления (редизайн v3, PR7) — боковая панель на десктопе, полноэкранно на
+        // мобильном, см. record-add-page.component.ts. ДО 'records/:id' — иначе роутер принял
+        // бы литеральный сегмент 'new' за :id (порядок регистрации важен для Angular Router,
+        // в отличие от ASP.NET Core Minimal API, где специфичность важнее порядка).
+        path: 'records/new',
+        loadComponent: () =>
+          import('./components/record-add-page/record-add-page.component').then(
+            (m) => m.RecordAddPageComponent,
+          ),
+      },
+      {
+        // Мобильный экран открытой записи (редизайн v3, PR6) — деслктоп продолжает раскрывать
+        // запись инлайн в списке, см. record-detail-page.component.ts.
+        path: 'records/:id',
+        loadComponent: () =>
+          import('./components/record-detail-page/record-detail-page.component').then(
+            (m) => m.RecordDetailPageComponent,
+          ),
+      },
+      {
         path: 'visits',
         loadComponent: () =>
           import('./components/doctor-visits-tab/doctor-visits-tab.component').then(
             (m) => m.DoctorVisitsTabComponent,
+          ),
+      },
+      {
+        path: 'visits/new',
+        loadComponent: () =>
+          import('./components/doctor-visit-add/doctor-visit-add.component').then(
+            (m) => m.DoctorVisitAddComponent,
+          ),
+      },
+      {
+        path: 'visits/:id',
+        loadComponent: () =>
+          import('./components/doctor-visit-detail-page/doctor-visit-detail-page.component').then(
+            (m) => m.DoctorVisitDetailPageComponent,
           ),
       },
       {

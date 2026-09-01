@@ -274,6 +274,10 @@ export class ApiService {
   getMedicalRecords = (filter: MedicalRecordFilter = {}) =>
     this.get<PagedResult<MedicalRecord>>(`/api/medical-records${buildQuery(filter)}`);
 
+  /** Одна запись по id (редизайн v3) — мобильный экран открытой записи, deep link/refresh без
+   * предзагрузки всего списка. Видимость, не только владение — как у getMedicalRecords. */
+  getMedicalRecord = (recordId: string) => this.get<MedicalRecord>(`/api/medical-records/${recordId}`);
+
   /** Список вложений записи — грузится с сервера (не копится в памяти сессии, как раньше). */
   getRecordAttachments = (recordId: string) => this.get<Attachment[]>(`/api/medical-records/${recordId}/attachments`);
 

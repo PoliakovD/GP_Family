@@ -1,0 +1,31 @@
+.settings-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--tap-min);
+  padding: 14px 16px;
+  color: var(--color-text);
+
+  & + .settings-menu-row {
+    border-top: 1px solid var(--color-divider);
+  }
+
+  i:first-child {
+    font-size: 20px;
+    color: var(--color-neutral-700);
+  }
+}
+
+.settings-menu-push-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-paper));
+  border-left: 3px solid var(--color-status-warning);
+
+  i {
+    font-size: 24px;
+    color: var(--color-status-warning);
+  }
+}

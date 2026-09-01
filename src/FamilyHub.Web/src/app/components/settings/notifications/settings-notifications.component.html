@@ -1,84 +1,84 @@
 @if (auth.me(); as me) {
-  <section class="mb-2">
-    <h3>Push-уведомления</h3>
-    @if (push.isSupported) {
-      <div class="d-flex align-items-center justify-content-between gap-2">
-        <p class="muted mb-0">
-          Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
-        </p>
-        <label class="switch">
-          <input
-            type="checkbox"
-            [checked]="push.isSubscribed()"
-            [disabled]="pushBusy()"
-            (change)="togglePush()"
-          />
-          <span class="switch-knob"></span>
-        </label>
-      </div>
-    } @else if (tg.isInsideTelegram()) {
-      <p class="muted mb-0">Недоступно внутри Telegram — откройте FamilyHub в браузере.</p>
-    } @else {
-      <p class="muted mb-0">Ваш браузер не поддерживает push-уведомления.</p>
-    }
-  </section>
+  <h2 class="mb-4">Оповещения</h2>
 
-  <section>
-    <h3>Оповещения по типам</h3>
-    @if (!push.isSupported && !me.hasTelegram) {
-      <p class="muted mb-0">
-        Нет доступного канала доставки — включите push-уведомления или привяжите Telegram
-        на вкладке «Профиль», чтобы настроить оповещения по отдельным типам.
-      </p>
-    } @else if (preferences()) {
-      <div style="overflow-x: auto;">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Тип оповещения</th>
-              @if (push.isSupported) { <th>Push</th> }
-              @if (me.hasTelegram) { <th>Telegram</th> }
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of rows; track row.type) {
-              <tr>
-                <td>{{ label(row.type) }}</td>
+  <!-- Редизайн v3, PR8 — главный push-выключатель в отдельном акцентном блоке-баннере сверху
+     (было — обычной строкой внутри списка ниже). -->
+  @if (push.isSupported) {
+    <div class="settings-push-banner mb-4" [class.off]="!push.isSubscribed()">
+      <i [class]="push.isSubscribed() ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash'" aria-hidden="true"></i>
+      <div class="flex-fill">
+        <div style="font-weight:600">Push-уведомления {{ push.isSubscribed() ? 'включены' : 'выключены' }}</div>
+        <div class="muted" style="font-size:14px">
+          @if (push.isSubscribed()) {
+            Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
+          } @else {
+            Пока выключены, напоминания приходить не будут — даже если типы ниже включены.
+          }
+        </div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" [checked]="push.isSubscribed()" [disabled]="pushBusy()" (change)="togglePush()" />
+        <span class="switch-knob"></span>
+      </label>
+    </div>
+  } @else if (tg.isInsideTelegram()) {
+    <p class="muted mb-4">Push недоступен внутри Telegram — откройте FamilyHub в браузере.</p>
+  } @else {
+    <p class="muted mb-4">Ваш браузер не поддерживает push-уведомления.</p>
+  }
+
+  <!-- Редизайн v3, PR8 — строки сгруппированы по разделу (было — плоская таблица всех типов). -->
+  @if (!push.isSupported && !me.hasTelegram) {
+    <p class="muted mb-0">
+      Нет доступного канала доставки — включите push-уведомления или привяжите Telegram
+      на вкладке «Аккаунт», чтобы настроить оповещения по отдельным типам.
+    </p>
+  } @else if (preferences()) {
+    <div class="settings-notification-header">
+      <span>Тип оповещения</span>
+      @if (push.isSupported) { <span class="text-center">Push</span> }
+      @if (me.hasTelegram) { <span class="text-center">Telegram</span> }
+    </div>
+
+    <div class="d-flex flex-column gap-4">
+      @for (section of sections; track section.name) {
+        <section>
+          <div class="card-kicker mb-2">{{ section.name }}</div>
+          <div class="card" style="padding:0">
+            @for (row of section.rows; track row.type) {
+              <div class="settings-notification-row">
+                <span>{{ label(row.type) }}</span>
                 @if (push.isSupported) {
-                  <td>
-                    <label class="switch">
-                      <input
-                        type="checkbox"
-                        [checked]="row.pushEnabled"
-                        [disabled]="prefsBusy()"
-                        (change)="setPreference(row.type, 'pushEnabled', !row.pushEnabled)"
-                      />
-                      <span class="switch-knob"></span>
-                    </label>
-                  </td>
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      [checked]="row.pushEnabled"
+                      [disabled]="prefsBusy()"
+                      (change)="setPreference(row.type, 'pushEnabled', !row.pushEnabled)"
+                    />
+                    <span class="switch-knob"></span>
+                  </label>
                 }
                 @if (me.hasTelegram) {
-                  <td>
-                    <label class="switch">
-                      <input
-                        type="checkbox"
-                        [checked]="row.telegramEnabled"
-                        [disabled]="prefsBusy()"
-                        (change)="setPreference(row.type, 'telegramEnabled', !row.telegramEnabled)"
-                      />
-                      <span class="switch-knob"></span>
-                    </label>
-                  </td>
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      [checked]="row.telegramEnabled"
+                      [disabled]="prefsBusy()"
+                      (change)="setPreference(row.type, 'telegramEnabled', !row.telegramEnabled)"
+                    />
+                    <span class="switch-knob"></span>
+                  </label>
                 }
-              </tr>
+              </div>
             }
-          </tbody>
-        </table>
-      </div>
-    } @else {
-      <p class="muted mb-0">Загрузка…</p>
-    }
-  </section>
+          </div>
+        </section>
+      }
+    </div>
+  } @else {
+    <p class="muted mb-0">Загрузка…</p>
+  }
 } @else {
   <p>Загрузка…</p>
 }

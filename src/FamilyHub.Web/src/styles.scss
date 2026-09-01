@@ -719,6 +719,115 @@ select.input {
 }
 
 // ============================================================================
+// Файлы (форма создания записи + дозагрузка к существующей) — тот же визуальный язык, что
+// photo-grid/photo-tile/photo-add в medications-panel, но под произвольные документы, не только
+// фото. Глобальный, а не component-scoped (редизайн v3, PR7) — переиспользуется и
+// medical-records-panel (модалка «Файлы»), и record-add (форма создания на отдельном роуте).
+// ============================================================================
+.file-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.file-chip {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--color-divider);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  text-align: center;
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  i {
+    font-size: 22px;
+    color: var(--color-neutral-600);
+  }
+}
+
+.file-chip-name {
+  font-size: 9px;
+  line-height: 1.2;
+  color: var(--color-neutral-700);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.file-chip-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.file-chip-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px dashed var(--color-divider);
+  background: transparent;
+  color: var(--color-neutral-600);
+  cursor: pointer;
+  font-size: 10px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+
+  i { font-size: 22px; }
+
+  &:active {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+}
+
+// Скрывает нативный <input type="file"> визуально, но оставляет доступным для <label for>
+// и скринридеров (в отличие от display:none) — та же техника, что в medications-panel.scss.
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// ============================================================================
 // Оболочка приложения — редизайн v2 (каркас навигации, PR2). Было: .app-wrapper (колонка) +
 // .app-header (просто заголовок) + .tab-bar (одинаково на всех ширинах). Стало: десктоп
 // (≥1024px, BreakpointService.tier()==='wide') — боковое меню вместо таб-бара, узкие экраны —

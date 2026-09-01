@@ -71,9 +71,11 @@ public record CreateMedicalRecordRequest(
     Guid? FamilyDependentId = null,
     Guid? TargetUserId = null);
 
-/// <summary>Правка даты/врача/описания существующей записи (UX-редизайн) — пациент и вид записи
-/// не редактируются, см. MedicalRecordService.UpdateAsync.</summary>
-public record UpdateMedicalRecordRequest(DateOnly RecordDate, string? Doctor, string? Description);
+/// <summary>Правка даты/врача/описания/названия существующей записи (UX-редизайн, Title —
+/// редизайн v3, PR7) — пациент и вид записи не редактируются, см.
+/// MedicalRecordService.UpdateAsync. Title — необязательный последним параметром: существующие
+/// позиционные вызовы (тесты) остаются исходно совместимыми и не трогают название.</summary>
+public record UpdateMedicalRecordRequest(DateOnly RecordDate, string? Doctor, string? Description, string? Title = null);
 
 public record FamilyIdsRequest(List<Guid> FamilyIds);
 

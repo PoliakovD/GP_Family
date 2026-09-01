@@ -205,6 +205,56 @@ public class MedicalRecordService(
     }
 
     /// <summary>
+    /// Одна запись по id (редизайн v3 — мобильный экран открытой записи: deep link/refresh
+    /// страницы без предзагрузки всего списка). Видимость — VisibleRecordsQuery (та же, что у
+    /// списка/тренда показателя), НЕ владение: запись читаема всем, кому она видна (расшарена/
+    /// назначена/подопечный семьи), а не только владельцу — в отличие от UpdateAsync/DeleteAsync,
+    /// это операция чтения, не правки. NotFound/Forbidden различаются тем же приёмом, что
+    /// ExtractionQueryService.CheckAccessAsync — сначала ищем запись БЕЗ фильтра видимости (иначе
+    /// невидимая чужая запись выглядела бы как "не существует", а не как "нет доступа").
+    /// </summary>
+    public async Task<(MedicalRecordAccessResult Result, MedicalRecordDto? Item)> GetByIdAsync(
+        Guid userId, Guid recordId, CancellationToken ct = default)
+    {
+        var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);
+        if (record is null) return (MedicalRecordAccessResult.NotFound, null);
+        if (!await IsVisibleToAsync(recordId, userId, ct)) return (MedicalRecordAccessResult.Forbidden, null);
+
+        if (record.OwnerUserId != userId)
+        {
+            audit.Enqueue(userId, MedicalAccessAction.ViewList, ownerUserId: record.OwnerUserId, medicalRecordId: recordId);
+            await db.SaveChangesAsync(ct);
+        }
+
+        // HiddenFamilyIds (L2) — только владельцу, та же оговорка, что в GetVisibleRecordsAsync.
+        var hiddenFamilyIds = record.OwnerUserId == userId
+            ? await db.MedicalRecordHiddens.Where(h => h.MedicalRecordId == recordId).Select(h => h.FamilyId).ToListAsync(ct)
+            : [];
+        var personName = (await ResolvePersonNamesAsync([record], userId, ct))[record.Id];
+
+        var attachmentCounts = await db.FileAttachments
+            .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId)
+            .GroupBy(a => a.OwnerId)
+            .Select(g => new { Total = g.Count(), Unrecognized = g.Count(a => a.ExtractedAt == null) })
+            .FirstOrDefaultAsync(ct);
+        var indicatorCounts = await db.LabIndicators
+            .Where(i => i.MedicalRecordId == recordId)
+            .GroupBy(i => i.MedicalRecordId)
+            .Select(g => new
+            {
+                Count = g.Count(),
+                Abnormal = g.Count(i => i.Flag == IndicatorFlag.Low || i.Flag == IndicatorFlag.High || i.Flag == IndicatorFlag.Critical),
+                Normal = g.Count(i => i.Flag == IndicatorFlag.Normal),
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return (MedicalRecordAccessResult.Success, ToDto(
+            record, hiddenFamilyIds, personName,
+            attachmentCounts?.Total ?? 0, attachmentCounts?.Unrecognized ?? 0,
+            indicatorCounts?.Count ?? 0, indicatorCounts?.Abnormal ?? 0, indicatorCounts?.Normal ?? 0));
+    }
+
+    /// <summary>
     /// Отображаемое имя пациента (v2 — MedicalRecord.PersonName убран, идентичность выражается
     /// целиком через OwnerUserId/FamilyDependentId/TargetUserId) — резолвится на чтение, а не
     /// хранится: подопечный/участник семьи может переименоваться в профиле, и отображение должно
@@ -441,10 +491,13 @@ public class MedicalRecordService(
 
     /// <summary>
     /// Правка полей записи (UX-редизайн — кнопка «Редактировать» на карточке): дата/врач/
-    /// описание. Пациент (FamilyDependentId/TargetUserId) и Kind НЕ редактируются — смена
+    /// описание/название. Пациент (FamilyDependentId/TargetUserId) и Kind НЕ редактируются — смена
     /// пациента задним числом переписала бы историю доступа (та же логика, что и у "владелец не
-    /// меняется"); Kind определяет саму вкладку, в которой запись отображается. Title не трогаем
-    /// здесь — он либо приходит из распознавания, либо это отдельная забота (не запрошено).
+    /// меняется"); Kind определяет саму вкладку, в которой запись отображается. Title (редизайн
+    /// v3, PR7) — та же семантика, что Doctor/Description: форма всегда шлёт текущее значение
+    /// поля, пустая строка/null явно очищает (не "не менять"); иначе он выставляется только
+    /// распознаванием, см. MedicalDocumentExtractionProcessor (там — только если record.Title
+    /// ещё null, чтобы не затирать то, что здесь уже поправил пользователь).
     /// </summary>
     public async Task<(MedicalRecordAccessResult Result, MedicalRecordDto? Item)> UpdateAsync(
         Guid ownerUserId, Guid recordId, UpdateMedicalRecordRequest request, CancellationToken ct = default)
@@ -464,6 +517,7 @@ public class MedicalRecordService(
         record.RecordDate = request.RecordDate;
         record.Doctor = string.IsNullOrWhiteSpace(request.Doctor) ? null : request.Doctor.Trim();
         record.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        record.Title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Мед-запись {RecordId} отредактирована владельцем {OwnerUserId}", recordId, ownerUserId);

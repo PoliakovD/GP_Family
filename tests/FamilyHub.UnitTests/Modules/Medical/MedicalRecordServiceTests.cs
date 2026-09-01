@@ -537,6 +537,40 @@ public class MedicalRecordServiceTests : SqliteTestBase
         dto.NormalIndicatorCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task UpdateAsync_SetsTitle()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        await Db.SaveChangesAsync();
+
+        var (result, dto) = await _sut.UpdateAsync(
+            owner.Id, record.Id, new UpdateMedicalRecordRequest(record.RecordDate, null, null, "Общий анализ крови"));
+
+        result.Should().Be(MedicalRecordAccessResult.Success);
+        dto!.Title.Should().Be("Общий анализ крови");
+    }
+
+    /// <summary>Title (редизайн v3, PR7) — та же семантика, что Doctor/Description: форма всегда
+    /// шлёт текущее значение, пустая строка явно очищает ранее выставленное распознаванием
+    /// название, а не оставляет его нетронутым.</summary>
+    [Fact]
+    public async Task UpdateAsync_BlankTitle_ClearsPreviouslyRecognizedTitle()
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        record.Title = "Распознанное название";
+        Db.MedicalRecords.Add(record);
+        await Db.SaveChangesAsync();
+
+        var (result, dto) = await _sut.UpdateAsync(
+            owner.Id, record.Id, new UpdateMedicalRecordRequest(record.RecordDate, null, null, "  "));
+
+        result.Should().Be(MedicalRecordAccessResult.Success);
+        dto!.Title.Should().BeNull();
+    }
+
     private static LabIndicator NewIndicator(MedicalRecord record, Guid ownerUserId, IndicatorFlag flag) => new()
     {
         Id = Guid.NewGuid(),

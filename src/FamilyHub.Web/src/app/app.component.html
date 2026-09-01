@@ -36,6 +36,16 @@
               }
             </div>
           }
+
+          @if (item.id === 'settings' && isSettingsActive()) {
+            <div class="app-sidebar-children">
+              @for (sub of item.children ?? []; track sub.path) {
+                <a class="app-sidebar-child" [routerLink]="sub.path" [class.active]="currentUrl().startsWith(sub.path)">
+                  {{ sub.label }}
+                </a>
+              }
+            </div>
+          }
         }
       </nav>
 
@@ -74,7 +84,12 @@
   <div class="app-main">
     @if (showTabs()) {
       <header class="app-topbar">
-        <app-search />
+        <!-- Редизайн v3 — «один поиск на экране»: страницы со своим локальным поиском (Анализы,
+             Врачи, Аптечка) подавляют общий поиск шапки через PageActionService, не показывают
+             оба поля разом. -->
+        @if (!pageAction.suppressGlobalSearch()) {
+          <app-search />
+        }
         @if (pageAction.action(); as action) {
           <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
             @if (action.icon) {

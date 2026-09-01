@@ -1,0 +1,45 @@
+// Редизайн v3, PR8 — Пароль/Устройства в две колонки на широких экранах вместо трёх
+// последовательных секций во всю ширину; на узких — стек (было и остаётся стеком по умолчанию).
+.settings-security-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .settings-security-columns {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .settings-security-col-password {
+    width: 380px;
+    flex: none;
+  }
+
+  .settings-security-col-devices {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.settings-password-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--color-neutral-600);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  li.done {
+    color: var(--color-status-ok-text);
+  }
+}

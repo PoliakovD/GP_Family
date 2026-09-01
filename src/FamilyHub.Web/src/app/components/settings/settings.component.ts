@@ -1,24 +1,17 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { RouterOutlet } from '@angular/router';
 
 /**
- * Хаб «Настройки» (редизайн навигации): вкладки Профиль/Безопасность/Уведомления/Данные вместо
- * одного длинного скролла. Настоящие вложенные роуты (не in-page state) — переживают refresh и
- * работают с browser back, тот же паттерн, что и HealthHubComponent (/health). Дочерние компоненты
- * монтируются в router-outlet этого хаба, а не корневого.
+ * Хаб «Настройки» (редизайн v3, PR8) — разделы (Аккаунт/Безопасность/Оповещения/Данные) больше
+ * не собственные табы этого компонента (.seg поверх сайдбара — два независимых уровня навигации),
+ * а подпункты сайдбара каркаса, тот же паттерн, что «Здоровье» (см. app.component.ts
+ * sidebarItems). Мобильный корневой список — отдельный SettingsMenuComponent на дочернем роуте
+ * '' (settings-menu/settings-menu.component.ts), не таб-строка здесь.
  */
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterOutlet],
   templateUrl: './settings.component.html',
-  styleUrl: './settings.component.scss',
 })
-export class SettingsComponent {
-  readonly sections: { path: string; label: string }[] = [
-    { path: 'profile', label: 'Профиль' },
-    { path: 'security', label: 'Безопасность' },
-    { path: 'notifications', label: 'Уведомления' },
-    { path: 'data', label: 'Данные' },
-  ];
-}
+export class SettingsComponent {}

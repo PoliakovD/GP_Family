@@ -1,88 +1,112 @@
 @if (auth.me(); as me) {
-  <section class="mb-2">
-    <h3>Пароль</h3>
-    @if (me.hasPassword) {
-      <form (ngSubmit)="changePassword()">
-        <label class="form-label" for="current-password">Текущий пароль</label>
-        <input
-          id="current-password" class="input mb-2" type="password" name="currentPassword"
-          [(ngModel)]="currentPassword" required autocomplete="current-password" />
+  <h2 class="mb-1">Безопасность</h2>
+  <p class="muted mb-4">Пароль и активные сессии. Медицинские данные доступны только с этих устройств.</p>
 
-        <label class="form-label" for="new-password">Новый пароль (минимум 8 симв., строчная и заглавная буквы, цифра)</label>
-        <input
-          id="new-password" class="input mb-2" type="password" name="newPassword"
-          [(ngModel)]="newPassword" required minlength="8" maxlength="100"
-          autocomplete="new-password" />
+  <!-- Редизайн v3, PR8 — двухколоночная раскладка (Пароль/Устройства) на широких экранах вместо
+     трёх последовательных секций во всю ширину; на узких те же блоки стеком (см. .scss). -->
+  <div class="settings-security-columns">
+    <section class="settings-security-col-password">
+      <div class="card-kicker mb-2">Пароль</div>
+      @if (me.hasPassword) {
+        <div class="card">
+          <form (ngSubmit)="changePassword()">
+            <label class="form-label" for="current-password">Текущий пароль</label>
+            <input
+              id="current-password" class="input mb-2" type="password" name="currentPassword"
+              [(ngModel)]="currentPassword" required autocomplete="current-password" />
 
-        <label class="form-label" for="new-password-repeat">Повторите новый пароль</label>
-        <input
-          id="new-password-repeat" class="input mb-2" type="password" name="newPasswordRepeat"
-          [(ngModel)]="newPasswordRepeat" required autocomplete="new-password" />
-        @if (newPasswordRepeat && newPassword !== newPasswordRepeat) {
-          <p class="field-hint field-hint-error mb-2">Пароли не совпадают.</p>
-        }
+            <label class="form-label" for="new-password">Новый пароль</label>
+            <input
+              id="new-password" class="input mb-2" type="password" name="newPassword"
+              [(ngModel)]="newPassword" required minlength="8" maxlength="100"
+              autocomplete="new-password" />
 
-        <button type="submit" class="btn btn-primary" [disabled]="busy() || !passwordFormValid">Сменить пароль</button>
-      </form>
-    } @else {
-      <p class="muted mb-0">
-        У аккаунта ещё нет пароля — сначала привяжите email на вкладке
-        <a routerLink="/settings/profile">«Профиль»</a>.
-      </p>
-    }
-  </section>
-
-  @if (auth.mode === 'pwa') {
-    <section class="mb-2">
-      <h3>Мои устройства</h3>
-      @if (sessions(); as list) {
-        @if (list.length === 0) {
-          <p class="muted mb-0">Активных сессий не найдено.</p>
-        } @else {
-          <ul class="list-unstyled mb-2">
-            @for (s of list; track s.id) {
-              <li class="mb-2">
-                <div class="d-flex align-items-center justify-content-between gap-2">
-                  <div>
-                    <p class="mb-0">
-                      <i class="ph ph-device-mobile" aria-hidden="true"></i>
-                      {{ s.device }}
-                      @if (s.isCurrent) { <span class="tag tag-accent">Это устройство</span> }
-                    </p>
-                    <p class="muted mb-0">
-                      {{ s.ipAddress ?? '—' }} · последняя активность {{ s.lastSeenAt | date: 'd MMM, HH:mm' }}
-                    </p>
-                  </div>
-                  @if (!s.isCurrent) {
-                    <button
-                      type="button" class="btn btn-secondary btn-sm" [disabled]="sessionsBusy()"
-                      (click)="revokeSession(s.id)">
-                      Завершить
-                    </button>
-                  }
-                </div>
+            <!-- Живой чек-лист (редизайн v3, PR8) — кнопка активна, когда все требования
+               выполнены; раньше была просто выцветшей без объяснения, почему не нажимается. -->
+            <ul class="settings-password-checklist mb-2">
+              <li [class.done]="passwordChecks.length">
+                <i [class]="passwordChecks.length ? 'ph-fill ph-check-circle' : 'ph ph-circle'" aria-hidden="true"></i>
+                от 8 символов
               </li>
+              <li [class.done]="passwordChecks.mixedCase">
+                <i [class]="passwordChecks.mixedCase ? 'ph-fill ph-check-circle' : 'ph ph-circle'" aria-hidden="true"></i>
+                строчная и заглавная буквы
+              </li>
+              <li [class.done]="passwordChecks.digit">
+                <i [class]="passwordChecks.digit ? 'ph-fill ph-check-circle' : 'ph ph-circle'" aria-hidden="true"></i>
+                цифра
+              </li>
+            </ul>
+
+            <label class="form-label" for="new-password-repeat">Повторите новый пароль</label>
+            <input
+              id="new-password-repeat" class="input mb-2" type="password" name="newPasswordRepeat"
+              [(ngModel)]="newPasswordRepeat" required autocomplete="new-password" />
+            @if (newPasswordRepeat && newPassword !== newPasswordRepeat) {
+              <p class="field-hint field-hint-error mb-2">Пароли не совпадают.</p>
             }
-          </ul>
-        }
-        <button type="button" class="btn btn-danger btn-sm" (click)="logoutAll()">Выйти со всех устройств</button>
+
+            <button type="submit" class="btn btn-primary" [disabled]="busy() || !passwordFormValid">Сменить пароль</button>
+          </form>
+        </div>
       } @else {
-        <p class="muted mb-0">Загрузка…</p>
+        <p class="muted mb-0">
+          У аккаунта ещё нет пароля — сначала привяжите email на вкладке
+          <a routerLink="/settings/profile">«Аккаунт»</a>.
+        </p>
       }
     </section>
-  } @else {
-    <section class="mb-2">
-      <h3>Мои устройства</h3>
-      <p class="muted mb-0">
-        В Telegram Mini App нет отдельных сессий — доступ проверяется на каждый запрос. Список
-        устройств доступен только при входе через браузер (PWA).
-      </p>
+
+    <section class="settings-security-col-devices">
+      @if (auth.mode === 'pwa') {
+        <div class="card-kicker mb-2">Устройства @if (sessions(); as list) { <span class="muted">· {{ list.length }}</span> }</div>
+        @if (sessions(); as list) {
+          @if (list.length === 0) {
+            <p class="muted mb-0">Активных сессий не найдено.</p>
+          } @else {
+            <ul class="list-unstyled mb-2">
+              @for (s of list; track s.id) {
+                <li class="card mb-2">
+                  <div class="d-flex align-items-center justify-content-between gap-2">
+                    <div>
+                      <p class="mb-0">
+                        <i class="ph ph-device-mobile" aria-hidden="true"></i>
+                        {{ s.device }}
+                        @if (s.isCurrent) { <span class="tag tag-accent">Это устройство</span> }
+                      </p>
+                      <p class="muted mb-0">
+                        {{ s.ipAddress ?? '—' }} · последняя активность {{ s.lastSeenAt | date: 'd MMM, HH:mm' }}
+                      </p>
+                    </div>
+                    @if (!s.isCurrent) {
+                      <button
+                        type="button" class="btn btn-secondary btn-sm" [disabled]="sessionsBusy()"
+                        (click)="revokeSession(s.id)">
+                        Завершить
+                      </button>
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+          <button type="button" class="btn btn-danger btn-sm" (click)="logoutAll()">Выйти со всех устройств</button>
+        } @else {
+          <p class="muted mb-0">Загрузка…</p>
+        }
+      } @else {
+        <div class="card-kicker mb-2">Устройства</div>
+        <p class="muted mb-0">
+          В Telegram Mini App нет отдельных сессий — доступ проверяется на каждый запрос. Список
+          устройств доступен только при входе через браузер (PWA).
+        </p>
+      }
     </section>
-  }
+  </div>
 
   @if (me.hasTelegram && me.hasPassword) {
-    <section class="mb-2">
-      <h3>Telegram</h3>
+    <section class="mb-2 mt-4">
+      <div class="card-kicker mb-2">Telegram</div>
       <p class="muted mb-2">
         Отвяжите Telegram, если аккаунт мог быть скомпрометирован — доступ из Telegram
         пропадёт сразу, войти можно будет по email и паролю.
@@ -101,7 +125,7 @@
   }
 
   @if (me.provider === 'email') {
-    <section>
+    <section class="mt-4">
       <button class="btn btn-secondary" (click)="logout()">Выйти</button>
     </section>
   }

@@ -13,11 +13,22 @@ export interface PageAction {
 export class PageActionService {
     readonly action = signal<PageAction | null>(null);
 
+    /** Редизайн v3 — «один поиск на экране»: страница со своим локальным полем поиска
+     * (Анализы/Врачи/Аптечка) подавляет общий поиск шапки, чтобы не показывать два поля разом.
+     * Сбрасывается вместе с action() в clear() — иначе «утечёт» на следующий экран без своего
+     * поиска (тот же класс бага, для которого уже существует эта симметрия у action). */
+    readonly suppressGlobalSearch = signal(false);
+
     set(action: PageAction): void {
         this.action.set(action);
     }
 
+    setSearchSuppressed(v: boolean): void {
+        this.suppressGlobalSearch.set(v);
+    }
+
     clear(): void {
         this.action.set(null);
+        this.suppressGlobalSearch.set(false);
     }
 }

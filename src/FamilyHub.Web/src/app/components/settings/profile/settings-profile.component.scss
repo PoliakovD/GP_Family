@@ -1,0 +1,42 @@
+// Редизайн v3, PR8 — герой-блок + «Данные аккаунта»/«Способы входа» списком пар вместо строки
+// через «·» (было — narrow card по центру пустого экрана).
+.settings-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: 760px;
+}
+
+.settings-data-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 13px 18px;
+  max-width: 760px;
+
+  & + .settings-data-row {
+    border-top: 1px solid var(--color-divider);
+  }
+}
+
+.settings-data-label {
+  width: 180px;
+  flex: none;
+  color: var(--color-neutral-600);
+}
+
+.settings-login-method {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  max-width: 760px;
+
+  i {
+    font-size: 26px;
+    color: var(--color-accent);
+  }
+}

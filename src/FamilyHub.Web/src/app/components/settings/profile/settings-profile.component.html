@@ -1,23 +1,22 @@
 @if (auth.me(); as me) {
-  <section class="mb-2">
-    <h3>Аккаунт</h3>
-    <p class="mb-1"><app-person-name [person]="me" styleOverride="full" /></p>
-    <p class="muted">
-      @if (me.username) { &#64;{{ me.username }} · }
-      Telegram: {{ me.hasTelegram ? (me.tgUsername ? '@' + me.tgUsername : 'привязан') : '—' }} ·
-      Email: {{ me.email ?? '—' }} ·
-      Вход: {{ me.provider === 'email' ? 'браузер (PWA)' : 'Telegram' }}
-    </p>
-
+  <!-- Редизайн v3, PR8 — герой-блок (аватар+ФИО+метаданные) вместо строки через «·»; контент
+     выровнен по левому краю, max-width как на остальных экранах (не карточка по центру). -->
+  <div class="settings-hero mb-4">
+    <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="lg" />
+    <div class="flex-fill" style="min-width:0">
+      <h2 class="mb-1"><app-person-name [person]="me" styleOverride="full" /></h2>
+      <div class="muted">
+        @if (me.username) { &#64;{{ me.username }} · }
+        {{ me.provider === 'email' ? 'вход через браузер (PWA)' : 'вход через Telegram' }}
+      </div>
+    </div>
     @if (!editingProfile()) {
-      <p class="muted mb-1">
-        Дата рождения: {{ me.birthDate ?? '—' }} ·
-        Пол: {{ me.gender === 1 ? 'женский' : 'мужской' }}
-      </p>
-      <button type="button" class="btn btn-secondary btn-sm" (click)="startEditProfile()">
-        Изменить ФИО и дату рождения
-      </button>
-    } @else {
+      <button type="button" class="btn btn-secondary btn-sm" (click)="startEditProfile()">Изменить</button>
+    }
+  </div>
+
+  @if (editingProfile()) {
+    <section class="mb-4">
       <form (ngSubmit)="saveProfile()">
         <label class="form-label" for="profile-last-name">Фамилия</label>
         <input
@@ -50,61 +49,111 @@
           <button type="button" class="btn btn-secondary btn-sm" (click)="editingProfile.set(false)">Отмена</button>
         </div>
       </form>
-    }
-  </section>
+    </section>
+  } @else {
+    <!-- Редизайн v3, PR8 — «Данные аккаунта» списком пар вместо строки через «·»; у даты
+       рождения/пола объяснение, зачем они здесь (персональные нормы в анализах). -->
+    <section class="mb-4">
+      <div class="card-kicker mb-2">Данные аккаунта</div>
+      <div class="card" style="padding:0">
+        <div class="settings-data-row">
+          <span class="settings-data-label">ФИО</span>
+          <span class="flex-fill"><app-person-name [person]="me" styleOverride="full" /></span>
+        </div>
+        <div class="settings-data-row">
+          <span class="settings-data-label">Дата рождения</span>
+          <span class="flex-fill">{{ me.birthDate ?? '—' }}</span>
+          <span class="muted" style="font-size:13px">нужна для норм в анализах</span>
+        </div>
+        <div class="settings-data-row">
+          <span class="settings-data-label">Пол</span>
+          <span class="flex-fill">{{ me.gender === 1 ? 'Женский' : 'Мужской' }}</span>
+          <span class="muted" style="font-size:13px">нужен для норм в анализах</span>
+        </div>
+        <div class="settings-data-row">
+          <span class="settings-data-label">Email</span>
+          <span class="flex-fill">{{ me.email ?? '—' }}</span>
+        </div>
+      </div>
+    </section>
+  }
 
-  @if (!me.email) {
-    <section class="mb-2">
-      <h3>Вход из браузера (PWA)</h3>
-      <p class="muted mb-2">Привяжите email и пароль, чтобы открывать FamilyHub без Telegram.</p>
+  <!-- Редизайн v3, PR8 — «Способы входа»: браузер (всегда активен) + Telegram в одном блоке
+     (было — Telegram отдельным разделом внизу страницы). -->
+  <section class="mb-4">
+    <div class="card-kicker mb-2">Способы входа</div>
+    <div class="settings-login-method mb-2">
+      <i class="ph-duotone ph-globe" aria-hidden="true"></i>
+      <div class="flex-fill">
+        <div style="font-weight:600">Браузер · email и пароль</div>
+        <div class="muted" style="font-size:14px">{{ me.provider === 'email' ? 'Используется сейчас' : (me.hasPassword ? 'Доступен' : 'Не привязан') }}</div>
+      </div>
+      @if (me.provider === 'email') {
+        <span class="tag tag-accent">активен</span>
+      }
+    </div>
+
+    @if (!me.email) {
       @switch (linkStep()) {
         @case ('idle') {
-          <form (ngSubmit)="startLinkEmail()">
-            <label class="form-label" for="link-email">Email</label>
-            <input id="link-email" class="input mb-2" type="email" name="linkEmail" [(ngModel)]="linkEmail" required />
-            <button type="submit" class="btn btn-primary" [disabled]="busy()">Отправить код</button>
+          <form (ngSubmit)="startLinkEmail()" class="settings-login-method">
+            <div class="flex-fill">
+              <label class="form-label" for="link-email">Email</label>
+              <input id="link-email" class="input mb-2" type="email" name="linkEmail" [(ngModel)]="linkEmail" required />
+              <button type="submit" class="btn btn-primary" [disabled]="busy()">Отправить код</button>
+            </div>
           </form>
         }
         @case ('code') {
-          <form (ngSubmit)="confirmLinkEmail()">
-            <label class="form-label" for="link-code">Код из письма</label>
-            <input
-              id="link-code" class="input mb-2" type="text" name="linkCode"
-              [(ngModel)]="linkCode" required inputmode="numeric" maxlength="6" />
+          <form (ngSubmit)="confirmLinkEmail()" class="settings-login-method">
+            <div class="flex-fill">
+              <label class="form-label" for="link-code">Код из письма</label>
+              <input
+                id="link-code" class="input mb-2" type="text" name="linkCode"
+                [(ngModel)]="linkCode" required inputmode="numeric" maxlength="6" />
 
-            <label class="form-label" for="link-password">Пароль (минимум 8 симв., строчная и заглавная буквы, цифра)</label>
-            <input
-              id="link-password" class="input mb-2" type="password" name="linkPassword"
-              [(ngModel)]="linkPassword" required minlength="8" maxlength="100"
-              autocomplete="new-password" />
+              <label class="form-label" for="link-password">Пароль (минимум 8 симв., строчная и заглавная буквы, цифра)</label>
+              <input
+                id="link-password" class="input mb-2" type="password" name="linkPassword"
+                [(ngModel)]="linkPassword" required minlength="8" maxlength="100"
+                autocomplete="new-password" />
 
-            <button type="submit" class="btn btn-primary" [disabled]="busy()">Привязать</button>
+              <button type="submit" class="btn btn-primary" [disabled]="busy()">Привязать</button>
+            </div>
           </form>
         }
       }
-    </section>
-  }
+    }
 
-  @if (me.provider === 'email' && !me.hasTelegram) {
-    <section class="mb-2">
-      <h3>Telegram</h3>
-      <p class="muted mb-2">
-        Привяжите Telegram-аккаунт — потом можно будет входить и через бота/Mini App.
-        Если этот Telegram уже писал боту раньше, данные объединятся с текущим аккаунтом.
-      </p>
-      @if (telegramLink(); as link) {
-        <p class="mb-2">Откройте Telegram и нажмите «Привязать» в сообщении от бота.</p>
-        <a class="btn btn-primary btn-lg mb-1" [href]="link.deepLink" target="_blank" rel="noopener">
-          <i class="ph-fill ph-telegram-logo" aria-hidden="true"></i> Открыть Telegram
-        </a>
-        <p class="muted mb-0">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
-      } @else {
-        <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="startLinkTelegram()">
-          Привязать Telegram
-        </button>
+    <div class="settings-login-method">
+      <i class="ph-duotone ph-telegram-logo" aria-hidden="true"></i>
+      <div class="flex-fill">
+        <div style="font-weight:600">Telegram</div>
+        @if (me.hasTelegram) {
+          <div class="muted" style="font-size:14px">{{ me.tgUsername ? '@' + me.tgUsername : 'Привязан' }}</div>
+        } @else if (me.provider === 'email') {
+          <div class="muted" style="font-size:14px">
+            Не привязан. После привязки можно входить через бота и Mini App; если этот Telegram
+            уже писал боту, данные объединятся с текущим аккаунтом.
+          </div>
+        }
+      </div>
+      @if (me.hasTelegram) {
+        <span class="tag tag-accent">привязан</span>
+      } @else if (me.provider === 'email') {
+        @if (telegramLink(); as link) {
+          <a class="btn btn-primary btn-sm" [href]="link.deepLink" target="_blank" rel="noopener">Открыть Telegram</a>
+        } @else {
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="startLinkTelegram()">
+            Привязать
+          </button>
+        }
       }
-    </section>
-  }
+    </div>
+    @if (telegramLink(); as link) {
+      <p class="muted mt-1 mb-0" style="font-size:13px">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
+    }
+  </section>
 } @else {
   <p>Загрузка…</p>
 }

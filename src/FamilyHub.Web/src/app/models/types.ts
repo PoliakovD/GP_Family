@@ -243,6 +243,9 @@ export interface UpdateMedicalRecordRequest {
     recordDate: string;
     doctor: string | null;
     description: string | null;
+    /** Редизайн v3 (PR7) — та же семантика, что doctor/description: форма всегда шлёт текущее
+     * значение, null/пустая строка явно очищает ранее выставленное распознаванием название. */
+    title?: string | null;
 }
 
 export interface MedicalRecordInput {

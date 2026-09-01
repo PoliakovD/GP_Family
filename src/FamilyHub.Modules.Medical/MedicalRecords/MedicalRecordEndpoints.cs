@@ -47,6 +47,20 @@ public static class MedicalRecordEndpoints
             };
         });
 
+        // Одна запись по id (редизайн v3) — мобильный экран открытой записи, deep link/refresh
+        // без предзагрузки всего списка. Видимость, не владение — см. GetByIdAsync.
+        group.MapGet("/{recordId:guid}", async (
+            Guid recordId, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, item) = await service.GetByIdAsync(currentUser.UserId, recordId, ct);
+            return result switch
+            {
+                MedicalRecordAccessResult.NotFound => Results.NotFound(),
+                MedicalRecordAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(item),
+            };
+        });
+
         // Правка даты/врача/описания (UX-редизайн) — только владелец.
         group.MapPut("/{recordId:guid}", async (
             Guid recordId, UpdateMedicalRecordRequest request, MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>

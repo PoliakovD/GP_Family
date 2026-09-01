@@ -25,6 +25,22 @@ function initial(part: string): string {
   return part.length > 0 ? part[0].toUpperCase() : '';
 }
 
+/**
+ * Редизайн v3 — «Анализы»: группа-человек показывает короткое имя всегда (не по брейкпойнту, как
+ * formatPersonName выше), полное ФИО — только в title-тултипе. На вход — УЖЕ отформатированная
+ * строка ("Фамилия Имя Отчество"), не структурные поля: бэк отдаёт мед-записям одно резолвленное
+ * отображаемое имя (см. MedicalRecordService.ResolvePersonNamesAsync), а не ФИО по частям — та же
+ * причина, по которой personAvatarParts в medical-records-panel.component.ts делает то же самое
+ * простое разбиение по пробелу. "Иванов Иван Иванович" -> "Иванов И.И."; без отчества ->
+ * "Иванов И."; один токен (например, кличка питомца) остаётся как есть.
+ */
+export function shortenDisplayName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return fullName.trim();
+  const [last, ...rest] = parts;
+  return `${last} ${rest.map((p) => `${initial(p)}.`).join('')}`;
+}
+
 /** Схлопывается корректно без отчества (не у всех есть) во всех трёх стилях. */
 export function formatPersonName(person: PersonNameParts, style: PersonNameStyle): string {
   const last = person.lastName?.trim() ?? '';

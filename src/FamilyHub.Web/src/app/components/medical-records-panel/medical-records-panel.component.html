@@ -3,89 +3,39 @@
     <div class="alert-danger mb-2">{{ error }}</div>
   }
 
-  <!-- Редизайн v2: кнопка «Добавить» теперь в топбаре каркаса (PageActionService) — здесь
-       остаётся только сама форма, открытая/закрытая через createOpen. -->
-  @if (createOpen) {
-    <div class="card mb-3">
-      <label class="form-label" for="{{ createFileInputId }}-patient">Пациент</label>
-      <select id="{{ createFileInputId }}-patient" class="input" [ngModel]="selectedPatientKey" (ngModelChange)="selectedPatientKey = $event">
-        @for (opt of patientOptions; track opt.key) {
-          <option [value]="opt.key">{{ opt.label }}</option>
-        }
-      </select>
+  <!-- Редизайн v3 — форма создания переехала на отдельный роут (record-add.component.ts,
+       боковая панель/полноэкранно), кнопка «Добавить» в топбаре теперь навигирует туда, не
+       разворачивает форму инлайн (см. PR7 плана). -->
 
-      <label class="form-label" for="{{ createFileInputId }}-date">Дата</label>
-      <input id="{{ createFileInputId }}-date" class="input" type="date" [(ngModel)]="form.recordDate" />
-
-      <label class="form-label" for="{{ createFileInputId }}-doctor">Врач</label>
-      <input
-        id="{{ createFileInputId }}-doctor"
-        class="input"
-        [attr.list]="doctorsDatalistId"
-        [(ngModel)]="form.doctor"
-        [placeholder]="labels.doctorPlaceholder"
-      />
-      <datalist [id]="doctorsDatalistId">
-        @for (d of doctorSuggestions; track d) {
-          <option [value]="d"></option>
+  <!-- Редизайн v3 — «Фильтры» переехали из сворачиваемой панели над списком в кнопку рядом с
+       локальным поиском (один ряд), см. PR5.3/5.4 плана. Тот же приём двух обёрток на одном
+       наборе полей, что уже применён в shared/action-menu: попап на широких экранах, шторка на
+       узких. -->
+  <div class="d-flex gap-2 mb-2 align-items-start">
+    <app-search-field class="flex-fill" [placeholder]="labels.searchPlaceholder" [value]="searchQuery" (valueChange)="onSearchQueryChange($event)" />
+    <div class="filters-anchor" #filtersAnchor>
+      <button type="button" class="btn btn-secondary text-nowrap" (click)="filtersOpen = !filtersOpen">
+        <i class="ph ph-funnel" aria-hidden="true"></i> Фильтры
+        @if (activeFilterCount > 0) {
+          <span class="tag tag-accent" style="margin-left:6px">{{ activeFilterCount }}</span>
         }
-      </datalist>
+      </button>
 
-      <label class="form-label" for="{{ createFileInputId }}-description">Описание</label>
-      <textarea
-        id="{{ createFileInputId }}-description"
-        class="input"
-        [(ngModel)]="form.description"
-        [placeholder]="labels.descriptionPlaceholder"
-        rows="2"
-      ></textarea>
-
-      <div class="file-chip-grid">
-        @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
-          <div class="file-chip">
-            @if (pf.previewUrl) {
-              <img [src]="pf.previewUrl" alt="" />
-            } @else {
-              <i class="ph ph-file-text" aria-hidden="true"></i>
-              <span class="file-chip-name">{{ pf.file.name }}</span>
-            }
-            <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="removePendingFile(i)">
-              <i class="ph-bold ph-x" aria-hidden="true"></i>
-            </button>
-          </div>
-        }
-        @if (canAddMorePendingFiles()) {
-          <label class="file-chip file-chip-add" [attr.for]="createFileInputId">
-            <i class="ph ph-paperclip" aria-hidden="true"></i>
-            <span>Файлы</span>
-          </label>
-        }
-      </div>
-      <input
-        [id]="createFileInputId"
-        class="visually-hidden-input"
-        type="file"
-        multiple
-        [accept]="acceptedFileTypes"
-        (change)="onPendingFilesSelected($event)"
-      />
-      @if (attachmentLimits; as limits) {
-        <div class="muted mb-2" style="font-size:12px">
-          Можно приложить сканы анализа/выписки сразу — до {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
+      @if (filtersOpen && isWide) {
+        <div class="card filters-popover">
+          <ng-container *ngTemplateOutlet="filterFields" />
         </div>
       }
-
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm align-self-start" [disabled]="saving" (click)="handleSubmit()">
-          {{ saving ? 'Сохраняем…' : labels.addButtonLabel }}
-        </button>
-        <button type="button" class="btn btn-ghost btn-sm" [disabled]="saving" (click)="createOpen = false">Отмена</button>
-      </div>
     </div>
+  </div>
+
+  @if (filtersOpen && !isWide) {
+    <app-bottom-sheet title="Фильтры" [open]="true" (closed)="filtersOpen = false">
+      <ng-container *ngTemplateOutlet="filterFields" />
+    </app-bottom-sheet>
   }
 
-  <!-- UX-редизайн: серверные фильтры (были — только поиск), сворачиваемая панель. -->
-  <app-expandable title="Фильтры" [count]="activeFilterCount || null" class="mb-2">
+  <ng-template #filterFields>
     <div class="d-flex flex-wrap gap-2 mb-2">
       <div class="flex-fill" style="min-width:130px">
         <label class="form-label">С даты</label>
@@ -107,9 +57,338 @@
     @if (activeFilterCount > 0) {
       <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
     }
-  </app-expandable>
+  </ng-template>
 
-  <app-search-field [placeholder]="labels.searchPlaceholder" [value]="searchQuery" (valueChange)="onSearchQueryChange($event)" />
+  <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список (десктоп/
+       мобайл) и мобильный экран открытой записи показывают одно и то же содержимое, разница —
+       только в singleMode (детали всегда развёрнуты, «Открыть» не нужна). -->
+  <ng-template #recordCard let-item let-singleMode="singleMode">
+    <div class="card record-card flex-fill">
+      <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
+           (см. PR5.1 плана). На мобильном списке (не singleMode, не isWide) действий нет вообще —
+           вся строка уводит на экран записи (PR6 плана), где singleMode=true. -->
+      <div
+        class="record-card-row"
+        [class.clickable]="!singleMode && !isWide"
+        (click)="onRecordCardClick(item, singleMode)"
+      >
+        <div class="record-card-main">
+          <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
+
+          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок. -->
+          <div class="record-chips">
+            @if (item.attachmentCount > 0) {
+              <span class="tag tag-neutral">{{ attachmentCountLabel(item) }}</span>
+            }
+            @if (item.indicatorCount > 0) {
+              <span class="tag tag-neutral">{{ indicatorCountLabel(item) }}</span>
+            }
+            @if (item.abnormalIndicatorCount > 0) {
+              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));color:var(--color-status-danger-text)">
+                {{ item.abnormalIndicatorCount }} вне нормы
+              </span>
+            } @else if (item.normalIndicatorCount > 0) {
+              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));color:var(--color-status-ok-text)">
+                {{ item.normalIndicatorCount }} в норме
+              </span>
+            }
+            @if (item.doctor) {
+              <span class="muted" style="font-size:13px">Врач: {{ item.doctor }}</span>
+            }
+          </div>
+        </div>
+
+        @if (singleMode || isWide) {
+          <div class="record-card-actions">
+            @if (!singleMode) {
+              <button class="btn btn-secondary text-nowrap" (click)="toggleExpandedRecord(item)">
+                {{ expandedRecordId === item.id ? 'Свернуть' : 'Открыть' }}
+              </button>
+            }
+            <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
+          </div>
+        }
+      </div>
+
+      @if (hasUnrecognizedAttachments(item)) {
+        <button
+          class="btn btn-primary btn-sm align-self-start mt-1"
+          [disabled]="recognizingRecordId === item.id"
+          (click)="handleRecognize(item)"
+        >
+          @if (recognizingRecordId === item.id) {
+            <span class="recognize-spinner" aria-hidden="true"></span>
+          } @else {
+            <i class="ph ph-magic-wand" aria-hidden="true"></i>
+          }
+          Распознать
+        </button>
+      }
+
+      @if (pipelineStepsByRecord[item.id]; as steps) {
+        <app-pipeline-progress [steps]="steps" />
+      }
+
+      @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
+        <div class="muted" style="font-size:12px">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
+      }
+
+      <!-- Редизайн v3 — «Подробнее» больше не отдельная свёртка со своим заголовком/шевроном
+           (см. PR5.2 плана). В singleMode (экран открытой записи) детали видны всегда — там нет
+           кнопки «Открыть», раскрывать нечего. -->
+      @if (singleMode || expandedRecordId === item.id) {
+        @if (item.doctor) {
+          <p class="muted mb-1">Врач: {{ item.doctor }}</p>
+        }
+        @if (item.description) {
+          <p class="mb-1">{{ item.description }}</p>
+        }
+
+        <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
+             читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
+        @if (summaryByRecord[item.id]; as summary) {
+          <div class="card-kicker mt-2">Резюме</div>
+          @if (summary.plainSummary) {
+            <p class="mb-1">{{ summary.plainSummary }}</p>
+          }
+          @if (summary.deviations.length > 0) {
+            <ul class="mb-1" style="font-size:13px">
+              @for (d of summary.deviations; track d.name) {
+                <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+              }
+            </ul>
+          }
+          @if (summary.questionsForDoctor.length > 0) {
+            <div class="card-kicker mt-2">Вопросы врачу</div>
+            <ul class="mb-1" style="font-size:13px">
+              @for (q of summary.questionsForDoctor; track q) {
+                <li>{{ q }}</li>
+              }
+            </ul>
+          }
+          <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+        }
+
+        @if (item.kind === Kind.Analysis) {
+        @if (indicatorsFor(item.id).length > 0) {
+        <div class="table-responsive">
+          <table class="indicators-table">
+            <thead>
+              <tr>
+                <th>Показатель</th>
+                <th>Значение</th>
+                <th>Норма</th>
+                <th>Статус</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (ind of indicatorsFor(item.id); track ind.id) {
+                @if (editingIndicatorId === ind.id) {
+                  <tr class="indicator-edit-row">
+                    <td colspan="5">
+                      <div class="d-flex flex-column gap-1">
+                        <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
+                        <div class="d-flex gap-1">
+                          <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                          <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+                        </div>
+                        <select class="input" [ngModel]="specimenKey(editIndicatorForm)" (ngModelChange)="applySpecimenKey(editIndicatorForm, $event)">
+                          @for (opt of specimenOptions; track opt.value) {
+                            <option [value]="opt.value">{{ opt.label }}</option>
+                          }
+                          @for (custom of customSpecimens; track custom.id) {
+                            <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
+                          }
+                        </select>
+                        @if (editIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
+                          <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
+                        }
+                        @if (addingCustomSpecimen) {
+                          <div class="d-flex gap-1 align-items-center">
+                            <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
+                            <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
+                            <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
+                          </div>
+                          @if (customSpecimenError) {
+                            <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+                          }
+                        }
+                        <div class="d-flex gap-1">
+                          <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                          <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+                        </div>
+                        <input class="input" [ngModel]="editIndicatorForm.refText" (ngModelChange)="editIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+                        <div class="d-flex gap-2">
+                          <button class="btn btn-primary btn-sm" [disabled]="savingIndicator" (click)="saveEditIndicator(item.id)">Сохранить</button>
+                          <button class="btn btn-ghost btn-sm" [disabled]="savingIndicator" (click)="cancelEditIndicator()">Отмена</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                } @else {
+                  <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
+                       шкала-референс / статус), клик по строке открывает панель справки; правка
+                       и удаление — компактные иконки-аффордансы, не отдельные "колонки данных". -->
+                  <tr class="indicator-row" (click)="openIndicatorInfo(ind)">
+                    <td>
+                      {{ shortIndicatorName(ind) }}
+                      @if (indicatorReference(ind); as ref) {
+                        <div class="muted" style="font-size:11px">
+                          {{ ref }}
+                          @if (isCalculatedRef(ind)) {
+                            <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
+                          }
+                        </div>
+                      }
+                    </td>
+                    <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
+                      {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
+                    </td>
+                    <td>
+                      @if (scaleBounds(ind); as b) {
+                        <app-reference-scale
+                          [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
+                          [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                        />
+                      } @else {
+                        <span class="muted" style="font-size:12px">—</span>
+                      }
+                    </td>
+                    <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
+                    <td class="indicator-actions-cell" (click)="$event.stopPropagation()">
+                      <span class="indicator-actions">
+                        <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
+                          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                        </button>
+                        <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
+                          <i class="ph ph-trash" aria-hidden="true"></i>
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                }
+              }
+              @if (creatingIndicatorRecordId === item.id) {
+                <tr class="indicator-edit-row">
+                  <td colspan="5">
+                    <div class="d-flex flex-column gap-1">
+                      <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+                      <div class="d-flex gap-1">
+                        <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                        <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+                      </div>
+                      <select class="input" [ngModel]="specimenKey(newIndicatorForm)" (ngModelChange)="applySpecimenKey(newIndicatorForm, $event)">
+                        @for (opt of specimenOptions; track opt.value) {
+                          <option [value]="opt.value">{{ opt.label }}</option>
+                        }
+                        @for (custom of customSpecimens; track custom.id) {
+                          <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
+                        }
+                      </select>
+                      @if (newIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
+                        <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
+                      }
+                      @if (addingCustomSpecimen) {
+                        <div class="d-flex gap-1 align-items-center">
+                          <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
+                          <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
+                          <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
+                        </div>
+                        @if (customSpecimenError) {
+                          <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+                        }
+                      }
+                      <div class="d-flex gap-1">
+                        <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                        <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+                      </div>
+                      <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
+                        <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              } @else {
+                <tr>
+                  <td colspan="5">
+                    <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        } @else {
+          <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+        }
+        }
+
+        @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
+          @if (conclusion.diagnosis) {
+            <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
+          }
+          @if (conclusion.anamnesis) {
+            <p class="mb-1"><strong>Анамнез:</strong> {{ conclusion.anamnesis }}</p>
+          }
+          @if (conclusion.proceduresPerformed) {
+            <p class="mb-1"><strong>Проведено на приёме:</strong> {{ conclusion.proceduresPerformed }}</p>
+          }
+          @if (conclusion.recommendations) {
+            <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
+          }
+          @if (conclusion.prescribedMedications.length > 0) {
+            <div class="card-kicker mt-2">Назначенные лекарства</div>
+            <ul class="list-unstyled mb-0">
+              @for (med of conclusion.prescribedMedications; track med.name) {
+                <li class="mb-1">
+                  <strong>{{ med.name }}</strong>
+                  @if (med.dosageInstructions) { — {{ med.dosageInstructions }} }
+                  @if (med.kbMedicationId; as kbId) {
+                    <button type="button" class="btn-link" (click)="openKbCard(kbId)">Справка</button>
+                  } @else {
+                    <span class="muted" style="font-size:12px">— справка уточняется</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        }
+      }
+    </div>
+  </ng-template>
+
+  @if (recordId()) {
+    <!-- Редизайн v3 — мобильный экран открытой записи (PR6 плана): та же карточка, что в
+         списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». -->
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <button type="button" class="btn-icon" (click)="goToList()" aria-label="Назад к списку">
+        <i class="ph ph-arrow-left" aria-hidden="true"></i>
+      </button>
+      @if (items[0]; as only) {
+        <div class="card-title" style="font-size:19px">{{ shortName(only) }}</div>
+      }
+    </div>
+
+    <!-- Редизайн v3 (PR7) — одноразовый баннер сразу после сохранения из record-add.component.ts:
+         показатели ещё могут распознаваться (см. живой прогресс на карточке ниже). -->
+    @if (firstReview() === '1') {
+      <div class="alert-info mb-3">
+        <i class="ph-duotone ph-magic-wand" aria-hidden="true"></i>
+        Разобрали бланк. Поправьте, если что-то не так — или просто сохраните.
+      </div>
+    }
+
+    @if (loading) {
+      <app-loading-spinner />
+    } @else {
+      @if (items[0]; as only) {
+        <ng-container *ngTemplateOutlet="recordCard; context: {$implicit: only, singleMode: true}" />
+      }
+    }
+  } @else {
 
   <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры"). -->
   <div class="d-flex flex-wrap gap-2 mb-2">
@@ -134,12 +413,18 @@
            словами на уровне группы (не под каждой записью), таймлайн записей по датам внутри. -->
       <div class="record-group mb-3">
         <div class="record-group-header">
-          <app-avatar [person]="{key: group.key, firstName: personAvatarParts(group.personName).firstName, lastName: personAvatarParts(group.personName).lastName}" size="lg" />
+          <app-avatar
+            [person]="{key: group.key, firstName: personAvatarParts(group.personName).firstName, lastName: personAvatarParts(group.personName).lastName}"
+            size="lg"
+            [title]="group.personName"
+          />
           <div class="flex-fill" style="min-width:0">
-            <div class="card-title" style="font-size:19px">{{ group.personName }}</div>
+            <!-- Редизайн v3 — короткое имя всегда (не полное ФИО), контрастнее; полное ФИО —
+                 только в native-тултипе при наведении (см. PR5.5 плана). -->
+            <div class="card-title" style="font-size:19px" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
             <div class="muted" style="font-size:14px">
               {{ group.records.length }} {{ pluralizeRu(group.records.length, kind() === Kind.Analysis ? 'анализ' : 'посещение', kind() === Kind.Analysis ? 'анализа' : 'посещения', kind() === Kind.Analysis ? 'анализов' : 'посещений') }}
-              · последний {{ group.records[0].recordDate }}
+              · последний {{ formatDayMonthYear(group.records[0].recordDate) }}
             </div>
           </div>
           <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:13px">
@@ -155,295 +440,15 @@
         <div class="record-timeline">
           @for (item of group.records; track item.id) {
             <div class="record-timeline-row">
+              <!-- Редизайн v3 — вместо сырого "гггг-мм-дд" двухстрочный бейдж: крупнее/контрастнее
+                   день+месяц, мельче/приглушённо год снизу (см. PR5.7 плана). -->
               <div class="record-timeline-date">
-                <div class="record-timeline-day">{{ item.recordDate }}</div>
+                <div class="record-timeline-day">{{ formatDayMonth(item.recordDate) }}</div>
+                <div class="record-timeline-year">{{ formatYear(item.recordDate) }}</div>
               </div>
               <div class="record-timeline-rail"><span class="record-timeline-dot"></span></div>
 
-              <div class="card record-card flex-fill">
-        <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
-
-        <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок. -->
-        <div class="record-chips">
-          @if (item.attachmentCount > 0) {
-            <span class="tag tag-neutral">{{ attachmentCountLabel(item) }}</span>
-          }
-          @if (item.indicatorCount > 0) {
-            <span class="tag tag-neutral">{{ indicatorCountLabel(item) }}</span>
-          }
-          @if (item.abnormalIndicatorCount > 0) {
-            <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));color:var(--color-status-danger-text)">
-              {{ item.abnormalIndicatorCount }} вне нормы
-            </span>
-          } @else if (item.normalIndicatorCount > 0) {
-            <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));color:var(--color-status-ok-text)">
-              {{ item.normalIndicatorCount }} в норме
-            </span>
-          }
-          @if (item.doctor) {
-            <span class="muted" style="font-size:13px">Врач: {{ item.doctor }}</span>
-          }
-        </div>
-
-        <div class="record-card-actions">
-          <button class="btn btn-secondary" (click)="toggleExpandedRecord(item)">
-            {{ expandedRecordId === item.id ? 'Свернуть' : 'Открыть' }}
-          </button>
-          <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
-        </div>
-
-        @if (hasUnrecognizedAttachments(item)) {
-          <button
-            class="btn btn-secondary btn-sm align-self-start mt-1"
-            [disabled]="recognizingRecordId === item.id"
-            (click)="handleRecognize(item)"
-          >
-            @if (recognizingRecordId === item.id) {
-              <span class="recognize-spinner" aria-hidden="true"></span>
-            } @else {
-              <i class="ph ph-magic-wand" aria-hidden="true"></i>
-            }
-            Распознать
-          </button>
-        }
-
-        @if (pipelineStepsByRecord[item.id]; as steps) {
-          <app-pipeline-progress [steps]="steps" />
-        }
-
-        @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
-          <div class="muted" style="font-size:12px">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
-        }
-
-        <!-- UX-редизайн: одна «Подробнее» на карточку — врач/описание + (для анализа) таблица
-             показателей и резюме, (для визита) диагноз/анамнез/назначения. Ширина строки заголовка
-             карточки экономится именно за счёт того, что всё это внутри одной свёртки. -->
-        <app-expandable
-          title="Подробнее"
-          [open]="expandedRecordId === item.id"
-          (openChange)="expandedRecordId = $event ? item.id : null"
-        >
-          @if (item.doctor) {
-            <p class="muted mb-1">Врач: {{ item.doctor }}</p>
-          }
-          @if (item.description) {
-            <p class="mb-1">{{ item.description }}</p>
-          }
-
-          <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
-               читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
-          @if (summaryByRecord[item.id]; as summary) {
-            <div class="card-kicker mt-2">Резюме</div>
-            @if (summary.plainSummary) {
-              <p class="mb-1">{{ summary.plainSummary }}</p>
-            }
-            @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:13px">
-                @for (d of summary.deviations; track d.name) {
-                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                }
-              </ul>
-            }
-            @if (summary.questionsForDoctor.length > 0) {
-              <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:13px">
-                @for (q of summary.questionsForDoctor; track q) {
-                  <li>{{ q }}</li>
-                }
-              </ul>
-            }
-            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
-          }
-
-          @if (item.kind === Kind.Analysis) {
-          @if (indicatorsFor(item.id).length > 0) {
-          <div class="table-responsive">
-            <table class="indicators-table">
-              <thead>
-                <tr>
-                  <th>Показатель</th>
-                  <th>Значение</th>
-                  <th>Норма</th>
-                  <th>Статус</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (ind of indicatorsFor(item.id); track ind.id) {
-                  @if (editingIndicatorId === ind.id) {
-                    <tr class="indicator-edit-row">
-                      <td colspan="5">
-                        <div class="d-flex flex-column gap-1">
-                          <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
-                          <div class="d-flex gap-1">
-                            <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                            <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
-                          </div>
-                          <select class="input" [ngModel]="specimenKey(editIndicatorForm)" (ngModelChange)="applySpecimenKey(editIndicatorForm, $event)">
-                            @for (opt of specimenOptions; track opt.value) {
-                              <option [value]="opt.value">{{ opt.label }}</option>
-                            }
-                            @for (custom of customSpecimens; track custom.id) {
-                              <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
-                            }
-                          </select>
-                          @if (editIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
-                            <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
-                          }
-                          @if (addingCustomSpecimen) {
-                            <div class="d-flex gap-1 align-items-center">
-                              <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
-                              <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
-                              <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
-                            </div>
-                            @if (customSpecimenError) {
-                              <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
-                            }
-                          }
-                          <div class="d-flex gap-1">
-                            <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                            <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
-                          </div>
-                          <input class="input" [ngModel]="editIndicatorForm.refText" (ngModelChange)="editIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
-                          <div class="d-flex gap-2">
-                            <button class="btn btn-primary btn-sm" [disabled]="savingIndicator" (click)="saveEditIndicator(item.id)">Сохранить</button>
-                            <button class="btn btn-ghost btn-sm" [disabled]="savingIndicator" (click)="cancelEditIndicator()">Отмена</button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  } @else {
-                    <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
-                         шкала-референс / статус), клик по строке открывает панель справки; правка
-                         и удаление — компактные иконки-аффордансы, не отдельные "колонки данных". -->
-                    <tr class="indicator-row" (click)="openIndicatorInfo(ind)">
-                      <td>
-                        {{ shortIndicatorName(ind) }}
-                        @if (indicatorReference(ind); as ref) {
-                          <div class="muted" style="font-size:11px">
-                            {{ ref }}
-                            @if (isCalculatedRef(ind)) {
-                              <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
-                            }
-                          </div>
-                        }
-                      </td>
-                      <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
-                        {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
-                      </td>
-                      <td>
-                        @if (scaleBounds(ind); as b) {
-                          <app-reference-scale
-                            [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-                            [unit]="ind.unit" [flag]="ind.flag" variant="mini"
-                          />
-                        } @else {
-                          <span class="muted" style="font-size:12px">—</span>
-                        }
-                      </td>
-                      <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
-                      <td class="indicator-actions-cell" (click)="$event.stopPropagation()">
-                        <span class="indicator-actions">
-                          <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
-                            <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-                          </button>
-                          <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
-                            <i class="ph ph-trash" aria-hidden="true"></i>
-                          </button>
-                        </span>
-                      </td>
-                    </tr>
-                  }
-                }
-                @if (creatingIndicatorRecordId === item.id) {
-                  <tr class="indicator-edit-row">
-                    <td colspan="5">
-                      <div class="d-flex flex-column gap-1">
-                        <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
-                        <div class="d-flex gap-1">
-                          <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                          <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
-                        </div>
-                        <select class="input" [ngModel]="specimenKey(newIndicatorForm)" (ngModelChange)="applySpecimenKey(newIndicatorForm, $event)">
-                          @for (opt of specimenOptions; track opt.value) {
-                            <option [value]="opt.value">{{ opt.label }}</option>
-                          }
-                          @for (custom of customSpecimens; track custom.id) {
-                            <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
-                          }
-                        </select>
-                        @if (newIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
-                          <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
-                        }
-                        @if (addingCustomSpecimen) {
-                          <div class="d-flex gap-1 align-items-center">
-                            <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
-                            <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
-                            <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
-                          </div>
-                          @if (customSpecimenError) {
-                            <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
-                          }
-                        }
-                        <div class="d-flex gap-1">
-                          <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                          <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
-                        </div>
-                        <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
-                        <div class="d-flex gap-2">
-                          <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
-                          <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                } @else {
-                  <tr>
-                    <td colspan="5">
-                      <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-          } @else {
-            <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
-          }
-          }
-
-          @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
-            @if (conclusion.diagnosis) {
-              <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
-            }
-            @if (conclusion.anamnesis) {
-              <p class="mb-1"><strong>Анамнез:</strong> {{ conclusion.anamnesis }}</p>
-            }
-            @if (conclusion.proceduresPerformed) {
-              <p class="mb-1"><strong>Проведено на приёме:</strong> {{ conclusion.proceduresPerformed }}</p>
-            }
-            @if (conclusion.recommendations) {
-              <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
-            }
-            @if (conclusion.prescribedMedications.length > 0) {
-              <div class="card-kicker mt-2">Назначенные лекарства</div>
-              <ul class="list-unstyled mb-0">
-                @for (med of conclusion.prescribedMedications; track med.name) {
-                  <li class="mb-1">
-                    <strong>{{ med.name }}</strong>
-                    @if (med.dosageInstructions) { — {{ med.dosageInstructions }} }
-                    @if (med.kbMedicationId; as kbId) {
-                      <button type="button" class="btn-link" (click)="openKbCard(kbId)">Справка</button>
-                    } @else {
-                      <span class="muted" style="font-size:12px">— справка уточняется</span>
-                    }
-                  </li>
-                }
-              </ul>
-            }
-          }
-        </app-expandable>
-              </div>
+              <ng-container *ngTemplateOutlet="recordCard; context: {$implicit: item, singleMode: false}" />
             </div>
           }
         </div>
@@ -469,6 +474,7 @@
     @if (loadingMore) {
       <app-loading-spinner />
     }
+  }
   }
 
   @if (accessRecord; as record) {
@@ -535,6 +541,11 @@
 
   @if (editRecord; as record) {
     <app-bottom-sheet title="Редактировать запись" [open]="true" (closed)="closeEditSheet()">
+      <!-- Редизайн v3 (PR7) — «Название» редактируемо: раньше выставлялось только распознаванием,
+           поле «Изменить» на экране проверки распознанного правит его через ту же форму. -->
+      <label class="form-label">Название</label>
+      <input class="input mb-2" [(ngModel)]="editRecordForm.title" [placeholder]="shortName(record)" />
+
       <label class="form-label">Дата</label>
       <input class="input mb-2" type="date" [(ngModel)]="editRecordForm.recordDate" />
 

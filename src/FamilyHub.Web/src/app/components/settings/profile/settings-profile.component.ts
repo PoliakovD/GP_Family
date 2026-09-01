@@ -6,6 +6,7 @@ import { AuthService, LinkTelegramStart } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { runBusy } from '../settings-task';
 import { PersonNameComponent } from '../../../shared/person-name/person-name.component';
+import { AvatarComponent } from '../../../shared/avatar/avatar.component';
 
 const LINK_POLL_INTERVAL_MS = 4000;
 
@@ -16,8 +17,9 @@ const LINK_POLL_INTERVAL_MS = 4000;
 @Component({
   selector: 'app-settings-profile',
   standalone: true,
-  imports: [FormsModule, DatePipe, PersonNameComponent],
+  imports: [FormsModule, DatePipe, PersonNameComponent, AvatarComponent],
   templateUrl: './settings-profile.component.html',
+  styleUrl: './settings-profile.component.scss',
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);

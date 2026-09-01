@@ -1,0 +1,61 @@
+<h3 class="mb-3">Профиль</h3>
+
+@if (auth.me(); as me) {
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="lg" />
+    <div>
+      <div class="card-title" style="font-size:20px">{{ formatPersonName(me, 'full') }}</div>
+      @if (me.username) {
+        <div class="muted">&#64;{{ me.username }}</div>
+      }
+    </div>
+  </div>
+
+  @if (push.isSupported && !push.isSubscribed()) {
+    <div class="settings-menu-push-banner mb-3">
+      <i class="ph-duotone ph-bell-slash" aria-hidden="true"></i>
+      <div class="flex-fill">
+        <div style="font-weight:600">Push выключены</div>
+        <div class="muted" style="font-size:13px">Напоминания не приходят</div>
+      </div>
+    </div>
+  }
+}
+
+<div class="card" style="padding:0">
+  <a class="settings-menu-row" routerLink="/settings/profile">
+    <i class="ph ph-user" aria-hidden="true"></i>
+    <span class="flex-fill">Аккаунт</span>
+    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
+  </a>
+  <a class="settings-menu-row" routerLink="/settings/security">
+    <i class="ph ph-lock-simple" aria-hidden="true"></i>
+    <span class="flex-fill">Безопасность</span>
+    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
+  </a>
+  <a class="settings-menu-row" routerLink="/settings/notifications">
+    <i class="ph ph-bell" aria-hidden="true"></i>
+    <span class="flex-fill">Оповещения</span>
+    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
+  </a>
+  <!-- Telegram — отдельной строкой на мобильном корне (быстрый доступ к привязке), но ведёт на
+       ту же «Аккаунт», где живёт блок «Способы входа» — на десктопе Telegram туда же встроен
+       (см. Screen - Profile settings.dc.html, расхождение мобильного/десктопного мокапа принято
+       как есть). -->
+  <a class="settings-menu-row" routerLink="/settings/profile">
+    <i class="ph ph-telegram-logo" aria-hidden="true"></i>
+    <span class="flex-fill">Telegram</span>
+    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
+  </a>
+  <a class="settings-menu-row" routerLink="/settings/data">
+    <i class="ph ph-database" aria-hidden="true"></i>
+    <span class="flex-fill">Данные и приватность</span>
+    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
+  </a>
+</div>
+
+@if (auth.me()?.provider === 'email') {
+  <button type="button" class="btn btn-secondary btn-block mt-3" (click)="logout()">
+    <i class="ph ph-sign-out" aria-hidden="true"></i> Выйти
+  </button>
+}

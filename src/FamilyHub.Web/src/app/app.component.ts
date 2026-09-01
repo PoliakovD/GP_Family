@@ -104,7 +104,18 @@ export class AppComponent implements OnInit {
     },
     { id: 'family', label: 'Семья', icon: 'ph-users-three' }, // path вычисляется — см. familyHref()
     { id: 'notifications', label: 'Уведомления', icon: 'ph-bell', path: '/notifications' },
-    { id: 'settings', label: 'Профиль', icon: 'ph-user', path: '/settings' },
+    {
+      id: 'settings',
+      label: 'Профиль',
+      icon: 'ph-user',
+      path: '/settings',
+      children: [
+        { path: '/settings/profile', label: 'Аккаунт' },
+        { path: '/settings/security', label: 'Безопасность' },
+        { path: '/settings/notifications', label: 'Оповещения' },
+        { path: '/settings/data', label: 'Данные и приватность' },
+      ],
+    },
   ];
 
   /** Семейные саб-пункты — фиксированные ярлыки, роут всегда на текущую выбранную семью с ?tab=. */

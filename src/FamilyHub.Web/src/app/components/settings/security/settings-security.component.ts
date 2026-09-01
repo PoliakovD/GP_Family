@@ -16,6 +16,7 @@ import { PASSWORD_PATTERN, describeSettingsError, runBusy } from '../settings-ta
   standalone: true,
   imports: [FormsModule, DatePipe, RouterLink],
   templateUrl: './settings-security.component.html',
+  styleUrl: './settings-security.component.scss',
 })
 export class SettingsSecurityComponent implements OnInit {
   readonly auth = inject(AuthService);
@@ -45,6 +46,17 @@ export class SettingsSecurityComponent implements OnInit {
       this.newPassword === this.newPasswordRepeat &&
       this.currentPassword.length > 0
     );
+  }
+
+  /** Живой чек-лист требований пароля (редизайн v3, PR8) — составные части того же
+   * PASSWORD_PATTERN, что уже проверяет passwordFormValid; кнопка была просто выцветшей без
+   * объяснения, почему не нажимается. */
+  get passwordChecks(): { length: boolean; mixedCase: boolean; digit: boolean } {
+    return {
+      length: this.newPassword.length >= 8,
+      mixedCase: /[a-z]/.test(this.newPassword) && /[A-Z]/.test(this.newPassword),
+      digit: /\d/.test(this.newPassword),
+    };
   }
 
   async changePassword(): Promise<void> {
