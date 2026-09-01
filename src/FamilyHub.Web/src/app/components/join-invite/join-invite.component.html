@@ -1,0 +1,52 @@
+<div class="auth-shell">
+  <div class="card auth-card elev-md">
+    <div class="auth-brand">
+      <div class="card-kicker">FamilyHub</div>
+      <h2 class="card-title mb-0">Приглашение в семью</h2>
+    </div>
+
+    @switch (state()) {
+      @case ('loading') {
+        <p class="text-muted mb-0">Загрузка…</p>
+      }
+      @case ('not_found') {
+        <div class="alert-danger">Ссылка недействительна — проверьте, что скопировали её целиком.</div>
+      }
+      @case ('revoked') {
+        <div class="alert-danger">Эта ссылка отозвана тем, кто её создал.</div>
+      }
+      @case ('expired') {
+        <div class="alert-danger">Срок действия ссылки истёк — попросите новую.</div>
+      }
+      @case ('exhausted') {
+        <div class="alert-danger">Эта ссылка уже использована максимальное число раз.</div>
+      }
+      @case ('valid') {
+        <p class="text-muted mb-3">
+          Вас зовут в семью «{{ preview()?.familyName }}» в FamilyHub
+          @if (preview()?.inviterName) {
+            — пригласил(а) {{ preview()?.inviterName }}
+          }.
+        </p>
+
+        @if (!authChecked()) {
+          <p class="text-muted mb-0">Загрузка…</p>
+        } @else if (auth.me() !== null) {
+          <button type="button" class="btn btn-primary btn-block" [disabled]="busy()" (click)="joinNow()">
+            Присоединиться
+          </button>
+        } @else {
+          <p class="text-muted mb-3">
+            Чтобы принять приглашение, войдите в FamilyHub или создайте аккаунт.
+          </p>
+          <button type="button" class="btn btn-primary btn-block mb-2" (click)="goToRegister()">
+            Создать аккаунт
+          </button>
+          <button type="button" class="btn btn-secondary btn-block" (click)="goToLogin()">
+            Войти
+          </button>
+        }
+      }
+    }
+  </div>
+</div>

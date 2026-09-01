@@ -16,9 +16,15 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
 {
     private const string SystemPrompt = """
         Ты — медицинский справочный ассистент. На входе — название лабораторного показателя
-        (анализа) и пронумерованные сниппеты со страниц проверенных лабораторных справочников РФ.
-        Проанализируй ТОЛЬКО переданные сниппеты (ничего не добавляй от себя, никаких знаний "из
-        головы") и верни ТОЛЬКО валидный JSON, без пояснений, без markdown, без блока <think>.
+        (анализа), биоматериал (кровь/моча/и т.д.) и пронумерованные сниппеты со страниц проверенных
+        лабораторных справочников РФ, ОТСОРТИРОВАННЫЕ по приоритету источника (сниппеты от более
+        приоритетного домена идут раньше). Проанализируй ТОЛЬКО переданные сниппеты (ничего не
+        добавляй от себя, никаких знаний "из головы") и верни ТОЛЬКО валидный JSON, без пояснений,
+        без markdown, без блока <think>.
+
+        Ответ строится из трёх блоков: "Что это" (plainExplanation), "Нормы" (refRanges +
+        calculationInstructions) и "На что влияет" (whyMeasured + highMeans/lowMeans — что значит
+        отклонение выше/ниже нормы).
 
         Формат ответа:
         {
@@ -26,9 +32,15 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
           "defaultUnit": "обычная единица измерения (г/л, ммоль/л и т.п.) или null",
           "plainExplanation": "что это за показатель — простыми бытовыми словами, без медицинских терминов, или null",
           "whyMeasured": "зачем его измеряют / для диагностики чего используется или null",
-          "highMeans": "о чём обычно говорит повышенное значение или null",
-          "lowMeans": "о чём обычно говорит пониженное значение или null",
-          "refRanges": [{"ageFrom": null, "ageTo": null, "sex": null, "low": 120, "high": 160, "unit": "г/л"}],
+          "highMeans": "о чём обычно говорит повышенное значение (когда выше нормы) или null",
+          "lowMeans": "о чём обычно говорит пониженное значение (когда ниже нормы) или null",
+          "refRanges": [
+            {
+              "ageFrom": null, "ageTo": null, "sex": null, "low": 120, "high": 160, "unit": "г/л",
+              "normKind": "fixed", "population": "general", "populationDetail": null,
+              "sourceIndex": 0
+            }
+          ],
           "calculationInstructions": "если норма зависит от веса/роста/срока беременности/фазы цикла и т.п. и НЕ сводится к фиксированным диапазонам — словами, как её вычислить, иначе null",
           "aliases": ["другое название/сокращение показателя", "..."],
           "relatedAnalytes": ["показатель, который обычно смотрят вместе с этим", "..."],
@@ -38,14 +50,31 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
         Правила:
         - "plainExplanation" — коротко и просто, обычными словами, которыми говорят в быту, не
           медицинскими терминами.
-        - "refRanges" — один или несколько референсных диапазонов. Если источник даёт диапазоны
-          отдельно для мужчин и женщин — верни ДВА объекта с разным "sex" ("male"/"female"), НЕ
-          объединяй их в один средний диапазон. Если пол не важен — один объект с "sex": null.
-          Если источник даёт диапазоны для разных возрастных групп — несколько объектов с
-          ageFrom/ageTo (годы, включительно), можно сочетать с sex (например, отдельно
-          "male"+0-1 год и "male"+больше 1 года). Диапазон без возрастных ограничений —
-          ageFrom=null, ageTo=null. Если числового диапазона в сниппетах нет вовсе (только
-          методика расчёта) — верни пустой массив, а методику опиши в "calculationInstructions".
+        - "refRanges" — один или несколько референсных диапазонов, КАЖДЫЙ обязательно со своим
+          "sourceIndex" — номером сниппета (см. подпись "[N]"), из которого взят именно этот
+          диапазон. Диапазон без "sourceIndex" использован не будет — не придумывай его, если
+          сниппет не даёт числа явно.
+        - Если источник даёт диапазоны отдельно для мужчин и женщин — верни ДВА объекта с разным
+          "sex" ("male"/"female"), НЕ объединяй их в один средний диапазон. Если пол не важен —
+          один объект с "sex": null. Если источник даёт диапазоны для разных возрастных групп —
+          несколько объектов с ageFrom/ageTo (годы, включительно), можно сочетать с sex (например,
+          отдельно "male"+0-1 год и "male"+больше 1 года). Диапазон без возрастных ограничений —
+          ageFrom=null, ageTo=null.
+        - "normKind": "fixed" — обычный числовой диапазон (low/high заданы, большинство
+          показателей); "calculated" — норма зависит от веса/роста/площади тела и т.п. и не
+          сводится к диапазону (тогда low/high этого объекта — null, а методика — в
+          "calculationInstructions", а не в refRanges); "qualitative" — норма описывается словами
+          ("отрицательно", "не обнаружено"), а не числом.
+        - "population": "general" — обычная норма для взрослых; "pregnancy" — специфична для
+          беременности (тогда "populationDetail" — триместр, например "2 триместр", если указан);
+          "children" — специфична для детей отдельно от обычной возрастной группировки (обычно
+          "general" с ageFrom/ageTo уже достаточно — используй "children" только если источник
+          прямо выделяет её как отдельную категорию, а не просто возрастной диапазон); "cyclePhase" —
+          зависит от фазы менструального цикла (тогда "populationDetail" — фаза, например
+          "фолликулярная фаза"). Для подавляющего большинства показателей — "general".
+        - Если источники по-разному нормируют одну и ту же группу (тот же пол+возраст+population) —
+          возьми диапазон из наиболее приоритетного по порядку сниппета для этой группы, а для
+          групп, которых у приоритетного источника нет, используй следующие по порядку сниппеты.
         - "calculationInstructions" — ТОЛЬКО когда норма реально не выражается фиксированными
           диапазонами (явная формула/зависимость от веса, роста, срока беременности, площади
           поверхности тела и т.п. — например, клиренс креатинина). Для подавляющего большинства
@@ -59,8 +88,9 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
           не придумывай по общим медицинским знаниям. Пустой массив, если сниппеты не называют
           связанные показатели.
         - "usedSourceIndexes" — индексы (из подписи "[N]" перед каждым сниппетом) источников, на
-          которые реально опирается ответ. Если ни один сниппет не содержит полезной информации о
-          показателе — верни пустой массив и null во всех текстовых полях, пустые массивы в refRanges/aliases.
+          которые реально опирается ответ (объединение всех sourceIndex из refRanges и источников
+          текстовых полей). Если ни один сниппет не содержит полезной информации о показателе —
+          верни пустой массив и null во всех текстовых полях, пустые массивы в refRanges/aliases.
         - Каждое текстовое поле — по существу, без искусственного сокращения и без дословного
           копирования целого сниппета.
         - Верни строго один JSON-объект, ничего кроме него.
@@ -94,7 +124,7 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
             return LabAnalyteSummarizeResult.Failure("Модель не смогла подтвердить ответ ни одним источником.");
         }
 
-        var refRanges = ReadRefRanges(result.Payload);
+        var refRanges = ReadRefRanges(result.Payload, snippets.Count);
         var aliases = ReadStringArray(result.Payload, "aliases");
         var calculationInstructions = ReadString(result.Payload, "calculationInstructions");
         var relatedAnalytes = ReadStringArray(result.Payload, "relatedAnalytes");
@@ -127,7 +157,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
         return LabAnalyteSummarizeResult.Ok(summary);
     }
 
-    private static List<LabAnalyteReferenceRange> ReadRefRanges(Dictionary<string, System.Text.Json.JsonElement> payload)
+    private static List<LabAnalyteReferenceRange> ReadRefRanges(
+        Dictionary<string, System.Text.Json.JsonElement> payload, int snippetCount)
     {
         if (!TryGetValue(payload, "refRanges", out var el) || el.ValueKind != System.Text.Json.JsonValueKind.Array)
             return [];
@@ -137,9 +168,20 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
         {
             if (item.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
 
+            // Диапазон без валидного sourceIndex — продолжение антигаллюцинационного гейта (см.
+            // class doc): без источника невозможно определить приоритет при merge (ReferenceRangeMerger),
+            // а непроверяемое число опаснее, чем его отсутствие.
+            var sourceIndexRaw = ReadDouble(item, "sourceIndex");
+            if (sourceIndexRaw is null) continue;
+            var sourceIndex = (int)sourceIndexRaw.Value;
+            if (sourceIndex < 0 || sourceIndex >= snippetCount) continue;
+
+            var normKind = ParseNormKind(ReadString(item, "normKind"));
             var low = ReadDouble(item, "low");
             var high = ReadDouble(item, "high");
-            if (low is null && high is null) continue; // диапазон без чисел бесполезен
+            // Диапазон без чисел бесполезен — кроме качественного результата ("отрицательно"),
+            // у которого числа никогда и не будет.
+            if (low is null && high is null && normKind != LabNormKind.Qualitative) continue;
 
             var ageFrom = ReadDouble(item, "ageFrom");
             var ageTo = ReadDouble(item, "ageTo");
@@ -148,10 +190,29 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
                 AgeTo: ageTo.HasValue ? (int)ageTo.Value : null,
                 Sex: ParseSex(ReadString(item, "sex")),
                 Low: low, High: high,
-                Unit: ReadString(item, "unit")));
+                Unit: ReadString(item, "unit"),
+                NormKind: normKind,
+                Population: ParsePopulation(ReadString(item, "population")),
+                PopulationDetail: ReadString(item, "populationDetail"),
+                SourceIndex: sourceIndex));
         }
         return ranges;
     }
+
+    private static LabNormKind ParseNormKind(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "calculated" => LabNormKind.Calculated,
+        "qualitative" => LabNormKind.Qualitative,
+        _ => LabNormKind.FixedRange,
+    };
+
+    private static LabPopulation ParsePopulation(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "pregnancy" => LabPopulation.Pregnancy,
+        "children" => LabPopulation.Children,
+        "cyclephase" or "cycle_phase" or "cycle-phase" => LabPopulation.CyclePhase,
+        _ => LabPopulation.General,
+    };
 
     /// <summary>Регистронезависимо — модель иногда меняет casing/язык ("Male"/"м"/"муж").</summary>
     private static Gender? ParseSex(string? value) => value?.Trim().ToLowerInvariant() switch

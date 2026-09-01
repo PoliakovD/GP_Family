@@ -145,6 +145,39 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("EncryptionRotationRuns", (string)null);
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.EnrichmentTrustedDomain", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Topic")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Topic", "Domain")
+                        .IsUnique();
+
+                    b.HasIndex("Topic", "Rank");
+
+                    b.ToTable("EnrichmentTrustedDomains", "medical");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.Family", b =>
                 {
                     b.Property<Guid>("Id")
@@ -422,12 +455,15 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("Specimen")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NormalizedName")
+                    b.HasIndex("NormalizedName", "Specimen")
                         .IsUnique();
 
                     b.ToTable("global_lab_analytes_kb", "kb");
@@ -475,6 +511,38 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("global_medications_kb", "kb");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.GlobalSpecimenKb", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("global_specimens_kb", "kb");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.LabAnalyteEnrichmentJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -496,6 +564,9 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<DateTime?>("ExternalSearchAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Force")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("KbId")
                         .HasColumnType("uuid");
@@ -520,6 +591,9 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("Specimen")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -530,13 +604,52 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("LabIndicatorId");
 
-                    b.HasIndex("NormalizedName")
+                    b.HasIndex("NormalizedName", "Specimen")
                         .IsUnique()
                         .HasFilter("\"Status\" IN (0, 1)");
 
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("LabAnalyteEnrichmentJobs", "medical");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.LabAnalyteSearchCache", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CanBeUpdatedAfter")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("OverridesJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SnippetsJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Specimen")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName", "Specimen")
+                        .IsUnique();
+
+                    b.ToTable("lab_analyte_search_cache", "kb");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.LabIndicator", b =>
@@ -915,6 +1028,9 @@ namespace FamilyHub.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
+
+                    b.Property<string>("OverridesJson")
+                        .HasColumnType("text");
 
                     b.Property<string>("Provider")
                         .IsRequired()

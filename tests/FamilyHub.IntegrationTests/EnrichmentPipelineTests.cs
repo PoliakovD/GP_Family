@@ -30,7 +30,8 @@ file sealed class FakeMedicationSearchProvider : IMedicationSearchProvider
     public string Name => "FakeProvider";
 
     public Task<IReadOnlyList<WebSnippet>> SearchAsync(
-        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication, CancellationToken ct = default) =>
+        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
+        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<WebSnippet>>(
         [
             new WebSnippet(
@@ -81,17 +82,6 @@ public class EnrichmentWebFactory : FamilyHubWebFactory
             services.AddScoped<IMedicationSearchProvider, FakeMedicationSearchProvider>();
             services.AddScoped<ILmStudioJsonClient, FakeLmStudioJsonClient>();
         });
-    }
-}
-
-/// <summary>Тот же конвейер, но с нулевой месячной квотой — первая же задача уходит в Skipped,
-/// без реального внешнего запроса.</summary>
-public class EnrichmentQuotaZeroWebFactory : EnrichmentWebFactory
-{
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        base.ConfigureWebHost(builder);
-        builder.UseSetting("Enrichment:MonthlyQuota", "0");
     }
 }
 
@@ -146,12 +136,6 @@ public class EnrichmentCorrectionWebFactory : FamilyHubWebFactory
 public class EnrichmentCollection : ICollectionFixture<EnrichmentWebFactory>
 {
     public const string Name = "EnrichmentIntegration";
-}
-
-[CollectionDefinition(Name)]
-public class EnrichmentQuotaZeroCollection : ICollectionFixture<EnrichmentQuotaZeroWebFactory>
-{
-    public const string Name = "EnrichmentQuotaZeroIntegration";
 }
 
 [CollectionDefinition(Name)]
@@ -380,61 +364,6 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
 
         (await db.MedicationEnrichmentJobs.CountAsync(j => j.NormalizedName == normalizedName))
             .Should().Be(1, "конкурентное сохранение одного и того же препарата не должно порождать вторую задачу/второй внешний запрос");
-    }
-}
-
-[Collection(EnrichmentQuotaZeroCollection.Name)]
-public class EnrichmentQuotaTests(EnrichmentQuotaZeroWebFactory factory)
-{
-    private record CreateFamilyResponseDto(Guid Id);
-
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
-
-    private HttpClient ClientAs(long telegramId)
-    {
-        var client = factory.CreateClientAs(telegramId);
-        ConsentHelper.AcceptCurrent(client);
-        return client;
-    }
-
-    private static async Task WaitForAsync(Func<Task<bool>> condition, string because, int timeoutMs = 45_000)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (await condition()) return;
-            await Task.Delay(300);
-        }
-
-        (await condition()).Should().BeTrue(because);
-    }
-
-    [Fact]
-    public async Task MonthlyQuotaExhausted_JobIsSkipped_WithoutExternalCall()
-    {
-        var admin = ClientAs(Random.Shared.NextInt64(1_000_000_000, 9_000_000_000));
-        var family = await (await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" }))
-            .Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
-        var medkit = await (await admin.PostAsJsonAsync($"/api/families/{family!.Id}/medkits", new CreateMedkitRequest("Аптечка")))
-            .Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
-        var medication = await (await admin.PostAsJsonAsync($"/api/medkits/{medkit!.Id}/medications",
-                new CreateMedicationRequest($"Квотныйпрепарат{Guid.NewGuid():N}", null, null)))
-            .Content.ReadFromJsonAsync<MedicationDto>(JsonOpts);
-
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        await WaitForAsync(async () =>
-        {
-            var job = await db.MedicationEnrichmentJobs.AsNoTracking()
-                .FirstOrDefaultAsync(j => j.MedicationId == medication!.Id);
-            return job is { Status: EnrichmentJobStatus.Skipped };
-        }, "с MonthlyQuota=0 первая же задача должна быть Skipped, а не уйти во внешний поиск");
-
-        var completedJob = await db.MedicationEnrichmentJobs.AsNoTracking()
-            .SingleAsync(j => j.MedicationId == medication!.Id);
-        completedJob.ExternalSearchAt.Should().BeNull("исчерпанная квота проверяется ДО внешнего запроса");
-        completedJob.Error.Should().Contain("квота");
     }
 }
 

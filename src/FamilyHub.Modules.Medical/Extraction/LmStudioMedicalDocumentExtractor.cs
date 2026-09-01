@@ -48,6 +48,7 @@ public class LmStudioMedicalDocumentExtractor(
             }
           ],
           "specimen": "биоматериал бланка — один из: blood, urine, stool, vaginalSwab, saliva, other — или null, если не указан/непонятен",
+          "specimenOtherLabel": "название биоматериала как написано в бланке — заполняй ТОЛЬКО когда specimen=\"other\" (например, \"ликвор\", \"мокрота\"), иначе null",
           "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
           "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай",
           "doctor": "ФИО и/или специальность врача, назначившего анализ, если указаны в бланке — иначе null, не придумывай"
@@ -127,6 +128,7 @@ public class LmStudioMedicalDocumentExtractor(
         // ШАПКЕ бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные
         // куски (таблица показателей без шапки) просто не заполняют эти поля повторно.
         SpecimenType? specimen = null;
+        string? specimenOtherLabel = null;
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
         string? doctor = null;
@@ -134,6 +136,7 @@ public class LmStudioMedicalDocumentExtractor(
         void CaptureDocumentFields(Dictionary<string, JsonElement> payload)
         {
             specimen ??= ParseSpecimen(ReadString(payload, "specimen"));
+            specimenOtherLabel ??= ReadString(payload, "specimenOtherLabel");
             documentDate ??= ParseDate(ReadString(payload, "documentDate"));
             suggestedTitle ??= ReadString(payload, "suggestedTitle");
             doctor ??= ReadString(payload, "doctor");
@@ -169,15 +172,21 @@ public class LmStudioMedicalDocumentExtractor(
             }
         }
 
+        // specimenOtherLabel имеет смысл только вместе со specimen=Other — модель могла заполнить
+        // текст, но по ошибке классифицировать в другую категорию; не тащим дальше мусор.
+        var effectiveSpecimenOtherLabel = specimen == SpecimenType.Other ? specimenOtherLabel : null;
+
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
         {
             return new ExtractionResult(
-                true, [], null, "Не удалось распознать ни одного показателя.", specimen, documentDate, suggestedTitle, doctor);
+                true, [], null, "Не удалось распознать ни одного показателя.", specimen, documentDate, suggestedTitle, doctor,
+                effectiveSpecimenOtherLabel);
         }
 
         return new ExtractionResult(
-            true, deduped, null, Specimen: specimen, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor);
+            true, deduped, null, Specimen: specimen, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor,
+            SpecimenOtherLabel: effectiveSpecimenOtherLabel);
     }
 
     private static SpecimenType? ParseSpecimen(string? value) => value?.Trim().ToLowerInvariant() switch

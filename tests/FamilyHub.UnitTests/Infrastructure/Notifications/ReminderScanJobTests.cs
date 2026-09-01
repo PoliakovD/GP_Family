@@ -24,8 +24,17 @@ public class ReminderScanJobTests : SqliteTestBase, IAsyncLifetime
 
     public async Task DisposeAsync() => await _pipeline.DisposeAsync();
 
+    /// <summary>Собственный NotificationSendingService на Db (не _pipeline.Notifications/_consumerDb) —
+    /// в проде ReminderScanJob и его ретрай-свип делят один и тот же per-job scoped AppDbContext,
+    /// а консьюмеры шины (в тесте — асинхронный MassTransit-харнесс поверх _consumerDb) физически
+    /// в другом процессе, значит с ним никогда не конкурируют за один DbContext. В этом харнессе
+    /// consumer уже стартует асинхронно сразу после PublishAsync (см. DomainEventTestPipeline) —
+    /// если бы SendPendingAsync звал тот же singleton NotificationSendingService, что и consumer
+    /// (оба на _consumerDb), запись справочника UserNotificationPreference внутри TrySendAsync
+    /// гонялась бы с ещё не завершившимся хендлером за один DbContext (не потокобезопасен) —
+    /// перемежающийся "A second operation was started on this context instance ...".</summary>
     private ReminderScanJob CreateSut(NotificationOptions? options = null) =>
-        new(Db, _pipeline.Publisher, _pipeline.Notifications,
+        new(Db, _pipeline.Publisher, new NotificationSendingService(Db, [_sender], NullLogger<NotificationSendingService>.Instance),
             Options.Create(options ?? new NotificationOptions()), NullLogger<ReminderScanJob>.Instance);
 
     /// <summary>Полный цикл «как в проде»: скан публикует события, диспетчер доставляет их хендлерам.</summary>

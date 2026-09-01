@@ -27,10 +27,18 @@ public class MedicationSearchCache
     /// индексным сравнением, а не пересчётом даты на каждый запрос.</summary>
     public DateTime CanBeUpdatedAfter { get; set; }
 
-    /// <summary>Сериализованный List&lt;WebSnippet&gt; — сами результаты последнего платного поиска,
-    /// а не только факт обращения. Это и делает таблицу настоящим кэшем: пока не истёк
+    /// <summary>Сериализованный List&lt;WebSnippet&gt; — ВСЕ результаты последнего платного поиска,
+    /// включая недоверенные (пересборка enrich-пайплайна — провайдер больше не фильтрует по
+    /// домену), не только факт обращения. Это и делает таблицу настоящим кэшем: пока не истёк
     /// CanBeUpdatedAfter, суммаризатор можно пересчитывать сколько угодно раз (например, при
-    /// доработке промпта/схемы полей MedicationSummary в разработке) без повторной оплаты
-    /// внешнего запроса — см. MedicationSearchCacheService/MedicationEnrichmentProcessor.</summary>
+    /// доработке промпта/схемы полей MedicationSummary или при смене списка доверенных доменов)
+    /// без повторной оплаты внешнего запроса — см. MedicationSearchCacheService/MedicationEnrichmentProcessor.</summary>
     public string? SnippetsJson { get; set; }
+
+    /// <summary>Сериализованный Dictionary&lt;string Url, bool Enabled&gt; — точечные ручные
+    /// исключения/включения конкретных сниппетов из админки (EnrichmentSnippetFilter), поверх
+    /// членства домена в EnrichmentTrustedDomain. Null — override'ов нет, решает только домен.
+    /// НЕ трогается при обновлении SnippetsJson свежим поиском (см. ApplyRecord) — иначе
+    /// ре-обновление кэша по истечении кулдауна тихо стирало бы решения администратора.</summary>
+    public string? OverridesJson { get; set; }
 }

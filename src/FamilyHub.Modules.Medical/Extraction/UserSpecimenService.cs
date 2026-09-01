@@ -1,11 +1,9 @@
 using System.Text.RegularExpressions;
 using FamilyHub.Domain.Entities;
-using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
@@ -13,23 +11,16 @@ public enum CreateSpecimenResult { Success, AlreadyExists, Rejected, Unavailable
 
 /// <summary>
 /// Справочник биоматериалов на пользователя (UX-редизайн) — когда фиксированного
-/// <see cref="Domain.Enums.SpecimenType"/> не хватает ("ликвор", "мокрота" и т.п.). Пользователь
-/// вводит название один раз, LLM проверяет, что это настоящий биоматериал, а не мусор/ругательство/
-/// название ПОКАЗАТЕЛЯ анализа — дальше значение живёт в личном справочнике и предлагается
-/// автоподсказкой (см. GET /api/specimens).
-///
-/// Приём "модель предлагает, детерминированный код ветирует" — зеркало
-/// MedicationEnrichmentProcessor.ResolveCorrectedName: LLM может нормализовать написание
-/// ("ликвор" → "Ликвор (СМЖ)"), но если предложенное слишком далеко от введённого по триграммам,
-/// это значит модель подменила понятие целиком, а не поправила орфографию — отклоняем.
-/// LM Studio недоступен → Unavailable, а не "принять на веру": запись ушла бы в справочник
-/// пользователя навсегда, тихий пропуск валидации хуже честного отказа (тот же принцип, что и у
-/// остальных LLM-гейтов модуля).
+/// <see cref="Domain.Enums.SpecimenType"/> не хватает ("ликвор", "мокрота" и т.п.). LLM-гейт
+/// (пересборка enrich-пайплайна) вынесен в общий <see cref="GlobalSpecimenKbService"/> — то же
+/// название, once провалидированное кем-то одним, находится ПОСЛЕДУЮЩИМИ пользователями без
+/// нового LLM-вызова (раньше каждый провалидировал бы одно и то же слово себе заново). Личная
+/// запись (эта таблица) остаётся — она то, что реально предлагается автоподсказкой (GET
+/// /api/specimens) КОНКРЕТНОМУ пользователю.
 /// </summary>
-public class UserSpecimenService(AppDbContext db, ILmStudioJsonClient client, ILogger<UserSpecimenService> logger)
+public class UserSpecimenService(
+    AppDbContext db, GlobalSpecimenKbService globalKb, ILogger<UserSpecimenService> logger)
 {
-    private const double MinValiditySimilarity = 0.3;
-
     /// <summary>Буквы (кириллица/латиница), пробел, дефис, скобки — рамки ДО вызова модели,
     /// отсекают явный мусор (числа, спецсимволы, эмодзи) бесплатно.</summary>
     private static readonly Regex ValidCharsRegex = new(@"^[\p{L}\s\-()]+$", RegexOptions.Compiled);
@@ -48,28 +39,6 @@ public class UserSpecimenService(AppDbContext db, ILmStudioJsonClient client, IL
         LabAnalyteNormalizer.Normalize("другое"),
         LabAnalyteNormalizer.Normalize("не указано"),
     };
-
-    private const string SystemPrompt = """
-        Ты — валидатор пользовательских названий биоматериала для лабораторных анализов. На входе
-        — короткая строка, которую человек ввёл как название биоматериала (кровь, моча, кал, мазок,
-        слюна, ликвор и т.п.). Реши, является ли это настоящим видом биоматериала для медицинского
-        анализа, и верни ТОЛЬКО валидный JSON, без пояснений, без markdown, без блока <think>.
-
-        Формат ответа: {"valid": true, "displayName": "Ликвор (СМЖ)", "reason": null}
-
-        Правила:
-        - "valid": true — только если это реально существующий биоматериал, которым сдают
-          лабораторные анализы (например: ликвор, мокрота, синовиальная жидкость, сперма, пот,
-          волосы, ногти, желчь, плевральная жидкость).
-        - "valid": false — если это мусор, случайный набор символов, оскорбление, название
-          ПОКАЗАТЕЛЯ анализа (а не биоматериала — например "гемоглобин", "холестерин", "СОЭ"), имя
-          человека, или любое другое понятие, которое не является видом биоматериала. В этом
-          случае "displayName": null, а "reason" — короткое пояснение по-русски, почему отклонено.
-        - "displayName" при valid=true — исправленное литературное написание введённого (с
-          заглавной буквы, с общепринятым сокращением в скобках, если есть) — НЕ придумывай другой
-          биоматериал, только приведи в порядок написание того, что ввёл пользователь.
-        - Верни строго один JSON-объект, ничего кроме него.
-        """;
 
     public async Task<List<UserSpecimen>> GetOwnAsync(Guid ownerUserId, CancellationToken ct = default) =>
         await db.UserSpecimens.AsNoTracking()
@@ -97,36 +66,26 @@ public class UserSpecimenService(AppDbContext db, ILmStudioJsonClient client, IL
         if (existing is not null)
             return (CreateSpecimenResult.AlreadyExists, existing, null);
 
-        var result = await client.ExtractJsonAsync(SystemPrompt, trimmed, ct);
-        if (!result.Success || result.Payload is null)
+        // Кто-то уже провалидировал ровно это название — переиспользуем его написание бесплатно,
+        // без нового LLM-вызова (см. class doc GlobalSpecimenKbService).
+        string displayName;
+        var globalHit = await globalKb.FindAsync(normalized, ct);
+        if (globalHit is not null)
         {
-            logger.LogInformation(
-                "Валидация биоматериала «{Name}» ({UserId}) недоступна: {Error}", trimmed, ownerUserId, result.Error);
-            return (CreateSpecimenResult.Unavailable, null, "Проверка временно недоступна, попробуйте позже.");
+            displayName = globalHit.DisplayName;
         }
-
-        var valid = ReadBool(result.Payload, "valid");
-        var reason = ReadString(result.Payload, "reason");
-        if (valid != true)
+        else
         {
-            logger.LogInformation(
-                "Биоматериал «{Name}» отклонён моделью ({UserId}): {Reason}", trimmed, ownerUserId, reason);
-            return (CreateSpecimenResult.Rejected, null, reason ?? "Похоже, это не биоматериал.");
-        }
-
-        var displayName = ReadString(result.Payload, "displayName")?.Trim();
-        if (string.IsNullOrEmpty(displayName)) displayName = trimmed;
-
-        // Детерминированное вето поверх ответа модели (см. class doc) — предложенное название не
-        // должно быть другим понятием, а лишь поправленной орфографией введённого.
-        var displayNormalized = LabAnalyteNormalizer.Normalize(displayName);
-        var similarity = TrigramSimilarity.Similarity(displayNormalized, normalized);
-        if (displayNormalized.Length > 0 && similarity < MinValiditySimilarity)
-        {
-            logger.LogWarning(
-                "Валидация биоматериала: модель предложила «{Corrected}» вместо «{Original}», но схожесть " +
-                "{Similarity:F2} слишком низкая — отклонено ({UserId}).", displayName, trimmed, similarity, ownerUserId);
-            return (CreateSpecimenResult.Rejected, null, "Похоже, это не биоматериал.");
+            var (result, validatedName, reason) = await globalKb.ValidateAndRegisterAsync(trimmed, normalized, ct);
+            if (result != SpecimenValidationResult.Valid)
+            {
+                logger.LogInformation(
+                    "Биоматериал «{Name}» ({UserId}): {Result} — {Reason}", trimmed, ownerUserId, result, reason);
+                return (result == SpecimenValidationResult.Unavailable
+                    ? CreateSpecimenResult.Unavailable
+                    : CreateSpecimenResult.Rejected, null, reason);
+            }
+            displayName = validatedName!;
         }
 
         var specimen = new UserSpecimen
@@ -154,17 +113,5 @@ public class UserSpecimenService(AppDbContext db, ILmStudioJsonClient client, IL
 
         logger.LogInformation("Биоматериал «{Name}» добавлен пользователем {UserId}.", displayName, ownerUserId);
         return (CreateSpecimenResult.Success, specimen, null);
-    }
-
-    private static bool? ReadBool(Dictionary<string, System.Text.Json.JsonElement> payload, string key)
-    {
-        if (!TryGetValue(payload, key, out var el)) return null;
-        return el.ValueKind switch
-        {
-            System.Text.Json.JsonValueKind.True => true,
-            System.Text.Json.JsonValueKind.False => false,
-            System.Text.Json.JsonValueKind.String when bool.TryParse(el.GetString(), out var b) => b,
-            _ => null,
-        };
     }
 }

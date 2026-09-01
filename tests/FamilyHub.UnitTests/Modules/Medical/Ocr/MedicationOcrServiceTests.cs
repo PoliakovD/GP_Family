@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Ocr;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -16,7 +17,13 @@ public class MedicationOcrServiceTests
 
     public MedicationOcrServiceTests()
     {
-        _sut = new MedicationOcrService(_client, NullLogger<MedicationOcrService>.Instance);
+        // Второй проход коррекции OCR (OcrNameCorrector) вызывает тот же клиент отдельным
+        // (текстовым, без фото) запросом — по умолчанию не застаблен ⇒ NSubstitute вернёт
+        // Task<LmStudioJsonResult>(null); OcrNameCorrector трактует null/Success=false как
+        // "коррекция недоступна" и просто оставляет исходное имя, тесты ниже это не ловят
+        // отдельно, а полагаются на конкретный стаб в успешном сценарии.
+        var nameCorrector = new OcrNameCorrector(_client, NullLogger<OcrNameCorrector>.Instance);
+        _sut = new MedicationOcrService(_client, nameCorrector, NullLogger<MedicationOcrService>.Instance);
     }
 
     /// <summary>Length берётся из объявленного конструктору значения, а не из реального размера

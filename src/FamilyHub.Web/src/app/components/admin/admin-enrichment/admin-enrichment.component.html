@@ -1,0 +1,168 @@
+<div class="d-flex justify-content-between mb-3" style="align-items: center; flex-wrap: wrap; gap: 8px;">
+  <div class="seg">
+    <button type="button" class="seg-opt" [class.active]="tab() === 'domains'" (click)="selectTab('domains')">
+      Доверенные домены
+    </button>
+    <button type="button" class="seg-opt" [class.active]="tab() === 'cache'" (click)="selectTab('cache')">
+      Кэш поиска
+    </button>
+  </div>
+
+  <div class="seg">
+    <button type="button" class="seg-opt" [class.active]="topic() === WebSearchTopic.Medication"
+            (click)="selectTopic(WebSearchTopic.Medication)">
+      Медикаменты
+    </button>
+    <button type="button" class="seg-opt" [class.active]="topic() === WebSearchTopic.LabAnalyte"
+            (click)="selectTopic(WebSearchTopic.LabAnalyte)">
+      Анализы
+    </button>
+  </div>
+</div>
+
+@if (tab() === 'domains') {
+  <div class="card">
+    <div class="card-title">Доверенные домены</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Только сниппеты с доверенных доменов уходят в суммаризатор по умолчанию. Порядок значим только
+        для анализов (приоритет источника при конфликте норм между лабораториями).
+      </p>
+
+      @if (domainsLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table mb-3">
+          <thead><tr><th>Домен</th><th>Порядок</th><th>Включён</th><th></th></tr></thead>
+          <tbody>
+            @for (d of domains(); track d.id; let i = $index) {
+              <tr [class.text-muted]="!d.isEnabled">
+                <td>{{ d.domain }}</td>
+                <td>
+                  <button type="button" class="btn-link" [disabled]="i === 0 || domainsBusy()" (click)="moveDomain(i, -1)">↑</button>
+                  <button type="button" class="btn-link" [disabled]="i === domains().length - 1 || domainsBusy()" (click)="moveDomain(i, 1)">↓</button>
+                </td>
+                <td>
+                  <input type="checkbox" [checked]="d.isEnabled" [disabled]="domainsBusy()" (change)="toggleDomain(d)" />
+                </td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" [disabled]="domainsBusy()" (click)="deleteDomain(d)">
+                    Удалить
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="4" class="text-muted">Список пуст.</td></tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      <form class="d-flex gap-2" (ngSubmit)="addDomain()">
+        <input class="input" placeholder="например, invitro.ru или https://www.invitro.ru/..."
+               [ngModel]="newDomain()" (ngModelChange)="newDomain.set($event)" name="newDomain" />
+        <button type="submit" class="btn btn-primary btn-sm" [disabled]="domainsBusy() || !newDomain().trim()">
+          Добавить
+        </button>
+      </form>
+    </div>
+  </div>
+}
+
+@if (tab() === 'cache') {
+  <div class="card mb-3">
+    <div class="card-title">Кэш сырых результатов поиска</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Хранит ВСЕ сниппеты, которые вернул платный поиск, не только доверенные — можно поменять
+        список доменов или точечно включить/выключить отдельный URL без нового платного запроса.
+      </p>
+
+      <form class="d-flex gap-2 mb-3" (ngSubmit)="loadCache(true)">
+        <input class="input" placeholder="поиск по названию…"
+               [ngModel]="cacheQuery()" (ngModelChange)="cacheQuery.set($event)" name="cacheQuery" />
+        <button type="submit" class="btn btn-secondary btn-sm" [disabled]="cacheLoading()">Найти</button>
+      </form>
+
+      @if (cacheLoading() && cacheRows().length === 0) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Название</th>
+              @if (topic() === WebSearchTopic.LabAnalyte) { <th>Биоматериал</th> }
+              <th>Провайдер</th>
+              <th>Обновлён</th>
+              <th>Сниппетов</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of cacheRows(); track row.id) {
+              <tr>
+                <td>{{ row.normalizedName }}</td>
+                @if (topic() === WebSearchTopic.LabAnalyte) { <td>{{ row.specimen }}</td> }
+                <td>{{ row.provider }}</td>
+                <td>{{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                <td>{{ row.snippetCount }}</td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="openCacheRow(row)">Открыть</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td [attr.colspan]="topic() === WebSearchTopic.LabAnalyte ? 6 : 5" class="text-muted">Ничего не найдено.</td></tr>
+            }
+          </tbody>
+        </table>
+
+        @if (cacheRows().length < cacheTotal()) {
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="cacheLoading()" (click)="loadCache(false)">
+            Показать ещё ({{ cacheRows().length }} / {{ cacheTotal() }})
+          </button>
+        }
+      }
+    </div>
+  </div>
+
+  @if (cacheDetailLoading()) {
+    <div class="card"><div class="card-body"><p class="text-muted mb-0">Загрузка сниппетов…</p></div></div>
+  } @else if (cacheDetail()) {
+    @let detail = cacheDetail()!;
+    <div class="card">
+      <div class="card-title d-flex justify-content-between" style="align-items: center;">
+        <span>{{ detail.normalizedName }}@if (detail.specimen) { &nbsp;({{ detail.specimen }}) }</span>
+        <button type="button" class="btn-link" (click)="closeCacheDetail()">Закрыть</button>
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-2">
+          Клик по чекбоксу переключает: не задано (решает домен) → включено вручную → выключено вручную → снова не задано.
+        </p>
+        <table class="table">
+          <thead><tr><th>Вкл.</th><th>Домен</th><th>Заголовок</th><th>Текст</th></tr></thead>
+          <tbody>
+            @for (s of detail.snippets; track s.url) {
+              <tr [class.text-muted]="!s.enabled">
+                <td>
+                  <input type="checkbox" [checked]="s.enabled"
+                         [title]="s.override === null ? 'по домену (' + (s.isTrustedByDomain ? 'доверен' : 'не доверен') + ')' : (s.override ? 'включён вручную' : 'выключен вручную')"
+                         (change)="cycleSnippetOverride(s.url)" />
+                  @if (s.override !== null) {
+                    <span class="tag tag-neutral">вручную</span>
+                  }
+                </td>
+                <td>{{ s.domain }}</td>
+                <td>
+                  <a [href]="s.url" target="_blank" rel="noopener">{{ s.title }}</a>
+                </td>
+                <td class="text-muted">{{ s.text }}</td>
+              </tr>
+            } @empty {
+              <tr><td colspan="4" class="text-muted">Сниппетов нет.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+}

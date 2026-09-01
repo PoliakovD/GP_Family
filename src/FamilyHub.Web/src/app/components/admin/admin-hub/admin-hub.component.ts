@@ -23,6 +23,7 @@ export class AdminHubComponent {
     { path: 'storage', label: 'Хранилище' },
     { path: 'system', label: 'Система' },
     { path: 'keys', label: 'Ключи' },
+    { path: 'enrichment', label: 'Обогащение' },
   ];
 
   async logout(): Promise<void> {

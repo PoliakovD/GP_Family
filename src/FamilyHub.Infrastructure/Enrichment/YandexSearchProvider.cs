@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FamilyHub.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -13,10 +14,13 @@ namespace FamilyHub.Infrastructure.Enrichment;
 /// Два свойства подтверждены живым запросом к API (не только документацией):
 /// 1) ответ приходит ОБЁРНУТЫМ В МАССИВ (gRPC-gateway streaming-стиль) даже без getPartialResults —
 ///    десериализуем List&lt;GenSearchResponse&gt;, берём последний элемент;
-/// 2) жёсткое ограничение поиска через поле "host" (искать ТОЛЬКО по TrustedDomains) на практике
-///    даёт "Ничего не найдено" — GenSearch триггерит несколько под-запросов и, видимо, не находит
-///    источников внутри узкого host-набора для всех них разом. Поэтому, как и у Brave, фильтрация
-///    по TrustedDomains — ПОСТФАКТУМ по used-источникам, без ограничения самого запроса.
+/// 2) жёсткое ограничение поиска через поле "host" (искать ТОЛЬКО по доверенным доменам) на
+///    практике даёт "Ничего не найдено" — GenSearch триггерит несколько под-запросов и, видимо, не
+///    находит источников внутри узкого host-набора для всех них разом, поэтому запрос самого поиска
+///    этим полем не ограничивается.
+/// Возвращает ВСЕ источники, которые Yandex реально использовал для ответа (used=true), независимо
+/// от домена (пересборка enrich-пайплайна) — фильтрация по доверенным доменам ПОСТФАКТУМ переехала
+/// на процессор (EnrichmentSnippetFilter, БД-список EnrichmentTrustedDomain), не здесь.
 /// Суммаризация сгенерированного Yandex ответа всё равно проходит через локальный Qwen
 /// (MedicationSummarizer) — ADR-0005 п.7: облачный сервис не пишет в справочник напрямую, только
 /// поставляет сырой материал под тем же антигаллюцинационным гейтом, что и Brave.
@@ -29,11 +33,12 @@ public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOpti
     public string Name => "Yandex";
 
     public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
-        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication, CancellationToken ct = default)
+        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
+        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default)
     {
         var opts = options.Value;
         var messageText = topic == WebSearchTopic.LabAnalyte
-            ? $"{normalizedName}: что показывает анализ, референсные (нормальные) значения, о чём говорит повышение и понижение"
+            ? SpecimenQueryLabel.BuildAnalyteSearchQuery(normalizedName, specimen)
             : $"{normalizedName}: инструкция по применению, показания, форма выпуска, условия хранения, влияние на управление транспортом";
         var request = new GenSearchRequest(
             Messages: [new GenSearchMessage(messageText, "ROLE_USER")],
@@ -72,37 +77,23 @@ public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOpti
             return [];
         }
 
-        var trustedDomains = topic == WebSearchTopic.LabAnalyte ? opts.AnalyteTrustedDomains : opts.TrustedDomains;
-        var usedTrustedSources = (parsed.Sources ?? [])
-            .Where(s => s.Used && !string.IsNullOrWhiteSpace(s.Url) && IsTrustedDomain(s.Url!, trustedDomains))
+        var usedSources = (parsed.Sources ?? [])
+            .Where(s => s.Used && !string.IsNullOrWhiteSpace(s.Url))
             .ToList();
 
-        if (usedTrustedSources.Count == 0)
+        if (usedSources.Count == 0)
         {
-            logger.LogInformation(
-                "Yandex Search по «{NormalizedName}»: ни один использованный источник не с доверенного домена.", normalizedName);
+            logger.LogInformation("Yandex Search по «{NormalizedName}»: ни один источник не использован в ответе.", normalizedName);
             return [];
         }
 
         // GenSearch отдаёт ОДИН сгенерированный ответ, а не сниппет на источник — но
         // MedicationSummarizer нумерует переданные сниппеты и требует сослаться на индекс
         // (антигаллюцинационный гейт), поэтому один и тот же текст ответа дублируется на каждый
-        // доверенный использованный источник, чтобы у модели был явный [N] на что сослаться.
-        return usedTrustedSources
-            .Take(opts.MaxSnippets)
+        // использованный источник, чтобы у модели был явный [N] на что сослаться.
+        return usedSources
             .Select(s => new WebSnippet(s.Title ?? string.Empty, s.Url!, parsed.Message.Content))
             .ToList();
-    }
-
-    /// <summary>Точное совпадение хоста или его поддомен — тот же приём, что в BraveSearchProvider.</summary>
-    private static bool IsTrustedDomain(string url, IReadOnlyList<string> trustedDomains)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
-
-        var host = uri.Host;
-        return trustedDomains.Any(domain =>
-            host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
-            host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
     }
 
     // --- DTO запроса/ответа Yandex Web Search API (GenSearch.Search, только нужные поля) ---

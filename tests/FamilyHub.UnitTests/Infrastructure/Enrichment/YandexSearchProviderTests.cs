@@ -11,9 +11,12 @@ namespace FamilyHub.UnitTests.Infrastructure.Enrichment;
 
 /// <summary>
 /// YandexSearchProvider — GenSearch отдаёт один сгенерированный ответ (message.content) вместо
-/// сниппета на источник, поэтому фильтрация по used+TrustedDomains и обработка
-/// isAnswerRejected/problematicAnswer здесь важнее, чем для Brave. Фейковый HttpMessageHandler —
-/// без реального обращения к searchapi.api.cloud.yandex.net.
+/// сниппета на источник, поэтому фильтрация по used (реальный сигнал модели "процитировала этот
+/// источник") и обработка isAnswerRejected/problematicAnswer здесь важнее, чем для Brave.
+/// Доверенные домены больше не фильтруются на этом уровне (пересборка enrich-пайплайна) — все
+/// used-источники возвращаются как есть, решение по домену принимает процессор
+/// (EnrichmentSnippetFilter). Фейковый HttpMessageHandler — без реального обращения к
+/// searchapi.api.cloud.yandex.net.
 /// </summary>
 public class YandexSearchProviderTests
 {
@@ -37,17 +40,11 @@ public class YandexSearchProviderTests
     }
 
     private static (YandexSearchProvider Sut, CapturingHttpMessageHandler Handler) CreateSut(
-        Func<HttpRequestMessage, HttpResponseMessage> respond, EnrichmentOptions? options = null)
+        Func<HttpRequestMessage, HttpResponseMessage> respond)
     {
         var handler = new CapturingHttpMessageHandler(respond);
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/") };
-        var opts = options ?? new EnrichmentOptions
-        {
-            ApiKey = "test-key",
-            FolderId = "b1gtest0000000000000",
-            TrustedDomains = ["vidal.ru", "rlsnet.ru"],
-            MaxSnippets = 5,
-        };
+        var opts = new EnrichmentOptions { ApiKey = "test-key", FolderId = "b1gtest0000000000000" };
         return (new YandexSearchProvider(httpClient, Options.Create(opts), NullLogger<YandexSearchProvider>.Instance), handler);
     }
 
@@ -58,7 +55,7 @@ public class YandexSearchProviderTests
 
     // Ответ Yandex приходит ОБЁРНУТЫМ В МАССИВ (gRPC-gateway streaming-стиль) — подтверждено
     // живым запросом к API, расходится с примером тела ответа в документации.
-    private const string ResponseWithUsedAndUnusedTrustedSources = """
+    private const string ResponseWithUsedAndUnusedSources = """
         [{
           "message": { "content": "Парацетамол — жаропонижающее средство.", "role": "ROLE_ASSISTANT" },
           "sources": [
@@ -72,15 +69,17 @@ public class YandexSearchProviderTests
         """;
 
     [Fact]
-    public async Task SearchAsync_OnlyUsedAndTrustedSources_AreReturned()
+    public async Task SearchAsync_OnlyUsedSources_AreReturned_RegardlessOfDomain()
     {
-        var (sut, _) = CreateSut(_ => JsonResponse(ResponseWithUsedAndUnusedTrustedSources));
+        var (sut, _) = CreateSut(_ => JsonResponse(ResponseWithUsedAndUnusedSources));
 
         var snippets = await sut.SearchAsync("парацетамол");
 
-        snippets.Should().HaveCount(1, "неиспользованный (used=false) и недоверенный источники должны быть отброшены");
-        snippets[0].Url.Should().Be("https://www.vidal.ru/drugs/paracetamol");
-        snippets[0].Text.Should().Contain("жаропонижающее", "текст ответа GenSearch дублируется на каждый used+доверенный источник");
+        snippets.Should().HaveCount(2, "used=false отбрасывается, но домен больше не фильтруется здесь");
+        snippets.Should().Contain(s => s.Url == "https://www.vidal.ru/drugs/paracetamol");
+        snippets.Should().Contain(s => s.Url == "https://spam.example.com/x");
+        snippets.Should().OnlyContain(s => s.Text.Contains("жаропонижающее"),
+            "текст ответа GenSearch дублируется на каждый used-источник");
     }
 
     [Fact]
@@ -113,7 +112,7 @@ public class YandexSearchProviderTests
     }
 
     [Fact]
-    public async Task SearchAsync_NoUsedTrustedSources_ReturnsEmpty()
+    public async Task SearchAsync_NoUsedSources_ReturnsEmpty()
     {
         const string onlyUnused = """
             [{ "message": { "content": "текст", "role": "ROLE_ASSISTANT" },
@@ -134,7 +133,7 @@ public class YandexSearchProviderTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/") };
         var sut = new YandexSearchProvider(
             httpClient,
-            Options.Create(new EnrichmentOptions { ApiKey = "k", FolderId = "f", TrustedDomains = ["vidal.ru"] }),
+            Options.Create(new EnrichmentOptions { ApiKey = "k", FolderId = "f" }),
             NullLogger<YandexSearchProvider>.Instance);
 
         var snippets = await sut.SearchAsync("парацетамол");
@@ -145,7 +144,7 @@ public class YandexSearchProviderTests
     [Fact]
     public async Task SearchAsync_SendsApiKeyHeader_AndFolderId_WithoutRestrictingHost()
     {
-        var (sut, handler) = CreateSut(_ => JsonResponse(ResponseWithUsedAndUnusedTrustedSources));
+        var (sut, handler) = CreateSut(_ => JsonResponse(ResponseWithUsedAndUnusedSources));
 
         await sut.SearchAsync("парацетамол");
 
@@ -153,7 +152,7 @@ public class YandexSearchProviderTests
         handler.LastRequestBody.Should().Contain("\"folderId\":\"b1gtest0000000000000\"");
         // "host" в теле запроса намеренно не отправляем (см. класс-докстринг YandexSearchProvider) —
         // живой запрос показал, что ограничение поиска этим полем даёт "Ничего не найдено" даже для
-        // доменов, которые находятся и используются без ограничения; фильтрация — постфактум.
+        // доменов, которые находятся и используются без ограничения; фильтрация — постфактум, на процессоре.
         handler.LastRequestBody.Should().NotContain("\"host\"");
     }
 }

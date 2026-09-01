@@ -39,12 +39,20 @@ public static class MedicalModule
         services.AddScoped<MedicalDocumentExtractionProcessor>();
         // Обогащение справочника показателей (kb.global_lab_analytes_kb) — зеркало конвейера
         // медикаментов ниже, тот же IMedicationSearchProvider (Program.cs), другой topic
-        // (WebSearchTopic.LabAnalyte) и общая с ним EnrichmentQuotaService.
+        // (WebSearchTopic.LabAnalyte).
         services.AddScoped<LabAnalyteKbWriter>();
         services.AddScoped<LabAnalyteKbSummarizer>();
+        services.AddScoped<LabAnalyteSearchCacheService>();
         services.AddScoped<LabAnalyteEnrichmentRequestService>();
         services.AddScoped<LabAnalyteEnrichmentProcessor>();
+        services.AddScoped<LabAnalyteKbReenrichJob>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
+        // Второй проход коррекции OCR (анализы + медикаменты, см. class doc) — общий на оба конвейера.
+        services.AddScoped<OcrNameCorrector>();
+        // Общий (не персональный) справочник биоматериалов вне SpecimenType (пересборка
+        // enrich-пайплайна) — используется и ручным вводом (UserSpecimenService), и извлечением
+        // документа ниже.
+        services.AddScoped<GlobalSpecimenKbService>();
         services.AddScoped<UserSpecimenService>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.
@@ -60,7 +68,8 @@ public static class MedicalModule
         services.AddScoped<KbWriter>();
         services.AddScoped<MedicationSummarizer>();
         services.AddScoped<MedicationSearchCacheService>();
-        services.AddScoped<EnrichmentQuotaService>();
+        // Доверенные домены обоих конвейеров — БД-backed, управляются через админку (см. class doc).
+        services.AddScoped<EnrichmentTrustedDomainService>();
         services.AddScoped<IEnrichmentRequestService, EnrichmentRequestService>();
         services.AddScoped<MedicationEnrichmentProcessor>();
         // Обогащение справочника медикаментов из заключений врача (UX-редизайн) — отдельный

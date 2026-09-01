@@ -24,6 +24,11 @@ public static class LabAnalyteKbPayload
         refRanges = summary.RefRanges.Select(r => new
         {
             ageFrom = r.AgeFrom, ageTo = r.AgeTo, sex = SexToString(r.Sex), low = r.Low, high = r.High, unit = r.Unit,
+            normKind = NormKindToString(r.NormKind),
+            population = PopulationToString(r.Population),
+            populationDetail = r.PopulationDetail,
+            sourceDomain = r.SourceDomain,
+            sourceRank = r.SourceRank,
         }),
     });
 
@@ -47,7 +52,14 @@ public static class LabAnalyteKbPayload
                     Sex: ParseSex(el.TryGetProperty("sex", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null),
                     Low: ReadDouble(el, "low"),
                     High: ReadDouble(el, "high"),
-                    Unit: el.TryGetProperty("unit", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null));
+                    Unit: el.TryGetProperty("unit", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null,
+                    // v1-v3 не писали эти поля — читаются как FixedRange/General (см. class doc
+                    // LabAnalyteSummarySchema), а не как ошибка парсинга.
+                    NormKind: ParseNormKind(ReadStringProp(el, "normKind")),
+                    Population: ParsePopulation(ReadStringProp(el, "population")),
+                    PopulationDetail: ReadStringProp(el, "populationDetail"),
+                    SourceDomain: ReadStringProp(el, "sourceDomain"),
+                    SourceRank: ReadInt(el, "sourceRank") ?? 0));
             }
             return result;
         }
@@ -109,6 +121,39 @@ public static class LabAnalyteKbPayload
         "female" => Gender.Female,
         _ => null,
     };
+
+    private static string NormKindToString(LabNormKind kind) => kind switch
+    {
+        LabNormKind.Calculated => "calculated",
+        LabNormKind.Qualitative => "qualitative",
+        _ => "fixed",
+    };
+
+    private static LabNormKind ParseNormKind(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "calculated" => LabNormKind.Calculated,
+        "qualitative" => LabNormKind.Qualitative,
+        _ => LabNormKind.FixedRange,
+    };
+
+    private static string PopulationToString(LabPopulation population) => population switch
+    {
+        LabPopulation.Pregnancy => "pregnancy",
+        LabPopulation.Children => "children",
+        LabPopulation.CyclePhase => "cyclePhase",
+        _ => "general",
+    };
+
+    private static LabPopulation ParsePopulation(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "pregnancy" => LabPopulation.Pregnancy,
+        "children" => LabPopulation.Children,
+        "cyclephase" or "cycle_phase" or "cycle-phase" => LabPopulation.CyclePhase,
+        _ => LabPopulation.General,
+    };
+
+    private static string? ReadStringProp(JsonElement el, string prop) =>
+        el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
     private static int? ReadInt(JsonElement el, string prop) =>
         el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i) ? i : null;

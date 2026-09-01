@@ -9,10 +9,12 @@ using Xunit;
 namespace FamilyHub.UnitTests.Infrastructure.Enrichment;
 
 /// <summary>
-/// BraveSearchProvider — фильтрация по доверенным доменам и усечение до MaxSnippets происходят
-/// на нашей стороне (не через `site:`-синтаксис поисковика, см. ADR-0005) — эти правила и
-/// устойчивость к сбоям (таймаут/сеть) покрыты здесь фейковым HttpMessageHandler, без реального
-/// обращения к api.search.brave.com.
+/// BraveSearchProvider — возвращает ВСЕ результаты выдачи как есть (пересборка enrich-пайплайна):
+/// фильтрация по доверенным доменам и усечение до MaxSnippets переехали на процессор
+/// (EnrichmentSnippetFilter, БД-список EnrichmentTrustedDomain — см. их тесты), провайдер больше
+/// не знает про доверие домену вообще. Здесь проверяется только сам разбор ответа API и
+/// устойчивость к сбоям (таймаут/сеть) — фейковым HttpMessageHandler, без реального обращения к
+/// api.search.brave.com.
 /// </summary>
 public class BraveSearchProviderTests
 {
@@ -28,15 +30,10 @@ public class BraveSearchProviderTests
             throw exception;
     }
 
-    private static BraveSearchProvider CreateSut(HttpMessageHandler handler, EnrichmentOptions? options = null)
+    private static BraveSearchProvider CreateSut(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.search.brave.com/") };
-        var opts = options ?? new EnrichmentOptions
-        {
-            ApiKey = "test-key",
-            TrustedDomains = ["vidal.ru", "rlsnet.ru"],
-            MaxSnippets = 5,
-        };
+        var opts = new EnrichmentOptions { ApiKey = "test-key" };
         return new BraveSearchProvider(httpClient, Options.Create(opts), NullLogger<BraveSearchProvider>.Instance);
     }
 
@@ -58,46 +55,39 @@ public class BraveSearchProviderTests
         """;
 
     [Fact]
-    public async Task SearchAsync_FiltersOutUntrustedDomains()
+    public async Task SearchAsync_ReturnsAllResults_IncludingUntrustedDomains()
     {
         var sut = CreateSut(new FakeHttpMessageHandler(_ => JsonResponse(ResponseWithMixedDomains)));
 
         var snippets = await sut.SearchAsync("парацетамол");
 
-        snippets.Should().HaveCount(2, "спам-домен не входит в TrustedDomains и должен быть отброшен");
-        snippets.Should().OnlyContain(s => s.Url.Contains("vidal.ru") || s.Url.Contains("rlsnet.ru"));
+        snippets.Should().HaveCount(3,
+            "провайдер больше не фильтрует по доверенным доменам (пересборка enrich-пайплайна) — это делает процессор");
+        snippets.Should().Contain(s => s.Url.Contains("spam.example.com"));
     }
 
     [Fact]
-    public async Task SearchAsync_TrustsSubdomainsOfTrustedDomain()
+    public async Task SearchAsync_SkipsResultsWithoutUrlOrDescription()
     {
-        // "www.vidal.ru" доверен, если доверен "vidal.ru" (см. IsTrustedDomain).
-        var sut = CreateSut(new FakeHttpMessageHandler(_ => JsonResponse(ResponseWithMixedDomains)));
-
-        var snippets = await sut.SearchAsync("парацетамол");
-
-        snippets.Should().Contain(s => s.Url == "https://www.vidal.ru/drugs/paracetamol");
-    }
-
-    [Fact]
-    public async Task SearchAsync_TruncatesToMaxSnippets()
-    {
-        var sut = CreateSut(
-            new FakeHttpMessageHandler(_ => JsonResponse(ResponseWithMixedDomains)),
-            new EnrichmentOptions { ApiKey = "test-key", TrustedDomains = ["vidal.ru", "rlsnet.ru"], MaxSnippets = 1 });
-
-        var snippets = await sut.SearchAsync("парацетамол");
-
-        snippets.Should().HaveCount(1, "MaxSnippets=1 должен обрезать даже при двух доверенных совпадениях");
-    }
-
-    [Fact]
-    public async Task SearchAsync_NoTrustedResults_ReturnsEmpty()
-    {
-        const string onlyUntrusted = """
-            { "web": { "results": [ { "title": "Спам", "url": "https://spam.example.com/x", "description": "..." } ] } }
+        const string withGaps = """
+            { "web": { "results": [
+              { "title": "Без описания", "url": "https://vidal.ru/x" },
+              { "title": "Полный", "url": "https://vidal.ru/y", "description": "Текст." }
+            ] } }
             """;
-        var sut = CreateSut(new FakeHttpMessageHandler(_ => JsonResponse(onlyUntrusted)));
+        var sut = CreateSut(new FakeHttpMessageHandler(_ => JsonResponse(withGaps)));
+
+        var snippets = await sut.SearchAsync("парацетамол");
+
+        snippets.Should().ContainSingle();
+        snippets[0].Url.Should().Be("https://vidal.ru/y");
+    }
+
+    [Fact]
+    public async Task SearchAsync_EmptyResults_ReturnsEmpty()
+    {
+        const string empty = """{ "web": { "results": [] } }""";
+        var sut = CreateSut(new FakeHttpMessageHandler(_ => JsonResponse(empty)));
 
         var snippets = await sut.SearchAsync("парацетамол");
 

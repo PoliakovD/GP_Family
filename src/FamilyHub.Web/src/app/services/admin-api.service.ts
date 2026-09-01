@@ -52,6 +52,29 @@ export interface RotationStatus {
   fieldsProcessed: number; fieldsTotal: number; blobsProcessed: number; blobsTotal: number;
 }
 
+/** WebSearchTopic (см. FamilyHub.Domain.Enums) — 0=Medication, 1=LabAnalyte. Тело JSON-запросов не
+ * настроено на JsonStringEnumConverter (см. AdminEnrichmentEndpoints), поэтому enum'ы — числами,
+ * тот же формат, что и остальные enum-поля запросов в проекте (см. InviteCreated.assignedRole). */
+export const WebSearchTopic = { Medication: 0, LabAnalyte: 1 } as const;
+export type WebSearchTopicValue = (typeof WebSearchTopic)[keyof typeof WebSearchTopic];
+
+export interface TrustedDomain { id: string; domain: string; rank: number; isEnabled: boolean; }
+
+export interface SearchCacheRow {
+  id: string; normalizedName: string; specimen: string | null; provider: string;
+  lastUpdatedAt: string; canBeUpdatedAfter: string; snippetCount: number;
+}
+export interface SearchCacheListResponse { rows: SearchCacheRow[]; total: number; }
+
+export interface SearchCacheSnippet {
+  title: string; url: string; text: string; domain: string | null;
+  isTrustedByDomain: boolean; override: boolean | null; enabled: boolean;
+}
+export interface SearchCacheDetail {
+  id: string; normalizedName: string; specimen: string | null; provider: string;
+  lastUpdatedAt: string; canBeUpdatedAfter: string; snippets: SearchCacheSnippet[];
+}
+
 /**
  * Клиент /api/admin/*. Отдельно от ApiService (api.service.ts) намеренно — другая поверхность
  * аутентификации (cookie familyhub.admin, схема AuthSchemes.Admin, см. ADR-0009), не должна
@@ -75,6 +98,15 @@ export class AdminApiService {
     this.log.log('api', 'info', `POST ${path}`);
     try {
       return await firstValueFrom(this.http.post<T>(path, body));
+    } catch (e) {
+      throw this.toApiError(e);
+    }
+  }
+
+  private async put<T>(path: string, body: unknown = null): Promise<T> {
+    this.log.log('api', 'info', `PUT ${path}`);
+    try {
+      return await firstValueFrom(this.http.put<T>(path, body));
     } catch (e) {
       throw this.toApiError(e);
     }
@@ -110,4 +142,30 @@ export class AdminApiService {
   startRotation = () => this.post<void>('/api/admin/keys/encryption/rotate');
   cancelRotation = () => this.post<void>('/api/admin/keys/encryption/rotate/cancel');
   getRotationStatus = () => this.get<RotationStatus>('/api/admin/keys/encryption/rotate/status');
+
+  // Пересборка enrich-пайплайна — доверенные домены (БД-backed) + кэш сырых результатов поиска
+  // (хранит ВСЕ сниппеты, не только доверенные) обоих конвейеров обогащения.
+  getTrustedDomains = (topic: WebSearchTopicValue) =>
+    this.get<TrustedDomain[]>(`/api/admin/enrichment/trusted-domains?topic=${topic}`);
+
+  addTrustedDomain = (topic: WebSearchTopicValue, domain: string) =>
+    this.post<TrustedDomain>('/api/admin/enrichment/trusted-domains', { topic, domain });
+
+  setTrustedDomainEnabled = (id: string, isEnabled: boolean) =>
+    this.put<void>(`/api/admin/enrichment/trusted-domains/${id}`, { isEnabled });
+
+  deleteTrustedDomain = (id: string) => this.del<void>(`/api/admin/enrichment/trusted-domains/${id}`);
+
+  reorderTrustedDomains = (topic: WebSearchTopicValue, orderedIds: string[]) =>
+    this.post<void>('/api/admin/enrichment/trusted-domains/reorder', { topic, orderedIds });
+
+  getSearchCache = (topic: WebSearchTopicValue, query: string, skip: number, take: number) =>
+    this.get<SearchCacheListResponse>(
+      `/api/admin/enrichment/search-cache?topic=${topic}&query=${encodeURIComponent(query)}&skip=${skip}&take=${take}`);
+
+  getSearchCacheDetail = (id: string, topic: WebSearchTopicValue) =>
+    this.get<SearchCacheDetail>(`/api/admin/enrichment/search-cache/${id}?topic=${topic}`);
+
+  setSnippetOverride = (id: string, topic: WebSearchTopicValue, url: string, enabled: boolean | null) =>
+    this.post<void>(`/api/admin/enrichment/search-cache/${id}/override`, { topic, url, enabled });
 }

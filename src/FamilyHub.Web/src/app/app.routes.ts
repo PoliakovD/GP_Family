@@ -48,6 +48,14 @@ export const routes: Routes = [
             (m) => m.AdminKeysComponent,
           ),
       },
+      {
+        // Пересборка enrich-пайплайна: доверенные домены + кэш сырых результатов поиска.
+        path: 'enrichment',
+        loadComponent: () =>
+          import('./components/admin/admin-enrichment/admin-enrichment.component').then(
+            (m) => m.AdminEnrichmentComponent,
+          ),
+      },
     ],
   },
 
@@ -64,6 +72,13 @@ export const routes: Routes = [
     canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
+  },
+  {
+    // Публичный лендинг приглашения (веб-альтернатива Telegram-инвайту, см. FamilyDetailsComponent) —
+    // намеренно БЕЗ гардов: гость должен увидеть превью и решить, создавать ли аккаунт, до входа.
+    path: 'join/:code',
+    loadComponent: () =>
+      import('./components/join-invite/join-invite.component').then((m) => m.JoinInviteComponent),
   },
   {
     // Сбор ФИО/ДР/пола (identity rework) — единственный путь сюда: profileGuard на данных

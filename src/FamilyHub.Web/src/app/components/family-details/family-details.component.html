@@ -92,18 +92,29 @@
                         <p class="muted mb-2">
                             Код: <code>{{ createdInvite().code }}</code>
                         </p>
-                        @if (createdInvite().telegramLink) {
+                        <div class="d-flex gap-2 mb-2">
                             <button
-                                    class="btn btn-primary btn-block mb-2"
-                                    (click)="shareInvite(createdInvite().telegramLink!)"
+                                    class="btn btn-primary flex-grow-1"
+                                    (click)="shareInvite(createdInvite().webLink)"
                             >
-                                Поделиться / Отправить в Telegram
+                                Поделиться ссылкой
                             </button>
-                        } @else {
-                            <p class="muted mb-2">
-                                Отправьте боту: <code>/start {{ createdInvite().code }}</code>
-                            </p>
-                        }
+                            @if (createdInvite().telegramLink) {
+                                <button
+                                        type="button"
+                                        class="btn btn-secondary btn-icon"
+                                        title="Отправить в Telegram"
+                                        aria-label="Отправить в Telegram"
+                                        (click)="openTelegramInvite(createdInvite().telegramLink!)"
+                                >
+                                    <i class="ph-fill ph-telegram-logo" aria-hidden="true"></i>
+                                </button>
+                            } @else {
+                                <p class="muted mb-0 align-self-center">
+                                    Или боту: <code>/start {{ createdInvite().code }}</code>
+                                </p>
+                            }
+                        </div>
                         <div class="d-flex justify-content-end gap-2">
                             <button class="btn btn-secondary btn-sm" (click)="closeInviteModal()">
                                 Закрыть

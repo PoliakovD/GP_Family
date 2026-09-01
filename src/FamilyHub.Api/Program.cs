@@ -919,6 +919,7 @@ if (adminOptions.Enabled)
 {
     app.MapAdminSessionEndpoints();
     app.MapAdminEndpoints();
+    app.MapAdminEnrichmentEndpoints();
 }
 
 // SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).
@@ -1048,7 +1049,23 @@ app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<EncryptionRo
         }
     }
 
-
+// Пересборка enrich-пайплайна анализов: один батч принудительного переобогащения справочника
+// показателей на каждый старт API (LabAnalyteKbReenrichJob) — идемпотентно (no-op, если строк со
+// старой схемой не осталось) и самовосстановимо: если предыдущий батч не успел закрыть весь
+// справочник, следующий деплой продолжит его сам, без ручного клика в админке. Ручной повторный
+// запуск всё равно доступен через POST /api/admin/kb/lab-analytes/reenrich (см. AdminEndpoints).
+// Постановка — best-effort: недоступность Hangfire-стораж на старте не должна ронять хост целиком
+// (тот же принцип, что EnrichmentRequestService/LabAnalyteEnrichmentRequestService — см. их доки).
+try
+{
+    app.Services.GetRequiredService<IBackgroundJobClient>().Enqueue<LabAnalyteKbReenrichJob>(
+        j => j.RunAsync(CancellationToken.None));
+}
+catch (Exception ex)
+{
+    app.Services.GetRequiredService<ILogger<Program>>().LogWarning(
+        ex, "Не удалось поставить LabAnalyteKbReenrichJob в очередь при старте — попробуется на следующем деплое.");
+}
 
 await app.RunAsync();
 }

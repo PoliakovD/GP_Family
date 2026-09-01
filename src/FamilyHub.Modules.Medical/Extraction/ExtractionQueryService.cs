@@ -183,9 +183,13 @@ public class ExtractionQueryService(
             {
                 // KbRefRangeDto/KbReferenceRange — одинаковые по форме, но разные типы (DTO ответа
                 // vs внутренний тип каскада расчёта статуса) — конвертация, не общий тип специально,
-                // чтобы не тащить зависимость каскада в контракт ответа API.
+                // чтобы не тащить зависимость каскада в контракт ответа API. NormKind/Population
+                // ОБЯЗАТЕЛЬНО прокидываются дальше (не default) — иначе PickBestRangeIndex ниже не
+                // сможет отфильтровать Pregnancy/CyclePhase/Qualitative строки (пересборка enrich-пайплайна).
                 var ranges = article.RefRanges
-                    .Select(r => new KbReferenceRange(r.AgeFrom, r.AgeTo, r.Sex, r.Low, r.High, r.Unit))
+                    .Select(r => new KbReferenceRange(
+                        r.AgeFrom, r.AgeTo, r.Sex, r.Low, r.High, r.Unit,
+                        r.NormKind, r.Population, r.PopulationDetail, r.SourceDomain))
                     .ToList();
                 matchedIndex = IndicatorFlagCalculator.PickBestRangeIndex(ranges, ageYears, sex);
             }

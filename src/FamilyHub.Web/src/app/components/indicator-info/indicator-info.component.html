@@ -1,5 +1,10 @@
 <div>
-  <h4 class="mb-1">{{ title() }}</h4>
+  <h4 class="mb-1">
+    {{ title() }}
+    @if (specimenLabel(); as sl) {
+      <span class="muted" style="font-size:14px;font-weight:400">&nbsp;· {{ sl }}</span>
+    }
+  </h4>
 
   @if (reading(); as r) {
     <div class="mb-2">
@@ -28,16 +33,34 @@
       <div class="card-kicker mt-2">Нормы</div>
       @if (matchedRange(); as mr) {
         <p class="mb-1" style="font-weight:600">{{ rangeLabel(mr) }}</p>
+        <div class="d-flex flex-wrap gap-1 mb-1">
+          @if (populationBadge(mr); as pb) {
+            <span class="tag tag-accent-2">{{ pb }}</span>
+          }
+          @if (sourceLabel(mr); as sd) {
+            <span class="tag tag-neutral">{{ sd }}</span>
+          }
+        </div>
         @if (otherRanges().length > 0) {
           <app-expandable title="Другие диапазоны" [count]="otherRanges().length">
             @for (r of otherRanges(); track $index) {
-              <p class="muted mb-1">{{ rangeLabel(r) }}</p>
+              <p class="muted mb-1">
+                {{ rangeLabel(r) }}
+                @if (populationBadge(r); as pb) {
+                  <span class="tag tag-accent-2">{{ pb }}</span>
+                }
+              </p>
             }
           </app-expandable>
         }
       } @else {
         @for (r of a.refRanges; track $index) {
-          <p class="mb-1">{{ rangeLabel(r) }}</p>
+          <p class="mb-1">
+            {{ rangeLabel(r) }}
+            @if (populationBadge(r); as pb) {
+              <span class="tag tag-accent-2">{{ pb }}</span>
+            }
+          </p>
         }
       }
     }

@@ -42,6 +42,8 @@ public class MedicalDocumentExtractionProcessor(
     IMedicalDocumentExtractor extractor,
     LabAnalyteKbLookupService kbLookup,
     LabAnalyteEnrichmentRequestService enrichmentRequest,
+    OcrNameCorrector ocrNameCorrector,
+    GlobalSpecimenKbService specimenKb,
     PatientReferenceCalculator referenceCalculator,
     LabSummarizer summarizer,
     Kb.KbLookupService medicationKbLookup,
@@ -180,6 +182,7 @@ public class MedicalDocumentExtractionProcessor(
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
         string? doctor = null;
+        string? specimenOtherLabel = null;
         var rawIndicators = new List<(ExtractedLabIndicator Dto, SpecimenType Specimen)>();
 
         foreach (var result in results)
@@ -187,10 +190,30 @@ public class MedicalDocumentExtractionProcessor(
             if (result.DocumentDate is not null) documentDate = result.DocumentDate;
             if (suggestedTitle is null && !string.IsNullOrWhiteSpace(result.SuggestedTitle)) suggestedTitle = result.SuggestedTitle;
             if (doctor is null && !string.IsNullOrWhiteSpace(result.Doctor)) doctor = result.Doctor;
+            if (specimenOtherLabel is null && !string.IsNullOrWhiteSpace(result.SpecimenOtherLabel))
+                specimenOtherLabel = result.SpecimenOtherLabel;
             if (result.LabIndicators is null) continue;
 
             var specimen = result.Specimen ?? SpecimenType.Unknown;
             rawIndicators.AddRange(result.LabIndicators.Select(dto => (dto, specimen)));
+        }
+
+        // Биоматериал вне фиксированного enum ("ликвор" и т.п.) — лучшее усилие: пополняем общий
+        // справочник (GlobalSpecimenKbService), чтобы то же название не пришлось провалидировать
+        // заново при ручном вводе. Не блокирует и не проваливает основной конвейер — LabIndicator.
+        // Specimen всё равно останется SpecimenType.Other независимо от исхода этой регистрации.
+        if (!string.IsNullOrWhiteSpace(specimenOtherLabel))
+        {
+            try
+            {
+                var normalizedSpecimenLabel = LabAnalyteNormalizer.Normalize(specimenOtherLabel);
+                if (normalizedSpecimenLabel.Length > 0 && await specimenKb.FindAsync(normalizedSpecimenLabel, ct) is null)
+                    await specimenKb.ValidateAndRegisterAsync(specimenOtherLabel.Trim(), normalizedSpecimenLabel, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Не удалось зарегистрировать биоматериал «{Label}» в общем справочнике — пропускаем.", specimenOtherLabel);
+            }
         }
 
         if (rawIndicators.Count == 0)
@@ -214,17 +237,31 @@ public class MedicalDocumentExtractionProcessor(
         var ownerUserId = record.OwnerUserId;
         var recordDate = record.RecordDate;
 
+        // Второй проход коррекции OCR — ДО нормализации/сопоставления со справочником: смешение
+        // кириллицы/латиницы и КАПС в сыром имени снижают триграммную схожесть в pg_trgm-каскаде
+        // ниже и порождают ложные промахи (см. OcrNameCorrector). Один батч-вызов на весь набор
+        // показателей записи, не по одному на показатель.
+        var correctedNames = await ocrNameCorrector.CorrectBatchAsync(
+            rawIndicators.Select(x => x.Dto.Name).ToList(), ct);
+        rawIndicators = rawIndicators
+            .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.Specimen))
+            .ToList();
+
         var normalized = rawIndicators
             .Select(x => (x.Dto, AnalyteKey: LabAnalyteNormalizer.Normalize(x.Dto.Name), x.Specimen))
             .Where(x => x.AnalyteKey.Length > 0)
             .ToList();
 
-        // Один Lookup на уникальное имя — один и тот же показатель может повторяться на одном бланке.
-        var lookups = new Dictionary<string, Kb.KbLookupResult>();
-        foreach (var (_, analyteKey, _) in normalized)
+        // Один Lookup на уникальную пару (имя, биоматериал) — один и тот же показатель в одном и
+        // том же биоматериале может повторяться на одном бланке; тот же показатель в РАЗНОМ
+        // биоматериале (кровь/моча) ищется отдельно (пересборка enrich-пайплайна, см.
+        // LabAnalyteKbLookupService).
+        var lookups = new Dictionary<(string AnalyteKey, SpecimenType Specimen), Kb.KbLookupResult>();
+        foreach (var (_, analyteKey, specimen) in normalized)
         {
-            if (!lookups.ContainsKey(analyteKey))
-                lookups[analyteKey] = await kbLookup.LookupAsync(analyteKey, ct);
+            var key = (analyteKey, specimen);
+            if (!lookups.ContainsKey(key))
+                lookups[key] = await kbLookup.LookupAsync(analyteKey, specimen, ct);
         }
 
         var hitIds = lookups.Values.Where(l => l.Kind == Kb.KbLookupKind.Hit).Select(l => l.KbId!.Value).Distinct().ToList();
@@ -246,7 +283,7 @@ public class MedicalDocumentExtractionProcessor(
 
         foreach (var (dto, analyteKey, specimen) in normalized)
         {
-            var lookup = lookups[analyteKey];
+            var lookup = lookups[(analyteKey, specimen)];
             var kbAnalyteId = lookup.Kind == Kb.KbLookupKind.Hit ? lookup.KbId : null;
             var kbPayloadJson = kbAnalyteId is not null && kbPayloads.TryGetValue(kbAnalyteId.Value, out var pj) ? pj : null;
 
@@ -308,7 +345,7 @@ public class MedicalDocumentExtractionProcessor(
             // Дедуп на уровне БД (см. LabAnalyteEnrichmentRequestService) — повтор того же
             // показателя на этом же бланке или в другом анализе не плодит вторую задачу.
             if (lookup.Kind != Kb.KbLookupKind.Hit)
-                await enrichmentRequest.RequestAsync(analyteKey, dto.Name, null, ownerUserId, ct);
+                await enrichmentRequest.RequestAsync(analyteKey, specimen, dto.Name, null, ownerUserId, ct);
         }
 
         job.Stage = ExtractionStage.Summarizing;

@@ -15,6 +15,12 @@ public record CreateInviteRequest(Guid? TargetUserId, FamilyRole AssignedRole, i
 public record PendingMemberDto(
     Guid UserId, string? LastName, string? FirstName, string? MiddleName, string? Username, FamilyRole Role, DateTime JoinedAt);
 
+/// <summary>Публичный, обезличенный превью инвайта для лендинга /join/:code — никаких участников
+/// семьи и никакого email, только то, что нужно, чтобы гость решил, стоит ли создавать аккаунт.</summary>
+public record InvitePreviewDto(string FamilyName, string? InviterName);
+
+public enum InvitePreviewResult { Valid, NotFound, Revoked, Expired, Exhausted }
+
 /// <summary>
 /// Приглашения и одобрение заявок — дословно по разделу 8 брифа: гибридное одобрение
 /// (персональный инвайт → Active сразу, ссылка → PendingApproval до одобрения админа),
@@ -57,37 +63,72 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
         return (CreateInviteResult.Created, invite);
     }
 
-    public async Task<RedeemResult> RedeemInviteAsync(string code, Guid userId, CancellationToken ct = default)
+    /// <summary>Анонимный превью инвайта (лендинг /join/:code) — без авторизации, без персональных
+    /// данных участников семьи: только название семьи и имя пригласившего, чтобы гость понял, куда
+    /// его зовут, до того как заведёт аккаунт.</summary>
+    public async Task<(InvitePreviewResult Result, InvitePreviewDto? Preview)> GetPreviewAsync(
+        string code, CancellationToken ct = default)
+    {
+        var invite = await (
+            from i in db.FamilyInvites
+            where i.Code == code
+            join creator in db.Users on i.CreatedByUserId equals creator.Id into creators
+            from creator in creators.DefaultIfEmpty()
+            select new
+            {
+                i.IsRevoked,
+                i.ExpiresAt,
+                i.UsedCount,
+                i.MaxUses,
+                FamilyName = i.Family.Name,
+                InviterFirstName = creator != null ? creator.FirstName : null,
+                InviterLastName = creator != null ? creator.LastName : null,
+            }).FirstOrDefaultAsync(ct);
+
+        if (invite is null) return (InvitePreviewResult.NotFound, null);
+        if (invite.IsRevoked) return (InvitePreviewResult.Revoked, null);
+        if (invite.ExpiresAt is { } exp && exp < DateTime.UtcNow) return (InvitePreviewResult.Expired, null);
+        if (invite.UsedCount >= invite.MaxUses) return (InvitePreviewResult.Exhausted, null);
+
+        var inviterName = string.Join(" ", new[] { invite.InviterFirstName, invite.InviterLastName }
+            .Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        return (InvitePreviewResult.Valid,
+            new InvitePreviewDto(invite.FamilyName, string.IsNullOrWhiteSpace(inviterName) ? null : inviterName));
+    }
+
+    public async Task<(RedeemResult Result, Guid? FamilyId)> RedeemInviteAsync(
+        string code, Guid userId, CancellationToken ct = default)
     {
         var invite = await db.FamilyInvites.FirstOrDefaultAsync(i => i.Code == code, ct);
 
         if (invite is null)
         {
             logger.LogWarning("Погашение инвайта: код не найден (пользователь {UserId})", userId);
-            return RedeemResult.NotFound;
+            return (RedeemResult.NotFound, null);
         }
         if (invite.IsRevoked)
         {
             logger.LogWarning("Погашение инвайта {InviteId} отклонено: отозван (пользователь {UserId})", invite.Id, userId);
-            return RedeemResult.Revoked;
+            return (RedeemResult.Revoked, null);
         }
         if (invite.ExpiresAt is { } exp && exp < DateTime.UtcNow)
         {
             logger.LogWarning("Погашение инвайта {InviteId} отклонено: истёк {ExpiresAt} (пользователь {UserId})", invite.Id, exp, userId);
-            return RedeemResult.Expired;
+            return (RedeemResult.Expired, null);
         }
         if (invite.UsedCount >= invite.MaxUses)
         {
             logger.LogWarning(
                 "Погашение инвайта {InviteId} отклонено: исчерпан лимит {UsedCount}/{MaxUses} (пользователь {UserId})",
                 invite.Id, invite.UsedCount, invite.MaxUses, userId);
-            return RedeemResult.Exhausted;
+            return (RedeemResult.Exhausted, null);
         }
         if (invite.TargetUserId is { } target && target != userId)
         {
             logger.LogWarning(
                 "Погашение инвайта {InviteId} отклонено: предназначен другому пользователю (запросил {UserId})", invite.Id, userId);
-            return RedeemResult.NotForYou;
+            return (RedeemResult.NotForYou, null);
         }
 
         var already = await db.FamilyMembers.AnyAsync(
@@ -97,7 +138,7 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
             logger.LogDebug(
                 "Погашение инвайта {InviteId}: пользователь {UserId} уже состоит в семье {FamilyId}",
                 invite.Id, userId, invite.FamilyId);
-            return RedeemResult.AlreadyMember;
+            return (RedeemResult.AlreadyMember, invite.FamilyId);
         }
 
         // Гибрид: персональный инвайт → сразу Active; ссылка → PendingApproval.
@@ -126,7 +167,7 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
             logger.LogWarning(
                 "Погашение инвайта {InviteId} отклонено: лимит исчерпан параллельным запросом (пользователь {UserId})",
                 invite.Id, userId);
-            return RedeemResult.Exhausted;
+            return (RedeemResult.Exhausted, null);
         }
 
         db.FamilyMembers.Add(new FamilyMember
@@ -153,9 +194,10 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
             "Инвайт {InviteId} погашен пользователем {UserId}, семья {FamilyId}, статус {Status}",
             invite.Id, userId, invite.FamilyId, status);
 
-        return status == MemberStatus.Active
+        return (status == MemberStatus.Active
             ? RedeemResult.Joined           // персональный — вступил сразу
-            : RedeemResult.PendingApproval;  // ссылка — ждёт одобрения админа
+            : RedeemResult.PendingApproval,  // ссылка — ждёт одобрения админа
+            invite.FamilyId);
     }
 
     public async Task<RevokeInviteResult> RevokeInviteAsync(Guid inviteId, Guid requestingUserId, CancellationToken ct = default)

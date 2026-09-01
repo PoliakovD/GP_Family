@@ -6,29 +6,32 @@ using FamilyHub.Modules.Medical.Kb;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
 /// <summary>
-/// Шаги обогащения справочника показателей (ветка medicalrecords) — повторная проверка справочника
-/// → веб-поиск по лабораторным источникам (EnrichmentOptions.AnalyteTrustedDomains) → суммаризация
-/// локальным Qwen → запись. Зеркало MedicationEnrichmentProcessor (этап 4), без шага коррекции
-/// названия (CorrectedName) — имя показателя приходит из уже гейтованного LLM-извлечения
-/// (LmStudioMedicalDocumentExtractor), а не из OCR по фото упаковки, опечатки маловероятны — и без
-/// собственного кэша сниппетов (MedicationSearchCacheService): в отличие от медикаментов повторные
-/// платные запросы по одному и тому же показателю редки (Pending/Running-дедуп уже достаточен).
-/// Та же выделенная очередь "enrichment", тот же общий EnrichmentQuotaService (месячная квота —
-/// одна на оба конвейера, они делят одного и того же внешнего провайдера).
+/// Шаги обогащения справочника показателей (ветка medicalrecords, пересборка enrich-пайплайна
+/// анализов) — повторная проверка справочника → кэш сниппетов (LabAnalyteSearchCacheService,
+/// зеркало MedicationSearchCacheService — закрывает ранее задокументированный пропуск) → веб-поиск
+/// по лабораторным источникам, отсортированным по приоритету (EnrichmentTrustedDomain, Topic=LabAnalyte)
+/// → суммаризация локальным Qwen → детерминированный merge норм по приоритету источника
+/// (ReferenceRangeMerger) → запись. Без шага коррекции названия (CorrectedName), в отличие от
+/// MedicationEnrichmentProcessor — имя показателя приходит из уже гейтованного LLM-извлечения
+/// (LmStudioMedicalDocumentExtractor) и второго прохода OCR-коррекции (OcrNameCorrector), опечатки
+/// маловероятны. Та же выделенная очередь "enrichment".
 /// </summary>
 [Queue("enrichment")]
 [AutomaticRetry(Attempts = LabAnalyteEnrichmentProcessor.MaxAttempts, DelaysInSeconds = [60, 600, 3600])]
 public class LabAnalyteEnrichmentProcessor(
     AppDbContext db,
     LabAnalyteKbLookupService kbLookup,
+    LabAnalyteSearchCacheService searchCache,
     IMedicationSearchProvider provider,
     LabAnalyteKbSummarizer summarizer,
     LabAnalyteKbWriter kbWriter,
-    EnrichmentQuotaService quota,
+    EnrichmentTrustedDomainService trustedDomains,
+    IOptions<EnrichmentOptions> options,
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
 {
@@ -51,10 +54,12 @@ public class LabAnalyteEnrichmentProcessor(
 
         try
         {
-            // Соседняя задача (другой анализ, тот же показатель) могла успеть наполнить справочник,
-            // пока эта ждала своей очереди.
-            var existing = await kbLookup.LookupAsync(job.NormalizedName, ct);
-            if (existing.Kind == KbLookupKind.Hit)
+            // Соседняя задача (другой анализ, тот же показатель+биоматериал) могла успеть наполнить
+            // справочник, пока эта ждала своей очереди. Force (LabAnalyteKbReenrichJob) намеренно
+            // пропускает этот выход — цель форсированной задачи ИМЕННО в том, чтобы пройти пайплайн
+            // заново поверх уже существующей записи, а не подтвердить, что она есть.
+            var existing = await kbLookup.LookupAsync(job.NormalizedName, job.Specimen, ct);
+            if (!job.Force && existing.Kind == KbLookupKind.Hit)
             {
                 job.Status = EnrichmentJobStatus.Completed;
                 job.KbId = existing.KbId;
@@ -67,25 +72,51 @@ public class LabAnalyteEnrichmentProcessor(
                 return;
             }
 
-            if (provider.Name != "Null" && await quota.MonthlyQuotaExceededAsync(ct))
+            // Настоящий кэш, не просто лог "когда можно/нельзя" — тот же приём, что
+            // MedicationEnrichmentProcessor: переиспользуем сохранённые сниппеты, если минимальный
+            // интервал обновления ещё не истёк, суммаризацию можно пересчитывать сколько угодно раз
+            // (например, при доработке промпта), не тратя платный запрос на одно и то же снова.
+            var cached = provider.Name != "Null" ? await searchCache.GetCachedAsync(job.NormalizedName, job.Specimen, ct) : null;
+
+            IReadOnlyList<WebSnippet> rawSnippets;
+            IReadOnlyDictionary<string, bool>? overrides = null;
+            if (cached is not null && cached.IsFresh)
             {
-                job.Status = EnrichmentJobStatus.Skipped;
-                job.Error = "Месячная квота внешнего поиска исчерпана.";
-                job.CompletedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct);
-                logger.LogWarning("LabAnalyteEnrichmentJob {JobId}: месячная квота исчерпана, пропущено.", job.Id);
-                return;
+                rawSnippets = cached.Snippets;
+                overrides = cached.Overrides;
+                job.Provider = cached.Provider;
+                logger.LogInformation(
+                    "LabAnalyteEnrichmentJob {JobId}: «{Name}» — использованы закэшированные результаты поиска " +
+                    "от {LastUpdatedAt:dd.MM.yyyy}, платный запрос не потребовался.",
+                    job.Id, job.NormalizedName, cached.LastUpdatedAt);
+            }
+            else
+            {
+                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.LabAnalyte, job.Specimen, ct);
+                if (provider.Name != "Null")
+                {
+                    job.ExternalSearchAt = DateTime.UtcNow;
+                    job.Provider = provider.Name;
+                    await db.SaveChangesAsync(ct);
+                    // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
+                    // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) сразу после
+                    // запроса, а не после успешной записи в справочник.
+                    await searchCache.RecordSearchAsync(job.NormalizedName, job.Specimen, provider.Name, rawSnippets, ct);
+                }
             }
 
-            var snippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.LabAnalyte, ct);
-            if (provider.Name != "Null")
-            {
-                job.ExternalSearchAt = DateTime.UtcNow;
-                job.Provider = provider.Name;
-                await db.SaveChangesAsync(ct);
-            }
+            // Фильтрация по доверенным доменам (БД-список, управляемый через админку, см.
+            // EnrichmentTrustedDomainService) + точечные override'ы конкретных URL — переехала сюда
+            // с провайдера. Сортировка по приоритету домена ДО суммаризатора — приоритетный
+            // источник должен попасть в контекст первым и не срезаться лимитом MaxSnippets (порядок
+            // в БД значим, см. ReferenceRangeMerger).
+            var trustedDomainsByPriority = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.LabAnalyte, ct);
+            var sortedSnippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, trustedDomainsByPriority, overrides)
+                .OrderBy(s => DomainRank(s.Url, trustedDomainsByPriority))
+                .Take(options.Value.MaxSnippets)
+                .ToList();
 
-            var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, snippets, ct);
+            var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, sortedSnippets, ct);
             if (!summarized.Success || summarized.Summary is null)
             {
                 job.Status = EnrichmentJobStatus.Failed;
@@ -95,10 +126,13 @@ public class LabAnalyteEnrichmentProcessor(
                 return;
             }
 
-            var source = BuildSourceLabel(provider.Name, snippets, summarized.Summary.UsedSourceIndexes);
+            var mergedRanges = ReferenceRangeMerger.Merge(summarized.Summary.RefRanges, sortedSnippets, trustedDomainsByPriority);
+            var summary = summarized.Summary with { RefRanges = mergedRanges };
+
+            var source = BuildSourceLabel(provider.Name, sortedSnippets, summary.UsedSourceIndexes);
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
-            var writeResult = await kbWriter.UpsertAsync(job.NormalizedName, job.SourceDisplayName, summarized.Summary, source, ct);
+            var writeResult = await kbWriter.UpsertAsync(job.NormalizedName, job.Specimen, job.SourceDisplayName, summary, source, ct);
             if (!writeResult.Success)
             {
                 await tx.RollbackAsync(ct);
@@ -147,5 +181,23 @@ public class LabAnalyteEnrichmentProcessor(
             .ToList();
 
         return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
+    }
+
+    /// <summary>Индекс домена в trustedDomainsByPriority — та же логика ранжирования, что
+    /// ReferenceRangeMerger.ResolveRank, но здесь применяется к порядку СНИППЕТОВ перед тем, как их
+    /// увидит модель (см. class doc: приоритетный источник не должен срезаться MaxSnippets).</summary>
+    private static int DomainRank(string url, IReadOnlyList<string> trustedDomainsByPriority)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return trustedDomainsByPriority.Count;
+
+        var host = uri.Host;
+        for (var i = 0; i < trustedDomainsByPriority.Count; i++)
+        {
+            var trusted = trustedDomainsByPriority[i];
+            if (host.Equals(trusted, StringComparison.OrdinalIgnoreCase) ||
+                host.EndsWith("." + trusted, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return trustedDomainsByPriority.Count;
     }
 }

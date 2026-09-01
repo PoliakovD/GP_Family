@@ -26,13 +26,13 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
 
         var rows = string.IsNullOrWhiteSpace(q)
             ? await db.Database.SqlQuery<KbAnalyteCatalogRow>($"""
-                SELECT "Id", "DisplayName", "PayloadJson"
+                SELECT "Id", "DisplayName", "Specimen", "PayloadJson"
                 FROM kb.global_lab_analytes_kb
                 ORDER BY "DisplayName"
                 OFFSET {skip} LIMIT {take}
                 """).ToListAsync(ct)
             : await db.Database.SqlQuery<KbAnalyteCatalogRow>($"""
-                SELECT "Id", "DisplayName", "PayloadJson"
+                SELECT "Id", "DisplayName", "Specimen", "PayloadJson"
                 FROM kb.global_lab_analytes_kb
                 WHERE search_vector @@ plainto_tsquery('russian', {q})
                    OR similarity("DisplayName", {q}) > 0.3
@@ -44,14 +44,15 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
                 OFFSET {skip} LIMIT {take}
                 """).ToListAsync(ct);
 
-        var items = rows.Select(r => new KbAnalyteListItem(r.Id, r.DisplayName, ParsePayload(r.Id, r.PayloadJson).PlainExplanation)).ToList();
+        var items = rows.Select(r =>
+            new KbAnalyteListItem(r.Id, r.DisplayName, r.Specimen, ParsePayload(r.Id, r.PayloadJson).PlainExplanation)).ToList();
         return new KbAnalyteListResponse(items, HasMore: rows.Count == take);
     }
 
     public async Task<KbAnalyteCard?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var row = await db.Database.SqlQuery<KbAnalyteDetailRow>($"""
-            SELECT "Id", "DisplayName", "PayloadJson", "Source", "UpdatedAt"
+            SELECT "Id", "DisplayName", "Specimen", "PayloadJson", "Source", "UpdatedAt"
             FROM kb.global_lab_analytes_kb
             WHERE "Id" = {id}
             """).FirstOrDefaultAsync(ct);
@@ -67,14 +68,16 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
     {
         var payload = ParsePayload(row.Id, row.PayloadJson);
         var refRanges = LabAnalyteKbPayload.ParseRefRanges(row.PayloadJson)
-            .Select(r => new KbRefRangeDto(r.AgeFrom, r.AgeTo, r.Sex, r.Low, r.High, r.Unit))
+            .Select(r => new KbRefRangeDto(
+                r.AgeFrom, r.AgeTo, r.Sex, r.Low, r.High, r.Unit,
+                r.NormKind, r.Population, r.PopulationDetail, r.SourceDomain))
             .ToList();
 
         var relatedNames = LabAnalyteKbPayload.ParseRelatedNames(row.PayloadJson);
         var related = await ResolveRelatedAsync(relatedNames, ct);
 
         return new KbAnalyteCard(
-            row.Id, row.DisplayName, payload.LoincCode, payload.DefaultUnit, payload.PlainExplanation,
+            row.Id, row.DisplayName, row.Specimen, payload.LoincCode, payload.DefaultUnit, payload.PlainExplanation,
             payload.WhyMeasured, payload.HighMeans, payload.LowMeans, refRanges, related, row.Source, row.UpdatedAt);
     }
 

@@ -8,21 +8,38 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// старые строки (v1) читаются как есть, оба поля просто null/отсутствуют.
 /// v3 (редизайн v2, PR4-BE): добавлен LabAnalyteSummary.RelatedAnalytes («Что смотрят вместе» в
 /// панели справки) — старые строки (v1/v2) читаются как пустой список, бэкофилл не нужен, поле
-/// дозаполняется при следующем прогоне обогащения/ручного рефреша.</summary>
+/// дозаполняется при следующем прогоне обогащения/ручного рефреша.
+/// v4 (пересборка enrich-пайплайна анализов): у справочника появился ключ (показатель, биоматериал)
+/// вместо одного имени (см. GlobalLabAnalyteKb.Specimen); LabAnalyteReferenceRange получил
+/// систематизированные NormKind/Population/PopulationDetail (вместо неявного вывода из наличия
+/// чисел) и SourceDomain/SourceRank, заполняемые детерминированным merge'ем по приоритету
+/// доверенных доменов (см. ReferenceRangeMerger), а не моделью. Старые строки (v1-v3) читаются как
+/// NormKind=FixedRange, Population=General, SourceDomain=null/SourceRank=0 — принудительное
+/// переобогащение (LabAnalyteKbReenrichJob) дозаполняет их следующим прогоном.</summary>
 public static class LabAnalyteSummarySchema
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 }
 
 /// <summary>Один референсный диапазон из PayloadJson.refRanges. Sex=null — общий диапазон (годится
 /// любому полу); задан — диапазон специфичен для этого пола (домен теперь хранит пол — identity
 /// rework, User.Gender/FamilyDependent.Gender — см. IndicatorFlagCalculator.MatchesPatient).
-/// AgeFrom/AgeTo оба null — диапазон общий, без возрастных ограничений.</summary>
-public record LabAnalyteReferenceRange(int? AgeFrom, int? AgeTo, Gender? Sex, double? Low, double? High, string? Unit);
+/// AgeFrom/AgeTo оба null — диапазон общий, без возрастных ограничений.
+/// SourceIndex — индекс сниппета (см. LabAnalyteKbSummarizer), из которого модель взяла ИМЕННО этот
+/// диапазон; заполняется моделью, используется только внутри ReferenceRangeMerger для вычисления
+/// SourceDomain/SourceRank и не попадает в итоговый payload (см. LabAnalyteKbPayload.Build).</summary>
+public record LabAnalyteReferenceRange(
+    int? AgeFrom, int? AgeTo, Gender? Sex, double? Low, double? High, string? Unit,
+    LabNormKind NormKind = LabNormKind.FixedRange,
+    LabPopulation Population = LabPopulation.General,
+    string? PopulationDetail = null,
+    int? SourceIndex = null,
+    string? SourceDomain = null,
+    int SourceRank = 0);
 
 /// <summary>
 /// Обезличенное знание о лабораторном показателе, извлечённое суммаризатором из веб-сниппетов
-/// доверенных источников (лаборатории/лабораторные справочники — EnrichmentOptions.AnalyteTrustedDomains).
+/// доверенных источников (лаборатории/лабораторные справочники — EnrichmentTrustedDomain, Topic=LabAnalyte).
 /// Зеркало MedicationSummary (этап 4) на другой предмет.
 /// </summary>
 public record LabAnalyteSummary(

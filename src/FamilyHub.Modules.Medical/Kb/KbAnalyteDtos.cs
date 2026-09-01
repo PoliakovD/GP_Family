@@ -5,11 +5,21 @@ namespace FamilyHub.Modules.Medical.Kb;
 
 /// <summary>Одна карточка в списке результатов справочника показателей (редизайн v2,
 /// /health/kb/indicators) — зеркало KbListItem (медикаменты), другое поле вместо Purpose.</summary>
-public record KbAnalyteListItem(Guid Id, string DisplayName, string? PlainExplanation);
+/// <summary>Specimen — часть заголовка карточки в списке (пересборка enrich-пайплайна): ключ
+/// справочника теперь (показатель, биоматериал), одно DisplayName может встретиться дважды с
+/// разными биоматериалами ("Белок" в крови и в моче) — список должен различать их визуально.</summary>
+public record KbAnalyteListItem(Guid Id, string DisplayName, SpecimenType Specimen, string? PlainExplanation);
 
 public record KbAnalyteListResponse(IReadOnlyList<KbAnalyteListItem> Items, bool HasMore);
 
-public record KbRefRangeDto(int? AgeFrom, int? AgeTo, Gender? Sex, double? Low, double? High, string? Unit);
+/// <summary>NormKind/Population/PopulationDetail — систематизированные категории нормы (пересборка
+/// enrich-пайплайна, см. FamilyHub.Domain.Enums.LabNormKind/LabPopulation) — старые статьи (payload
+/// v1-v3) читаются как FixedRange/General (см. LabAnalyteKbPayload). SourceDomain — домен,
+/// выигравший при merge по приоритету источников (см. ReferenceRangeMerger); null для строк,
+/// записанных до пересборки пайплайна.</summary>
+public record KbRefRangeDto(
+    int? AgeFrom, int? AgeTo, Gender? Sex, double? Low, double? High, string? Unit,
+    LabNormKind NormKind, LabPopulation Population, string? PopulationDetail, string? SourceDomain);
 
 /// <summary>Id=null — статьи по этому имени пока нет в справочнике (обогащение ещё не дошло до
 /// него) — чип рендерится, но некликабелен. Живой резолв, не хранимая ссылка — та же причина,
@@ -23,6 +33,7 @@ public record KbRelatedAnalyte(Guid? Id, string DisplayName);
 public record KbAnalyteCard(
     Guid Id,
     string DisplayName,
+    SpecimenType Specimen,
     string? LoincCode,
     string? DefaultUnit,
     string? PlainExplanation,
@@ -49,6 +60,7 @@ internal sealed class KbAnalyteCatalogRow
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public SpecimenType Specimen { get; set; }
     public string PayloadJson { get; set; } = "{}";
 }
 
@@ -57,6 +69,7 @@ internal sealed class KbAnalyteDetailRow
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public SpecimenType Specimen { get; set; }
     public string PayloadJson { get; set; } = "{}";
     public string Source { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; }

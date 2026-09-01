@@ -1,6 +1,9 @@
 namespace FamilyHub.Infrastructure.Enrichment;
 
-/// <summary>Конфигурация секции "Enrichment" в appsettings — внешний веб-поиск для обогащения справочника (этап 4).</summary>
+/// <summary>Конфигурация секции "Enrichment" в appsettings — внешний веб-поиск для обогащения
+/// справочника (этап 4). Доверенные домены (раньше — TrustedDomains/AnalyteTrustedDomains здесь)
+/// переехали в БД (EnrichmentTrustedDomain, пересборка enrich-пайплайна) — управляются через
+/// админку без передеплоя; начальные значения — миграция AddEnrichmentTrustedDomains.</summary>
 public class EnrichmentOptions
 {
     public const string SectionName = "Enrichment";
@@ -15,26 +18,8 @@ public class EnrichmentOptions
     /// требует folderId в теле каждого запроса, fail-fast в Program.cs).</summary>
     public string? FolderId { get; set; }
 
-    /// <summary>
-    /// Домены, которым доверяем как медицинскому источнику РФ (ГРЛС/Vidal/RLS и т.п.) — сниппеты
-    /// с других доменов отбрасываются провайдером ещё до похода к суммаризатору.
-    /// </summary>
-    public string[] TrustedDomains { get; set; } = ["grls.rosminzdrav.ru", "vidal.ru", "rlsnet.ru"];
-
-    /// <summary>
-    /// Доверенные домены для справочника ЛАБОРАТОРНЫХ ПОКАЗАТЕЛЕЙ (ветка medicalrecords,
-    /// kb.global_lab_analytes_kb) — отдельный список от TrustedDomains: реестры лекарств
-    /// бесполезны для референсных диапазонов анализов, нужны лаборатории/лабораторные справочники.
-    /// </summary>
-    public string[] AnalyteTrustedDomains { get; set; } = ["helix.ru", "invitro.ru", "gemotest.ru", "kdlmed.ru", "cmd-online.ru"];
-
-    /// <summary>Месячный лимит внешних запросов (напр. free-tier Brave — 2000/мес; для Yandex —
-    /// зависит от тарифа) — считается по Postgres, не в памяти.</summary>
-    public int MonthlyQuota { get; set; } = 2000;
-
     /// <summary>Минимальный интервал между обращениями к платному API за ОДНО и то же нормализованное
-    /// название (см. MedicationSearchCache) — защита от повторной оплаты за один и тот же препарат,
-    /// не связана с MonthlyQuota (тот лимит — суммарный по всем названиям сразу).</summary>
+    /// название (см. MedicationSearchCache) — защита от повторной оплаты за один и тот же препарат.</summary>
     public int MinRefreshIntervalMonths { get; set; } = 1;
 
     /// <summary>Сколько сниппетов максимум передаём суммаризатору за один запрос.</summary>

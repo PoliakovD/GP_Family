@@ -71,10 +71,27 @@ public static class IndicatorFlagCalculator
     {
         if (ranges.Count == 0) return null;
 
+        // Индексы всегда относительно ОРИГИНАЛЬНОГО списка ranges (контракт метода — см. doc выше),
+        // даже после фильтров ниже: панель справки подсвечивает строку по этому индексу в
+        // KbAnalyteCard.RefRanges, который зеркалит исходный порядок как есть.
+        var indexed = ranges.Select((r, i) => (Range: r, Index: i)).ToList();
+
+        // Автоматическое сравнение годится только для обычных числовых диапазонов общей/детской
+        // популяции — для Pregnancy/CyclePhase в домене нет сигнала (беременность/фаза цикла
+        // нигде не хранятся), а Qualitative не число; такие строки остаются только в статье
+        // справочника (см. class doc LabPopulation). Если после фильтра ничего не осталось (KB-
+        // запись до пересборки, только Pregnancy/Qualitative-строки) — используем полный список,
+        // как раньше, лучше приблизительный ориентир, чем никакого.
+        var autoMatchable = indexed
+            .Where(x => x.Range.NormKind == LabNormKind.FixedRange &&
+                        x.Range.Population is LabPopulation.General or LabPopulation.Children)
+            .ToList();
+        if (autoMatchable.Count > 0) indexed = autoMatchable;
+
         var bySexIndexed = sex is null
-            ? ranges.Select((r, i) => (Range: r, Index: i)).ToList()
-            : ranges.Select((r, i) => (Range: r, Index: i)).Where(x => x.Range.Sex is null || x.Range.Sex == sex).ToList();
-        if (bySexIndexed.Count == 0) bySexIndexed = ranges.Select((r, i) => (Range: r, Index: i)).ToList();
+            ? indexed
+            : indexed.Where(x => x.Range.Sex is null || x.Range.Sex == sex).ToList();
+        if (bySexIndexed.Count == 0) bySexIndexed = indexed;
 
         if (ageYears is not null)
         {
@@ -120,5 +137,15 @@ public static class IndicatorFlagCalculator
 
 /// <summary>Один диапазон из GlobalLabAnalyteKb.PayloadJson.refRanges — используется только когда
 /// бланк не напечатал собственный референс (см. Calculate). Sex=null — общий диапазон, годится
-/// любому полу; Sex задан — годится только пациенту того же пола (см. MatchesPatient).</summary>
-public record KbReferenceRange(int? AgeFrom, int? AgeTo, Gender? Sex, double? Low, double? High, string? Unit);
+/// любому полу; Sex задан — годится только пациенту того же пола (см. MatchesPatient). NormKind/
+/// Population — систематизированные категории (пересборка enrich-пайплайна, см.
+/// LabAnalyteReferenceRange) — PickBestRangeIndex фильтрует по ним ДО сопоставления пола/возраста.
+/// SourceDomain/SourceRank — откуда взят диапазон при merge (см. ReferenceRangeMerger), для
+/// отображения источника в статье справочника, в каскад расчёта статуса не участвуют.</summary>
+public record KbReferenceRange(
+    int? AgeFrom, int? AgeTo, Gender? Sex, double? Low, double? High, string? Unit,
+    LabNormKind NormKind = LabNormKind.FixedRange,
+    LabPopulation Population = LabPopulation.General,
+    string? PopulationDetail = null,
+    string? SourceDomain = null,
+    int SourceRank = 0);

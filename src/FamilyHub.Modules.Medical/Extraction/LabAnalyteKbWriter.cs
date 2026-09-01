@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Kb;
@@ -11,13 +12,14 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// KbWriter (этап 4) на другую таблицу. Изоляция справочника (задача 2.6) — тем же общим
 /// <see cref="KbIsolationGuard"/>, что и у KbWriter: структурно (GlobalLabAnalyteKb не имеет
 /// полей под персональный контекст) и на уровне значений.
-/// Upsert по NormalizedName — raw SQL, как и весь остальной доступ к kb (см. LabAnalyteKbLookupService):
-/// Aliases/search_vector вне EF-модели.
+/// Upsert по (NormalizedName, Specimen) — raw SQL, как и весь остальной доступ к kb (см.
+/// LabAnalyteKbLookupService): Aliases/search_vector вне EF-модели.
 /// </summary>
 public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> logger)
 {
     public async Task<KbWriteResult> UpsertAsync(
-        string normalizedName, string displayName, LabAnalyteSummary summary, string source, CancellationToken ct = default)
+        string normalizedName, SpecimenType specimen, string displayName, LabAnalyteSummary summary,
+        string source, CancellationToken ct = default)
     {
         var violation = FindViolation(displayName, summary);
         if (violation is not null)
@@ -38,13 +40,14 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
 
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
+        var specimenValue = (int)specimen;
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO kb.global_lab_analytes_kb
-                ("Id", "NormalizedName", "DisplayName", "PayloadJson", "PayloadVersion", "Source", "Aliases", "CreatedAt", "UpdatedAt")
+                ("Id", "NormalizedName", "Specimen", "DisplayName", "PayloadJson", "PayloadVersion", "Source", "Aliases", "CreatedAt", "UpdatedAt")
             VALUES
-                ({id}, {normalizedName}, {displayName}, {payloadJson}::jsonb, {LabAnalyteSummarySchema.CurrentVersion}, {source}, {aliases}, {now}, {now})
-            ON CONFLICT ("NormalizedName") DO UPDATE SET
+                ({id}, {normalizedName}, {specimenValue}, {displayName}, {payloadJson}::jsonb, {LabAnalyteSummarySchema.CurrentVersion}, {source}, {aliases}, {now}, {now})
+            ON CONFLICT ("NormalizedName", "Specimen") DO UPDATE SET
                 "DisplayName" = EXCLUDED."DisplayName",
                 "PayloadJson" = EXCLUDED."PayloadJson",
                 "PayloadVersion" = EXCLUDED."PayloadVersion",
@@ -54,11 +57,12 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
             """, ct);
 
         var actualId = await db.Database.SqlQuery<KbIdRow>($"""
-            SELECT "Id" FROM kb.global_lab_analytes_kb WHERE "NormalizedName" = {normalizedName}
+            SELECT "Id" FROM kb.global_lab_analytes_kb WHERE "NormalizedName" = {normalizedName} AND "Specimen" = {specimenValue}
             """).Select(r => r.Id).SingleAsync(ct);
 
-        logger.LogInformation("Справочник показателей пополнен: «{DisplayName}» ({NormalizedName}), источник: {Source}.",
-            displayName, normalizedName, source);
+        logger.LogInformation(
+            "Справочник показателей пополнен: «{DisplayName}» ({NormalizedName}, {Specimen}), источник: {Source}.",
+            displayName, normalizedName, specimen, source);
         return KbWriteResult.Ok(actualId);
     }
 

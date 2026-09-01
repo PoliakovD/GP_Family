@@ -39,7 +39,7 @@ public static class InternalBotEndpoints
             if (userId is null)
                 return Results.Ok(new RedeemInviteResponse(BotRedeemOutcome.NotLinked));
 
-            var result = await invites.RedeemInviteAsync(request.Code, userId.Value, ct);
+            var (result, _) = await invites.RedeemInviteAsync(request.Code, userId.Value, ct);
             return Results.Ok(new RedeemInviteResponse(MapRedeemOutcome(result)));
         });
 

@@ -6,6 +6,7 @@ using FamilyHub.Modules.Medical.Kb;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using FamilyHub.Infrastructure.Persistence;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
@@ -26,7 +27,8 @@ public class VisitMedicationEnrichmentProcessor(
     IMedicationSearchProvider provider,
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
-    EnrichmentQuotaService quota,
+    EnrichmentTrustedDomainService trustedDomains,
+    IOptions<EnrichmentOptions> options,
     ILogger<VisitMedicationEnrichmentProcessor> logger)
 {
     /// <summary>Тот же порог, что MedicationEnrichmentProcessor — исправленное название должно
@@ -67,33 +69,32 @@ public class VisitMedicationEnrichmentProcessor(
 
             var cached = provider.Name != "Null" ? await searchCache.GetCachedAsync(job.NormalizedName, ct) : null;
 
-            IReadOnlyList<WebSnippet> snippets;
+            IReadOnlyList<WebSnippet> rawSnippets;
+            IReadOnlyDictionary<string, bool>? overrides = null;
             if (cached is not null && cached.IsFresh)
             {
-                snippets = cached.Snippets;
+                rawSnippets = cached.Snippets;
+                overrides = cached.Overrides;
                 job.Provider = cached.Provider;
             }
             else
             {
-                if (provider.Name != "Null" && await quota.MonthlyQuotaExceededAsync(ct))
-                {
-                    job.Status = EnrichmentJobStatus.Skipped;
-                    job.Error = "Месячная квота внешнего поиска исчерпана.";
-                    job.CompletedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync(ct);
-                    logger.LogWarning("VisitMedicationEnrichmentJob {JobId}: месячная квота исчерпана, пропущено.", job.Id);
-                    return;
-                }
-
-                snippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct);
+                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct: ct);
                 if (provider.Name != "Null")
                 {
                     job.ExternalSearchAt = DateTime.UtcNow;
                     job.Provider = provider.Name;
                     await db.SaveChangesAsync(ct);
-                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, snippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct);
                 }
             }
+
+            // См. MedicationEnrichmentProcessor doc — фильтрация по доверенным доменам переехала
+            // на процессор (БД-список EnrichmentTrustedDomain + override'ы конкретных URL).
+            var domains = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.Medication, ct);
+            var snippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, domains, overrides)
+                .Take(options.Value.MaxSnippets)
+                .ToList();
 
             var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, snippets, ct);
             if (!summarized.Success || summarized.Summary is null)

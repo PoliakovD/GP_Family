@@ -19,7 +19,11 @@ public class UserSpecimenServiceTests : SqliteTestBase
 
     public UserSpecimenServiceTests()
     {
-        _sut = new UserSpecimenService(Db, _client, NullLogger<UserSpecimenService>.Instance);
+        // LLM-гейт вынесен в GlobalSpecimenKbService (пересборка enrich-пайплайна) — тот же мок
+        // клиента, реальный сервис поверх него, чтобы поведение UserSpecimenService проверялось
+        // сквозь настоящую логику гейта/детерминированного вето, а не через второй мок.
+        var globalKb = new GlobalSpecimenKbService(Db, _client, NullLogger<GlobalSpecimenKbService>.Instance);
+        _sut = new UserSpecimenService(Db, globalKb, NullLogger<UserSpecimenService>.Instance);
     }
 
     private void SetUpModelResponse(bool valid, string? displayName, string? reason = null)
@@ -141,5 +145,27 @@ public class UserSpecimenServiceTests : SqliteTestBase
 
         resultA.Should().Be(CreateSpecimenResult.Success);
         resultB.Should().Be(CreateSpecimenResult.Success);
+    }
+
+    [Fact]
+    public async Task CreateAsync_SameNameAlreadyValidatedByAnotherOwner_ReusesGlobalKb_WithoutSecondLlmCall()
+    {
+        // Пересборка enrich-пайплайна (B7): второй пользователь, вводящий то же самое название,
+        // не должен тратить второй LLM-вызов — общий справочник уже провалидировал это слово.
+        var ownerA = Db.AddUser();
+        var ownerB = Db.AddUser();
+        SetUpModelResponse(valid: true, displayName: "Ликвор (СМЖ)");
+
+        var (resultA, itemA, _) = await _sut.CreateAsync(ownerA.Id, "ликвор");
+        resultA.Should().Be(CreateSpecimenResult.Success);
+        itemA!.DisplayName.Should().Be("Ликвор (СМЖ)");
+        _client.ClearReceivedCalls();
+
+        var (resultB, itemB, _) = await _sut.CreateAsync(ownerB.Id, "Ликвор");
+
+        resultB.Should().Be(CreateSpecimenResult.Success);
+        itemB!.DisplayName.Should().Be("Ликвор (СМЖ)", "написание должно взяться из общего справочника, не заново от модели");
+        itemB.OwnerUserId.Should().Be(ownerB.Id);
+        await _client.DidNotReceiveWithAnyArgs().ExtractJsonAsync(default!, default!, Arg.Any<CancellationToken>());
     }
 }

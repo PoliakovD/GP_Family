@@ -1,6 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
@@ -33,11 +33,16 @@ const USERNAME_CHECK_DEBOUNCE_MS = 400;
 export class LoginComponent implements HasPendingCodeEntry {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly cookieConsent = inject(CookieConsentService);
 
-  readonly step = signal<Step>('login');
+  // ?intent=register — переход сюда с /join/:code кнопкой «Создать аккаунт» (JoinInviteComponent):
+  // сразу открываем шаг регистрации, а не общий вход.
+  readonly step = signal<Step>(
+    this.route.snapshot.queryParamMap.get('intent') === 'register' ? 'register-details' : 'login',
+  );
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   /** Успешный confirm ставит true ПЕРЕД навигацией — без этого pendingCodeGuard переспрашивал

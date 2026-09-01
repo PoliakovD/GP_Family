@@ -52,17 +52,48 @@ public class KbIsolationGuardTests : SqliteTestBase
     }
 
     [Fact]
-    public void GlobalLabAnalyteKb_LivesInKbSchema_WithUniqueNormalizedName()
+    public void GlobalLabAnalyteKb_LivesInKbSchema_WithUniqueNormalizedNameAndSpecimen()
     {
         // Ветка medicalrecords: второй kb-writer (LabAnalyteKbWriter) — тот же инвариант,
         // что у справочника медикаментов, проверенный отдельно на случай, если общий
-        // reflection-тест выше когда-нибудь ослабят.
+        // reflection-тест выше когда-нибудь ослабят. Ключ дедупликации — пара (показатель,
+        // биоматериал), не одно имя (пересборка enrich-пайплайна) — см. GlobalLabAnalyteKb.Specimen.
         var entity = Db.Model.FindEntityType(typeof(GlobalLabAnalyteKb))!;
 
         entity.GetSchema().Should().Be("kb");
         entity.GetTableName().Should().Be("global_lab_analytes_kb");
         entity.GetIndexes().Should().Contain(i =>
-            i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name == nameof(GlobalLabAnalyteKb.NormalizedName));
+            i.IsUnique && i.Properties.Count == 2 &&
+            i.Properties.Any(p => p.Name == nameof(GlobalLabAnalyteKb.NormalizedName)) &&
+            i.Properties.Any(p => p.Name == nameof(GlobalLabAnalyteKb.Specimen)));
+    }
+
+    [Fact]
+    public void LabAnalyteSearchCache_LivesInKbSchema_WithUniqueNormalizedNameAndSpecimen()
+    {
+        // Кэш платного поиска для анализов (пересборка enrich-пайплайна, зеркало
+        // MedicationSearchCache) — тот же инвариант изоляции, проверенный отдельно.
+        var entity = Db.Model.FindEntityType(typeof(LabAnalyteSearchCache))!;
+
+        entity.GetSchema().Should().Be("kb");
+        entity.GetTableName().Should().Be("lab_analyte_search_cache");
+        entity.GetIndexes().Should().Contain(i =>
+            i.IsUnique && i.Properties.Count == 2 &&
+            i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.NormalizedName)) &&
+            i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.Specimen)));
+    }
+
+    [Fact]
+    public void GlobalSpecimenKb_LivesInKbSchema_WithUniqueNormalizedName()
+    {
+        // Общий справочник биоматериалов вне SpecimenType (пересборка enrich-пайплайна,
+        // GlobalSpecimenKbService) — тот же инвариант изоляции, проверенный отдельно.
+        var entity = Db.Model.FindEntityType(typeof(GlobalSpecimenKb))!;
+
+        entity.GetSchema().Should().Be("kb");
+        entity.GetTableName().Should().Be("global_specimens_kb");
+        entity.GetIndexes().Should().Contain(i =>
+            i.IsUnique && i.Properties.Count == 1 && i.Properties[0].Name == nameof(GlobalSpecimenKb.NormalizedName));
     }
 
     [Fact]

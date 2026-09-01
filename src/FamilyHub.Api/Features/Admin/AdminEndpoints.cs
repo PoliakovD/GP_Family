@@ -1,3 +1,5 @@
+using FamilyHub.Modules.Medical.Extraction;
+using Hangfire;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace FamilyHub.Api.Features.Admin;
@@ -52,5 +54,15 @@ public static class AdminEndpoints
 
         group.MapGet("/keys/encryption/rotate/status", async (AdminKeysService keys, CancellationToken ct) =>
             Results.Ok(await keys.GetStatusAsync(ct)));
+
+        // Пересборка enrich-пайплайна анализов — принудительное переобогащение справочника
+        // показателей батчами (см. LabAnalyteKbReenrichJob doc); первый батч ставится
+        // автоматически после миграции на v4, повторные запуски — отсюда, пока строк со старой
+        // схемой не останется.
+        group.MapPost("/kb/lab-analytes/reenrich", (IBackgroundJobClient backgroundJobs) =>
+        {
+            backgroundJobs.Enqueue<LabAnalyteKbReenrichJob>(j => j.RunAsync(CancellationToken.None));
+            return Results.Accepted();
+        });
     }
 }

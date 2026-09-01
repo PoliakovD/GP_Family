@@ -136,6 +136,79 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         secondArticle!.HistoryAvailable.Should().BeTrue("появилась вторая точка того же показателя/биоматериала");
     }
 
+    /// <summary>Пересборка enrich-пайплайна (B9): NormKind/Population должны реально доехать через
+    /// KbRefRangeDto → KbReferenceRange до IndicatorFlagCalculator.PickBestRangeIndex — иначе
+    /// строка нормы для беременных могла бы ошибочно выбраться как "лучшее совпадение" для
+    /// пациентки, о беременности которой в системе никакого сигнала нет.</summary>
+    [Fact]
+    public async Task Article_PregnancyOnlyRange_NeverAutoMatched_GeneralRangeWinsInstead()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var ownerUserId = (await owner.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts))!.UserId;
+        await SetOwnerIdentityAsync(ownerUserId, new DateOnly(1990, 1, 1), Gender.Female);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var now = DateTime.UtcNow;
+            db.GlobalLabAnalytesKb.Add(new GlobalLabAnalyteKb
+            {
+                Id = Guid.NewGuid(),
+                NormalizedName = "гемоглобин",
+                Specimen = SpecimenType.Blood,
+                DisplayName = "Гемоглобин",
+                PayloadJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    schemaVersion = 4,
+                    refRanges = new[]
+                    {
+                        new
+                        {
+                            ageFrom = (int?)null, ageTo = (int?)null, sex = "female", low = 200.0, high = 250.0,
+                            unit = "г/л", normKind = "fixed", population = "pregnancy", populationDetail = (string?)"3 триместр",
+                            sourceDomain = "invitro.ru", sourceRank = 0,
+                        },
+                        new
+                        {
+                            ageFrom = (int?)null, ageTo = (int?)null, sex = "female", low = 120.0, high = 150.0,
+                            unit = "г/л", normKind = "fixed", population = "general", populationDetail = (string?)null,
+                            sourceDomain = "invitro.ru", sourceRank = 0,
+                        },
+                    },
+                }),
+                Source = "тест",
+                PayloadVersion = 4,
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await db.SaveChangesAsync();
+        }
+        var kbId = await FindKbIdAsync("гемоглобин", SpecimenType.Blood);
+
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
+            .Content.ReadFromJsonAsync<IndicatorDto>())!;
+        await LinkIndicatorToKbAsync(indicator.Id, kbId);
+
+        var article = await owner.GetFromJsonAsync<IndicatorArticleResponse>($"/api/indicators/{indicator.Id}/article", JsonOpts);
+
+        article!.Article.Should().NotBeNull();
+        var matched = article.Article!.RefRanges[article.MatchedRefRangeIndex!.Value];
+        matched.Low.Should().Be(120.0, "строка для беременных не должна автоматически выбираться — нет сигнала о беременности");
+        matched.Population.Should().Be(LabPopulation.General);
+        matched.SourceDomain.Should().Be("invitro.ru");
+    }
+
+    private async Task<Guid> FindKbIdAsync(string normalizedName, SpecimenType specimen)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return (await db.GlobalLabAnalytesKb
+            .Where(k => k.NormalizedName == normalizedName && k.Specimen == specimen)
+            .OrderByDescending(k => k.CreatedAt)
+            .FirstAsync()).Id;
+    }
+
     [Fact]
     public async Task Article_StrangerWithNoAccess_ReturnsForbidden()
     {

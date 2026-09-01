@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Modules.Medical.Extraction;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Ocr;
@@ -8,7 +9,8 @@ namespace FamilyHub.Modules.Medical.Ocr;
 /// Оцифровка медикамента по фото упаковки/этикетки через локальную vision-LLM (LM Studio).
 /// Фото не сохраняются — используются только для распознавания в рамках одного запроса.
 /// </summary>
-public class MedicationOcrService(ILmStudioJsonClient client, ILogger<MedicationOcrService> logger)
+public class MedicationOcrService(
+    ILmStudioJsonClient client, OcrNameCorrector nameCorrector, ILogger<MedicationOcrService> logger)
 {
     private const int MaxPhotos = 5;
 
@@ -110,9 +112,15 @@ public class MedicationOcrService(ILmStudioJsonClient client, ILogger<Medication
             }
         }
 
+        // Второй проход коррекции OCR (см. OcrNameCorrector) — смешение кириллицы/латиницы и КАПС
+        // на фото упаковки чинится здесь, ДО того как имя дойдёт до пользователя и до платного
+        // поиска в MedicationEnrichmentProcessor (та поздняя коррекция по цитируемым источникам —
+        // второй, независимый рубеж, не замена этому).
+        var correctedName = string.IsNullOrWhiteSpace(name) ? null : await nameCorrector.CorrectAsync(name, ct);
+
         return new MedicationOcrResponse(
             true,
-            string.IsNullOrWhiteSpace(name) ? null : name,
+            string.IsNullOrWhiteSpace(correctedName) ? null : correctedName,
             string.IsNullOrWhiteSpace(expiryDate) ? null : expiryDate,
             data,
             null);

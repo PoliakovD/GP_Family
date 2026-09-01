@@ -212,6 +212,12 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** Кнопка-самолётик — открывает бот-диплинк инвайта напрямую, в отличие от shareInvite() ниже
+     * (который открывает системный шаринг ссылки, а не саму Telegram-ссылку). */
+    openTelegramInvite(telegramLink: string): void {
+        this.tg.openTelegramLink(telegramLink);
+    }
+
     async shareInvite(link: string): Promise<void> {
         // Внутри Telegram — открываем нативный шаринг (пользователь сам выбирает контакт/чат
         // из списка Telegram; мы не запрашиваем и не храним чужие Telegram ID).

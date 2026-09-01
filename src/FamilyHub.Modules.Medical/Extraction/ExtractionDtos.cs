@@ -58,4 +58,9 @@ public record ExtractionResult(
     SpecimenType? Specimen = null,
     DateOnly? DocumentDate = null,
     string? SuggestedTitle = null,
-    string? Doctor = null);
+    string? Doctor = null,
+    /// <summary>Название биоматериала как в бланке — заполняется, только когда Specimen ==
+    /// SpecimenType.Other (пересборка enrich-пайплайна): фиксированный enum не различает "какой
+    /// именно" other, этот текст даёт MedicalDocumentExtractionProcessor материал для
+    /// GlobalSpecimenKbService (см. её class doc). Null для остальных значений Specimen.</summary>
+    string? SpecimenOtherLabel = null);

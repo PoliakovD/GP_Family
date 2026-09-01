@@ -1,16 +1,13 @@
+using FamilyHub.Domain.Enums;
+
 namespace FamilyHub.Infrastructure.Enrichment;
 
 /// <summary>Один результат внешнего веб-поиска — сниппет выдачи, не полная страница (осознанно
-/// не скрейпим: меньше egress, не ломается от смены вёрстки источника).</summary>
+/// не скрейпим: меньше egress, не ломается от смены вёрстки источника). Провайдер больше НЕ
+/// фильтрует по доверенным доменам (пересборка enrich-пайплайна, см. EnrichmentSnippetFilter) —
+/// сюда попадают ВСЕ результаты поиска, включая недоверенные; фильтрация — на процессоре, по
+/// БД-списку доверенных доменов (EnrichmentTrustedDomain), управляемому через админку.</summary>
 public record WebSnippet(string Title, string Url, string Text);
-
-/// <summary>
-/// Какой конвейер обогащения запрашивает поиск — провайдер выбирает по этому значению список
-/// доверенных доменов (EnrichmentOptions.TrustedDomains vs AnalyteTrustedDomains) и формулировку
-/// запроса: реестры лекарств (vidal.ru, rlsnet.ru) бесполезны для референсных диапазонов лаб.
-/// показателей, и наоборот (ветка medicalrecords — справочник kb.global_lab_analytes_kb).
-/// </summary>
-public enum WebSearchTopic { Medication, LabAnalyte }
 
 /// <summary>
 /// Абстракция внешнего поиска для обогащения справочников (этап 4 — препараты, ветка
@@ -24,6 +21,10 @@ public interface IMedicationSearchProvider
     /// <summary>Имя провайдера — попадает в Source обогащённой записи для прослеживаемости знания.</summary>
     string Name { get; }
 
+    /// <summary>specimen — только для WebSearchTopic.LabAnalyte (пересборка enrich-пайплайна):
+    /// делает сырой запрос информативнее ("натрий в моче", не просто "натрий") — см. реализации.
+    /// Unknown у медикаментов и у анализов без определённого биоматериала — прежний, общий запрос.</summary>
     Task<IReadOnlyList<WebSnippet>> SearchAsync(
-        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication, CancellationToken ct = default);
+        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
+        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default);
 }

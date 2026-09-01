@@ -40,6 +40,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<PersonalCompatibilityResult> PersonalCompatibilityResults => Set<PersonalCompatibilityResult>();
     public DbSet<MedicationEnrichmentJob> MedicationEnrichmentJobs => Set<MedicationEnrichmentJob>();
     public DbSet<MedicationSearchCache> MedicationSearchCaches => Set<MedicationSearchCache>();
+    public DbSet<EnrichmentTrustedDomain> EnrichmentTrustedDomains => Set<EnrichmentTrustedDomain>();
 
     /// <summary>Ветка medicalrecords (задачи 5.2/5.3) — конвейер извлечения показателей анализов
     /// и заключений врача.</summary>
@@ -47,6 +48,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<MedicalDocumentExtractionJob> MedicalDocumentExtractionJobs => Set<MedicalDocumentExtractionJob>();
     public DbSet<GlobalLabAnalyteKb> GlobalLabAnalytesKb => Set<GlobalLabAnalyteKb>();
     public DbSet<LabAnalyteEnrichmentJob> LabAnalyteEnrichmentJobs => Set<LabAnalyteEnrichmentJob>();
+    public DbSet<LabAnalyteSearchCache> LabAnalyteSearchCaches => Set<LabAnalyteSearchCache>();
+    public DbSet<GlobalSpecimenKb> GlobalSpecimensKb => Set<GlobalSpecimenKb>();
 
     /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
     public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();

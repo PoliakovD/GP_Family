@@ -27,7 +27,12 @@
   } @else {
     @for (item of items; track item.id) {
       <div class="card mb-2 card-clickable" (click)="openCard(item.id)">
-        <strong class="card-title">{{ item.displayName }}</strong>
+        <strong class="card-title">
+          {{ item.displayName }}
+          @if (specimenSubtitle(item); as sl) {
+            <span class="muted" style="font-weight:400">&nbsp;· {{ sl }}</span>
+          }
+        </strong>
         @if (item.plainExplanation) {
           <p class="card-body mb-0">{{ item.plainExplanation }}</p>
         }

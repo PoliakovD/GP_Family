@@ -14,6 +14,7 @@ public class GlobalLabAnalyteKbConfiguration : IEntityTypeConfiguration<GlobalLa
         builder.HasKey(k => k.Id);
 
         builder.Property(k => k.NormalizedName).HasMaxLength(200).IsRequired();
+        builder.Property(k => k.Specimen).HasConversion<int>().IsRequired();
         builder.Property(k => k.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(k => k.PayloadJson).HasColumnType("jsonb").IsRequired();
         builder.Property(k => k.Source).HasMaxLength(200).IsRequired();
@@ -23,6 +24,8 @@ public class GlobalLabAnalyteKbConfiguration : IEntityTypeConfiguration<GlobalLa
         // не единого кроссплатформенного маппинга для SQLite-юнит-тестов.
         builder.Ignore(k => k.Aliases);
 
-        builder.HasIndex(k => k.NormalizedName).IsUnique();
+        // Ключ дедупликации — пара (показатель, биоматериал), не одно имя (пересборка
+        // enrich-пайплайна, см. class doc): "белок" в крови и в моче — разные записи.
+        builder.HasIndex(k => new { k.NormalizedName, k.Specimen }).IsUnique();
     }
 }

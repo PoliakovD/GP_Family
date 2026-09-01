@@ -32,11 +32,14 @@ public class RecalculateIndicatorFlagsJob(
         }
 
         // KbAnalyteId уже проставлен — прошлый прогон нашёл эту же запись, но не смог вывести
-        // диапазон под пациента (RefSource.None). AnalyteKey без KbAnalyteId — показатель
-        // распознан ДО того, как эта KB-запись вообще появилась (совсем не привязан).
+        // диапазон под пациента (RefSource.None). AnalyteKey+Specimen без KbAnalyteId — показатель
+        // распознан ДО того, как эта KB-запись вообще появилась (совсем не привязан). Specimen —
+        // обязательное условие фолбэка (пересборка enrich-пайплайна): без него "белок" в моче мог
+        // бы ошибочно подхватить норму записи "белок" в крови, которая появилась первой.
         var candidates = await db.LabIndicators
             .Where(i => i.RefSource == RefSource.None &&
-                        (i.KbAnalyteId == kbAnalyteId || (i.KbAnalyteId == null && i.AnalyteKey == kb.NormalizedName)))
+                        (i.KbAnalyteId == kbAnalyteId ||
+                         (i.KbAnalyteId == null && i.AnalyteKey == kb.NormalizedName && i.Specimen == kb.Specimen)))
             .ToListAsync(ct);
         if (candidates.Count == 0) return;
 

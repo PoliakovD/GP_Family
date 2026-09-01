@@ -7,6 +7,9 @@ import { PageActionService } from './services/page-action.service';
 import { BreakpointService } from './services/breakpoint.service';
 import { AuthService } from './services/auth.service';
 import { DevLoggerService } from './services/dev-logger.service';
+import { ApiError, ApiService } from './services/api.service';
+import { PendingInviteService } from './services/pending-invite.service';
+import { ToastService } from './shared/toast/toast.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 import { ToastContainerComponent } from './shared/toast/toast-container.component';
 import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.component';
@@ -58,6 +61,9 @@ export class AppComponent implements OnInit {
   private readonly tg = inject(TelegramService);
   private readonly router = inject(Router);
   private readonly log = inject(DevLoggerService);
+  private readonly api = inject(ApiService);
+  private readonly pendingInvite = inject(PendingInviteService);
+  private readonly toast = inject(ToastService);
 
   /** Признак десктопа — существующий BreakpointService (первая брейкпойнт-абстракция в
    * проекте), второй параллельный механизм не заводим (см. .claude/patterns/frontend_web.md). */
@@ -168,6 +174,7 @@ export class AppComponent implements OnInit {
       if (this.auth.mode === 'pwa' && this.auth.me() !== null) {
         this.state.refresh();
         void this.notifications.refresh();
+        void this.tryRedeemPendingInvite();
       }
     }, { allowSignalWrites: true });
 
@@ -184,8 +191,34 @@ export class AppComponent implements OnInit {
         this.state.refresh();
         void this.notifications.refresh();
         void this.auth.loadMe();
+        void this.tryRedeemPendingInvite();
       }
     }, { allowSignalWrites: true });
+  }
+
+  /**
+   * Погашение кода инвайта, с которым гость попал на /join/:code до входа/регистрации
+   * (JoinInviteComponent → PendingInviteService.set перед уходом на /login или /telegram-bind) —
+   * срабатывает на том же переходе "только что аутентифицировался", что и первичная загрузка
+   * семей выше. consume() возвращает null почти всегда (обычный вход без ожидающего инвайта) —
+   * тогда это no-op.
+   */
+  private async tryRedeemPendingInvite(): Promise<void> {
+    const code = this.pendingInvite.consume();
+    if (!code) return;
+
+    try {
+      const result = await this.api.redeemInvite(code);
+      this.toast.success(
+        result.status === 'joined'
+          ? 'Вы присоединились к семье.'
+          : 'Заявка отправлена, ожидайте подтверждения администратором.',
+      );
+      await this.state.refresh();
+      if (result.familyId) await this.router.navigate(['/families', result.familyId]);
+    } catch (e) {
+      this.toast.error(e instanceof ApiError ? e.message : 'Не удалось погасить приглашение.');
+    }
   }
 
   ngOnInit(): void {

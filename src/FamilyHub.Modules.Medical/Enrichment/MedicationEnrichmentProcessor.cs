@@ -9,6 +9,7 @@ using FamilyHub.Modules.Medical.Kb;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
 
@@ -18,8 +19,8 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// одним воркером (см. Program.cs) — естественно укладывается в лимит Brave free-tier (1 req/s),
 /// не забирая пропускную способность у ReminderScanJob/AuditRetentionJob. AutomaticRetry — только
 /// на настоящие сбои (сеть к БД, необработанное исключение); ожидаемые исходы (нет доверенных
-/// источников, квота исчерпана) переводят статус задачи в Failed/Skipped и возвращаются обычным
-/// return — Hangfire не должен их ретраить.
+/// источников) переводят статус задачи в Failed и возвращаются обычным return — Hangfire не должен
+/// их ретраить.
 /// </summary>
 [Queue("enrichment")]
 [AutomaticRetry(Attempts = MedicationEnrichmentProcessor.MaxAttempts, DelaysInSeconds = [60, 600, 3600])]
@@ -30,8 +31,9 @@ public class MedicationEnrichmentProcessor(
     IMedicationSearchProvider provider,
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
+    EnrichmentTrustedDomainService trustedDomains,
+    IOptions<EnrichmentOptions> options,
     IDomainEventPublisher publisher,
-    EnrichmentQuotaService quota,
     ILogger<MedicationEnrichmentProcessor> logger)
 {
     /// <summary>Тот же порог, что и pg_trgm.similarity_threshold (см. RussianTextSearcher/KbLookupService) —
@@ -83,10 +85,12 @@ public class MedicationEnrichmentProcessor(
             // одно и то же название снова и снова.
             var cached = provider.Name != "Null" ? await searchCache.GetCachedAsync(job.NormalizedName, ct) : null;
 
-            IReadOnlyList<WebSnippet> snippets;
+            IReadOnlyList<WebSnippet> rawSnippets;
+            IReadOnlyDictionary<string, bool>? overrides = null;
             if (cached is not null && cached.IsFresh)
             {
-                snippets = cached.Snippets;
+                rawSnippets = cached.Snippets;
+                overrides = cached.Overrides;
                 job.Provider = cached.Provider;
                 logger.LogInformation(
                     "MedicationEnrichmentJob {JobId}: «{Name}» — использованы закэшированные результаты поиска " +
@@ -95,17 +99,7 @@ public class MedicationEnrichmentProcessor(
             }
             else
             {
-                if (provider.Name != "Null" && await quota.MonthlyQuotaExceededAsync(ct))
-                {
-                    job.Status = EnrichmentJobStatus.Skipped;
-                    job.Error = "Месячная квота внешнего поиска исчерпана.";
-                    job.CompletedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync(ct);
-                    logger.LogWarning("MedicationEnrichmentJob {JobId}: месячная квота исчерпана, пропущено.", job.Id);
-                    return;
-                }
-
-                snippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct);
+                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct: ct);
                 if (provider.Name != "Null")
                 {
                     // Считаем реальным внешним запросом только настоящих провайдеров — Null ничего
@@ -114,10 +108,20 @@ public class MedicationEnrichmentProcessor(
                     job.Provider = provider.Name;
                     await db.SaveChangesAsync(ct);
                     // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
-                    // сами сниппеты и кулдаун сразу после запроса, а не после успешной записи в справочник.
-                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, snippets, ct);
+                    // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) и кулдаун
+                    // сразу после запроса, а не после успешной записи в справочник.
+                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct);
                 }
             }
+
+            // Фильтрация по доверенным доменам (БД-список, управляемый через админку) + точечные
+            // override'ы конкретных URL — переехала сюда с провайдера (пересборка enrich-пайплайна):
+            // так смена списка/override не требует нового платного запроса, только пересчёта поверх
+            // уже закэшированных сырых сниппетов.
+            var domains = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.Medication, ct);
+            var snippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, domains, overrides)
+                .Take(options.Value.MaxSnippets)
+                .ToList();
 
             var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, snippets, ct);
             if (!summarized.Success || summarized.Summary is null)

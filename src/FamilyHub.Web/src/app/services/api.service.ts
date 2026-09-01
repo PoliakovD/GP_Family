@@ -18,6 +18,7 @@ import {
   IndicatorDto,
   IndicatorHistoryPoint,
   InviteCreated,
+  InvitePreview,
   KbAnalyteCard,
   KbAnalyteListResponse,
   KbListResponse,
@@ -184,7 +185,11 @@ export class ApiService {
       expiresAt: null,
     });
 
-  redeemInvite = (code: string) => this.post<{ status: string }>(`/api/invites/${code}/redeem`);
+  redeemInvite = (code: string) =>
+    this.post<{ status: string; familyId: string | null }>(`/api/invites/${code}/redeem`);
+
+  /** Анонимный превью инвайта для лендинга /join/:code — до входа/регистрации. */
+  getInvitePreview = (code: string) => this.get<InvitePreview>(`/api/invites/${code}/preview`);
 
   // Подопечные (дети/питомцы/пожилые родственники без своего User) — семейный ресурс, тот же
   // паттерн, что аптечки/дни рождения. Create/Update — любой активный участник, Delete — только Admin.

@@ -1,11 +1,13 @@
 import { Component, computed, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import type { IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto } from '../../models/types';
-import { Gender } from '../../models/types';
+import { Gender, SpecimenType } from '../../models/types';
 import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
+import { labPopulationLabel, shouldShowPopulationBadge } from '../../shared/util/lab-norm';
+import { specimenLabel } from '../../shared/util/specimen';
 
 /** Текущее значение показателя в контексте конкретной записи — есть только у первой из трёх
  * точек входа (клик по строке записи); у чипа «что смотрят вместе» и каталога reading=null. */
@@ -45,6 +47,13 @@ export class IndicatorInfoComponent {
   readonly openInCatalog = output<void>();
 
   readonly title = computed(() => this.article()?.displayName ?? this.displayName());
+
+  /** Биоматериал показан только когда он известен (ключ справочника — (показатель, биоматериал),
+   * см. GlobalLabAnalyteKb.Specimen) — Unknown не несёт полезной информации в заголовке статьи. */
+  readonly specimenLabel = computed(() => {
+    const specimen = this.article()?.specimen;
+    return specimen !== undefined && specimen !== SpecimenType.Unknown ? specimenLabel(specimen) : null;
+  });
 
   readonly matchedRange = computed<KbRefRangeDto | null>(() => {
     const a = this.article();
@@ -89,6 +98,18 @@ export class IndicatorInfoComponent {
             : '';
     const value = r.low !== null && r.high !== null ? `${formatNum(r.low)}–${formatNum(r.high)}` : '—';
     return `${sex}${age}: ${value}${r.unit ? ' ' + r.unit : ''}`;
+  }
+
+  /** Бейдж категории популяции — только для особых случаев (беременность/дети/фаза цикла),
+   * General не показывается (подразумевается по умолчанию). */
+  populationBadge(r: KbRefRangeDto): string | null {
+    return shouldShowPopulationBadge(r.population) ? labPopulationLabel(r.population, r.populationDetail) : null;
+  }
+
+  /** Домен-источник, выигравший при merge по приоритету (см. ReferenceRangeMerger) — null для
+   * строк, записанных до пересборки enrich-пайплайна. */
+  sourceLabel(r: KbRefRangeDto): string | null {
+    return r.sourceDomain;
   }
 }
 

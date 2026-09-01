@@ -68,7 +68,17 @@ export interface InviteCreated {
     code: string;
     maxUses: number;
     expiresAt: string | null;
+    /** Основная ссылка — ведёт на сайт (/join/:code), работает без Telegram. */
+    webLink: string;
+    /** Отдельная кнопка-самолётик — null, если бот не сконфигурирован (Telegram:BotUsername). */
     telegramLink: string | null;
+}
+
+/** Анонимный превью инвайта для лендинга /join/:code (см. InviteEndpoints.GetPreview) — без
+ * персональных данных участников семьи, только то, что нужно гостю до входа/регистрации. */
+export interface InvitePreview {
+    familyName: string;
+    inviterName: string | null;
 }
 
 /** Подопечный без своего User — ребёнок, питомец или пожилой родственник (семейный ресурс,
@@ -528,6 +538,7 @@ export interface RecordSummaryResponse {
 export interface KbAnalyteListItem {
     id: string;
     displayName: string;
+    specimen: number; // SpecimenType — ключ справочника (показатель, биоматериал), см. shared/util/specimen.ts
     plainExplanation: string | null;
 }
 
@@ -536,6 +547,9 @@ export interface KbAnalyteListResponse {
     hasMore: boolean;
 }
 
+/** normKind/population — см. FamilyHub.Domain.Enums.LabNormKind/LabPopulation, подписи в
+ * shared/util/lab-norm.ts. sourceDomain — домен, выигравший при merge по приоритету источников
+ * (null для строк, записанных до пересборки enrich-пайплайна). */
 export interface KbRefRangeDto {
     ageFrom: number | null;
     ageTo: number | null;
@@ -543,6 +557,10 @@ export interface KbRefRangeDto {
     low: number | null;
     high: number | null;
     unit: string | null;
+    normKind: number; // LabNormKind
+    population: number; // LabPopulation
+    populationDetail: string | null;
+    sourceDomain: string | null;
 }
 
 /** id=null — статьи по этому имени пока нет в справочнике (обогащение ещё не дошло) — чип
@@ -556,6 +574,7 @@ export interface KbRelatedAnalyte {
 export interface KbAnalyteCard {
     id: string;
     displayName: string;
+    specimen: number; // SpecimenType
     loincCode: string | null;
     defaultUnit: string | null;
     plainExplanation: string | null;

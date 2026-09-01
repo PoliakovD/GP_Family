@@ -62,7 +62,7 @@ public class InviteServiceTests : SqliteTestBase
     [Fact]
     public async Task RedeemInviteAsync_UnknownCode_ReturnsNotFound()
     {
-        var result = await _sut.RedeemInviteAsync("does-not-exist", Guid.NewGuid());
+        var (result, _) = await _sut.RedeemInviteAsync("does-not-exist", Guid.NewGuid());
 
         result.Should().Be(RedeemResult.NotFound);
     }
@@ -75,7 +75,7 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
+        var (result, _) = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
 
         result.Should().Be(RedeemResult.Revoked);
     }
@@ -88,7 +88,7 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
+        var (result, _) = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
 
         result.Should().Be(RedeemResult.Expired);
     }
@@ -102,7 +102,7 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
+        var (result, _) = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
 
         result.Should().Be(RedeemResult.Exhausted);
     }
@@ -115,7 +115,7 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
+        var (result, _) = await _sut.RedeemInviteAsync(invite.Code, Guid.NewGuid());
 
         result.Should().Be(RedeemResult.NotForYou);
     }
@@ -129,7 +129,7 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, existingMember.Id);
+        var (result, _) = await _sut.RedeemInviteAsync(invite.Code, existingMember.Id);
 
         result.Should().Be(RedeemResult.AlreadyMember);
     }
@@ -143,9 +143,10 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, targetUser.Id);
+        var (result, familyId) = await _sut.RedeemInviteAsync(invite.Code, targetUser.Id);
 
         result.Should().Be(RedeemResult.Joined);
+        familyId.Should().Be(family.Id);
         var member = Db.FamilyMembers.Single(m => m.FamilyId == family.Id && m.UserId == targetUser.Id);
         member.Status.Should().Be(MemberStatus.Active);
 
@@ -166,9 +167,10 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var result = await _sut.RedeemInviteAsync(invite.Code, user.Id);
+        var (result, familyId) = await _sut.RedeemInviteAsync(invite.Code, user.Id);
 
         result.Should().Be(RedeemResult.PendingApproval);
+        familyId.Should().Be(family.Id);
         var member = Db.FamilyMembers.Single(m => m.FamilyId == family.Id && m.UserId == user.Id);
         member.Status.Should().Be(MemberStatus.PendingApproval);
     }
@@ -185,8 +187,8 @@ public class InviteServiceTests : SqliteTestBase
         Db.FamilyInvites.Add(invite);
         await Db.SaveChangesAsync();
 
-        var first = await _sut.RedeemInviteAsync(invite.Code, user.Id);
-        var second = await _sut.RedeemInviteAsync(invite.Code, user.Id);
+        var (first, _) = await _sut.RedeemInviteAsync(invite.Code, user.Id);
+        var (second, _) = await _sut.RedeemInviteAsync(invite.Code, user.Id);
 
         first.Should().Be(RedeemResult.PendingApproval);
         second.Should().Be(RedeemResult.AlreadyMember);
