@@ -1,4 +1,3 @@
-using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
 
 namespace FamilyHub.Modules.Medical.Extraction;
@@ -80,16 +79,12 @@ public static class ExtractionEndpoints
         indicators.MapGet("/", async (ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.GetMyIndicatorsAsync(currentUser.UserId, ct)));
 
-        // Specimen в query (не в path, UX-редизайн) — второй ключ группировки, SpecimenCustomId,
-        // не помещается в path-сегмент; без обоих история "лейкоцитов" смешала бы кровь и мочу,
-        // а два кастомных биоматериала (оба Specimen=Other) — друг с другом.
+        // SpecimenKbId в query (не в path, UX-редизайн) — второй ключ группировки; без него
+        // история "лейкоцитов" смешала бы кровь и мочу.
         indicators.MapGet("/{analyteKey}", async (
-            string analyteKey, int specimen, Guid? customId,
+            string analyteKey, Guid specimenKbId,
             ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
-        {
-            if (!Enum.IsDefined(typeof(SpecimenType), specimen)) return Results.BadRequest();
-            return Results.Ok(await service.GetHistoryAsync(currentUser.UserId, analyteKey, (SpecimenType)specimen, customId, ct));
-        });
+            Results.Ok(await service.GetHistoryAsync(currentUser.UserId, analyteKey, specimenKbId, ct)));
 
         // Правка показателя вручную (ошибка OCR) — только владелец записи.
         indicators.MapPut("/{id:guid}", async (

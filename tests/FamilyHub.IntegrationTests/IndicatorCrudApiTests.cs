@@ -27,8 +27,13 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
     }
 
-    private static CreateIndicatorRequest SampleIndicator(string name = "Гемоглобин") =>
-        new(name, "118", "г/л", SpecimenType.Blood, "130", "160", null);
+    private Guid? _bloodSpecimenId;
+
+    private async Task<CreateIndicatorRequest> SampleIndicatorAsync(string name = "Гемоглобин")
+    {
+        _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
+        return new(name, "118", "г/л", _bloodSpecimenId.Value, "130", "160", null);
+    }
 
     [Fact]
     public async Task CreateIndicator_Owner_Succeeds_AndFlagIsComputed()
@@ -36,7 +41,7 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
 
-        var response = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator());
+        var response = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var indicator = await response.Content.ReadFromJsonAsync<IndicatorDto>();
@@ -50,10 +55,10 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
+        (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
             .StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var second = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator());
+        var second = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync());
 
         second.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
@@ -65,7 +70,7 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         var record = await CreateAnalysisAsync(owner);
         var stranger = ClientAs(FreshTelegramId());
 
-        var response = await stranger.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator());
+        var response = await stranger.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync());
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -75,14 +80,14 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         var stranger = ClientAs(FreshTelegramId());
 
-        var forbidden = await stranger.PutAsJsonAsync($"/api/indicators/{created.Id}", SampleIndicator("Гемоглобин исправленный") with { ValueRaw = "140" });
+        var forbidden = await stranger.PutAsJsonAsync($"/api/indicators/{created.Id}", await SampleIndicatorAsync("Гемоглобин исправленный") with { ValueRaw = "140" });
         forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-        var ownUpdate = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}", SampleIndicator("Гемоглобин исправленный") with { ValueRaw = "140" });
+        var ownUpdate = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}", await SampleIndicatorAsync("Гемоглобин исправленный") with { ValueRaw = "140" });
         ownUpdate.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var indicators = await (await owner.GetAsync($"/api/medical-records/{record.Id}/indicators"))
@@ -97,7 +102,7 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await owner.DeleteAsync($"/api/indicators/{created.Id}");
@@ -113,7 +118,7 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         var stranger = ClientAs(FreshTelegramId());
 

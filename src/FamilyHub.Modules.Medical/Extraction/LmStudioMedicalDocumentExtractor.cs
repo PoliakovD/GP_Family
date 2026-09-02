@@ -24,6 +24,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 public class LmStudioMedicalDocumentExtractor(
     IDocumentTextExtractor documentTextExtractor,
     ILmStudioJsonClient lmStudioClient,
+    SpecimenResolver specimenResolver,
     IOptions<ExtractionOptions> options,
     ILogger<LmStudioMedicalDocumentExtractor> logger) : IMedicalDocumentExtractor
 {
@@ -39,7 +40,7 @@ public class LmStudioMedicalDocumentExtractor(
         {
           "indicators": [
             {
-              "name": "название показателя как в бланке (например, \"Гемоглобин\")",
+              "name": "название показателя БЕЗ порядкового номера пункта бланка и БЕЗ единицы измерения (например, \"Гемоглобин\", не \"1. Гемоглобин, г/л\")",
               "value": "значение как напечатано (например, \"118\" или \"отрицательно\")",
               "unit": "единица измерения или null (например, \"г/л\")",
               "refLow": 130,
@@ -47,8 +48,6 @@ public class LmStudioMedicalDocumentExtractor(
               "refText": "референсный диапазон текстом или null — заполняй ТОЛЬКО если референс НЕ раскладывается на refLow/refHigh (например, \"отрицательно\", \"1-3 в п/зр\")"
             }
           ],
-          "specimen": "биоматериал бланка — один из: blood, urine, stool, vaginalSwab, saliva, other — или null, если не указан/непонятен",
-          "specimenOtherLabel": "название биоматериала как написано в бланке — заполняй ТОЛЬКО когда specimen=\"other\" (например, \"ликвор\", \"мокрота\"), иначе null",
           "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
           "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай",
           "doctor": "ФИО и/или специальность врача, назначившего анализ, если указаны в бланке — иначе null, не придумывай"
@@ -57,6 +56,10 @@ public class LmStudioMedicalDocumentExtractor(
         Правила:
         - Извлекай ТОЛЬКО то, что реально написано в этом фрагменте — ничего не добавляй от себя
           и не переноси показатели из общих знаний о медицине.
+        - "name" — название показателя БЕЗ порядкового номера строки/пункта бланка ("1.", "12)" и
+          т.п. в начале — это нумерация бланка, не часть названия) и без единицы измерения (она
+          отдельным полем "unit"). Регистр — как обычно пишут в литературном тексте (с заглавной
+          буквы), даже если в бланке весь текст напечатан КАПСОМ.
         - Если в строке бланка нет значения (пустая ячейка, только название показателя без цифры
           или текста напротив, ЛИБО там стоит только прочерк "-"/"—") — НЕ включай этот показатель
           в ответ вообще, пропусти его: прочерк ничего не говорит о результате анализа, хранить
@@ -66,12 +69,12 @@ public class LmStudioMedicalDocumentExtractor(
         - "refLow"/"refHigh" — числа, только если референс — числовой диапазон (например,
           "130-160"). Если так — "refText" оставь null. Если референс не числовой — заполни
           только "refText", "refLow"/"refHigh" оставь null.
-        - "specimen"/"documentDate"/"suggestedTitle"/"doctor" — заполняй, только если это
-          ДЕЙСТВИТЕЛЬНО есть в этом фрагменте (обычно в шапке документа); если фрагмент — просто
-          таблица показателей без шапки, оставь все четыре null.
+        - "documentDate"/"suggestedTitle"/"doctor" — заполняй, только если это ДЕЙСТВИТЕЛЬНО есть
+          в этом фрагменте (обычно в шапке документа); если фрагмент — просто таблица показателей
+          без шапки, оставь все три null.
         - Если во фрагменте нет ни одного показателя анализа (это шапка документа, подпись врача,
-          пояснительный текст и т.п.) — indicators пустой массив, но specimen/documentDate/
-          suggestedTitle всё равно заполни, если они есть в этом фрагменте.
+          пояснительный текст и т.п.) — indicators пустой массив, но documentDate/suggestedTitle
+          всё равно заполни, если они есть в этом фрагменте.
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
@@ -124,19 +127,17 @@ public class LmStudioMedicalDocumentExtractor(
     {
         var indicators = new List<ExtractedLabIndicator>();
 
-        // Поля уровня документа (specimen/documentDate/suggestedTitle) обычно есть только в
-        // ШАПКЕ бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные
-        // куски (таблица показателей без шапки) просто не заполняют эти поля повторно.
-        SpecimenType? specimen = null;
-        string? specimenOtherLabel = null;
+        // Поля уровня документа (documentDate/suggestedTitle/doctor) обычно есть только в ШАПКЕ
+        // бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные куски
+        // (таблица показателей без шапки) просто не заполняют эти поля повторно. Источник
+        // показателя (биоматериал/исследование) сюда больше не входит — резолвится отдельным
+        // проходом (см. SpecimenResolver), не как побочное поле промпта структурирования.
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
         string? doctor = null;
 
         void CaptureDocumentFields(Dictionary<string, JsonElement> payload)
         {
-            specimen ??= ParseSpecimen(ReadString(payload, "specimen"));
-            specimenOtherLabel ??= ReadString(payload, "specimenOtherLabel");
             documentDate ??= ParseDate(ReadString(payload, "documentDate"));
             suggestedTitle ??= ReadString(payload, "suggestedTitle");
             doctor ??= ReadString(payload, "doctor");
@@ -172,33 +173,24 @@ public class LmStudioMedicalDocumentExtractor(
             }
         }
 
-        // specimenOtherLabel имеет смысл только вместе со specimen=Other — модель могла заполнить
-        // текст, но по ошибке классифицировать в другую категорию; не тащим дальше мусор.
-        var effectiveSpecimenOtherLabel = specimen == SpecimenType.Other ? specimenOtherLabel : null;
+        // Резолвинг источника — отдельный LLM-вызов на весь этот файл (не на чанк/страницу, не
+        // побочное поле промпта структурирования выше, см. SpecimenResolver). Ещё не сведён к
+        // ссылке на справочник — это делает MedicalDocumentExtractionProcessor, у которого есть
+        // доступ к БД (этот класс — чистый LLM-клиент, без Infrastructure.Persistence).
+        var specimenResolution = await specimenResolver.ResolveAsync(content, ct);
 
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
         {
             return new ExtractionResult(
-                true, [], null, "Не удалось распознать ни одного показателя.", specimen, documentDate, suggestedTitle, doctor,
-                effectiveSpecimenOtherLabel);
+                true, [], null, "Не удалось распознать ни одного показателя.", documentDate, suggestedTitle, doctor,
+                specimenResolution);
         }
 
         return new ExtractionResult(
-            true, deduped, null, Specimen: specimen, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor,
-            SpecimenOtherLabel: effectiveSpecimenOtherLabel);
+            true, deduped, null, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor,
+            SpecimenResolution: specimenResolution);
     }
-
-    private static SpecimenType? ParseSpecimen(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        "blood" => SpecimenType.Blood,
-        "urine" => SpecimenType.Urine,
-        "stool" => SpecimenType.Stool,
-        "vaginalswab" => SpecimenType.VaginalSwab,
-        "saliva" => SpecimenType.Saliva,
-        "other" => SpecimenType.Other,
-        _ => null,
-    };
 
     private static DateOnly? ParseDate(string? value) =>
         DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d)

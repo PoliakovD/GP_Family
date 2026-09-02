@@ -13,6 +13,7 @@ import {
   FamilyDependent,
   FamilyDependentInput,
   FamilySummary,
+  GlobalSpecimenDto,
   HomeSummaryResponse,
   IndicatorArticleResponse,
   IndicatorDto,
@@ -360,14 +361,14 @@ export class ApiService {
 
   deleteIndicator = (id: string) => this.del<void>(`/api/indicators/${id}`);
 
-  /** Последнее значение по каждому (показателю, биоматериалу) среди своих записей — /health/indicators. */
+  /** Последнее значение по каждому (показателю, источнику) среди своих записей — /health/indicators. */
   getMyIndicators = () => this.get<MyIndicatorSummary[]>('/api/indicators');
 
-  /** specimen/customId — query (не path), см. ExtractionEndpoints: второй ключ группировки не
+  /** specimenKbId — query (не path), см. ExtractionEndpoints: второй ключ группировки не
    * помещается в path-сегмент. */
-  getIndicatorHistory = (analyteKey: string, specimen: number, customId?: string | null) =>
+  getIndicatorHistory = (analyteKey: string, specimenKbId: string) =>
     this.get<IndicatorHistoryPoint[]>(
-      `/api/indicators/${encodeURIComponent(analyteKey)}${buildQuery({ specimen, customId: customId ?? undefined })}`,
+      `/api/indicators/${encodeURIComponent(analyteKey)}${buildQuery({ specimenKbId })}`,
     );
 
   /** Персонализированная статья справочника — панель/шторка справки по клику на показатель
@@ -389,10 +390,17 @@ export class ApiService {
 
   getKbAnalyte = (id: string) => this.get<KbAnalyteCard>(`/api/kb/analytes/${id}`);
 
-  // Пользовательский справочник биоматериалов (UX-редизайн) — LLM-валидация один раз при создании.
+  // Источник показателя (пересборка enrich-пайплайна) — общий справочник (GlobalSpecimenKb), не
+  // фиксированный enum; find-or-register через LLM-валидацию (GlobalSpecimenKbService), общий
+  // путь для распространённых и «своих» источников.
   getSpecimens = () => this.get<UserSpecimen[]>('/api/specimens');
 
   createSpecimen = (name: string) => this.post<UserSpecimen>('/api/specimens', { name });
+
+  /** Автоподсказка по всему общему справочнику (не только «недавно использованные этим
+   * пользователем» выше) — GET /api/specimens/search. */
+  searchSpecimens = (q?: string, take = 20) =>
+    this.get<GlobalSpecimenDto[]>(`/api/specimens/search${buildQuery({ q: q || undefined, take })}`);
 
   // Оповещения
   getNotifications = (unreadOnly: boolean) =>

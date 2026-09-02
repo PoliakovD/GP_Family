@@ -193,26 +193,17 @@
                           <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
                           <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
                         </div>
-                        <select class="input" [ngModel]="specimenKey(editIndicatorForm)" (ngModelChange)="applySpecimenKey(editIndicatorForm, $event)">
-                          @for (opt of specimenOptions; track opt.value) {
-                            <option [value]="opt.value">{{ opt.label }}</option>
-                          }
-                          @for (custom of customSpecimens; track custom.id) {
-                            <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
-                          }
-                        </select>
-                        @if (editIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
-                          <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
+                        <input class="input" list="specimen-suggestions" placeholder="Источник (кровь, моча, ЭКГ…)"
+                          [(ngModel)]="editSpecimenQuery"
+                          (ngModelChange)="onSpecimenQueryInput($event)"
+                          (blur)="resolveSpecimenQuery(editSpecimenQuery, editIndicatorForm)" />
+                        @if (savingCustomSpecimen) {
+                          <div class="muted" style="font-size:12px">Проверяем источник…</div>
+                        } @else if (!editIndicatorForm.specimenKbId && editSpecimenQuery) {
+                          <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
                         }
-                        @if (addingCustomSpecimen) {
-                          <div class="d-flex gap-1 align-items-center">
-                            <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
-                            <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
-                            <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
-                          </div>
-                          @if (customSpecimenError) {
-                            <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
-                          }
+                        @if (customSpecimenError) {
+                          <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
                         }
                         <div class="d-flex gap-1">
                           <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
@@ -278,26 +269,17 @@
                         <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
                         <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
                       </div>
-                      <select class="input" [ngModel]="specimenKey(newIndicatorForm)" (ngModelChange)="applySpecimenKey(newIndicatorForm, $event)">
-                        @for (opt of specimenOptions; track opt.value) {
-                          <option [value]="opt.value">{{ opt.label }}</option>
-                        }
-                        @for (custom of customSpecimens; track custom.id) {
-                          <option [value]="SpecimenType.Other + ':' + custom.id">{{ custom.displayName }}</option>
-                        }
-                      </select>
-                      @if (newIndicatorForm.specimen === SpecimenType.Other && !addingCustomSpecimen) {
-                        <button type="button" class="btn-link" (click)="startAddCustomSpecimen()">+ Добавить свой биоматериал…</button>
+                      <input class="input" list="specimen-suggestions" placeholder="Источник (кровь, моча, ЭКГ…)"
+                        [(ngModel)]="newSpecimenQuery"
+                        (ngModelChange)="onSpecimenQueryInput($event)"
+                        (blur)="resolveSpecimenQuery(newSpecimenQuery, newIndicatorForm)" />
+                      @if (savingCustomSpecimen) {
+                        <div class="muted" style="font-size:12px">Проверяем источник…</div>
+                      } @else if (!newIndicatorForm.specimenKbId && newSpecimenQuery) {
+                        <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
                       }
-                      @if (addingCustomSpecimen) {
-                        <div class="d-flex gap-1 align-items-center">
-                          <input class="input" [(ngModel)]="customSpecimenInput" placeholder="Например, ликвор" style="flex:1" />
-                          <button type="button" class="btn btn-secondary btn-sm" [disabled]="savingCustomSpecimen" (click)="submitCustomSpecimen()">Проверить</button>
-                          <button type="button" class="btn btn-ghost btn-sm" (click)="cancelAddCustomSpecimen()">Отмена</button>
-                        </div>
-                        @if (customSpecimenError) {
-                          <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
-                        }
+                      @if (customSpecimenError) {
+                        <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
                       }
                       <div class="d-flex gap-1">
                         <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
@@ -658,4 +640,16 @@
       }
     </app-modal>
   }
+
+  <!-- Общий список подсказок для полей источника показателя (правка + создание) — подсказки
+       поиска по справочнику (пересборка enrich-пайплайна) + недавно использованные этим
+       пользователем. -->
+  <datalist id="specimen-suggestions">
+    @for (s of specimenSuggestions; track s.id) {
+      <option [value]="s.displayName"></option>
+    }
+    @for (c of customSpecimens; track c.specimenKbId) {
+      <option [value]="c.displayName"></option>
+    }
+  </datalist>
 </div>

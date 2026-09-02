@@ -51,18 +51,6 @@ public class UserSpecimenServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task CreateAsync_MatchesSystemSpecimenName_RejectedWithoutCallingModel()
-    {
-        var owner = Db.AddUser();
-
-        var (result, _, reason) = await _sut.CreateAsync(owner.Id, "Кровь");
-
-        result.Should().Be(CreateSpecimenResult.InvalidInput);
-        reason.Should().NotBeNull();
-        await _client.DidNotReceiveWithAnyArgs().ExtractJsonAsync(default!, default!, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task CreateAsync_DuplicateOfOwnExisting_ReturnsAlreadyExists_WithoutCallingModel()
     {
         var owner = Db.AddUser();
@@ -129,8 +117,7 @@ public class UserSpecimenServiceTests : SqliteTestBase
 
         result.Should().Be(CreateSpecimenResult.Success);
         item!.DisplayName.Should().Be("Мокрота");
-        item.OwnerUserId.Should().Be(owner.Id);
-        (await _sut.GetOwnAsync(owner.Id)).Should().ContainSingle(s => s.Id == item.Id);
+        (await _sut.GetOwnAsync(owner.Id)).Should().ContainSingle(s => s.SpecimenKbId == item.SpecimenKbId);
     }
 
     [Fact]
@@ -165,7 +152,7 @@ public class UserSpecimenServiceTests : SqliteTestBase
 
         resultB.Should().Be(CreateSpecimenResult.Success);
         itemB!.DisplayName.Should().Be("Ликвор (СМЖ)", "написание должно взяться из общего справочника, не заново от модели");
-        itemB.OwnerUserId.Should().Be(ownerB.Id);
+        itemB.SpecimenKbId.Should().Be(itemA.SpecimenKbId, "оба владельца ссылаются на одну и ту же запись общего справочника");
         await _client.DidNotReceiveWithAnyArgs().ExtractJsonAsync(default!, default!, Arg.Any<CancellationToken>());
     }
 }

@@ -31,8 +31,18 @@ public class LabIndicator
     /// поиска и тренда. "Гемоглобин (HGB), г/л" → "гемоглобин".</summary>
     public string AnalyteKey { get; set; } = string.Empty;
 
-    /// <summary>Имя как напечатано в бланке — для отображения.</summary>
+    /// <summary>Имя как напечатано в бланке, после детерминированной чистки (см.
+    /// LabAnalyteNameCleaner.Clean) — для отображения. Каноническое имя из справочника
+    /// подставляется сюда вместо сырого при попадании в KB (см. MedicalDocumentExtractionProcessor);
+    /// исходная строка бланка в этом случае лежит в <see cref="RawDisplayName"/>.</summary>
     public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Имя как оно было напечатано на бланке (только очищено от нумерации пункта/эха,
+    /// регистр не подгоняется под справочник) — заполняется, только когда оно отличается от
+    /// <see cref="DisplayName"/> (пересборка enrich-пайплайна: канон справочника подставляется в
+    /// DisplayName при попадании, а исходная формулировка бланка остаётся здесь подсказкой в UI).
+    /// Null, если DisplayName и есть очищенное имя с бланка (справочник не нашёлся).</summary>
+    public string? RawDisplayName { get; set; }
 
     /// <summary>Привязка к kb.global_lab_analytes_kb, если найдена (не FK — справочник в другой
     /// схеме, физически изолирован).</summary>
@@ -43,17 +53,17 @@ public class LabIndicator
     /// <summary>Откуда взят референс, использованный для Flag — каскад приоритетов, см. RefSource.</summary>
     public RefSource RefSource { get; set; } = RefSource.None;
 
-    /// <summary>Биоматериал (кровь/моча/кал и т.д.) — часть ключа группировки на графике/в списке
-    /// "мои показатели" вместе с AnalyteKey, иначе одноимённые показатели из разных биоматериалов
-    /// (лейкоциты крови и мочи) смешались бы на одном тренде. См. FamilyHub.Domain.Enums.SpecimenType.</summary>
-    public SpecimenType Specimen { get; set; } = SpecimenType.Unknown;
-
-    /// <summary>Заполняется только когда Specimen == SpecimenType.Other — ссылка на запись
-    /// пользовательского справочника (см. UserSpecimen). Сервис принудительно обнуляет поле, если
-    /// Specimen != Other (тот же приём, что FamilyDependent.PetSpecies). Часть ключа группировки
-    /// вместе с (AnalyteKey, Specimen) — без него два разных кастомных биоматериала оба хранились
-    /// бы как просто "Other" и схлопывались на одном графике.</summary>
-    public Guid? SpecimenCustomId { get; set; }
+    /// <summary>Источник показателя — биоматериал (кровь/моча/кал) ИЛИ небиологическое исследование
+    /// (ЭКГ/УЗИ) — часть ключа группировки на графике/в списке "мои показатели" вместе с
+    /// AnalyteKey, иначе одноимённые показатели из разных источников (лейкоциты крови и мочи)
+    /// смешались бы на одном тренде. Ссылка (не FK — GlobalSpecimenKb в отдельной схеме kb,
+    /// физически изолирован) на <see cref="GlobalSpecimenKb"/> — пересборка enrich-пайплайна:
+    /// раньше был фиксированный C#-enum с switch-классификацией в коде (SpecimenType), теперь
+    /// источник — полностью данные: LLM нормализует (см. SpecimenResolver), код только сверяет по
+    /// триграмме. Никогда не null — нерезолвленный/неуверенный источник указывает на
+    /// <see cref="SpecimenContextIds.Unresolved"/>, чтобы уникальный индекс
+    /// (MedicalRecordId, AnalyteKey, SpecimenKbId) продолжал ловить дубли и у таких показателей.</summary>
+    public Guid SpecimenKbId { get; set; } = SpecimenContextIds.Unresolved;
 
     /// <summary>Порядок в бланке — таблица показателей на фронте отображается в исходном порядке,
     /// не алфавитном.</summary>

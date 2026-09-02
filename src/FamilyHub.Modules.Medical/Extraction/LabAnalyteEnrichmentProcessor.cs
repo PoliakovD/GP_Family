@@ -58,7 +58,7 @@ public class LabAnalyteEnrichmentProcessor(
             // справочник, пока эта ждала своей очереди. Force (LabAnalyteKbReenrichJob) намеренно
             // пропускает этот выход — цель форсированной задачи ИМЕННО в том, чтобы пройти пайплайн
             // заново поверх уже существующей записи, а не подтвердить, что она есть.
-            var existing = await kbLookup.LookupAsync(job.NormalizedName, job.Specimen, ct);
+            var existing = await kbLookup.LookupAsync(job.NormalizedName, job.SpecimenKbId, ct);
             if (!job.Force && existing.Kind == KbLookupKind.Hit)
             {
                 job.Status = EnrichmentJobStatus.Completed;
@@ -76,7 +76,7 @@ public class LabAnalyteEnrichmentProcessor(
             // MedicationEnrichmentProcessor: переиспользуем сохранённые сниппеты, если минимальный
             // интервал обновления ещё не истёк, суммаризацию можно пересчитывать сколько угодно раз
             // (например, при доработке промпта), не тратя платный запрос на одно и то же снова.
-            var cached = provider.Name != "Null" ? await searchCache.GetCachedAsync(job.NormalizedName, job.Specimen, ct) : null;
+            var cached = provider.Name != "Null" ? await searchCache.GetCachedAsync(job.NormalizedName, job.SpecimenKbId, ct) : null;
 
             IReadOnlyList<WebSnippet> rawSnippets;
             IReadOnlyDictionary<string, bool>? overrides = null;
@@ -92,7 +92,12 @@ public class LabAnalyteEnrichmentProcessor(
             }
             else
             {
-                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.LabAnalyte, job.Specimen, ct);
+                // Отображаемое имя источника для текста поискового запроса (AnalyteSearchQueryBuilder) —
+                // читается по факту непосредственно перед платным вызовом, не заранее: на кэш-хите
+                // выше этот запрос вообще не нужен.
+                var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
+                    .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.LabAnalyte, specimenDisplayName, ct);
                 if (provider.Name != "Null")
                 {
                     job.ExternalSearchAt = DateTime.UtcNow;
@@ -101,7 +106,7 @@ public class LabAnalyteEnrichmentProcessor(
                     // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
                     // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) сразу после
                     // запроса, а не после успешной записи в справочник.
-                    await searchCache.RecordSearchAsync(job.NormalizedName, job.Specimen, provider.Name, rawSnippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct);
                 }
             }
 
@@ -132,7 +137,7 @@ public class LabAnalyteEnrichmentProcessor(
             var source = BuildSourceLabel(provider.Name, sortedSnippets, summary.UsedSourceIndexes);
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
-            var writeResult = await kbWriter.UpsertAsync(job.NormalizedName, job.Specimen, job.SourceDisplayName, summary, source, ct);
+            var writeResult = await kbWriter.UpsertAsync(job.NormalizedName, job.SpecimenKbId, job.SourceDisplayName, summary, source, ct);
             if (!writeResult.Success)
             {
                 await tx.RollbackAsync(ct);

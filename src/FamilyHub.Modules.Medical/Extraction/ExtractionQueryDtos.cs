@@ -14,10 +14,11 @@ public record ExtractionStatusResponse(
 /// IndicatorFlagCalculator.Calculate/effLow-effHigh). Фронт вправе делать parseFloat без
 /// нормализации запятых. Инвариант проверен тестом RefTextFieldsAreAlwaysParseable.</summary>
 public record IndicatorDto(
-    Guid Id, string AnalyteKey, string DisplayName, IndicatorFlag Flag, RefSource RefSource, SpecimenType Specimen, int Position,
+    Guid Id, string AnalyteKey, string DisplayName, IndicatorFlag Flag, RefSource RefSource,
+    Guid SpecimenKbId, string? SpecimenDisplayName, int Position,
     string ValueRaw, string? Unit, string? RefLowText, string? RefHighText, string? RefText,
-    DateOnly RecordDate, Guid MedicalRecordId, Guid? SpecimenCustomId = null,
-    string? ValueNumericText = null, Guid? KbAnalyteId = null);
+    DateOnly RecordDate, Guid MedicalRecordId,
+    string? ValueNumericText = null, Guid? KbAnalyteId = null, string? RawDisplayName = null);
 
 public record IndicatorHistoryPoint(DateOnly RecordDate, string ValueRaw, string? ValueNumericText, IndicatorFlag Flag, Guid MedicalRecordId);
 
@@ -35,8 +36,8 @@ public record IndicatorArticleResponse(
     IndicatorDto Indicator, PatientContextDto Patient, int? MatchedRefRangeIndex, KbAnalyteCard? Article, bool HistoryAvailable);
 
 public record MyIndicatorSummary(
-    string AnalyteKey, string DisplayName, SpecimenType Specimen, string ValueRaw, string? Unit,
-    IndicatorFlag Flag, DateOnly LastRecordDate, Guid? SpecimenCustomId = null);
+    string AnalyteKey, string DisplayName, Guid SpecimenKbId, string? SpecimenDisplayName, string ValueRaw, string? Unit,
+    IndicatorFlag Flag, DateOnly LastRecordDate);
 
 /// <summary>Форма MedicalRecord.SummaryJson, которую пишет LabSummarizer — используется только
 /// для десериализации на чтении.</summary>
@@ -64,8 +65,8 @@ public record VisitConclusionResponse(
 /// тому же IndicatorFlagCalculator, что и при распознавании (референс из формы приоритетнее KB,
 /// как и раньше — правка вручную это ещё один источник "из бланка").</summary>
 public record UpdateIndicatorRequest(
-    string DisplayName, string ValueRaw, string? Unit, SpecimenType Specimen,
-    string? RefLowText, string? RefHighText, string? RefText, Guid? SpecimenCustomId = null);
+    string DisplayName, string ValueRaw, string? Unit, Guid SpecimenKbId,
+    string? RefLowText, string? RefHighText, string? RefText);
 
 public enum UpdateIndicatorResult { Success, NotFound, Forbidden, Conflict }
 
@@ -74,8 +75,8 @@ public enum UpdateIndicatorResult { Success, NotFound, Forbidden, Conflict }
 /// бланка"). Та же форма, что UpdateIndicatorRequest — владелец записи, флаг считается тем же
 /// компаратором, RefSource.Blank.</summary>
 public record CreateIndicatorRequest(
-    string DisplayName, string ValueRaw, string? Unit, SpecimenType Specimen,
-    string? RefLowText, string? RefHighText, string? RefText, Guid? SpecimenCustomId = null);
+    string DisplayName, string ValueRaw, string? Unit, Guid SpecimenKbId,
+    string? RefLowText, string? RefHighText, string? RefText);
 
 public enum CreateIndicatorResult { Success, NotFound, Forbidden, Conflict }
 

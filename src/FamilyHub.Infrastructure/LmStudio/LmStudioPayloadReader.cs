@@ -60,14 +60,19 @@ public static class LmStudioPayloadReader
     public static double? ReadDouble(JsonElement obj, string key)
     {
         if (!TryGetProperty(obj, key, out var el)) return null;
-        return el.ValueKind switch
-        {
-            JsonValueKind.Number when el.TryGetDouble(out var d) => d,
-            JsonValueKind.String when double.TryParse(el.GetString(), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsed) => parsed,
-            _ => null,
-        };
+        return ParseDouble(el);
     }
+
+    public static double? ReadDouble(Dictionary<string, JsonElement> payload, string key) =>
+        TryGetValue(payload, key, out var el) ? ParseDouble(el) : null;
+
+    private static double? ParseDouble(JsonElement el) => el.ValueKind switch
+    {
+        JsonValueKind.Number when el.TryGetDouble(out var d) => d,
+        JsonValueKind.String when double.TryParse(el.GetString(), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) => parsed,
+        _ => null,
+    };
 
     public static List<string> ReadStringArray(Dictionary<string, JsonElement> payload, string key)
     {

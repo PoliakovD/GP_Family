@@ -5,10 +5,12 @@ namespace FamilyHub.Domain.Entities;
 /// <summary>
 /// Задача обогащения справочника показателей (ветка medicalrecords) — зеркало
 /// <see cref="MedicationEnrichmentJob"/>, отдельная таблица (а не переиспользование той же),
-/// потому что дедуп-индекс по (NormalizedName, Specimen) должен быть независим между двумя
+/// потому что дедуп-индекс по (NormalizedName, SpecimenKbId) должен быть независим между двумя
 /// справочниками: показатель "натрий" и медикамент с тем же нормализованным именем не должны
-/// конкурировать за один индекс. Наружу конвейер отправляет NormalizedName+Specimen — см.
-/// LabAnalyteEnrichmentProcessor.
+/// конкурировать за один индекс. Наружу конвейер отправляет NormalizedName+SpecimenKbId — см.
+/// LabAnalyteEnrichmentProcessor. Ставится только для источника, подтверждённого SpecimenResolver
+/// выше порога уверенности (см. LabAnalyteEnrichmentRequestService) — SpecimenKbId никогда не
+/// равен SpecimenContextIds.Unresolved.
 /// </summary>
 public class LabAnalyteEnrichmentJob
 {
@@ -16,9 +18,9 @@ public class LabAnalyteEnrichmentJob
 
     public string NormalizedName { get; set; } = string.Empty;
 
-    /// <summary>Биоматериал — вторая половина ключа дедупликации (пересборка enrich-пайплайна),
-    /// та же пара, что у GlobalLabAnalyteKb.</summary>
-    public SpecimenType Specimen { get; set; } = SpecimenType.Unknown;
+    /// <summary>Источник показателя — вторая половина ключа дедупликации (пересборка
+    /// enrich-пайплайна), та же пара, что у GlobalLabAnalyteKb.</summary>
+    public Guid SpecimenKbId { get; set; }
 
     public string SourceDisplayName { get; set; } = string.Empty;
 

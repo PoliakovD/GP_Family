@@ -24,37 +24,43 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
         take = take <= 0 ? DefaultTake : Math.Min(take, MaxTake);
         skip = Math.Max(skip, 0);
 
+        // JOIN на GlobalSpecimenKb резолвит DisplayName источника живым запросом — та же схема kb,
+        // ссылка не FK (справочники физически отдельные таблицы), поэтому явный JOIN, не навигация.
         var rows = string.IsNullOrWhiteSpace(q)
             ? await db.Database.SqlQuery<KbAnalyteCatalogRow>($"""
-                SELECT "Id", "DisplayName", "Specimen", "PayloadJson"
-                FROM kb.global_lab_analytes_kb
-                ORDER BY "DisplayName"
+                SELECT a."Id", a."DisplayName", a."SpecimenKbId", s."DisplayName" AS "SpecimenDisplayName", a."PayloadJson"
+                FROM kb.global_lab_analytes_kb a
+                LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
+                ORDER BY a."DisplayName"
                 OFFSET {skip} LIMIT {take}
                 """).ToListAsync(ct)
             : await db.Database.SqlQuery<KbAnalyteCatalogRow>($"""
-                SELECT "Id", "DisplayName", "Specimen", "PayloadJson"
-                FROM kb.global_lab_analytes_kb
-                WHERE search_vector @@ plainto_tsquery('russian', {q})
-                   OR similarity("DisplayName", {q}) > 0.3
-                   OR lower({q}) = ANY("Aliases")
+                SELECT a."Id", a."DisplayName", a."SpecimenKbId", s."DisplayName" AS "SpecimenDisplayName", a."PayloadJson"
+                FROM kb.global_lab_analytes_kb a
+                LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
+                WHERE a.search_vector @@ plainto_tsquery('russian', {q})
+                   OR similarity(a."DisplayName", {q}) > 0.3
+                   OR lower({q}) = ANY(a."Aliases")
                 ORDER BY GREATEST(
-                    ts_rank(search_vector, plainto_tsquery('russian', {q})),
-                    similarity("DisplayName", {q})
+                    ts_rank(a.search_vector, plainto_tsquery('russian', {q})),
+                    similarity(a."DisplayName", {q})
                 ) DESC
                 OFFSET {skip} LIMIT {take}
                 """).ToListAsync(ct);
 
         var items = rows.Select(r =>
-            new KbAnalyteListItem(r.Id, r.DisplayName, r.Specimen, ParsePayload(r.Id, r.PayloadJson).PlainExplanation)).ToList();
+            new KbAnalyteListItem(r.Id, r.DisplayName, r.SpecimenKbId, r.SpecimenDisplayName, ParsePayload(r.Id, r.PayloadJson).PlainExplanation)).ToList();
         return new KbAnalyteListResponse(items, HasMore: rows.Count == take);
     }
 
     public async Task<KbAnalyteCard?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var row = await db.Database.SqlQuery<KbAnalyteDetailRow>($"""
-            SELECT "Id", "DisplayName", "Specimen", "PayloadJson", "Source", "UpdatedAt"
-            FROM kb.global_lab_analytes_kb
-            WHERE "Id" = {id}
+            SELECT a."Id", a."DisplayName", a."SpecimenKbId", s."DisplayName" AS "SpecimenDisplayName",
+                   a."PayloadJson", a."Source", a."UpdatedAt"
+            FROM kb.global_lab_analytes_kb a
+            LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
+            WHERE a."Id" = {id}
             """).FirstOrDefaultAsync(ct);
 
         return row is null ? null : await BuildCardAsync(row, ct);
@@ -77,8 +83,9 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
         var related = await ResolveRelatedAsync(relatedNames, ct);
 
         return new KbAnalyteCard(
-            row.Id, row.DisplayName, row.Specimen, payload.LoincCode, payload.DefaultUnit, payload.PlainExplanation,
-            payload.WhyMeasured, payload.HighMeans, payload.LowMeans, refRanges, related, row.Source, row.UpdatedAt);
+            row.Id, row.DisplayName, row.SpecimenKbId, row.SpecimenDisplayName, payload.LoincCode, payload.DefaultUnit,
+            payload.PlainExplanation, payload.WhyMeasured, payload.HighMeans, payload.LowMeans, refRanges, related,
+            row.Source, row.UpdatedAt);
     }
 
     private async Task<List<KbRelatedAnalyte>> ResolveRelatedAsync(List<string> displayNames, CancellationToken ct)

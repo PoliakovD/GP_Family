@@ -1,6 +1,5 @@
 using System.Text.Json;
 using FamilyHub.Domain.Entities;
-using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -23,19 +22,19 @@ public record CachedAnalyteSearch(
 /// <see cref="Enrichment.MedicationSearchCacheService"/> целиком, включая обработку гонки на
 /// уникальном индексе (пересборка enrich-пайплайна анализов, закрывает задокументированный ранее
 /// пропуск: без этого кэша каждая доработка промпта суммаризатора/схемы полей означала новый
-/// платный запрос на каждый показатель заново). Ключ — пара (NormalizedName, Specimen).
+/// платный запрос на каждый показатель заново). Ключ — пара (NormalizedName, SpecimenKbId).
 /// </summary>
 public class LabAnalyteSearchCacheService(
     AppDbContext db, IOptions<EnrichmentOptions> options, ILogger<LabAnalyteSearchCacheService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>Null — по этой паре (название, биоматериал) ещё ни разу не искали платно.</summary>
+    /// <summary>Null — по этой паре (название, источник) ещё ни разу не искали платно.</summary>
     public async Task<CachedAnalyteSearch?> GetCachedAsync(
-        string normalizedName, SpecimenType specimen, CancellationToken ct = default)
+        string normalizedName, Guid specimenKbId, CancellationToken ct = default)
     {
         var cache = await db.LabAnalyteSearchCaches.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.Specimen == specimen, ct);
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
         if (cache?.SnippetsJson is null) return null;
 
         var snippets = JsonSerializer.Deserialize<List<WebSnippet>>(cache.SnippetsJson, JsonOptions) ?? [];
@@ -83,7 +82,7 @@ public class LabAnalyteSearchCacheService(
     /// сразу после реального запроса (успешного или нет), безусловно, тем же принципом, что
     /// MedicationSearchCacheService.RecordSearchAsync (см. её doc-комментарий).</summary>
     public async Task RecordSearchAsync(
-        string normalizedName, SpecimenType specimen, string provider, IReadOnlyList<WebSnippet> snippets,
+        string normalizedName, Guid specimenKbId, string provider, IReadOnlyList<WebSnippet> snippets,
         CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
@@ -91,7 +90,7 @@ public class LabAnalyteSearchCacheService(
         var snippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
 
         var existing = await db.LabAnalyteSearchCaches
-            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.Specimen == specimen, ct);
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
         if (existing is not null)
         {
             ApplyRecord(existing, provider, now, canBeUpdatedAfter, snippetsJson);
@@ -103,7 +102,7 @@ public class LabAnalyteSearchCacheService(
         {
             Id = Guid.NewGuid(),
             NormalizedName = normalizedName,
-            Specimen = specimen,
+            SpecimenKbId = specimenKbId,
             Provider = provider,
             LastUpdatedAt = now,
             CanBeUpdatedAfter = canBeUpdatedAfter,
@@ -117,15 +116,15 @@ public class LabAnalyteSearchCacheService(
         }
         catch (DbUpdateException ex)
         {
-            // Гонка на уникальном индексе (NormalizedName, Specimen) — тот же показатель мог
+            // Гонка на уникальном индексе (NormalizedName, SpecimenKbId) — тот же показатель мог
             // обогащаться параллельно из двух разных бланков (см. MedicationSearchCacheService —
             // тот же приём на другой таблице).
-            logger.LogDebug(ex, "Кэш поиска показателя «{Name}» ({Specimen}): гонка на ключе, переигрываем как обновление",
-                normalizedName, specimen);
+            logger.LogDebug(ex, "Кэш поиска показателя «{Name}» ({SpecimenKbId}): гонка на ключе, переигрываем как обновление",
+                normalizedName, specimenKbId);
             db.Entry(cache).State = EntityState.Detached;
 
             var existingAfterRace = await db.LabAnalyteSearchCaches
-                .SingleAsync(c => c.NormalizedName == normalizedName && c.Specimen == specimen, ct);
+                .SingleAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
             ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, snippetsJson);
             await db.SaveChangesAsync(ct);
         }

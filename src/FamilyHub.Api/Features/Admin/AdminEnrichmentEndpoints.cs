@@ -1,7 +1,9 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Extraction;
+using Microsoft.EntityFrameworkCore;
 
 namespace FamilyHub.Api.Features.Admin;
 
@@ -59,7 +61,8 @@ public static class AdminEnrichmentEndpoints
 
         group.MapGet("/search-cache", async (
             WebSearchTopic topic, string? query, int? skip, int? take,
-            MedicationSearchCacheService medicationCache, LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+            MedicationSearchCacheService medicationCache, LabAnalyteSearchCacheService analyteCache,
+            AppDbContext db, CancellationToken ct) =>
         {
             var take2 = Math.Clamp(take ?? 25, 1, 100);
             var skip2 = Math.Max(skip ?? 0, 0);
@@ -76,17 +79,19 @@ public static class AdminEnrichmentEndpoints
             else
             {
                 var (rows, total) = await analyteCache.ListAsync(query, skip2, take2, ct);
+                var specimenNames = await ResolveSpecimenNamesAsync(db, rows.Select(r => r.SpecimenKbId), ct);
                 return Results.Ok(new SearchCacheListResponse(
                     rows.Select(r => new SearchCacheRowDto(
-                        r.Id, r.NormalizedName, r.Specimen.ToString(), r.Provider, r.LastUpdatedAt, r.CanBeUpdatedAfter,
-                        CountSnippets(r.SnippetsJson))).ToList(),
+                        r.Id, r.NormalizedName, specimenNames.GetValueOrDefault(r.SpecimenKbId, r.SpecimenKbId.ToString()),
+                        r.Provider, r.LastUpdatedAt, r.CanBeUpdatedAfter, CountSnippets(r.SnippetsJson))).ToList(),
                     total));
             }
         });
 
         group.MapGet("/search-cache/{id:guid}", async (
             Guid id, WebSearchTopic topic, MedicationSearchCacheService medicationCache,
-            LabAnalyteSearchCacheService analyteCache, EnrichmentTrustedDomainService trustedDomains, CancellationToken ct) =>
+            LabAnalyteSearchCacheService analyteCache, EnrichmentTrustedDomainService trustedDomains,
+            AppDbContext db, CancellationToken ct) =>
         {
             var activeDomains = await trustedDomains.GetActiveDomainsByPriorityAsync(topic, ct);
 
@@ -102,8 +107,11 @@ public static class AdminEnrichmentEndpoints
             {
                 var row = await analyteCache.GetByIdAsync(id, ct);
                 if (row is null) return Results.NotFound();
-                var cached = await analyteCache.GetCachedAsync(row.NormalizedName, row.Specimen, ct);
-                return Results.Ok(BuildDetail(id, row.NormalizedName, row.Specimen.ToString(), row.Provider, row.LastUpdatedAt,
+                var cached = await analyteCache.GetCachedAsync(row.NormalizedName, row.SpecimenKbId, ct);
+                var specimenName = await db.GlobalSpecimensKb.AsNoTracking()
+                    .Where(s => s.Id == row.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct)
+                    ?? row.SpecimenKbId.ToString();
+                return Results.Ok(BuildDetail(id, row.NormalizedName, specimenName, row.Provider, row.LastUpdatedAt,
                     row.CanBeUpdatedAfter, cached?.Snippets ?? [], cached?.Overrides, activeDomains));
             }
         });
@@ -133,6 +141,18 @@ public static class AdminEnrichmentEndpoints
         }).ToList();
 
         return new SearchCacheDetailDto(id, normalizedName, specimen, provider, lastUpdatedAt, canBeUpdatedAfter, snippetDtos);
+    }
+
+    /// <summary>Батч-резолв DisplayName источников (пересборка enrich-пайплайна: строки кэша
+    /// хранят только SpecimenKbId, не текст) — один запрос на страницу списка, не N+1.</summary>
+    private static async Task<Dictionary<Guid, string>> ResolveSpecimenNamesAsync(
+        AppDbContext db, IEnumerable<Guid> specimenKbIds, CancellationToken ct)
+    {
+        var distinct = specimenKbIds.Distinct().ToList();
+        if (distinct.Count == 0) return [];
+        return await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => distinct.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.DisplayName, ct);
     }
 
     private static int CountSnippets(string? snippetsJson)

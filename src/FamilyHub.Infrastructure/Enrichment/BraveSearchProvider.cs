@@ -22,10 +22,10 @@ public class BraveSearchProvider(HttpClient httpClient, IOptions<EnrichmentOptio
 
     public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default)
+        string? specimenDisplayName = null, CancellationToken ct = default)
     {
         var queryText = topic == WebSearchTopic.LabAnalyte
-            ? SpecimenQueryLabel.BuildAnalyteSearchQuery(normalizedName, specimen)
+            ? AnalyteSearchQueryBuilder.Build(normalizedName, specimenDisplayName)
             : $"{normalizedName} инструкция по применению";
         var query = Uri.EscapeDataString(queryText);
         var url = $"res/v1/web/search?q={query}&country=ru&search_lang=ru&ui_lang=ru&count=10";

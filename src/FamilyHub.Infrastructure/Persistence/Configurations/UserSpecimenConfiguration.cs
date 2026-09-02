@@ -12,10 +12,14 @@ public class UserSpecimenConfiguration : IEntityTypeConfiguration<UserSpecimen>
 
         builder.HasKey(s => s.Id);
 
-        builder.Property(s => s.NormalizedName).HasMaxLength(60).IsRequired();
-        builder.Property(s => s.DisplayName).HasMaxLength(60).IsRequired();
+        builder.Property(s => s.SpecimenKbId).IsRequired();
 
-        // Дедуп в пределах владельца — см. UserSpecimenService.CreateAsync.
-        builder.HasIndex(s => new { s.OwnerUserId, s.NormalizedName }).IsUnique();
+        // SpecimenKbId — НЕ FK (GlobalSpecimenKb физически в отдельной схеме kb) — soft-ссылка.
+
+        // Дедуп в пределах владельца — см. UserSpecimenService.RecordUsageAsync.
+        builder.HasIndex(s => new { s.OwnerUserId, s.SpecimenKbId }).IsUnique();
+
+        // Автоподсказка сортирует по недавности использования конкретным пользователем.
+        builder.HasIndex(s => new { s.OwnerUserId, s.LastUsedAt });
     }
 }

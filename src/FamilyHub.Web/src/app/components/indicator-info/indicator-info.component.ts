@@ -1,13 +1,12 @@
 import { Component, computed, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import type { IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto } from '../../models/types';
-import { Gender, SpecimenType } from '../../models/types';
+import { Gender } from '../../models/types';
 import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { labPopulationLabel, shouldShowPopulationBadge } from '../../shared/util/lab-norm';
-import { specimenLabel } from '../../shared/util/specimen';
 
 /** Текущее значение показателя в контексте конкретной записи — есть только у первой из трёх
  * точек входа (клик по строке записи); у чипа «что смотрят вместе» и каталога reading=null. */
@@ -48,12 +47,10 @@ export class IndicatorInfoComponent {
 
   readonly title = computed(() => this.article()?.displayName ?? this.displayName());
 
-  /** Биоматериал показан только когда он известен (ключ справочника — (показатель, биоматериал),
-   * см. GlobalLabAnalyteKb.Specimen) — Unknown не несёт полезной информации в заголовке статьи. */
-  readonly specimenLabel = computed(() => {
-    const specimen = this.article()?.specimen;
-    return specimen !== undefined && specimen !== SpecimenType.Unknown ? specimenLabel(specimen) : null;
-  });
+  /** Источник показан только когда он известен (ключ справочника — (показатель, источник), см.
+   * GlobalLabAnalyteKb.SpecimenKbId) — сервер уже отдаёт готовую подпись, ссылку локально не
+   * разбираем (пересборка enrich-пайплайна, никакой фиксированной классификации на фронте). */
+  readonly specimenLabel = computed(() => this.article()?.specimenDisplayName ?? null);
 
   readonly matchedRange = computed<KbRefRangeDto | null>(() => {
     const a = this.article();

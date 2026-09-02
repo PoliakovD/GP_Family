@@ -18,8 +18,13 @@ public class IndicatorHistoryVisibilityTests(FamilyHubWebFactory factory) : Inte
 {
     private record MeDto(Guid UserId);
 
-    private static CreateIndicatorRequest Hemoglobin(string value) =>
-        new("Гемоглобин", value, "г/л", SpecimenType.Blood, "130", "160", null);
+    private Guid? _bloodSpecimenId;
+
+    private async Task<CreateIndicatorRequest> HemoglobinAsync(string value)
+    {
+        _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
+        return new("Гемоглобин", value, "г/л", _bloodSpecimenId.Value, "130", "160", null);
+    }
 
     private static async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner, DateOnly date)
     {
@@ -61,9 +66,9 @@ public class IndicatorHistoryVisibilityTests(FamilyHubWebFactory factory) : Inte
         var visible = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
         var hiddenFromFamily = await CreateAnalysisAsync(owner, new DateOnly(2026, 2, 1));
 
-        var visibleIndicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{visible.Id}/indicators", Hemoglobin("140")))
+        var visibleIndicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{visible.Id}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
-        await owner.PostAsJsonAsync($"/api/medical-records/{hiddenFromFamily.Id}/indicators", Hemoglobin("150"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{hiddenFromFamily.Id}/indicators", await HemoglobinAsync("150"));
 
         // L1: расшарить ВСЕ записи семье. L2: точечно скрыть hiddenFromFamily именно от неё.
         (await owner.PostAsJsonAsync("/api/medical-records/share", new { FamilyId = familyId }))
@@ -92,7 +97,7 @@ public class IndicatorHistoryVisibilityTests(FamilyHubWebFactory factory) : Inte
         var owner = ClientAs(FreshTelegramId());
         var stranger = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner, DateOnly.FromDateTime(DateTime.UtcNow));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", Hemoglobin("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await stranger.GetAsync($"/api/medical-records/{record.Id}/indicators/{indicator.Id}/history");

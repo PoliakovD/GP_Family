@@ -21,10 +21,14 @@ public interface IMedicationSearchProvider
     /// <summary>Имя провайдера — попадает в Source обогащённой записи для прослеживаемости знания.</summary>
     string Name { get; }
 
-    /// <summary>specimen — только для WebSearchTopic.LabAnalyte (пересборка enrich-пайплайна):
-    /// делает сырой запрос информативнее ("натрий в моче", не просто "натрий") — см. реализации.
-    /// Unknown у медикаментов и у анализов без определённого биоматериала — прежний, общий запрос.</summary>
+    /// <summary>specimenDisplayName — только для WebSearchTopic.LabAnalyte (пересборка
+    /// enrich-пайплайна): готовый текст из справочника источников (GlobalSpecimenKb.DisplayName,
+    /// например "кровь" или "ЭКГ"), делает сырой запрос информативнее ("натрий в крови", не
+    /// просто "натрий") — см. AnalyteSearchQueryBuilder. Никакой классификации на стороне
+    /// провайдера — источник уже пришёл готовой строкой из справочника, код здесь её не
+    /// интерпретирует. Null у медикаментов и у анализов без определённого источника — прежний,
+    /// общий запрос.</summary>
     Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default);
+        string? specimenDisplayName = null, CancellationToken ct = default);
 }

@@ -1,12 +1,12 @@
 namespace FamilyHub.Domain.Entities;
 
 /// <summary>
-/// Биоматериал, которого нет в фиксированном <see cref="Enums.SpecimenType"/> (UX-редизайн) —
-/// пользователь может завести свой ("ликвор", "мокрота"), провалидированный один раз локальной
-/// LLM (см. UserSpecimenService), дальше он живёт как обычная запись пользовательского
-/// справочника и предлагается автоподсказкой. Всё plaintext, как AnalyteKey/Flag на
-/// <see cref="LabIndicator"/> — участвует в ключе группировки/тренда, шифрование убило бы SQL-
-/// индекс по нему (см. LabIndicator.SpecimenCustomId).
+/// "Недавно использованные этим пользователем" источники показателя (пересборка enrich-пайплайна) —
+/// тонкая таблица поверх общего <see cref="GlobalSpecimenKb"/>, а НЕ второй источник истины
+/// написания (тот один — GlobalSpecimenKb.DisplayName). Раньше (до пересборки) хранила свой
+/// NormalizedName/DisplayName как персональная копия провалидированного биоматериала вне enum —
+/// теперь, когда источник целиком в общем справочнике, роль этой таблицы сузилась до "что
+/// автоподсказка должна предложить В ПЕРВУЮ ОЧЕРЕДЬ конкретному человеку" (см. UserSpecimenService).
 /// </summary>
 public class UserSpecimen
 {
@@ -14,13 +14,11 @@ public class UserSpecimen
 
     public Guid OwnerUserId { get; set; }
 
-    /// <summary>Ключ дедупликации — тот же LabAnalyteNormalizer, что и у показателей (ё→е,
-    /// гомоглифы, пунктуация); уникален в пределах владельца.</summary>
-    public string NormalizedName { get; set; } = string.Empty;
+    /// <summary>Ссылка (не FK — GlobalSpecimenKb в отдельной схеме kb) на использованную запись
+    /// общего справочника.</summary>
+    public Guid SpecimenKbId { get; set; }
 
-    /// <summary>Как ввёл пользователь (или как поправила модель при валидации, например
-    /// "ликвор" → "Ликвор (СМЖ)") — для отображения.</summary>
-    public string DisplayName { get; set; } = string.Empty;
-
-    public DateTime CreatedAt { get; set; }
+    /// <summary>Последнее использование — автоподсказка сортирует по этому полю, не по дате
+    /// первого добавления.</summary>
+    public DateTime LastUsedAt { get; set; }
 }

@@ -3,9 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { KbAnalyteCard, KbAnalyteListItem } from '../../models/types';
-import { SpecimenType } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
-import { specimenLabel } from '../../shared/util/specimen';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
@@ -63,14 +61,12 @@ export class KbAnalyteTabComponent implements OnInit, OnDestroy {
     return this.breakpoints.tier() === 'wide';
   }
 
-  /** Ключ справочника — (показатель, биоматериал): одно DisplayName может встретиться дважды
-   * («Белок» в крови и в моче) — показывать только когда биоматериал известен и в списке есть
-   * ещё одна запись с тем же именем (иначе подпись не несёт пользы, например "Гемоглобин · Кровь"
-   * когда мочевого гемоглобина в справочнике вовсе нет). */
+  /** Ключ справочника — (показатель, источник): одно DisplayName может встретиться дважды
+   * («Белок» в крови и в моче) — показывать источник только когда в списке есть ещё одна запись
+   * с тем же именем (иначе подпись не несёт пользы). */
   specimenSubtitle(item: KbAnalyteListItem): string | null {
-    if (item.specimen === SpecimenType.Unknown) return null;
     const sameName = this.items.filter((i) => i.displayName === item.displayName);
-    return sameName.length > 1 ? specimenLabel(item.specimen) : null;
+    return sameName.length > 1 ? item.specimenDisplayName : null;
   }
 
   async ngOnInit(): Promise<void> {

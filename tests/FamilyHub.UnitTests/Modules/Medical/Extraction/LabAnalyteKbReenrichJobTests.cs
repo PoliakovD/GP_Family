@@ -1,5 +1,4 @@
 using FamilyHub.Domain.Entities;
-using FamilyHub.Domain.Enums;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.TestUtils;
 using FluentAssertions;
@@ -15,6 +14,13 @@ namespace FamilyHub.UnitTests.Modules.Medical.Extraction;
 /// которые LabAnalyteEnrichmentProcessor не должен закрывать как "уже есть" без реальной работы.</summary>
 public class LabAnalyteKbReenrichJobTests : SqliteTestBase
 {
+    // Пересборка enrich-пайплайна: источник — ссылка на GlobalSpecimenKb, не enum. Реальная
+    // kb-запись никогда не имеет SpecimenKbId=Unresolved (жёсткий гейт в
+    // LabAnalyteEnrichmentRequestService это гарантирует) — произвольные Guid'ы здесь просто
+    // отличают "кровь" от "мочу" для теста, без реальных строк справочника.
+    private static readonly Guid BloodId = Guid.NewGuid();
+    private static readonly Guid UrineId = Guid.NewGuid();
+
     private readonly IBackgroundJobClient _backgroundJobs = Substitute.For<IBackgroundJobClient>();
     private readonly LabAnalyteKbReenrichJob _sut;
 
@@ -25,14 +31,14 @@ public class LabAnalyteKbReenrichJobTests : SqliteTestBase
         _sut = new LabAnalyteKbReenrichJob(Db, requestService, NullLogger<LabAnalyteKbReenrichJob>.Instance);
     }
 
-    private void SeedKb(string normalizedName, SpecimenType specimen, int payloadVersion)
+    private void SeedKb(string normalizedName, Guid specimenKbId, int payloadVersion)
     {
         var now = DateTime.UtcNow;
         Db.GlobalLabAnalytesKb.Add(new GlobalLabAnalyteKb
         {
             Id = Guid.NewGuid(),
             NormalizedName = normalizedName,
-            Specimen = specimen,
+            SpecimenKbId = specimenKbId,
             DisplayName = normalizedName,
             PayloadJson = "{}",
             PayloadVersion = payloadVersion,
@@ -45,14 +51,14 @@ public class LabAnalyteKbReenrichJobTests : SqliteTestBase
     [Fact]
     public async Task RunAsync_StaleSchemaRow_CreatesForcedJob()
     {
-        SeedKb("гемоглобин", SpecimenType.Blood, payloadVersion: 3);
+        SeedKb("гемоглобин", BloodId, payloadVersion: 3);
         await Db.SaveChangesAsync();
 
         await _sut.RunAsync();
 
         var job = Db.LabAnalyteEnrichmentJobs.Single();
         job.NormalizedName.Should().Be("гемоглобин");
-        job.Specimen.Should().Be(SpecimenType.Blood);
+        job.SpecimenKbId.Should().Be(BloodId);
         job.Force.Should().BeTrue("иначе процессор увидит Hit в справочнике и завершит задачу без реальной работы");
         job.RequestedByUserId.Should().Be(Guid.Empty, "задача поставлена системой, не конкретным пользователем");
         _backgroundJobs.Received(1).Create(
@@ -63,7 +69,7 @@ public class LabAnalyteKbReenrichJobTests : SqliteTestBase
     [Fact]
     public async Task RunAsync_AlreadyCurrentSchemaRow_DoesNotCreateJob()
     {
-        SeedKb("глюкоза", SpecimenType.Blood, payloadVersion: LabAnalyteSummarySchema.CurrentVersion);
+        SeedKb("глюкоза", BloodId, payloadVersion: LabAnalyteSummarySchema.CurrentVersion);
         await Db.SaveChangesAsync();
 
         await _sut.RunAsync();
@@ -76,7 +82,7 @@ public class LabAnalyteKbReenrichJobTests : SqliteTestBase
     public async Task RunAsync_MoreStaleRowsThanBatchSize_OnlyProcessesOneBatch()
     {
         for (var i = 0; i < LabAnalyteKbReenrichJob.BatchSize + 5; i++)
-            SeedKb($"показатель{i}", SpecimenType.Unknown, payloadVersion: 1);
+            SeedKb($"показатель{i}", BloodId, payloadVersion: 1);
         await Db.SaveChangesAsync();
 
         await _sut.RunAsync();
@@ -88,13 +94,13 @@ public class LabAnalyteKbReenrichJobTests : SqliteTestBase
     [Fact]
     public async Task RunAsync_DifferentSpecimenSameName_BothGetSeparateForcedJobs()
     {
-        SeedKb("белок", SpecimenType.Blood, payloadVersion: 3);
-        SeedKb("белок", SpecimenType.Urine, payloadVersion: 3);
+        SeedKb("белок", BloodId, payloadVersion: 3);
+        SeedKb("белок", UrineId, payloadVersion: 3);
         await Db.SaveChangesAsync();
 
         await _sut.RunAsync();
 
         Db.LabAnalyteEnrichmentJobs.Should().HaveCount(2);
-        Db.LabAnalyteEnrichmentJobs.Select(j => j.Specimen).Should().BeEquivalentTo([SpecimenType.Blood, SpecimenType.Urine]);
+        Db.LabAnalyteEnrichmentJobs.Select(j => j.SpecimenKbId).Should().BeEquivalentTo([BloodId, UrineId]);
     }
 }

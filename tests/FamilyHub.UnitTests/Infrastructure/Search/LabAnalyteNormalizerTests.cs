@@ -47,4 +47,28 @@ public class LabAnalyteNormalizerTests
     {
         LabAnalyteNormalizer.Normalize("  ГЕМОГЛОБИН  ").Should().Be("гемоглобин");
     }
+
+    [Theory]
+    [InlineData("1. Гемоглобин", "гемоглобин")]
+    [InlineData("12) Лейкоциты", "лейкоциты")]
+    [InlineData("1.2 Белок", "белок")]
+    [InlineData("5 Гемоглобин", "гемоглобин")]
+    [InlineData("[0] Гемоглобин", "гемоглобин")]
+    public void Normalize_StripsLeadingNumberingAndEchoIndex(string raw, string expected)
+    {
+        // Пересборка enrich-пайплайна: нумерация пункта бланка ("1. ") и эхо-подпись, которую
+        // модель иногда возвращает вместе с исправленным текстом ("[0] "), не должны попадать в
+        // ключ дедупликации — иначе один и тот же показатель на разных бланках расходится на
+        // разные строки справочника.
+        LabAnalyteNormalizer.Normalize(raw).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("витамин B12", "витамин b12")]
+    [InlineData("омега 3", "омега 3")]
+    [InlineData("17-ОН-прогестерон", "17 он прогестерон")]
+    public void Normalize_KeepsDigitsThatAreNotLeadingNumbering(string raw, string expected)
+    {
+        LabAnalyteNormalizer.Normalize(raw).Should().Be(expected);
+    }
 }

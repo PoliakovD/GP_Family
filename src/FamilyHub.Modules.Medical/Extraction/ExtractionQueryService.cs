@@ -48,7 +48,8 @@ public class ExtractionQueryService(
             .OrderBy(i => i.Position)
             .ToListAsync(ct);
 
-        return (ExtractionQueryResult.Success, items.Select(ToDto).ToList());
+        var specimenNames = await ResolveSpecimenNamesAsync(items.Select(i => i.SpecimenKbId), ct);
+        return (ExtractionQueryResult.Success, items.Select(i => ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId))).ToList());
     }
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
@@ -123,36 +124,52 @@ public class ExtractionQueryService(
             summary.PlainSummary, summary.Deviations, summary.QuestionsForDoctor, summary.Disclaimer));
     }
 
-    /// <summary>Последнее значение по каждому (показатель, биоматериал) среди СВОИХ записей
+    /// <summary>Последнее значение по каждому (показатель, источник) среди СВОИХ записей
     /// пользователя (владелец) — расшаренные чужие записи сюда не входят, "мои показатели" в
-    /// буквальном смысле. (Specimen, SpecimenCustomId) — часть ключа группировки (v2 + UX-
-    /// редизайн): лейкоциты крови и мочи, а также два разных кастомных биоматериала (оба
-    /// Specimen=Other) не должны схлопнуться в одну строку.</summary>
+    /// буквальном смысле. SpecimenKbId — часть ключа группировки (пересборка enrich-пайплайна):
+    /// лейкоциты крови и мочи, а также два разных источника вне общего набора (ЭКГ, УЗИ) не
+    /// должны схлопнуться в одну строку.</summary>
     public async Task<List<MyIndicatorSummary>> GetMyIndicatorsAsync(Guid userId, CancellationToken ct = default)
     {
         var all = await db.LabIndicators.AsNoTracking()
             .Where(i => i.OwnerUserId == userId)
             .ToListAsync(ct);
 
-        return all
-            .GroupBy(i => (i.AnalyteKey, i.Specimen, i.SpecimenCustomId))
+        var latest = all
+            .GroupBy(i => (i.AnalyteKey, i.SpecimenKbId))
             .Select(g => g.OrderByDescending(i => i.RecordDate).First())
+            .ToList();
+
+        var specimenNames = await ResolveSpecimenNamesAsync(latest.Select(i => i.SpecimenKbId), ct);
+        return latest
             .Select(i => new MyIndicatorSummary(
-                i.AnalyteKey, i.DisplayName, i.Specimen, i.ValueRaw, i.Unit, i.Flag, i.RecordDate, i.SpecimenCustomId))
+                i.AnalyteKey, i.DisplayName, i.SpecimenKbId, specimenNames.GetValueOrDefault(i.SpecimenKbId),
+                i.ValueRaw, i.Unit, i.Flag, i.RecordDate))
             .OrderBy(s => s.DisplayName)
             .ToList();
     }
 
     public async Task<List<IndicatorHistoryPoint>> GetHistoryAsync(
-        Guid userId, string analyteKey, SpecimenType specimen, Guid? specimenCustomId, CancellationToken ct = default)
+        Guid userId, string analyteKey, Guid specimenKbId, CancellationToken ct = default)
     {
         var items = await db.LabIndicators.AsNoTracking()
-            .Where(i => i.OwnerUserId == userId && i.AnalyteKey == analyteKey && i.Specimen == specimen
-                && i.SpecimenCustomId == specimenCustomId)
+            .Where(i => i.OwnerUserId == userId && i.AnalyteKey == analyteKey && i.SpecimenKbId == specimenKbId)
             .OrderBy(i => i.RecordDate)
             .ToListAsync(ct);
 
         return items.Select(i => new IndicatorHistoryPoint(i.RecordDate, i.ValueRaw, i.ValueNumericText, i.Flag, i.MedicalRecordId)).ToList();
+    }
+
+    /// <summary>Батч-резолв DisplayName источников на набор SpecimenKbId — один запрос вместо N+1,
+    /// тот же приём, что exactHits в GetConclusionAsync.</summary>
+    private async Task<Dictionary<Guid, string>> ResolveSpecimenNamesAsync(IEnumerable<Guid> specimenKbIds, CancellationToken ct)
+    {
+        var distinct = specimenKbIds.Distinct().ToList();
+        if (distinct.Count == 0) return [];
+
+        return await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => distinct.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.DisplayName, ct);
     }
 
     /// <summary>Персонализированная статья справочника по показателю (редизайн v2, панель справки) —
@@ -196,9 +213,11 @@ public class ExtractionQueryService(
         }
 
         var historyCount = (await QueryVisibleHistoryAsync(indicator, userId, ct)).Count;
+        var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => s.Id == indicator.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
 
         return (ExtractionQueryResult.Success, new IndicatorArticleResponse(
-            ToDto(indicator), new PatientContextDto(ageYears, sex), matchedIndex, article, historyCount >= 2));
+            ToDto(indicator, specimenDisplayName), new PatientContextDto(ageYears, sex), matchedIndex, article, historyCount >= 2));
     }
 
     /// <summary>Тренд показателя для КОНКРЕТНОЙ записи (в отличие от GetHistoryAsync выше, который
@@ -224,7 +243,7 @@ public class ExtractionQueryService(
         var visibleIds = await medicalRecords.GetVisibleRecordIdsAsync(userId, MedicalRecordKind.Analysis, ct);
         var items = await db.LabIndicators.AsNoTracking()
             .Where(i => i.OwnerUserId == indicator.OwnerUserId && i.AnalyteKey == indicator.AnalyteKey
-                && i.Specimen == indicator.Specimen && i.SpecimenCustomId == indicator.SpecimenCustomId
+                && i.SpecimenKbId == indicator.SpecimenKbId
                 && visibleIds.Contains(i.MedicalRecordId))
             .OrderBy(i => i.RecordDate)
             .ToListAsync(ct);
@@ -251,19 +270,18 @@ public class ExtractionQueryService(
         var analyteKey = LabAnalyteNormalizer.Normalize(displayName);
         if (analyteKey.Length == 0) analyteKey = indicator.AnalyteKey;
 
-        // Кастомный биоматериал (UX-редизайн) — только при Specimen=Other, только свой (нельзя
-        // сослаться на чужую запись справочника, зная только id); иначе принудительно обнуляем,
-        // как FamilyDependent.PetSpecies при IsPet=false.
-        var specimenCustomId = request.Specimen == SpecimenType.Other ? request.SpecimenCustomId : null;
-        if (specimenCustomId is { } customId &&
-            !await db.UserSpecimens.AnyAsync(s => s.Id == customId && s.OwnerUserId == userId, ct))
+        // Источник (пересборка enrich-пайплайна) — должен существовать в общем справочнике
+        // (сентинел "не определено" — тоже валидная строка, разрешён). Ручная правка НИКОГДА не
+        // ставит обогащение в очередь (жёсткое требование) — только перепривязка к уже
+        // существующей строке KB, даже если выбор явно не подходит показателю.
+        if (!await db.GlobalSpecimensKb.AnyAsync(s => s.Id == request.SpecimenKbId, ct))
             return UpdateIndicatorResult.NotFound;
 
-        // Уникальный индекс (MedicalRecordId, AnalyteKey, Specimen, SpecimenCustomId) — правка
-        // могла увести показатель на пару, уже занятую другой строкой этой же записи.
+        // Уникальный индекс (MedicalRecordId, AnalyteKey, SpecimenKbId) — правка могла увести
+        // показатель на пару, уже занятую другой строкой этой же записи.
         var conflict = await db.LabIndicators.AnyAsync(i =>
             i.Id != indicatorId && i.MedicalRecordId == indicator.MedicalRecordId &&
-            i.AnalyteKey == analyteKey && i.Specimen == request.Specimen && i.SpecimenCustomId == specimenCustomId, ct);
+            i.AnalyteKey == analyteKey && i.SpecimenKbId == request.SpecimenKbId, ct);
         if (conflict) return UpdateIndicatorResult.Conflict;
 
         var refLow = ParseNumeric(request.RefLowText);
@@ -274,9 +292,12 @@ public class ExtractionQueryService(
         var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback: null, ageYears: null, sex: null);
 
         indicator.DisplayName = displayName;
+        // Ручная правка полностью заменяет исходную формулировку с бланка — RawDisplayName больше
+        // не актуален, подсказка "в бланке: …" исчезает из UI (тот же приём, что сброс других
+        // распознанных полей ручной правкой ниже).
+        indicator.RawDisplayName = null;
         indicator.AnalyteKey = analyteKey;
-        indicator.Specimen = request.Specimen;
-        indicator.SpecimenCustomId = specimenCustomId;
+        indicator.SpecimenKbId = request.SpecimenKbId;
         indicator.ValueRaw = request.ValueRaw;
         indicator.ValueNumericText = ParseNumeric(request.ValueRaw)?.ToString(CultureInfo.InvariantCulture);
         indicator.Unit = request.Unit;
@@ -307,14 +328,14 @@ public class ExtractionQueryService(
         var analyteKey = LabAnalyteNormalizer.Normalize(displayName);
         if (analyteKey.Length == 0) return (CreateIndicatorResult.NotFound, null);
 
-        var specimenCustomId = request.Specimen == SpecimenType.Other ? request.SpecimenCustomId : null;
-        if (specimenCustomId is { } customId &&
-            !await db.UserSpecimens.AnyAsync(s => s.Id == customId && s.OwnerUserId == userId, ct))
-            return (CreateIndicatorResult.NotFound, null);
+        // Источник должен существовать в общем справочнике (сентинел "не определено" — тоже
+        // валидная строка). Ручное добавление НЕ ставит обогащение в очередь (жёсткое требование).
+        var specimenRow = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => s.Id == request.SpecimenKbId).Select(s => new { s.Id, s.DisplayName }).FirstOrDefaultAsync(ct);
+        if (specimenRow is null) return (CreateIndicatorResult.NotFound, null);
 
         var conflict = await db.LabIndicators.AnyAsync(i =>
-            i.MedicalRecordId == recordId && i.AnalyteKey == analyteKey &&
-            i.Specimen == request.Specimen && i.SpecimenCustomId == specimenCustomId, ct);
+            i.MedicalRecordId == recordId && i.AnalyteKey == analyteKey && i.SpecimenKbId == request.SpecimenKbId, ct);
         if (conflict) return (CreateIndicatorResult.Conflict, null);
 
         var refLow = ParseNumeric(request.RefLowText);
@@ -340,8 +361,7 @@ public class ExtractionQueryService(
             DisplayName = displayName,
             Flag = flag,
             RefSource = refSource,
-            Specimen = request.Specimen,
-            SpecimenCustomId = specimenCustomId,
+            SpecimenKbId = specimenRow.Id,
             Position = maxPosition + 1,
             ValueRaw = request.ValueRaw,
             ValueNumericText = ParseNumeric(request.ValueRaw)?.ToString(CultureInfo.InvariantCulture),
@@ -354,7 +374,7 @@ public class ExtractionQueryService(
         db.LabIndicators.Add(indicator);
         await db.SaveChangesAsync(ct);
 
-        return (CreateIndicatorResult.Success, ToDto(indicator));
+        return (CreateIndicatorResult.Success, ToDto(indicator, specimenRow.DisplayName));
     }
 
     /// <summary>Удаление ошибочно распознанного/добавленного показателя — только владелец
@@ -385,10 +405,10 @@ public class ExtractionQueryService(
         return ExtractionQueryResult.Success;
     }
 
-    private static IndicatorDto ToDto(DomainLabIndicator i) => new(
-        i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.Specimen, i.Position,
-        i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId, i.SpecimenCustomId,
-        i.ValueNumericText, i.KbAnalyteId);
+    private static IndicatorDto ToDto(DomainLabIndicator i, string? specimenDisplayName) => new(
+        i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
+        i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
+        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName);
 
     private static double? ParseNumeric(string? value)
     {

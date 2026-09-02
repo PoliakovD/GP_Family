@@ -57,7 +57,7 @@ public class KbIsolationGuardTests : SqliteTestBase
         // Ветка medicalrecords: второй kb-writer (LabAnalyteKbWriter) — тот же инвариант,
         // что у справочника медикаментов, проверенный отдельно на случай, если общий
         // reflection-тест выше когда-нибудь ослабят. Ключ дедупликации — пара (показатель,
-        // биоматериал), не одно имя (пересборка enrich-пайплайна) — см. GlobalLabAnalyteKb.Specimen.
+        // источник), не одно имя (пересборка enrich-пайплайна) — см. GlobalLabAnalyteKb.SpecimenKbId.
         var entity = Db.Model.FindEntityType(typeof(GlobalLabAnalyteKb))!;
 
         entity.GetSchema().Should().Be("kb");
@@ -65,7 +65,7 @@ public class KbIsolationGuardTests : SqliteTestBase
         entity.GetIndexes().Should().Contain(i =>
             i.IsUnique && i.Properties.Count == 2 &&
             i.Properties.Any(p => p.Name == nameof(GlobalLabAnalyteKb.NormalizedName)) &&
-            i.Properties.Any(p => p.Name == nameof(GlobalLabAnalyteKb.Specimen)));
+            i.Properties.Any(p => p.Name == nameof(GlobalLabAnalyteKb.SpecimenKbId)));
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class KbIsolationGuardTests : SqliteTestBase
         entity.GetIndexes().Should().Contain(i =>
             i.IsUnique && i.Properties.Count == 2 &&
             i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.NormalizedName)) &&
-            i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.Specimen)));
+            i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.SpecimenKbId)));
     }
 
     [Fact]

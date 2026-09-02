@@ -49,10 +49,12 @@ public static class MedicalModule
         services.AddScoped<RecalculateIndicatorFlagsJob>();
         // Второй проход коррекции OCR (анализы + медикаменты, см. class doc) — общий на оба конвейера.
         services.AddScoped<OcrNameCorrector>();
-        // Общий (не персональный) справочник биоматериалов вне SpecimenType (пересборка
-        // enrich-пайплайна) — используется и ручным вводом (UserSpecimenService), и извлечением
-        // документа ниже.
+        // Общий (не персональный) справочник источников показателя — биоматериал ИЛИ
+        // инструментальное исследование, одна таблица на оба рода понятия (пересборка
+        // enrich-пайплайна, никакого enum/switch в коде) — используется и ручным вводом
+        // (UserSpecimenService), и резолвингом при извлечении документа (SpecimenResolver).
         services.AddScoped<GlobalSpecimenKbService>();
+        services.AddScoped<SpecimenResolver>();
         services.AddScoped<UserSpecimenService>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.

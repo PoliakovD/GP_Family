@@ -9,12 +9,13 @@ import { AuthService } from '../../services/auth.service';
 import { PageActionService } from '../../services/page-action.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import {
-  ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource, SpecimenType,
+  ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
 } from '../../models/types';
 import type {
   Attachment,
   AttachmentLimits,
   ExtractionStatusResponse,
+  GlobalSpecimenDto,
   IndicatorDto,
   IndicatorHistoryPoint,
   KbAnalyteCard,
@@ -44,7 +45,7 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { SPECIMEN_OPTIONS, specimenLabel } from '../../shared/util/specimen';
+import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '../../shared/util/attachment-upload';
@@ -205,9 +206,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly pipelineClearHandles = new Map<string, ReturnType<typeof setTimeout>>();
 
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
-  readonly SpecimenType = SpecimenType;
   readonly RefSource = RefSource;
-  readonly specimenOptions = SPECIMEN_OPTIONS;
   editingIndicatorId: string | null = null;
   editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
   savingIndicator = false;
@@ -216,12 +215,18 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   newIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
   savingNewIndicator = false;
 
-  // --- Кастомный биоматериал (UX-редизайн) — свой справочник + LLM-валидация при создании. ---
+  // --- Источник показателя (пересборка enrich-пайплайна) — свободный текстовый поиск по общему
+  // справочнику (GlobalSpecimenKb) вместо прежнего захардкоженного select'а на 6 значений
+  // SpecimenType: одно текстовое поле на всё, resolveSpecimenQuery находит-или-заводит строку
+  // справочника при потере фокуса (тот же find-or-register, что раньше был только у «своего»
+  // биоматериала — теперь единственный путь на все случаи).
+  editSpecimenQuery = '';
+  newSpecimenQuery = '';
+  specimenSuggestions: GlobalSpecimenDto[] = [];
   customSpecimens: UserSpecimen[] = [];
-  addingCustomSpecimen = false;
-  customSpecimenInput = '';
   customSpecimenError: string | null = null;
   savingCustomSpecimen = false;
+  private specimenSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
@@ -937,27 +942,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return key.length > 0 ? key[0].toUpperCase() + key.slice(1) : indicator.displayName;
   }
 
-  /** Комбинированный ключ (specimen[:customId]) для одиночного <select> формы правки/создания —
-   * нативный <option> не даёт слушать (click) внутри <select> кроссбраузерно, поэтому системные и
-   * кастомные значения кодируются одной строкой, а не отдельным обработчиком клика по опции. */
-  specimenKey(form: UpdateIndicatorRequest): string {
-    return form.specimen === SpecimenType.Other && form.specimenCustomId
-      ? `${form.specimen}:${form.specimenCustomId}`
-      : `${form.specimen}`;
-  }
-
-  applySpecimenKey(form: UpdateIndicatorRequest, key: string): void {
-    const [specimenPart, customId] = key.split(':');
-    form.specimen = Number(specimenPart) as SpecimenType;
-    form.specimenCustomId = customId ?? null;
-  }
-
-  specimenLabelFor(indicator: { specimen: number; specimenCustomId: string | null }): string {
-    if (indicator.specimen === SpecimenType.Other && indicator.specimenCustomId) {
-      const custom = this.customSpecimens.find((c) => c.id === indicator.specimenCustomId);
-      if (custom) return custom.displayName;
-    }
-    return specimenLabel(indicator.specimen);
+  specimenLabelFor(indicator: { specimenDisplayName: string | null }): string {
+    return specimenLabel(indicator.specimenDisplayName);
   }
 
   /** Бэйдж «рассчитано ИИ» — только для диапазона, посчитанного локальной LLM по методике из
@@ -983,22 +969,22 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       displayName: indicator.displayName,
       valueRaw: indicator.valueRaw,
       unit: indicator.unit,
-      specimen: indicator.specimen as SpecimenType,
+      specimenKbId: indicator.specimenKbId,
       refLowText: indicator.refLowText,
       refHighText: indicator.refHighText,
       refText: indicator.refText,
-      specimenCustomId: indicator.specimenCustomId,
     };
+    this.editSpecimenQuery = indicator.specimenDisplayName ?? '';
   }
 
   cancelEditIndicator(): void {
     this.editingIndicatorId = null;
     this.editIndicatorForm = emptyIndicatorEdit();
-    this.addingCustomSpecimen = false;
+    this.editSpecimenQuery = '';
   }
 
   async saveEditIndicator(recordId: string): Promise<void> {
-    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
+    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim() || !this.editIndicatorForm.specimenKbId) return;
     this.savingIndicator = true;
     try {
       await this.api.updateIndicator(this.editingIndicatorId, sanitizeIndicatorForm(this.editIndicatorForm));
@@ -1038,16 +1024,17 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.editingIndicatorId = null;
     this.creatingIndicatorRecordId = recordId;
     this.newIndicatorForm = emptyIndicatorEdit();
+    this.newSpecimenQuery = '';
   }
 
   cancelCreateIndicator(): void {
     this.creatingIndicatorRecordId = null;
     this.newIndicatorForm = emptyIndicatorEdit();
-    this.addingCustomSpecimen = false;
+    this.newSpecimenQuery = '';
   }
 
   async saveNewIndicator(): Promise<void> {
-    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim()) return;
+    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim() || !this.newIndicatorForm.specimenKbId) return;
     const recordId = this.creatingIndicatorRecordId;
     this.savingNewIndicator = true;
     try {
@@ -1064,39 +1051,48 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Кастомный биоматериал ---
+  // --- Источник показателя — поиск по общему справочнику + find-or-register на потере фокуса ---
 
-  startAddCustomSpecimen(): void {
-    this.addingCustomSpecimen = true;
-    this.customSpecimenInput = '';
-    this.customSpecimenError = null;
+  /** Debounce поиска подсказок (GET /api/specimens/search) — вызывается на каждый ввод символа
+   * в любое из двух полей (правка/создание), общий список подсказок на оба. */
+  onSpecimenQueryInput(q: string): void {
+    if (this.specimenSearchTimer) clearTimeout(this.specimenSearchTimer);
+    this.specimenSearchTimer = setTimeout(() => void this.searchSpecimens(q), 200);
   }
 
-  cancelAddCustomSpecimen(): void {
-    this.addingCustomSpecimen = false;
-    this.customSpecimenInput = '';
-    this.customSpecimenError = null;
+  private async searchSpecimens(q: string): Promise<void> {
+    try {
+      this.specimenSuggestions = await this.api.searchSpecimens(q);
+    } catch {
+      // Подсказка необязательна для работы формы — молча оставляем прежний список при сбое сети.
+    }
   }
 
-  /** Проверяет и добавляет биоматериал через LLM-валидацию (UserSpecimenService), затем сразу
-   * подставляет его в текущую форму (правку или создание — то, что сейчас открыто). */
-  async submitCustomSpecimen(): Promise<void> {
-    const name = this.customSpecimenInput.trim();
-    if (!name || this.savingCustomSpecimen) return;
+  /** Резолвит введённый текст в ссылку на справочник при потере фокуса поля — совпадение среди
+   * уже загруженных подсказок берётся без сети; новый текст проходит find-or-register
+   * (POST /api/specimens, та же LLM-валидация, что раньше была только у «своего» биоматериала —
+   * теперь единственный путь на все случаи, включая распространённые источники). */
+  async resolveSpecimenQuery(query: string, form: UpdateIndicatorRequest): Promise<void> {
+    const trimmed = query.trim();
+    if (!trimmed || this.savingCustomSpecimen) return;
+
+    const existing = this.specimenSuggestions.find((s) => s.displayName.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      form.specimenKbId = existing.id;
+      this.customSpecimenError = null;
+      return;
+    }
+
     this.savingCustomSpecimen = true;
     this.customSpecimenError = null;
     try {
-      const created = await this.api.createSpecimen(name);
-      if (!this.customSpecimens.some((s) => s.id === created.id)) {
+      const created = await this.api.createSpecimen(trimmed);
+      form.specimenKbId = created.specimenKbId;
+      if (!this.customSpecimens.some((s) => s.specimenKbId === created.specimenKbId)) {
         this.customSpecimens = [...this.customSpecimens, created].sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
       }
-      const target = this.creatingIndicatorRecordId ? this.newIndicatorForm : this.editIndicatorForm;
-      target.specimen = SpecimenType.Other;
-      target.specimenCustomId = created.id;
-      this.addingCustomSpecimen = false;
-      this.customSpecimenInput = '';
     } catch (err) {
-      this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить биоматериал.';
+      this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить источник показателя.';
     } finally {
       this.savingCustomSpecimen = false;
     }
@@ -1330,8 +1326,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {
   return {
-    displayName: '', valueRaw: '', unit: null, specimen: SpecimenType.Unknown,
-    refLowText: null, refHighText: null, refText: null, specimenCustomId: null,
+    displayName: '', valueRaw: '', unit: null, specimenKbId: '',
+    refLowText: null, refHighText: null, refText: null,
   };
 }
 
@@ -1346,6 +1342,5 @@ function sanitizeIndicatorForm(form: UpdateIndicatorRequest): UpdateIndicatorReq
     refLowText: form.refLowText?.trim() || null,
     refHighText: form.refHighText?.trim() || null,
     refText: form.refText?.trim() || null,
-    specimenCustomId: form.specimen === SpecimenType.Other ? (form.specimenCustomId ?? null) : null,
   };
 }

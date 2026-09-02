@@ -38,7 +38,7 @@ public class LabAnalyteKbReenrichJob(
             .Where(k => k.PayloadVersion < LabAnalyteSummarySchema.CurrentVersion)
             .OrderBy(k => k.UpdatedAt)
             .Take(BatchSize)
-            .Select(k => new { k.NormalizedName, k.Specimen, k.DisplayName })
+            .Select(k => new { k.NormalizedName, k.SpecimenKbId, k.DisplayName })
             .ToListAsync(ct);
 
         if (stale.Count == 0)
@@ -52,7 +52,7 @@ public class LabAnalyteKbReenrichJob(
         foreach (var row in stale)
         {
             await enrichmentRequest.RequestAsync(
-                row.NormalizedName, row.Specimen, row.DisplayName, labIndicatorId: null, SystemUserId, force: true, ct);
+                row.NormalizedName, row.SpecimenKbId, row.DisplayName, labIndicatorId: null, SystemUserId, force: true, ct);
         }
 
         logger.LogInformation(

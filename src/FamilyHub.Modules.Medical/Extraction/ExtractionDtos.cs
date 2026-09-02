@@ -1,5 +1,3 @@
-using FamilyHub.Domain.Enums;
-
 namespace FamilyHub.Modules.Medical.Extraction;
 
 /// <summary>Один показатель, как его вернула модель — сырой выход LLM ДО нормализации/привязки к
@@ -40,8 +38,6 @@ public record VisitConclusion(
 ///
 /// v2: поля уровня ДОКУМЕНТА (не индикатора) — распознаются один раз на вложение, дешевле для
 /// модели, чем спрашивать это же на каждый показатель:
-/// <see cref="Specimen"/> — биоматериал бланка (кровь/моча/кал и т.д.), проставляется на КАЖДЫЙ
-/// извлечённый LabIndicator этого файла процессором при мерже в запись.
 /// <see cref="DocumentDate"/> — дата анализа/приёма, напечатанная в бланке, если распозналась —
 /// процессор обновляет MedicalRecord.RecordDate (по умолчанию — дата создания записи).
 /// <see cref="SuggestedTitle"/> — короткое название документа ("Общий анализ крови"), если оно
@@ -49,18 +45,18 @@ public record VisitConclusion(
 /// <see cref="Doctor"/> — врач/специалист, если указан в документе (для анализа — "кто назначил",
 /// для визита — принимавший врач) — процессор пишет в MedicalRecord.Doctor, если оно ещё пустое
 /// (не затирает то, что пользователь мог ввести вручную в форме создания).
+///
+/// Источник показателя (биоматериал/исследование) больше НЕ структурное поле этого результата —
+/// определяется отдельным проходом SpecimenResolver по документу целиком (один вызов LLM на файл,
+/// не побочное поле промпта структурирования показателей — совмещение задач мешало обеим), сырой
+/// (ещё не сведённый к строке справочника) итог этого прохода лежит в <see cref="SpecimenResolution"/>.
 /// </summary>
 public record ExtractionResult(
     bool Supported,
     IReadOnlyList<ExtractedLabIndicator>? LabIndicators,
     VisitConclusion? Conclusion,
     string? FailureReason = null,
-    SpecimenType? Specimen = null,
     DateOnly? DocumentDate = null,
     string? SuggestedTitle = null,
     string? Doctor = null,
-    /// <summary>Название биоматериала как в бланке — заполняется, только когда Specimen ==
-    /// SpecimenType.Other (пересборка enrich-пайплайна): фиксированный enum не различает "какой
-    /// именно" other, этот текст даёт MedicalDocumentExtractionProcessor материал для
-    /// GlobalSpecimenKbService (см. её class doc). Null для остальных значений Specimen.</summary>
-    string? SpecimenOtherLabel = null);
+    SpecimenDocumentResolution? SpecimenResolution = null);

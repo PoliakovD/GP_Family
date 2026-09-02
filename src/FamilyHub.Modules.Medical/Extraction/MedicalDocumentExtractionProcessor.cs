@@ -23,8 +23,8 @@ namespace FamilyHub.Modules.Medical.Extraction;
 ///
 /// v2: задача теперь на ЗАПИСЬ целиком — обрабатывает ПОСЛЕДОВАТЕЛЬНО все вложения записи, ещё не
 /// распознанные (FileAttachment.ExtractedAt=null), не одно вложение по клику. Показатели из
-/// разных файлов МЕРЖАТСЯ по ключу (AnalyteKey, Specimen) в существующий набор записи (upsert, не
-/// blanket-delete) — повторный клик «Распознать» после добавления нового файла не стирает
+/// разных файлов МЕРЖАТСЯ по ключу (AnalyteKey, SpecimenKbId) в существующий набор записи (upsert,
+/// не blanket-delete) — повторный клик «Распознать» после добавления нового файла не стирает
 /// результаты уже разобранных. Суммаризация — ОДИН проход по полному смерженному набору после
 /// всех файлов, не по каждому файлу отдельно.
 ///
@@ -43,7 +43,7 @@ public class MedicalDocumentExtractionProcessor(
     LabAnalyteKbLookupService kbLookup,
     LabAnalyteEnrichmentRequestService enrichmentRequest,
     OcrNameCorrector ocrNameCorrector,
-    GlobalSpecimenKbService specimenKb,
+    SpecimenResolver specimenResolver,
     PatientReferenceCalculator referenceCalculator,
     LabSummarizer summarizer,
     Kb.KbLookupService medicationKbLookup,
@@ -182,38 +182,21 @@ public class MedicalDocumentExtractionProcessor(
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
         string? doctor = null;
-        string? specimenOtherLabel = null;
-        var rawIndicators = new List<(ExtractedLabIndicator Dto, SpecimenType Specimen)>();
+        var rawIndicators = new List<(ExtractedLabIndicator Dto, SpecimenDocumentResolution? Resolution)>();
 
         foreach (var result in results)
         {
             if (result.DocumentDate is not null) documentDate = result.DocumentDate;
             if (suggestedTitle is null && !string.IsNullOrWhiteSpace(result.SuggestedTitle)) suggestedTitle = result.SuggestedTitle;
             if (doctor is null && !string.IsNullOrWhiteSpace(result.Doctor)) doctor = result.Doctor;
-            if (specimenOtherLabel is null && !string.IsNullOrWhiteSpace(result.SpecimenOtherLabel))
-                specimenOtherLabel = result.SpecimenOtherLabel;
             if (result.LabIndicators is null) continue;
 
-            var specimen = result.Specimen ?? SpecimenType.Unknown;
-            rawIndicators.AddRange(result.LabIndicators.Select(dto => (dto, specimen)));
-        }
-
-        // Биоматериал вне фиксированного enum ("ликвор" и т.п.) — лучшее усилие: пополняем общий
-        // справочник (GlobalSpecimenKbService), чтобы то же название не пришлось провалидировать
-        // заново при ручном вводе. Не блокирует и не проваливает основной конвейер — LabIndicator.
-        // Specimen всё равно останется SpecimenType.Other независимо от исхода этой регистрации.
-        if (!string.IsNullOrWhiteSpace(specimenOtherLabel))
-        {
-            try
-            {
-                var normalizedSpecimenLabel = LabAnalyteNormalizer.Normalize(specimenOtherLabel);
-                if (normalizedSpecimenLabel.Length > 0 && await specimenKb.FindAsync(normalizedSpecimenLabel, ct) is null)
-                    await specimenKb.ValidateAndRegisterAsync(specimenOtherLabel.Trim(), normalizedSpecimenLabel, ct);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Не удалось зарегистрировать биоматериал «{Label}» в общем справочнике — пропускаем.", specimenOtherLabel);
-            }
+            // Источник (биоматериал/исследование) резолвится один раз на файл экстрактором (см.
+            // SpecimenResolver, LmStudioMedicalDocumentExtractor.ExtractAnalysisAsync) — здесь
+            // только переносится на каждый показатель этого файла, ещё не сведён к Guid: секция
+            // конкретного показателя (несколько панелей на одном бланке) может переопределить
+            // document-level источник этого же файла, см. ниже.
+            rawIndicators.AddRange(result.LabIndicators.Select(dto => (dto, result.SpecimenResolution)));
         }
 
         if (rawIndicators.Count == 0)
@@ -244,61 +227,89 @@ public class MedicalDocumentExtractionProcessor(
         var correctedNames = await ocrNameCorrector.CorrectBatchAsync(
             rawIndicators.Select(x => x.Dto.Name).ToList(), ct);
         rawIndicators = rawIndicators
-            .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.Specimen))
+            .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.Resolution))
             .ToList();
 
-        var normalized = rawIndicators
-            .Select(x => (x.Dto, AnalyteKey: LabAnalyteNormalizer.Normalize(x.Dto.Name), x.Specimen))
-            .Where(x => x.AnalyteKey.Length > 0)
-            .ToList();
-
-        // Один Lookup на уникальную пару (имя, биоматериал) — один и тот же показатель в одном и
-        // том же биоматериале может повторяться на одном бланке; тот же показатель в РАЗНОМ
-        // биоматериале (кровь/моча) ищется отдельно (пересборка enrich-пайплайна, см.
-        // LabAnalyteKbLookupService).
-        var lookups = new Dictionary<(string AnalyteKey, SpecimenType Specimen), Kb.KbLookupResult>();
-        foreach (var (_, analyteKey, specimen) in normalized)
+        // Резолвим источник в Guid — секция (несколько панелей на одном бланке, см. SpecimenResolver)
+        // побеждает над document-level контекстом того же файла, если модель явно перечислила этот
+        // показатель в секции с другим источником. Кэш по (context, rawLabel, confidence) — один
+        // запрос к справочнику на уникальную комбинацию, не на каждый показатель.
+        var specimenKbIdCache = new Dictionary<(string? Context, string? RawLabel, double Confidence), Guid>();
+        async Task<Guid> ResolveSpecimenKbIdAsync(string? context, string? rawLabel, double confidence)
         {
-            var key = (analyteKey, specimen);
+            var cacheKey = (context, rawLabel, confidence);
+            if (specimenKbIdCache.TryGetValue(cacheKey, out var cached)) return cached;
+            var resolved = await specimenResolver.ResolveKbIdAsync(context, confidence, rawLabel, ct);
+            specimenKbIdCache[cacheKey] = resolved;
+            return resolved;
+        }
+
+        var normalized = new List<(ExtractedLabIndicator Dto, string AnalyteKey, Guid SpecimenKbId)>();
+        foreach (var (dto, resolution) in rawIndicators)
+        {
+            var analyteKey = LabAnalyteNormalizer.Normalize(dto.Name);
+            if (analyteKey.Length == 0) continue;
+
+            var section = resolution?.Sections.FirstOrDefault(s => s.IndicatorNames.Any(n =>
+                string.Equals(LabAnalyteNormalizer.Normalize(n), analyteKey, StringComparison.Ordinal)));
+
+            // Явное перечисление в секции — сильный сигнал самой модели по конкретному показателю,
+            // не нуждается в отдельном сравнении с порогом confidence документа.
+            var (context, rawLabel, confidence) = section is not null
+                ? (section.Context, section.Context, 1.0)
+                : (resolution?.Context, resolution?.RawLabel, resolution?.Confidence ?? 0);
+
+            var specimenKbId = await ResolveSpecimenKbIdAsync(context, rawLabel, confidence);
+            normalized.Add((dto, analyteKey, specimenKbId));
+        }
+
+        // Один Lookup на уникальную пару (имя, источник) — один и тот же показатель из одного и
+        // того же источника может повторяться на одном бланке; тот же показатель из РАЗНОГО
+        // источника (кровь/моча) ищется отдельно (пересборка enrich-пайплайна, см.
+        // LabAnalyteKbLookupService).
+        var lookups = new Dictionary<(string AnalyteKey, Guid SpecimenKbId), Kb.KbLookupResult>();
+        foreach (var (_, analyteKey, specimenKbId) in normalized)
+        {
+            var key = (analyteKey, specimenKbId);
             if (!lookups.ContainsKey(key))
-                lookups[key] = await kbLookup.LookupAsync(analyteKey, specimen, ct);
+                lookups[key] = await kbLookup.LookupAsync(analyteKey, specimenKbId, ct);
         }
 
         var hitIds = lookups.Values.Where(l => l.Kind == Kb.KbLookupKind.Hit).Select(l => l.KbId!.Value).Distinct().ToList();
-        Dictionary<Guid, string> kbPayloads = hitIds.Count == 0
+        Dictionary<Guid, (string PayloadJson, string DisplayName)> kbRows = hitIds.Count == 0
             ? []
             : await db.GlobalLabAnalytesKb.AsNoTracking()
                 .Where(k => hitIds.Contains(k.Id))
-                .Select(k => new { k.Id, k.PayloadJson })
-                .ToDictionaryAsync(x => x.Id, x => x.PayloadJson, ct);
+                .Select(k => new { k.Id, k.PayloadJson, k.DisplayName })
+                .ToDictionaryAsync(x => x.Id, x => (x.PayloadJson, x.DisplayName), ct);
 
         var (ageYears, sex) = await PatientIdentityResolver.ResolveAsync(db, record, ct);
 
         // Существующие показатели записи (из прошлых прогонов «Распознать» на этой же записи) —
-        // upsert по (AnalyteKey, Specimen), НЕ blanket-delete: повторный клик с новым файлом не
+        // upsert по (AnalyteKey, SpecimenKbId), НЕ blanket-delete: повторный клик с новым файлом не
         // должен стирать результаты уже распознанных ранее файлов той же записи.
         var existing = await db.LabIndicators.Where(i => i.MedicalRecordId == recordId).ToListAsync(ct);
-        var existingByKey = existing.ToDictionary(i => (i.AnalyteKey, i.Specimen));
+        var existingByKey = existing.ToDictionary(i => (i.AnalyteKey, i.SpecimenKbId));
         var nextPosition = existing.Count == 0 ? 0 : existing.Max(i => i.Position) + 1;
 
-        foreach (var (dto, analyteKey, specimen) in normalized)
+        foreach (var (dto, analyteKey, specimenKbId) in normalized)
         {
-            var lookup = lookups[(analyteKey, specimen)];
+            var lookup = lookups[(analyteKey, specimenKbId)];
             var kbAnalyteId = lookup.Kind == Kb.KbLookupKind.Hit ? lookup.KbId : null;
-            var kbPayloadJson = kbAnalyteId is not null && kbPayloads.TryGetValue(kbAnalyteId.Value, out var pj) ? pj : null;
+            var kbRow = kbAnalyteId is not null && kbRows.TryGetValue(kbAnalyteId.Value, out var row) ? row : ((string PayloadJson, string DisplayName)?)null;
 
-            KbReferenceRange? kbFallback = kbPayloadJson is null
+            KbReferenceRange? kbFallback = kbRow is null
                 ? null
-                : IndicatorFlagCalculator.PickBestRange(LabAnalyteKbPayload.ParseRefRanges(kbPayloadJson), ageYears, sex);
+                : IndicatorFlagCalculator.PickBestRange(LabAnalyteKbPayload.ParseRefRanges(kbRow.Value.PayloadJson), ageYears, sex);
 
             var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex);
 
             // Каскад шаг 3: KB-запись есть, фиксированный диапазон не подошёл под пациента, но
             // есть словесная методика расчёта — просим локальную LLM посчитать под конкретного
             // пациента (возраст/пол), в единице измерения бланка.
-            if (refSource == RefSource.None && kbPayloadJson is not null)
+            if (refSource == RefSource.None && kbRow is not null)
             {
-                var instructions = LabAnalyteKbPayload.ParseCalculationInstructions(kbPayloadJson);
+                var instructions = LabAnalyteKbPayload.ParseCalculationInstructions(kbRow.Value.PayloadJson);
                 if (!string.IsNullOrWhiteSpace(instructions))
                 {
                     var calculated = await referenceCalculator.CalculateAsync(dto.Name, instructions, ageYears, sex, dto.Unit, ct);
@@ -312,7 +323,7 @@ public class MedicalDocumentExtractionProcessor(
                 }
             }
 
-            var key = (analyteKey, specimen);
+            var key = (analyteKey, specimenKbId);
             if (!existingByKey.TryGetValue(key, out var entity))
             {
                 entity = new DomainLabIndicator
@@ -321,7 +332,7 @@ public class MedicalDocumentExtractionProcessor(
                     MedicalRecordId = recordId,
                     OwnerUserId = ownerUserId,
                     AnalyteKey = analyteKey,
-                    Specimen = specimen,
+                    SpecimenKbId = specimenKbId,
                     Position = nextPosition++,
                     CreatedAt = DateTime.UtcNow,
                 };
@@ -329,8 +340,24 @@ public class MedicalDocumentExtractionProcessor(
                 existingByKey[key] = entity;
             }
 
+            // Каноническое имя из справочника при попадании — сырое (очищенное от нумерации/КАПС)
+            // имя с бланка остаётся рядом подсказкой (пересборка enrich-пайплайна, см.
+            // LabIndicator.RawDisplayName). Промах — само очищенное имя с бланка становится
+            // отображаемым, RawDisplayName пуст (нечего подсказывать, DisplayName и есть бланк).
+            var cleanedFromForm = LabAnalyteNameCleaner.Clean(dto.Name);
+            if (kbRow is not null)
+            {
+                entity.DisplayName = kbRow.Value.DisplayName;
+                entity.RawDisplayName = string.Equals(kbRow.Value.DisplayName, cleanedFromForm, StringComparison.Ordinal)
+                    ? null : dto.Name;
+            }
+            else
+            {
+                entity.DisplayName = cleanedFromForm;
+                entity.RawDisplayName = string.Equals(cleanedFromForm, dto.Name, StringComparison.Ordinal) ? null : dto.Name;
+            }
+
             entity.RecordDate = recordDate;
-            entity.DisplayName = dto.Name;
             entity.KbAnalyteId = kbAnalyteId;
             entity.Flag = flag;
             entity.RefSource = refSource;
@@ -342,10 +369,10 @@ public class MedicalDocumentExtractionProcessor(
             entity.RefText = dto.RefText;
 
             // Промах/неуверенный кандидат — ставим показатель в очередь обогащения справочника.
-            // Дедуп на уровне БД (см. LabAnalyteEnrichmentRequestService) — повтор того же
-            // показателя на этом же бланке или в другом анализе не плодит вторую задачу.
+            // Дедуп на уровне БД + жёсткий гейт на нерезолвленный источник — оба внутри
+            // LabAnalyteEnrichmentRequestService.RequestAsync (единственная точка входа).
             if (lookup.Kind != Kb.KbLookupKind.Hit)
-                await enrichmentRequest.RequestAsync(analyteKey, specimen, dto.Name, null, ownerUserId, ct);
+                await enrichmentRequest.RequestAsync(analyteKey, specimenKbId, entity.DisplayName, null, ownerUserId, ct);
         }
 
         job.Stage = ExtractionStage.Summarizing;

@@ -581,7 +581,6 @@ public class MedicalRecordServiceTests : SqliteTestBase
         DisplayName = "Тестовый показатель",
         Flag = flag,
         RefSource = RefSource.Blank,
-        Specimen = SpecimenType.Blood,
         Position = 0,
         ValueRaw = "1",
         CreatedAt = DateTime.UtcNow,

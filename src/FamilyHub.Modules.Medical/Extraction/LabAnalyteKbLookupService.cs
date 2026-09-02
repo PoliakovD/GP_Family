@@ -1,4 +1,4 @@
-using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Kb;
 using Microsoft.EntityFrameworkCore;
@@ -8,15 +8,15 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// <summary>
 /// Каскадный поиск показателя в kb.global_lab_analytes_kb (ветка medicalrecords) — точная копия
 /// логики <see cref="KbLookupService"/> (этап 4) на другую таблицу, но с дополнительным измерением:
-/// ключ справочника теперь (показатель, биоматериал) (пересборка enrich-пайплайна), поэтому каждый
+/// ключ справочника теперь (показатель, источник) (пересборка enrich-пайплайна), поэтому каждый
 /// шаг каскада (точное совпадение → алиас → нечёткое) сначала ищет запись под конкретный
-/// specimen, и только при промахе — среди записей с Specimen=Unknown (обобщённое знание,
-/// накопленное до того, как документ определял биоматериал, или когда сам документ его не дал).
-/// Специфичная запись всегда предпочтительнее обобщённой — фолбэк применяется только когда прямой
-/// поиск под specimen ничего не нашёл. Пороги те же — ошибочная автопривязка референсного
-/// диапазона к чужому показателю дороже промаха. Переиспользует <see cref="KbLookupResult"/>/
-/// <see cref="KbLookupKind"/> (Kb/) — форма результата уже достаточно общая, заводить второй набор
-/// типов ради другой таблицы избыточно.
+/// SpecimenKbId, и только при промахе — среди записей с SpecimenKbId=SpecimenContextIds.Unresolved
+/// (обобщённое знание, накопленное до того, как источник определился, или заведённое вручную из
+/// админки как общий фолбэк). Специфичная запись всегда предпочтительнее обобщённой — фолбэк
+/// применяется только когда прямой поиск под источник ничего не нашёл. Пороги те же — ошибочная
+/// автопривязка референсного диапазона к чужому показателю дороже промаха. Переиспользует
+/// <see cref="KbLookupResult"/>/<see cref="KbLookupKind"/> (Kb/) — форма результата уже достаточно
+/// общая, заводить второй набор типов ради другой таблицы избыточно.
 /// </summary>
 public class LabAnalyteKbLookupService(AppDbContext db)
 {
@@ -25,25 +25,26 @@ public class LabAnalyteKbLookupService(AppDbContext db)
     private const double TrigramFloor = 0.3;
 
     public async Task<KbLookupResult> LookupAsync(
-        string normalizedName, SpecimenType specimen, CancellationToken ct = default)
+        string normalizedName, Guid specimenKbId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(normalizedName)) return KbLookupResult.Miss;
 
-        var specific = await LookupBySpecimenAsync(normalizedName, (int)specimen, ct);
+        var specific = await LookupBySpecimenAsync(normalizedName, specimenKbId, ct);
         if (specific.Kind != KbLookupKind.Miss) return specific;
 
-        // Фолбэк на обобщённую запись — только когда под конкретный биоматериал ничего не нашлось,
-        // и только если сам specimen не Unknown (иначе это был бы тот же самый запрос дважды).
-        if (specimen == SpecimenType.Unknown) return KbLookupResult.Miss;
-        return await LookupBySpecimenAsync(normalizedName, (int)SpecimenType.Unknown, ct);
+        // Фолбэк на обобщённую запись — только когда под конкретный источник ничего не нашлось,
+        // и только если сам источник не сентинел "не определено" (иначе это был бы тот же самый
+        // запрос дважды).
+        if (specimenKbId == SpecimenContextIds.Unresolved) return KbLookupResult.Miss;
+        return await LookupBySpecimenAsync(normalizedName, SpecimenContextIds.Unresolved, ct);
     }
 
-    private async Task<KbLookupResult> LookupBySpecimenAsync(string normalizedName, int specimenValue, CancellationToken ct)
+    private async Task<KbLookupResult> LookupBySpecimenAsync(string normalizedName, Guid specimenKbId, CancellationToken ct)
     {
         var exact = await db.Database.SqlQuery<KbLookupRow>($"""
             SELECT "Id", "DisplayName", 1.0::double precision AS "Score"
             FROM kb.global_lab_analytes_kb
-            WHERE "NormalizedName" = {normalizedName} AND "Specimen" = {specimenValue}
+            WHERE "NormalizedName" = {normalizedName} AND "SpecimenKbId" = {specimenKbId}
             LIMIT 1
             """).FirstOrDefaultAsync(ct);
         if (exact is not null) return KbLookupResult.Hit(exact.Id, exact.DisplayName, exact.Score);
@@ -51,7 +52,7 @@ public class LabAnalyteKbLookupService(AppDbContext db)
         var alias = await db.Database.SqlQuery<KbLookupRow>($"""
             SELECT "Id", "DisplayName", 1.0::double precision AS "Score"
             FROM kb.global_lab_analytes_kb
-            WHERE {normalizedName} = ANY("Aliases") AND "Specimen" = {specimenValue}
+            WHERE {normalizedName} = ANY("Aliases") AND "SpecimenKbId" = {specimenKbId}
             LIMIT 1
             """).FirstOrDefaultAsync(ct);
         if (alias is not null) return KbLookupResult.Hit(alias.Id, alias.DisplayName, alias.Score);
@@ -63,7 +64,7 @@ public class LabAnalyteKbLookupService(AppDbContext db)
                        similarity("DisplayName", {normalizedName})
                    ) AS "Score"
             FROM kb.global_lab_analytes_kb
-            WHERE "Specimen" = {specimenValue}
+            WHERE "SpecimenKbId" = {specimenKbId}
               AND (search_vector @@ plainto_tsquery('russian', {normalizedName})
                OR similarity("NormalizedName", {normalizedName}) > {TrigramFloor}
                OR similarity("DisplayName", {normalizedName}) > {TrigramFloor})

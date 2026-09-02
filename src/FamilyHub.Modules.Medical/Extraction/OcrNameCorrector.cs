@@ -96,7 +96,11 @@ public class OcrNameCorrector(ILmStudioJsonClient client, ILogger<OcrNameCorrect
             if (item.ValueKind != JsonValueKind.Object) continue;
 
             var index = (int?)ReadDouble(item, "index");
-            var candidate = ReadString(item, "corrected")?.Trim();
+            // Модель иногда эхом возвращает подпись "[N] " вместе с исправленным текстом вместо
+            // одного лишь исправления — снимаем её здесь же, до сравнения/вето, иначе "[0] " уезжает
+            // прямо в DisplayName/AnalyteKey (пересборка enrich-пайплайна, была прямой причиной
+            // нумерации в справочнике).
+            var candidate = LabAnalyteNameCleaner.Clean(ReadString(item, "corrected"));
             if (index is null || index < 0 || index >= names.Count || string.IsNullOrEmpty(candidate)) continue;
 
             var original = names[index.Value];

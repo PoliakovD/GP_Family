@@ -5,10 +5,12 @@ namespace FamilyHub.Modules.Medical.Kb;
 
 /// <summary>Одна карточка в списке результатов справочника показателей (редизайн v2,
 /// /health/kb/indicators) — зеркало KbListItem (медикаменты), другое поле вместо Purpose.</summary>
-/// <summary>Specimen — часть заголовка карточки в списке (пересборка enrich-пайплайна): ключ
-/// справочника теперь (показатель, биоматериал), одно DisplayName может встретиться дважды с
-/// разными биоматериалами ("Белок" в крови и в моче) — список должен различать их визуально.</summary>
-public record KbAnalyteListItem(Guid Id, string DisplayName, SpecimenType Specimen, string? PlainExplanation);
+/// <summary>SpecimenKbId/SpecimenDisplayName — часть заголовка карточки в списке (пересборка
+/// enrich-пайплайна): ключ справочника теперь (показатель, источник), одно DisplayName может
+/// встретиться дважды с разными источниками ("Белок" в крови и в моче) — список должен различать
+/// их визуально. SpecimenDisplayName резолвится живым JOIN на GlobalSpecimenKb (см.
+/// KbAnalyteCatalogService) — null, если ссылка почему-то не нашлась (не должно случаться).</summary>
+public record KbAnalyteListItem(Guid Id, string DisplayName, Guid SpecimenKbId, string? SpecimenDisplayName, string? PlainExplanation);
 
 public record KbAnalyteListResponse(IReadOnlyList<KbAnalyteListItem> Items, bool HasMore);
 
@@ -33,7 +35,8 @@ public record KbRelatedAnalyte(Guid? Id, string DisplayName);
 public record KbAnalyteCard(
     Guid Id,
     string DisplayName,
-    SpecimenType Specimen,
+    Guid SpecimenKbId,
+    string? SpecimenDisplayName,
     string? LoincCode,
     string? DefaultUnit,
     string? PlainExplanation,
@@ -60,7 +63,8 @@ internal sealed class KbAnalyteCatalogRow
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
-    public SpecimenType Specimen { get; set; }
+    public Guid SpecimenKbId { get; set; }
+    public string? SpecimenDisplayName { get; set; }
     public string PayloadJson { get; set; } = "{}";
 }
 
@@ -69,7 +73,8 @@ internal sealed class KbAnalyteDetailRow
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
-    public SpecimenType Specimen { get; set; }
+    public Guid SpecimenKbId { get; set; }
+    public string? SpecimenDisplayName { get; set; }
     public string PayloadJson { get; set; } = "{}";
     public string Source { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; }

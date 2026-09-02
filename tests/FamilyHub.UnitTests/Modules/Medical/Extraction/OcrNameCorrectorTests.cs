@@ -84,6 +84,19 @@ public class OcrNameCorrectorTests
     }
 
     [Fact]
+    public async Task CorrectAsync_ModelEchoesIndexPrefix_StripsItBeforeApplying()
+    {
+        // Пересборка enrich-пайплайна: BuildUserText подписывает элементы "[N] Имя" — модель
+        // иногда возвращает эту подпись обратно вместе с исправлением; она не должна уехать в
+        // DisplayName/AnalyteKey.
+        SetUpModelResponse((0, "[0] Суматриптан"));
+
+        var result = await _sut.CorrectAsync("СYMАТPИПTАН");
+
+        result.Should().Be("Суматриптан");
+    }
+
+    [Fact]
     public async Task CorrectBatchAsync_EmptyInput_ReturnsEmpty_DoesNotCallModel()
     {
         var result = await _sut.CorrectBatchAsync([]);

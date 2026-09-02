@@ -11,7 +11,7 @@
       и они появятся здесь.
     </p>
   } @else {
-    @for (item of items; track item.analyteKey + ':' + item.specimen) {
+    @for (item of items; track item.analyteKey + ':' + item.specimenKbId) {
       <div class="card mb-2 card-clickable" (click)="openDetail(item)">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>

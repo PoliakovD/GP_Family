@@ -1,14 +1,12 @@
-using FamilyHub.Domain.Enums;
-
 namespace FamilyHub.Domain.Entities;
 
 /// <summary>
 /// Кэш обращений к платному внешнему поиску для лабораторных показателей — зеркало
 /// <see cref="MedicationSearchCache"/> (пересборка enrich-пайплайна анализов, закрывает
 /// задокументированный ранее пропуск: раньше повторный прогон/доработка промпта суммаризатора
-/// означала новый платный запрос на каждый показатель). Ключ — пара (NormalizedName, Specimen),
+/// означала новый платный запрос на каждый показатель). Ключ — пара (NormalizedName, SpecimenKbId),
 /// не одно имя: "белок" в крови и в моче ищутся и кэшируются раздельно. Обезличено, как и
-/// GlobalLabAnalyteKb — только нормализованное название и биоматериал, никакого персонального
+/// GlobalLabAnalyteKb — только нормализованное название и источник, никакого персонального
 /// контекста (см. KbIsolationGuardTests).
 /// </summary>
 public class LabAnalyteSearchCache
@@ -17,7 +15,7 @@ public class LabAnalyteSearchCache
 
     public string NormalizedName { get; set; } = string.Empty;
 
-    public SpecimenType Specimen { get; set; } = SpecimenType.Unknown;
+    public Guid SpecimenKbId { get; set; }
 
     public string Provider { get; set; } = string.Empty;
 

@@ -24,8 +24,14 @@ public class LmStudioMedicalDocumentExtractorTests
 
     public LmStudioMedicalDocumentExtractorTests()
     {
+        // SpecimenResolver.ResolveAsync (единственный метод, который зовёт экстрактор) не
+        // обращается к GlobalSpecimenKbService — ей нужна БД, которой в этих тестах нет; null
+        // безопасен. Тот же _client — SetUpModelResponse ниже не задаёт context/confidence,
+        // поэтому резолвер молча получает пустой SpecimenDocumentResolution, не влияющий на
+        // проверяемые в этом файле поля (показатели/врач/заключение).
+        var specimenResolver = new SpecimenResolver(_client, null!, NullLogger<SpecimenResolver>.Instance);
         _sut = new LmStudioMedicalDocumentExtractor(
-            _textExtractor, _client, Options.Create(new ExtractionOptions()),
+            _textExtractor, _client, specimenResolver, Options.Create(new ExtractionOptions()),
             NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
     }
 

@@ -1,5 +1,4 @@
 using FamilyHub.Domain.Entities;
-using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Kb;
@@ -12,14 +11,20 @@ namespace FamilyHub.IntegrationTests;
 
 /// <summary>
 /// Каскадный поиск в справочнике показателей (LabAnalyteKbLookupService, пересборка enrich-
-/// пайплайна анализов) — ключ теперь (показатель, биоматериал), не одно имя: специфичная по
-/// биоматериалу запись должна побеждать обобщённую (Specimen=Unknown), а промах под конкретный
-/// биоматериал должен откатываться на обобщённое знание. Реальный Postgres нужен по той же
+/// пайплайна анализов) — ключ теперь (показатель, источник), не одно имя: специфичная по источнику
+/// запись должна побеждать обобщённую (SpecimenKbId=SpecimenContextIds.Unresolved), а промах под
+/// конкретный источник должен откатываться на обобщённое знание. Реальный Postgres нужен по той же
 /// причине, что и в KbLookupTests — raw-SQL пороги (similarity/tsvector) недоступны на SQLite.
 /// </summary>
 public class LabAnalyteKbLookupTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
-    private async Task SeedKbAsync(string normalizedName, SpecimenType specimen, string displayName)
+    // Источник — ссылка на GlobalSpecimenKb, не enum (пересборка enrich-пайплайна); произвольные
+    // Guid'ы здесь просто отличают "кровь" от "мочи" для теста каскада, без реальных строк
+    // справочника источников (эти тесты проверяют LabAnalyteKbLookupService, не GlobalSpecimenKb).
+    private static readonly Guid BloodId = Guid.NewGuid();
+    private static readonly Guid UrineId = Guid.NewGuid();
+
+    private async Task SeedKbAsync(string normalizedName, Guid specimenKbId, string displayName)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -28,7 +33,7 @@ public class LabAnalyteKbLookupTests(FamilyHubWebFactory factory) : IntegrationT
         {
             Id = Guid.NewGuid(),
             NormalizedName = normalizedName,
-            Specimen = specimen,
+            SpecimenKbId = specimenKbId,
             DisplayName = displayName,
             PayloadJson = """{"schemaVersion":4}""",
             Source = "тест",
@@ -48,17 +53,17 @@ public class LabAnalyteKbLookupTests(FamilyHubWebFactory factory) : IntegrationT
     public async Task SpecificSpecimenRecord_PreferredOverUnknownFallback()
     {
         var name = $"белок{Guid.NewGuid():N}";
-        await SeedKbAsync(name, SpecimenType.Unknown, "Белок (общий)");
-        await SeedKbAsync(name, SpecimenType.Urine, "Белок в моче");
+        await SeedKbAsync(name, SpecimenContextIds.Unresolved, "Белок (общий)");
+        await SeedKbAsync(name, UrineId, "Белок в моче");
 
         var sut = CreateSut(out var scope);
         using (scope)
         {
-            var result = await sut.LookupAsync(name, SpecimenType.Urine);
+            var result = await sut.LookupAsync(name, UrineId);
 
             result.Kind.Should().Be(KbLookupKind.Hit);
             result.DisplayName.Should().Be("Белок в моче",
-                "специфичная по биоматериалу запись должна побеждать обобщённую (Unknown)");
+                "специфичная по источнику запись должна побеждать обобщённую (Unresolved)");
         }
     }
 
@@ -66,15 +71,15 @@ public class LabAnalyteKbLookupTests(FamilyHubWebFactory factory) : IntegrationT
     public async Task NoSpecificSpecimenRecord_FallsBackToUnknown()
     {
         var name = $"глюкоза{Guid.NewGuid():N}";
-        await SeedKbAsync(name, SpecimenType.Unknown, "Глюкоза (общая)");
+        await SeedKbAsync(name, SpecimenContextIds.Unresolved, "Глюкоза (общая)");
 
         var sut = CreateSut(out var scope);
         using (scope)
         {
-            var result = await sut.LookupAsync(name, SpecimenType.Blood);
+            var result = await sut.LookupAsync(name, BloodId);
 
             result.Kind.Should().Be(KbLookupKind.Hit,
-                "промах под конкретный биоматериал должен откатываться на обобщённое знание (Specimen=Unknown)");
+                "промах под конкретный источник должен откатываться на обобщённое знание (Unresolved)");
             result.DisplayName.Should().Be("Глюкоза (общая)");
         }
     }
@@ -83,15 +88,15 @@ public class LabAnalyteKbLookupTests(FamilyHubWebFactory factory) : IntegrationT
     public async Task DifferentSpecimen_DoesNotMatchUnrelatedRecord()
     {
         var name = $"лейкоциты{Guid.NewGuid():N}";
-        await SeedKbAsync(name, SpecimenType.Blood, "Лейкоциты крови");
+        await SeedKbAsync(name, BloodId, "Лейкоциты крови");
 
         var sut = CreateSut(out var scope);
         using (scope)
         {
-            var result = await sut.LookupAsync(name, SpecimenType.Urine);
+            var result = await sut.LookupAsync(name, UrineId);
 
             result.Kind.Should().Be(KbLookupKind.Miss,
-                "запись под другой биоматериал (кровь) не должна закрывать промах для мочи без явного Unknown-фолбэка");
+                "запись под другой источник (кровь) не должна закрывать промах для мочи без явного Unresolved-фолбэка");
         }
     }
 }

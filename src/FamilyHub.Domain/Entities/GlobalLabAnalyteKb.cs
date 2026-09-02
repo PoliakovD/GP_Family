@@ -1,12 +1,10 @@
-using FamilyHub.Domain.Enums;
-
 namespace FamilyHub.Domain.Entities;
 
 /// <summary>
 /// Обезличенный справочник лабораторных показателей (ветка medicalrecords, зеркало
 /// <see cref="GlobalMedicationKb"/> — тот же принцип: НИКАКОГО персонального контекста, знание
-/// едино для всех. Ключ дедупликации — пара (NormalizedName, Specimen), не одно имя (пересборка
-/// enrich-пайплайна): один и тот же показатель имеет разные нормы в разных биоматериалах
+/// едино для всех. Ключ дедупликации — пара (NormalizedName, SpecimenKbId), не одно имя
+/// (пересборка enrich-пайплайна): один и тот же показатель имеет разные нормы в разных источниках
 /// ("белок" в крови и в моче) и не может делить одну запись. Инвариант изоляции охраняет
 /// KbIsolationGuardTests наравне со справочником медикаментов.
 /// </summary>
@@ -14,13 +12,16 @@ public class GlobalLabAnalyteKb
 {
     public Guid Id { get; set; }
 
-    /// <summary>Нормализованное имя (см. LabAnalyteNormalizer) — часть ключа дедупликации вместе со Specimen.</summary>
+    /// <summary>Нормализованное имя (см. LabAnalyteNormalizer) — часть ключа дедупликации вместе с SpecimenKbId.</summary>
     public string NormalizedName { get; set; } = string.Empty;
 
-    /// <summary>Биоматериал — вторая половина ключа дедупликации. Unknown — документ не указал
-    /// биоматериал явно; такие записи служат обобщённым фолбэком (см. LabAnalyteKbLookupService),
-    /// когда специфичной по биоматериалу записи ещё нет.</summary>
-    public SpecimenType Specimen { get; set; } = SpecimenType.Unknown;
+    /// <summary>Источник показателя — ссылка (не FK, GlobalSpecimenKb в той же схеме kb, но
+    /// самостоятельная таблица) на <see cref="GlobalSpecimenKb"/> — вторая половина ключа
+    /// дедупликации. Записи со значением <see cref="SpecimenContextIds.Unresolved"/> служат
+    /// обобщённым фолбэком (см. LabAnalyteKbLookupService), когда специфичной по источнику записи
+    /// ещё нет; заводятся только вручную из админки (обычный enrich-конвейер такие не создаёт —
+    /// см. жёсткий гейт в LabAnalyteEnrichmentRequestService).</summary>
+    public Guid SpecimenKbId { get; set; } = SpecimenContextIds.Unresolved;
 
     public string DisplayName { get; set; } = string.Empty;
 

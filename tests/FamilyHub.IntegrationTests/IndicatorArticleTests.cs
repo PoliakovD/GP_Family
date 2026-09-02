@@ -20,8 +20,16 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
 {
     private record MeDto(Guid UserId);
 
-    private static CreateIndicatorRequest Hemoglobin(string value) =>
-        new("Гемоглобин", value, "г/л", SpecimenType.Blood, "130", "160", null);
+    private Guid? _bloodSpecimenId;
+
+    private async Task<Guid> BloodSpecimenIdAsync()
+    {
+        _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
+        return _bloodSpecimenId.Value;
+    }
+
+    private async Task<CreateIndicatorRequest> HemoglobinAsync(string value) =>
+        new("Гемоглобин", value, "г/л", await BloodSpecimenIdAsync(), "130", "160", null);
 
     private async Task<Guid> CreateAnalysisAsync(HttpClient owner, DateOnly date)
     {
@@ -46,10 +54,14 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
+        // NormalizedName намеренно не совпадает с тем, что сеет Article_PregnancyOnlyRange_...
+        // ниже в этом же файле (тоже "гемоглобин", но под другим SpecimenKbId) — LinkIndicatorToKbAsync
+        // привязывает по Id напрямую, само название/источник здесь не участвуют в лукапе, поэтому
+        // достаточно, чтобы ключ (NormalizedName, SpecimenKbId) не совпал с другой строкой теста.
         db.GlobalLabAnalytesKb.Add(new GlobalLabAnalyteKb
         {
             Id = id,
-            NormalizedName = "гемоглобин",
+            NormalizedName = $"гемоглобин{Guid.NewGuid():N}",
             DisplayName = "Гемоглобин",
             PayloadJson = System.Text.Json.JsonSerializer.Serialize(new
             {
@@ -88,7 +100,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var kbId = await SeedKbAnalyteAsync();
 
         var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         await LinkIndicatorToKbAsync(indicator.Id, kbId);
 
@@ -106,7 +118,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var recordId = await CreateAnalysisAsync(owner, DateOnly.FromDateTime(DateTime.UtcNow));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await owner.GetAsync($"/api/indicators/{indicator.Id}/article");
@@ -123,14 +135,14 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record1 = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        var indicator1 = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record1}/indicators", Hemoglobin("140")))
+        var indicator1 = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record1}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var firstArticle = await owner.GetFromJsonAsync<IndicatorArticleResponse>($"/api/indicators/{indicator1.Id}/article", JsonOpts);
         firstArticle!.HistoryAvailable.Should().BeFalse("пока есть только одна точка того же показателя");
 
         var record2 = await CreateAnalysisAsync(owner, new DateOnly(2026, 2, 1));
-        await owner.PostAsJsonAsync($"/api/medical-records/{record2}/indicators", Hemoglobin("145"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{record2}/indicators", await HemoglobinAsync("145"));
 
         var secondArticle = await owner.GetFromJsonAsync<IndicatorArticleResponse>($"/api/indicators/{indicator1.Id}/article", JsonOpts);
         secondArticle!.HistoryAvailable.Should().BeTrue("появилась вторая точка того же показателя/биоматериала");
@@ -147,6 +159,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var ownerUserId = (await owner.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts))!.UserId;
         await SetOwnerIdentityAsync(ownerUserId, new DateOnly(1990, 1, 1), Gender.Female);
 
+        var specimenId = await BloodSpecimenIdAsync();
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -155,7 +168,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
             {
                 Id = Guid.NewGuid(),
                 NormalizedName = "гемоглобин",
-                Specimen = SpecimenType.Blood,
+                SpecimenKbId = specimenId,
                 DisplayName = "Гемоглобин",
                 PayloadJson = System.Text.Json.JsonSerializer.Serialize(new
                 {
@@ -183,10 +196,10 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
             });
             await db.SaveChangesAsync();
         }
-        var kbId = await FindKbIdAsync("гемоглобин", SpecimenType.Blood);
+        var kbId = await FindKbIdAsync("гемоглобин", specimenId);
 
         var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         await LinkIndicatorToKbAsync(indicator.Id, kbId);
 
@@ -199,12 +212,12 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         matched.SourceDomain.Should().Be("invitro.ru");
     }
 
-    private async Task<Guid> FindKbIdAsync(string normalizedName, SpecimenType specimen)
+    private async Task<Guid> FindKbIdAsync(string normalizedName, Guid specimenKbId)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return (await db.GlobalLabAnalytesKb
-            .Where(k => k.NormalizedName == normalizedName && k.Specimen == specimen)
+            .Where(k => k.NormalizedName == normalizedName && k.SpecimenKbId == specimenKbId)
             .OrderByDescending(k => k.CreatedAt)
             .FirstAsync()).Id;
     }
@@ -215,7 +228,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var owner = ClientAs(FreshTelegramId());
         var stranger = ClientAs(FreshTelegramId());
         var recordId = await CreateAnalysisAsync(owner, DateOnly.FromDateTime(DateTime.UtcNow));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await stranger.GetAsync($"/api/indicators/{indicator.Id}/article");

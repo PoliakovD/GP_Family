@@ -2,6 +2,7 @@ using System.Text;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Infrastructure.Search;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
@@ -125,9 +126,14 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
         }
 
         var refRanges = ReadRefRanges(result.Payload, snippets.Count);
-        var aliases = ReadStringArray(result.Payload, "aliases");
+        // Clean, не Normalize — эти строки идут в KB как есть (алиасы/связанные показатели для
+        // человека), не как ключ сравнения. Снимает случайный мусор вроде эхо-нумерации, если
+        // модель скопировала кусок текста источника буквально вместе со служебной разметкой.
+        var aliases = ReadStringArray(result.Payload, "aliases")
+            .Select(LabAnalyteNameCleaner.Clean).Where(a => a.Length > 0).Distinct().ToList();
         var calculationInstructions = ReadString(result.Payload, "calculationInstructions");
-        var relatedAnalytes = ReadStringArray(result.Payload, "relatedAnalytes");
+        var relatedAnalytes = ReadStringArray(result.Payload, "relatedAnalytes")
+            .Select(LabAnalyteNameCleaner.Clean).Where(a => a.Length > 0).Distinct().ToList();
 
         var summary = new LabAnalyteSummary(
             LoincCode: ReadString(result.Payload, "loincCode"),

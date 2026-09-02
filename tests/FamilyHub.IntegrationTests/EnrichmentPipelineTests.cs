@@ -31,7 +31,7 @@ file sealed class FakeMedicationSearchProvider : IMedicationSearchProvider
 
     public Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default) =>
+        string? specimenDisplayName = null, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<WebSnippet>>(
         [
             new WebSnippet(

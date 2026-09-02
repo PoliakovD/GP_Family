@@ -406,10 +406,11 @@ export type IndicatorFlag = typeof IndicatorFlag[keyof typeof IndicatorFlag];
 export const RefSource = { None: 0, Blank: 1, KbFixed: 2, KbCalculated: 3 } as const;
 export type RefSource = typeof RefSource[keyof typeof RefSource];
 
-/** Биоматериал показателя (v2) — часть ключа группировки вместе с analyteKey, иначе лейкоциты
- * крови и мочи слились бы на одном графике. См. FamilyHub.Domain.Enums.SpecimenType. */
-export const SpecimenType = { Unknown: 0, Blood: 1, Urine: 2, Stool: 3, VaginalSwab: 4, Saliva: 5, Other: 6 } as const;
-export type SpecimenType = typeof SpecimenType[keyof typeof SpecimenType];
+// Источник показателя (пересборка enrich-пайплайна) — раньше фиксированный enum SpecimenType,
+// теперь ссылка (specimenKbId) на общий справочник (GlobalSpecimenKb): биоматериал ("кровь",
+// "моча") ИЛИ небиологическое исследование ("ЭКГ", "УЗИ") — одна и та же таблица на оба рода
+// понятия, никакого списка значений на фронте не осталось. specimenDisplayName приходит от
+// сервера готовой строкой — фронт её не переводит и не сопоставляет локально.
 
 /** Прогресс задачи распознавания внутри одного прогона — детальнее MedicalRecord.extractionStatus. */
 export const ExtractionStage = { Queued: 0, Decoding: 1, Ocr: 2, Structuring: 3, Linking: 4, Summarizing: 5 } as const;
@@ -438,7 +439,10 @@ export interface IndicatorDto {
     displayName: string;
     flag: number; // IndicatorFlag
     refSource: number; // RefSource
-    specimen: number; // SpecimenType
+    specimenKbId: string;
+    /** Готовое отображаемое имя источника — резолвится сервером, null, если ссылка почему-то
+     * не нашлась (не должно случаться). */
+    specimenDisplayName: string | null;
     position: number;
     valueRaw: string;
     unit: string | null;
@@ -447,13 +451,15 @@ export interface IndicatorDto {
     refText: string | null;
     recordDate: string; // DateOnly "yyyy-MM-dd"
     medicalRecordId: string;
-    /** Заполнено только при specimen === SpecimenType.Other — ссылка на UserSpecimen. */
-    specimenCustomId: string | null;
     /** Редизайн v2 — invariant-culture double либо null (качественный результат без числа).
      * Гарантия та же, что у refLowText/refHighText: parseFloat без нормализации запятых. */
     valueNumericText: string | null;
     /** Редизайн v2 — ключ статьи справочника показателей; null, пока обогащение до него не дошло. */
     kbAnalyteId: string | null;
+    /** Имя как оно было напечатано в бланке (очищено только от нумерации/эха, не от регистра
+     * справочника) — заполнено, только когда отличается от displayName (пересборка enrich-пайплайна:
+     * канон справочника подставляется в displayName при попадании). Подсказка "в бланке: …" в UI. */
+    rawDisplayName: string | null;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч. */
@@ -461,11 +467,10 @@ export interface UpdateIndicatorRequest {
     displayName: string;
     valueRaw: string;
     unit: string | null;
-    specimen: SpecimenType;
+    specimenKbId: string;
     refLowText: string | null;
     refHighText: string | null;
     refText: string | null;
-    specimenCustomId?: string | null;
 }
 
 /** Ручное добавление показателя, POST /api/medical-records/{recordId}/indicators — та же форма,
@@ -482,26 +487,31 @@ export interface IndicatorHistoryPoint {
     medicalRecordId: string;
 }
 
-/** Последнее значение по каждому (показателю, биоматериалу) среди СВОИХ записей (GET /api/indicators). */
+/** Последнее значение по каждому (показателю, источнику) среди СВОИХ записей (GET /api/indicators). */
 export interface MyIndicatorSummary {
     analyteKey: string;
     displayName: string;
-    specimen: number; // SpecimenType
+    specimenKbId: string;
+    specimenDisplayName: string | null;
     valueRaw: string;
     unit: string | null;
     flag: number; // IndicatorFlag
     lastRecordDate: string;
-    specimenCustomId: string | null;
 }
 
-/** Биоматериал, которого нет в фиксированном SpecimenType — свой справочник пользователя
- * (UX-редизайн), провалидированный LLM один раз при создании (POST /api/specimens). */
-export interface UserSpecimen {
+/** Один источник в результате поиска по общему справочнику (GET /api/specimens/search) —
+ * заменяет прежний захардкоженный список 6 значений SpecimenType (пересборка enrich-пайплайна). */
+export interface GlobalSpecimenDto {
     id: string;
-    ownerUserId: string;
-    normalizedName: string;
     displayName: string;
-    createdAt: string;
+}
+
+/** "Недавно использованный этим пользователем" источник (GET /api/specimens) — что автоподсказка
+ * должна предложить в первую очередь; сам справочник источников общий (GlobalSpecimenDto). */
+export interface UserSpecimen {
+    specimenKbId: string;
+    displayName: string;
+    lastUsedAt: string;
 }
 
 /** Назначенный препарат (UX-редизайн) — kbMedicationId резолвится сервером живым поиском по
@@ -541,7 +551,8 @@ export interface RecordSummaryResponse {
 export interface KbAnalyteListItem {
     id: string;
     displayName: string;
-    specimen: number; // SpecimenType — ключ справочника (показатель, биоматериал), см. shared/util/specimen.ts
+    specimenKbId: string; // ключ справочника (показатель, источник)
+    specimenDisplayName: string | null;
     plainExplanation: string | null;
 }
 
@@ -577,7 +588,8 @@ export interface KbRelatedAnalyte {
 export interface KbAnalyteCard {
     id: string;
     displayName: string;
-    specimen: number; // SpecimenType
+    specimenKbId: string;
+    specimenDisplayName: string | null;
     loincCode: string | null;
     defaultUnit: string | null;
     plainExplanation: string | null;

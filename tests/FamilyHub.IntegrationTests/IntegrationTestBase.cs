@@ -1,5 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using FamilyHub.Infrastructure.Search;
+using FamilyHub.Modules.Medical.Extraction;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -46,4 +49,17 @@ public abstract class IntegrationTestBase(FamilyHubWebFactory factory)
 
     /// <summary>Гарантированно уникальный Telegram ID для теста (избегаем коллизий между тестами одной коллекции).</summary>
     protected static long FreshTelegramId() => Random.Shared.NextInt64(1_000_000_000, 9_000_000_000);
+
+    /// <summary>Находит-или-заводит строку общего справочника источников показателя (пересборка
+    /// enrich-пайплайна: LabIndicator.SpecimenKbId — ссылка на GlobalSpecimenKb, не фиксированный
+    /// enum) — find-or-register через реальный GlobalSpecimenKbService.FindOrRegisterAsync, не
+    /// безусловный insert: миграция сеет распространённые источники ("кровь", "моча" и т.п.),
+    /// вызов с тем же названием должен переиспользовать засеянную строку, а не упереться в
+    /// уникальный индекс NormalizedName.</summary>
+    protected async Task<Guid> SeedSpecimenAsync(string displayName)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var globalKb = scope.ServiceProvider.GetRequiredService<GlobalSpecimenKbService>();
+        return await globalKb.FindOrRegisterAsync(displayName, LabAnalyteNormalizer.Normalize(displayName));
+    }
 }

@@ -34,11 +34,11 @@ public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOpti
 
     public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        SpecimenType specimen = SpecimenType.Unknown, CancellationToken ct = default)
+        string? specimenDisplayName = null, CancellationToken ct = default)
     {
         var opts = options.Value;
         var messageText = topic == WebSearchTopic.LabAnalyte
-            ? SpecimenQueryLabel.BuildAnalyteSearchQuery(normalizedName, specimen)
+            ? AnalyteSearchQueryBuilder.Build(normalizedName, specimenDisplayName)
             : $"{normalizedName}: инструкция по применению, показания, форма выпуска, условия хранения, влияние на управление транспортом";
         var request = new GenSearchRequest(
             Messages: [new GenSearchMessage(messageText, "ROLE_USER")],
