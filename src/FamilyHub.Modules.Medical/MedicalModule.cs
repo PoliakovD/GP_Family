@@ -46,6 +46,7 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteEnrichmentRequestService>();
         services.AddScoped<LabAnalyteEnrichmentProcessor>();
         services.AddScoped<LabAnalyteKbReenrichJob>();
+        services.AddScoped<LabAnalyteKbRebuildJob>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
         // Второй проход коррекции OCR (анализы + медикаменты, см. class doc) — общий на оба конвейера.
         services.AddScoped<OcrNameCorrector>();

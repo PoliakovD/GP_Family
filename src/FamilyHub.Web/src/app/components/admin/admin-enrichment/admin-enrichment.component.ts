@@ -1,8 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AdminApiService,
+  KbRebuildStatus,
   SearchCacheDetail,
   SearchCacheRow,
   TrustedDomain,
@@ -13,6 +14,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 
 const PAGE_SIZE = 25;
+const REBUILD_POLL_INTERVAL_MS = 2000;
 
 /**
  * Пересборка enrich-пайплайна — управление доверенными доменами и кэшем сырых результатов поиска
@@ -26,14 +28,14 @@ const PAGE_SIZE = 25;
   imports: [FormsModule, DatePipe],
   templateUrl: './admin-enrichment.component.html',
 })
-export class AdminEnrichmentComponent implements OnInit {
+export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
   readonly WebSearchTopic = WebSearchTopic;
 
-  readonly tab = signal<'domains' | 'cache'>('domains');
+  readonly tab = signal<'domains' | 'cache' | 'rebuild'>('domains');
   readonly topic = signal<WebSearchTopicValue>(WebSearchTopic.Medication);
 
   readonly domains = signal<TrustedDomain[]>([]);
@@ -48,13 +50,23 @@ export class AdminEnrichmentComponent implements OnInit {
   readonly cacheDetail = signal<SearchCacheDetail | null>(null);
   readonly cacheDetailLoading = signal(false);
 
+  readonly rebuild = signal<KbRebuildStatus | null>(null);
+  readonly rebuildLoading = signal(false);
+  readonly rebuildBusy = signal(false);
+  private rebuildPollTimer?: ReturnType<typeof setTimeout>;
+
   ngOnInit(): void {
     void this.loadDomains();
   }
 
-  selectTab(tab: 'domains' | 'cache'): void {
+  ngOnDestroy(): void {
+    clearTimeout(this.rebuildPollTimer);
+  }
+
+  selectTab(tab: 'domains' | 'cache' | 'rebuild'): void {
     this.tab.set(tab);
     if (tab === 'cache' && this.cacheRows().length === 0) void this.loadCache();
+    if (tab === 'rebuild' && this.rebuild() === null) void this.loadRebuildStatus();
   }
 
   async selectTopic(topic: WebSearchTopicValue): Promise<void> {
@@ -190,6 +202,66 @@ export class AdminEnrichmentComponent implements OnInit {
       this.cacheDetail.set(await this.api.getSearchCacheDetail(detail.id, this.topic()));
     } catch {
       this.toast.error('Не удалось изменить сниппет.');
+    }
+  }
+
+  // --- Пересборка справочника показателей (§4.2 плана) — поллинг статуса, пока прогон Running,
+  // тот же приём, что AdminKeysComponent.schedulePollIfRunning. ---
+
+  async loadRebuildStatus(): Promise<void> {
+    this.rebuildLoading.set(true);
+    try {
+      this.rebuild.set(await this.api.getKbRebuildStatus());
+      this.scheduleRebuildPollIfRunning();
+    } catch {
+      this.toast.error('Не удалось загрузить статус пересборки.');
+    } finally {
+      this.rebuildLoading.set(false);
+    }
+  }
+
+  private scheduleRebuildPollIfRunning(): void {
+    clearTimeout(this.rebuildPollTimer);
+    if (this.rebuild()?.status !== 'Running') return;
+
+    this.rebuildPollTimer = setTimeout(async () => {
+      try {
+        const status = await this.api.getKbRebuildStatus();
+        const wasRunning = this.rebuild()?.status === 'Running';
+        this.rebuild.set(status);
+        if (wasRunning && status.status !== 'Running') {
+          this.toast[status.status === 'Completed' ? 'success' : 'error'](
+            status.status === 'Completed' ? 'Пересборка справочника завершена.' : `Пересборка упала: ${status.lastError ?? 'см. логи'}`,
+          );
+        }
+      } catch {
+        // Транзиентная ошибка поллинга — не считаем прогон завершённым, просто попробуем снова.
+      }
+      this.scheduleRebuildPollIfRunning();
+    }, REBUILD_POLL_INTERVAL_MS);
+  }
+
+  async startRebuild(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Пересобрать справочник показателей?',
+      message: 'Ключи показателей будут пересчитаны новым нормализатором, справочник анализов ' +
+        'очищен и наполнен заново поверх уже оплаченного кэша поиска (новых внешних запросов не ' +
+        'потребуется). Операция фоновая, панель можно закрыть — прогон продолжится.',
+      confirmText: 'Пересобрать',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.rebuildBusy.set(true);
+    try {
+      await this.api.startKbRebuild();
+      this.toast.success('Пересборка запущена.');
+      this.rebuild.set(await this.api.getKbRebuildStatus());
+      this.scheduleRebuildPollIfRunning();
+    } catch {
+      this.toast.error('Не удалось запустить пересборку.');
+    } finally {
+      this.rebuildBusy.set(false);
     }
   }
 }

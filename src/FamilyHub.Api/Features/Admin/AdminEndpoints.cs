@@ -64,5 +64,20 @@ public static class AdminEndpoints
             backgroundJobs.Enqueue<LabAnalyteKbReenrichJob>(j => j.RunAsync(CancellationToken.None));
             return Results.Accepted();
         });
+
+        // Полная пересборка справочника показателей поверх исправленной чистки имён/резолвинга
+        // источника (§4.2 плана) — в отличие от reenrich выше (реагирует на дрейф PayloadVersion
+        // построчно), разовое ручное действие после деплоя: пересчитывает ключи существующих
+        // показателей, чистит справочник и пересеивает обогащение. См. LabAnalyteKbRebuildJob.
+        group.MapPost("/kb/lab-analytes/rebuild", async (AdminKbRebuildService rebuild, CancellationToken ct) =>
+        {
+            var result = await rebuild.StartOrResumeAsync(ct);
+            return result == StartKbRebuildResult.AlreadyRunning
+                ? Results.Json(new { code = "already_running" }, statusCode: StatusCodes.Status409Conflict)
+                : Results.Accepted();
+        });
+
+        group.MapGet("/kb/lab-analytes/rebuild/status", async (AdminKbRebuildService rebuild, CancellationToken ct) =>
+            Results.Ok(await rebuild.GetStatusAsync(ct)));
     }
 }

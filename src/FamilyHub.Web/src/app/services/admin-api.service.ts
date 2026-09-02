@@ -75,6 +75,15 @@ export interface SearchCacheDetail {
   lastUpdatedAt: string; canBeUpdatedAfter: string; snippets: SearchCacheSnippet[];
 }
 
+/** Прогон пересборки справочника показателей (пересборка enrich-пайплайна, §4.2 плана) — зеркало
+ * RotationStatus на LabAnalyteKbRebuildJob. status: "Running" | "Completed" | "Failed" | null. */
+export interface KbRebuildStatus {
+  runId: string | null; status: string | null; startedAt: string | null; finishedAt: string | null;
+  lastError: string | null; stageIndex: number;
+  cacheMerged: number; indicatorsUpdated: number; indicatorsMerged: number;
+  catalogDeleted: number; reseedRequested: number;
+}
+
 /**
  * Клиент /api/admin/*. Отдельно от ApiService (api.service.ts) намеренно — другая поверхность
  * аутентификации (cookie familyhub.admin, схема AuthSchemes.Admin, см. ADR-0009), не должна
@@ -168,4 +177,10 @@ export class AdminApiService {
 
   setSnippetOverride = (id: string, topic: WebSearchTopicValue, url: string, enabled: boolean | null) =>
     this.post<void>(`/api/admin/enrichment/search-cache/${id}/override`, { topic, url, enabled });
+
+  // Полная пересборка справочника показателей (§4.2 плана) — разовое ручное действие после
+  // деплоя исправлений очистки имён/резолвинга источника, отдельно от reenrich (который реагирует
+  // на дрейф PayloadVersion построчно и запускается автоматически).
+  startKbRebuild = () => this.post<void>('/api/admin/kb/lab-analytes/rebuild');
+  getKbRebuildStatus = () => this.get<KbRebuildStatus>('/api/admin/kb/lab-analytes/rebuild/status');
 }

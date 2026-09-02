@@ -51,6 +51,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<LabAnalyteSearchCache> LabAnalyteSearchCaches => Set<LabAnalyteSearchCache>();
     public DbSet<GlobalSpecimenKb> GlobalSpecimensKb => Set<GlobalSpecimenKb>();
 
+    /// <summary>Прогоны пересборки справочника показателей (пересборка enrich-пайплайна, §4.2) —
+    /// см. LabAnalyteKbRebuildJob.</summary>
+    public DbSet<KbRebuildRun> KbRebuildRuns => Set<KbRebuildRun>();
+
     /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
     public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();
 

@@ -6,6 +6,9 @@
     <button type="button" class="seg-opt" [class.active]="tab() === 'cache'" (click)="selectTab('cache')">
       Кэш поиска
     </button>
+    <button type="button" class="seg-opt" [class.active]="tab() === 'rebuild'" (click)="selectTab('rebuild')">
+      Пересборка анализов
+    </button>
   </div>
 
   <div class="seg">
@@ -165,4 +168,45 @@
       </div>
     </div>
   }
+}
+
+@if (tab() === 'rebuild') {
+  <div class="card">
+    <div class="card-title">Пересборка справочника показателей</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Пересчитывает ключи уже распознанных показателей новым нормализатором (снимает нумерацию
+        пункта бланка, КАПС), очищает справочник анализов и наполняет его заново поверх уже
+        оплаченного кэша поиска — новых внешних запросов не потребуется. Разовое действие после
+        деплоя исправлений очистки имён/резолвинга источника, не автоматическое.
+      </p>
+
+      @if (rebuildLoading() && !rebuild()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        @let r = rebuild();
+        @if (r && r.status) {
+          <table class="table mb-3">
+            <tbody>
+              <tr><td>Статус</td><td>{{ r.status }}</td></tr>
+              <tr><td>Запущена</td><td>{{ r.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr>
+              @if (r.finishedAt) { <tr><td>Завершена</td><td>{{ r.finishedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr> }
+              <tr><td>Этап</td><td>{{ r.stageIndex }} / 4</td></tr>
+              <tr><td>Слито строк кэша</td><td>{{ r.cacheMerged }}</td></tr>
+              <tr><td>Показателей обновлено</td><td>{{ r.indicatorsUpdated }} (слито {{ r.indicatorsMerged }})</td></tr>
+              <tr><td>Справочник очищен</td><td>{{ r.catalogDeleted }} строк</td></tr>
+              <tr><td>Пересеяно задач</td><td>{{ r.reseedRequested }}</td></tr>
+              @if (r.lastError) { <tr><td>Ошибка</td><td class="text-danger">{{ r.lastError }}</td></tr> }
+            </tbody>
+          </table>
+        } @else {
+          <p class="text-muted mb-3">Пересборка ещё ни разу не запускалась.</p>
+        }
+
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="rebuildBusy() || r?.status === 'Running'" (click)="startRebuild()">
+          {{ r?.status === 'Running' ? 'Пересборка идёт…' : 'Пересобрать справочник' }}
+        </button>
+      }
+    </div>
+  </div>
 }

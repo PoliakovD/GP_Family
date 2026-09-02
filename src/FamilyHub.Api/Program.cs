@@ -375,6 +375,7 @@ if (adminOptions.Enabled)
 }
 builder.Services.AddScoped<AdminStatsService>();
 builder.Services.AddScoped<AdminKeysService>();
+builder.Services.AddScoped<AdminKbRebuildService>();
 
 authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions =>
 {
