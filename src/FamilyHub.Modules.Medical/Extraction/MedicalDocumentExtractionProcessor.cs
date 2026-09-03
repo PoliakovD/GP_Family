@@ -216,7 +216,7 @@ public class MedicalDocumentExtractionProcessor(
         // (не затираем то, что пользователь мог ввести вручную в форме создания).
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
-        if (record.Doctor is null && doctor is not null) record.Doctor = doctor;
+        if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
         var recordId = record.Id;
         var ownerUserId = record.OwnerUserId;
@@ -432,12 +432,25 @@ public class MedicalDocumentExtractionProcessor(
             return;
         }
 
+        // Чистка названий назначенных препаратов (нумерация/эхо-индекс/КАПС) — до того, как
+        // заключение уйдёт и в ExtractedDataJson (сырой текст, который видит пользователь), и в
+        // очередь обогащения справочника медикаментов ниже (пересборка enrich-пайплайна, §5 плана).
+        if (conclusion.PrescribedMedications is { Count: > 0 })
+        {
+            conclusion = conclusion with
+            {
+                PrescribedMedications = conclusion.PrescribedMedications
+                    .Select(m => m with { Name = LabAnalyteNameCleaner.Clean(m.Name) })
+                    .ToList(),
+            };
+        }
+
         var documentDate = results.Select(r => r.DocumentDate).FirstOrDefault(d => d is not null);
         var suggestedTitle = results.Select(r => r.SuggestedTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         var doctor = results.Select(r => r.Doctor).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
-        if (record.Doctor is null && doctor is not null) record.Doctor = doctor;
+        if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
         // Назначенные препараты — сверяем со справочником медикаментов (тот же, что у аптечки);
         // промах ставит обогащение в очередь (UX-редизайн, см. VisitMedicationEnrichmentRequestService).

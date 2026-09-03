@@ -47,20 +47,9 @@ public static class ReferenceRangeMerger
         return Uri.TryCreate(snippets[sourceIndex.Value].Url, UriKind.Absolute, out var uri) ? uri.Host : null;
     }
 
-    /// <summary>Индекс домена в trustedDomainsByPriority (меньше — приоритетнее, точное совпадение
-    /// или поддомен, как в EnrichmentSnippetFilter.IsTrustedDomain); неопознанный/отсутствующий домен —
-    /// ниже всех известных, не выше.</summary>
-    private static int ResolveRank(string? domain, IReadOnlyList<string> trustedDomainsByPriority)
-    {
-        if (domain is null) return trustedDomainsByPriority.Count;
-
-        for (var i = 0; i < trustedDomainsByPriority.Count; i++)
-        {
-            var trusted = trustedDomainsByPriority[i];
-            if (domain.Equals(trusted, StringComparison.OrdinalIgnoreCase) ||
-                domain.EndsWith("." + trusted, StringComparison.OrdinalIgnoreCase))
-                return i;
-        }
-        return trustedDomainsByPriority.Count;
-    }
+    /// <summary>Индекс домена в trustedDomainsByPriority — общий примитив, см.
+    /// EnrichmentSnippetFilter.RankOf (пересборка enrich-пайплайна, §5 плана: раньше здесь была
+    /// отдельная копия того же цикла).</summary>
+    private static int ResolveRank(string? domain, IReadOnlyList<string> trustedDomainsByPriority) =>
+        EnrichmentSnippetFilter.RankOf(domain, trustedDomainsByPriority);
 }

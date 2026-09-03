@@ -34,6 +34,28 @@ public static partial class LabAnalyteNameCleaner
         return WhitespaceRegex().Replace(trimmedPunctuation, " ").Trim();
     }
 
+    /// <summary>Та же чистка (нумерация/эхо-индекс/гомоглифы), но КАПС разбирается по словам, а не
+    /// по фразе целиком — для ФИО ("ИВАНОВ ИВАН ИВАНОВИЧ" → "Иванов Иван Иванович"), где каждое
+    /// слово — отдельное имя собственное, а не одна многословная фраза вроде "Общий белок"
+    /// (пересборка enrich-пайплайна, §5 плана — врач/пациент в записи). <see cref="NormalizeCasing"/>
+    /// капитализирует только первый токен фразы целиком и намеренно не трогает короткие/латинские/
+    /// с цифрой токены (сокращения вроде "СОЭ") — для ФИО оба допущения неверны: короткое имя
+    /// ("Иван", "Ян") — не сокращение, и капитализировать нужно КАЖДОЕ слово, не только первое.</summary>
+    public static string CleanPersonName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+        var withoutMarkers = LabTextCleanupHelpers.StripLeadingMarkers(raw.Trim());
+        var fixedScript = LabTextCleanupHelpers.FixMixedScriptHomoglyphs(withoutMarkers);
+
+        var cased = IsAllCaps(fixedScript)
+            ? string.Join(' ', fixedScript.Split(' ').Select(w => LowercaseWithLeadingUpper(w, capitalize: true)))
+            : fixedScript;
+
+        var trimmedPunctuation = TrailingPunctuationRegex().Replace(cased, string.Empty);
+        return WhitespaceRegex().Replace(trimmedPunctuation, " ").Trim();
+    }
+
     /// <summary>КАПС ("ГЕМОГЛОБИН (HGB), Г/Л") приводится к обычному регистру с заглавной первой
     /// буквой; регистр, в котором уже есть строчные буквы, не трогается вовсе — детерминированный
     /// код не пытается угадывать смысл случайного чеРЕДования регистра (это остаётся необязательному

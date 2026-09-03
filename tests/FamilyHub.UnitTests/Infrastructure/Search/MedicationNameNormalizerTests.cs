@@ -92,4 +92,18 @@ public class MedicationNameNormalizerTests
     {
         MedicationNameNormalizer.Normalize("ПАРАЦЕТАМОЛ").Should().Be(MedicationNameNormalizer.Normalize("парацетамол"));
     }
+
+    [Theory]
+    [InlineData("1. Парацетамол")]
+    [InlineData("12) Парацетамол")]
+    [InlineData("[0] Парацетамол")]
+    public void Normalize_StripsLeadingNumberingOrEchoIndex_SameKeyAsBareName(string raw)
+    {
+        // Та же дыра, что была у LabAnalyteNormalizer до пересборки enrich-пайплайна (§5 плана) —
+        // список назначенных препаратов в заключении врача тоже подписывается "[N]"
+        // (OcrNameCorrector.BuildUserText), а нумерация пункта могла попасть из бланка так же, как
+        // у показателей анализа. Без снятия маркера "1. Парацетамол" получал бы отдельный ключ
+        // дедупликации от "Парацетамол".
+        MedicationNameNormalizer.Normalize(raw).Should().Be("парацетамол");
+    }
 }

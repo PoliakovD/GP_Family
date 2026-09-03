@@ -86,4 +86,32 @@ public class LabAnalyteNameCleanerTests
         LabAnalyteNameCleaner.Clean("   ").Should().BeEmpty();
         LabAnalyteNameCleaner.Clean(null).Should().BeEmpty();
     }
+
+    [Fact]
+    public void CleanPersonName_AllCaps_CapitalizesEveryWord_UnlikeClean()
+    {
+        // Отличие от Clean (капитализирует только первое слово фразы, годится для терминов вроде
+        // "Общий белок") — ФИО состоит из нескольких имён собственных, каждое капитализируется
+        // отдельно (пересборка enrich-пайплайна, §5 плана: строка врача в записи).
+        LabAnalyteNameCleaner.CleanPersonName("ИВАНОВ ИВАН ИВАНОВИЧ").Should().Be("Иванов Иван Иванович");
+    }
+
+    [Fact]
+    public void CleanPersonName_StripsLeadingNumbering()
+    {
+        LabAnalyteNameCleaner.CleanPersonName("1. Иванов И.И.").Should().Be("Иванов И.И.");
+    }
+
+    [Fact]
+    public void CleanPersonName_NormalCasing_IsNotTouched()
+    {
+        LabAnalyteNameCleaner.CleanPersonName("Иванов Иван Иванович").Should().Be("Иванов Иван Иванович");
+    }
+
+    [Fact]
+    public void CleanPersonName_EmptyOrWhitespace_ReturnsEmpty()
+    {
+        LabAnalyteNameCleaner.CleanPersonName("   ").Should().BeEmpty();
+        LabAnalyteNameCleaner.CleanPersonName(null).Should().BeEmpty();
+    }
 }

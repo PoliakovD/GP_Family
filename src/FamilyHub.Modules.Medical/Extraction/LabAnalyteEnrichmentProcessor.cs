@@ -188,21 +188,11 @@ public class LabAnalyteEnrichmentProcessor(
         return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
     }
 
-    /// <summary>Индекс домена в trustedDomainsByPriority — та же логика ранжирования, что
-    /// ReferenceRangeMerger.ResolveRank, но здесь применяется к порядку СНИППЕТОВ перед тем, как их
-    /// увидит модель (см. class doc: приоритетный источник не должен срезаться MaxSnippets).</summary>
-    private static int DomainRank(string url, IReadOnlyList<string> trustedDomainsByPriority)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return trustedDomainsByPriority.Count;
-
-        var host = uri.Host;
-        for (var i = 0; i < trustedDomainsByPriority.Count; i++)
-        {
-            var trusted = trustedDomainsByPriority[i];
-            if (host.Equals(trusted, StringComparison.OrdinalIgnoreCase) ||
-                host.EndsWith("." + trusted, StringComparison.OrdinalIgnoreCase))
-                return i;
-        }
-        return trustedDomainsByPriority.Count;
-    }
+    /// <summary>Индекс домена в trustedDomainsByPriority — общий примитив, см.
+    /// EnrichmentSnippetFilter.RankOf; применяется к порядку СНИППЕТОВ перед тем, как их увидит
+    /// модель (см. class doc: приоритетный источник не должен срезаться MaxSnippets).</summary>
+    private static int DomainRank(string url, IReadOnlyList<string> trustedDomainsByPriority) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            ? EnrichmentSnippetFilter.RankOf(uri.Host, trustedDomainsByPriority)
+            : trustedDomainsByPriority.Count;
 }

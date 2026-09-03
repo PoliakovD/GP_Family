@@ -22,13 +22,28 @@ public static class EnrichmentSnippetFilter
 
     /// <summary>Точное совпадение хоста или его поддомен ("www.vidal.ru" доверен, если доверен "vidal.ru") —
     /// перенесено из BraveSearchProvider/YandexSearchProvider без изменений в логике.</summary>
-    public static bool IsTrustedDomain(string url, IReadOnlyList<string> trustedDomains)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+    public static bool IsTrustedDomain(string url, IReadOnlyList<string> trustedDomains) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && RankOf(uri.Host, trustedDomains) < trustedDomains.Count;
 
-        var host = uri.Host;
-        return trustedDomains.Any(domain =>
-            host.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
-            host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
+    /// <summary>Индекс домена в trustedDomains по приоритету (меньше — приоритетнее; точное
+    /// совпадение хоста или его поддомен, та же проверка, что <see cref="IsTrustedDomain"/>) —
+    /// общий примитив ранжирования: раньше эту же проверку в цикле дублировали
+    /// LabAnalyteEnrichmentProcessor.DomainRank (сортировка сниппетов перед лимитом на модель) и
+    /// ReferenceRangeMerger.ResolveRank (приоритет источника при слиянии референсных диапазонов) —
+    /// пересборка enrich-пайплайна, §5 плана. host — уже резолвленный (Uri.Host), не URL целиком:
+    /// вызывающий код сам решает, откуда его взять (сырой URL или уже сохранённый SourceDomain).
+    /// Неопознанный/отсутствующий домен — ниже всех известных приоритетов, не выше.</summary>
+    public static int RankOf(string? host, IReadOnlyList<string> trustedDomains)
+    {
+        if (host is null) return trustedDomains.Count;
+
+        for (var i = 0; i < trustedDomains.Count; i++)
+        {
+            var trusted = trustedDomains[i];
+            if (host.Equals(trusted, StringComparison.OrdinalIgnoreCase) ||
+                host.EndsWith("." + trusted, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return trustedDomains.Count;
     }
 }

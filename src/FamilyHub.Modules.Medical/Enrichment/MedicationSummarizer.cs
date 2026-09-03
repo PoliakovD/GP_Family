@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 
@@ -95,9 +96,19 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
             return SummarizeResult.Failure("Модель не смогла подтвердить ответ ни одним источником.");
         }
 
+        // Clean, не Normalize — торговые названия/исправленное имя идут дальше как отображаемый
+        // текст (KbWriter.Aliases/DisplayName), не как ключ сравнения. Снимает случайный мусор
+        // вроде эхо-нумерации, если модель скопировала кусок сниппета буквально вместе со
+        // служебной разметкой — тот же приём, что LabAnalyteKbSummarizer применяет к
+        // aliases/relatedAnalytes (пересборка enrich-пайплайна, §5 плана).
+        var tradeNames = ReadStringArray(result.Payload, "tradeNames")
+            .Select(LabAnalyteNameCleaner.Clean).Where(n => n.Length > 0).Distinct().ToList();
+        var correctedName = ReadString(result.Payload, "correctedName");
+        var cleanedCorrectedName = string.IsNullOrWhiteSpace(correctedName) ? null : LabAnalyteNameCleaner.Clean(correctedName);
+
         var summary = new MedicationSummary(
             InternationalName: ReadString(result.Payload, "internationalName"),
-            TradeNames: ReadStringArray(result.Payload, "tradeNames"),
+            TradeNames: tradeNames,
             Form: ReadString(result.Payload, "form"),
             Purpose: ReadString(result.Payload, "purpose"),
             SimplePurpose: ReadString(result.Payload, "simplePurpose"),
@@ -106,7 +117,7 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
             Driving: ReadString(result.Payload, "driving"),
             SpecialNotes: ReadString(result.Payload, "specialNotes"),
             UsedSourceIndexes: usedIndexes,
-            CorrectedName: ReadString(result.Payload, "correctedName"));
+            CorrectedName: cleanedCorrectedName);
 
         // Второе условие гейта: индексы есть, но контента по сути нет (модель сослалась на
         // источник, где не нашла ничего полезного) — тоже не пишем пустую строку в справочник.

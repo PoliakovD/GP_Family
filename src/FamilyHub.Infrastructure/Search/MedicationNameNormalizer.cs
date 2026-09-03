@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace FamilyHub.Infrastructure.Search;
@@ -13,19 +12,6 @@ namespace FamilyHub.Infrastructure.Search;
 /// </summary>
 public static partial class MedicationNameNormalizer
 {
-    /// <summary>
-    /// Латинские буквы, визуально неотличимые от кириллических (частый артефакт OCR по русским
-    /// упаковкам: модель распознаёт часть букв слова латиницей). Применяется ТОЛЬКО к словам, где
-    /// уже есть хотя бы одна кириллическая буква — иначе честные латинские торговые названия
-    /// ("Nurofen") превратились бы в кириллическую кашу.
-    /// </summary>
-    private static readonly Dictionary<char, char> LatinToCyrillicHomoglyphs = new()
-    {
-        ['A'] = 'А', ['B'] = 'В', ['E'] = 'Е', ['K'] = 'К', ['M'] = 'М', ['H'] = 'Н',
-        ['O'] = 'О', ['P'] = 'Р', ['C'] = 'С', ['T'] = 'Т', ['X'] = 'Х', ['Y'] = 'У',
-        ['a'] = 'а', ['c'] = 'с', ['e'] = 'е', ['o'] = 'о', ['p'] = 'р', ['x'] = 'х', ['y'] = 'у',
-    };
-
     /// <summary>Дозировка/фасовка с единицей измерения: "400мг", "0.5 г", "10мл", "500 IU".</summary>
     [GeneratedRegex(@"\d+(?:[.,]\d+)?\s*(?:мг|мкг|г|мл|л|ме|iu|%)\b", RegexOptions.IgnoreCase)]
     private static partial Regex DosageRegex();
@@ -69,7 +55,13 @@ public static partial class MedicationNameNormalizer
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
 
-        var fixedScript = FixMixedScriptHomoglyphs(raw);
+        // Снять эхо-индекс/нумерацию пункта списка ДО починки гомоглифов/регистра — та же дыра,
+        // что была у LabAnalyteNormalizer до пересборки enrich-пайплайна: без этого шага
+        // "1. Парацетамол" и "Парацетамол" расходились в разные ключи дедупликации (числовая
+        // нумерация из OcrNameCorrector.BuildUserText/эхо модели пунктуацией ниже не снимается —
+        // цифра не пунктуация).
+        var withoutMarkers = LabTextCleanupHelpers.StripLeadingMarkers(raw);
+        var fixedScript = LabTextCleanupHelpers.FixMixedScriptHomoglyphs(withoutMarkers);
         var lower = fixedScript.ToLowerInvariant().Replace('ё', 'е');
 
         var stripped = DosageRegex().Replace(lower, " ");
@@ -83,30 +75,4 @@ public static partial class MedicationNameNormalizer
         var noPunctuation = PunctuationRegex().Replace(stripped, " ");
         return WhitespaceRegex().Replace(noPunctuation, " ").Trim();
     }
-
-    /// <summary>
-    /// Заменяет латинские гомоглифы на кириллицу только внутри слов, где уже есть хотя бы одна
-    /// кириллическая буква (иначе "Nurofen" превратился бы в нечитаемую смесь).
-    /// </summary>
-    private static string FixMixedScriptHomoglyphs(string input)
-    {
-        var words = input.Split(' ');
-        for (var w = 0; w < words.Length; w++)
-        {
-            var word = words[w];
-            if (!HasCyrillic(word) || !HasLatin(word)) continue;
-
-            var sb = new StringBuilder(word.Length);
-            foreach (var ch in word)
-                sb.Append(LatinToCyrillicHomoglyphs.TryGetValue(ch, out var mapped) ? mapped : ch);
-
-            words[w] = sb.ToString();
-        }
-
-        return string.Join(' ', words);
-    }
-
-    private static bool HasCyrillic(string s) => s.Any(ch => ch is >= 'Ѐ' and <= 'ӿ');
-
-    private static bool HasLatin(string s) => s.Any(ch => ch is >= 'a' and <= 'z' or >= 'A' and <= 'Z');
 }
