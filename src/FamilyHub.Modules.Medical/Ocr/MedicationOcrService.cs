@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Extraction;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Ocr;
@@ -10,7 +11,7 @@ namespace FamilyHub.Modules.Medical.Ocr;
 /// Фото не сохраняются — используются только для распознавания в рамках одного запроса.
 /// </summary>
 public class MedicationOcrService(
-    ILmStudioJsonClient client, OcrNameCorrector nameCorrector, ILogger<MedicationOcrService> logger)
+    ILmStudioJsonClient client, OcrNameCorrector nameCorrector, IPromptProvider promptProvider, ILogger<MedicationOcrService> logger)
 {
     private const int MaxPhotos = 5;
 
@@ -85,7 +86,8 @@ public class MedicationOcrService(
             images.Add((ms.ToArray(), file.ContentType));
         }
 
-        var result = await client.ExtractJsonAsync(SystemPrompt, UserText, images, ct);
+        var prompt = await promptProvider.GetAsync("medication.ocr", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, UserText, images, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Распознавание препарата по фото не удалось: {Error}", result.Error);

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
@@ -22,7 +23,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// имя. LM Studio недоступен ⇒ тоже исходные имена (в отличие от валидации биоматериала, тихий
 /// пропуск здесь безопасен — хуже, чем без коррекции, не станет).
 /// </summary>
-public class OcrNameCorrector(ILmStudioJsonClient client, ILogger<OcrNameCorrector> logger)
+public class OcrNameCorrector(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<OcrNameCorrector> logger)
 {
     /// <summary>Тот же порог, что MedicationEnrichmentProcessor.ResolveCorrectedName/UserSpecimenService.</summary>
     private const double MinCorrectionSimilarity = 0.3;
@@ -81,7 +82,8 @@ public class OcrNameCorrector(ILmStudioJsonClient client, ILogger<OcrNameCorrect
         var corrected = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var userText = BuildUserText(names);
-        var result = await client.ExtractJsonAsync(SystemPrompt, userText, ct);
+        var prompt = await promptProvider.GetAsync("analysis.ocr-correct", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct);
         if (result is null || !result.Success || result.Payload is null)
         {
             logger.LogInformation("Коррекция OCR-имён недоступна: {Error}", result?.Error);

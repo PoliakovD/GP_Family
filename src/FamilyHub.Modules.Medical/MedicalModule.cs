@@ -7,6 +7,7 @@ using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
 using FamilyHub.Modules.Medical.Ocr;
+using FamilyHub.Modules.Medical.Pipeline;
 using FamilyHub.Modules.Medical.Search;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,13 @@ public static class MedicalModule
 {
     public static IServiceCollection AddMedicalModule(this IServiceCollection services)
     {
+        // Управление enrich-пайплайном из админки (§2) — резолвинг активного текста промпта по
+        // ключу и вкл/выкл необязательных шагов. IMemoryCache регистрируется в Program.cs.
+        services.AddScoped<PromptProvider>();
+        services.AddScoped<IPromptProvider>(sp => sp.GetRequiredService<PromptProvider>());
+        services.AddScoped<PipelineConfigService>();
+        services.AddScoped<IPipelineConfigService>(sp => sp.GetRequiredService<PipelineConfigService>());
+
         services.AddScoped<MedkitService>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();

@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Enrichment;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -21,7 +22,7 @@ public class MedicationSummarizerTests
 
     public MedicationSummarizerTests()
     {
-        _sut = new MedicationSummarizer(_client, NullLogger<MedicationSummarizer>.Instance);
+        _sut = new MedicationSummarizer(_client, TestPromptProvider.ReturningFallback(), NullLogger<MedicationSummarizer>.Instance);
     }
 
     private static readonly IReadOnlyList<WebSnippet> OneTrustedSnippet =

@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
@@ -32,7 +33,8 @@ file sealed class GlobalSpecimenSearchRow
 /// при извлечении документа (SpecimenResolver, который уже провалидировал источник в рамках
 /// одного вызова на документ и переиспользует найденный/зарегистрированный здесь Id напрямую).
 /// </summary>
-public class GlobalSpecimenKbService(AppDbContext db, ILmStudioJsonClient client, ILogger<GlobalSpecimenKbService> logger)
+public class GlobalSpecimenKbService(
+    AppDbContext db, ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<GlobalSpecimenKbService> logger)
 {
     /// <summary>Тот же порог, что раньше был в UserSpecimenService — предложенное моделью написание
     /// не должно быть другим понятием, а лишь поправленной орфографией введённого.</summary>
@@ -102,7 +104,8 @@ public class GlobalSpecimenKbService(AppDbContext db, ILmStudioJsonClient client
     public async Task<(SpecimenValidationResult Result, Guid? SpecimenKbId, string? DisplayName, string? Reason)> ValidateAndRegisterAsync(
         string trimmedRawName, string normalizedName, CancellationToken ct = default)
     {
-        var result = await client.ExtractJsonAsync(SystemPrompt, trimmedRawName, ct);
+        var prompt = await promptProvider.GetAsync("analysis.specimen-validate", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, trimmedRawName, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Валидация источника «{Name}» недоступна: {Error}", trimmedRawName, result.Error);

@@ -3,6 +3,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
@@ -13,7 +14,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// medicalrecords, зеркало MedicationSummarizer этапа 4 — тот же антигаллюцинационный гейт:
 /// модель обязана сослаться хотя бы на один сниппет, иначе запись в справочник отклоняется).
 /// </summary>
-public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnalyteKbSummarizer> logger)
+public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<LabAnalyteKbSummarizer> logger)
 {
     private const string SystemPrompt = """
         Ты — медицинский справочный ассистент. На входе — название лабораторного показателя
@@ -104,7 +105,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, ILogger<LabAnaly
             return LabAnalyteSummarizeResult.Failure("Нет сниппетов от доверенных источников — суммаризировать нечего.");
 
         var userText = BuildUserText(displayName, snippets);
-        var result = await client.ExtractJsonAsync(SystemPrompt, userText, ct);
+        var prompt = await promptProvider.GetAsync("lab-analyte.summarize", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация показателя «{DisplayName}» не удалась: {Error}", displayName, result.Error);

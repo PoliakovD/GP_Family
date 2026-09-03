@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 public class RecalculateIndicatorFlagsJob(
     AppDbContext db,
     PatientReferenceCalculator referenceCalculator,
+    IPipelineConfigService pipelineConfig,
     ILogger<RecalculateIndicatorFlagsJob> logger)
 {
     public async Task RunAsync(Guid kbAnalyteId, CancellationToken ct = default)
@@ -70,7 +72,8 @@ public class RecalculateIndicatorFlagsJob(
                     continue;
                 }
 
-                if (!string.IsNullOrWhiteSpace(instructions))
+                if (!string.IsNullOrWhiteSpace(instructions) &&
+                    await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "patient-reference", ct))
                 {
                     var calculated = await referenceCalculator.CalculateAsync(
                         indicator.DisplayName, instructions, ageYears, sex, indicator.Unit, ct);

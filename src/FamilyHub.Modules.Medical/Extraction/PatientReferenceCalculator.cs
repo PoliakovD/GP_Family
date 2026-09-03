@@ -1,6 +1,7 @@
 using System.Text;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
@@ -17,7 +18,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// совпасть с той, что напечатана в бланке — иначе результат отбрасывается: смешать единицы
 /// опаснее, чем не посчитать вовсе.
 /// </summary>
-public class PatientReferenceCalculator(ILmStudioJsonClient client, ILogger<PatientReferenceCalculator> logger)
+public class PatientReferenceCalculator(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<PatientReferenceCalculator> logger)
 {
     private const string SystemPrompt = """
         Ты — медицинский калькулятор референсных значений. На входе — название лабораторного
@@ -40,7 +41,8 @@ public class PatientReferenceCalculator(ILmStudioJsonClient client, ILogger<Pati
         string analyteName, string calculationInstructions, int? ageYears, Gender? sex, string? unit, CancellationToken ct = default)
     {
         var userText = BuildUserText(analyteName, calculationInstructions, ageYears, sex, unit);
-        var result = await client.ExtractJsonAsync(SystemPrompt, userText, ct);
+        var prompt = await promptProvider.GetAsync("analysis.patient-reference", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Расчёт референса «{Name}» не удался: {Error}", analyteName, result.Error);

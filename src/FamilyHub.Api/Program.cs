@@ -921,6 +921,7 @@ if (adminOptions.Enabled)
     app.MapAdminSessionEndpoints();
     app.MapAdminEndpoints();
     app.MapAdminEnrichmentEndpoints();
+    app.MapAdminPipelineEndpoints();
 }
 
 // SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).

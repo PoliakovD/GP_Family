@@ -56,6 +56,14 @@ export const routes: Routes = [
             (m) => m.AdminEnrichmentComponent,
           ),
       },
+      {
+        // Управление enrich-пайплайном (§2 плана): шаги, промпты, задачи.
+        path: 'pipeline',
+        loadComponent: () =>
+          import('./components/admin/admin-pipeline/admin-pipeline.component').then(
+            (m) => m.AdminPipelineComponent,
+          ),
+      },
     ],
   },
 

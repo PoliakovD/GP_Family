@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.TestUtils;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -22,7 +23,7 @@ public class UserSpecimenServiceTests : SqliteTestBase
         // LLM-гейт вынесен в GlobalSpecimenKbService (пересборка enrich-пайплайна) — тот же мок
         // клиента, реальный сервис поверх него, чтобы поведение UserSpecimenService проверялось
         // сквозь настоящую логику гейта/детерминированного вето, а не через второй мок.
-        var globalKb = new GlobalSpecimenKbService(Db, _client, NullLogger<GlobalSpecimenKbService>.Instance);
+        var globalKb = new GlobalSpecimenKbService(Db, _client, TestPromptProvider.ReturningFallback(), NullLogger<GlobalSpecimenKbService>.Instance);
         _sut = new UserSpecimenService(Db, globalKb, NullLogger<UserSpecimenService>.Instance);
     }
 

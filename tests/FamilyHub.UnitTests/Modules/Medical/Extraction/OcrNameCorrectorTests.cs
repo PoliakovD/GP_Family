@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Extraction;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -18,7 +19,7 @@ public class OcrNameCorrectorTests
 
     public OcrNameCorrectorTests()
     {
-        _sut = new OcrNameCorrector(_client, NullLogger<OcrNameCorrector>.Instance);
+        _sut = new OcrNameCorrector(_client, TestPromptProvider.ReturningFallback(), NullLogger<OcrNameCorrector>.Instance);
     }
 
     private void SetUpModelResponse(params (int Index, string Corrected)[] corrections)

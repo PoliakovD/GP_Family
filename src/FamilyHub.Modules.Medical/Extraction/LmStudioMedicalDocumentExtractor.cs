@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
@@ -25,6 +26,8 @@ public class LmStudioMedicalDocumentExtractor(
     IDocumentTextExtractor documentTextExtractor,
     ILmStudioJsonClient lmStudioClient,
     SpecimenResolver specimenResolver,
+    IPromptProvider promptProvider,
+    IPipelineConfigService pipelineConfig,
     IOptions<ExtractionOptions> options,
     ILogger<LmStudioMedicalDocumentExtractor> logger) : IMedicalDocumentExtractor
 {
@@ -143,11 +146,13 @@ public class LmStudioMedicalDocumentExtractor(
             doctor ??= ReadString(payload, "doctor");
         }
 
+        var analysisPrompt = await promptProvider.GetAsync("analysis.extract", AnalysisSystemPrompt, ct);
+
         if (content.Kind == DocumentSourceKind.Text)
         {
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
             {
-                var result = await lmStudioClient.ExtractJsonAsync(AnalysisSystemPrompt, chunk, ct);
+                var result = await lmStudioClient.ExtractJsonAsync(analysisPrompt, chunk, ct);
                 if (!result.Success || result.Payload is null) continue;
 
                 CaptureDocumentFields(result.Payload);
@@ -165,7 +170,7 @@ public class LmStudioMedicalDocumentExtractor(
             foreach (var image in content.Images)
             {
                 var result = await lmStudioClient.ExtractJsonAsync(
-                    AnalysisSystemPrompt, "Распознай показатели анализа на этом изображении.", [(image.Bytes, image.ContentType)], ct);
+                    analysisPrompt, "Распознай показатели анализа на этом изображении.", [(image.Bytes, image.ContentType)], ct);
                 if (!result.Success || result.Payload is null) continue;
 
                 CaptureDocumentFields(result.Payload);
@@ -177,7 +182,12 @@ public class LmStudioMedicalDocumentExtractor(
         // побочное поле промпта структурирования выше, см. SpecimenResolver). Ещё не сведён к
         // ссылке на справочник — это делает MedicalDocumentExtractionProcessor, у которого есть
         // доступ к БД (этот класс — чистый LLM-клиент, без Infrastructure.Persistence).
-        var specimenResolution = await specimenResolver.ResolveAsync(content, ct);
+        // Необязательный шаг (§2 плана) — выключен из админки означает, что показатели этого
+        // документа остаются с нерезолвленным источником (SpecimenContextIds.Unresolved,
+        // проставляется дальше по конвейеру), а не что модель спрашивается впустую.
+        var specimenResolution = await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "specimen-resolve", ct)
+            ? await specimenResolver.ResolveAsync(content, ct)
+            : SpecimenDocumentResolution.Empty;
 
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
@@ -199,11 +209,13 @@ public class LmStudioMedicalDocumentExtractor(
 
     private async Task<ExtractionResult> ExtractVisitAsync(DocumentContent content, CancellationToken ct)
     {
+        var visitPrompt = await promptProvider.GetAsync("visit.extract", VisitSystemPrompt, ct);
+
         if (content.Kind == DocumentSourceKind.Text)
         {
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
             {
-                var result = await lmStudioClient.ExtractJsonAsync(VisitSystemPrompt, chunk, ct);
+                var result = await lmStudioClient.ExtractJsonAsync(visitPrompt, chunk, ct);
                 if (!result.Success || result.Payload is null) continue;
 
                 var conclusion = ParseConclusion(result.Payload);
@@ -222,7 +234,7 @@ public class LmStudioMedicalDocumentExtractor(
             foreach (var image in content.Images)
             {
                 var result = await lmStudioClient.ExtractJsonAsync(
-                    VisitSystemPrompt, "Распознай заключение врача на этом изображении.", [(image.Bytes, image.ContentType)], ct);
+                    visitPrompt, "Распознай заключение врача на этом изображении.", [(image.Bytes, image.ContentType)], ct);
                 if (!result.Success || result.Payload is null) continue;
 
                 var conclusion = ParseConclusion(result.Payload);

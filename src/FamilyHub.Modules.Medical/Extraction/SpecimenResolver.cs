@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
@@ -33,7 +34,8 @@ public record SpecimenDocumentResolution(
 /// (<see cref="GlobalSpecimenKbService"/>) по триграмме — тот же приём "модель предлагает,
 /// детерминированный код ветирует", что уже есть в OcrNameCorrector/GlobalSpecimenKbService.
 /// </summary>
-public class SpecimenResolver(ILmStudioJsonClient client, GlobalSpecimenKbService specimenKb, ILogger<SpecimenResolver> logger)
+public class SpecimenResolver(
+    ILmStudioJsonClient client, GlobalSpecimenKbService specimenKb, IPromptProvider promptProvider, ILogger<SpecimenResolver> logger)
 {
     /// <summary>Ниже этого confidence источник считается нерезолвленным — параметр шага пайплайна
     /// (см. §2 плана, конфигурируется из админки; пока константа).</summary>
@@ -92,13 +94,15 @@ public class SpecimenResolver(ILmStudioJsonClient client, GlobalSpecimenKbServic
         if (content.Kind == DocumentSourceKind.Text && !string.IsNullOrEmpty(content.Text))
         {
             var header = content.Text.Length > HeaderChars ? content.Text[..HeaderChars] : content.Text;
-            result = await client.ExtractJsonAsync(SystemPrompt, header, ct);
+            var prompt = await promptProvider.GetAsync("analysis.specimen-resolve", SystemPrompt, ct);
+            result = await client.ExtractJsonAsync(prompt, header, ct);
         }
         else if (content.Kind == DocumentSourceKind.Image && content.Images.Count > 0)
         {
             var first = content.Images[0];
+            var prompt = await promptProvider.GetAsync("analysis.specimen-resolve", SystemPrompt, ct);
             result = await client.ExtractJsonAsync(
-                SystemPrompt, "Определи источник показателей на этом изображении.",
+                prompt, "Определи источник показателей на этом изображении.",
                 [(first.Bytes, first.ContentType)], ct);
         }
         else

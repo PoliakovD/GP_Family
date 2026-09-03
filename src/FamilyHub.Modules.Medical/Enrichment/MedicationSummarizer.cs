@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
@@ -18,7 +19,7 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// оседало бы как DisplayName/NormalizedName записи справочника (см. MedicationEnrichmentProcessor,
 /// где коррекция дополнительно проверяется на схожесть с исходным именем).
 /// </summary>
-public class MedicationSummarizer(ILmStudioJsonClient client, ILogger<MedicationSummarizer> logger)
+public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<MedicationSummarizer> logger)
 {
     private const string SystemPrompt = """
         Ты — медицинский справочный ассистент. На входе — название препарата и пронумерованные
@@ -70,7 +71,8 @@ public class MedicationSummarizer(ILmStudioJsonClient client, ILogger<Medication
         }
 
         var userText = BuildUserText(displayName, snippets);
-        var result = await client.ExtractJsonAsync(SystemPrompt, userText, ct);
+        var prompt = await promptProvider.GetAsync("medication.summarize", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация «{DisplayName}» не удалась: {Error}", displayName, result.Error);

@@ -3,6 +3,8 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Extraction;
+using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -29,9 +31,11 @@ public class LmStudioMedicalDocumentExtractorTests
         // безопасен. Тот же _client — SetUpModelResponse ниже не задаёт context/confidence,
         // поэтому резолвер молча получает пустой SpecimenDocumentResolution, не влияющий на
         // проверяемые в этом файле поля (показатели/врач/заключение).
-        var specimenResolver = new SpecimenResolver(_client, null!, NullLogger<SpecimenResolver>.Instance);
+        var specimenResolver = new SpecimenResolver(
+            _client, null!, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
         _sut = new LmStudioMedicalDocumentExtractor(
-            _textExtractor, _client, specimenResolver, Options.Create(new ExtractionOptions()),
+            _textExtractor, _client, specimenResolver, TestPromptProvider.ReturningFallback(),
+            TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
             NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
     }
 

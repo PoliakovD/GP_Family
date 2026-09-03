@@ -55,6 +55,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// см. LabAnalyteKbRebuildJob.</summary>
     public DbSet<KbRebuildRun> KbRebuildRuns => Set<KbRebuildRun>();
 
+    /// <summary>Управление enrich-пайплайном из админки (§2) — слоты промптов, их версии
+    /// и вкл/выкл шагов. См. PromptProvider, PipelineConfigService.</summary>
+    public DbSet<PipelinePrompt> PipelinePrompts => Set<PipelinePrompt>();
+    public DbSet<PipelinePromptVersion> PipelinePromptVersions => Set<PipelinePromptVersion>();
+    public DbSet<PipelineStepConfig> PipelineStepConfigs => Set<PipelineStepConfig>();
+
     /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
     public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();
 

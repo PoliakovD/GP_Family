@@ -1,0 +1,197 @@
+<div class="d-flex justify-content-between mb-3" style="align-items: center; flex-wrap: wrap; gap: 8px;">
+  <div class="seg">
+    <button type="button" class="seg-opt" [class.active]="tab() === 'steps'" (click)="selectTab('steps')">Шаги</button>
+    <button type="button" class="seg-opt" [class.active]="tab() === 'prompts'" (click)="selectTab('prompts')">Промпты</button>
+    <button type="button" class="seg-opt" [class.active]="tab() === 'jobs'" (click)="selectTab('jobs')">Задачи</button>
+  </div>
+</div>
+
+@if (tab() === 'steps') {
+  <div class="card">
+    <div class="card-title">Шаги конвейеров</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Порядок вызовов зашит в коде (жёсткие зависимости между шагами одного прогона — например,
+        коррекция OCR обязана случиться до поиска в справочнике) — здесь только вкл/выкл
+        необязательных шагов. Обязательные шаги выключить нельзя.
+      </p>
+
+      @if (stepsLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead><tr><th>Пайплайн</th><th>Шаг</th><th>Описание</th><th>Промпт</th><th>Включён</th></tr></thead>
+          <tbody>
+            @for (s of steps(); track s.pipelineKey + s.stepKey) {
+              <tr [class.text-muted]="!s.isEnabled">
+                <td>{{ s.pipelineKey }}</td>
+                <td>{{ s.stepKey }}</td>
+                <td>{{ s.description }}</td>
+                <td>{{ s.promptKey ?? '—' }}</td>
+                <td>
+                  @if (s.isMandatory) {
+                    <span class="tag tag-neutral">обязателен</span>
+                  } @else {
+                    <input type="checkbox" [checked]="s.isEnabled" [disabled]="stepsBusy()" (change)="toggleStep(s)" />
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+}
+
+@if (tab() === 'prompts') {
+  <div class="card mb-3">
+    <div class="card-title">Слоты промптов</div>
+    <div class="card-body">
+      @if (promptsLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead><tr><th>Ключ</th><th>Описание</th><th>Активная версия</th><th></th></tr></thead>
+          <tbody>
+            @for (p of promptSlots(); track p.key) {
+              <tr [class.text-muted]="selectedPromptKey() !== p.key">
+                <td>{{ p.key }}</td>
+                <td>{{ p.description }}</td>
+                <td>{{ p.activeVersion ?? 'код (фолбэк)' }}</td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="selectPrompt(p.key)">Открыть</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+
+  @if (selectedPromptKey()) {
+    <div class="card mb-3">
+      <div class="card-title">{{ selectedPromptKey() }} — редактор</div>
+      <div class="card-body">
+        @if (promptVersionsLoading()) {
+          <p class="text-muted">Загрузка…</p>
+        } @else {
+          <textarea class="input mb-2" rows="14" style="width: 100%; font-family: monospace;"
+                    [ngModel]="editorBody()" (ngModelChange)="editorBody.set($event)"></textarea>
+
+          <input class="input mb-2" placeholder="что изменилось (необязательно)…" style="width: 100%;"
+                 [ngModel]="editorNote()" (ngModelChange)="editorNote.set($event)" />
+
+          <div class="d-flex gap-2 mb-3">
+            <button type="button" class="btn btn-primary btn-sm" [disabled]="editorBusy() || !editorBody().trim()" (click)="saveNewVersion()">
+              Сохранить новую версию и активировать
+            </button>
+          </div>
+
+          <div class="card-title" style="font-size: 14px;">История версий</div>
+          <table class="table mb-3">
+            <thead><tr><th>Версия</th><th>Активна</th><th>Создана</th><th>Заметка</th><th></th></tr></thead>
+            <tbody>
+              @for (v of promptVersions(); track v.id) {
+                <tr [class.text-muted]="!v.isActive">
+                  <td>{{ v.version }}</td>
+                  <td>{{ v.isActive ? 'да' : '' }}</td>
+                  <td>{{ v.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                  <td>{{ v.note }}</td>
+                  <td>
+                    @if (!v.isActive) {
+                      <button type="button" class="btn btn-secondary btn-sm" [disabled]="editorBusy()" (click)="activateVersion(v)">
+                        Активировать (откат)
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Dry-run — прогон без записи в справочник</div>
+      <div class="card-body">
+        <p class="text-muted mb-2">
+          Прогоняет текущий текст из редактора выше по образцу текста ниже через локальную LLM —
+          без веб-поиска, без записи в справочник. Проверить промпт перед сохранением.
+        </p>
+        <textarea class="input mb-2" rows="6" style="width: 100%;" placeholder="вставьте пример текста (кусок бланка, сниппеты и т.п.)…"
+                  [ngModel]="dryRunUserText()" (ngModelChange)="dryRunUserText.set($event)"></textarea>
+        <button type="button" class="btn btn-secondary btn-sm mb-3" [disabled]="dryRunBusy() || !dryRunUserText().trim()" (click)="runDryRun()">
+          Прогнать
+        </button>
+
+        @if (dryRunBusy()) {
+          <p class="text-muted">Выполняется…</p>
+        } @else if (dryRunResult()) {
+          @let r = dryRunResult()!;
+          @if (r.success) {
+            <pre style="white-space: pre-wrap;">{{ r.payload | json }}</pre>
+          } @else {
+            <p class="text-danger">{{ r.error }}</p>
+          }
+        }
+      </div>
+    </div>
+  }
+}
+
+@if (tab() === 'jobs') {
+  <div class="card">
+    <div class="card-title">Задачи конвейеров</div>
+    <div class="card-body">
+      <div class="d-flex gap-2 mb-3" style="flex-wrap: wrap;">
+        <div class="seg">
+          @for (t of jobTypes; track t.value) {
+            <button type="button" class="seg-opt" [class.active]="jobType() === t.value" (click)="selectJobType(t.value)">
+              {{ t.label }}
+            </button>
+          }
+        </div>
+        <select class="input" [ngModel]="jobStatus()" (ngModelChange)="jobStatus.set($event); loadJobs()">
+          <option value="">Любой статус</option>
+          <option value="Pending">Pending</option>
+          <option value="Running">Running</option>
+          <option value="Completed">Completed</option>
+          <option value="Failed">Failed</option>
+          <option value="Skipped">Skipped</option>
+        </select>
+      </div>
+
+      @if (jobsLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead><tr><th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th></tr></thead>
+          <tbody>
+            @for (j of jobs(); track j.id) {
+              <tr>
+                <td>{{ j.displayName }}</td>
+                <td>{{ j.status }}</td>
+                <td>{{ j.attempts }}</td>
+                <td class="text-muted">{{ j.error }}</td>
+                <td>{{ j.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                <td>
+                  @if (j.status === 'Failed') {
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsBusy()" (click)="retryJob(j)">
+                      Повторить
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="text-muted">Задач нет.</td></tr>
+            }
+          </tbody>
+        </table>
+        <p class="text-muted">Всего: {{ jobsTotal() }}</p>
+      }
+    </div>
+  </div>
+}

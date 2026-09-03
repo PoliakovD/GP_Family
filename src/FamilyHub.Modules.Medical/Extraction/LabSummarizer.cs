@@ -3,6 +3,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
@@ -16,7 +17,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// подмешивается в ответ константой, не запрашивается у модели — не полагаемся на то, что модель
 /// не забудет его вставить.
 /// </summary>
-public class LabSummarizer(ILmStudioJsonClient client, ILogger<LabSummarizer> logger)
+public class LabSummarizer(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<LabSummarizer> logger)
 {
     public const string Disclaimer =
         "Это не диагноз и не медицинская рекомендация — только помощь в чтении бланка. Точную трактовку результатов даёт врач.";
@@ -55,7 +56,8 @@ public class LabSummarizer(ILmStudioJsonClient client, ILogger<LabSummarizer> lo
         if (indicators.Count == 0) return LabSummaryResult.Failure("Нет показателей для суммаризации.");
 
         var userText = BuildUserText(indicators);
-        var result = await client.ExtractJsonAsync(SystemPrompt, userText, ct);
+        var prompt = await promptProvider.GetAsync("analysis.record-summary", SystemPrompt, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация анализа не удалась: {Error}", result.Error);

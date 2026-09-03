@@ -7,6 +7,7 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.Enrichment;
+using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -48,6 +49,7 @@ public class MedicalDocumentExtractionProcessor(
     LabSummarizer summarizer,
     Kb.KbLookupService medicationKbLookup,
     VisitMedicationEnrichmentRequestService visitMedicationEnrichment,
+    IPipelineConfigService pipelineConfig,
     IDomainEventPublisher publisher,
     ILogger<MedicalDocumentExtractionProcessor> logger)
 {
@@ -223,12 +225,17 @@ public class MedicalDocumentExtractionProcessor(
         // Второй проход коррекции OCR — ДО нормализации/сопоставления со справочником: смешение
         // кириллицы/латиницы и КАПС в сыром имени снижают триграммную схожесть в pg_trgm-каскаде
         // ниже и порождают ложные промахи (см. OcrNameCorrector). Один батч-вызов на весь набор
-        // показателей записи, не по одному на показатель.
-        var correctedNames = await ocrNameCorrector.CorrectBatchAsync(
-            rawIndicators.Select(x => x.Dto.Name).ToList(), ct);
-        rawIndicators = rawIndicators
-            .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.Resolution))
-            .ToList();
+        // показателей записи, не по одному на показатель. Необязательный шаг (§2 плана) —
+        // выключен из админки означает пропуск LLM-вызова целиком, детерминированный cleaner
+        // (LabAnalyteNameCleaner, ниже по конвейеру) продолжает работать без него.
+        if (await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "ocr-correct", ct))
+        {
+            var correctedNames = await ocrNameCorrector.CorrectBatchAsync(
+                rawIndicators.Select(x => x.Dto.Name).ToList(), ct);
+            rawIndicators = rawIndicators
+                .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.Resolution))
+                .ToList();
+        }
 
         // Резолвим источник в Guid — секция (несколько панелей на одном бланке, см. SpecimenResolver)
         // побеждает над document-level контекстом того же файла, если модель явно перечислила этот
@@ -307,7 +314,8 @@ public class MedicalDocumentExtractionProcessor(
             // Каскад шаг 3: KB-запись есть, фиксированный диапазон не подошёл под пациента, но
             // есть словесная методика расчёта — просим локальную LLM посчитать под конкретного
             // пациента (возраст/пол), в единице измерения бланка.
-            if (refSource == RefSource.None && kbRow is not null)
+            if (refSource == RefSource.None && kbRow is not null &&
+                await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "patient-reference", ct))
             {
                 var instructions = LabAnalyteKbPayload.ParseCalculationInstructions(kbRow.Value.PayloadJson);
                 if (!string.IsNullOrWhiteSpace(instructions))
@@ -380,11 +388,17 @@ public class MedicalDocumentExtractionProcessor(
 
         // ОДИН проход суммаризатора по ПОЛНОМУ смерженному набору показателей записи — не по
         // каждому файлу отдельно, иначе summary не видел бы показатели, распознанные раньше.
+        // Необязательный шаг (§2 плана) — выключен из админки означает отсутствие сводки, сами
+        // показатели уже сохранены и не зависят от неё.
         var allIndicators = existingByKey.Values.ToList();
-        var summarized = await summarizer.SummarizeAsync(allIndicators, ct);
-        record.SummaryJson = summarized.Success && summarized.Summary is not null
-            ? JsonSerializer.Serialize(summarized.Summary)
-            : null;
+        record.SummaryJson = null;
+        if (await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "record-summary", ct))
+        {
+            var summarized = await summarizer.SummarizeAsync(allIndicators, ct);
+            record.SummaryJson = summarized.Success && summarized.Summary is not null
+                ? JsonSerializer.Serialize(summarized.Summary)
+                : null;
+        }
         record.ExtractionStatus = ExtractionStatus.Ready;
 
         var deviationCount = allIndicators.Count(i => i.Flag is IndicatorFlag.Low or IndicatorFlag.High or IndicatorFlag.Critical);
