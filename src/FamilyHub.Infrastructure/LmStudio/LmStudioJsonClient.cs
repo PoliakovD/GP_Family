@@ -41,6 +41,26 @@ public class LmStudioJsonClient(
         [LmStudioReasoning.Maximum] = "Уровень рассуждений: максимальный. Рассуждай перед ответом подробно и тщательно, проверяя себя на каждом шаге, прежде чем дать финальный ответ.",
     };
 
+    /// <summary>Второй, узко-специализированный проход — вызывается только когда первичный ответ
+    /// не распарсился как JSON (см. ExtractJsonAsync). Несмотря на промпт задачи, модель иногда
+    /// отдаёт почти-валидный JSON с мелким синтаксическим дефектом (пропущенная запятая,
+    /// незакрытая кавычка/скобка) — просить её поправить СИНТАКСИС, не переосмысливая задачу
+    /// заново, восстанавливает заметную долю таких случаев вместо того, чтобы сразу проваливать
+    /// вызов. Задача узкая и механическая — директива уровня рассуждений (см. ReasoningDirectives)
+    /// сюда не примешивается.</summary>
+    private const string JsonRepairSystemPrompt = """
+        Ты — специалист по исправлению синтаксиса JSON. На входе — текст, который должен быть
+        валидным JSON-объектом, но не парсится (пропущенная запятая, незакрытая кавычка/скобка,
+        лишняя запятая перед закрывающей скобкой, неэкранированный спецсимвол внутри строки и
+        т.п.). Верни ТОЛЬКО исправленный JSON, без пояснений, без markdown, без блока <think>.
+
+        Правила:
+        - Исправляй ТОЛЬКО синтаксис — ни одно значение или ключ не должны измениться по смыслу.
+        - Если это в принципе не похоже на JSON или понять, что именно сломано, невозможно —
+          верни входной текст как есть, ничего не придумывая вместо него.
+        - Верни строго один JSON-объект, ничего кроме него.
+        """;
+
     /// <inheritdoc cref="ILmStudioJsonClient.ExtractJsonAsync(string, string, CancellationToken)"/>
     public Task<LmStudioJsonResult> ExtractJsonAsync(string systemPrompt, string userText, CancellationToken ct = default) =>
         ExtractJsonAsync(systemPrompt, userText, [], ct);
@@ -53,6 +73,54 @@ public class LmStudioJsonClient(
     {
         var systemPromptWithReasoning = $"{systemPrompt}\n\n{ReasoningDirectives[options.Value.Reasoning]}";
 
+        var (rawContent, sendError) = await SendChatCompletionAsync(systemPromptWithReasoning, userText, images, ct);
+        if (sendError is not null) return LmStudioJsonResult.Failure(sendError);
+        if (string.IsNullOrWhiteSpace(rawContent))
+        {
+            logger.LogWarning("LM Studio вернул пустой ответ на запрос распознавания препарата");
+            return LmStudioJsonResult.Failure("Модель вернула пустой ответ.");
+        }
+
+        var (success, payload, candidate, parseError) = TryParseJson(rawContent);
+        if (success) return new LmStudioJsonResult(true, payload, null);
+
+        // Фолбэк на невалидный JSON — несмотря на промпт задачи, модель иногда отдаёт
+        // почти-валидный JSON с мелким синтаксическим дефектом (см. class doc JsonRepairSystemPrompt).
+        // Один дополнительный узкий проход "почини синтаксис" восстанавливает заметную долю таких
+        // случаев вместо того, чтобы сразу проваливать вызов целиком.
+        logger.LogInformation(
+            "LM Studio вернул невалидный JSON ({Error}) — пробуем починить отдельным проходом. Сырой ответ: {Raw}",
+            parseError, rawContent);
+
+        var (repairedRaw, repairSendError) = await SendChatCompletionAsync(JsonRepairSystemPrompt, candidate, [], ct);
+        if (repairSendError is not null || string.IsNullOrWhiteSpace(repairedRaw))
+        {
+            logger.LogWarning("LM Studio: починка JSON недоступна ({Error}).", repairSendError ?? "пустой ответ");
+            return LmStudioJsonResult.Failure("Модель вернула невалидный JSON, и починить его не удалось.");
+        }
+
+        var (repairSuccess, repairedPayload, _, repairParseError) = TryParseJson(repairedRaw);
+        if (repairSuccess)
+        {
+            logger.LogInformation("LM Studio: JSON успешно починен отдельным проходом.");
+            return new LmStudioJsonResult(true, repairedPayload, null);
+        }
+
+        logger.LogWarning(
+            "LM Studio: JSON всё ещё невалиден после попытки починки ({Error}). Исходный ответ: {Raw}, после починки: {Repaired}",
+            repairParseError, rawContent, repairedRaw);
+        return LmStudioJsonResult.Failure("Модель вернула невалидный JSON, и починить его не удалось.");
+    }
+
+    /// <summary>Единая точка сериализации всех вызовов LM Studio (аудит, находка High #2) —
+    /// физически единственный инстанс модели за WireGuard не выдержит параллельных запросов;
+    /// раньше это соблюдалось только фоновым конвейером (WorkerCount=1 на Hangfire-очередях), но
+    /// не синхронным OCR-эндпоинтом, который шёл сюда напрямую из HTTP-запроса. Используется и
+    /// основным вызовом, и починкой JSON (ExtractJsonAsync) — оба варианта одного и того же
+    /// физического запроса к модели.</summary>
+    private async Task<(string? RawContent, string? Error)> SendChatCompletionAsync(
+        string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images, CancellationToken ct)
+    {
         var contentParts = new List<ContentPart> { new("text", Text: userText) };
         foreach (var (bytes, contentType) in images)
         {
@@ -64,17 +132,12 @@ public class LmStudioJsonClient(
             Model: options.Value.Model,
             Messages:
             [
-                new ChatMessage("system", systemPromptWithReasoning),
+                new ChatMessage("system", systemPrompt),
                 new ChatMessage("user", contentParts),
             ],
             Temperature: 0.1,
             Stream: false);
 
-        string? rawContent;
-        // Единая точка сериализации всех вызовов LM Studio (аудит, находка High #2) — физически
-        // единственный инстанс модели за WireGuard не выдержит параллельных запросов; раньше это
-        // соблюдалось только фоновым конвейером (WorkerCount=1 на Hangfire-очередях), но не
-        // синхронным OCR-эндпоинтом, который шёл сюда напрямую из HTTP-запроса.
         await gate.WaitAsync(ct);
         try
         {
@@ -87,11 +150,11 @@ public class LmStudioJsonClient(
                 var errorBody = await response.Content.ReadAsStringAsync(ct);
                 logger.LogWarning(
                     "LM Studio вернул {StatusCode} на запрос: {Body}", (int)response.StatusCode, errorBody);
-                return LmStudioJsonResult.Failure($"Локальный сервер распознавания вернул ошибку {(int)response.StatusCode}.");
+                return (null, $"Локальный сервер распознавания вернул ошибку {(int)response.StatusCode}.");
             }
 
             var parsed = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, ct);
-            rawContent = parsed?.Choices?.FirstOrDefault()?.Message?.Content;
+            return (parsed?.Choices?.FirstOrDefault()?.Message?.Content, null);
         }
         // !ct.IsCancellationRequested исключает из этого catch отмену САМИМ вызывающим (аудит,
         // находка Medium #1) — TaskCanceledException прилетает и от клиентского HttpClient.Timeout
@@ -103,35 +166,31 @@ public class LmStudioJsonClient(
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
         {
             logger.LogWarning(ex, "LM Studio недоступен или запрос по фото препарата превысил таймаут");
-            return LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.");
+            return (null, "Локальный сервер распознавания недоступен.");
         }
         finally
         {
             gate.Release();
         }
+    }
 
-        if (string.IsNullOrWhiteSpace(rawContent))
-        {
-            logger.LogWarning("LM Studio вернул пустой ответ на запрос распознавания препарата");
-            return LmStudioJsonResult.Failure("Модель вернула пустой ответ.");
-        }
-
+    /// <summary>Извлекает JSON-подстроку (см. ExtractJsonPayload) и пытается её распарсить —
+    /// Candidate возвращается всегда (даже при неудаче), это и есть вход для починки JSON
+    /// отдельным проходом (ExtractJsonAsync) — уже избавленный от &lt;think&gt;/markdown, узкая
+    /// цель для повторного запроса, а не сырой текст с посторонним контекстом.</summary>
+    private static (bool Success, Dictionary<string, JsonElement>? Payload, string Candidate, string? Error) TryParseJson(string rawContent)
+    {
+        var candidate = ExtractJsonPayload(rawContent);
         try
         {
-            var jsonPayload = ExtractJsonPayload(rawContent);
-            var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonPayload, JsonOptions);
-            if (payload is null)
-            {
-                logger.LogWarning("LM Studio: JSON распарсился в null. Сырой ответ: {Raw}", rawContent);
-                return LmStudioJsonResult.Failure("Не удалось распознать структуру препарата на фото.");
-            }
-
-            return new LmStudioJsonResult(true, payload, null);
+            var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(candidate, JsonOptions);
+            return payload is null
+                ? (false, null, candidate, "JSON распарсился в null")
+                : (true, payload, candidate, null);
         }
         catch (JsonException ex)
         {
-            logger.LogWarning(ex, "LM Studio вернул невалидный JSON. Сырой ответ: {Raw}", rawContent);
-            return LmStudioJsonResult.Failure("Не удалось распознать структуру препарата на фото.");
+            return (false, null, candidate, ex.Message);
         }
     }
 
