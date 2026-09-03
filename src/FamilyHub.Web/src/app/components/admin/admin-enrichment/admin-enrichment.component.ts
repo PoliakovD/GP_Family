@@ -49,6 +49,7 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   readonly cacheLoading = signal(false);
   readonly cacheDetail = signal<SearchCacheDetail | null>(null);
   readonly cacheDetailLoading = signal(false);
+  readonly purgeBusy = signal(false);
 
   readonly rebuild = signal<KbRebuildStatus | null>(null);
   readonly rebuildLoading = signal(false);
@@ -167,6 +168,30 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
       this.toast.error('Не удалось загрузить кэш поиска.');
     } finally {
       this.cacheLoading.set(false);
+    }
+  }
+
+  /** Массовая очистка кэша от строк с неопределённым источником — наследие до пересборки
+   * enrich-пайплайна анализов, жёсткий гейт больше не даёт таким строкам появляться заново
+   * (см. class doc LabAnalyteSearchCacheService.PurgeUnresolvedSpecimenAsync на бэкенде). */
+  async purgeUnresolvedSpecimenCache(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Удалить строки кэша с неопределённым источником?',
+      message: 'Эти строки — наследие до пересборки enrich-пайплайна: новые задачи с таким источником больше не ставятся в очередь, поэтому такой кэш никогда не будет прочитан заново.',
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.purgeBusy.set(true);
+    try {
+      const { deletedCount } = await this.api.purgeUnresolvedSpecimenSearchCache();
+      this.toast.success(`Удалено строк: ${deletedCount}.`);
+      await this.loadCache(true);
+    } catch {
+      this.toast.error('Не удалось очистить кэш.');
+    } finally {
+      this.purgeBusy.set(false);
     }
   }
 

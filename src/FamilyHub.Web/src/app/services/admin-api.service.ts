@@ -226,6 +226,11 @@ export class AdminApiService {
   setSnippetOverride = (id: string, topic: WebSearchTopicValue, url: string, enabled: boolean | null) =>
     this.post<void>(`/api/admin/enrichment/search-cache/${id}/override`, { topic, url, enabled });
 
+  /** Массовая очистка кэша показателей с нерезолвленным источником — наследие до пересборки
+   * enrich-пайплайна анализов (жёсткий гейт больше не даёт таким строкам появляться заново). */
+  purgeUnresolvedSpecimenSearchCache = () =>
+    this.post<{ deletedCount: number }>('/api/admin/enrichment/search-cache/lab-analytes/purge-unresolved-specimen');
+
   // Полная пересборка справочника показателей (§4.2 плана) — разовое ручное действие после
   // деплоя исправлений очистки имён/резолвинга источника, отдельно от reenrich (который реагирует
   // на дрейф PayloadVersion построчно и запускается автоматически).

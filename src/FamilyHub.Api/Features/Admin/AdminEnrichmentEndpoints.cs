@@ -116,6 +116,17 @@ public static class AdminEnrichmentEndpoints
             }
         });
 
+        // Кэш поиска показателей с нерезолвленным источником (SpecimenKbId=Unresolved) — чистый
+        // мусор, наследие до пересборки enrich-пайплайна анализов (жёсткий гейт не даёт новым
+        // задачам с таким источником ставиться в очередь, значит и кэш для них больше не читается
+        // ни одной задачей). Только LabAnalyte — у медикаментов нет понятия "источник".
+        group.MapPost("/search-cache/lab-analytes/purge-unresolved-specimen", async (
+            LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+        {
+            var deleted = await analyteCache.PurgeUnresolvedSpecimenAsync(ct);
+            return Results.Ok(new { deletedCount = deleted });
+        });
+
         group.MapPost("/search-cache/{id:guid}/override", async (
             Guid id, SetSnippetOverrideRequest request, MedicationSearchCacheService medicationCache,
             LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>

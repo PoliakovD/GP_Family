@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using FamilyHub.Domain.Entities;
+using FamilyHub.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -116,4 +120,52 @@ public class AdminEnrichmentApiTests(AdminWebFactory factory)
     }
 
     private record SearchCacheListDto(List<object> Rows, int Total);
+
+    private record PurgeResponseDto(int DeletedCount);
+
+    private async Task<Guid> SeedLabAnalyteSearchCacheAsync(string normalizedName, Guid specimenKbId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var id = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        db.LabAnalyteSearchCaches.Add(new LabAnalyteSearchCache
+        {
+            Id = id,
+            NormalizedName = normalizedName,
+            SpecimenKbId = specimenKbId,
+            Provider = "тест",
+            LastUpdatedAt = now,
+            CanBeUpdatedAfter = now,
+            SnippetsJson = "[]",
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task PurgeUnresolvedSpecimenSearchCache_DeletesOnlyUnresolvedRows()
+    {
+        var client = await AuthenticatedClientAsync();
+        var unresolvedName = $"показатель-unresolved-{Guid.NewGuid():N}";
+        var resolvedName = $"показатель-resolved-{Guid.NewGuid():N}";
+
+        var unresolvedId = await SeedLabAnalyteSearchCacheAsync(unresolvedName, SpecimenContextIds.Unresolved);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var specimens = scope.ServiceProvider.GetRequiredService<Modules.Medical.Extraction.GlobalSpecimenKbService>();
+            var bloodId = await specimens.FindOrRegisterAsync($"Кровь {Guid.NewGuid():N}", $"кровь{Guid.NewGuid():N}");
+            await SeedLabAnalyteSearchCacheAsync(resolvedName, bloodId);
+        }
+
+        var response = await client.PostAsync("/api/admin/enrichment/search-cache/lab-analytes/purge-unresolved-specimen", null);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<PurgeResponseDto>();
+        body!.DeletedCount.Should().BeGreaterThanOrEqualTo(1);
+
+        using var checkScope = factory.Services.CreateScope();
+        var checkDb = checkScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await checkDb.LabAnalyteSearchCaches.AnyAsync(c => c.Id == unresolvedId)).Should().BeFalse();
+        (await checkDb.LabAnalyteSearchCaches.AnyAsync(c => c.NormalizedName == resolvedName)).Should().BeTrue();
+    }
 }
