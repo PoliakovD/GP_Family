@@ -1,4 +1,4 @@
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using NSubstitute;
 
 namespace FamilyHub.UnitTests.TestSupport;

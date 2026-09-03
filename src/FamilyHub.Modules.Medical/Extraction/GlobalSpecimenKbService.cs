@@ -3,7 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;

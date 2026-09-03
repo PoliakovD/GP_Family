@@ -347,6 +347,12 @@ export class ApiService {
   getRecordSummary = (recordId: string) =>
     this.get<RecordSummaryResponse>(`/api/medical-records/${recordId}/summary`);
 
+  /** Пересчёт "Резюме"/"Вопросы врачу" по текущим (в т.ч. вручную поправленным) показателям —
+   * без повторного распознавания документа. Нужен, когда OCR неверно прочитал значение/референс
+   * с бланка: резюме само не пересчитывается после ручной правки показателя. */
+  regenerateRecordSummary = (recordId: string) =>
+    this.post<RecordSummaryResponse>(`/api/medical-records/${recordId}/summary/regenerate`);
+
   /** Заключение врача (Kind=DoctorVisit) — аналог getRecordSummary для Kind=Analysis. */
   getRecordConclusion = (recordId: string) =>
     this.get<VisitConclusion>(`/api/medical-records/${recordId}/conclusion`);

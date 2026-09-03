@@ -1,9 +1,13 @@
 using System.Net;
 using System.Text;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.Prompts;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Infrastructure.Enrichment;
@@ -34,7 +38,10 @@ public class BraveSearchProviderTests
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.search.brave.com/") };
         var opts = new EnrichmentOptions { ApiKey = "test-key" };
-        return new BraveSearchProvider(httpClient, Options.Create(opts), NullLogger<BraveSearchProvider>.Instance);
+        var promptProvider = TestPromptProvider.ReturningFallback();
+        return new BraveSearchProvider(
+            httpClient, Options.Create(opts), NullLogger<BraveSearchProvider>.Instance,
+            new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
     }
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
@@ -112,5 +119,28 @@ public class BraveSearchProviderTests
         var snippets = await sut.SearchAsync("парацетамол");
 
         snippets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchAsync_Medication_UsesAdminTemplate_FromPromptProvider_WithNameSubstituted()
+    {
+        Uri? requestUri = null;
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            requestUri = request.RequestUri;
+            return JsonResponse("""{ "web": { "results": [] } }""");
+        });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.search.brave.com/") };
+        var promptProvider = Substitute.For<IPromptProvider>();
+        promptProvider.GetAsync("medication.search-query.brave", Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult("{name} — купить в аптеке РФ"));
+        var sut = new BraveSearchProvider(
+            httpClient, Options.Create(new EnrichmentOptions { ApiKey = "test-key" }),
+            NullLogger<BraveSearchProvider>.Instance, new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
+
+        await sut.SearchAsync("парацетамол", WebSearchTopic.Medication);
+
+        requestUri!.Query.Should().Contain(Uri.EscapeDataString("парацетамол — купить в аптеке РФ"),
+            "текст запроса для медикамента должен браться из шаблона IPromptProvider, а не из захардкоженной строки");
     }
 }

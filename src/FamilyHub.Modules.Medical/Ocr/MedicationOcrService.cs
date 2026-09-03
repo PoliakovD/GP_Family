@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Extraction;
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Ocr;

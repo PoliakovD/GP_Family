@@ -3,7 +3,7 @@ using System.Text.Json;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Enrichment;

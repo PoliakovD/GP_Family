@@ -10,7 +10,9 @@ using DomainLabIndicator = FamilyHub.Domain.Entities.LabIndicator;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
-public enum ExtractionQueryResult { Success, NotFound, Forbidden }
+/// <summary>Failed — только у RegenerateSummaryAsync: запись/доступ в порядке, но сама
+/// суммаризация не удалась (LM Studio недоступен, гейт отклонил пустой ответ и т.п.).</summary>
+public enum ExtractionQueryResult { Success, NotFound, Forbidden, Failed }
 
 /// <summary>
 /// Чтение результатов конвейера извлечения (ветка medicalrecords). Показатели/статус/summary
@@ -19,7 +21,7 @@ public enum ExtractionQueryResult { Success, NotFound, Forbidden }
 /// </summary>
 public class ExtractionQueryService(
     AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup,
-    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit)
+    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer)
 {
     public async Task<(ExtractionQueryResult Result, ExtractionStatusResponse? Item)> GetStatusAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
@@ -122,6 +124,33 @@ public class ExtractionQueryService(
 
         return (ExtractionQueryResult.Success, new RecordSummaryResponse(
             summary.PlainSummary, summary.Deviations, summary.QuestionsForDoctor, summary.Disclaimer));
+    }
+
+    /// <summary>Пересчитывает "Резюме"/"Вопросы врачу" по ТЕКУЩИМ показателям записи — независимо
+    /// от исходной автоматической суммаризации при распознавании. Нужен, когда OCR неверно
+    /// прочитал значение/референс с бланка (см. IndicatorFlagCalculator), из-за чего исходное
+    /// резюме построено на неверных цифрах: пользователь правит показатель вручную
+    /// (UpdateIndicatorAsync), а резюме само не пересчитывается — этот метод даёт явную кнопку
+    /// вместо того, чтобы заставлять пересканировать документ заново (который вернул бы ту же
+    /// ошибку OCR). Синхронный вызов LLM из HTTP-запроса — тот же приём, что MedicationOcrService.</summary>
+    public async Task<(ExtractionQueryResult Result, RecordSummaryResponse? Item)> RegenerateSummaryAsync(
+        Guid recordId, Guid userId, CancellationToken ct = default)
+    {
+        var record = await db.MedicalRecords.FirstOrDefaultAsync(r => r.Id == recordId, ct);
+        if (record is null) return (ExtractionQueryResult.NotFound, null);
+        if (record.OwnerUserId != userId) return (ExtractionQueryResult.Forbidden, null);
+
+        var indicators = await db.LabIndicators.Where(i => i.MedicalRecordId == recordId).ToListAsync(ct);
+        if (indicators.Count == 0) return (ExtractionQueryResult.NotFound, null);
+
+        var summarized = await summarizer.SummarizeAsync(indicators, ct);
+        if (!summarized.Success || summarized.Summary is null) return (ExtractionQueryResult.Failed, null);
+
+        record.SummaryJson = JsonSerializer.Serialize(summarized.Summary);
+        await db.SaveChangesAsync(ct);
+
+        return (ExtractionQueryResult.Success, new RecordSummaryResponse(
+            summarized.Summary.PlainSummary, summarized.Summary.Deviations, summarized.Summary.QuestionsForDoctor, summarized.Summary.Disclaimer));
     }
 
     /// <summary>Последнее значение по каждому (показатель, источник) среди СВОИХ записей

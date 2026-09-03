@@ -146,27 +146,46 @@
 
         <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
              читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
-        @if (summaryByRecord[item.id]; as summary) {
-          <div class="card-kicker mt-2">Резюме</div>
-          @if (summary.plainSummary) {
-            <p class="mb-1">{{ summary.plainSummary }}</p>
+        @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
+          <div class="d-flex justify-content-between mt-2" style="align-items:center;">
+            <div class="card-kicker mb-0">Резюме</div>
+            <button type="button" class="btn-link" style="font-size:12px"
+                    [disabled]="summaryRegeneratingRecordId === item.id"
+                    (click)="regenerateSummary(item.id)">
+              {{ summaryRegeneratingRecordId === item.id ? 'Пересчитываем…' : (summaryByRecord[item.id] ? 'Пересчитать резюме' : 'Составить резюме') }}
+            </button>
+          </div>
+          @if (summaryByRecord[item.id]; as summary) {
+            @if (summary.plainSummary) {
+              <p class="mb-1">{{ summary.plainSummary }}</p>
+            }
+            @if (summary.deviations.length > 0) {
+              <ul class="mb-1" style="font-size:13px">
+                @for (d of summary.deviations; track d.name) {
+                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                }
+              </ul>
+            }
+            @if (summary.questionsForDoctor.length > 0) {
+              <div class="card-kicker mt-2">Вопросы врачу</div>
+              <ul class="mb-1" style="font-size:13px">
+                @for (q of summary.questionsForDoctor; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            }
+            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+          } @else {
+            <p class="muted mb-1" style="font-size:13px">Резюме ещё не составлено.</p>
           }
-          @if (summary.deviations.length > 0) {
-            <ul class="mb-1" style="font-size:13px">
-              @for (d of summary.deviations; track d.name) {
-                <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-              }
-            </ul>
-          }
-          @if (summary.questionsForDoctor.length > 0) {
-            <div class="card-kicker mt-2">Вопросы врачу</div>
-            <ul class="mb-1" style="font-size:13px">
-              @for (q of summary.questionsForDoctor; track q) {
-                <li>{{ q }}</li>
-              }
-            </ul>
-          }
-          <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+          <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
+               а объяснить, что делать) — резюме строится по показателям на момент последнего
+               распознавания/пересчёта и само не обновляется после ручной правки значения. -->
+          <p class="muted mb-0" style="font-size:11px">
+            Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
+            пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
+            нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
+          </p>
         }
 
         @if (item.kind === Kind.Analysis) {

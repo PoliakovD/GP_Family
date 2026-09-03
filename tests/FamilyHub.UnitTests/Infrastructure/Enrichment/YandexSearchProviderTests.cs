@@ -1,10 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.Prompts;
+using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Infrastructure.Enrichment;
@@ -45,7 +49,10 @@ public class YandexSearchProviderTests
         var handler = new CapturingHttpMessageHandler(respond);
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/") };
         var opts = new EnrichmentOptions { ApiKey = "test-key", FolderId = "b1gtest0000000000000" };
-        return (new YandexSearchProvider(httpClient, Options.Create(opts), NullLogger<YandexSearchProvider>.Instance), handler);
+        var promptProvider = TestPromptProvider.ReturningFallback();
+        return (new YandexSearchProvider(
+            httpClient, Options.Create(opts), NullLogger<YandexSearchProvider>.Instance,
+            new AnalyteSearchQueryBuilder(promptProvider), promptProvider), handler);
     }
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
@@ -131,10 +138,12 @@ public class YandexSearchProviderTests
     {
         var handler = new ThrowingHttpMessageHandler(new HttpRequestException("Тестовый сбой сети"));
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/") };
+        var promptProvider = TestPromptProvider.ReturningFallback();
         var sut = new YandexSearchProvider(
             httpClient,
             Options.Create(new EnrichmentOptions { ApiKey = "k", FolderId = "f" }),
-            NullLogger<YandexSearchProvider>.Instance);
+            NullLogger<YandexSearchProvider>.Instance,
+            new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
 
         var snippets = await sut.SearchAsync("парацетамол");
 
@@ -154,5 +163,25 @@ public class YandexSearchProviderTests
         // живой запрос показал, что ограничение поиска этим полем даёт "Ничего не найдено" даже для
         // доменов, которые находятся и используются без ограничения; фильтрация — постфактум, на процессоре.
         handler.LastRequestBody.Should().NotContain("\"host\"");
+    }
+
+    [Fact]
+    public async Task SearchAsync_Medication_UsesAdminTemplate_FromPromptProvider_WithNameSubstituted()
+    {
+        var handler = new CapturingHttpMessageHandler(_ => JsonResponse(ResponseWithUsedAndUnusedSources));
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/") };
+        var promptProvider = Substitute.For<IPromptProvider>();
+        promptProvider.GetAsync("medication.search-query.yandex", Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult("custom-admin-template about {name}"));
+        var sut = new YandexSearchProvider(
+            httpClient, Options.Create(new EnrichmentOptions { ApiKey = "test-key", FolderId = "b1gtest0000000000000" }),
+            NullLogger<YandexSearchProvider>.Instance, new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
+
+        await sut.SearchAsync("парацетамол", WebSearchTopic.Medication);
+
+        // JSON-сериализация экранирует кириллицу в \uXXXX (JsonSerializerDefaults.Web) — шаблон
+        // из латиницы, чтобы проверять подстановку по сырому телу запроса без декодирования JSON.
+        handler.LastRequestBody.Should().Contain("custom-admin-template about ",
+            "текст запроса для медикамента должен браться из шаблона IPromptProvider, а не из захардкоженной строки");
     }
 }

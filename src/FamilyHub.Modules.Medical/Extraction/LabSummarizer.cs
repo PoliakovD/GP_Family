@@ -3,7 +3,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 

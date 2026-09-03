@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Prompts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -24,11 +25,20 @@ namespace FamilyHub.Infrastructure.Enrichment;
 /// Суммаризация сгенерированного Yandex ответа всё равно проходит через локальный Qwen
 /// (MedicationSummarizer) — ADR-0005 п.7: облачный сервис не пишет в справочник напрямую, только
 /// поставляет сырой материал под тем же антигаллюцинационным гейтом, что и Brave.
+/// Текст запроса для медикаментов редактируется из админки отдельным ключом
+/// "medication.search-query.yandex" (см. class doc IPromptProvider) — сформулирован под GenSearch
+/// (развёрнутый вопрос, а не ключевые слова), поэтому текст осознанно отличается от Brave-версии
+/// (см. class doc BraveSearchProvider).
 /// </summary>
-public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOptions> options, ILogger<YandexSearchProvider> logger)
+public class YandexSearchProvider(
+    HttpClient httpClient, IOptions<EnrichmentOptions> options, ILogger<YandexSearchProvider> logger,
+    AnalyteSearchQueryBuilder analyteQueryBuilder, IPromptProvider promptProvider)
     : IMedicationSearchProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    public const string MedicationFallbackTemplate =
+        "{name}: инструкция по применению, показания, форма выпуска, условия хранения, влияние на управление транспортом";
 
     public string Name => "Yandex";
 
@@ -38,8 +48,9 @@ public class YandexSearchProvider(HttpClient httpClient, IOptions<EnrichmentOpti
     {
         var opts = options.Value;
         var messageText = topic == WebSearchTopic.LabAnalyte
-            ? AnalyteSearchQueryBuilder.Build(normalizedName, specimenDisplayName)
-            : $"{normalizedName}: инструкция по применению, показания, форма выпуска, условия хранения, влияние на управление транспортом";
+            ? await analyteQueryBuilder.BuildAsync(normalizedName, specimenDisplayName, ct)
+            : (await promptProvider.GetAsync("medication.search-query.yandex", MedicationFallbackTemplate, ct))
+                .Replace("{name}", normalizedName);
         var request = new GenSearchRequest(
             Messages: [new GenSearchMessage(messageText, "ROLE_USER")],
             FolderId: opts.FolderId ?? string.Empty,

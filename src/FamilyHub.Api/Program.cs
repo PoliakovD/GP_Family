@@ -34,6 +34,7 @@ using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Notifications.Consumers;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Prompts;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Security.Rotation;
@@ -616,6 +617,15 @@ builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, cli
     client.BaseAddress = new Uri(lmStudioOptions.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(lmStudioOptions.TimeoutSeconds);
 });
+
+// Управление enrich-пайплайном из админки (§2) — резолвинг активного текста промпта/шаблона по
+// ключу, версионируется в БД (PipelinePromptVersion). Infrastructure-уровня (не Modules.Medical):
+// используется и LLM-промптами Modules.Medical.Extraction/Enrichment, и шаблонами поисковых
+// запросов во внешний поиск здесь же в Infrastructure.Enrichment (AnalyteSearchQueryBuilder,
+// BraveSearchProvider/YandexSearchProvider) — см. class doc IPromptProvider.
+builder.Services.AddScoped<PromptProvider>();
+builder.Services.AddScoped<IPromptProvider>(sp => sp.GetRequiredService<PromptProvider>());
+builder.Services.AddScoped<AnalyteSearchQueryBuilder>();
 
 // --- Документы: декодирование вложений под конвейер извлечения (ветка medicalrecords) ---
 builder.Services.AddScoped<PdfDocumentReader>();

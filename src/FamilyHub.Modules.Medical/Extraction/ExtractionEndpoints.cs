@@ -51,6 +51,23 @@ public static class ExtractionEndpoints
             return MapQueryResult(result, item);
         });
 
+        // Пересчёт "Резюме"/"Вопросы врачу" по текущим (в т.ч. вручную поправленным) показателям —
+        // без повторного распознавания документа (см. class doc RegenerateSummaryAsync).
+        records.MapPost("/{recordId:guid}/summary/regenerate", async (
+            Guid recordId, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, item) = await service.RegenerateSummaryAsync(recordId, currentUser.UserId, ct);
+            return result switch
+            {
+                ExtractionQueryResult.NotFound => Results.NotFound(),
+                ExtractionQueryResult.Forbidden => Results.Forbid(),
+                ExtractionQueryResult.Failed => Results.Json(
+                    new { code = "summary_regeneration_failed", message = "Не удалось пересчитать резюме — локальный сервер распознавания недоступен или не смог обработать показатели." },
+                    statusCode: StatusCodes.Status502BadGateway),
+                _ => Results.Ok(item),
+            };
+        });
+
         records.MapGet("/{recordId:guid}/conclusion", async (
             Guid recordId, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
         {

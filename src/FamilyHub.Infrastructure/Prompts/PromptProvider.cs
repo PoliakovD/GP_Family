@@ -2,14 +2,15 @@ using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace FamilyHub.Modules.Medical.Pipeline;
+namespace FamilyHub.Infrastructure.Prompts;
 
 /// <summary>
-/// Резолвит текст промпта по ключу (управление enrich-пайплайном из админки, §2 плана) —
+/// Резолвит текст промпта/шаблона по ключу (управление enrich-пайплайном из админки, §2 плана) —
 /// активная версия из БД (PipelinePromptVersion), фолбэк на константу в коде, если активной
 /// версии нет (пустая БД, только что задеплоенный слот, ещё не отредактированный из админки).
 /// Кэш в IMemoryCache (тот же приём, что 15-минутный кэш AdminStatsService) — правка промпта
-/// случается на порядки реже, чем сам конвейер спрашивает его текст.
+/// случается на порядки реже, чем сам конвейер спрашивает его текст. См. class doc IPromptProvider
+/// про то, почему этот класс в Infrastructure, а не в Modules.Medical.
 /// </summary>
 public class PromptProvider(AppDbContext db, IMemoryCache cache) : IPromptProvider
 {

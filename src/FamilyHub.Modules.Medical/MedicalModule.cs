@@ -22,10 +22,10 @@ public static class MedicalModule
 {
     public static IServiceCollection AddMedicalModule(this IServiceCollection services)
     {
-        // Управление enrich-пайплайном из админки (§2) — резолвинг активного текста промпта по
-        // ключу и вкл/выкл необязательных шагов. IMemoryCache регистрируется в Program.cs.
-        services.AddScoped<PromptProvider>();
-        services.AddScoped<IPromptProvider>(sp => sp.GetRequiredService<PromptProvider>());
+        // Управление enrich-пайплайном из админки (§2) — вкл/выкл необязательных шагов.
+        // PromptProvider/IPromptProvider — Infrastructure-уровня (см. class doc IPromptProvider:
+        // используется и здесь, и поисковыми запросами Infrastructure.Enrichment), регистрируется
+        // в Program.cs, не тут. IMemoryCache тоже регистрируется в Program.cs.
         services.AddScoped<PipelineConfigService>();
         services.AddScoped<IPipelineConfigService>(sp => sp.GetRequiredService<PipelineConfigService>());
 

@@ -1,11 +1,11 @@
 using FamilyHub.Domain.Entities;
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
 using Xunit;
 
-namespace FamilyHub.UnitTests.Modules.Medical.Pipeline;
+namespace FamilyHub.UnitTests.Infrastructure.Prompts;
 
 /// <summary>Резолвинг текста промпта по ключу (управление enrich-пайплайном из админки, §2 плана) —
 /// активная версия из БД побеждает фолбэк на константу в коде, кэш инвалидируется явно при

@@ -196,6 +196,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   extractionStatusByRecord: Record<string, ExtractionStatusResponse | null> = {};
   indicatorsByRecord: Record<string, IndicatorDto[]> = {};
   summaryByRecord: Record<string, RecordSummaryResponse | null> = {};
+  /** Id записи, для которой сейчас идёт пересчёт резюме (см. regenerateSummary) — дизейблит
+   * кнопку именно этой записи и переключает её подпись на "Пересчитываем…". */
+  summaryRegeneratingRecordId: string | null = null;
   conclusionByRecord: Record<string, VisitConclusion | null> = {};
   /** Id записи, для которой сейчас идёт запрос «Распознать» — дизейблит кнопку именно этой записи. */
   recognizingRecordId: string | null = null;
@@ -884,6 +887,23 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       }
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить результат распознавания.';
+    }
+  }
+
+  /** Пересчитывает "Резюме"/"Вопросы врачу" по текущим (в т.ч. вручную поправленным) показателям
+   * записи — см. class doc ExtractionQueryService.RegenerateSummaryAsync на бэкенде: исходное
+   * резюме строится один раз при распознавании и не пересчитывается само после ручной правки
+   * показателя, поэтому нужна явная кнопка, а не полное повторное распознавание документа. */
+  async regenerateSummary(recordId: string): Promise<void> {
+    this.summaryRegeneratingRecordId = recordId;
+    this.error = null;
+    try {
+      const summary = await this.api.regenerateRecordSummary(recordId);
+      this.summaryByRecord = { ...this.summaryByRecord, [recordId]: summary };
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось пересчитать резюме.';
+    } finally {
+      this.summaryRegeneratingRecordId = null;
     }
   }
 

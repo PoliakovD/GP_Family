@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Prompts;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Pipeline;

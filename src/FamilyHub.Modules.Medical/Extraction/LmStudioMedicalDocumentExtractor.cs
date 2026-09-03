@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Infrastructure.Prompts;
 using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

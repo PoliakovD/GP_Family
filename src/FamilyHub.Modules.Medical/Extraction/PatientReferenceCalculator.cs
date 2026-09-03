@@ -1,7 +1,7 @@
 using System.Text;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
-using FamilyHub.Modules.Medical.Pipeline;
+using FamilyHub.Infrastructure.Prompts;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
