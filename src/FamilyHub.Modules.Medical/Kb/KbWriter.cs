@@ -64,17 +64,25 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
 
+        // Ручная правка справочника (§3 плана) — залоченные поля переживают переобогащение, тот
+        // же приём, что LabAnalyteKbWriter (см. его class doc для полного объяснения).
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO kb.global_medications_kb
-                ("Id", "NormalizedName", "DisplayName", "PayloadJson", "PayloadVersion", "Source", "Aliases", "CreatedAt", "UpdatedAt")
+                ("Id", "NormalizedName", "DisplayName", "PayloadJson", "PayloadVersion", "Source", "Aliases", "LockedFields", "CreatedAt", "UpdatedAt")
             VALUES
-                ({id}, {normalizedName}, {displayName}, {payloadJson}::jsonb, {MedicationSummarySchema.CurrentVersion}, {source}, {aliases}, {now}, {now})
+                ({id}, {normalizedName}, {displayName}, {payloadJson}::jsonb, {MedicationSummarySchema.CurrentVersion}, {source}, {aliases}, {Array.Empty<string>()}, {now}, {now})
             ON CONFLICT ("NormalizedName") DO UPDATE SET
-                "DisplayName" = EXCLUDED."DisplayName",
-                "PayloadJson" = EXCLUDED."PayloadJson",
-                "PayloadVersion" = EXCLUDED."PayloadVersion",
-                "Source" = EXCLUDED."Source",
-                "Aliases" = ARRAY(SELECT DISTINCT unnest(kb.global_medications_kb."Aliases" || EXCLUDED."Aliases")),
+                "DisplayName" = CASE WHEN 'displayName' = ANY(kb.global_medications_kb."LockedFields")
+                    THEN kb.global_medications_kb."DisplayName" ELSE EXCLUDED."DisplayName" END,
+                "PayloadJson" = CASE WHEN 'payload' = ANY(kb.global_medications_kb."LockedFields")
+                    THEN kb.global_medications_kb."PayloadJson" ELSE EXCLUDED."PayloadJson" END,
+                "PayloadVersion" = CASE WHEN 'payload' = ANY(kb.global_medications_kb."LockedFields")
+                    THEN kb.global_medications_kb."PayloadVersion" ELSE EXCLUDED."PayloadVersion" END,
+                "Source" = CASE WHEN 'payload' = ANY(kb.global_medications_kb."LockedFields")
+                    THEN kb.global_medications_kb."Source" ELSE EXCLUDED."Source" END,
+                "Aliases" = CASE WHEN 'aliases' = ANY(kb.global_medications_kb."LockedFields")
+                    THEN kb.global_medications_kb."Aliases"
+                    ELSE ARRAY(SELECT DISTINCT unnest(kb.global_medications_kb."Aliases" || EXCLUDED."Aliases")) END,
                 "UpdatedAt" = EXCLUDED."UpdatedAt"
             """, ct);
 

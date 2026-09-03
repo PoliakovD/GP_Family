@@ -64,6 +64,14 @@ export const routes: Routes = [
             (m) => m.AdminPipelineComponent,
           ),
       },
+      {
+        // Ручная правка справочников после ИИ (§3 плана): показатели, медикаменты, источники.
+        path: 'catalog',
+        loadComponent: () =>
+          import('./components/admin/admin-catalog/admin-catalog.component').then(
+            (m) => m.AdminCatalogComponent,
+          ),
+      },
     ],
   },
 

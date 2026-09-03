@@ -25,6 +25,7 @@ public class GlobalMedicationKbConfiguration : IEntityTypeConfiguration<GlobalMe
         // маппинга (Npgsql array vs SQLite-юнит-тесты), читается/пишется только через raw SQL
         // (KbLookupService/KbWriter) — исключаем из EF-модели, иначе SQLite-тесты не соберут модель.
         builder.Ignore(k => k.Aliases);
+        builder.Ignore(k => k.LockedFields);
 
         builder.HasIndex(k => k.NormalizedName).IsUnique();
     }

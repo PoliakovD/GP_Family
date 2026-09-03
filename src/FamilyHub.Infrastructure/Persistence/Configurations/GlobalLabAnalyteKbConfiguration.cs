@@ -20,9 +20,10 @@ public class GlobalLabAnalyteKbConfiguration : IEntityTypeConfiguration<GlobalLa
         builder.Property(k => k.Source).HasMaxLength(200).IsRequired();
         builder.Property(k => k.PayloadVersion).IsRequired();
 
-        // Aliases — Postgres text[], заводится raw SQL в миграции (как у GlobalMedicationKb.Aliases) —
-        // не единого кроссплатформенного маппинга для SQLite-юнит-тестов.
+        // Aliases/LockedFields — Postgres text[], заводится raw SQL в миграции (как у
+        // GlobalMedicationKb.Aliases) — не единого кроссплатформенного маппинга для SQLite-юнит-тестов.
         builder.Ignore(k => k.Aliases);
+        builder.Ignore(k => k.LockedFields);
 
         // Ключ дедупликации — пара (показатель, источник), не одно имя (пересборка
         // enrich-пайплайна, см. class doc): "белок" в крови и в моче — разные записи.

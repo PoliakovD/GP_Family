@@ -12,6 +12,17 @@ namespace FamilyHub.Modules.Medical.Extraction;
 
 public enum SpecimenValidationResult { Valid, Rejected, Unavailable }
 
+/// <summary>Ручное переименование источника из админки (§3 плана) — без нового LLM-вызова
+/// (в отличие от ValidateAndRegisterAsync, где нужно провалидировать НОВОЕ, ещё не проверенное
+/// название) — админ переименовывает уже существующую, реальную запись, второй раз спрашивать
+/// модель, существует ли этот источник, незачем.</summary>
+public enum SpecimenRenameResult { Ok, NotFound, Conflict }
+
+/// <summary>InUse — на строку ссылается хоть один LabIndicator/GlobalLabAnalyteKb/строка кэша
+/// поиска/UserSpecimen (§3 плана: удаление справочника не должно оставлять висячие ссылки).
+/// Sentinel — попытка удалить SpecimenContextIds.Unresolved, системную запись "источник не определён".</summary>
+public enum SpecimenDeleteResult { Ok, NotFound, InUse, Sentinel }
+
 /// <summary>Один источник в результате поиска по общему справочнику (GET /api/specimens/search) —
 /// фронт строит по этому список автоподсказки вместо прежнего захардкоженного select'а по 6
 /// значениям SpecimenType (пересборка enrich-пайплайна).</summary>
@@ -177,6 +188,50 @@ public class GlobalSpecimenKbService(
         }
 
         return entry.Id;
+    }
+
+    /// <summary>Переименование существующей строки из админки (§3 плана) — конфликтует, если
+    /// новое написание нормализуется в уже занятое другой строкой имя (уникальный индекс по
+    /// NormalizedName); в этом случае предлагать пользователю перепривязку на существующую строку
+    /// (Id конфликтующей записи), а не разрешать дубль.</summary>
+    public async Task<SpecimenRenameResult> RenameAsync(Guid id, string newDisplayName, CancellationToken ct = default)
+    {
+        var entity = await db.GlobalSpecimensKb.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (entity is null) return SpecimenRenameResult.NotFound;
+
+        var trimmed = newDisplayName.Trim();
+        var normalized = LabAnalyteNormalizer.Normalize(trimmed);
+        if (normalized.Length == 0) return SpecimenRenameResult.Conflict;
+
+        var conflict = await db.GlobalSpecimensKb.AnyAsync(s => s.Id != id && s.NormalizedName == normalized, ct);
+        if (conflict) return SpecimenRenameResult.Conflict;
+
+        entity.DisplayName = trimmed;
+        entity.NormalizedName = normalized;
+        await db.SaveChangesAsync(ct);
+        return SpecimenRenameResult.Ok;
+    }
+
+    /// <summary>Удаление из админки (§3 плана) — блокируется, если строка ещё используется где-либо
+    /// (реальные показатели/статьи справочника/кэш поиска/личный список), чтобы не оставлять
+    /// висячие SpecimenKbId; сентинел "не определено" не удаляется никогда (нужен как фолбэк).</summary>
+    public async Task<SpecimenDeleteResult> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        if (id == SpecimenContextIds.Unresolved) return SpecimenDeleteResult.Sentinel;
+
+        var exists = await db.GlobalSpecimensKb.AnyAsync(s => s.Id == id, ct);
+        if (!exists) return SpecimenDeleteResult.NotFound;
+
+        var inUse =
+            await db.LabIndicators.AnyAsync(i => i.SpecimenKbId == id, ct) ||
+            await db.GlobalLabAnalytesKb.AnyAsync(k => k.SpecimenKbId == id, ct) ||
+            await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.SpecimenKbId == id, ct) ||
+            await db.LabAnalyteSearchCaches.AnyAsync(c => c.SpecimenKbId == id, ct) ||
+            await db.UserSpecimens.AnyAsync(u => u.SpecimenKbId == id, ct);
+        if (inUse) return SpecimenDeleteResult.InUse;
+
+        await db.GlobalSpecimensKb.Where(s => s.Id == id).ExecuteDeleteAsync(ct);
+        return SpecimenDeleteResult.Ok;
     }
 
     private static bool? ReadBool(Dictionary<string, JsonElement> payload, string key)

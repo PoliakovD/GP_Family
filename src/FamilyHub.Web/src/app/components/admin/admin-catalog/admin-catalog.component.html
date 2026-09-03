@@ -1,0 +1,224 @@
+<div class="seg mb-3">
+  <button type="button" class="seg-opt" [class.active]="tab() === 'analytes'" (click)="selectTab('analytes')">Показатели</button>
+  <button type="button" class="seg-opt" [class.active]="tab() === 'medications'" (click)="selectTab('medications')">Медикаменты</button>
+  <button type="button" class="seg-opt" [class.active]="tab() === 'specimens'" (click)="selectTab('specimens')">Источники</button>
+</div>
+
+@if (tab() === 'analytes') {
+  <div class="card mb-3">
+    <div class="card-title">Показатели</div>
+    <div class="card-body">
+      <form class="d-flex gap-2 mb-3" (ngSubmit)="searchAnalytes()">
+        <input class="input" placeholder="поиск по названию…"
+               [ngModel]="analyteQuery()" (ngModelChange)="analyteQuery.set($event)" name="analyteQuery" />
+        <button type="submit" class="btn btn-secondary btn-sm" [disabled]="analytesLoading()">Найти</button>
+      </form>
+
+      @if (analytesLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead><tr><th>Название</th><th>Источник</th><th></th></tr></thead>
+          <tbody>
+            @for (a of analytes(); track a.id) {
+              <tr>
+                <td>{{ a.displayName }}</td>
+                <td>{{ a.specimenDisplayName }}</td>
+                <td><button type="button" class="btn btn-secondary btn-sm" (click)="openAnalyte(a)">Открыть</button></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="3" class="text-muted">Ничего не найдено.</td></tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+
+  @if (analyteDetail()) {
+    @let d = analyteDetail()!;
+    <div class="card">
+      <div class="card-title d-flex justify-content-between" style="align-items: center;">
+        <span>{{ d.displayName }}</span>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="reenrichAnalyte()">Переобогатить</button>
+          <button type="button" class="btn btn-danger btn-sm" [disabled]="analyteBusy()" (click)="deleteAnalyte()">Удалить</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-3">
+          Обновлено {{ d.updatedAt | date: 'dd.MM.yyyy HH:mm' }} · источник знания: {{ d.source }}
+        </p>
+
+        <div class="mb-3">
+          <label class="d-flex justify-content-between" style="align-items: center;">
+            <span>Название</span>
+            @if (d.lockedFields.includes('displayName')) {
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('displayName')">🔒 залочено — снять</span>
+            }
+          </label>
+          <div class="d-flex gap-2">
+            <input class="input" style="flex: 1;" [ngModel]="analyteEditorDisplayName()" (ngModelChange)="analyteEditorDisplayName.set($event)" />
+            <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="saveAnalyteField('displayName')">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="d-flex justify-content-between" style="align-items: center;">
+            <span>Синонимы (через запятую)</span>
+            @if (d.lockedFields.includes('aliases')) {
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('aliases')">🔒 залочено — снять</span>
+            }
+          </label>
+          <div class="d-flex gap-2">
+            <input class="input" style="flex: 1;" [ngModel]="analyteEditorAliases()" (ngModelChange)="analyteEditorAliases.set($event)" />
+            <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="saveAnalyteField('aliases')">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <label class="d-flex justify-content-between" style="align-items: center;">
+            <span>Payload (JSON)</span>
+            @if (d.lockedFields.includes('payload')) {
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('payload')">🔒 залочено — снять</span>
+            }
+          </label>
+          <textarea class="input mb-2" rows="16" style="width: 100%; font-family: monospace;"
+                    [ngModel]="analyteEditorPayload()" (ngModelChange)="analyteEditorPayload.set($event)"></textarea>
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="saveAnalyteField('payloadJson')">Сохранить payload</button>
+        </div>
+      </div>
+    </div>
+  }
+}
+
+@if (tab() === 'medications') {
+  <div class="card mb-3">
+    <div class="card-title">Медикаменты</div>
+    <div class="card-body">
+      <form class="d-flex gap-2 mb-3" (ngSubmit)="searchMedications()">
+        <input class="input" placeholder="поиск по названию…"
+               [ngModel]="medicationQuery()" (ngModelChange)="medicationQuery.set($event)" name="medicationQuery" />
+        <button type="submit" class="btn btn-secondary btn-sm" [disabled]="medicationsLoading()">Найти</button>
+      </form>
+
+      @if (medicationsLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead><tr><th>Название</th><th></th></tr></thead>
+          <tbody>
+            @for (m of medications(); track m.id) {
+              <tr>
+                <td>{{ m.displayName }}</td>
+                <td><button type="button" class="btn btn-secondary btn-sm" (click)="openMedication(m)">Открыть</button></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="2" class="text-muted">Ничего не найдено.</td></tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+
+  @if (medicationDetail()) {
+    @let d = medicationDetail()!;
+    <div class="card">
+      <div class="card-title d-flex justify-content-between" style="align-items: center;">
+        <span>{{ d.displayName }}</span>
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="medicationBusy()" (click)="deleteMedication()">Удалить</button>
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-3">
+          Обновлено {{ d.updatedAt | date: 'dd.MM.yyyy HH:mm' }} · источник знания: {{ d.source }}
+        </p>
+
+        <div class="mb-3">
+          <label class="d-flex justify-content-between" style="align-items: center;">
+            <span>Название</span>
+            @if (d.lockedFields.includes('displayName')) {
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('displayName')">🔒 залочено — снять</span>
+            }
+          </label>
+          <div class="d-flex gap-2">
+            <input class="input" style="flex: 1;" [ngModel]="medicationEditorDisplayName()" (ngModelChange)="medicationEditorDisplayName.set($event)" />
+            <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="saveMedicationField('displayName')">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="d-flex justify-content-between" style="align-items: center;">
+            <span>Синонимы/торговые названия (через запятую)</span>
+            @if (d.lockedFields.includes('aliases')) {
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('aliases')">🔒 залочено — снять</span>
+            }
+          </label>
+          <div class="d-flex gap-2">
+            <input class="input" style="flex: 1;" [ngModel]="medicationEditorAliases()" (ngModelChange)="medicationEditorAliases.set($event)" />
+            <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="saveMedicationField('aliases')">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <label class="d-flex justify-content-between" style="align-items: center;">
+            <span>Payload (JSON)</span>
+            @if (d.lockedFields.includes('payload')) {
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('payload')">🔒 залочено — снять</span>
+            }
+          </label>
+          <textarea class="input mb-2" rows="16" style="width: 100%; font-family: monospace;"
+                    [ngModel]="medicationEditorPayload()" (ngModelChange)="medicationEditorPayload.set($event)"></textarea>
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="saveMedicationField('payloadJson')">Сохранить payload</button>
+        </div>
+      </div>
+    </div>
+  }
+}
+
+@if (tab() === 'specimens') {
+  <div class="card">
+    <div class="card-title">Источники показателей</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Биоматериал (кровь, моча…) и инструментальные исследования (ЭКГ, УЗИ…) — один общий справочник.
+        Переименование меняет и ключ поиска; удаление заблокировано, пока источник ещё используется.
+      </p>
+
+      <form class="d-flex gap-2 mb-3" (ngSubmit)="searchSpecimens()">
+        <input class="input" placeholder="поиск по названию…"
+               [ngModel]="specimenQuery()" (ngModelChange)="specimenQuery.set($event)" name="specimenQuery" />
+        <button type="submit" class="btn btn-secondary btn-sm" [disabled]="specimensLoading()">Найти</button>
+      </form>
+
+      @if (specimensLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead><tr><th>Название</th><th></th><th></th></tr></thead>
+          <tbody>
+            @for (s of specimens(); track s.id) {
+              <tr>
+                <td>
+                  <input class="input" [ngModel]="specimenDraft(s)" (ngModelChange)="setSpecimenDraft(s.id, $event)" />
+                </td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="renameSpecimen(s)">
+                    Переименовать
+                  </button>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-danger btn-sm" [disabled]="specimenBusy()" (click)="deleteSpecimen(s)">
+                    Удалить
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="3" class="text-muted">Ничего не найдено.</td></tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  </div>
+}

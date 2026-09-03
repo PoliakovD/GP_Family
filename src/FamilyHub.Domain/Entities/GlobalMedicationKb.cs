@@ -30,6 +30,11 @@ public class GlobalMedicationKb
     /// </summary>
     public string[] Aliases { get; set; } = [];
 
+    /// <summary>Поля, защищённые от перезаписи автообогащением после ручной правки из админки
+    /// (§3 плана) — подмножество {"displayName", "payload", "aliases"}. Postgres text[], та же
+    /// причина вне EF-модели, что у Aliases. Пусто — переобогащение обновляет всё как раньше.</summary>
+    public string[] LockedFields { get; set; } = [];
+
     /// <summary>Версия схемы <see cref="PayloadJson"/> — позволяет мигрировать формат знания без потери строк.</summary>
     public int PayloadVersion { get; set; } = 1;
 

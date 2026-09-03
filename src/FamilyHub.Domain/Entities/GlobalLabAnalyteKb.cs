@@ -37,6 +37,11 @@ public class GlobalLabAnalyteKb
     /// (как у GlobalMedicationKb.Aliases) — читается/пишется только raw SQL.</summary>
     public string[] Aliases { get; set; } = [];
 
+    /// <summary>Поля, защищённые от перезаписи автообогащением после ручной правки из админки
+    /// (§3 плана) — подмножество {"displayName", "payload", "aliases"}. Postgres text[], та же
+    /// причина вне EF-модели, что у Aliases. Пусто — переобогащение обновляет всё как раньше.</summary>
+    public string[] LockedFields { get; set; } = [];
+
     public int PayloadVersion { get; set; } = 1;
 
     public DateTime CreatedAt { get; set; }

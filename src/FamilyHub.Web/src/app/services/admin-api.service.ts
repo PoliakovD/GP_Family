@@ -98,6 +98,30 @@ export interface PromptSlot { key: string; description: string; activeVersion: n
 
 export interface PromptVersion { id: string; version: number; isActive: boolean; note: string | null; createdAt: string; body: string; }
 
+// --- Ручная правка справочников после ИИ (§3 плана) ---
+
+export interface KbAnalyteListItem { id: string; displayName: string; specimenKbId: string; specimenDisplayName: string | null; plainExplanation: string | null; }
+export interface KbAnalyteListResponse { items: KbAnalyteListItem[]; hasMore: boolean; }
+
+export interface KbListItem { id: string; displayName: string; purpose: string | null; }
+export interface KbListResponse { items: KbListItem[]; hasMore: boolean; }
+
+/** LockedFields — подмножество {"displayName","payload","aliases"}; залоченное поле переживает
+ * следующее автообогащение (см. AdminCatalogService на бэкенде). */
+export interface AdminLabAnalyteDetail {
+  id: string; normalizedName: string; specimenKbId: string; specimenDisplayName: string | null;
+  displayName: string; payloadJson: string; source: string; aliases: string[]; lockedFields: string[];
+  payloadVersion: number; createdAt: string; updatedAt: string;
+}
+export interface AdminMedicationDetail {
+  id: string; normalizedName: string; displayName: string; payloadJson: string; source: string;
+  aliases: string[]; lockedFields: string[]; payloadVersion: number; createdAt: string; updatedAt: string;
+}
+
+export interface AdminKbEditRequest { displayName?: string | null; payloadJson?: string | null; aliases?: string[] | null; }
+
+export interface GlobalSpecimen { id: string; displayName: string; }
+
 export interface DryRunResponse { success: boolean; error: string | null; payload: Record<string, unknown> | null; }
 
 export type PipelineJobType = 'lab-analyte' | 'medication' | 'visit-medication' | 'extraction';
@@ -236,4 +260,37 @@ export class AdminApiService {
     this.post<void>(`/api/admin/pipeline/jobs/${id}/retry?type=${type}`);
 
   reenrichLabAnalyte = (id: string) => this.post<void>(`/api/admin/pipeline/kb/lab-analytes/${id}/reenrich`);
+
+  // Ручная правка справочников после ИИ (§3 плана) — показатели, медикаменты, источники.
+  searchLabAnalytes = (q: string, skip: number, take: number) =>
+    this.get<KbAnalyteListResponse>(`/api/admin/kb/lab-analytes?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}`);
+
+  getLabAnalyte = (id: string) => this.get<AdminLabAnalyteDetail>(`/api/admin/kb/lab-analytes/${id}`);
+
+  updateLabAnalyte = (id: string, request: AdminKbEditRequest) =>
+    this.put<AdminLabAnalyteDetail>(`/api/admin/kb/lab-analytes/${id}`, request);
+
+  unlockLabAnalyteField = (id: string, field: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}/locks/${field}`);
+
+  deleteLabAnalyte = (id: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}`);
+
+  searchMedications = (q: string, skip: number, take: number) =>
+    this.get<KbListResponse>(`/api/admin/kb/medications?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}`);
+
+  getMedication = (id: string) => this.get<AdminMedicationDetail>(`/api/admin/kb/medications/${id}`);
+
+  updateMedication = (id: string, request: AdminKbEditRequest) =>
+    this.put<AdminMedicationDetail>(`/api/admin/kb/medications/${id}`, request);
+
+  unlockMedicationField = (id: string, field: string) => this.del<void>(`/api/admin/kb/medications/${id}/locks/${field}`);
+
+  deleteMedication = (id: string) => this.del<void>(`/api/admin/kb/medications/${id}`);
+
+  searchSpecimens = (q: string, take = 20) =>
+    this.get<GlobalSpecimen[]>(`/api/admin/kb/specimens?q=${encodeURIComponent(q)}&take=${take}`);
+
+  renameSpecimen = (id: string, displayName: string) =>
+    this.put<void>(`/api/admin/kb/specimens/${id}`, { displayName });
+
+  deleteSpecimen = (id: string) => this.del<void>(`/api/admin/kb/specimens/${id}`);
 }

@@ -77,6 +77,9 @@ public static class MedicalModule
         services.AddScoped<KbAnalyteCatalogService>();
         services.AddScoped<MedicationKbStatusService>();
         services.AddScoped<KbWriter>();
+        // Ручная правка справочников после ИИ из админки (§3 плана) — единственный писатель,
+        // кроме автоматического обогащения (LabAnalyteKbWriter/KbWriter выше).
+        services.AddScoped<AdminCatalogService>();
         services.AddScoped<MedicationSummarizer>();
         services.AddScoped<MedicationSearchCacheService>();
         // Доверенные домены обоих конвейеров — БД-backed, управляются через админку (см. class doc).

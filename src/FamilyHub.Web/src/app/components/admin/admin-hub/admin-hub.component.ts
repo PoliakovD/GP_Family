@@ -25,6 +25,7 @@ export class AdminHubComponent {
     { path: 'keys', label: 'Ключи' },
     { path: 'enrichment', label: 'Обогащение' },
     { path: 'pipeline', label: 'Пайплайн' },
+    { path: 'catalog', label: 'Справочник' },
   ];
 
   async logout(): Promise<void> {
