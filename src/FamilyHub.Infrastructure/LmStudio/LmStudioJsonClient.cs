@@ -17,9 +17,12 @@ namespace FamilyHub.Infrastructure.LmStudio;
 /// системного промпта (см. ReasoningDirectives) — модель сама подстраивается под неё.
 /// Вырезание &lt;think&gt;...&lt;/think&gt; из content — подстраховка на случай бэкенда, который
 /// вкладывает рассуждение прямо в основной текст ответа, а не в отдельное поле reasoning_content.
+/// Поле "model" запроса берётся из ILmStudioModelProvider (админка), не напрямую из
+/// LmStudioOptions.Model — переключение модели из UI не требует передеплоя.
 /// </summary>
 public class LmStudioJsonClient(
-    HttpClient httpClient, IOptions<LmStudioOptions> options, LmStudioConcurrencyGate gate, ILogger<LmStudioJsonClient> logger)
+    HttpClient httpClient, IOptions<LmStudioOptions> options, LmStudioConcurrencyGate gate,
+    ILmStudioModelProvider modelProvider, ILogger<LmStudioJsonClient> logger)
     : ILmStudioJsonClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -128,8 +131,9 @@ public class LmStudioJsonClient(
             contentParts.Add(new ContentPart("image_url", ImageUrl: new ImageUrlPart(dataUrl)));
         }
 
+        var model = await modelProvider.GetActiveModelAsync(options.Value.Model, ct);
         var request = new ChatCompletionRequest(
-            Model: options.Value.Model,
+            Model: model,
             Messages:
             [
                 new ChatMessage("system", systemPrompt),

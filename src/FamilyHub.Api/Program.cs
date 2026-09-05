@@ -627,6 +627,10 @@ builder.Services.AddScoped<PromptProvider>();
 builder.Services.AddScoped<IPromptProvider>(sp => sp.GetRequiredService<PromptProvider>());
 builder.Services.AddScoped<AnalyteSearchQueryBuilder>();
 
+// Выбор активной модели LM Studio из админки — тот же приём, что PromptProvider выше.
+builder.Services.AddScoped<LmStudioModelProvider>();
+builder.Services.AddScoped<ILmStudioModelProvider>(sp => sp.GetRequiredService<LmStudioModelProvider>());
+
 // --- Документы: декодирование вложений под конвейер извлечения (ветка medicalrecords) ---
 builder.Services.AddScoped<PdfDocumentReader>();
 builder.Services.AddScoped<OfficeDocumentReader>();
@@ -933,6 +937,7 @@ if (adminOptions.Enabled)
     app.MapAdminEnrichmentEndpoints();
     app.MapAdminPipelineEndpoints();
     app.MapAdminCatalogEndpoints();
+    app.MapAdminLmStudioEndpoints();
 }
 
 // SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).

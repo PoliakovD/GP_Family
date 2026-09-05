@@ -6,6 +6,7 @@ using FamilyHub.Infrastructure.LmStudio;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Infrastructure.LmStudio;
@@ -36,7 +37,10 @@ public class LmStudioJsonClientTests
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
         var options = Options.Create(new LmStudioOptions());
-        return new LmStudioJsonClient(httpClient, options, new LmStudioConcurrencyGate(), NullLogger<LmStudioJsonClient>.Instance);
+        var modelProvider = Substitute.For<ILmStudioModelProvider>();
+        modelProvider.GetActiveModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult((string)ci[0]));
+        return new LmStudioJsonClient(httpClient, options, new LmStudioConcurrencyGate(), modelProvider, NullLogger<LmStudioJsonClient>.Instance);
     }
 
     private static HttpResponseMessage ChatResponse(string content) => new(HttpStatusCode.OK)

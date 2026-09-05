@@ -132,6 +132,11 @@ export interface PipelineJob {
 }
 export interface PipelineJobListResponse { rows: PipelineJob[]; total: number; }
 
+/** activeModel=null означает, что в БД ничего не выбрано и клиент шлёт fallbackModel
+ * (LmStudioOptions.Model, appsettings/env) — см. ILmStudioModelProvider на бэкенде. */
+export interface LmStudioModelInfo { activeModel: string | null; fallbackModel: string; }
+export interface LmStudioAvailableModels { models: string[]; lmStudioReachable: boolean; }
+
 /**
  * Клиент /api/admin/*. Отдельно от ApiService (api.service.ts) намеренно — другая поверхность
  * аутентификации (cookie familyhub.admin, схема AuthSchemes.Admin, см. ADR-0009), не должна
@@ -256,6 +261,13 @@ export class AdminApiService {
 
   dryRunPrompt = (promptKey: string, bodyOverride: string | null, userText: string) =>
     this.post<DryRunResponse>('/api/admin/pipeline/prompts/dry-run', { promptKey, bodyOverride, userText });
+
+  // Выбор активной модели LM Studio из админки — тот же приём, что промпты выше.
+  getLmStudioModel = () => this.get<LmStudioModelInfo>('/api/admin/lmstudio/model');
+
+  getAvailableLmStudioModels = () => this.get<LmStudioAvailableModels>('/api/admin/lmstudio/available-models');
+
+  setLmStudioModel = (modelId: string | null) => this.put<void>('/api/admin/lmstudio/model', { modelId });
 
   getPipelineJobs = (type: PipelineJobType, status: string | null, skip: number, take: number) =>
     this.get<PipelineJobListResponse>(

@@ -3,6 +3,7 @@ import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AdminApiService,
+  LmStudioAvailableModels,
   PipelineJob,
   PipelineJobType,
   PipelineStep,
@@ -39,7 +40,7 @@ export class AdminPipelineComponent implements OnInit {
 
   readonly jobTypes = JOB_TYPES;
 
-  readonly tab = signal<'steps' | 'prompts' | 'jobs'>('steps');
+  readonly tab = signal<'steps' | 'prompts' | 'jobs' | 'lmstudio'>('steps');
 
   readonly steps = signal<PipelineStep[]>([]);
   readonly stepsLoading = signal(true);
@@ -65,14 +66,22 @@ export class AdminPipelineComponent implements OnInit {
   readonly jobsLoading = signal(false);
   readonly jobsBusy = signal(false);
 
+  readonly lmStudioActiveModel = signal<string | null>(null);
+  readonly lmStudioFallbackModel = signal('');
+  readonly lmStudioAvailable = signal<LmStudioAvailableModels | null>(null);
+  readonly lmStudioSelectedModel = signal('');
+  readonly lmStudioLoading = signal(false);
+  readonly lmStudioBusy = signal(false);
+
   ngOnInit(): void {
     void this.loadSteps();
   }
 
-  selectTab(tab: 'steps' | 'prompts' | 'jobs'): void {
+  selectTab(tab: 'steps' | 'prompts' | 'jobs' | 'lmstudio'): void {
     this.tab.set(tab);
     if (tab === 'prompts' && this.promptSlots().length === 0) void this.loadPrompts();
     if (tab === 'jobs' && this.jobs().length === 0) void this.loadJobs();
+    if (tab === 'lmstudio' && this.lmStudioFallbackModel() === '') void this.loadLmStudioModel();
   }
 
   // --- Шаги ---
@@ -218,6 +227,49 @@ export class AdminPipelineComponent implements OnInit {
       this.toast.error('Не удалось перезапустить задачу.');
     } finally {
       this.jobsBusy.set(false);
+    }
+  }
+
+  // --- LM Studio ---
+
+  async loadLmStudioModel(): Promise<void> {
+    this.lmStudioLoading.set(true);
+    try {
+      const info = await this.api.getLmStudioModel();
+      this.lmStudioActiveModel.set(info.activeModel);
+      this.lmStudioFallbackModel.set(info.fallbackModel);
+      this.lmStudioSelectedModel.set(info.activeModel ?? info.fallbackModel);
+      this.lmStudioAvailable.set(await this.api.getAvailableLmStudioModels());
+    } catch {
+      this.toast.error('Не удалось загрузить настройки LM Studio.');
+    } finally {
+      this.lmStudioLoading.set(false);
+    }
+  }
+
+  async saveLmStudioModel(): Promise<void> {
+    this.lmStudioBusy.set(true);
+    try {
+      await this.api.setLmStudioModel(this.lmStudioSelectedModel().trim() || null);
+      this.toast.success('Модель обновлена.');
+      await this.loadLmStudioModel();
+    } catch {
+      this.toast.error('Не удалось сохранить модель.');
+    } finally {
+      this.lmStudioBusy.set(false);
+    }
+  }
+
+  async resetLmStudioModel(): Promise<void> {
+    this.lmStudioBusy.set(true);
+    try {
+      await this.api.setLmStudioModel(null);
+      this.toast.success('Возврат к модели по умолчанию.');
+      await this.loadLmStudioModel();
+    } catch {
+      this.toast.error('Не удалось сбросить модель.');
+    } finally {
+      this.lmStudioBusy.set(false);
     }
   }
 }

@@ -3,6 +3,7 @@
     <button type="button" class="seg-opt" [class.active]="tab() === 'steps'" (click)="selectTab('steps')">Шаги</button>
     <button type="button" class="seg-opt" [class.active]="tab() === 'prompts'" (click)="selectTab('prompts')">Промпты</button>
     <button type="button" class="seg-opt" [class.active]="tab() === 'jobs'" (click)="selectTab('jobs')">Задачи</button>
+    <button type="button" class="seg-opt" [class.active]="tab() === 'lmstudio'" (click)="selectTab('lmstudio')">LM Studio</button>
   </div>
 </div>
 
@@ -191,6 +192,61 @@
           </tbody>
         </table>
         <p class="text-muted">Всего: {{ jobsTotal() }}</p>
+      }
+    </div>
+  </div>
+}
+
+@if (tab() === 'lmstudio') {
+  <div class="card">
+    <div class="card-title">Модель LM Studio</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Модель, которую конвейер шлёт в поле "model" каждого запроса к LM Studio (OCR,
+        суммаризация, коррекция OCR, резолвинг источника и т.д.) — общая для всех задач. Смена
+        применяется сразу, без передеплоя.
+      </p>
+
+      @if (lmStudioLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <p class="mb-2">
+          Сейчас активна: <strong>{{ lmStudioActiveModel() ?? lmStudioFallbackModel() }}</strong>
+          @if (!lmStudioActiveModel()) {
+            <span class="tag tag-neutral">по умолчанию (appsettings)</span>
+          }
+        </p>
+
+        @if (lmStudioAvailable(); as available) {
+          @if (!available.lmStudioReachable) {
+            <p class="text-danger mb-2">
+              LM Studio недоступен — список моделей не загружен. Можно ввести id модели вручную ниже.
+            </p>
+          } @else if (available.models.length === 0) {
+            <p class="text-muted mb-2">LM Studio не сообщил ни одной загруженной модели.</p>
+          }
+        }
+
+        <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+          @if (lmStudioAvailable()?.models?.length) {
+            <select class="input" [ngModel]="lmStudioSelectedModel()" (ngModelChange)="lmStudioSelectedModel.set($event)">
+              @for (m of lmStudioAvailable()!.models; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+          } @else {
+            <input class="input" style="min-width: 320px;" placeholder="id модели (например, prism-ml/bonsai-27b)…"
+                   [ngModel]="lmStudioSelectedModel()" (ngModelChange)="lmStudioSelectedModel.set($event)" />
+          }
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="lmStudioBusy() || !lmStudioSelectedModel().trim()"
+                  (click)="saveLmStudioModel()">
+            Сохранить
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="lmStudioBusy() || !lmStudioActiveModel()"
+                  (click)="resetLmStudioModel()">
+            Сбросить на по умолчанию
+          </button>
+        </div>
       }
     </div>
   </div>

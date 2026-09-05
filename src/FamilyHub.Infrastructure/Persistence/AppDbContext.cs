@@ -61,6 +61,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<PipelinePromptVersion> PipelinePromptVersions => Set<PipelinePromptVersion>();
     public DbSet<PipelineStepConfig> PipelineStepConfigs => Set<PipelineStepConfig>();
 
+    /// <summary>Выбор активной модели LM Studio из админки — см. ILmStudioModelProvider.</summary>
+    public DbSet<LmStudioModelConfig> LmStudioModelConfigs => Set<LmStudioModelConfig>();
+
     /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
     public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();
 
