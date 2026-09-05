@@ -31,6 +31,7 @@ public static class MedicalModule
         // Первый обязательный шаг каждого конвейера (см. PipelineCatalog.LegitimacyCheckStep) —
         // проверка легитимности/prompt injection до любого другого LLM-вызова этим прогоном.
         services.AddScoped<LegitimacyGuardService>();
+        services.AddScoped<ILegitimacyGuardService>(sp => sp.GetRequiredService<LegitimacyGuardService>());
 
         services.AddScoped<MedkitService>();
         services.AddScoped<MedicationService>();

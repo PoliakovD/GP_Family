@@ -6,13 +6,6 @@ using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
 
 namespace FamilyHub.Modules.Medical.Pipeline;
 
-public record LegitimacyCheckResult(bool IsLegitimate, string? Reason)
-{
-    public static LegitimacyCheckResult Legitimate() => new(true, null);
-
-    public static LegitimacyCheckResult Rejected(string reason) => new(false, reason);
-}
-
 /// <summary>
 /// Первый шаг КАЖДОГО enrich/extraction-конвейера (см. PipelineCatalog — StepKey
 /// "legitimacy-check", IsMandatory=true во всех четырёх пайплайнах: нельзя выключить из
@@ -29,6 +22,7 @@ public record LegitimacyCheckResult(bool IsLegitimate, string? Reason)
 /// MedicalDocumentExtractionProcessor/LabAnalyteEnrichmentProcessor/MedicationEnrichmentProcessor).
 /// </summary>
 public class LegitimacyGuardService(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<LegitimacyGuardService> logger)
+    : ILegitimacyGuardService
 {
     private const string FallbackPrompt = """
         Ты — фильтр безопасности перед медицинским конвейером обработки текста. На входе — короткий
@@ -56,12 +50,21 @@ public class LegitimacyGuardService(ILmStudioJsonClient client, IPromptProvider 
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
-    public async Task<LegitimacyCheckResult> CheckAsync(string text, CancellationToken ct = default)
+    public Task<LegitimacyCheckResult> CheckAsync(string text, CancellationToken ct = default) =>
+        CheckAsync(text, [], ct);
+
+    /// <summary>Вариант для vision-пути распознавания документа (фото/скан) — своего текста для
+    /// проверки нет (см. class doc LmStudioMedicalDocumentExtractor про то, почему текстовый путь
+    /// вообще предпочтителен), поэтому проверяются сами изображения тем же промптом, той же
+    /// vision-моделью LM Studio.</summary>
+    public async Task<LegitimacyCheckResult> CheckAsync(
+        string text, IReadOnlyList<(byte[] Bytes, string ContentType)> images, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(text)) return LegitimacyCheckResult.Legitimate();
+        if (string.IsNullOrWhiteSpace(text) && images.Count == 0) return LegitimacyCheckResult.Legitimate();
 
         var prompt = await promptProvider.GetAsync("guard.legitimacy-check", FallbackPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, text, ct);
+        var userText = string.IsNullOrWhiteSpace(text) ? "Проверь содержимое приложенных изображений." : text;
+        var result = await client.ExtractJsonAsync(prompt, userText, images, ct);
         if (!result.Success || result.Payload is null)
         {
             logger.LogWarning(

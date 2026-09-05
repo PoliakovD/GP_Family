@@ -22,11 +22,17 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// куска — показатель, которого модель "не увидела" в тексте, а придумала, отбрасывается. На
 /// vision-пути такой проверки нет по построению (исходный текст недоступен) — точность там ниже
 /// принципиально, поэтому текстовый путь предпочтителен всегда, когда доступен.
+///
+/// Первый шаг конвейера (PipelineCatalog.LegitimacyCheckStep, см. LegitimacyGuardService) —
+/// документ ЦЕЛИКОМ (текст или изображения) проверяется на попытку prompt injection ДО того, как
+/// хоть один его фрагмент дойдёт до analysis.extract/visit.extract: содержимое документа
+/// полностью контролируется тем, кто его загрузил.
 /// </summary>
 public class LmStudioMedicalDocumentExtractor(
     IDocumentTextExtractor documentTextExtractor,
     ILmStudioJsonClient lmStudioClient,
     SpecimenResolver specimenResolver,
+    ILegitimacyGuardService legitimacyGuard,
     IPromptProvider promptProvider,
     IPipelineConfigService pipelineConfig,
     IOptions<ExtractionOptions> options,
@@ -120,6 +126,22 @@ public class LmStudioMedicalDocumentExtractor(
             logger.LogInformation(
                 "Распознавание «{FileName}» невозможно: {Reason}", source.FileName, content.UnsupportedReason);
             return new ExtractionResult(false, null, null, content.UnsupportedReason);
+        }
+
+        // Первый обязательный шаг конвейера (PipelineCatalog.LegitimacyCheckStep) — документ
+        // ЦЕЛИКОМ, до того как хоть один его фрагмент попадёт в системный промпт
+        // analysis.extract/visit.extract: содержимое документа полностью контролируется тем, кто
+        // его загрузил (это "бланк", напечатанный кем угодно), включая попытку внедрить в него
+        // инструкцию для модели, которая будет его читать.
+        var guardResult = content.Kind == DocumentSourceKind.Text
+            ? await legitimacyGuard.CheckAsync(content.Text!, ct)
+            : await legitimacyGuard.CheckAsync(
+                string.Empty, content.Images.Select(i => (i.Bytes, i.ContentType)).ToList(), ct);
+        if (!guardResult.IsLegitimate)
+        {
+            logger.LogWarning(
+                "Распознавание «{FileName}» остановлено проверкой легитимности: {Reason}", source.FileName, guardResult.Reason);
+            return new ExtractionResult(false, null, null, guardResult.Reason);
         }
 
         return kind == MedicalRecordKind.Analysis
