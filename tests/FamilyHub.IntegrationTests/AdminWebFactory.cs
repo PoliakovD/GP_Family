@@ -21,6 +21,13 @@ public class AdminWebFactory : FamilyHubWebFactory
         builder.UseSetting("Admin:Enabled", "true");
         builder.UseSetting("Admin:User", TestUser);
         builder.UseSetting("Admin:Password", TestPassword);
-        builder.UseSetting("Admin:SessionLifetime", "00:00:05"); // короткий TTL — тест истечения без Thread.Sleep на часы
+        // Короче прод-дефолта (12 часов, AdminOptions.SessionLifetime), но заведомо длиннее любого
+        // поллинга в этой коллекции (LabAnalyteKbRebuildJobTests.WaitForAsync — до 45с) — раньше
+        // здесь стояло 5с "для теста истечения без ожидания часами", но ни один тест в коллекции
+        // реального ожидания истечения не проверяет, а короткий TTL истекал СРЕДИ долгого поллинга
+        // и валил его 401-м (сессия — общая на всю AdminWebFactory, не только на гипотетический
+        // тест истечения). Понадобится тест именно истечения — заводить для него отдельную фабрику
+        // с ещё более коротким TTL, не трогая этот дефолт.
+        builder.UseSetting("Admin:SessionLifetime", "00:02:00");
     }
 }

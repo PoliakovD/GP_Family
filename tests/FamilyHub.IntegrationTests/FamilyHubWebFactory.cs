@@ -96,6 +96,16 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // Без BotToken: вебхук-эндпоинт и ITelegramBotClient не регистрируются (см. Program.cs) —
         // достаточно для всего, кроме BotWebhookTests, у которых своя фабрика-наследник.
         builder.UseSetting("Telegram:BotToken", "");
+        // LM Studio (LmStudioOptions.BaseUrl по умолчанию http://localhost:1234) НЕ гейтится
+        // на Null-переключатель, в отличие от Extraction:Enabled/Enrichment:Provider выше —
+        // ILmStudioJsonClient вызывается напрямую там, где нет доменной абстракции над ним
+        // (POST /api/medications/ocr, admin dry-run). На dev-машине, где LM Studio реально
+        // запущен (обычный случай — им же пользуются вживую вне тестов), эти пути вместо
+        // мгновенного connection refused попадают на настоящий инференс и виснут на десятки
+        // секунд/таймаут HttpClient (DryRun_LmStudioUnreachableInTestEnv рассчитан именно на
+        // быстрый отказ). Порт заведомо закрыт (loopback, никто туда не слушает) — тесты не
+        // должны зависеть от того, что ещё запущено на машине разработчика.
+        builder.UseSetting("LmStudio:BaseUrl", "http://127.0.0.1:1");
         // Ускоренный цикл EF Core Outbox delivery service: тесты, проверяющие фоновую доставку,
         // не ждут дефолтные несколько секунд (см. ADR-0006, MassTransitRegistration). 500мс, не
         // меньше (тот же интервал, что был у старого Outbox:PollInterval) — каждый тик делает

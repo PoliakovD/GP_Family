@@ -12,10 +12,10 @@ namespace FamilyHub.IntegrationTests;
 /// текущим показателям записи независимо от исходной автоматической суммаризации при
 /// распознавании (нужен после ручной правки показателя, см. class doc
 /// ExtractionQueryService.RegenerateSummaryAsync). LM Studio недоступен через какой-либо
-/// Null-переключатель (в отличие от Extraction:Enabled/Enrichment:Provider) — фактический вызов
-/// ILmStudioJsonClient здесь не проверяется вовсе, тем же приёмом, что и остальной набор
-/// (IMedicalDocumentExtractor по умолчанию Null): только проводка эндпоинта — доступ, поиск
-/// записи/показателей.
+/// Null-переключатель (в отличие от Extraction:Enabled/Enrichment:Provider) — ILmStudioJsonClient
+/// вызывается напрямую; FamilyHubWebFactory направляет LmStudio:BaseUrl на заведомо закрытый
+/// loopback-порт (см. её class doc), поэтому вызов действительно быстро проваливается
+/// (connection refused), а не зависит от того, поднят ли на машине реальный LM Studio.
 /// </summary>
 public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
@@ -74,5 +74,19 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
         var response = await stranger.PostAsync($"/api/medical-records/{recordId}/summary/regenerate", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RegenerateSummary_WithIndicators_LmStudioUnavailable_ReturnsBadGateway_NotUnhandledError()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
+        await CreateIndicatorAsync(owner, recordId, specimenId);
+
+        var response = await owner.PostAsync($"/api/medical-records/{recordId}/summary/regenerate", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway,
+            "LM Studio недоступен в тестовом хосте (см. class doc) — эндпоинт обязан отдать аккуратный 502, не 5xx-исключение");
     }
 }

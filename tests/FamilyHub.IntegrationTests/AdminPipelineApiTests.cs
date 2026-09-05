@@ -89,16 +89,21 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
     }
 
     [Fact]
-    public async Task Prompts_SeededMigrationRows_AllTenSlotsHaveActiveVersion1()
+    public async Task Prompts_SeededMigrationRows_AllThirteenSlotsHaveActiveVersion1()
     {
         var client = await AuthenticatedClientAsync();
 
         var slots = await client.GetFromJsonAsync<List<PromptSlotDto>>("/api/admin/pipeline/prompts");
 
-        slots.Should().HaveCount(10);
+        // 10 слотов LLM-промптов (AddPipelineConfig) + 3 шаблона поисковых запросов
+        // (AddSearchQueryPrompts) — тот же механизм PipelinePrompt/PromptVersion на оба рода.
+        slots.Should().HaveCount(13);
         slots.Should().OnlyContain(s => s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.extract");
         slots.Should().Contain(s => s.Key == "lab-analyte.summarize");
+        slots.Should().Contain(s => s.Key == "analysis.search-query");
+        slots.Should().Contain(s => s.Key == "medication.search-query.brave");
+        slots.Should().Contain(s => s.Key == "medication.search-query.yandex");
     }
 
     [Fact]
