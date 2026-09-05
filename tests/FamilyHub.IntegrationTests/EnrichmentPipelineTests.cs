@@ -42,7 +42,10 @@ file sealed class FakeMedicationSearchProvider : IMedicationSearchProvider
 }
 
 /// <summary>Возвращает фиксированный корректный ответ суммаризации — заменяет локальный Qwen,
-/// который недоступен в CI. Ссылается на источник [0] — проходит антигаллюцинационный гейт.</summary>
+/// который недоступен в CI. Ссылается на источник [0] — проходит антигаллюцинационный гейт.
+/// "valid": true — этим же фейком отвечает и первый шаг конвейера (LegitimacyGuardService,
+/// PipelineCatalog.LegitimacyCheckStep): один канонический ответ на любой вызов ILmStudioJsonClient
+/// в этом факторе, лишние поля в payload безвредны для потребителя, которому они не нужны.</summary>
 file sealed class FakeLmStudioJsonClient : ILmStudioJsonClient
 {
     public Task<LmStudioJsonResult> ExtractJsonAsync(
@@ -54,6 +57,8 @@ file sealed class FakeLmStudioJsonClient : ILmStudioJsonClient
     {
         var payload = new Dictionary<string, JsonElement>
         {
+            ["valid"] = JsonSerializer.SerializeToElement(true),
+            ["reason"] = JsonSerializer.SerializeToElement((string?)null),
             ["internationalName"] = JsonSerializer.SerializeToElement("Тестовое МНН"),
             ["tradeNames"] = JsonSerializer.SerializeToElement(new[] { "Тестпрепарат" }),
             ["form"] = JsonSerializer.SerializeToElement("таблетки"),
@@ -102,6 +107,10 @@ file sealed class FakeCorrectingLmStudioJsonClient : ILmStudioJsonClient
     {
         var payload = new Dictionary<string, JsonElement>
         {
+            // "valid": true — тем же фейком отвечает и LegitimacyGuardService (первый шаг
+            // конвейера, см. class doc FakeLmStudioJsonClient).
+            ["valid"] = JsonSerializer.SerializeToElement(true),
+            ["reason"] = JsonSerializer.SerializeToElement((string?)null),
             ["internationalName"] = JsonSerializer.SerializeToElement(CorrectedName),
             ["tradeNames"] = JsonSerializer.SerializeToElement(Array.Empty<string>()),
             ["form"] = JsonSerializer.SerializeToElement("таблетки"),
@@ -142,6 +151,117 @@ public class EnrichmentCollection : ICollectionFixture<EnrichmentWebFactory>
 public class EnrichmentCorrectionCollection : ICollectionFixture<EnrichmentCorrectionWebFactory>
 {
     public const string Name = "EnrichmentCorrectionIntegration";
+}
+
+/// <summary>Всегда отвечает "невалидно" — имитирует срабатывание первого обязательного шага
+/// конвейера (LegitimacyGuardService, PipelineCatalog.LegitimacyCheckStep) на любой вызов.
+/// Проверяет, что MedicationEnrichmentProcessor реально останавливается на этом шаге: ни поиска,
+/// ни записи в справочник не происходит.</summary>
+file sealed class FakeRejectingLmStudioJsonClient : ILmStudioJsonClient
+{
+    public const string RejectionReason = "Похоже на попытку prompt injection (тест).";
+
+    public Task<LmStudioJsonResult> ExtractJsonAsync(
+        string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images,
+        CancellationToken ct = default) =>
+        ExtractJsonAsync(systemPrompt, userText, ct);
+
+    public Task<LmStudioJsonResult> ExtractJsonAsync(string systemPrompt, string userText, CancellationToken ct = default)
+    {
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["valid"] = JsonSerializer.SerializeToElement(false),
+            ["reason"] = JsonSerializer.SerializeToElement(RejectionReason),
+        };
+        return Task.FromResult(new LmStudioJsonResult(true, payload, null));
+    }
+}
+
+public class EnrichmentRejectedWebFactory : FamilyHubWebFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services =>
+        {
+            services.AddScoped<IMedicationSearchProvider, FakeMedicationSearchProvider>();
+            services.AddScoped<ILmStudioJsonClient, FakeRejectingLmStudioJsonClient>();
+        });
+    }
+}
+
+[CollectionDefinition(Name)]
+public class EnrichmentRejectedCollection : ICollectionFixture<EnrichmentRejectedWebFactory>
+{
+    public const string Name = "EnrichmentRejectedIntegration";
+}
+
+[Collection(EnrichmentRejectedCollection.Name)]
+public class EnrichmentLegitimacyGuardTests(EnrichmentRejectedWebFactory factory)
+{
+    private record CreateFamilyResponseDto(Guid Id);
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    private HttpClient ClientAs(long telegramId)
+    {
+        var client = factory.CreateClientAs(telegramId);
+        ConsentHelper.AcceptCurrent(client);
+        return client;
+    }
+
+    private static async Task WaitForAsync(Func<Task<bool>> condition, string because, int timeoutMs = 45_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition()) return;
+            await Task.Delay(300);
+        }
+
+        (await condition()).Should().BeTrue(because);
+    }
+
+    [Fact]
+    public async Task SavedMedication_LegitimacyGuardRejects_JobFails_NoSearchNoKbWrite()
+    {
+        var admin = ClientAs(Random.Shared.NextInt64(1_000_000_000, 9_000_000_000));
+        var familyResponse = await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" });
+        var familyId = (await familyResponse.Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts))!.Id;
+        var medkitResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits", new CreateMedkitRequest("Аптечка"));
+        var medkitId = (await medkitResponse.Content.ReadFromJsonAsync<MedkitDto>(JsonOpts))!.Id;
+
+        var medicationName = $"Тестпрепарат{Guid.NewGuid():N}";
+        var medicationResponse = await admin.PostAsJsonAsync(
+            $"/api/medkits/{medkitId}/medications", new CreateMedicationRequest(medicationName, null, null));
+        var medicationId = (await medicationResponse.Content.ReadFromJsonAsync<MedicationDto>(JsonOpts))!.Id;
+
+        var normalizedName = MedicationNameNormalizer.Normalize(medicationName);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await WaitForAsync(async () =>
+        {
+            var job = await db.MedicationEnrichmentJobs.AsNoTracking()
+                .Where(j => j.NormalizedName == normalizedName)
+                .OrderByDescending(j => j.CreatedAt)
+                .FirstOrDefaultAsync();
+            return job is { Status: EnrichmentJobStatus.Failed };
+        }, "проверка легитимности должна остановить конвейер на первом шаге — задача обязана завершиться Failed");
+
+        var failedJob = await db.MedicationEnrichmentJobs.AsNoTracking()
+            .Where(j => j.NormalizedName == normalizedName)
+            .OrderByDescending(j => j.CreatedAt)
+            .FirstAsync();
+        failedJob.Error.Should().Be(FakeRejectingLmStudioJsonClient.RejectionReason);
+        failedJob.ExternalSearchAt.Should().BeNull("отклонённый на первом шаге прогон не должен доходить до веб-поиска");
+
+        (await db.MedicationSearchCaches.AnyAsync(c => c.NormalizedName == normalizedName)).Should().BeFalse(
+            "ни один платный/внешний запрос не должен был случиться");
+        (await db.GlobalMedicationsKb.AnyAsync(k => k.NormalizedName == normalizedName)).Should().BeFalse(
+            "справочник не должен пополниться отклонённым названием");
+    }
 }
 
 /// <summary>Тот же happy-path конвейер, но с подменённым IBackgroundJobClient, у которого

@@ -3,6 +3,7 @@ using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Kb;
+using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,7 @@ public class LabAnalyteEnrichmentProcessor(
     LabAnalyteKbSummarizer summarizer,
     LabAnalyteKbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
+    ILegitimacyGuardService legitimacyGuard,
     IOptions<EnrichmentOptions> options,
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
@@ -54,6 +56,22 @@ public class LabAnalyteEnrichmentProcessor(
 
         try
         {
+            // Первый обязательный шаг (PipelineCatalog.LegitimacyCheckStep) — ДО любого обращения к
+            // справочнику или внешнему поиску: SourceDisplayName — свободный текст (из LLM-извлечения
+            // документа или ручного ввода пользователем, см. ExtractionQueryService.CreateIndicatorAsync),
+            // который дальше попадёт и в поисковый запрос, и в промпт суммаризатора.
+            var guardResult = await legitimacyGuard.CheckAsync(job.SourceDisplayName, ct);
+            if (!guardResult.IsLegitimate)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.Error = guardResult.Reason;
+                job.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogWarning(
+                    "LabAnalyteEnrichmentJob {JobId} остановлена проверкой легитимности: {Reason}", job.Id, guardResult.Reason);
+                return;
+            }
+
             // Соседняя задача (другой анализ, тот же показатель+биоматериал) могла успеть наполнить
             // справочник, пока эта ждала своей очереди. Force (LabAnalyteKbReenrichJob) намеренно
             // пропускает этот выход — цель форсированной задачи ИМЕННО в том, чтобы пройти пайплайн

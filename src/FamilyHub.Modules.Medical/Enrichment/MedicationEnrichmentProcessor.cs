@@ -6,6 +6,7 @@ using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Kb;
+using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -32,6 +33,7 @@ public class MedicationEnrichmentProcessor(
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
+    ILegitimacyGuardService legitimacyGuard,
     IOptions<EnrichmentOptions> options,
     IDomainEventPublisher publisher,
     ILogger<MedicationEnrichmentProcessor> logger)
@@ -62,6 +64,22 @@ public class MedicationEnrichmentProcessor(
 
         try
         {
+            // Первый обязательный шаг (PipelineCatalog.LegitimacyCheckStep) — ДО любого обращения к
+            // справочнику или внешнему поиску: SourceDisplayName — свободный текст (распознан по
+            // фото упаковки или введён вручную), который дальше попадёт и в поисковый запрос, и в
+            // промпт суммаризатора.
+            var guardResult = await legitimacyGuard.CheckAsync(job.SourceDisplayName, ct);
+            if (!guardResult.IsLegitimate)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.Error = guardResult.Reason;
+                job.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogWarning(
+                    "MedicationEnrichmentJob {JobId} остановлена проверкой легитимности: {Reason}", job.Id, guardResult.Reason);
+                return;
+            }
+
             // Соседняя задача (другая семья, тот же препарат) могла успеть наполнить справочник,
             // пока эта ждала своей очереди — тогда внешний запрос вообще не нужен.
             var existing = await kbLookup.LookupAsync(job.NormalizedName, ct);
