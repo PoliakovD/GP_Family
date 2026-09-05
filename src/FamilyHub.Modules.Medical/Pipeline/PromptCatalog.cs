@@ -28,5 +28,7 @@ public static class PromptCatalog
             "ключевой поиск). Плейсхолдер: {name} — нормализованное название препарата."),
         new("medication.search-query.yandex", "Шаблон поискового запроса для медикамента в Yandex GenSearch " +
             "(развёрнутый вопрос, не ключевые слова). Плейсхолдер: {name} — нормализованное название препарата."),
+        new("guard.legitimacy-check", "Проверка легитимности/prompt injection — первый шаг КАЖДОГО конвейера " +
+            "(см. LegitimacyGuardService), нельзя выключить из админки."),
     ];
 }

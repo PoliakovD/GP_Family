@@ -28,6 +28,9 @@ public static class MedicalModule
         // в Program.cs, не тут. IMemoryCache тоже регистрируется в Program.cs.
         services.AddScoped<PipelineConfigService>();
         services.AddScoped<IPipelineConfigService>(sp => sp.GetRequiredService<PipelineConfigService>());
+        // Первый обязательный шаг каждого конвейера (см. PipelineCatalog.LegitimacyCheckStep) —
+        // проверка легитимности/prompt injection до любого другого LLM-вызова этим прогоном.
+        services.AddScoped<LegitimacyGuardService>();
 
         services.AddScoped<MedkitService>();
         services.AddScoped<MedicationService>();

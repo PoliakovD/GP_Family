@@ -26,8 +26,20 @@ public static class PipelineCatalog
     public const string LabAnalyteEnrichment = "lab-analyte-enrichment";
     public const string MedicationEnrichment = "medication-enrichment";
 
+    /// <summary>Ключ первого, обязательного шага КАЖДОГО пайплайна ниже — проверка легитимности
+    /// и prompt injection (LegitimacyGuardService), ДО любого другого вызова LLM или внешнего
+    /// поиска этим прогоном. Не по одному объявлению на пайплайн вручную ниже — добавляется через
+    /// AllPipelineKeys, чтобы новый пайплайн не мог случайно забыть про него.</summary>
+    public const string LegitimacyCheckStep = "legitimacy-check";
+
+    private static readonly IReadOnlyList<string> AllPipelineKeys =
+        [AnalysisExtraction, VisitExtraction, LabAnalyteEnrichment, MedicationEnrichment];
+
     public static readonly IReadOnlyList<PipelineStepDeclaration> Steps =
     [
+        .. AllPipelineKeys.Select(key => new PipelineStepDeclaration(
+            key, LegitimacyCheckStep, "Проверка легитимности и защиты от prompt injection", true, "guard.legitimacy-check")),
+
         new(AnalysisExtraction, "extract", "Структурирование показателей из текста/фото бланка", true, "analysis.extract"),
         new(AnalysisExtraction, "specimen-resolve", "Резолвинг источника показателя (биоматериал/исследование)", false, "analysis.specimen-resolve"),
         new(AnalysisExtraction, "ocr-correct", "Коррекция OCR-артефактов в названиях показателей", false, "analysis.ocr-correct"),
