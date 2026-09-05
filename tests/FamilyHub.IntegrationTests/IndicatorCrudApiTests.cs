@@ -13,10 +13,15 @@ using Xunit;
 namespace FamilyHub.IntegrationTests;
 
 /// <summary>UX-редизайн: ручное добавление/правка/удаление показателя (без ожидания следующего
-/// «Распознать») — не требует LM Studio, поэтому не нужна отдельная WebFactory с фейковым
-/// клиентом (в отличие от EnrichmentPipelineTests). Пагинация/фильтры списка записей проверены
-/// подробно на уровне сервиса (MedicalRecordServiceTests) — здесь только сквозная проверка, что
-/// query-параметры HTTP-эндпоинта долетают до него и ответ действительно постраничный.</summary>
+/// «Распознать») — синхронный HTTP-ответ не требует LM Studio, поэтому не нужна отдельная
+/// WebFactory с фейковым клиентом (в отличие от EnrichmentPipelineTests): обогащение справочника
+/// при промахе (см. class doc ExtractionQueryService.CreateIndicatorAsync) ставится в очередь
+/// фоновой Hangfire-задачей и не блокирует ответ — сама задача при выполнении упрётся в
+/// недоступный в тестовом хосте LM Studio (см. FamilyHubWebFactory) и завершится Failed на первом
+/// шаге (LegitimacyGuardService), что и проверяется отдельно ниже. Пагинация/фильтры списка
+/// записей проверены подробно на уровне сервиса (MedicalRecordServiceTests) — здесь только
+/// сквозная проверка, что query-параметры HTTP-эндпоинта долетают до него и ответ действительно
+/// постраничный.</summary>
 public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
     private static async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner)
@@ -48,6 +53,47 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         indicator!.DisplayName.Should().Be("Гемоглобин");
         indicator.Flag.Should().Be(IndicatorFlag.Low, "118 меньше нижней границы 130");
         indicator.RefSource.Should().Be(RefSource.Blank);
+    }
+
+    [Fact]
+    public async Task CreateIndicator_KbMiss_QueuesEnrichmentJob_ForResolvedSpecimen()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateAnalysisAsync(owner);
+        var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
+
+        var response = await owner.PostAsJsonAsync(
+            $"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync(uniqueName));
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
+
+        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeTrue(
+            "ручное добавление показателя теперь ставит обогащение справочника в очередь при промахе KB, " +
+            "тем же путём, что и распознавание документа");
+    }
+
+    [Fact]
+    public async Task CreateIndicator_KbMiss_UnresolvedSpecimen_DoesNotQueueEnrichmentJob()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateAnalysisAsync(owner);
+        var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
+
+        var response = await owner.PostAsJsonAsync(
+            $"/api/medical-records/{record.Id}/indicators",
+            new CreateIndicatorRequest(uniqueName, "118", "г/л", SpecimenContextIds.Unresolved, "130", "160", null));
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
+
+        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeFalse(
+            "жёсткое требование — источник не определён, во внешний поиск/справочник ничего не уходит " +
+            "(гейт в LabAnalyteEnrichmentRequestService)");
     }
 
     [Fact]

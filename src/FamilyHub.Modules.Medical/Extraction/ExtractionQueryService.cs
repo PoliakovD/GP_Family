@@ -21,7 +21,8 @@ public enum ExtractionQueryResult { Success, NotFound, Forbidden, Failed }
 /// </summary>
 public class ExtractionQueryService(
     AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup,
-    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer)
+    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer,
+    LabAnalyteKbLookupService analyteKbLookup, LabAnalyteEnrichmentRequestService enrichmentRequest)
 {
     public async Task<(ExtractionQueryResult Result, ExtractionStatusResponse? Item)> GetStatusAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
@@ -341,8 +342,19 @@ public class ExtractionQueryService(
     }
 
     /// <summary>Ручное добавление показателя (UX-редизайн) — тот же путь расчёта флага, что и
-    /// правка: RefSource.Blank, KB-каскад заново не гоняется (пользователь вводит конкретные
-    /// цифры руками, не просит распознать заново). Position — в конец текущего списка записи.</summary>
+    /// правка: RefSource.Blank, KB-каскад заново не гоняется для САМОГО этого показателя
+    /// (пользователь вводит конкретные цифры руками, не просит распознать заново). Position — в
+    /// конец текущего списка записи.
+    ///
+    /// В СПРАВОЧНИК же обогащение теперь ставится в очередь при промахе — ровно тем же путём и с
+    /// теми же гарантиями, что у распознавания документа (см. MedicalDocumentExtractionProcessor):
+    /// единственная точка входа LabAnalyteEnrichmentRequestService сама гейтует нерезолвленный
+    /// источник, а первый шаг самого фонового конвейера (LegitimacyGuardService,
+    /// PipelineCatalog.LegitimacyCheckStep) проверяет введённое название на легитимность и prompt
+    /// injection ДО web-поиска/LLM-суммаризации — отклонённое название просто проваливает задачу
+    /// обогащения (Job.Status=Failed), не блокируя сохранение самого показателя: это личные данные
+    /// пользователя, им они распоряжается всегда, обогащение — только побочная попытка связать их
+    /// с общим справочником.</summary>
     public async Task<(CreateIndicatorResult Result, IndicatorDto? Item)> CreateIndicatorAsync(
         Guid recordId, Guid userId, CreateIndicatorRequest request, CancellationToken ct = default)
     {
@@ -402,6 +414,13 @@ public class ExtractionQueryService(
         };
         db.LabIndicators.Add(indicator);
         await db.SaveChangesAsync(ct);
+
+        // Промах справочника по (показатель, источник) — ставим обогащение в очередь, тем же
+        // единственным входом, что и распознавание документа (см. class doc выше). Гейт на
+        // нерезолвленный источник и дедуп — внутри RequestAsync, не здесь.
+        var lookup = await analyteKbLookup.LookupAsync(analyteKey, specimenRow.Id, ct);
+        if (lookup.Kind != Kb.KbLookupKind.Hit)
+            await enrichmentRequest.RequestAsync(analyteKey, specimenRow.Id, displayName, indicator.Id, userId, ct);
 
         return (CreateIndicatorResult.Success, ToDto(indicator, specimenRow.DisplayName));
     }
