@@ -10,6 +10,7 @@ using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Hangfire;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -51,6 +52,7 @@ public class AttachmentServiceTests : SqliteTestBase
             Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
         _sut = new AttachmentService(
             Db, _storage, _fileCipher, _keyRing, downloadTokens, medicalRecords, access, auditWriter,
+            Substitute.For<IBackgroundJobClient>(),
             Options.Create(new AttachmentUploadOptions()), NullLogger<AttachmentService>.Instance);
     }
 
@@ -161,7 +163,8 @@ public class AttachmentServiceTests : SqliteTestBase
                 Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), new TestSupport.RecordingDomainEventPublisher(),
                 new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), new RussianTextSearcher(), _storage, NullLogger<MedicalRecordService>.Instance),
             new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
-            new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), options, NullLogger<AttachmentService>.Instance);
+            new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), Substitute.For<IBackgroundJobClient>(),
+            options, NullLogger<AttachmentService>.Instance);
 
         await sut.UploadForMedicalRecordAsync(record.Id, owner.Id, "a.pdf", "application/pdf", 10, Content());
         await sut.UploadForMedicalRecordAsync(record.Id, owner.Id, "b.pdf", "application/pdf", 10, Content());

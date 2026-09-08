@@ -12,6 +12,7 @@ import { buildPatientOptions, type PatientOption } from '../../shared/util/patie
 import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '../../shared/util/attachment-upload';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
+import { FileViewerComponent } from '../../shared/file-viewer/file-viewer.component';
 
 /** Файл, ожидающий загрузки — ещё не отправленный (запись создастся только по «Сохранить»).
  * previewUrl — только для картинок (см. medications-panel.photos). */
@@ -39,7 +40,7 @@ let nextInstanceId = 0;
 @Component({
   selector: 'app-record-add',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, ExpandableComponent],
+  imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent],
   templateUrl: './record-add.component.html',
   styleUrl: './record-add.component.scss',
 })
@@ -145,6 +146,24 @@ export class RecordAddComponent implements OnInit, OnDestroy {
   removePendingFile(index: number): void {
     const [removed] = this.pendingFiles.splice(index, 1);
     if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+    if (this.viewerFileIndex === index) this.closeStagedPreview();
+  }
+
+  /** Превью ещё не загруженного файла (см. app-file-viewer[localFile]) — PDF/картинки открываются
+   * полноценно офлайн (blob:-URL), остальные форматы — карточкой «Формат…» без похода на сервер
+   * (полноценный предпросмотр появится после сохранения записи и фоновой генерации). */
+  viewerFileIndex: number | null = null;
+
+  get viewerStagedFile(): File | null {
+    return this.viewerFileIndex !== null ? (this.pendingFiles[this.viewerFileIndex]?.file ?? null) : null;
+  }
+
+  openStagedPreview(index: number): void {
+    this.viewerFileIndex = index;
+  }
+
+  closeStagedPreview(): void {
+    this.viewerFileIndex = null;
   }
 
   private clearPendingFiles(): void {

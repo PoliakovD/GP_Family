@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<FamilyMedicalShare> FamilyMedicalShares => Set<FamilyMedicalShare>();
     public DbSet<MedicalRecordHidden> MedicalRecordHiddens => Set<MedicalRecordHidden>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
+    public DbSet<AttachmentPreview> AttachmentPreviews => Set<AttachmentPreview>();
     public DbSet<Birthday> Birthdays => Set<Birthday>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();

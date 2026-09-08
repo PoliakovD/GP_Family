@@ -45,6 +45,24 @@ services:
     volumes:
       - seq-data:/data
 
+  # Сайдкар для превью Office-документов (docx/xlsx/xls/doc/rtf/html → PDF, см.
+  # FamilyHub.Infrastructure.Previews.GotenbergConverter) — LibreOffice headless за HTTP API,
+  # NPOI (уже используется для извлечения текста) не имеет собственного движка вёрстки. Порт
+  # наружу не публикуется — api ходит по имени сервиса внутри docker-сети, как minio/kafka.
+  # --chromium-disable-javascript — превью читает произвольные пользовательские HTML-вложения,
+  # выполнять их JS незачем и небезопасно (Gotenberg использует Chromium только для HTML/route
+  # конвертации; для LibreOffice-маршрута сам флаг не задействован, но безвреден оставить всегда).
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command: ["gotenberg", "--api-port=3000", "--chromium-disable-javascript=true"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Kafka Rider (ADR-0006, топология потребителей — ADR-0007): реальный транспорт для бизнес-
   # событий — все 7 потребителей (Notifications + Medical cleanup) подписаны на топики через
   # TopicEndpoint, не на InMemory. api ниже требует этот сервис (depends_on: service_healthy) —
@@ -111,6 +129,9 @@ services:
       # false здесь означал бы полный dev-lite режим без брокера — для полного стека не нужен.
       Messaging__Kafka__Enabled: "${KAFKA_ENABLED:-true}"
       Messaging__Kafka__BootstrapServers: "kafka:9092"
+      # Превью вложений (Анализы/Врачи) — сайдкар Gotenberg выше. Пусто/недоступен — Office-файлы
+      # деградируют в карточку «Скачать» (NullGotenbergConverter/fail-soft), не роняют задачу.
+      Previews__GotenbergBaseUrl: "http://gotenberg:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,6 +140,8 @@ services:
       seq:
         condition: service_started
       kafka:
+        condition: service_healthy
+      gotenberg:
         condition: service_healthy
 
   # Telegram-бот (ADR-0008) — отдельным процессом, без доступа к БД. Под профилем "bot": по

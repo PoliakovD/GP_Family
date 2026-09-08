@@ -35,14 +35,24 @@
       <div class="form-label">Сканы и файлы</div>
       <div class="file-chip-grid">
         @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
-          <div class="file-chip">
+          <!-- role=button на div, не вложенный <button> — .file-chip-remove внутри уже кнопка,
+               а кнопка в кнопке невалидна (браузер закрыл бы внешний тег раньше времени). -->
+          <div
+            class="file-chip"
+            style="cursor:pointer"
+            role="button"
+            tabindex="0"
+            [attr.title]="pf.file.name"
+            (click)="openStagedPreview(i)"
+            (keydown.enter)="openStagedPreview(i)"
+          >
             @if (pf.previewUrl) {
               <img [src]="pf.previewUrl" alt="" />
             } @else {
               <i class="ph ph-file-text" aria-hidden="true"></i>
               <span class="file-chip-name">{{ pf.file.name }}</span>
             }
-            <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="removePendingFile(i)">
+            <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="$event.stopPropagation(); removePendingFile(i)">
               <i class="ph-bold ph-x" aria-hidden="true"></i>
             </button>
           </div>
@@ -124,3 +134,5 @@
     <ng-container *ngTemplateOutlet="formContent" />
   </div>
 }
+
+<app-file-viewer [open]="viewerFileIndex !== null" [localFile]="viewerStagedFile" (closed)="closeStagedPreview()" />

@@ -1,0 +1,140 @@
+// z-index 550, не 500 (обычный .overlay-backdrop/.sheet-backdrop) — вьюер может открыться ПОВЕРХ
+// уже открытого оверлея (стейдж-превью в record-add, чья форма сама живёт в .overlay-backdrop на
+// wide) — выше, чтобы не зависеть от порядка в DOM при равных z-index.
+:host {
+  display: contents;
+}
+
+.viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 550;
+  background: color-mix(in srgb, var(--color-neutral-900) 78%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:not(.viewer-backdrop-wide) {
+    background: var(--color-neutral-900);
+  }
+}
+
+.viewer-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, 100vw - 64px);
+  height: calc(100vh - 64px);
+  background: var(--color-neutral-900);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.viewer-panel-fullscreen {
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: #fff;
+  background: color-mix(in srgb, #000 35%, transparent);
+  flex-shrink: 0;
+
+  // Кнопки в тёмной шапке — .btn-ghost по умолчанию цвета акцента на светлом фоне, здесь фон
+  // всегда тёмный (даже в светлой теме — вьюер намеренно не следует общей палитре, как плеер).
+  // Без ::ng-deep — кнопки прямо в разметке ЭТОГО компонента, не в дочерних, обычная вложенность
+  // видит их и так.
+  .btn-icon {
+    color: #fff;
+
+    &:hover { background: color-mix(in srgb, #fff 15%, transparent); }
+    &:active { background: color-mix(in srgb, #fff 25%, transparent); }
+  }
+}
+
+.viewer-header-info {
+  min-width: 0;
+}
+
+.viewer-header-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.viewer-header-count {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.viewer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.viewer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none; // жесты (пинч/пан/свайп) обрабатываются вручную, см. ZoomPanController
+  color: var(--color-neutral-200);
+}
+
+.viewer-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, #000 45%, transparent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+
+  &:hover { background: color-mix(in srgb, #000 60%, transparent); }
+  &:disabled { opacity: 0.3; cursor: not-allowed; }
+}
+
+.viewer-nav-arrow-left { left: 12px; }
+.viewer-nav-arrow-right { right: 12px; }
+
+.viewer-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  flex-shrink: 0;
+}
+
+.viewer-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: color-mix(in srgb, #fff 30%, transparent);
+
+  &.viewer-dot-active {
+    background: #fff;
+  }
+}

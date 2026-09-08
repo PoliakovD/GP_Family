@@ -45,4 +45,15 @@ public class FileAttachment
     /// MedicalDocumentExtractionProcessor). Не про MedicalRecord.ExtractionStatus — тот про запись
     /// целиком, это — про конкретный файл.</summary>
     public DateTime? ExtractedAt { get; set; }
+
+    /// <summary>Статус фоновой генерации превью (AttachmentPreviewProcessor) — заодно и дедуп
+    /// повторной постановки в очередь при загрузке. None до первой попытки; после ротации ключа
+    /// шифрования сброс обратно в None (превью — регенерируемый кэш, не перешифровывается).</summary>
+    public AttachmentPreviewStatus PreviewStatus { get; set; } = AttachmentPreviewStatus.None;
+
+    /// <summary>Причина Failed/Unsupported — то, что показывается пользователю вместо технического
+    /// исключения (например «Не удалось сконвертировать документ» вместо стектрейса Gotenberg).</summary>
+    public string? PreviewFailureReason { get; set; }
+
+    public DateTime? PreviewGeneratedAt { get; set; }
 }

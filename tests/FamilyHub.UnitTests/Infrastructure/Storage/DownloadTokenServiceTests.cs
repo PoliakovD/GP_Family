@@ -15,9 +15,9 @@ public class DownloadTokenServiceTests
             UrlTtl = ttl ?? TimeSpan.FromMinutes(5),
         }));
 
-    private static (Guid AttachmentId, long Expires, string Sig) ParseUrl(string url, Guid expectedId)
+    private static (Guid AttachmentId, long Expires, string Sig) ParseUrl(string url, Guid expectedId, string route = "file")
     {
-        url.Should().StartWith($"/api/attachments/{expectedId}/file?expires=");
+        url.Should().StartWith($"/api/attachments/{expectedId}/{route}?expires=");
         var query = HttpUtility.ParseQueryString(url[(url.IndexOf('?') + 1)..]);
         return (expectedId, long.Parse(query["expires"]!), query["sig"]!);
     }
@@ -30,7 +30,7 @@ public class DownloadTokenServiceTests
 
         var (id, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId), attachmentId);
 
-        sut.Validate(id, expires, sig).Should().BeTrue();
+        sut.Validate(id, DownloadScope.File, expires, sig).Should().BeTrue();
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class DownloadTokenServiceTests
         var attachmentId = Guid.NewGuid();
         var (id, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId), attachmentId);
 
-        sut.Validate(id, expires, sig + "0").Should().BeFalse();
+        sut.Validate(id, DownloadScope.File, expires, sig + "0").Should().BeFalse();
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class DownloadTokenServiceTests
         var attachmentId = Guid.NewGuid();
         var (_, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId), attachmentId);
 
-        sut.Validate(Guid.NewGuid(), expires, sig).Should().BeFalse();
+        sut.Validate(Guid.NewGuid(), DownloadScope.File, expires, sig).Should().BeFalse();
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class DownloadTokenServiceTests
         var attachmentId = Guid.NewGuid();
         var (id, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId), attachmentId);
 
-        sut.Validate(id, expires, sig).Should().BeFalse();
+        sut.Validate(id, DownloadScope.File, expires, sig).Should().BeFalse();
     }
 
     [Fact]
@@ -71,7 +71,19 @@ public class DownloadTokenServiceTests
         var attachmentId = Guid.NewGuid();
         var (id, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId), attachmentId);
 
-        sut.Validate(id, expires + 3600, sig).Should().BeFalse();
+        sut.Validate(id, DownloadScope.File, expires + 3600, sig).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_WrongScope_Fails()
+    {
+        // Ссылка на миниатюру не должна открывать оригинал (и наоборот) — см. докстринг DownloadScope.
+        var sut = CreateSut();
+        var attachmentId = Guid.NewGuid();
+        var (id, expires, sig) = ParseUrl(sut.CreateUrl(attachmentId, DownloadScope.Thumbnail), attachmentId, "preview/thumb");
+
+        sut.Validate(id, DownloadScope.File, expires, sig).Should().BeFalse();
+        sut.Validate(id, DownloadScope.Thumbnail, expires, sig).Should().BeTrue();
     }
 
     // --- Ротация ключа (ADR-0009) ---
@@ -91,7 +103,7 @@ public class DownloadTokenServiceTests
             PreviousSigningKeys = ["test-download-signing-key"],
         }));
 
-        rotatedSut.Validate(id, expires, sig).Should().BeTrue();
+        rotatedSut.Validate(id, DownloadScope.File, expires, sig).Should().BeTrue();
     }
 
     [Fact]
@@ -107,7 +119,7 @@ public class DownloadTokenServiceTests
 
         // Старый ключ больше не подписывает — подпись новой ссылки им не совпадёт.
         var oldKeyOnlySut = CreateSut();
-        oldKeyOnlySut.Validate(id, expires, sig).Should().BeFalse();
+        oldKeyOnlySut.Validate(id, DownloadScope.File, expires, sig).Should().BeFalse();
     }
 
     [Fact]
@@ -124,6 +136,6 @@ public class DownloadTokenServiceTests
             PreviousSigningKeys = ["also-unrelated"],
         }));
 
-        unrelatedSut.Validate(id, expires, sig).Should().BeFalse();
+        unrelatedSut.Validate(id, DownloadScope.File, expires, sig).Should().BeFalse();
     }
 }

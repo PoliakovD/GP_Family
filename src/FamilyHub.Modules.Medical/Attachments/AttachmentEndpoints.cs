@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http;
@@ -70,20 +71,93 @@ public static class AttachmentEndpoints
             };
         });
 
-        // Скачивание по подписанной короткоживущей ссылке (выдаётся эндпоинтом /url после
-        // проверки доступа). AllowAnonymous: браузер открывает ссылку без auth-заголовков,
-        // как раньше открывал presigned URL хранилища; защита — HMAC-подпись + TTL.
+        // Описание превью + уже подписанные ссылки на всё, что нужно вьюеру (см. докстринг
+        // AttachmentService.GetPreviewAsync) — единственный эндпоинт превью, требующий обычной
+        // авторизации; сама раздача байт превью ниже — по HMAC-подписи, как и /file.
+        group.MapGet("/attachments/{attachmentId:guid}/preview", async (
+            Guid attachmentId, AttachmentService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, item) = await service.GetPreviewAsync(attachmentId, currentUser.UserId, ct);
+            return result switch
+            {
+                AttachmentAccessResult.NotFound => Results.NotFound(),
+                AttachmentAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(item),
+            };
+        });
+
+        // --- Раздача байт по подписанной короткоживущей ссылке (выдаётся /url и /preview после
+        // --- проверки доступа). AllowAnonymous: браузер/pdf.js/<img> открывает ссылку без
+        // --- auth-заголовков — защита - HMAC-подпись + TTL + scope (см. DownloadScope: ссылка на
+        // --- миниатюру не откроет оригинал, и наоборот).
+
+        // Скачивание — Content-Disposition: attachment (Results.Stream с fileName).
         app.MapGet("/api/attachments/{attachmentId:guid}/file", async (
             Guid attachmentId, long expires, string sig,
             AttachmentService service, DownloadTokenService tokens, CancellationToken ct) =>
         {
-            if (!tokens.Validate(attachmentId, expires, sig))
+            if (!tokens.Validate(attachmentId, DownloadScope.File, expires, sig))
                 return Results.Unauthorized();
 
             var download = await service.GetDownloadAsync(attachmentId, ct);
             return download is null
                 ? Results.NotFound()
                 : Results.Stream(download.Value.Content, download.Value.ContentType, download.Value.FileName);
+        }).AllowAnonymous();
+
+        // Отрисовка оригинала — без имени файла в Results.Stream, поэтому без
+        // Content-Disposition: attachment (иначе браузер/pdf.js/<img> скачивал бы вместо
+        // отрисовки). Обслуживает renderKind Pdf (нативный PDF) и Image (jpeg/png/webp) и Text.
+        app.MapGet("/api/attachments/{attachmentId:guid}/inline", async (
+            Guid attachmentId, long expires, string sig,
+            AttachmentService service, DownloadTokenService tokens, CancellationToken ct) =>
+        {
+            if (!tokens.Validate(attachmentId, DownloadScope.Inline, expires, sig))
+                return Results.Unauthorized();
+
+            var download = await service.GetDownloadAsync(attachmentId, ct);
+            return download is null
+                ? Results.NotFound()
+                : Results.Stream(download.Value.Content, download.Value.ContentType);
+        }).AllowAnonymous();
+
+        app.MapGet("/api/attachments/{attachmentId:guid}/preview/thumb", async (
+            Guid attachmentId, long expires, string sig,
+            AttachmentService service, DownloadTokenService tokens, CancellationToken ct) =>
+        {
+            if (!tokens.Validate(attachmentId, DownloadScope.Thumbnail, expires, sig))
+                return Results.Unauthorized();
+
+            var artifact = await service.GetPreviewArtifactAsync(attachmentId, AttachmentPreviewKind.Thumbnail, ct);
+            return artifact is null
+                ? Results.NotFound()
+                : Results.Stream(artifact.Value.Content, artifact.Value.ContentType);
+        }).AllowAnonymous();
+
+        app.MapGet("/api/attachments/{attachmentId:guid}/preview/pdf", async (
+            Guid attachmentId, long expires, string sig,
+            AttachmentService service, DownloadTokenService tokens, CancellationToken ct) =>
+        {
+            if (!tokens.Validate(attachmentId, DownloadScope.PreviewPdf, expires, sig))
+                return Results.Unauthorized();
+
+            var artifact = await service.GetPreviewArtifactAsync(attachmentId, AttachmentPreviewKind.Pdf, ct);
+            return artifact is null
+                ? Results.NotFound()
+                : Results.Stream(artifact.Value.Content, artifact.Value.ContentType);
+        }).AllowAnonymous();
+
+        app.MapGet("/api/attachments/{attachmentId:guid}/preview/page", async (
+            Guid attachmentId, long expires, string sig,
+            AttachmentService service, DownloadTokenService tokens, CancellationToken ct) =>
+        {
+            if (!tokens.Validate(attachmentId, DownloadScope.PreviewPage, expires, sig))
+                return Results.Unauthorized();
+
+            var artifact = await service.GetPreviewArtifactAsync(attachmentId, AttachmentPreviewKind.Page, ct);
+            return artifact is null
+                ? Results.NotFound()
+                : Results.Stream(artifact.Value.Content, artifact.Value.ContentType);
         }).AllowAnonymous();
     }
 }

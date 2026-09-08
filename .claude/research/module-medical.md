@@ -219,6 +219,41 @@ Forbidden`), даже `Admin` семьи не может вмешаться. Э�
 `IsVisibleToAsync`, что и у самой записи, аудит-запись при просмотре чужой расшаренной записи),
 `GET /api/attachments/{attachmentId}/url` → `{ url }`.
 
+### Превью вложений (встроенный вьюер, `Attachments/AttachmentPreviewProcessor.cs`)
+
+Модель артефактов — три вида (`AttachmentPreviewKind`: `Thumbnail`/`Pdf`/`Page`), не «страница
+на каждый лист документа»: PDF получает только `Thumbnail` (вьюер рисует оригинал сам, pdf.js);
+Office (`docx`/`xlsx`/`xls`/`doc`/`rtf`/`html`) конвертируется в PDF через сайдкар **Gotenberg**
+(LibreOffice headless, `Previews.GotenbergConverter`/`IGotenbergConverter` — у NPOI нет движка
+вёрстки, только извлечение текста) и получает оба артефакта, `Pdf` + `Thumbnail` из его первой
+страницы; HEIC/TIFF получают нормализованный `Page` (то, что реально может показать `<img>`,
+браузер их не умеет) плюс `Thumbnail`; jpeg/png/webp — только `Thumbnail`, вьюер показывает
+оригинал напрямую. text/csv/xml — без артефактов вовсе, вьюер тянет исходник инлайном.
+
+Диспетчер — `Infrastructure.Previews.AttachmentPreviewRenderer`, переиспользует конвейер OCR
+(`PdfPageRasterizer`, `ImageDownscaler`), не собственный код рендера. `FileAttachment.PreviewStatus`
+(`None|Pending|Ready|Failed|Unsupported`) — и дедуп очереди, и то, что видит клиент. Генерация —
+Hangfire, очередь `previews` (`WorkerCount=2`, CPU-bound, не делит ограничение LM Studio/внешнего
+поиска с `extraction`/`enrichment`), энкью — best-effort сразу после `UploadForMedicalRecordAsync`
+(в отличие от `ExtractionRequestService`, сбой энкью НЕ откатывает сам факт загрузки файла —
+превью произвольный, а не основной артефакт); легаси-вложения без превью (`PreviewStatus=None`,
+загружены до этой функции) получают его лениво — при первом `GET /preview`.
+
+Превью — **регенерируемый кэш**: `EncryptionRotationJob` их не перешифровывает, а удаляет
+(`ResetStalePreviewsAsync`, не резюмируемый курсор, в отличие от фазы 2) — пересоздаются по
+требованию. Исключены из экспорта аккаунта (`AccountService`) — производные данные, не
+пользовательский контент.
+
+Раздача байт — тот же принцип подписанных ссылок, что у `/file`, но с добавленным **scope**
+(`DownloadTokenService.DownloadScope`: `File`/`Inline`/`Thumbnail`/`PreviewPdf`/`PreviewPage`) —
+payload подписи включает scope, поэтому ссылка на миниатюру не открывает оригинал и наоборот.
+`/inline` и `/preview/*` отдают `Results.Stream` **без** `fileName` (иначе
+`Content-Disposition: attachment` не даст браузеру/pdf.js отрисовать вместо скачивания).
+
+Маршруты: `GET /api/attachments/{id}/preview` (авторизованный, отдаёт `AttachmentPreviewDto` —
+уже готовые подписанные ссылки + `AttachmentRenderKind`), `GET /api/attachments/{id}/inline`,
+`GET /api/attachments/{id}/preview/{thumb|pdf|page}` (все — `AllowAnonymous` + HMAC, как `/file`).
+
 ## OCR (`Ocr/`) — оцифровка медикамента по фото
 
 `MedicationOcrService` — вызывает `ILmStudioJsonClient` (`FamilyHub.Infrastructure.LmStudio`,

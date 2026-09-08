@@ -144,6 +144,11 @@
           <p class="mb-1">{{ item.description }}</p>
         }
 
+        <!-- Секция «Файлы» прямо в карточке (была модалка из меню «…» — недоступна на узком
+             экране в списке, см. shared/attachment-list). Владеет своим fetch — грузится ровно
+             тогда, когда карточка раскрыта, как и раньше при клике «Файлы». -->
+        <app-attachment-list [recordId]="item.id" (changed)="refresh()" />
+
         <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
              читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
         @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
@@ -603,61 +608,6 @@
         />
       }
     </app-bottom-sheet>
-  }
-
-  <!-- UX-редизайн: файлы — модалка по клику на иконку, а не раскрывающийся блок в самой
-       карточке (растягивал список анализов по высоте). -->
-  @if (filesModalRecord; as record) {
-    <app-modal title="Файлы" [open]="true" (closed)="closeFilesModal()">
-      @if (canAddMoreAttachments(record.id)) {
-        <label
-          class="file-chip file-chip-add"
-          style="width:auto;height:auto;padding:8px 12px;flex-direction:row"
-          [attr.for]="'attach-file-input-' + record.id"
-        >
-          <i class="ph ph-paperclip" aria-hidden="true"></i>
-          <span>Прикрепить файлы</span>
-        </label>
-      }
-      <input
-        [id]="'attach-file-input-' + record.id"
-        class="visually-hidden-input"
-        type="file"
-        multiple
-        [accept]="acceptedFileTypes"
-        [disabled]="uploadingRecordId === record.id || remainingSlots(record.id) === 0"
-        (change)="handleUpload(record, $event)"
-      />
-      @if (attachmentLimits; as limits) {
-        <div class="muted" style="font-size:12px">
-          До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
-          @if (remainingSlots(record.id); as room) {
-            — осталось {{ room }}
-          } @else if (remainingSlots(record.id) === 0) {
-            — лимит достигнут
-          }
-        </div>
-      }
-      @if (uploadingRecordId === record.id) {
-        <app-loading-spinner text="Загружаем…" />
-      }
-      @if (attachmentsFor(record.id).length > 0) {
-        <ul class="list-unstyled mb-0">
-          @for (a of attachmentsFor(record.id); track a.id) {
-            <li class="d-flex align-items-center gap-2">
-              <button class="btn btn-ghost btn-sm flex-fill text-start" (click)="handleOpenAttachment(a.id)">
-                <i class="ph ph-paperclip" aria-hidden="true"></i> {{ a.fileName }}
-              </button>
-              @if (a.extractedAt) {
-                <i class="ph ph-check-circle" style="color:var(--color-accent)" title="Распознано" aria-hidden="true"></i>
-              }
-            </li>
-          }
-        </ul>
-      } @else {
-        <p class="muted mb-0">Файлов пока нет.</p>
-      }
-    </app-modal>
   }
 
   <!-- Общий список подсказок для полей источника показателя (правка + создание) — подсказки

@@ -13,4 +13,13 @@ public static class StorageKeyFactory
         var hex = attachmentId.ToString("N");
         return $"blobs/{hex[..2]}/{hex[2..4]}/{hex}";
     }
+
+    /// <summary>Отдельное пространство ключей ("previews/", не "blobs/") — превью-блобы удаляются
+    /// и пересоздаются независимо от оригинала (регенерируемый кэш, см. AttachmentPreview),
+    /// префикс сразу отличает их в листинге бакета (админ-статистика, ADR-0009).</summary>
+    public static string CreatePreviewKey(Guid previewId)
+    {
+        var hex = previewId.ToString("N");
+        return $"previews/{hex[..2]}/{hex[2..4]}/{hex}";
+    }
 }

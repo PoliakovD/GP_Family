@@ -792,6 +792,21 @@ select.input {
   z-index: 1;
 }
 
+// Значок «Распознано» на плитке вложения (shared/attachment-list) — тот же угол, что
+// .file-chip-remove у record-add/attachment-list с возможностью удаления, но эта плитка кликабельна
+// целиком (открывает вьюер), поэтому просто индикатор, не кнопка.
+.file-chip-badge {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  font-size: 14px;
+  color: var(--color-accent);
+  background: var(--color-bg);
+  border-radius: 50%;
+  line-height: 1;
+  z-index: 1;
+}
+
 .file-chip-add {
   display: flex;
   flex-direction: column;

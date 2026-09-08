@@ -20,6 +20,7 @@
     "@angular/service-worker": "^18.2.0",
     "@fontsource/source-serif-4": "^5.2.9",
     "@phosphor-icons/web": "^2.1.2",
+    "pdfjs-dist": "^4.10.38",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.0"

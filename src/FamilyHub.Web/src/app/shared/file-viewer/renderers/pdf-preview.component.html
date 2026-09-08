@@ -1,0 +1,31 @@
+@if (loading) {
+  <div class="pdf-loading-card">
+    <app-loading-spinner text="Открываем документ…" />
+  </div>
+} @else if (error) {
+  <div class="pdf-error">
+    <i class="ph ph-warning-circle" aria-hidden="true"></i>
+    <span>Не удалось открыть документ.</span>
+  </div>
+} @else {
+  <div class="pdf-stage">
+    <div
+      class="pdf-page-wrap"
+      [style.transform]="'translate(' + transform.x + 'px,' + transform.y + 'px) scale(' + transform.scale + ') rotate(' + transform.rotationDeg + 'deg)'"
+    >
+      <canvas #canvas class="pdf-canvas"></canvas>
+    </div>
+  </div>
+
+  @if (pageCount > 1) {
+    <div class="pdf-page-nav">
+      <button type="button" class="btn btn-icon btn-ghost" aria-label="Предыдущая страница" [disabled]="pageNumber === 1" (click)="prevPage()">
+        <i class="ph ph-caret-left" aria-hidden="true"></i>
+      </button>
+      <span class="pdf-page-label">Стр. {{ pageNumber }} из {{ pageCount }}</span>
+      <button type="button" class="btn btn-icon btn-ghost" aria-label="Следующая страница" [disabled]="pageNumber === pageCount" (click)="nextPage()">
+        <i class="ph ph-caret-right" aria-hidden="true"></i>
+      </button>
+    </div>
+  }
+}

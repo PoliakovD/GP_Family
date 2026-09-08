@@ -1,0 +1,76 @@
+<div class="attachment-list">
+  <div class="card-kicker mb-0">Файлы</div>
+
+  @if (loading) {
+    <app-loading-spinner />
+  } @else {
+    @if (error) {
+      <div class="alert-danger mb-0" style="font-size:13px">{{ error }}</div>
+    }
+
+    <div class="file-chip-grid">
+      @for (a of attachments; track a.id; let i = $index) {
+        <button
+          type="button"
+          class="file-chip"
+          style="cursor:pointer;font:inherit"
+          [attr.title]="a.fileName"
+          (click)="openViewer(i)"
+        >
+          @if (thumbnailByAttachment[a.id]; as thumb) {
+            <img [src]="thumb" alt="" />
+          } @else {
+            <i class="ph {{ fileInfo(a).icon }}" aria-hidden="true"></i>
+            <span class="file-chip-name">{{ a.fileName }}</span>
+          }
+          @if (a.extractedAt) {
+            <i class="file-chip-badge ph-fill ph-check-circle" title="Распознано" aria-hidden="true"></i>
+          }
+        </button>
+      }
+      @if (canAddMore()) {
+        <label class="file-chip file-chip-add" for="attachment-list-input-{{ recordId }}">
+          <i class="ph ph-paperclip" aria-hidden="true"></i>
+          <span>Прикрепить</span>
+        </label>
+      }
+    </div>
+
+    <input
+      [id]="'attachment-list-input-' + recordId"
+      class="visually-hidden-input"
+      type="file"
+      multiple
+      [accept]="acceptedFileTypes"
+      [disabled]="uploading || remainingSlots() === 0"
+      (change)="handleUpload($event)"
+    />
+
+    @if (limits; as l) {
+      <div class="muted" style="font-size:12px">
+        До {{ l.maxFilesPerRecord }} файлов, {{ (l.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
+        @if (remainingSlots(); as room) {
+          — осталось {{ room }}
+        } @else if (remainingSlots() === 0) {
+          — лимит достигнут
+        }
+      </div>
+    }
+
+    @if (uploading) {
+      <app-loading-spinner text="Загружаем…" />
+    }
+
+    @if (attachments.length === 0 && !uploading) {
+      <p class="muted mb-0" style="font-size:13px">Файлов пока нет.</p>
+    }
+  }
+</div>
+
+<app-file-viewer
+  [open]="viewerOpen"
+  [attachments]="attachments"
+  [activeIndex]="viewerIndex"
+  (activeIndexChange)="viewerIndex = $event"
+  (closed)="closeViewer()"
+/>

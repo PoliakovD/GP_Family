@@ -1,0 +1,52 @@
+// Хост сидит на тёмной сцене вьюера (см. file-viewer.component.scss .viewer-stage) — токены
+// --color-neutral-600/--color-divider рассчитаны на светлый фон, поэтому и статус, и сам текст
+// живут на явной "бумажной" подложке, а не прямо на тёмном фоне (иначе нечитаемо).
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+}
+
+.text-preview-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 32px;
+  background: var(--color-paper);
+  border-radius: var(--radius-lg);
+  color: var(--color-neutral-600);
+}
+
+.text-preview-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: var(--color-paper);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.text-preview-pre {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text);
+}
+
+.text-preview-table {
+  border-collapse: collapse;
+  font-size: 13px;
+
+  td {
+    border: 1px solid var(--color-divider);
+    padding: 4px 8px;
+    white-space: nowrap;
+  }
+}

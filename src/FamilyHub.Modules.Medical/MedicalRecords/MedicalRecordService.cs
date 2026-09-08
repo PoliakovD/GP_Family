@@ -680,9 +680,19 @@ public class MedicalRecordService(
             return MedicalRecordAccessResult.Forbidden;
         }
 
-        var storageKeys = await db.FileAttachments
+        var attachments = await db.FileAttachments
             .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId)
-            .Select(a => a.StorageKey)
+            .Select(a => new { a.Id, a.StorageKey })
+            .ToListAsync(ct);
+        var storageKeys = attachments.Select(a => a.StorageKey).ToList();
+        // Превью — регенерируемый кэш (AttachmentPreview), но блоб в MinIO кэшем БД не является:
+        // строки уйдут каскадом FK (AttachmentPreviewConfiguration.OnDelete Cascade) вместе с
+        // ExecuteDeleteAsync ниже, а вот сами объекты в хранилище нужно собрать здесь же, до
+        // удаления строк, тем же приёмом, что и для оригиналов вложений.
+        var attachmentIds = attachments.Select(a => a.Id).ToList();
+        var previewStorageKeys = await db.AttachmentPreviews
+            .Where(p => attachmentIds.Contains(p.AttachmentId))
+            .Select(p => p.StorageKey)
             .ToListAsync(ct);
 
         await using (var tx = await db.Database.BeginTransactionAsync(ct))
@@ -696,7 +706,7 @@ public class MedicalRecordService(
             await tx.CommitAsync(ct);
         }
 
-        foreach (var key in storageKeys)
+        foreach (var key in storageKeys.Concat(previewStorageKeys))
         {
             try
             {

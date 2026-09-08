@@ -28,21 +28,54 @@ public class AttachmentDownloadOptions
 }
 
 /// <summary>
+/// Что именно ссылка разрешает получить — примешивается в подписываемый payload, чтобы ссылка,
+/// выданная на миниатюру, не могла быть подставлена в эндпоинт оригинала (и наоборот). До
+/// добавления превью (см. AttachmentPreview) существовал только один эндпоинт /file, поэтому
+/// в scope не было нужды — теперь их четыре, каждый со своей раздачей содержимого.
+/// </summary>
+public enum DownloadScope
+{
+    /// <summary>Оригинал вложения — GET /api/attachments/{id}/file (скачивание, Content-Disposition: attachment).</summary>
+    File,
+
+    /// <summary>Оригинал, отдаваемый inline (без Content-Disposition) — GET /api/attachments/{id}/inline, для текстовых превью.</summary>
+    Inline,
+
+    /// <summary>Миниатюра превью — GET /api/attachments/{id}/preview/thumb.</summary>
+    Thumbnail,
+
+    /// <summary>PDF-артефакт превью — результат конвертации Office-документа — GET /api/attachments/{id}/preview/pdf.</summary>
+    PreviewPdf,
+
+    /// <summary>Нормализованная полная картинка (HEIC/TIFF → JPEG) — GET /api/attachments/{id}/preview/page.</summary>
+    PreviewPage,
+}
+
+/// <summary>
 /// Короткоживущие подписанные ссылки на скачивание вложений через собственный API-эндпоинт
 /// (замена presigned URL хранилища: блобы зашифрованы, отдавать их напрямую бессмысленно).
 /// Авторизация происходит в момент ВЫДАЧИ ссылки (проверка видимости записи);
-/// сам эндпоинт проверяет только подпись и срок — как и у presigned URL раньше.
+/// сам эндпоинт проверяет только подпись, срок и совпадение scope — как и у presigned URL раньше.
 /// </summary>
 public class DownloadTokenService(IOptions<AttachmentDownloadOptions> options)
 {
-    public string CreateUrl(Guid attachmentId)
+    private static readonly Dictionary<DownloadScope, string> RoutesByScope = new()
+    {
+        [DownloadScope.File] = "file",
+        [DownloadScope.Inline] = "inline",
+        [DownloadScope.Thumbnail] = "preview/thumb",
+        [DownloadScope.PreviewPdf] = "preview/pdf",
+        [DownloadScope.PreviewPage] = "preview/page",
+    };
+
+    public string CreateUrl(Guid attachmentId, DownloadScope scope = DownloadScope.File)
     {
         var expiresAtUnix = DateTimeOffset.UtcNow.Add(options.Value.UrlTtl).ToUnixTimeSeconds();
-        var signature = Sign(RequireKey(options.Value.DownloadSigningKey, "Attachments:DownloadSigningKey"), attachmentId, expiresAtUnix);
-        return $"/api/attachments/{attachmentId}/file?expires={expiresAtUnix}&sig={signature}";
+        var signature = Sign(RequireKey(options.Value.DownloadSigningKey, "Attachments:DownloadSigningKey"), attachmentId, scope, expiresAtUnix);
+        return $"/api/attachments/{attachmentId}/{RoutesByScope[scope]}?expires={expiresAtUnix}&sig={signature}";
     }
 
-    public bool Validate(Guid attachmentId, long expiresAtUnix, string signature)
+    public bool Validate(Guid attachmentId, DownloadScope scope, long expiresAtUnix, string signature)
     {
         if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresAtUnix)
             return false;
@@ -53,7 +86,7 @@ public class DownloadTokenService(IOptions<AttachmentDownloadOptions> options)
         // затем отставные — ссылка, подписанная до ротации, остаётся валидна до истечения TTL.
         foreach (var key in AllKeys())
         {
-            var expected = Sign(key, attachmentId, expiresAtUnix);
+            var expected = Sign(key, attachmentId, scope, expiresAtUnix);
             if (CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), signatureBytes))
                 return true;
         }
@@ -76,9 +109,9 @@ public class DownloadTokenService(IOptions<AttachmentDownloadOptions> options)
         return key;
     }
 
-    private static string Sign(string key, Guid attachmentId, long expiresAtUnix)
+    private static string Sign(string key, Guid attachmentId, DownloadScope scope, long expiresAtUnix)
     {
-        var payload = $"{attachmentId}:{expiresAtUnix}";
+        var payload = $"{attachmentId}:{scope}:{expiresAtUnix}";
         var hash = HMACSHA256.HashData(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(payload));
         return Convert.ToHexStringLower(hash);
     }
