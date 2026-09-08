@@ -233,7 +233,9 @@ public class LabAnalyteKbRebuildJob(
 
         foreach (var (analyteKey, specimenKbId, displayName) in distinctPairs)
         {
-            await enrichmentRequest.RequestAsync(analyteKey, specimenKbId, displayName, labIndicatorId: null, SystemUserId, force: true, ct);
+            await enrichmentRequest.RequestAsync(
+                analyteKey, specimenKbId, displayName, labIndicatorId: null, SystemUserId,
+                force: true, origin: EnrichmentRequestOrigin.SystemMaintenance, ct: ct);
             run.ReseedRequested++;
         }
 

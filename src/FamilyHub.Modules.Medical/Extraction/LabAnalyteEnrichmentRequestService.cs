@@ -26,16 +26,21 @@ public class LabAnalyteEnrichmentRequestService(
 {
     public async Task RequestAsync(
         string normalizedName, Guid specimenKbId, string sourceDisplayName, Guid? labIndicatorId,
-        Guid requestedByUserId, CancellationToken ct = default) =>
-        await RequestAsync(normalizedName, specimenKbId, sourceDisplayName, labIndicatorId, requestedByUserId, force: false, ct);
+        Guid requestedByUserId, EnrichmentRequestOrigin origin = EnrichmentRequestOrigin.Extraction,
+        CancellationToken ct = default) =>
+        await RequestAsync(
+            normalizedName, specimenKbId, sourceDisplayName, labIndicatorId, requestedByUserId, force: false, origin, ct);
 
     /// <summary>force=true — переобогащение уже существующей KB-записи (см. LabAnalyteKbReenrichJob),
     /// а не первичное обогащение промаха. Дедуп на уровне БД тот же — если для этой пары уже есть
     /// Pending/Running-задача (в т.ч. форсированная другим прогоном reenrich), вторая молча
-    /// становится no-op, как и обычно.</summary>
+    /// становится no-op, как и обычно. origin (см. EnrichmentRequestOrigin) не входит в дедуп-ключ —
+    /// ручной и документный запрос по одному и тому же показателю по-прежнему дедупятся друг с
+    /// другом, не заводят параллельных задач.</summary>
     public async Task RequestAsync(
         string normalizedName, Guid specimenKbId, string sourceDisplayName, Guid? labIndicatorId,
-        Guid requestedByUserId, bool force, CancellationToken ct = default)
+        Guid requestedByUserId, bool force, EnrichmentRequestOrigin origin = EnrichmentRequestOrigin.Extraction,
+        CancellationToken ct = default)
     {
         // Жёсткий гейт (см. class doc) — источник не резолвлен/не уверен, во внешний поиск и в
         // справочник ничего не уходит. Тихий выход, не исключение: вызывающий код (Linking-этап
@@ -57,6 +62,7 @@ public class LabAnalyteEnrichmentRequestService(
             LabIndicatorId = labIndicatorId,
             RequestedByUserId = requestedByUserId,
             Force = force,
+            Origin = origin,
             Status = EnrichmentJobStatus.Pending,
             CreatedAt = DateTime.UtcNow,
         };

@@ -34,6 +34,11 @@ public class LabAnalyteEnrichmentJob
 
     public Guid RequestedByUserId { get; set; }
 
+    /// <summary>Откуда пришёл запрос (см. EnrichmentRequestOrigin) — определяет, проходит ли
+    /// задача дополнительный гейт правдоподобности в LabAnalyteEnrichmentProcessor (только
+    /// ManualEntry). Дефолт Extraction — обратная совместимость существующих вызовов.</summary>
+    public EnrichmentRequestOrigin Origin { get; set; } = EnrichmentRequestOrigin.Extraction;
+
     public EnrichmentJobStatus Status { get; set; } = EnrichmentJobStatus.Pending;
 
     public int Attempts { get; set; }

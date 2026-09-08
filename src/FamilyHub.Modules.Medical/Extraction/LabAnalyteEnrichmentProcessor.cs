@@ -33,6 +33,7 @@ public class LabAnalyteEnrichmentProcessor(
     LabAnalyteKbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
     ILegitimacyGuardService legitimacyGuard,
+    IAnalytePlausibilityGuardService plausibilityGuard,
     IOptions<EnrichmentOptions> options,
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
@@ -70,6 +71,27 @@ public class LabAnalyteEnrichmentProcessor(
                 logger.LogWarning(
                     "LabAnalyteEnrichmentJob {JobId} остановлена проверкой легитимности: {Reason}", job.Id, guardResult.Reason);
                 return;
+            }
+
+            // Гейт «на бред» — ТОЛЬКО для показателей, введённых вручную (см.
+            // EnrichmentRequestOrigin, class doc AnalytePlausibilityGuardService): документное
+            // извлечение уже прошло собственный антигаллюцинационный гейт (имя показателя обязано
+            // встречаться в тексте бланка), у ручного ввода такой перекрёстной проверки нет.
+            if (job.Origin == EnrichmentRequestOrigin.ManualEntry)
+            {
+                var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
+                    .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+                var plausibility = await plausibilityGuard.CheckAsync(job.SourceDisplayName, specimenDisplayName, ct);
+                if (!plausibility.IsPlausible)
+                {
+                    job.Status = EnrichmentJobStatus.Failed;
+                    job.Error = plausibility.Reason;
+                    job.CompletedAt = DateTime.UtcNow;
+                    await db.SaveChangesAsync(ct);
+                    logger.LogWarning(
+                        "LabAnalyteEnrichmentJob {JobId} остановлена гейтом правдоподобности: {Reason}", job.Id, plausibility.Reason);
+                    return;
+                }
             }
 
             // Соседняя задача (другой анализ, тот же показатель+биоматериал) могла успеть наполнить

@@ -30,5 +30,7 @@ public static class PromptCatalog
             "(развёрнутый вопрос, не ключевые слова). Плейсхолдер: {name} — нормализованное название препарата."),
         new("guard.legitimacy-check", "Проверка легитимности/prompt injection — первый шаг КАЖДОГО конвейера " +
             "(см. LegitimacyGuardService), нельзя выключить из админки."),
+        new("analysis.analyte-plausibility", "Гейт «на бред» для показателей, введённых вручную — реальность " +
+            "названия и осмысленность сочетания с источником (см. AnalytePlausibilityGuardService)."),
     ];
 }

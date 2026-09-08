@@ -32,6 +32,10 @@ public static class MedicalModule
         // проверка легитимности/prompt injection до любого другого LLM-вызова этим прогоном.
         services.AddScoped<LegitimacyGuardService>();
         services.AddScoped<ILegitimacyGuardService>(sp => sp.GetRequiredService<LegitimacyGuardService>());
+        // Гейт "на бред" — только для показателей, введённых вручную (EnrichmentRequestOrigin.
+        // ManualEntry), см. class doc AnalytePlausibilityGuardService.
+        services.AddScoped<AnalytePlausibilityGuardService>();
+        services.AddScoped<IAnalytePlausibilityGuardService>(sp => sp.GetRequiredService<AnalytePlausibilityGuardService>());
 
         services.AddScoped<MedkitService>();
         services.AddScoped<MedicationService>();

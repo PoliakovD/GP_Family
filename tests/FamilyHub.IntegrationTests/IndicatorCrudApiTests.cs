@@ -97,6 +97,30 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     }
 
     [Fact]
+    public async Task UpdateIndicator_KbMiss_QueuesEnrichmentJob_WithManualEntryOrigin()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateAnalysisAsync(owner);
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
+            .Content.ReadFromJsonAsync<IndicatorDto>())!;
+
+        var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
+        var response = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}",
+            new UpdateIndicatorRequest(uniqueName, "140", "г/л", _bloodSpecimenId!.Value, "130", "160", null));
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
+
+        var job = await db.LabAnalyteEnrichmentJobs.SingleOrDefaultAsync(j => j.NormalizedName == analyteKey);
+        job.Should().NotBeNull(
+            "правка показателя теперь тоже ставит обогащение справочника в очередь при промахе KB, как и добавление");
+        job!.Origin.Should().Be(EnrichmentRequestOrigin.ManualEntry,
+            "правка — ручной ввод, задача должна пройти дополнительный гейт правдоподобности в процессоре");
+    }
+
+    [Fact]
     public async Task CreateIndicator_DuplicateAnalyteAndSpecimen_ReturnsConflict()
     {
         var owner = ClientAs(FreshTelegramId());

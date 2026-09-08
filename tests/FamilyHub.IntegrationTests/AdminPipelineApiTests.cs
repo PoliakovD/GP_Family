@@ -89,16 +89,17 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
     }
 
     [Fact]
-    public async Task Prompts_SeededMigrationRows_AllFourteenSlotsHaveActiveVersion1()
+    public async Task Prompts_SeededMigrationRows_AllFifteenSlotsHaveActiveVersion1()
     {
         var client = await AuthenticatedClientAsync();
 
         var slots = await client.GetFromJsonAsync<List<PromptSlotDto>>("/api/admin/pipeline/prompts");
 
         // 10 слотов LLM-промптов (AddPipelineConfig) + 3 шаблона поисковых запросов
-        // (AddSearchQueryPrompts) + 1 фильтр легитимности/prompt injection (AddLegitimacyGuardPrompt) —
-        // тот же механизм PipelinePrompt/PromptVersion на все три рода.
-        slots.Should().HaveCount(14);
+        // (AddSearchQueryPrompts) + 1 фильтр легитимности/prompt injection (AddLegitimacyGuardPrompt)
+        // + 1 гейт правдоподобности для ручного ввода (AddAnalytePlausibilityPrompt) — тот же
+        // механизм PipelinePrompt/PromptVersion на все четыре рода.
+        slots.Should().HaveCount(15);
         slots.Should().OnlyContain(s => s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.extract");
         slots.Should().Contain(s => s.Key == "lab-analyte.summarize");
@@ -106,6 +107,7 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         slots.Should().Contain(s => s.Key == "medication.search-query.brave");
         slots.Should().Contain(s => s.Key == "medication.search-query.yandex");
         slots.Should().Contain(s => s.Key == "guard.legitimacy-check");
+        slots.Should().Contain(s => s.Key == "analysis.analyte-plausibility");
     }
 
     [Fact]

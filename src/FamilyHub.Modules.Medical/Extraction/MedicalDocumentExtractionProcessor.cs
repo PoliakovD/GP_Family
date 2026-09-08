@@ -380,7 +380,9 @@ public class MedicalDocumentExtractionProcessor(
             // Дедуп на уровне БД + жёсткий гейт на нерезолвленный источник — оба внутри
             // LabAnalyteEnrichmentRequestService.RequestAsync (единственная точка входа).
             if (lookup.Kind != Kb.KbLookupKind.Hit)
-                await enrichmentRequest.RequestAsync(analyteKey, specimenKbId, entity.DisplayName, null, ownerUserId, ct);
+                await enrichmentRequest.RequestAsync(
+                    analyteKey, specimenKbId, entity.DisplayName, null, ownerUserId,
+                    origin: EnrichmentRequestOrigin.Extraction, ct: ct);
         }
 
         job.Stage = ExtractionStage.Summarizing;

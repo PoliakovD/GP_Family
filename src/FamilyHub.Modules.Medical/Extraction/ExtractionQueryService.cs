@@ -284,9 +284,13 @@ public class ExtractionQueryService(
     /// <summary>Правка показателя вручную (ошибка OCR) — только владелец мед-записи. Ref-поля,
     /// присланные в запросе, становятся новым "референсом с бланка" (RefSource.Blank) — ручная
     /// правка семантически заменяет то, что распознала модель, тем же приоритетом, что и печатный
-    /// бланк; KB/расчётный каскад заново не гоняется (пользователь правит конкретные цифры, а не
-    /// просит переопределить справочником). Flag пересчитывается тем же компаратором, что и при
-    /// автораспознавании — не дублируем пороговую логику.</summary>
+    /// бланк; KB/расчётный каскад заново не гоняется для САМОГО этого показателя (пользователь
+    /// правит конкретные цифры, а не просит переопределить справочником). Flag пересчитывается
+    /// тем же компаратором, что и при автораспознавании — не дублируем пороговую логику.
+    ///
+    /// В СПРАВОЧНИК же обогащение теперь ставится в очередь при промахе, тем же путём, что и
+    /// CreateIndicatorAsync (см. её class doc) — исправленное после правки название могло увести
+    /// показатель на пару (AnalyteKey, SpecimenKbId), которой ещё нет в KB.</summary>
     public async Task<UpdateIndicatorResult> UpdateIndicatorAsync(
         Guid indicatorId, Guid userId, UpdateIndicatorRequest request, CancellationToken ct = default)
     {
@@ -301,9 +305,11 @@ public class ExtractionQueryService(
         if (analyteKey.Length == 0) analyteKey = indicator.AnalyteKey;
 
         // Источник (пересборка enrich-пайплайна) — должен существовать в общем справочнике
-        // (сентинел "не определено" — тоже валидная строка, разрешён). Ручная правка НИКОГДА не
-        // ставит обогащение в очередь (жёсткое требование) — только перепривязка к уже
-        // существующей строке KB, даже если выбор явно не подходит показателю.
+        // (сентинел "не определено" — тоже валидная строка, разрешён). Правка может как
+        // перепривязать к уже существующей строке KB, так и (при промахе) поставить обогащение в
+        // очередь ниже — в обоих случаях выбор источника пользователя не проверяется на
+        // "подходит ли он по смыслу показателю" здесь: это делает гейт правдоподобности внутри
+        // самого фонового обогащения (AnalytePlausibilityGuardService), не эта проверка.
         if (!await db.GlobalSpecimensKb.AnyAsync(s => s.Id == request.SpecimenKbId, ct))
             return UpdateIndicatorResult.NotFound;
 
@@ -338,6 +344,15 @@ public class ExtractionQueryService(
         indicator.RefSource = refSource;
 
         await db.SaveChangesAsync(ct);
+
+        // Промах справочника по (показатель, источник) после правки — ставим обогащение в
+        // очередь, тем же единственным входом, что и CreateIndicatorAsync (см. её class doc).
+        var lookup = await analyteKbLookup.LookupAsync(analyteKey, request.SpecimenKbId, ct);
+        if (lookup.Kind != Kb.KbLookupKind.Hit)
+            await enrichmentRequest.RequestAsync(
+                analyteKey, request.SpecimenKbId, displayName, indicator.Id, userId,
+                origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+
         return UpdateIndicatorResult.Success;
     }
 
@@ -370,7 +385,7 @@ public class ExtractionQueryService(
         if (analyteKey.Length == 0) return (CreateIndicatorResult.NotFound, null);
 
         // Источник должен существовать в общем справочнике (сентинел "не определено" — тоже
-        // валидная строка). Ручное добавление НЕ ставит обогащение в очередь (жёсткое требование).
+        // валидная строка). Обогащение справочника ставится в очередь ниже, при промахе KB.
         var specimenRow = await db.GlobalSpecimensKb.AsNoTracking()
             .Where(s => s.Id == request.SpecimenKbId).Select(s => new { s.Id, s.DisplayName }).FirstOrDefaultAsync(ct);
         if (specimenRow is null) return (CreateIndicatorResult.NotFound, null);
@@ -420,7 +435,9 @@ public class ExtractionQueryService(
         // нерезолвленный источник и дедуп — внутри RequestAsync, не здесь.
         var lookup = await analyteKbLookup.LookupAsync(analyteKey, specimenRow.Id, ct);
         if (lookup.Kind != Kb.KbLookupKind.Hit)
-            await enrichmentRequest.RequestAsync(analyteKey, specimenRow.Id, displayName, indicator.Id, userId, ct);
+            await enrichmentRequest.RequestAsync(
+                analyteKey, specimenRow.Id, displayName, indicator.Id, userId,
+                origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
 
         return (CreateIndicatorResult.Success, ToDto(indicator, specimenRow.DisplayName));
     }

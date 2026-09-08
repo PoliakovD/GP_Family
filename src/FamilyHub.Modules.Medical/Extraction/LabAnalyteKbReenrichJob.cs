@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
@@ -52,7 +53,8 @@ public class LabAnalyteKbReenrichJob(
         foreach (var row in stale)
         {
             await enrichmentRequest.RequestAsync(
-                row.NormalizedName, row.SpecimenKbId, row.DisplayName, labIndicatorId: null, SystemUserId, force: true, ct);
+                row.NormalizedName, row.SpecimenKbId, row.DisplayName, labIndicatorId: null, SystemUserId,
+                force: true, origin: EnrichmentRequestOrigin.SystemMaintenance, ct: ct);
         }
 
         logger.LogInformation(
