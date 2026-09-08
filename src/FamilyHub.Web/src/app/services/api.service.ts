@@ -370,11 +370,13 @@ export class ApiService {
   /** Последнее значение по каждому (показателю, источнику) среди своих записей — /health/indicators. */
   getMyIndicators = () => this.get<MyIndicatorSummary[]>('/api/indicators');
 
-  /** specimenKbId — query (не path), см. ExtractionEndpoints: второй ключ группировки не
-   * помещается в path-сегмент. */
-  getIndicatorHistory = (analyteKey: string, specimenKbId: string) =>
+  /** specimenKbId/dependentId/targetUserId — query (не path), см. ExtractionEndpoints: ключ
+   * группировки не помещается в path-сегмент. dependentId/targetUserId оба не переданы — "Я"
+   * (см. MyIndicatorSummary.familyDependentId/targetUserId — передавать значения ИМЕННО той
+   * строки сводки, по которой кликнули, иначе история смешает показатели разных членов семьи). */
+  getIndicatorHistory = (analyteKey: string, specimenKbId: string, dependentId?: string | null, targetUserId?: string | null) =>
     this.get<IndicatorHistoryPoint[]>(
-      `/api/indicators/${encodeURIComponent(analyteKey)}${buildQuery({ specimenKbId })}`,
+      `/api/indicators/${encodeURIComponent(analyteKey)}${buildQuery({ specimenKbId, dependentId, targetUserId })}`,
     );
 
   /** Персонализированная статья справочника — панель/шторка справки по клику на показатель

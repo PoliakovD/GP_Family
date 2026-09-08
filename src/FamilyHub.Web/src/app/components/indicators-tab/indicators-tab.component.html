@@ -3,6 +3,16 @@
     <div class="alert-danger mb-2">{{ error }}</div>
   }
 
+  @if (!loading && items.length > 0 && patientFilterOptions.length > 2) {
+    <div class="seg mb-3" style="flex-wrap: wrap;">
+      @for (opt of patientFilterOptions; track opt.key) {
+        <button type="button" class="seg-opt" [class.active]="patientFilterKey === opt.key" (click)="setPatientFilter(opt.key)">
+          {{ opt.label }}
+        </button>
+      }
+    </div>
+  }
+
   @if (loading) {
     <app-loading-spinner />
   } @else if (items.length === 0) {
@@ -11,23 +21,27 @@
       и они появятся здесь.
     </p>
   } @else {
-    @for (item of items; track item.analyteKey + ':' + item.specimenKbId) {
+    @for (item of filteredItems; track item.analyteKey + ':' + item.specimenKbId + ':' + itemPatientKey(item)) {
       <div class="card mb-2 card-clickable" (click)="openDetail(item)">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>
             <strong class="card-title">{{ item.displayName }}</strong>
-            <div class="card-meta">{{ specimenLabel(item) }} · {{ item.lastRecordDate }}</div>
+            <div class="card-meta">
+              {{ item.patientName }} · {{ specimenLabel(item) }} · {{ item.lastRecordDate }}
+            </div>
           </div>
           <div [class]="flagClass(item.flag)" style="font-size:15px;font-weight:600;white-space:nowrap">
             {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
           </div>
         </div>
       </div>
+    } @empty {
+      <p class="muted">У этого пациента пока нет показателей.</p>
     }
   }
 
   <app-bottom-sheet
-    [title]="selected ? selected.displayName + ' (' + specimenLabel(selected) + ')' : 'Показатель'"
+    [title]="selected ? selected.displayName + ' (' + specimenLabel(selected) + ') — ' + selected.patientName : 'Показатель'"
     [open]="detailOpen"
     (closed)="closeDetail()"
   >

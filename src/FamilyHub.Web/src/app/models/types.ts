@@ -487,7 +487,10 @@ export interface IndicatorHistoryPoint {
     medicalRecordId: string;
 }
 
-/** Последнее значение по каждому (показателю, источнику) среди СВОИХ записей (GET /api/indicators). */
+/** Последнее значение по каждому (показателю, источнику, ПАЦИЕНТУ) среди СВОИХ записей
+ * (GET /api/indicators) — familyDependentId/targetUserId оба null означает "Я"; передавать их же
+ * в GET /api/indicators/{analyteKey}, чтобы история строилась по тому же человеку, не смешивала
+ * показатели разных членов семьи (см. class doc LabIndicator.FamilyDependentId на бэкенде). */
 export interface MyIndicatorSummary {
     analyteKey: string;
     displayName: string;
@@ -497,6 +500,9 @@ export interface MyIndicatorSummary {
     unit: string | null;
     flag: number; // IndicatorFlag
     lastRecordDate: string;
+    familyDependentId: string | null;
+    targetUserId: string | null;
+    patientName: string;
 }
 
 /** Один источник в результате поиска по общему справочнику (GET /api/specimens/search) —

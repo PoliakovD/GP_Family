@@ -154,11 +154,13 @@ public class ExtractionQueryService(
             summarized.Summary.PlainSummary, summarized.Summary.Deviations, summarized.Summary.QuestionsForDoctor, summarized.Summary.Disclaimer));
     }
 
-    /// <summary>Последнее значение по каждому (показатель, источник) среди СВОИХ записей
+    /// <summary>Последнее значение по каждому (показатель, источник, ПАЦИЕНТ) среди СВОИХ записей
     /// пользователя (владелец) — расшаренные чужие записи сюда не входят, "мои показатели" в
-    /// буквальном смысле. SpecimenKbId — часть ключа группировки (пересборка enrich-пайплайна):
-    /// лейкоциты крови и мочи, а также два разных источника вне общего набора (ЭКГ, УЗИ) не
-    /// должны схлопнуться в одну строку.</summary>
+    /// буквальном смысле "загруженные мной". SpecimenKbId — часть ключа группировки (пересборка
+    /// enrich-пайплайна): лейкоциты крови и мочи не должны схлопнуться в одну строку.
+    /// FamilyDependentId/TargetUserId — ТАК ЖЕ обязательная часть ключа: без неё показатели РАЗНЫХ
+    /// членов семьи (например, несколько человек сдавали АЛТ) схлопывались в одну строку/график —
+    /// реальный баг, см. class doc LabIndicator.FamilyDependentId.</summary>
     public async Task<List<MyIndicatorSummary>> GetMyIndicatorsAsync(Guid userId, CancellationToken ct = default)
     {
         var all = await db.LabIndicators.AsNoTracking()
@@ -166,24 +168,30 @@ public class ExtractionQueryService(
             .ToListAsync(ct);
 
         var latest = all
-            .GroupBy(i => (i.AnalyteKey, i.SpecimenKbId))
+            .GroupBy(i => (i.FamilyDependentId, i.TargetUserId, i.AnalyteKey, i.SpecimenKbId))
             .Select(g => g.OrderByDescending(i => i.RecordDate).First())
             .ToList();
 
         var specimenNames = await ResolveSpecimenNamesAsync(latest.Select(i => i.SpecimenKbId), ct);
+        var patientNames = await PatientIdentityResolver.ResolvePatientNamesAsync(
+            db, latest.Select(i => (i.FamilyDependentId, i.TargetUserId, i.OwnerUserId)), ct);
+
         return latest
             .Select(i => new MyIndicatorSummary(
                 i.AnalyteKey, i.DisplayName, i.SpecimenKbId, specimenNames.GetValueOrDefault(i.SpecimenKbId),
-                i.ValueRaw, i.Unit, i.Flag, i.RecordDate))
+                i.ValueRaw, i.Unit, i.Flag, i.RecordDate,
+                i.FamilyDependentId, i.TargetUserId,
+                patientNames.GetValueOrDefault((i.FamilyDependentId, i.TargetUserId), "Я")))
             .OrderBy(s => s.DisplayName)
             .ToList();
     }
 
     public async Task<List<IndicatorHistoryPoint>> GetHistoryAsync(
-        Guid userId, string analyteKey, Guid specimenKbId, CancellationToken ct = default)
+        Guid userId, string analyteKey, Guid specimenKbId, Guid? familyDependentId, Guid? targetUserId, CancellationToken ct = default)
     {
         var items = await db.LabIndicators.AsNoTracking()
-            .Where(i => i.OwnerUserId == userId && i.AnalyteKey == analyteKey && i.SpecimenKbId == specimenKbId)
+            .Where(i => i.OwnerUserId == userId && i.AnalyteKey == analyteKey && i.SpecimenKbId == specimenKbId
+                && i.FamilyDependentId == familyDependentId && i.TargetUserId == targetUserId)
             .OrderBy(i => i.RecordDate)
             .ToListAsync(ct);
 
@@ -251,10 +259,12 @@ public class ExtractionQueryService(
     }
 
     /// <summary>Тренд показателя для КОНКРЕТНОЙ записи (в отличие от GetHistoryAsync выше, который
-    /// строго "свои" — этот работает и для расшаренной чужой записи). Двойной фильтр обязателен:
-    /// владелец записи (все точки тренда — один и тот же человек, идентичность не размывается) И
-    /// видимость КАЖДОЙ точки лично зрителю — без второго условия тренд по одной расшаренной записи
-    /// обошёл бы точечное скрытие MedicalRecordHidden (L2), см. риск Р5 плана редизайна.</summary>
+    /// строго "свои" — этот работает и для расшаренной чужой записи). Тройной фильтр обязателен:
+    /// владелец записи + ТА ЖЕ идентичность пациента (FamilyDependentId/TargetUserId — иначе точки
+    /// тренда РАЗНЫХ членов семьи с одинаковым показателем смешались бы, см. class doc
+    /// LabIndicator.FamilyDependentId) И видимость КАЖДОЙ точки лично зрителю — без последнего
+    /// условия тренд по одной расшаренной записи обошёл бы точечное скрытие MedicalRecordHidden
+    /// (L2), см. риск Р5 плана редизайна.</summary>
     public async Task<(ExtractionQueryResult Result, List<IndicatorHistoryPoint> Items)> GetRecordIndicatorHistoryAsync(
         Guid recordId, Guid indicatorId, Guid userId, CancellationToken ct = default)
     {
@@ -274,6 +284,7 @@ public class ExtractionQueryService(
         var items = await db.LabIndicators.AsNoTracking()
             .Where(i => i.OwnerUserId == indicator.OwnerUserId && i.AnalyteKey == indicator.AnalyteKey
                 && i.SpecimenKbId == indicator.SpecimenKbId
+                && i.FamilyDependentId == indicator.FamilyDependentId && i.TargetUserId == indicator.TargetUserId
                 && visibleIds.Contains(i.MedicalRecordId))
             .OrderBy(i => i.RecordDate)
             .ToListAsync(ct);
@@ -374,7 +385,9 @@ public class ExtractionQueryService(
         Guid recordId, Guid userId, CreateIndicatorRequest request, CancellationToken ct = default)
     {
         var record = await db.MedicalRecords.AsNoTracking()
-            .Where(r => r.Id == recordId).Select(r => new { r.Id, r.OwnerUserId }).FirstOrDefaultAsync(ct);
+            .Where(r => r.Id == recordId)
+            .Select(r => new { r.Id, r.OwnerUserId, r.FamilyDependentId, r.TargetUserId })
+            .FirstOrDefaultAsync(ct);
         if (record is null) return (CreateIndicatorResult.NotFound, null);
         if (record.OwnerUserId != userId) return (CreateIndicatorResult.Forbidden, null);
 
@@ -413,6 +426,8 @@ public class ExtractionQueryService(
             MedicalRecordId = recordId,
             RecordDate = recordDate,
             OwnerUserId = userId,
+            FamilyDependentId = record.FamilyDependentId,
+            TargetUserId = record.TargetUserId,
             AnalyteKey = analyteKey,
             DisplayName = displayName,
             Flag = flag,

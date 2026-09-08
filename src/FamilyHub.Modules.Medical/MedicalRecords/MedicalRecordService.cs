@@ -298,7 +298,9 @@ public class MedicalRecordService(
         return result;
     }
 
-    private static string FormatName(string? firstName, string? lastName, string? middleName)
+    /// <summary>internal, не private — переиспользуется PatientIdentityResolver.ResolvePatientNamesAsync
+    /// (та же формула форматирования имени, ключ там — идентичность пациента, не Id записи).</summary>
+    internal static string FormatName(string? firstName, string? lastName, string? middleName)
     {
         var parts = new[] { lastName, firstName, middleName }.Where(p => !string.IsNullOrWhiteSpace(p));
         return string.Join(' ', parts);

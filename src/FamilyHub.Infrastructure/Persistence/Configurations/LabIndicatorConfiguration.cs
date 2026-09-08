@@ -29,9 +29,11 @@ public class LabIndicatorConfiguration : IEntityTypeConfiguration<LabIndicator>
         // что у KbAnalyteId выше) — soft-ссылка.
 
         // Тренд/поиск показателя ("мои показатели", GET /api/indicators/{analyteKey}) —
-        // SpecimenKbId в составе ключа, иначе одноимённые показатели из разных источников
-        // (лейкоциты крови и мочи) слились бы на одном графике.
-        builder.HasIndex(i => new { i.OwnerUserId, i.AnalyteKey, i.SpecimenKbId });
+        // FamilyDependentId/TargetUserId в составе ключа ТАК ЖЕ обязательны, как SpecimenKbId:
+        // без него одноимённые показатели из разных источников (лейкоциты крови и мочи) слились бы
+        // на одном графике; без FamilyDependentId/TargetUserId — показатели РАЗНЫХ людей одной
+        // семьи слились бы точно так же (см. class doc LabIndicator.FamilyDependentId).
+        builder.HasIndex(i => new { i.OwnerUserId, i.FamilyDependentId, i.TargetUserId, i.AnalyteKey, i.SpecimenKbId });
 
         // Upsert-мерж при повторном «Распознать» на записи с новым файлом (см.
         // MedicalDocumentExtractionProcessor) — находит существующую строку по этому же ключу.

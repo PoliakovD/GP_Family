@@ -35,9 +35,15 @@ public record PatientContextDto(int? AgeYears, Gender? Sex);
 public record IndicatorArticleResponse(
     IndicatorDto Indicator, PatientContextDto Patient, int? MatchedRefRangeIndex, KbAnalyteCard? Article, bool HistoryAvailable);
 
+/// <summary>FamilyDependentId/TargetUserId — идентичность пациента (оба null = "Я", сам
+/// загрузивший) — обязательные параметры для GET /api/indicators/{analyteKey}, чтобы история
+/// строилась по ТОМУ ЖЕ человеку, что и эта строка сводки (см. class doc
+/// LabIndicator.FamilyDependentId — без них показатели разных членов семьи схлопывались в одну
+/// строку/график). PatientName — уже отрезолвленное отображаемое имя, фронт ничего не резолвит сам.</summary>
 public record MyIndicatorSummary(
     string AnalyteKey, string DisplayName, Guid SpecimenKbId, string? SpecimenDisplayName, string ValueRaw, string? Unit,
-    IndicatorFlag Flag, DateOnly LastRecordDate);
+    IndicatorFlag Flag, DateOnly LastRecordDate,
+    Guid? FamilyDependentId, Guid? TargetUserId, string PatientName);
 
 /// <summary>Форма MedicalRecord.SummaryJson, которую пишет LabSummarizer — используется только
 /// для десериализации на чтении.</summary>

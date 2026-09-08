@@ -24,8 +24,21 @@ public class LabIndicator
     /// <summary>Денормализация даты записи — тренд по показателю строится без джойна к MedicalRecords.</summary>
     public DateOnly RecordDate { get; set; }
 
-    /// <summary>Владелец записи (не FK, как и MedicalRecord.OwnerUserId) — ключ выборки "мои показатели".</summary>
+    /// <summary>Владелец записи (не FK, как и MedicalRecord.OwnerUserId) — кто физически загрузил,
+    /// НЕ пациент (см. FamilyDependentId/TargetUserId ниже) — ключ выборки "мои записи", а не "мои
+    /// показатели" в смысле "показатели обо мне".</summary>
     public Guid OwnerUserId { get; set; }
+
+    /// <summary>Денормализация MedicalRecord.FamilyDependentId — ЧЕЙ это показатель (пациент), а не
+    /// кто его загрузил (см. OwnerUserId выше). Вместе с TargetUserId ниже — часть ключа
+    /// группировки "мои показатели"/тренда: без него результаты разных членов семьи (например,
+    /// несколько человек сдавали АЛТ) схлопывались в один график/строку списка, что медицински
+    /// вводит в заблуждение. Ровно одно из (FamilyDependentId, TargetUserId) заполнено, либо оба
+    /// null — "сам загрузивший" (тот же принцип взаимоисключения, что на MedicalRecord).</summary>
+    public Guid? FamilyDependentId { get; set; }
+
+    /// <summary>Денормализация MedicalRecord.TargetUserId — см. FamilyDependentId выше.</summary>
+    public Guid? TargetUserId { get; set; }
 
     /// <summary>Нормализованное имя показателя (см. LabAnalyteNormalizer) — ключ группировки,
     /// поиска и тренда. "Гемоглобин (HGB), г/л" → "гемоглобин".</summary>

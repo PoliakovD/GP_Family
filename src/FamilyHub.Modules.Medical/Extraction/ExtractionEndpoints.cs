@@ -97,11 +97,13 @@ public static class ExtractionEndpoints
             Results.Ok(await service.GetMyIndicatorsAsync(currentUser.UserId, ct)));
 
         // SpecimenKbId в query (не в path, UX-редизайн) — второй ключ группировки; без него
-        // история "лейкоцитов" смешала бы кровь и мочу.
+        // история "лейкоцитов" смешала бы кровь и мочу. dependentId/targetUserId — третий ключ
+        // (идентичность пациента, см. class doc LabIndicator.FamilyDependentId) — те же имена и
+        // семантика, что у GET /api/medical-records (MedicalRecordEndpoints), оба отсутствуют = "Я".
         indicators.MapGet("/{analyteKey}", async (
-            string analyteKey, Guid specimenKbId,
+            string analyteKey, Guid specimenKbId, Guid? dependentId, Guid? targetUserId,
             ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
-            Results.Ok(await service.GetHistoryAsync(currentUser.UserId, analyteKey, specimenKbId, ct)));
+            Results.Ok(await service.GetHistoryAsync(currentUser.UserId, analyteKey, specimenKbId, dependentId, targetUserId, ct)));
 
         // Правка показателя вручную (ошибка OCR) — только владелец записи.
         indicators.MapPut("/{id:guid}", async (

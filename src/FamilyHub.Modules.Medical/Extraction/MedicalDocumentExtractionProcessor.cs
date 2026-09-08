@@ -221,6 +221,8 @@ public class MedicalDocumentExtractionProcessor(
         var recordId = record.Id;
         var ownerUserId = record.OwnerUserId;
         var recordDate = record.RecordDate;
+        var familyDependentId = record.FamilyDependentId;
+        var targetUserId = record.TargetUserId;
 
         // Второй проход коррекции OCR — ДО нормализации/сопоставления со справочником: смешение
         // кириллицы/латиницы и КАПС в сыром имени снижают триграммную схожесть в pg_trgm-каскаде
@@ -344,6 +346,8 @@ public class MedicalDocumentExtractionProcessor(
                     Id = Guid.NewGuid(),
                     MedicalRecordId = recordId,
                     OwnerUserId = ownerUserId,
+                    FamilyDependentId = familyDependentId,
+                    TargetUserId = targetUserId,
                     AnalyteKey = analyteKey,
                     SpecimenKbId = specimenKbId,
                     Position = nextPosition++,
