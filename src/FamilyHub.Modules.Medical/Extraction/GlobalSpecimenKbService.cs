@@ -1,9 +1,11 @@
 using System.Text.Json;
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Prompts;
+using FamilyHub.Modules.Medical.Kb;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using static FamilyHub.Infrastructure.LmStudio.LmStudioPayloadReader;
@@ -22,6 +24,12 @@ public enum SpecimenRenameResult { Ok, NotFound, Conflict }
 /// поиска/UserSpecimen (§3 плана: удаление справочника не должно оставлять висячие ссылки).
 /// Sentinel — попытка удалить SpecimenContextIds.Unresolved, системную запись "источник не определён".</summary>
 public enum SpecimenDeleteResult { Ok, NotFound, InUse, Sentinel }
+
+/// <summary>Мердж двух источников (ручная чистка дублей из админки, например "Эякулят" +
+/// "Физические свойства Эякулят") — SameId, если прислали одну и ту же строку победителем и
+/// проигравшим; Sentinel — попытка сделать проигравшим SpecimenContextIds.Unresolved (сентинел
+/// никогда не может быть проигравшим — он и так фолбэк для всех, кому некуда деться).</summary>
+public enum SpecimenMergeResult { Ok, NotFound, SameId, Sentinel }
 
 /// <summary>Один источник в результате поиска по общему справочнику (GET /api/specimens/search) —
 /// фронт строит по этому список автоподсказки вместо прежнего захардкоженного select'а по 6
@@ -45,7 +53,8 @@ file sealed class GlobalSpecimenSearchRow
 /// одного вызова на документ и переиспользует найденный/зарегистрированный здесь Id напрямую).
 /// </summary>
 public class GlobalSpecimenKbService(
-    AppDbContext db, ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<GlobalSpecimenKbService> logger)
+    AppDbContext db, ILmStudioJsonClient client, IPromptProvider promptProvider,
+    AdminCatalogService adminCatalog, ILogger<GlobalSpecimenKbService> logger)
 {
     /// <summary>Тот же порог, что раньше был в UserSpecimenService — предложенное моделью написание
     /// не должно быть другим понятием, а лишь поправленной орфографией введённого.</summary>
@@ -75,9 +84,30 @@ public class GlobalSpecimenKbService(
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
-    /// <summary>Прямой поиск без LLM — уже провалидированное кем-то название находится бесплатно.</summary>
-    public async Task<GlobalSpecimenKb?> FindAsync(string normalizedName, CancellationToken ct = default) =>
-        await db.GlobalSpecimensKb.AsNoTracking().FirstOrDefaultAsync(s => s.NormalizedName == normalizedName, ct);
+    /// <summary>Прямой поиск без LLM — уже провалидированное кем-то название находится бесплатно.
+    /// Точное совпадение по NormalizedName — обычный LINQ (работает и на SQLite юнит-тестов);
+    /// алиас-фолбэк — Postgres text[] ANY(), недоступно вне Postgres (IsNpgsql() — тот же приём,
+    /// что AccountService/MembershipService), поэтому пропускается в тестовом окружении: там
+    /// алиасов и не бывает, поле вне EF-модели (см. class doc GlobalSpecimenKb.Aliases). Алиас
+    /// появляется только через мердж дублей из админки (см. MergeAsync) — то же "грязное" название
+    /// после следующего OCR находит победителя вместо повторного дубля.</summary>
+    public async Task<GlobalSpecimenKb?> FindAsync(string normalizedName, CancellationToken ct = default)
+    {
+        var exact = await db.GlobalSpecimensKb.AsNoTracking().FirstOrDefaultAsync(s => s.NormalizedName == normalizedName, ct);
+        if (exact is not null || !db.Database.IsNpgsql()) return exact;
+
+        // Entity-typed FromSqlInterpolated (тот же приём, что AccountService/MembershipService) —
+        // не отдельный row-DTO + Database.SqlQuery<T>: тот вариант падал внутри
+        // NavigationExpandingExpressionVisitor на этой версии EF Core. SELECT * тянет и
+        // игнорируемый Aliases из физической колонки — EF просто не мапит его, как и везде,
+        // где колонка вне модели.
+        return await db.GlobalSpecimensKb
+            .FromSqlInterpolated($"""
+                SELECT * FROM kb.global_specimens_kb WHERE {normalizedName} = ANY("Aliases") LIMIT 1
+                """)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct);
+    }
 
     /// <summary>Поиск по общему справочнику для автоподсказки при ручном выборе/правке источника
     /// показателя (GET /api/specimens/search) — тот же pg_trgm-приём, что KbAnalyteCatalogService,
@@ -232,6 +262,187 @@ public class GlobalSpecimenKbService(
 
         await db.GlobalSpecimensKb.Where(s => s.Id == id).ExecuteDeleteAsync(ct);
         return SpecimenDeleteResult.Ok;
+    }
+
+    /// <summary>
+    /// Мердж двух дублирующих источников из админки (реальный кейс: "Эякулят"/"Физические
+    /// свойства Эякулят"/"Микроскопическое исследование Эякулят" — три строки вместо одной, см.
+    /// SpecimenResolver про причину появления таких дублей) — редиректит ВСЕ ссылки на
+    /// проигравшего (тот же набор из пяти таблиц, что и DeleteAsync проверяет на InUse) на
+    /// победителя, разрешая коллизии уникальных ключей той же эвристикой "свежее/непустое
+    /// побеждает", что LabAnalyteKbRebuildJob уже применяет при пересборке, и добавляет старое
+    /// название в Aliases победителя — то же "грязное" название после следующего OCR найдёт
+    /// победителя вместо повторного дубля (см. FindAsync).
+    /// </summary>
+    public async Task<SpecimenMergeResult> MergeAsync(Guid loserId, Guid winnerId, CancellationToken ct = default)
+    {
+        if (loserId == winnerId) return SpecimenMergeResult.SameId;
+        if (loserId == SpecimenContextIds.Unresolved) return SpecimenMergeResult.Sentinel;
+
+        var loser = await db.GlobalSpecimensKb.AsNoTracking().FirstOrDefaultAsync(s => s.Id == loserId, ct);
+        var winnerExists = await db.GlobalSpecimensKb.AnyAsync(s => s.Id == winnerId, ct);
+        if (loser is null || !winnerExists) return SpecimenMergeResult.NotFound;
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        await MergeEnrichmentJobsAsync(loserId, winnerId, ct);
+        await MergeLabIndicatorsAsync(loserId, winnerId, ct);
+        await MergeLabAnalytesKbAsync(loserId, winnerId, ct);
+        await MergeSearchCacheAsync(loserId, winnerId, ct);
+        await MergeUserSpecimensAsync(loserId, winnerId, ct);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE kb.global_specimens_kb
+            SET "Aliases" = ARRAY(SELECT DISTINCT unnest("Aliases" || ARRAY[{loser.NormalizedName}]))
+            WHERE "Id" = {winnerId}
+            """, ct);
+
+        await db.GlobalSpecimensKb.Where(s => s.Id == loserId).ExecuteDeleteAsync(ct);
+
+        await tx.CommitAsync(ct);
+        logger.LogInformation(
+            "Источники объединены: «{Loser}» ({LoserId}) → «{Winner}» ({WinnerId}).", loser.DisplayName, loserId, winnerId);
+        return SpecimenMergeResult.Ok;
+    }
+
+    /// <summary>Pending/Running задачи под частичным уникальным индексом (NormalizedName,
+    /// SpecimenKbId) — после редиректа на победителя коллизия с уже идущей там же задачей
+    /// нарушила бы индекс. "Мягкая" отмена (Failed + причина), не удаление — сохраняет историю.
+    /// Завершённые задачи (Completed/Failed/Skipped) индексом не ограничены — редиректятся
+    /// свободно, дубли безвредны.</summary>
+    private async Task MergeEnrichmentJobsAsync(Guid loserId, Guid winnerId, CancellationToken ct)
+    {
+        var active = await db.LabAnalyteEnrichmentJobs
+            .Where(j => (j.SpecimenKbId == loserId || j.SpecimenKbId == winnerId) &&
+                        (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running))
+            .ToListAsync(ct);
+
+        foreach (var group in active.GroupBy(j => j.NormalizedName))
+        {
+            var ordered = group.OrderByDescending(j => j.CreatedAt).ToList();
+            foreach (var loserJob in ordered.Skip(1))
+            {
+                loserJob.Status = EnrichmentJobStatus.Failed;
+                loserJob.Error = "Отменено объединением источников в справочнике.";
+                loserJob.CompletedAt = DateTime.UtcNow;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        await db.LabAnalyteEnrichmentJobs.Where(j => j.SpecimenKbId == loserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.SpecimenKbId, winnerId), ct);
+    }
+
+    /// <summary>Уникальный ключ (MedicalRecordId, AnalyteKey, SpecimenKbId) — после редиректа две
+    /// строки ОДНОЙ записи могли схлопнуться на одну пару; побеждает непустое ValueRaw, при
+    /// равенстве — меньший Position (та же эвристика, что LabAnalyteKbRebuildJob.RecalculateIndicatorsAsync).</summary>
+    private async Task MergeLabIndicatorsAsync(Guid loserId, Guid winnerId, CancellationToken ct)
+    {
+        var rows = await db.LabIndicators
+            .Where(i => i.SpecimenKbId == loserId || i.SpecimenKbId == winnerId)
+            .ToListAsync(ct);
+
+        foreach (var group in rows.GroupBy(i => (i.MedicalRecordId, i.AnalyteKey)))
+        {
+            var loserRow = group.FirstOrDefault(i => i.SpecimenKbId == loserId);
+            var winnerRow = group.FirstOrDefault(i => i.SpecimenKbId == winnerId);
+            if (loserRow is null) continue;
+
+            if (winnerRow is null)
+            {
+                loserRow.SpecimenKbId = winnerId;
+                continue;
+            }
+
+            var keepWinner = !string.IsNullOrWhiteSpace(winnerRow.ValueRaw)
+                || string.IsNullOrWhiteSpace(loserRow.ValueRaw)
+                || winnerRow.Position <= loserRow.Position;
+            db.LabIndicators.Remove(keepWinner ? loserRow : winnerRow);
+            if (!keepWinner) loserRow.SpecimenKbId = winnerId;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Уникальный ключ (NormalizedName, SpecimenKbId) — после редиректа два разных
+    /// показателя (один заведённый под каждым из сливаемых источников) с тем же именем
+    /// схлопнутся; настоящий мердж строк (не просто выбор одной), переиспользует
+    /// AdminCatalogService.MergeLabAnalytesAsync — та же логика, что и публичный мердж
+    /// показателей из админки (редирект LabIndicators.KbAnalyteId + union Aliases).</summary>
+    private async Task MergeLabAnalytesKbAsync(Guid loserId, Guid winnerId, CancellationToken ct)
+    {
+        var rows = await db.GlobalLabAnalytesKb
+            .Where(k => k.SpecimenKbId == loserId || k.SpecimenKbId == winnerId)
+            .Select(k => new { k.Id, k.NormalizedName, k.SpecimenKbId, k.UpdatedAt })
+            .ToListAsync(ct);
+
+        foreach (var group in rows.GroupBy(k => k.NormalizedName))
+        {
+            var loserRow = group.FirstOrDefault(k => k.SpecimenKbId == loserId);
+            var winnerRow = group.FirstOrDefault(k => k.SpecimenKbId == winnerId);
+            if (loserRow is null) continue;
+
+            if (winnerRow is null)
+            {
+                await db.GlobalLabAnalytesKb.Where(k => k.Id == loserRow.Id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(k => k.SpecimenKbId, winnerId), ct);
+                continue;
+            }
+
+            // Свежая запись — победитель содержательно (богаче/новее данные), проигравшая
+            // строка сливается в неё, не наоборот.
+            var (survivorId, mergedId) = winnerRow.UpdatedAt >= loserRow.UpdatedAt
+                ? (winnerRow.Id, loserRow.Id)
+                : (loserRow.Id, winnerRow.Id);
+            await adminCatalog.MergeLabAnalytesAsync(mergedId, survivorId, ct);
+        }
+    }
+
+    /// <summary>Уникальный ключ (NormalizedName, SpecimenKbId) — свежий LastUpdatedAt побеждает
+    /// (та же эвристика, что LabAnalyteKbRebuildJob.RekeySearchCacheAsync).</summary>
+    private async Task MergeSearchCacheAsync(Guid loserId, Guid winnerId, CancellationToken ct)
+    {
+        var rows = await db.LabAnalyteSearchCaches
+            .Where(c => c.SpecimenKbId == loserId || c.SpecimenKbId == winnerId)
+            .ToListAsync(ct);
+
+        foreach (var group in rows.GroupBy(c => c.NormalizedName))
+        {
+            var loserRow = group.FirstOrDefault(c => c.SpecimenKbId == loserId);
+            var winnerRow = group.FirstOrDefault(c => c.SpecimenKbId == winnerId);
+            if (loserRow is null) continue;
+
+            if (winnerRow is null) { loserRow.SpecimenKbId = winnerId; continue; }
+
+            db.LabAnalyteSearchCaches.Remove(loserRow.LastUpdatedAt > winnerRow.LastUpdatedAt ? winnerRow : loserRow);
+            if (loserRow.LastUpdatedAt > winnerRow.LastUpdatedAt) loserRow.SpecimenKbId = winnerId;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Уникальный ключ (OwnerUserId, SpecimenKbId) — свежий LastUsedAt побеждает (та же
+    /// идея, что "недавно использованные" и так уже сортируются по этому полю).</summary>
+    private async Task MergeUserSpecimensAsync(Guid loserId, Guid winnerId, CancellationToken ct)
+    {
+        var rows = await db.UserSpecimens
+            .Where(u => u.SpecimenKbId == loserId || u.SpecimenKbId == winnerId)
+            .ToListAsync(ct);
+
+        foreach (var group in rows.GroupBy(u => u.OwnerUserId))
+        {
+            var loserRow = group.FirstOrDefault(u => u.SpecimenKbId == loserId);
+            var winnerRow = group.FirstOrDefault(u => u.SpecimenKbId == winnerId);
+            if (loserRow is null) continue;
+
+            if (winnerRow is null) { loserRow.SpecimenKbId = winnerId; continue; }
+
+            db.UserSpecimens.Remove(loserRow.LastUsedAt > winnerRow.LastUsedAt ? winnerRow : loserRow);
+            if (loserRow.LastUsedAt > winnerRow.LastUsedAt) loserRow.SpecimenKbId = winnerId;
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static bool? ReadBool(Dictionary<string, JsonElement> payload, string key)

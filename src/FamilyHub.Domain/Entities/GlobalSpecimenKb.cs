@@ -24,5 +24,13 @@ public class GlobalSpecimenKb
     /// под другие источники, тот же формат поля, что у GlobalLabAnalyteKb.Source.</summary>
     public string Source { get; set; } = string.Empty;
 
+    /// <summary>Синонимы (другие сырые названия того же источника, встреченные при извлечении
+    /// документов/мердже дублей) — тот же принцип, что GlobalLabAnalyteKb.Aliases: Postgres
+    /// text[], НЕ заведено в EF-модель, читается/пишется только raw SQL. Заполняется мерджем
+    /// дублей из админки (KbMergeService) — старое название проигравшей строки становится алиасом
+    /// победителя, чтобы то же "грязное" название после следующего OCR находило победителя, а не
+    /// заводило новый дубль (см. GlobalSpecimenKbService.FindAsync).</summary>
+    public string[] Aliases { get; set; } = [];
+
     public DateTime CreatedAt { get; set; }
 }

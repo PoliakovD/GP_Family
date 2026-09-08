@@ -89,6 +89,56 @@ public class AdminCatalogService(AppDbContext db)
         return affected > 0;
     }
 
+    /// <summary>
+    /// Объединение двух строк справочника показателей (например, две записи для одного и того же
+    /// анализа, разошедшиеся из-за "грязного" OCR-имени) — проигравшая строка удаляется, её
+    /// показатели (LabIndicators.KbAnalyteId — обычное справочное поле, не часть уникального
+    /// ключа, редиректить можно без риска коллизии) переезжают на победителя, а её
+    /// NormalizedName попадает победителю в Aliases — то же название после следующего OCR найдёт
+    /// победителя вместо повторного дубля (см. LabAnalyteKbLookupService.LookupBySpecimenAsync,
+    /// уже проверяет ANY(Aliases)). Разные SpecimenKbId у сливаемых строк допускаются намеренно —
+    /// это инструмент ручной чистки, админ сам решает, что считать дублем; LabIndicator.SpecimenKbId
+    /// самих показателей при этом не трогается, меняется только то, на какую статью справочника
+    /// они ссылаются.
+    /// </summary>
+    public async Task<AdminKbMergeResult> MergeLabAnalytesAsync(Guid loserId, Guid winnerId, CancellationToken ct = default)
+    {
+        if (loserId == winnerId) return AdminKbMergeResult.SameId;
+
+        var loser = await db.Database.SqlQuery<AdminLabAnalyteRow>($"""
+            SELECT "Id", "NormalizedName", "SpecimenKbId", NULL AS "SpecimenDisplayName", "DisplayName",
+                   "PayloadJson", "Source", "Aliases", "LockedFields", "PayloadVersion", "CreatedAt", "UpdatedAt"
+            FROM kb.global_lab_analytes_kb WHERE "Id" = {loserId}
+            """).FirstOrDefaultAsync(ct);
+        var winnerExists = await db.GlobalLabAnalytesKb.AnyAsync(k => k.Id == winnerId, ct);
+        if (loser is null || !winnerExists) return AdminKbMergeResult.NotFound;
+
+        // Вызывается и напрямую из админ-эндпоинта, и изнутри GlobalSpecimenKbService.MergeAsync
+        // (там — уже в открытой транзакции, вложенный BeginTransactionAsync на том же соединении
+        // упал бы) — своя транзакция открывается, только если родитель её ещё не начал.
+        var ownsTransaction = db.Database.CurrentTransaction is null;
+        var tx = ownsTransaction ? await db.Database.BeginTransactionAsync(ct) : null;
+
+        await db.LabIndicators.Where(i => i.KbAnalyteId == loserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.KbAnalyteId, winnerId), ct);
+
+        var loserAliases = loser.Aliases.Append(loser.NormalizedName).ToArray();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE kb.global_lab_analytes_kb
+            SET "Aliases" = ARRAY(SELECT DISTINCT unnest("Aliases" || {loserAliases})), "UpdatedAt" = {DateTime.UtcNow}
+            WHERE "Id" = {winnerId}
+            """, ct);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM kb.global_lab_analytes_kb WHERE "Id" = {loserId}""", ct);
+
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+            await tx.DisposeAsync();
+        }
+        return AdminKbMergeResult.Ok;
+    }
+
     // --- Медикаменты ---
 
     public async Task<AdminMedicationDetail?> GetMedicationAsync(Guid id, CancellationToken ct = default)

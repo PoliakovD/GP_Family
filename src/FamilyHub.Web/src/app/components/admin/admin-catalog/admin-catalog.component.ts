@@ -43,6 +43,9 @@ export class AdminCatalogComponent implements OnInit {
   readonly analyteEditorPayload = signal('');
   readonly analyteEditorAliases = signal('');
   readonly analyteBusy = signal(false);
+  /** Мердж дублей (§ ручной мердж): id строки, отмеченной как "проигравшая" — следующий клик
+   * "Слить сюда" на другой строке того же списка довершает мердж. null — режим мерджа не начат. */
+  readonly analyteMergeSourceId = signal<string | null>(null);
 
   // --- Медикаменты ---
   readonly medicationQuery = signal('');
@@ -60,6 +63,10 @@ export class AdminCatalogComponent implements OnInit {
   readonly specimensLoading = signal(false);
   readonly specimenRenameDrafts = signal<Record<string, string>>({});
   readonly specimenBusy = signal(false);
+  /** Мердж дублей (реальный кейс: "Эякулят"/"Физические свойства Эякулят" — три строки вместо
+   * одной, см. class doc GlobalSpecimenKbService.MergeAsync на бэкенде) — та же двухкликовая
+   * схема, что у показателей: отметить проигравшего, затем кликнуть "Слить сюда" на победителе. */
+  readonly specimenMergeSourceId = signal<string | null>(null);
 
   ngOnInit(): void {
     void this.searchAnalytes();
@@ -148,6 +155,41 @@ export class AdminCatalogComponent implements OnInit {
       this.toast.success('Переобогащение поставлено в очередь.');
     } catch {
       this.toast.error('Не удалось поставить переобогащение.');
+    } finally {
+      this.analyteBusy.set(false);
+    }
+  }
+
+  /** Клик "Начать мердж"/"Отмена"/"Слить сюда" на строке списка (см. analyteMergeSourceId). */
+  async onAnalyteMergeClick(item: KbAnalyteListItem): Promise<void> {
+    const sourceId = this.analyteMergeSourceId();
+    if (sourceId === null) {
+      this.analyteMergeSourceId.set(item.id);
+      return;
+    }
+    if (sourceId === item.id) {
+      this.analyteMergeSourceId.set(null);
+      return;
+    }
+
+    const loser = this.analytes().find((a) => a.id === sourceId);
+    const ok = await this.confirm.confirm({
+      title: 'Объединить показатели?',
+      message: `«${loser?.displayName ?? sourceId}» будет удалён, его показатели пользователей и синонимы переедут на «${item.displayName}».`,
+      confirmText: 'Объединить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.analyteBusy.set(true);
+    try {
+      await this.api.mergeLabAnalytes(sourceId, item.id);
+      this.toast.success('Показатели объединены.');
+      this.analyteMergeSourceId.set(null);
+      if (this.analyteDetail()?.id === sourceId) this.analyteDetail.set(null);
+      await this.searchAnalytes();
+    } catch {
+      this.toast.error('Не удалось объединить показатели.');
     } finally {
       this.analyteBusy.set(false);
     }
@@ -299,6 +341,40 @@ export class AdminCatalogComponent implements OnInit {
       await this.searchSpecimens();
     } catch {
       this.toast.error('Не удалось переименовать — возможно, такое название уже есть.');
+    } finally {
+      this.specimenBusy.set(false);
+    }
+  }
+
+  /** Клик "Начать мердж"/"Отмена"/"Слить сюда" на строке списка (см. specimenMergeSourceId). */
+  async onSpecimenMergeClick(item: GlobalSpecimen): Promise<void> {
+    const sourceId = this.specimenMergeSourceId();
+    if (sourceId === null) {
+      this.specimenMergeSourceId.set(item.id);
+      return;
+    }
+    if (sourceId === item.id) {
+      this.specimenMergeSourceId.set(null);
+      return;
+    }
+
+    const loser = this.specimens().find((s) => s.id === sourceId);
+    const ok = await this.confirm.confirm({
+      title: 'Объединить источники?',
+      message: `«${loser?.displayName ?? sourceId}» будет удалён, все показатели/статьи справочника, использующие его, переедут на «${item.displayName}», а старое название станет синонимом.`,
+      confirmText: 'Объединить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.specimenBusy.set(true);
+    try {
+      await this.api.mergeSpecimens(sourceId, item.id);
+      this.toast.success('Источники объединены.');
+      this.specimenMergeSourceId.set(null);
+      await this.searchSpecimens();
+    } catch {
+      this.toast.error('Не удалось объединить источники.');
     } finally {
       this.specimenBusy.set(false);
     }

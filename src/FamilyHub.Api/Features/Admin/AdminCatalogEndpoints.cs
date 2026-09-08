@@ -49,6 +49,20 @@ public static class AdminCatalogEndpoints
         group.MapDelete("/lab-analytes/{id:guid}", async (Guid id, AdminCatalogService admin, CancellationToken ct) =>
             await admin.DeleteLabAnalyteAsync(id, ct) ? Results.NoContent() : Results.NotFound());
 
+        group.MapPost("/lab-analytes/{loserId:guid}/merge-into/{winnerId:guid}", async (
+            Guid loserId, Guid winnerId, AdminCatalogService admin, CancellationToken ct) =>
+        {
+            var result = await admin.MergeLabAnalytesAsync(loserId, winnerId, ct);
+            return result switch
+            {
+                AdminKbMergeResult.Ok => Results.NoContent(),
+                AdminKbMergeResult.SameId => Results.Json(
+                    new { code = "same_id", message = "Победитель и проигравший — одна и та же строка." },
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
+        });
+
         // --- Медикаменты ---
 
         group.MapGet("/medications", async (
@@ -111,6 +125,23 @@ public static class AdminCatalogEndpoints
                     statusCode: StatusCodes.Status409Conflict),
                 SpecimenDeleteResult.Sentinel => Results.Json(
                     new { code = "sentinel", message = "Системная запись «источник не определён» не удаляется." },
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
+        });
+
+        group.MapPost("/specimens/{loserId:guid}/merge-into/{winnerId:guid}", async (
+            Guid loserId, Guid winnerId, GlobalSpecimenKbService specimens, CancellationToken ct) =>
+        {
+            var result = await specimens.MergeAsync(loserId, winnerId, ct);
+            return result switch
+            {
+                SpecimenMergeResult.Ok => Results.NoContent(),
+                SpecimenMergeResult.SameId => Results.Json(
+                    new { code = "same_id", message = "Победитель и проигравший — одна и та же строка." },
+                    statusCode: StatusCodes.Status409Conflict),
+                SpecimenMergeResult.Sentinel => Results.Json(
+                    new { code = "sentinel", message = "Системная запись «источник не определён» не может быть проигравшей." },
                     statusCode: StatusCodes.Status409Conflict),
                 _ => Results.NotFound(),
             };

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Extraction;
@@ -250,5 +251,183 @@ public class AdminCatalogApiTests(AdminWebFactory factory)
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.GlobalLabAnalytesKb.Where(k => k.Id == id).Select(k => k.NormalizedName).SingleAsync();
+    }
+
+    [Fact]
+    public async Task MergeLabAnalytes_RedirectsIndicators_UnionsAliases_DeletesLoser()
+    {
+        var client = await AuthenticatedClientAsync();
+        var specimenId = await SeedSpecimenDirectAsync($"кровь{Guid.NewGuid():N}");
+        var loserId = await SeedLabAnalyteAsync($"показательлузер{Guid.NewGuid():N}", "Показатель (дубль)", "{}");
+        var winnerId = await SeedLabAnalyteAsync($"показательвиннер{Guid.NewGuid():N}", "Показатель", "{}");
+        var loserNormalizedName = await GetNormalizedNameAsync(loserId);
+
+        var recordId = await SeedMedicalRecordAsync();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.LabIndicators.Add(new LabIndicator
+            {
+                Id = Guid.NewGuid(), MedicalRecordId = recordId, RecordDate = new DateOnly(2026, 1, 1),
+                OwnerUserId = Guid.NewGuid(), AnalyteKey = loserNormalizedName, DisplayName = "Показатель",
+                SpecimenKbId = specimenId, Position = 0, ValueRaw = "1", CreatedAt = DateTime.UtcNow,
+                KbAnalyteId = loserId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsync($"/api/admin/kb/lab-analytes/{loserId}/merge-into/{winnerId}", null);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var verify = factory.Services.CreateScope();
+        var verifyDb = verify.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await verifyDb.GlobalLabAnalytesKb.AnyAsync(k => k.Id == loserId)).Should().BeFalse("проигравшая строка удаляется после мерджа");
+
+        var winnerDetail = await (await client.GetAsync($"/api/admin/kb/lab-analytes/{winnerId}"))
+            .Content.ReadFromJsonAsync<AdminLabAnalyteDetailDto>();
+        winnerDetail!.Aliases.Should().Contain(loserNormalizedName,
+            "старое название проигравшего должно попасть в алиасы победителя — то же название после следующего OCR не даст новый дубль");
+
+        var indicator = await verifyDb.LabIndicators.SingleAsync(i => i.SpecimenKbId == specimenId);
+        indicator.KbAnalyteId.Should().Be(winnerId, "показатель должен переехать на победителя");
+    }
+
+    [Fact]
+    public async Task MergeLabAnalytes_SameId_ReturnsConflict()
+    {
+        var client = await AuthenticatedClientAsync();
+        var id = await SeedLabAnalyteAsync($"показатель{Guid.NewGuid():N}", "Показатель", "{}");
+
+        var response = await client.PostAsync($"/api/admin/kb/lab-analytes/{id}/merge-into/{id}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    private async Task<Guid> SeedSpecimenDirectAsync(string displayName)
+    {
+        using var scope = factory.Services.CreateScope();
+        var specimens = scope.ServiceProvider.GetRequiredService<GlobalSpecimenKbService>();
+        return await specimens.FindOrRegisterAsync(displayName, LabAnalyteNormalizer.Normalize(displayName));
+    }
+
+    /// <summary>LabIndicators.MedicalRecordId — реальный FK на MedicalRecords, нужна настоящая
+    /// строка записи, не произвольный Guid.</summary>
+    private async Task<Guid> SeedMedicalRecordAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var id = Guid.NewGuid();
+        db.MedicalRecords.Add(new MedicalRecord
+        {
+            Id = id, OwnerUserId = Guid.NewGuid(), Kind = MedicalRecordKind.Analysis,
+            RecordDate = new DateOnly(2026, 1, 1), ExtractionStatus = ExtractionStatus.Ready, CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    /// <summary>Реальный кейс из бага (§ мердж дублей): "Эякулят" + "Физические свойства Эякулят" —
+    /// три источника в одной проблеме, здесь достаточно двух, чтобы проверить весь путь редиректа.</summary>
+    [Fact]
+    public async Task MergeSpecimens_RedirectsAllReferences_UnionsAlias_DeletesLoser()
+    {
+        var client = await AuthenticatedClientAsync();
+        var winnerId = await SeedSpecimenDirectAsync($"Эякулят{Guid.NewGuid():N}");
+        var loserId = await SeedSpecimenDirectAsync($"Физические свойства эякулята {Guid.NewGuid():N}");
+        var loserNormalizedName = await GetSpecimenNormalizedNameAsync(loserId);
+
+        var analyteId = await SeedLabAnalyteAsync($"объём{Guid.NewGuid():N}", "Объём", "{}");
+        var recordId = await SeedMedicalRecordAsync();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.GlobalLabAnalytesKb.Where(k => k.Id == analyteId)
+                .ExecuteUpdateAsync(s => s.SetProperty(k => k.SpecimenKbId, loserId));
+            db.LabIndicators.Add(new LabIndicator
+            {
+                Id = Guid.NewGuid(), MedicalRecordId = recordId, RecordDate = new DateOnly(2026, 1, 1),
+                OwnerUserId = Guid.NewGuid(), AnalyteKey = $"объём{Guid.NewGuid():N}", DisplayName = "Объём",
+                SpecimenKbId = loserId, Position = 0, ValueRaw = "3", CreatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.PostAsync($"/api/admin/kb/specimens/{loserId}/merge-into/{winnerId}", null);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var verify = factory.Services.CreateScope();
+        var verifyDb = verify.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await verifyDb.GlobalSpecimensKb.AnyAsync(s => s.Id == loserId)).Should().BeFalse();
+        (await verifyDb.GlobalLabAnalytesKb.Where(k => k.Id == analyteId).Select(k => k.SpecimenKbId).SingleAsync())
+            .Should().Be(winnerId);
+        (await verifyDb.LabIndicators.Where(i => i.SpecimenKbId == winnerId).AnyAsync()).Should().BeTrue(
+            "показатель должен переехать на источник-победитель");
+
+        var winnerAliases = await GetSpecimenAliasesAsync(winnerId);
+        winnerAliases.Should().Contain(loserNormalizedName,
+            "старое название проигравшего должно попасть в алиасы победителя, иначе следующий такой же OCR-дубль появится снова");
+    }
+
+    [Fact]
+    public async Task MergeSpecimens_SentinelAsLoser_ReturnsConflict()
+    {
+        var client = await AuthenticatedClientAsync();
+        var winnerId = await SeedSpecimenDirectAsync($"Кровь{Guid.NewGuid():N}");
+
+        var response = await client.PostAsync($"/api/admin/kb/specimens/{SpecimenContextIds.Unresolved}/merge-into/{winnerId}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task MergeSpecimens_SameId_ReturnsConflict()
+    {
+        var client = await AuthenticatedClientAsync();
+        var id = await SeedSpecimenDirectAsync($"Кровь{Guid.NewGuid():N}");
+
+        var response = await client.PostAsync($"/api/admin/kb/specimens/{id}/merge-into/{id}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task MergeSpecimens_ThenFindOrRegisterWithOldName_ResolvesToWinner_ViaAlias()
+    {
+        var winnerId = await SeedSpecimenDirectAsync($"Эякулят{Guid.NewGuid():N}");
+        var loserDisplayName = $"Физические свойства эякулята {Guid.NewGuid():N}";
+        var loserId = await SeedSpecimenDirectAsync(loserDisplayName);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var specimens = scope.ServiceProvider.GetRequiredService<GlobalSpecimenKbService>();
+            var result = await specimens.MergeAsync(loserId, winnerId);
+            result.Should().Be(SpecimenMergeResult.Ok);
+        }
+
+        // То же "грязное" название приходит снова (например, повторный OCR того же бланка) —
+        // теперь оно должно найти победителя через Aliases, а не завести новый дубль.
+        using var verifyScope = factory.Services.CreateScope();
+        var verifySpecimens = verifyScope.ServiceProvider.GetRequiredService<GlobalSpecimenKbService>();
+        var resolvedId = await verifySpecimens.FindOrRegisterAsync(loserDisplayName, LabAnalyteNormalizer.Normalize(loserDisplayName));
+
+        resolvedId.Should().Be(winnerId, "мердж должен запомнить старое название как алиас победителя");
+    }
+
+    private async Task<string> GetSpecimenNormalizedNameAsync(Guid id)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.GlobalSpecimensKb.Where(s => s.Id == id).Select(s => s.NormalizedName).SingleAsync();
+    }
+
+    private record SpecimenAliasesRow(string[] Aliases);
+
+    private async Task<string[]> GetSpecimenAliasesAsync(Guid id)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await db.Database.SqlQuery<SpecimenAliasesRow>(
+            $"""SELECT "Aliases" FROM kb.global_specimens_kb WHERE "Id" = {id}""").SingleAsync();
+        return row.Aliases;
     }
 }

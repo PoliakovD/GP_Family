@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Modules.Medical.Extraction;
+using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.TestUtils;
 using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
@@ -30,7 +31,8 @@ public class SpecimenResolverTests : SqliteTestBase
     {
         // GlobalSpecimenKbService.FindAsync — реальный запрос к БД до триграммного вето (не только
         // после), нужна настоящая (пусть и SQLite) база, не null/мок конкретного класса.
-        var specimenKb = new GlobalSpecimenKbService(Db, _client, TestPromptProvider.ReturningFallback(), NullLogger<GlobalSpecimenKbService>.Instance);
+        var specimenKb = new GlobalSpecimenKbService(
+            Db, _client, TestPromptProvider.ReturningFallback(), new AdminCatalogService(Db), NullLogger<GlobalSpecimenKbService>.Instance);
         _sut = new SpecimenResolver(_client, specimenKb, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
     }
 

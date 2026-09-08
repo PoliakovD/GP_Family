@@ -291,6 +291,9 @@ export class AdminApiService {
 
   deleteLabAnalyte = (id: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}`);
 
+  mergeLabAnalytes = (loserId: string, winnerId: string) =>
+    this.post<void>(`/api/admin/kb/lab-analytes/${loserId}/merge-into/${winnerId}`);
+
   searchMedications = (q: string, skip: number, take: number) =>
     this.get<KbListResponse>(`/api/admin/kb/medications?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}`);
 
@@ -310,4 +313,7 @@ export class AdminApiService {
     this.put<void>(`/api/admin/kb/specimens/${id}`, { displayName });
 
   deleteSpecimen = (id: string) => this.del<void>(`/api/admin/kb/specimens/${id}`);
+
+  mergeSpecimens = (loserId: string, winnerId: string) =>
+    this.post<void>(`/api/admin/kb/specimens/${loserId}/merge-into/${winnerId}`);
 }

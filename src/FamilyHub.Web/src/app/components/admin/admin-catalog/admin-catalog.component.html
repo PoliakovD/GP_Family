@@ -14,20 +14,38 @@
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="analytesLoading()">Найти</button>
       </form>
 
+      @if (analyteMergeSourceId()) {
+        <p class="text-muted mb-2">
+          Проигравший выбран — кликните «Слить сюда» на строке-победителе (или «Отменить мердж», чтобы выйти из режима).
+        </p>
+      }
+
       @if (analytesLoading()) {
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th>Источник</th><th></th></tr></thead>
+          <thead><tr><th>Название</th><th>Источник</th><th></th><th></th></tr></thead>
           <tbody>
             @for (a of analytes(); track a.id) {
-              <tr>
-                <td>{{ a.displayName }}</td>
+              <tr [class.text-muted]="analyteMergeSourceId() === a.id">
+                <td>
+                  {{ a.displayName }}
+                  @if (analyteMergeSourceId() === a.id) { <span class="tag tag-neutral">проигравший</span> }
+                </td>
                 <td>{{ a.specimenDisplayName }}</td>
                 <td><button type="button" class="btn btn-secondary btn-sm" (click)="openAnalyte(a)">Открыть</button></td>
+                <td>
+                  @if (analyteMergeSourceId() === a.id) {
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Отменить мердж</button>
+                  } @else if (analyteMergeSourceId()) {
+                    <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Слить сюда</button>
+                  } @else {
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Мердж</button>
+                  }
+                </td>
               </tr>
             } @empty {
-              <tr><td colspan="3" class="text-muted">Ничего не найдено.</td></tr>
+              <tr><td colspan="4" class="text-muted">Ничего не найдено.</td></tr>
             }
           </tbody>
         </table>
@@ -191,21 +209,38 @@
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="specimensLoading()">Найти</button>
       </form>
 
+      @if (specimenMergeSourceId()) {
+        <p class="text-muted mb-2">
+          Проигравший выбран — кликните «Слить сюда» на строке-победителе (например, здесь «Эякулят» ←
+          «Физические свойства эякулята»), или «Отменить мердж», чтобы выйти из режима.
+        </p>
+      }
+
       @if (specimensLoading()) {
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th></th><th></th></tr></thead>
+          <thead><tr><th>Название</th><th></th><th></th><th></th></tr></thead>
           <tbody>
             @for (s of specimens(); track s.id) {
-              <tr>
+              <tr [class.text-muted]="specimenMergeSourceId() === s.id">
                 <td>
                   <input class="input" [ngModel]="specimenDraft(s)" (ngModelChange)="setSpecimenDraft(s.id, $event)" />
+                  @if (specimenMergeSourceId() === s.id) { <span class="tag tag-neutral">проигравший</span> }
                 </td>
                 <td>
                   <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="renameSpecimen(s)">
                     Переименовать
                   </button>
+                </td>
+                <td>
+                  @if (specimenMergeSourceId() === s.id) {
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Отменить мердж</button>
+                  } @else if (specimenMergeSourceId()) {
+                    <button type="button" class="btn btn-primary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Слить сюда</button>
+                  } @else {
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Мердж</button>
+                  }
                 </td>
                 <td>
                   <button type="button" class="btn btn-danger btn-sm" [disabled]="specimenBusy()" (click)="deleteSpecimen(s)">
@@ -214,7 +249,7 @@
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="3" class="text-muted">Ничего не найдено.</td></tr>
+              <tr><td colspan="4" class="text-muted">Ничего не найдено.</td></tr>
             }
           </tbody>
         </table>

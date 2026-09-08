@@ -22,6 +22,10 @@ public enum AdminKbEditResult { Ok, NotFound, InvalidPayloadJson, IsolationViola
 
 public enum AdminKbDeleteResult { Ok, NotFound }
 
+/// <summary>Мердж двух строк справочника (§ ручной мердж дублей из админки) — SameId, если
+/// прислали одну и ту же строку и победителем, и проигравшим.</summary>
+public enum AdminKbMergeResult { Ok, NotFound, SameId }
+
 internal sealed class AdminLabAnalyteRow
 {
     public Guid Id { get; set; }
