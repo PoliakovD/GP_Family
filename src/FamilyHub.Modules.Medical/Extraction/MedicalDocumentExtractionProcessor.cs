@@ -260,10 +260,15 @@ public class MedicalDocumentExtractionProcessor(
             var section = resolution?.Sections.FirstOrDefault(s => s.IndicatorNames.Any(n =>
                 string.Equals(LabAnalyteNormalizer.Normalize(n), analyteKey, StringComparison.Ordinal)));
 
-            // Явное перечисление в секции — сильный сигнал самой модели по конкретному показателю,
-            // не нуждается в отдельном сравнении с порогом confidence документа.
+            // Секция побеждает над document-level контекстом (свой источник для этой конкретной
+            // группы показателей), но проходит ТЕ ЖЕ проверки, что и документ целиком — своя,
+            // честная confidence модели (не 1.0, см. class doc SpecimenSection про баг, к которому
+            // приводила подделка) и триграммное вето против rawLabel документа, если он есть
+            // (у секции своего rawLabel не бывает — сверяем с тем, что модель написала про весь
+            // файл; rawLabel документа пуст — ResolveKbIdAsync просто пропускает вето для этой пары,
+            // как и раньше для document-level случая без rawLabel).
             var (context, rawLabel, confidence) = section is not null
-                ? (section.Context, section.Context, 1.0)
+                ? (section.Context, resolution?.RawLabel, section.Confidence)
                 : (resolution?.Context, resolution?.RawLabel, resolution?.Confidence ?? 0);
 
             var specimenKbId = await ResolveSpecimenKbIdAsync(context, rawLabel, confidence);
