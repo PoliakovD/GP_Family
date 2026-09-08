@@ -3,7 +3,6 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
-import { TelegramService } from '../../services/telegram.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
 import { PageActionService } from '../../services/page-action.service';
@@ -12,8 +11,6 @@ import {
   ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
 } from '../../models/types';
 import type {
-  Attachment,
-  AttachmentLimits,
   ExtractionStatusResponse,
   GlobalSpecimenDto,
   IndicatorDto,
@@ -30,7 +27,6 @@ import type {
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
-import { ModalComponent } from '../../shared/modal/modal.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
@@ -42,13 +38,13 @@ import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-se
 import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
 import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
+import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
-import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '../../shared/util/attachment-upload';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 
 /** Терминальные статусы задачи распознавания — опрос останавливается. */
@@ -105,10 +101,11 @@ let nextInstanceId = 0;
   standalone: true,
   imports: [
     NgTemplateOutlet,
-    FormsModule, LoadingSpinnerComponent, BottomSheetComponent, ModalComponent, SearchFieldComponent,
+    FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
     ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
     AvatarComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
     ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
+    AttachmentListComponent,
   ],
   templateUrl: './medical-records-panel.component.html',
   styleUrl: './medical-records-panel.component.scss',
@@ -127,7 +124,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
-  private readonly tg = inject(TelegramService);
   private readonly auth = inject(AuthService);
   private readonly confirm = inject(ConfirmService);
   private readonly pageAction = inject(PageActionService);
@@ -144,8 +140,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly formatDayMonth = formatDayMonth;
   readonly formatDayMonthYear = formatDayMonthYear;
   readonly formatYear = formatYear;
-
-  readonly acceptedFileTypes = ACCEPTED_ATTACHMENT_TYPES;
 
   /** Уникален на инстанс — «Анализы» и «Врачи» держат каждый свой экземпляр панели. */
   readonly doctorsDatalistId = `medical-record-doctors-datalist-${nextInstanceId++}`;
@@ -179,15 +173,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * её независимо — тот же дешёвый идемпотентный GET, дублировать состояние ради одного запроса
    * не стоит. */
   doctorSuggestions: string[] = [];
-
-  // Вложения — лениво, по первому раскрытию «Файлы» на карточке (UX-редизайн: раньше грузились
-  // для ВСЕХ записей страницы сразу в refresh(), самый большой источник N+1).
-  attachmentsByRecord: Record<string, Attachment[]> = {};
-  private readonly attachmentsLoadedFor = new Set<string>();
-  attachmentLimits: AttachmentLimits | null = null;
-  /** Id записи, к которой сейчас идёт загрузка файла — раньше был один булев на всю панель
-   * (спиннер «Загружаем…» рисовался в КАЖДОЙ карточке одновременно). */
-  uploadingRecordId: string | null = null;
 
   // Распознавание — результат живёт на уровне ЗАПИСИ (не вложения): повторное распознавание
   // любого вложения записи полностью заменяет предыдущие показатели/резюме этой записи (см.
@@ -313,9 +298,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
       this.pageAction.setSearchSuppressed(true);
-    }
-    if (!this.attachmentLimits) {
-      void this.api.getAttachmentLimits().then((limits) => (this.attachmentLimits = limits));
     }
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
@@ -455,11 +437,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.openAccessSheet(record);
   }
 
-  /** Действия меню «…» карточки — заменяет 4 безымянные иконки (редизайн v2). */
+  /** Действия меню «…» карточки — заменяет 4 безымянные иконки (редизайн v2). «Файлы» отсюда
+   * убраны (редизайн): секция «Файлы» теперь всегда видна прямо в раскрытой карточке
+   * (app-attachment-list), отдельный пункт меню/модалка больше не нужны. */
   recordMenuActions(item: MedicalRecord): ActionMenuItem[] {
-    const actions: ActionMenuItem[] = [
-      { label: 'Файлы', icon: 'ph ph-paperclip', handler: () => void this.openFilesModal(item) },
-    ];
+    const actions: ActionMenuItem[] = [];
     if (this.canDelete(item)) {
       actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
     }
@@ -678,81 +660,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Файлы записи (модалка, UX-редизайн — раньше раскрывающийся блок в самой карточке;
-  // вынесено в модалку, чтобы не растягивать карточку и высвободить место под остальное). ---
-
-  /** Запись, для которой сейчас открыта модалка «Файлы» (null — закрыта). */
-  filesModalRecord: MedicalRecord | null = null;
-
-  async openFilesModal(record: MedicalRecord): Promise<void> {
-    this.filesModalRecord = record;
-    if (this.attachmentsLoadedFor.has(record.id)) return;
-    this.attachmentsLoadedFor.add(record.id);
-    try {
-      const attachments = await this.api.getRecordAttachments(record.id);
-      this.attachmentsByRecord = { ...this.attachmentsByRecord, [record.id]: attachments };
-    } catch (err) {
-      this.attachmentsLoadedFor.delete(record.id);
-      this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить вложения.';
-    }
-  }
-
-  closeFilesModal(): void {
-    this.filesModalRecord = null;
-  }
-
-  /** Сколько ещё файлов можно приложить к этой записи — null, пока список вложений ещё не
-   * загружен (карточка ни разу не раскрывалась) ЛИБО лимиты ещё не пришли. */
-  remainingSlots(recordId: string): number | null {
-    if (!this.attachmentLimits || !this.attachmentsLoadedFor.has(recordId)) return null;
-    return Math.max(0, this.attachmentLimits.maxFilesPerRecord - this.attachmentsFor(recordId).length);
-  }
-
-  canAddMoreAttachments(recordId: string): boolean {
-    return this.remainingSlots(recordId) !== 0;
-  }
-
-  /** До 8 файлов за раз (multiple на инпуте) — загружаются последовательно (сервер принимает один
-   * файл за запрос), список вложений и остаток слотов обновляются по мере успеха каждого. */
-  async handleUpload(record: MedicalRecord, event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = ''; // позволяет выбрать те же файлы повторно
-    if (files.length === 0) return;
-
-    const recordId = record.id;
-    this.attachmentsLoadedFor.add(recordId); // на случай, если «Файлы» ещё не раскрывали
-    const { accepted, skippedByCount, tooLarge } = filterFilesAgainstLimits(this.attachmentLimits, this.attachmentsFor(recordId).length, files);
-
-    this.uploadingRecordId = recordId;
-    let failed = 0;
-    try {
-      for (const file of accepted) {
-        try {
-          const attachment = await this.api.uploadAttachment(recordId, file);
-          this.attachmentsByRecord = {
-            ...this.attachmentsByRecord,
-            [recordId]: [...(this.attachmentsByRecord[recordId] ?? []), attachment],
-          };
-        } catch {
-          failed++;
-        }
-      }
-    } finally {
-      this.uploadingRecordId = null;
-    }
-
-    // Счётчики на DTO записи (attachmentCount/unrecognizedAttachmentCount) устарели после
-    // загрузки — перечитываем список, чтобы кнопка «Распознать» и подпись «Файлы (N)» сошлись.
-    await this.refresh();
-
-    const limits = this.attachmentLimits;
-    const problems: string[] = [];
-    if (skippedByCount > 0 && limits) problems.push(`не прикреплено ${skippedByCount} файлов сверх лимита (${limits.maxFilesPerRecord} на запись)`);
-    if (tooLarge.length > 0 && limits) problems.push(`${tooLarge.length} файлов превышают ${formatMb(limits.maxFileSizeBytes)} и не отправлены`);
-    if (failed > 0) problems.push(`${failed} файлов не загрузились`);
-    this.error = problems.length > 0 ? `Загрузка завершена частично: ${problems.join(', ')}.` : null;
-  }
+  // Файлы записи — теперь shared/attachment-list.component.ts, встроенный прямо в раскрытую
+  // карточку (см. шаблон); own state/fetch/upload там, не здесь (было — модалка «Файлы»/методы
+  // openFilesModal/handleUpload на этой панели).
 
   // --- Распознавание (кнопка «Распознать» на записи, v2 — обрабатывает все ещё не
   // распознанные вложения последовательно за один прогон, не по клику на каждый файл) ---
@@ -1118,18 +1028,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  async handleOpenAttachment(attachmentId: string): Promise<void> {
-    try {
-      const { url } = await this.api.getAttachmentUrl(attachmentId);
-      this.tg.openExternalLink(url);
-    } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось получить ссылку на файл.';
-    }
-  }
-
-  attachmentsFor(recordId: string): Attachment[] {
-    return this.attachmentsByRecord[recordId] ?? [];
-  }
+  // Открытие/скачивание вложения теперь целиком внутри app-file-viewer/attachment-list.
 
   // --- Доступ (bottom-sheet «Доступ») ---
 

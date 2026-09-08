@@ -6,11 +6,12 @@ import type { AttachmentLimits } from '../../models/types';
 /** Зеркало FamilyHub.Infrastructure.Documents.DocumentContentTypes.All — то, что конвейер умеет
  * распознать (плюс .doc — хранится, но не распознаётся, см. докстринг там же). */
 export const ACCEPTED_ATTACHMENT_TYPES = [
-  'image/jpeg', 'image/png', 'image/webp', 'image/heic',
+  'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/tiff',
   'application/pdf', 'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel', 'text/csv', 'text/plain', 'application/rtf', 'text/html',
+  'application/xml', 'text/xml',
 ].join(',');
 
 export function formatMb(bytes: number): string {

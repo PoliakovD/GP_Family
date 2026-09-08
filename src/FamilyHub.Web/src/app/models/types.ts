@@ -258,6 +258,11 @@ export interface MedicalRecordInput {
     targetUserId: string | null;
 }
 
+/** Зеркало FamilyHub.Domain.Enums.AttachmentPreviewStatus — числовые значения, не строки
+ * (System.Text.Json сериализует enum по умолчанию как число). */
+export const AttachmentPreviewStatus = { None: 0, Pending: 1, Ready: 2, Failed: 3, Unsupported: 4 } as const;
+export type AttachmentPreviewStatus = (typeof AttachmentPreviewStatus)[keyof typeof AttachmentPreviewStatus];
+
 export interface Attachment {
     id: string;
     fileName: string;
@@ -267,6 +272,30 @@ export interface Attachment {
     /** Когда конвейер извлечения последний раз успешно распознал этот файл — null, если ещё
      * ни разу (v2: определяет, есть ли записи нечего распознавать кнопкой «Распознать»). */
     extractedAt: string | null;
+    /** Статус фоновой генерации превью (AttachmentPreviewProcessor) — Pending показывает спиннер
+     * «Готовим превью…» вместо похода за /preview, Unsupported/Failed сразу рисуют карточку
+     * «Скачать» без лишнего запроса. */
+    previewStatus: AttachmentPreviewStatus;
+}
+
+/** Зеркало FamilyHub.Modules.Medical.Attachments.AttachmentRenderKind — что вьюер должен
+ * нарисовать; сервер уже решил это за клиента (какой артефакт есть, какой из них главный). */
+export const AttachmentRenderKind = { None: 0, Pdf: 1, Image: 2, Text: 3 } as const;
+export type AttachmentRenderKind = (typeof AttachmentRenderKind)[keyof typeof AttachmentRenderKind];
+
+/** Ответ GET /api/attachments/{id}/preview — уже готовые подписанные ссылки (5 минут TTL,
+ * не кэшировать между открытиями вьюера). */
+export interface AttachmentPreview {
+    status: AttachmentPreviewStatus;
+    renderKind: AttachmentRenderKind;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    pageCount: number | null;
+    thumbnailUrl: string | null;
+    contentUrl: string | null;
+    downloadUrl: string;
+    failureReason: string | null;
 }
 
 /** Этап 3: пять источников с разным контролем доступа — см. FamilyHub.Modules.Medical.Search.SearchService.

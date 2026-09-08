@@ -41,6 +41,9 @@ public static class MedicalModule
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
+        // Превью вложений (Анализы/Врачи) — очередь "previews" (см. Program.cs). Рендерер
+        // (AttachmentPreviewRenderer) — Infrastructure-уровня, регистрируется в Program.cs.
+        services.AddScoped<AttachmentPreviewProcessor>();
         services.AddScoped<MedicationOcrService>();
         // Ветка medicalrecords (задачи 5.2/5.3): конвейер извлечения показателей анализов и
         // заключений врача. IMedicalDocumentExtractor регистрируется в Program.cs (переключатель

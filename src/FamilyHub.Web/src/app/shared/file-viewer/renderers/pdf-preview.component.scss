@@ -1,0 +1,68 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+// Тёмная сцена вьюера (.viewer-stage) — те же соображения, что в text-preview/unsupported-preview:
+// светлая подложка под сообщение, а не токены на светлый фон прямо на тёмном.
+.pdf-loading-card {
+  background: var(--color-paper);
+  border-radius: var(--radius-lg);
+  padding: 8px 16px;
+}
+
+.pdf-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 32px;
+  background: var(--color-paper);
+  border-radius: var(--radius-lg);
+  color: var(--color-neutral-600);
+}
+
+.pdf-stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pdf-page-wrap {
+  transition: transform 0.05s linear;
+  box-shadow: var(--shadow-md);
+}
+
+.pdf-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 160px);
+  width: auto;
+  height: auto;
+}
+
+.pdf-page-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-top: 8px;
+}
+
+.pdf-page-label {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+  min-width: 84px;
+  text-align: center;
+}

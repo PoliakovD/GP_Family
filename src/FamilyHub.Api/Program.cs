@@ -34,6 +34,7 @@ using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Notifications.Consumers;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Previews;
 using FamilyHub.Infrastructure.Prompts;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Security;
@@ -108,6 +109,7 @@ builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection(E
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
 builder.Services.Configure<AttachmentUploadOptions>(builder.Configuration.GetSection(AttachmentUploadOptions.SectionName));
+builder.Services.Configure<PreviewOptions>(builder.Configuration.GetSection(PreviewOptions.SectionName));
 builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
@@ -550,6 +552,17 @@ builder.Services.AddHangfireServer(o =>
     o.WorkerCount = 1;
     o.ServerName = "rotation-server";
 });
+// Пятый сервер, выделенная очередь "previews" (см. AttachmentPreviewProcessor) — WorkerCount=2,
+// не 1: в отличие от enrichment/extraction/rotation, генерация превью не упирается во внешний
+// ресурс с жёстким лимитом (Gotenberg — локальный сайдкар, не LM Studio за WireGuard и не
+// rate-limited поиск) — чистая CPU-задача (рендер PDF/картинок), два воркера дают параллелизм,
+// не конкурируя за упомянутые очереди.
+builder.Services.AddHangfireServer(o =>
+{
+    o.Queues = ["previews"];
+    o.WorkerCount = 2;
+    o.ServerName = "previews-server";
+});
 builder.Services.AddScoped<EncryptionRotationJob>();
 builder.Services.AddScoped<ReminderScanJob>();
 builder.Services.AddScoped<NotificationService>();
@@ -635,6 +648,27 @@ builder.Services.AddScoped<ILmStudioModelProvider>(sp => sp.GetRequiredService<L
 builder.Services.AddScoped<PdfDocumentReader>();
 builder.Services.AddScoped<OfficeDocumentReader>();
 builder.Services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
+
+// --- Превью вложений (Анализы/Врачи): растровый путь переиспользует конвейер OCR выше
+// --- (PdfPageRasterizer/ImageDownscaler), Office идёт через сайдкар Gotenberg (LibreOffice) —
+// --- у NPOI (OfficeDocumentReader) нет движка вёрстки, только извлечение текста. Пусто
+// --- Previews:GotenbergBaseUrl — Null-реализация (fail-soft: Office-документы деградируют в
+// --- карточку «Скачать», как и любой Failed/Unsupported предпросмотр, см. AttachmentPreviewRenderer).
+builder.Services.AddScoped<AttachmentPreviewRenderer>();
+var previewsOptions = builder.Configuration.GetSection(PreviewOptions.SectionName).Get<PreviewOptions>() ?? new PreviewOptions();
+if (previewsOptions.Enabled && !string.IsNullOrWhiteSpace(previewsOptions.GotenbergBaseUrl))
+{
+    builder.Services.AddHttpClient<IGotenbergConverter, GotenbergConverter>((sp, client) =>
+    {
+        var previews = sp.GetRequiredService<IOptions<PreviewOptions>>().Value;
+        client.BaseAddress = new Uri(previews.GotenbergBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(previews.GotenbergTimeoutSeconds);
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IGotenbergConverter, NullGotenbergConverter>();
+}
 
 // --- Enrichment: внешний веб-поиск для обогащения справочника препаратов (этап 4, ADR-0005) ---
 // Переключатель Enrichment:Provider = Null|Brave|Yandex (тот же паттерн конфиг-переключателя,
@@ -831,7 +865,11 @@ app.Use(async (context, next) =>
         "default-src 'self'; " +
         "script-src 'self' https://telegram.org; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data:; " +
+        // data:/blob: — pdf.js рисует страницы через blob:-URL и грузит свой воркер тем же
+        // способом (просмотрщик вложений, Анализы/Врачи); worker-src отдельно от script-src,
+        // потому что часть браузеров не считает воркеры покрытыми script-src без явного worker-src.
+        "img-src 'self' data: blob:; " +
+        "worker-src 'self' blob:; " +
         "font-src 'self'; " +
         "connect-src 'self'; " +
         "object-src 'none'; " +

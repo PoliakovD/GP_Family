@@ -14,3 +14,4 @@
 | [0006](0006-event-bus-masstransit-and-kafka.md) | Событийная шина: MediatR → MassTransit 8.5.1 + Kafka Rider (частично пересмотрен ADR-0007) |
 | [0007](0007-kafka-as-primary-event-transport.md) | Kafka Rider — реальный транспорт для бизнес-потребителей событий, не только внешний мост |
 | [0009](0009-admin-panel-and-key-rotation.md) | Админ-панель (статистика + ротация ключей) и связки ключей Encryption/Jwt/Attachments |
+| [0010](0010-attachment-previews-and-gotenberg.md) | Встроенный просмотрщик вложений: серверная конвертация превью и сайдкар Gotenberg |

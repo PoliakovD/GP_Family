@@ -1,0 +1,45 @@
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+// Хост сидит на тёмной сцене вьюера (.viewer-stage) — явная "бумажная" подложка, а не тёмный фон
+// напрямую: --color-text/--color-neutral-600 рассчитаны на светлый фон (см. text-preview.component.scss).
+.unsupported-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 32px;
+  text-align: center;
+  background: var(--color-paper);
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+
+  > i {
+    font-size: 56px;
+    color: var(--color-accent);
+    margin-bottom: 4px;
+  }
+}
+
+.unsupported-name {
+  font-weight: 600;
+  max-width: 100%;
+}
+
+.unsupported-meta {
+  color: var(--color-neutral-600);
+  font-size: 13px;
+}
+
+.unsupported-reason {
+  color: var(--color-neutral-600);
+  font-size: 13px;
+  margin-bottom: 4px;
+}

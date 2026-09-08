@@ -5,6 +5,7 @@ import {
   AppNotification,
   Attachment,
   AttachmentLimits,
+  AttachmentPreview,
   Birthday,
   BirthdayInput, CurrentMember,
   CreateIndicatorRequest,
@@ -311,6 +312,11 @@ export class ApiService {
   deleteMedicalRecord = (id: string) => this.del<void>(`/api/medical-records/${id}`);
 
   getAttachmentUrl = (id: string) => this.get<{ url: string }>(`/api/attachments/${id}/url`);
+
+  /** Описание превью + уже подписанные ссылки на всё, что нужно вьюеру (см. app-file-viewer) —
+   * ссылки живут 5 минут, не кэшировать между открытиями. Легаси-вложения без превью получают
+   * его лениво на сервере при этом самом запросе (см. AttachmentService.GetPreviewAsync). */
+  getAttachmentPreview = (id: string) => this.get<AttachmentPreview>(`/api/attachments/${id}/preview`);
 
   /** Лимиты загрузки (до попытки — чтобы UI мог дизейблить кнопку/показать «осталось N из 8»). */
   getAttachmentLimits = () => this.get<AttachmentLimits>('/api/attachments/limits');

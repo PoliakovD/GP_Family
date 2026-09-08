@@ -98,6 +98,30 @@ services:
         limits:
           memory: 1.5G
 
+  # Сайдкар для превью Office-документов (docx/xlsx/xls/doc/rtf/html → PDF, см.
+  # FamilyHub.Infrastructure.Previews.GotenbergConverter) — тот же сервис, что в дев-стеке
+  # (docker-compose.yml). Ни у одного сервиса, кроме caddy, нет наружу смотрящих портов (см.
+  # шапку файла) — api ходит по имени сервиса внутри docker-сети.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command: ["gotenberg", "--api-port=3000", "--chromium-disable-javascript=true"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    deploy:
+      resources:
+        limits:
+          # 512M, не 1G дев-стека — конвертация здесь редкая (по одному Office-документу за раз,
+          # не пакетно), а бюджет VDS уже плотный (см. шапку файла): экономим ~500M на ОС/docker/wg.
+          memory: 512M
+
   # Kafka Rider (ADR-0006/ADR-0007) — тот же однонодовый broker+controller, что в дев-стеке.
   # Отличия от docker-compose.yml: убран листенер HOST/проброс 9094 (был только для отладки
   # kafka-console-consumer.sh с хоста — на VPS не нужен и не должен торчать); топики создаёт
@@ -156,6 +180,9 @@ services:
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
       Messaging__Kafka__Enabled: "true"
       Messaging__Kafka__BootstrapServers: "kafka:9092"
+      # Превью вложений (Анализы/Врачи) — сайдкар gotenberg выше. Пусто/недоступен — Office-файлы
+      # деградируют в карточку «Скачать» (NullGotenbergConverter/fail-soft), не роняют задачу.
+      Previews__GotenbergBaseUrl: "http://gotenberg:3000"
       # Секрет обмена с FamilyHub.TelegramBot (см. telegrambot ниже, profiles: ["bot"]) —
       # ADR-0008. НЕ required (:-, не :?): пока профиль "bot" не включён, этой переменной может
       # не быть в PROD_ENV вовсе — Api тогда просто не мапит /internal/bot/* (internalBotApiConfigured
@@ -179,6 +206,7 @@ services:
       minio: { condition: service_healthy }
       kafka: { condition: service_healthy }
       seq: { condition: service_started }
+      gotenberg: { condition: service_healthy }
     logging:
       driver: json-file
       options: { max-size: "50m", max-file: "3" }

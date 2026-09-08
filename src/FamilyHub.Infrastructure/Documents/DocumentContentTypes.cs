@@ -13,6 +13,7 @@ public static class DocumentContentTypes
     public const string Png = "image/png";
     public const string Webp = "image/webp";
     public const string Heic = "image/heic";
+    public const string Tiff = "image/tiff";
     public const string Pdf = "application/pdf";
     public const string Doc = "application/msword";
     public const string Docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -22,13 +23,15 @@ public static class DocumentContentTypes
     public const string PlainText = "text/plain";
     public const string Rtf = "application/rtf";
     public const string Html = "text/html";
+    public const string Xml = "application/xml";
+    public const string XmlText = "text/xml";
 
-    /// <summary>Растровые форматы — путь через vision-OCR. Заявленный HEIC сюда входит (это
-    /// legit формат вложения — фронт конвертирует в JPEG перед загрузкой), но
-    /// <see cref="ImageDownscaler"/> его не декодирует (SkiaSharp на Linux не умеет HEIC) —
-    /// см. докстринг ImageDownscaler.</summary>
+    /// <summary>Растровые форматы — путь через vision-OCR. SkiaSharp на Linux не декодирует ни
+    /// HEIC, ни TIFF: TIFF <see cref="ImageDownscaler"/> дешифрует фолбэком через
+    /// SixLabors.ImageSharp (чисто управляемый декодер, без риска нативных musl-биндингов), а
+    /// HEIC остаётся нераспознаваемым сервером — см. докстринг ImageDownscaler.</summary>
     public static readonly IReadOnlySet<string> Images =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Jpeg, Png, Webp, Heic };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Jpeg, Png, Webp, Heic, Tiff };
 
     /// <summary>NPOI умеет распознать — XSSF/HSSF/XWPF. Легаси .doc (HWPF) сюда намеренно НЕ
     /// входит: в NPOI 2.7.4 модуль HWPF отсутствует во всех целевых сборках пакета (проверено
@@ -39,7 +42,7 @@ public static class DocumentContentTypes
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Docx, Xlsx, Xls };
 
     public static readonly IReadOnlySet<string> PlainTextLike =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Csv, PlainText, Rtf, Html };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Csv, PlainText, Rtf, Html, Xml, XmlText };
 
     /// <summary>Полный allow-list вложений мед-записи (что можно ЗАГРУЗИТЬ) — включает Doc, хотя
     /// его конвейер извлечения не распознаёт (см. Office выше): пользователь всё равно может

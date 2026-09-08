@@ -1,0 +1,28 @@
+@if (loading) {
+  <div class="text-preview-status">
+    <app-loading-spinner text="Загружаем…" />
+  </div>
+} @else if (error) {
+  <div class="text-preview-status">
+    <i class="ph ph-warning-circle" aria-hidden="true"></i>
+    <span>Не удалось загрузить содержимое файла.</span>
+  </div>
+} @else if (kind === 'csv') {
+  <div class="text-preview-scroll">
+    <table class="text-preview-table">
+      <tbody>
+        @for (row of csvRows; track $index) {
+          <tr>
+            @for (cell of row; track $index) {
+              <td>{{ cell }}</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else {
+  <div class="text-preview-scroll">
+    <pre class="text-preview-pre">{{ rawText }}</pre>
+  </div>
+}

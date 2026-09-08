@@ -1,0 +1,116 @@
+@if (open) {
+  <div
+    #overlayRoot
+    class="viewer-backdrop"
+    [class.viewer-backdrop-wide]="isWide"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="activeItem?.fileName ?? 'Просмотр файла'"
+    tabindex="-1"
+    (click)="isWide ? requestClose() : null"
+  >
+    <div class="viewer-panel" [class.viewer-panel-fullscreen]="!isWide" (click)="$event.stopPropagation()">
+      <header class="viewer-header">
+        <div class="viewer-header-info text-truncate">
+          <div class="viewer-header-name text-truncate">{{ activeItem?.fileName ?? '…' }}</div>
+          @if (hasGallery) {
+            <div class="viewer-header-count">{{ activeIndex + 1 }} / {{ attachments.length }}</div>
+          }
+        </div>
+        <div class="viewer-header-actions">
+          @if (canTransform) {
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Уменьшить" (click)="zoomOut()">
+              <i class="ph ph-magnifying-glass-minus" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Увеличить" (click)="zoomIn()">
+              <i class="ph ph-magnifying-glass-plus" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Повернуть" (click)="rotate()">
+              <i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Печать" (click)="print()">
+              <i class="ph ph-printer" aria-hidden="true"></i>
+            </button>
+          }
+          @if (activeItem?.downloadUrl) {
+            <button type="button" class="btn btn-icon btn-ghost" aria-label="Скачать" (click)="download()">
+              <i class="ph ph-download-simple" aria-hidden="true"></i>
+            </button>
+          }
+          <button type="button" class="btn btn-icon btn-ghost" aria-label="Закрыть" (click)="requestClose()">
+            <i class="ph ph-x" aria-hidden="true"></i>
+          </button>
+        </div>
+      </header>
+
+      <div
+        class="viewer-stage"
+        (wheel)="onStageWheel($event)"
+        (pointerdown)="onStagePointerDown($event)"
+        (pointermove)="onStagePointerMove($event)"
+        (pointerup)="onStagePointerUp($event)"
+        (pointercancel)="onStagePointerUp($event)"
+      >
+        @if (hasGallery && isWide) {
+          <button
+            type="button"
+            class="viewer-nav-arrow viewer-nav-arrow-left"
+            aria-label="Предыдущий файл"
+            [disabled]="activeIndex === 0"
+            (click)="prev()"
+          >
+            <i class="ph-bold ph-caret-left" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="viewer-nav-arrow viewer-nav-arrow-right"
+            aria-label="Следующий файл"
+            [disabled]="activeIndex === attachments.length - 1"
+            (click)="next()"
+          >
+            <i class="ph-bold ph-caret-right" aria-hidden="true"></i>
+          </button>
+        }
+
+        @if (activeItem; as item) {
+          @switch (item.status === 'ready' ? item.renderKind : 'none') {
+            @case ('image') {
+              <app-image-preview [url]="item.contentUrl!" [transform]="transform" [alt]="item.fileName" />
+            }
+            @case ('pdf') {
+              <app-pdf-preview [url]="item.contentUrl!" [transform]="transform" />
+            }
+            @case ('text') {
+              <app-text-preview [url]="item.contentUrl!" [contentType]="item.contentType" />
+            }
+            @default {
+              <app-unsupported-preview
+                [fileName]="item.fileName"
+                [contentType]="item.contentType"
+                [sizeBytes]="item.sizeBytes"
+                [pending]="item.status === 'pending'"
+                [failureReason]="item.failureReason"
+                [canDownload]="!!item.downloadUrl"
+                (download)="download()"
+              />
+            }
+          }
+        }
+      </div>
+
+      @if (hasGallery && !isWide) {
+        <div class="viewer-dots">
+          @for (a of attachments; track a.id; let i = $index) {
+            <button
+              type="button"
+              class="viewer-dot"
+              [class.viewer-dot-active]="i === activeIndex"
+              [attr.aria-label]="'Файл ' + (i + 1)"
+              (click)="activeIndexChange.emit(i)"
+            ></button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+}

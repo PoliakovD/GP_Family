@@ -73,6 +73,8 @@ public class EncryptionRotationJob(
             await RotateFieldsAsync(run, ct);
             if (!await IsCancelledAsync(run.Id, ct))
                 await RotateBlobsAsync(run, ct);
+            if (!await IsCancelledAsync(run.Id, ct))
+                await ResetStalePreviewsAsync(ct);
 
             var cancelled = await IsCancelledAsync(run.Id, ct);
             run.Status = cancelled ? EncryptionRotationStatus.Cancelled : EncryptionRotationStatus.Completed;
@@ -242,6 +244,50 @@ public class EncryptionRotationJob(
 
             if (page.Count < PageSize) return;
         }
+    }
+
+    // --- Фаза 3: превью вложений (регенерируемый кэш — не перешифровывается) ---
+
+    /// <summary>
+    /// В отличие от RotateBlobsAsync (фаза 2), превью не перешифровываются, а удаляются — дешевле
+    /// пересоздать по требованию (см. AttachmentService.GetPreviewAsync: PreviewStatus=None ставит
+    /// вложение в очередь генерации лениво, при первом открытии), чем тащить их через тот же
+    /// резюмируемый курсор. Не имеет собственного курсора в EncryptionRotationRun — идемпотентный
+    /// проход одним запросом (множество, как правило, на порядки меньше FileAttachments и не
+    /// требует постраничного резюме); повторный вызов после сбоя/ретрая просто находит уже меньше
+    /// строк — ничего не задваивает.
+    /// </summary>
+    private async Task ResetStalePreviewsAsync(CancellationToken ct)
+    {
+        var stale = await db.AttachmentPreviews.AsNoTracking()
+            .Where(p => p.IsEncrypted && p.KeyId != keyRing.ActiveKeyId)
+            .Select(p => new { p.Id, p.AttachmentId, p.StorageKey })
+            .ToListAsync(ct);
+        if (stale.Count == 0) return;
+
+        var staleIds = stale.Select(p => p.Id).ToList();
+        await db.AttachmentPreviews.Where(p => staleIds.Contains(p.Id)).ExecuteDeleteAsync(ct);
+
+        var affectedAttachmentIds = stale.Select(p => p.AttachmentId).Distinct().ToList();
+        await db.FileAttachments.Where(a => affectedAttachmentIds.Contains(a.Id))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.PreviewStatus, AttachmentPreviewStatus.None)
+                .SetProperty(a => a.PreviewGeneratedAt, (DateTime?)null)
+                .SetProperty(a => a.PreviewFailureReason, (string?)null), ct);
+
+        foreach (var key in stale.Select(p => p.StorageKey))
+        {
+            try
+            {
+                await storage.DeleteAsync(key, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Ротация: не удалось удалить устаревший блоб превью {StorageKey}.", key);
+            }
+        }
+
+        logger.LogInformation("EncryptionRotationJob: сброшено {Count} устаревших превью вложений.", stale.Count);
     }
 
     /// <summary>

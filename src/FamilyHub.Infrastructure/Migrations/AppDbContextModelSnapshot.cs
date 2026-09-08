@@ -22,6 +22,58 @@ namespace FamilyHub.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.AttachmentPreview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AttachmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsEncrypted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttachmentId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("AttachmentPreviews", "medical");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.Birthday", b =>
                 {
                     b.Property<Guid>("Id")
@@ -402,6 +454,15 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<int>("OwnerType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PreviewFailureReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PreviewGeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PreviewStatus")
                         .HasColumnType("integer");
 
                     b.Property<long>("SizeBytes")
@@ -1846,6 +1907,15 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("DataProtectionKeys");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.AttachmentPreview", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.FileAttachment", null)
+                        .WithMany()
+                        .HasForeignKey("AttachmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Birthday", b =>
