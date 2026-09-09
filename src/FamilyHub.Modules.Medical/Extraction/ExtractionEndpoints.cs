@@ -94,7 +94,7 @@ public static class ExtractionEndpoints
         records.MapPut("/{recordId:guid}/specimen", async (
             Guid recordId, SetRecordSpecimenRequest body, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var result = await service.SetRecordSpecimenAsync(recordId, currentUser.UserId, body.SpecimenKbId, ct);
+            var (result, warning) = await service.SetRecordSpecimenAsync(recordId, currentUser.UserId, body.SpecimenKbId, ct);
             return result switch
             {
                 SetRecordSpecimenResult.NotFound => Results.NotFound(),
@@ -102,7 +102,10 @@ public static class ExtractionEndpoints
                 SetRecordSpecimenResult.Conflict => Results.Json(
                     new { code = "specimen_conflict", message = "Не удалось сменить источник — в записи уже есть одноимённые показатели под разными источниками (унаследовано из старого распознавания)." },
                     statusCode: StatusCodes.Status409Conflict),
-                _ => Results.NoContent(),
+                // 200 с warning (заметка 3), не 204 — источник сохранён, но гейт «на бред»
+                // отклонил обогащение справочника хотя бы для одного показателя под новым
+                // источником; сама правка при этом не блокируется.
+                _ => warning is not null ? Results.Ok(new { warning }) : Results.NoContent(),
             };
         });
 

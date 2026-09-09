@@ -5,6 +5,7 @@ using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.MedicalRecords;
+using FamilyHub.Modules.Medical.Pipeline;
 using Microsoft.EntityFrameworkCore;
 using DomainLabIndicator = FamilyHub.Domain.Entities.LabIndicator;
 
@@ -22,8 +23,24 @@ public enum ExtractionQueryResult { Success, NotFound, Forbidden, Failed }
 public class ExtractionQueryService(
     AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup,
     Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer,
-    LabAnalyteKbLookupService analyteKbLookup, LabAnalyteEnrichmentRequestService enrichmentRequest)
+    LabAnalyteKbLookupService analyteKbLookup, LabAnalyteEnrichmentRequestService enrichmentRequest,
+    ILegitimacyGuardService legitimacyGuard, IAnalytePlausibilityGuardService plausibilityGuard)
 {
+    /// <summary>Заметка 3 — гейты проверяются СИНХРОННО, до постановки обогащения в очередь, а не
+    /// только внутри фонового LabAnalyteEnrichmentProcessor (тот же порог для ManualEntry, что уже
+    /// есть там — этот вызов лишь пододвигает его раньше, чтобы отказ был виден сразу, а не терялся
+    /// в Job.Status=Failed без какой-либо видимой пользователю причины). Отказ НЕ блокирует
+    /// сохранение самого показателя/источника — только обогащение общего справочника.</summary>
+    private async Task<string?> CheckManualEntryGatesAsync(string analyteName, string? specimenDisplayName, CancellationToken ct)
+    {
+        var legitimacy = await legitimacyGuard.CheckAsync(analyteName, ct);
+        if (!legitimacy.IsLegitimate) return legitimacy.Reason;
+
+        var plausibility = await plausibilityGuard.CheckAsync(analyteName, specimenDisplayName, ct);
+        if (!plausibility.IsPlausible) return plausibility.Reason;
+
+        return null;
+    }
     public async Task<(ExtractionQueryResult Result, ExtractionStatusResponse? Item)> GetStatusAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
     {
@@ -350,12 +367,21 @@ public class ExtractionQueryService(
         await db.SaveChangesAsync(ct);
 
         // Промах справочника по (показатель, источник) после правки — ставим обогащение в
-        // очередь, тем же единственным входом, что и CreateIndicatorAsync (см. её class doc).
+        // очередь, тем же единственным входом, что и CreateIndicatorAsync (см. её class doc), но
+        // только после синхронной проверки гейтами (заметка 3) — раньше отказ был виден только
+        // задним числом в Job.Status=Failed внутри фонового процессора.
         var lookup = await analyteKbLookup.LookupAsync(analyteKey, indicator.SpecimenKbId, ct);
-        if (lookup.Kind != Kb.KbLookupKind.Hit)
-            await enrichmentRequest.RequestAsync(
-                analyteKey, indicator.SpecimenKbId, displayName, indicator.Id, userId,
-                origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+        // Нерезолвленный источник и так навсегда отклонён внутри RequestAsync (жёсткое правило) —
+        // не тратим гейт-вызов LLM на заведомо обречённую постановку в очередь.
+        if (lookup.Kind != Kb.KbLookupKind.Hit && indicator.SpecimenKbId != Domain.Entities.SpecimenContextIds.Unresolved)
+        {
+            var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
+                .Where(s => s.Id == indicator.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+            if (await CheckManualEntryGatesAsync(displayName, specimenDisplayName, ct) is null)
+                await enrichmentRequest.RequestAsync(
+                    analyteKey, indicator.SpecimenKbId, displayName, indicator.Id, userId,
+                    origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+        }
 
         return UpdateIndicatorResult.Success;
     }
@@ -365,16 +391,22 @@ public class ExtractionQueryService(
     /// остальные мутации записи). Каскадится на все LabIndicators записи разом — источник у них
     /// денормализован (см. class doc LabIndicator.SpecimenKbId), правка одного показателя больше
     /// невозможна, только всей записи целиком. SpecimenHint сбрасывается — раз источник уточнён,
-    /// подсказка "уточните источник" в UI больше не нужна.</summary>
-    public async Task<SetRecordSpecimenResult> SetRecordSpecimenAsync(
+    /// подсказка "уточните источник" в UI больше не нужна.
+    ///
+    /// Warning в ответе (заметка 3) — не null, если гейты (см. CheckManualEntryGatesAsync)
+    /// отклонили обогащение хотя бы одного промахнувшегося показателя под НОВЫМ источником: смена
+    /// источника сама по себе всегда сохраняется (Success), отклонение гейта — только про то, что
+    /// в общий справочник по этой паре ничего не уйдёт.</summary>
+    public async Task<(SetRecordSpecimenResult Result, string? Warning)> SetRecordSpecimenAsync(
         Guid recordId, Guid userId, Guid specimenKbId, CancellationToken ct = default)
     {
         var record = await db.MedicalRecords.FirstOrDefaultAsync(r => r.Id == recordId, ct);
-        if (record is null) return SetRecordSpecimenResult.NotFound;
-        if (record.OwnerUserId != userId) return SetRecordSpecimenResult.Forbidden;
+        if (record is null) return (SetRecordSpecimenResult.NotFound, null);
+        if (record.OwnerUserId != userId) return (SetRecordSpecimenResult.Forbidden, null);
 
-        if (!await db.GlobalSpecimensKb.AnyAsync(s => s.Id == specimenKbId, ct))
-            return SetRecordSpecimenResult.NotFound;
+        var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => s.Id == specimenKbId).Select(s => (string?)s.DisplayName).FirstOrDefaultAsync(ct);
+        if (specimenDisplayName is null) return (SetRecordSpecimenResult.NotFound, null);
 
         var indicators = await db.LabIndicators.AsNoTracking()
             .Where(i => i.MedicalRecordId == recordId)
@@ -399,22 +431,32 @@ public class ExtractionQueryService(
                 // после каскада оба легли бы на одну пару (AnalyteKey, specimenKbId), нарушив
                 // уникальный индекс. Откатываем и правку записи — источник не сменён нигде.
                 await db.Entry(record).ReloadAsync(ct);
-                return SetRecordSpecimenResult.Conflict;
+                return (SetRecordSpecimenResult.Conflict, null);
             }
         }
 
         // Промах справочника по любому из показателей записи на новую пару — ставим обогащение в
-        // очередь, тем же единственным входом, что и Update/CreateIndicatorAsync.
+        // очередь, тем же единственным входом, что и Update/CreateIndicatorAsync, но только после
+        // синхронной проверки гейтами (заметка 3) — иначе отказ был бы виден только задним числом
+        // в Job.Status=Failed внутри фонового процессора.
+        var rejectedNames = new List<string>();
+        var isResolved = specimenKbId != Domain.Entities.SpecimenContextIds.Unresolved;
         foreach (var indicator in indicators)
         {
             var lookup = await analyteKbLookup.LookupAsync(indicator.AnalyteKey, specimenKbId, ct);
-            if (lookup.Kind != Kb.KbLookupKind.Hit)
+            if (lookup.Kind == Kb.KbLookupKind.Hit || !isResolved) continue;
+
+            if (await CheckManualEntryGatesAsync(indicator.DisplayName, specimenDisplayName, ct) is null)
                 await enrichmentRequest.RequestAsync(
                     indicator.AnalyteKey, specimenKbId, indicator.DisplayName, indicator.Id, userId,
                     origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+            else
+                rejectedNames.Add(indicator.DisplayName);
         }
 
-        return SetRecordSpecimenResult.Success;
+        var warning = rejectedNames.Count == 0 ? null
+            : $"Источник сохранён, но для показателей ({string.Join(", ", rejectedNames)}) он не будет добавлен в общий справочник — сочетание выглядит недостоверным.";
+        return (SetRecordSpecimenResult.Success, warning);
     }
 
     /// <summary>Ручное добавление показателя (UX-редизайн) — тот же путь расчёта флага, что и
@@ -489,17 +531,20 @@ public class ExtractionQueryService(
         db.LabIndicators.Add(indicator);
         await db.SaveChangesAsync(ct);
 
+        var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => s.Id == record.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+
         // Промах справочника по (показатель, источник) — ставим обогащение в очередь, тем же
-        // единственным входом, что и распознавание документа (см. class doc выше). Гейт на
+        // единственным входом, что и распознавание документа (см. class doc выше), но только
+        // после синхронной проверки гейтами (заметка 3, см. CheckManualEntryGatesAsync). Гейт на
         // нерезолвленный источник и дедуп — внутри RequestAsync, не здесь.
         var lookup = await analyteKbLookup.LookupAsync(analyteKey, record.SpecimenKbId, ct);
-        if (lookup.Kind != Kb.KbLookupKind.Hit)
+        if (lookup.Kind != Kb.KbLookupKind.Hit && record.SpecimenKbId != Domain.Entities.SpecimenContextIds.Unresolved &&
+            await CheckManualEntryGatesAsync(displayName, specimenDisplayName, ct) is null)
             await enrichmentRequest.RequestAsync(
                 analyteKey, record.SpecimenKbId, displayName, indicator.Id, userId,
                 origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
 
-        var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
-            .Where(s => s.Id == record.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
         return (CreateIndicatorResult.Success, ToDto(indicator, specimenDisplayName));
     }
 

@@ -66,25 +66,13 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         indicator.RefSource.Should().Be(RefSource.Blank);
     }
 
-    [Fact]
-    public async Task CreateIndicator_KbMiss_QueuesEnrichmentJob_ForResolvedSpecimen()
-    {
-        var owner = ClientAs(FreshTelegramId());
-        var record = await CreateAnalysisAsync(owner, await BloodSpecimenIdAsync());
-        var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
-
-        var response = await owner.PostAsJsonAsync(
-            $"/api/medical-records/{record.Id}/indicators", SampleIndicator(uniqueName));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        using var scope = Factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
-
-        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeTrue(
-            "ручное добавление показателя теперь ставит обогащение справочника в очередь при промахе KB, " +
-            "тем же путём, что и распознавание документа");
-    }
+    // CreateIndicator_KbMiss_QueuesEnrichmentJob_ForResolvedSpecimen,
+    // UpdateIndicator_KbMiss_QueuesEnrichmentJob_WithManualEntryOrigin и
+    // SetRecordSpecimen_CascadesToAllIndicators_AndQueuesEnrichmentOnMiss переехали в
+    // IndicatorEnrichmentGateTests.cs (заметка 3 — гейты легитимности/правдоподобности теперь
+    // синхронные, ДО постановки обогащения в очередь; этот хост нарочно направляет LM Studio на
+    // закрытый порт, поэтому оба гейта здесь всегда отклоняли бы deny-by-default — нужен отдельный
+    // хост с фейковым клиентом, отвечающим {"valid": true}).
 
     [Fact]
     public async Task CreateIndicator_KbMiss_UnresolvedSpecimen_DoesNotQueueEnrichmentJob()
@@ -108,27 +96,25 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     }
 
     [Fact]
-    public async Task UpdateIndicator_KbMiss_QueuesEnrichmentJob_WithManualEntryOrigin()
+    public async Task CreateIndicator_KbMiss_GateDeniesByDefault_StillSavesIndicator_ButDoesNotQueueEnrichment()
     {
+        // Этот хост нарочно направляет LM Studio на закрытый порт (см. class doc FamilyHubWebFactory) —
+        // синхронные гейты (заметка 3) отклоняют deny-by-default. Показатель обязан сохраниться
+        // (личные данные пользователя, ими он распоряжается всегда), обогащение — нет.
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner, await BloodSpecimenIdAsync());
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
-            .Content.ReadFromJsonAsync<IndicatorDto>())!;
-
         var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
-        var response = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}",
-            new UpdateIndicatorRequest(uniqueName, "140", "г/л", "130", "160", null));
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var response = await owner.PostAsJsonAsync(
+            $"/api/medical-records/{record.Id}/indicators", SampleIndicator(uniqueName));
+        response.StatusCode.Should().Be(HttpStatusCode.Created, "отказ гейта не должен блокировать сохранение самого показателя");
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
 
-        var job = await db.LabAnalyteEnrichmentJobs.SingleOrDefaultAsync(j => j.NormalizedName == analyteKey);
-        job.Should().NotBeNull(
-            "правка показателя теперь тоже ставит обогащение справочника в очередь при промахе KB, как и добавление");
-        job!.Origin.Should().Be(EnrichmentRequestOrigin.ManualEntry,
-            "правка — ручной ввод, задача должна пройти дополнительный гейт правдоподобности в процессоре");
+        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeFalse(
+            "гейт легитимности/правдоподобности отклонён (LM Studio недоступен → deny-by-default) — обогащение не ставится");
     }
 
     [Fact]
@@ -205,34 +191,6 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
 
         (await stranger.DeleteAsync($"/api/indicators/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await owner.DeleteAsync($"/api/indicators/{Guid.NewGuid()}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task SetRecordSpecimen_CascadesToAllIndicators_AndQueuesEnrichmentOnMiss()
-    {
-        var owner = ClientAs(FreshTelegramId());
-        // Без specimenKbId — запись создаётся на дефолте Unresolved, показатель наследует его.
-        var record = await CreateAnalysisAsync(owner);
-        var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator(uniqueName)))
-            .Content.ReadFromJsonAsync<IndicatorDto>())!;
-        created.SpecimenKbId.Should().Be(SpecimenContextIds.Unresolved);
-
-        var bloodId = await BloodSpecimenIdAsync();
-        var response = await owner.PutAsJsonAsync(
-            $"/api/medical-records/{record.Id}/specimen", new SetRecordSpecimenRequest(bloodId));
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-
-        var indicators = await (await owner.GetAsync($"/api/medical-records/{record.Id}/indicators"))
-            .Content.ReadFromJsonAsync<List<IndicatorDto>>();
-        indicators!.Should().ContainSingle().Which.SpecimenKbId.Should().Be(bloodId,
-            "источник — атрибут ВСЕЙ записи (заметка 1), смена записи каскадится на все её показатели");
-
-        using var scope = Factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
-        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey && j.SpecimenKbId == bloodId))
-            .Should().BeTrue("промах справочника по (показатель, новый источник) после смены должен ставить обогащение в очередь");
     }
 
     [Fact]
