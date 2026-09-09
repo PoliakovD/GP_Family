@@ -147,6 +147,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   items: MedicalRecord[] = [];
   loading = true;
   error: string | null = null;
+  /** Информационное сообщение (не ошибка) — «уже в очереди»/«сервер недоступен» на попытке
+   * «Распознать»: отдельно от error, чтобы не выглядеть как сбой (см. handleRecognize). */
+  info: string | null = null;
 
   // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
   // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
@@ -203,13 +206,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   newIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
   savingNewIndicator = false;
 
-  // --- Источник показателя (пересборка enrich-пайплайна) — свободный текстовый поиск по общему
-  // справочнику (GlobalSpecimenKb) вместо прежнего захардкоженного select'а на 6 значений
-  // SpecimenType: одно текстовое поле на всё, resolveSpecimenQuery находит-или-заводит строку
-  // справочника при потере фокуса (тот же find-or-register, что раньше был только у «своего»
-  // биоматериала — теперь единственный путь на все случаи).
-  editSpecimenQuery = '';
-  newSpecimenQuery = '';
+  // --- Источник ВСЕЙ записи (заметка 1) — свободный текстовый поиск по общему справочнику
+  // (GlobalSpecimenKb), меняется отдельно от показателей (PUT .../specimen, каскадится на все
+  // показатели записи). resolveSpecimenQuery находит-или-заводит строку справочника при потере
+  // фокуса (тот же find-or-register, что раньше был только у «своего» биоматериала — теперь
+  // единственный путь на все случаи).
+  editingSpecimenRecordId: string | null = null;
+  recordSpecimenQuery = '';
+  recordSpecimenForm: { specimenKbId: string } = { specimenKbId: '' };
+  savingRecordSpecimen = false;
   specimenSuggestions: GlobalSpecimenDto[] = [];
   customSpecimens: UserSpecimen[] = [];
   customSpecimenError: string | null = null;
@@ -680,10 +685,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       [record.id]: [{ id: 'queued', label: 'В очереди', state: 'active' }],
     };
     try {
-      await this.api.requestExtraction(record.id);
+      const response = await this.api.requestExtraction(record.id);
+      this.error = null;
+      // already_queued/llm_unavailable — не ошибка и не новая постановка в очередь (см.
+      // ExtractionRequestResult на бэкенде): показываем как info-плашку и НЕ запускаем поллинг
+      // заново — на already_queued существующая задача уже опрашивается предыдущим вызовом (или
+      // будет подхвачена следующим обновлением списка), на llm_unavailable опрашивать нечего.
+      if (response?.code === 'already_queued' || response?.code === 'llm_unavailable') {
+        this.info = response.message ?? null;
+        this.recognizingRecordId = null;
+        this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [record.id]: [] };
+        return;
+      }
+      this.info = null;
       this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: null };
       this.startPolling(record);
-      this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось запустить распознавание.';
       this.recognizingRecordId = null;
@@ -899,22 +915,19 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       displayName: indicator.displayName,
       valueRaw: indicator.valueRaw,
       unit: indicator.unit,
-      specimenKbId: indicator.specimenKbId,
       refLowText: indicator.refLowText,
       refHighText: indicator.refHighText,
       refText: indicator.refText,
     };
-    this.editSpecimenQuery = indicator.specimenDisplayName ?? '';
   }
 
   cancelEditIndicator(): void {
     this.editingIndicatorId = null;
     this.editIndicatorForm = emptyIndicatorEdit();
-    this.editSpecimenQuery = '';
   }
 
   async saveEditIndicator(recordId: string): Promise<void> {
-    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim() || !this.editIndicatorForm.specimenKbId) return;
+    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
     this.savingIndicator = true;
     try {
       await this.api.updateIndicator(this.editingIndicatorId, sanitizeIndicatorForm(this.editIndicatorForm));
@@ -954,17 +967,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.editingIndicatorId = null;
     this.creatingIndicatorRecordId = recordId;
     this.newIndicatorForm = emptyIndicatorEdit();
-    this.newSpecimenQuery = '';
   }
 
   cancelCreateIndicator(): void {
     this.creatingIndicatorRecordId = null;
     this.newIndicatorForm = emptyIndicatorEdit();
-    this.newSpecimenQuery = '';
   }
 
   async saveNewIndicator(): Promise<void> {
-    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim() || !this.newIndicatorForm.specimenKbId) return;
+    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim()) return;
     const recordId = this.creatingIndicatorRecordId;
     this.savingNewIndicator = true;
     try {
@@ -1001,8 +1012,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Резолвит введённый текст в ссылку на справочник при потере фокуса поля — совпадение среди
    * уже загруженных подсказок берётся без сети; новый текст проходит find-or-register
    * (POST /api/specimens, та же LLM-валидация, что раньше была только у «своего» биоматериала —
-   * теперь единственный путь на все случаи, включая распространённые источники). */
-  async resolveSpecimenQuery(query: string, form: UpdateIndicatorRequest): Promise<void> {
+   * теперь единственный путь на все случаи, включая распространённые источники). form — общий
+   * shape { specimenKbId }, не завязан на конкретную форму (используется и записью, и раньше —
+   * показателем, до того как источник переехал на уровень записи, см. заметку 1). */
+  async resolveSpecimenQuery(query: string, form: { specimenKbId: string }): Promise<void> {
     const trimmed = query.trim();
     if (!trimmed || this.savingCustomSpecimen) return;
 
@@ -1025,6 +1038,39 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить источник показателя.';
     } finally {
       this.savingCustomSpecimen = false;
+    }
+  }
+
+  // --- Источник ВСЕЙ записи (заметка 1) — карточка показывает текущий источник и позволяет его
+  // сменить/уточнить; та же UI-механика поиска/find-or-register, что раньше была у показателя. ---
+
+  /** hint — предзаполняет поле поиска подсказкой модели ("мазок" без локализации, заметка 2),
+   * когда открывается из баннера "уточните источник", а не из обычной ссылки "изменить". */
+  startEditRecordSpecimen(record: MedicalRecord, hint?: string): void {
+    this.editingSpecimenRecordId = record.id;
+    this.recordSpecimenQuery = hint ?? record.specimenDisplayName ?? '';
+    this.recordSpecimenForm = { specimenKbId: record.specimenKbId };
+    this.customSpecimenError = null;
+  }
+
+  cancelEditRecordSpecimen(): void {
+    this.editingSpecimenRecordId = null;
+    this.recordSpecimenQuery = '';
+    this.customSpecimenError = null;
+  }
+
+  async saveRecordSpecimen(recordId: string): Promise<void> {
+    if (!this.recordSpecimenForm.specimenKbId || this.savingRecordSpecimen) return;
+    this.savingRecordSpecimen = true;
+    try {
+      await this.api.setRecordSpecimen(recordId, this.recordSpecimenForm.specimenKbId);
+      this.cancelEditRecordSpecimen();
+      this.error = null;
+      await this.refresh();
+    } catch (err) {
+      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить источник.';
+    } finally {
+      this.savingRecordSpecimen = false;
     }
   }
 
@@ -1245,7 +1291,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {
   return {
-    displayName: '', valueRaw: '', unit: null, specimenKbId: '',
+    displayName: '', valueRaw: '', unit: null,
     refLowText: null, refHighText: null, refText: null,
   };
 }

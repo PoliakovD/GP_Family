@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
@@ -137,6 +138,13 @@ public class MedicalDocumentExtractionProcessor(
                 var source = new DocumentSource(bytes, download.Value.ContentType, download.Value.FileName);
                 var result = await extractor.ExtractAsync(source, record.Kind, ct);
 
+                // Технический сбой (LM Studio недоступен) — НЕ проставляем ExtractedAt на
+                // непрочитанном файле (readAttachmentIds ниже не пополняется) и пробрасываем
+                // исключение: catch в RunAsync запустит Hangfire-ретрай по расписанию вместо того,
+                // чтобы навсегда похоронить файл как "распознанный" (см. план, часть 1).
+                if (result.IsTransientFailure)
+                    throw new LmStudioUnavailableException(result.FailureReason ?? "Локальный сервер распознавания недоступен.");
+
                 if (!result.Supported)
                     fileErrors.Add($"{attachment.FileName}: {result.FailureReason ?? "формат не поддержан распознаванием"}");
                 else
@@ -170,6 +178,10 @@ public class MedicalDocumentExtractionProcessor(
                 // блокировал бы повторную постановку в очередь для этой же записи.
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+                // Помечаем ТОЛЬКО технический сбой (LM Studio так и не ответил за все попытки) —
+                // по этому флагу LmStudioRecoverySweepJob находит задачи, которые стоит вернуть в
+                // очередь, когда сервер снова станет доступен (см. план, часть 1).
+                job.IsTransientFailure = ex is LmStudioUnavailableException;
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicalDocumentExtractionJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
@@ -184,7 +196,7 @@ public class MedicalDocumentExtractionProcessor(
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
         string? doctor = null;
-        var rawIndicators = new List<(ExtractedLabIndicator Dto, SpecimenDocumentResolution? Resolution)>();
+        var rawIndicators = new List<ExtractedLabIndicator>();
 
         foreach (var result in results)
         {
@@ -192,13 +204,7 @@ public class MedicalDocumentExtractionProcessor(
             if (suggestedTitle is null && !string.IsNullOrWhiteSpace(result.SuggestedTitle)) suggestedTitle = result.SuggestedTitle;
             if (doctor is null && !string.IsNullOrWhiteSpace(result.Doctor)) doctor = result.Doctor;
             if (result.LabIndicators is null) continue;
-
-            // Источник (биоматериал/исследование) резолвится один раз на файл экстрактором (см.
-            // SpecimenResolver, LmStudioMedicalDocumentExtractor.ExtractAnalysisAsync) — здесь
-            // только переносится на каждый показатель этого файла, ещё не сведён к Guid: секция
-            // конкретного показателя (несколько панелей на одном бланке) может переопределить
-            // document-level источник этого же файла, см. ниже.
-            rawIndicators.AddRange(result.LabIndicators.Select(dto => (dto, result.SpecimenResolution)));
+            rawIndicators.AddRange(result.LabIndicators);
         }
 
         if (rawIndicators.Count == 0)
@@ -218,6 +224,34 @@ public class MedicalDocumentExtractionProcessor(
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
         if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
+        // Источник — атрибут ВСЕЙ записи, не отдельного показателя (заметка 1): смешанный бланк
+        // (кровь+моча) пользователь разделяет вручную на две записи, не конвейер посекционно. Уже
+        // резолвленный источник (ручной выбор пользователя или прошлый прогон «Распознать») НЕ
+        // переопределяется — та же логика, что у Title/Doctor выше. Среди файлов этого прогона
+        // берём резолюцию с наибольшей уверенностью модели.
+        if (record.SpecimenKbId == Domain.Entities.SpecimenContextIds.Unresolved)
+        {
+            var bestResolution = results
+                .Select(r => r.SpecimenResolution)
+                .Where(r => r is not null)
+                .OrderByDescending(r => r!.Confidence)
+                .FirstOrDefault();
+
+            if (bestResolution is not null)
+            {
+                record.SpecimenKbId = await specimenResolver.ResolveKbIdAsync(
+                    bestResolution.Context, bestResolution.Confidence, bestResolution.RawLabel, ct);
+
+                // Источник вида "мазок"/"соскоб" без указанной локализации (заметка 2) — модель
+                // намеренно не регистрирует его как context; кладём подсказку для UI, которая
+                // попросит пользователя уточнить, откуда именно.
+                if (record.SpecimenKbId == Domain.Entities.SpecimenContextIds.Unresolved &&
+                    !string.IsNullOrWhiteSpace(bestResolution.NeedsSite))
+                    record.SpecimenHint = bestResolution.NeedsSite;
+            }
+        }
+        var recordSpecimenKbId = record.SpecimenKbId;
+
         var recordId = record.Id;
         var ownerUserId = record.OwnerUserId;
         var recordDate = record.RecordDate;
@@ -233,48 +267,18 @@ public class MedicalDocumentExtractionProcessor(
         if (await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "ocr-correct", ct))
         {
             var correctedNames = await ocrNameCorrector.CorrectBatchAsync(
-                rawIndicators.Select(x => x.Dto.Name).ToList(), ct);
+                rawIndicators.Select(x => x.Name).ToList(), ct);
             rawIndicators = rawIndicators
-                .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.Resolution))
+                .Select((x, i) => x with { Name = correctedNames[i] })
                 .ToList();
         }
 
-        // Резолвим источник в Guid — секция (несколько панелей на одном бланке, см. SpecimenResolver)
-        // побеждает над document-level контекстом того же файла, если модель явно перечислила этот
-        // показатель в секции с другим источником. Кэш по (context, rawLabel, confidence) — один
-        // запрос к справочнику на уникальную комбинацию, не на каждый показатель.
-        var specimenKbIdCache = new Dictionary<(string? Context, string? RawLabel, double Confidence), Guid>();
-        async Task<Guid> ResolveSpecimenKbIdAsync(string? context, string? rawLabel, double confidence)
-        {
-            var cacheKey = (context, rawLabel, confidence);
-            if (specimenKbIdCache.TryGetValue(cacheKey, out var cached)) return cached;
-            var resolved = await specimenResolver.ResolveKbIdAsync(context, confidence, rawLabel, ct);
-            specimenKbIdCache[cacheKey] = resolved;
-            return resolved;
-        }
-
         var normalized = new List<(ExtractedLabIndicator Dto, string AnalyteKey, Guid SpecimenKbId)>();
-        foreach (var (dto, resolution) in rawIndicators)
+        foreach (var dto in rawIndicators)
         {
             var analyteKey = LabAnalyteNormalizer.Normalize(dto.Name);
             if (analyteKey.Length == 0) continue;
-
-            var section = resolution?.Sections.FirstOrDefault(s => s.IndicatorNames.Any(n =>
-                string.Equals(LabAnalyteNormalizer.Normalize(n), analyteKey, StringComparison.Ordinal)));
-
-            // Секция побеждает над document-level контекстом (свой источник для этой конкретной
-            // группы показателей), но проходит ТЕ ЖЕ проверки, что и документ целиком — своя,
-            // честная confidence модели (не 1.0, см. class doc SpecimenSection про баг, к которому
-            // приводила подделка) и триграммное вето против rawLabel документа, если он есть
-            // (у секции своего rawLabel не бывает — сверяем с тем, что модель написала про весь
-            // файл; rawLabel документа пуст — ResolveKbIdAsync просто пропускает вето для этой пары,
-            // как и раньше для document-level случая без rawLabel).
-            var (context, rawLabel, confidence) = section is not null
-                ? (section.Context, resolution?.RawLabel, section.Confidence)
-                : (resolution?.Context, resolution?.RawLabel, resolution?.Confidence ?? 0);
-
-            var specimenKbId = await ResolveSpecimenKbIdAsync(context, rawLabel, confidence);
-            normalized.Add((dto, analyteKey, specimenKbId));
+            normalized.Add((dto, analyteKey, recordSpecimenKbId));
         }
 
         // Один Lookup на уникальную пару (имя, источник) — один и тот же показатель из одного и

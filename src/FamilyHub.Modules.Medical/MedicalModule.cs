@@ -67,6 +67,11 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteKbReenrichJob>();
         services.AddScoped<LabAnalyteKbRebuildJob>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
+        // Ночной добиватель транзиентных сбоев LM Studio (см. план часть 1.4) — резюмирует
+        // задачи, упавшие технически после исчерпания [AutomaticRetry], когда сервер снова стал
+        // доступен. Регистрация рекуррентного расписания — в Program.cs (тот же приём, что
+        // reminder-scan/audit-retention/encryption-rotation-catchup).
+        services.AddScoped<LmStudioRecoverySweepJob>();
         // Второй проход коррекции OCR (анализы + медикаменты, см. class doc) — общий на оба конвейера.
         services.AddScoped<OcrNameCorrector>();
         // Общий (не персональный) справочник источников показателя — биоматериал ИЛИ
@@ -75,6 +80,9 @@ public static class MedicalModule
         // (UserSpecimenService), и резолвингом при извлечении документа (SpecimenResolver).
         services.AddScoped<GlobalSpecimenKbService>();
         services.AddScoped<SpecimenResolver>();
+        // Короткое название анализа отдельным LLM-проходом (заметка 4) — та же роль в конвейере,
+        // что у SpecimenResolver, только для названия, не источника.
+        services.AddScoped<AnalysisTitleGenerator>();
         services.AddScoped<UserSpecimenService>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.

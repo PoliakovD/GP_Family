@@ -24,29 +24,40 @@ namespace FamilyHub.IntegrationTests;
 /// постраничный.</summary>
 public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
-    private static async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner)
+    /// <summary>specimenKbId — если задан, сразу проставляется на запись через PUT .../specimen
+    /// (заметка 1: источник теперь атрибут ВСЕЙ записи, не отдельного показателя) — null оставляет
+    /// запись на дефолте SpecimenContextIds.Unresolved.</summary>
+    private static async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner, Guid? specimenKbId = null)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), null, null, null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
+        var record = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
+
+        if (specimenKbId is { } id)
+        {
+            var specimenResponse = await owner.PutAsJsonAsync(
+                $"/api/medical-records/{record.Id}/specimen", new SetRecordSpecimenRequest(id));
+            specimenResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        return record;
     }
 
     private Guid? _bloodSpecimenId;
 
-    private async Task<CreateIndicatorRequest> SampleIndicatorAsync(string name = "Гемоглобин")
-    {
-        _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
-        return new(name, "118", "г/л", _bloodSpecimenId.Value, "130", "160", null);
-    }
+    private async Task<Guid> BloodSpecimenIdAsync() => _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
+
+    private static CreateIndicatorRequest SampleIndicator(string name = "Гемоглобин") =>
+        new(name, "118", "г/л", "130", "160", null);
 
     [Fact]
     public async Task CreateIndicator_Owner_Succeeds_AndFlagIsComputed()
     {
         var owner = ClientAs(FreshTelegramId());
-        var record = await CreateAnalysisAsync(owner);
+        var record = await CreateAnalysisAsync(owner, await BloodSpecimenIdAsync());
 
-        var response = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync());
+        var response = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator());
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var indicator = await response.Content.ReadFromJsonAsync<IndicatorDto>();
@@ -55,36 +66,24 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         indicator.RefSource.Should().Be(RefSource.Blank);
     }
 
-    [Fact]
-    public async Task CreateIndicator_KbMiss_QueuesEnrichmentJob_ForResolvedSpecimen()
-    {
-        var owner = ClientAs(FreshTelegramId());
-        var record = await CreateAnalysisAsync(owner);
-        var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
-
-        var response = await owner.PostAsJsonAsync(
-            $"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync(uniqueName));
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        using var scope = Factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
-
-        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeTrue(
-            "ручное добавление показателя теперь ставит обогащение справочника в очередь при промахе KB, " +
-            "тем же путём, что и распознавание документа");
-    }
+    // CreateIndicator_KbMiss_QueuesEnrichmentJob_ForResolvedSpecimen,
+    // UpdateIndicator_KbMiss_QueuesEnrichmentJob_WithManualEntryOrigin и
+    // SetRecordSpecimen_CascadesToAllIndicators_AndQueuesEnrichmentOnMiss переехали в
+    // IndicatorEnrichmentGateTests.cs (заметка 3 — гейты легитимности/правдоподобности теперь
+    // синхронные, ДО постановки обогащения в очередь; этот хост нарочно направляет LM Studio на
+    // закрытый порт, поэтому оба гейта здесь всегда отклоняли бы deny-by-default — нужен отдельный
+    // хост с фейковым клиентом, отвечающим {"valid": true}).
 
     [Fact]
     public async Task CreateIndicator_KbMiss_UnresolvedSpecimen_DoesNotQueueEnrichmentJob()
     {
         var owner = ClientAs(FreshTelegramId());
+        // Без specimenKbId — запись остаётся на дефолте SpecimenContextIds.Unresolved.
         var record = await CreateAnalysisAsync(owner);
         var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
 
         var response = await owner.PostAsJsonAsync(
-            $"/api/medical-records/{record.Id}/indicators",
-            new CreateIndicatorRequest(uniqueName, "118", "г/л", SpecimenContextIds.Unresolved, "130", "160", null));
+            $"/api/medical-records/{record.Id}/indicators", SampleIndicator(uniqueName));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
         using var scope = Factory.Services.CreateScope();
@@ -97,27 +96,25 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     }
 
     [Fact]
-    public async Task UpdateIndicator_KbMiss_QueuesEnrichmentJob_WithManualEntryOrigin()
+    public async Task CreateIndicator_KbMiss_GateDeniesByDefault_StillSavesIndicator_ButDoesNotQueueEnrichment()
     {
+        // Этот хост нарочно направляет LM Studio на закрытый порт (см. class doc FamilyHubWebFactory) —
+        // синхронные гейты (заметка 3) отклоняют deny-by-default. Показатель обязан сохраниться
+        // (личные данные пользователя, ими он распоряжается всегда), обогащение — нет.
         var owner = ClientAs(FreshTelegramId());
-        var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
-            .Content.ReadFromJsonAsync<IndicatorDto>())!;
-
+        var record = await CreateAnalysisAsync(owner, await BloodSpecimenIdAsync());
         var uniqueName = $"Тестовыйпоказатель{Guid.NewGuid():N}";
-        var response = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}",
-            new UpdateIndicatorRequest(uniqueName, "140", "г/л", _bloodSpecimenId!.Value, "130", "160", null));
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var response = await owner.PostAsJsonAsync(
+            $"/api/medical-records/{record.Id}/indicators", SampleIndicator(uniqueName));
+        response.StatusCode.Should().Be(HttpStatusCode.Created, "отказ гейта не должен блокировать сохранение самого показателя");
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
 
-        var job = await db.LabAnalyteEnrichmentJobs.SingleOrDefaultAsync(j => j.NormalizedName == analyteKey);
-        job.Should().NotBeNull(
-            "правка показателя теперь тоже ставит обогащение справочника в очередь при промахе KB, как и добавление");
-        job!.Origin.Should().Be(EnrichmentRequestOrigin.ManualEntry,
-            "правка — ручной ввод, задача должна пройти дополнительный гейт правдоподобности в процессоре");
+        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeFalse(
+            "гейт легитимности/правдоподобности отклонён (LM Studio недоступен → deny-by-default) — обогащение не ставится");
     }
 
     [Fact]
@@ -125,10 +122,10 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
+        (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
             .StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var second = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync());
+        var second = await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator());
 
         second.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
@@ -140,7 +137,7 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
         var record = await CreateAnalysisAsync(owner);
         var stranger = ClientAs(FreshTelegramId());
 
-        var response = await stranger.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync());
+        var response = await stranger.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator());
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
@@ -150,14 +147,14 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         var stranger = ClientAs(FreshTelegramId());
 
-        var forbidden = await stranger.PutAsJsonAsync($"/api/indicators/{created.Id}", await SampleIndicatorAsync("Гемоглобин исправленный") with { ValueRaw = "140" });
+        var forbidden = await stranger.PutAsJsonAsync($"/api/indicators/{created.Id}", SampleIndicator("Гемоглобин исправленный") with { ValueRaw = "140" });
         forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-        var ownUpdate = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}", await SampleIndicatorAsync("Гемоглобин исправленный") with { ValueRaw = "140" });
+        var ownUpdate = await owner.PutAsJsonAsync($"/api/indicators/{created.Id}", SampleIndicator("Гемоглобин исправленный") with { ValueRaw = "140" });
         ownUpdate.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var indicators = await (await owner.GetAsync($"/api/medical-records/{record.Id}/indicators"))
@@ -172,7 +169,7 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await owner.DeleteAsync($"/api/indicators/{created.Id}");
@@ -188,12 +185,28 @@ public class IndicatorCrudApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner);
-        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await SampleIndicatorAsync()))
+        var created = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", SampleIndicator()))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         var stranger = ClientAs(FreshTelegramId());
 
         (await stranger.DeleteAsync($"/api/indicators/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await owner.DeleteAsync($"/api/indicators/{Guid.NewGuid()}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task SetRecordSpecimen_NotOwner_ReturnsForbidden_UnknownRecord_ReturnsNotFound_UnknownSpecimen_ReturnsNotFound()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateAnalysisAsync(owner);
+        var stranger = ClientAs(FreshTelegramId());
+        var bloodId = await BloodSpecimenIdAsync();
+
+        (await stranger.PutAsJsonAsync($"/api/medical-records/{record.Id}/specimen", new SetRecordSpecimenRequest(bloodId)))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/medical-records/{Guid.NewGuid()}/specimen", new SetRecordSpecimenRequest(bloodId)))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await owner.PutAsJsonAsync($"/api/medical-records/{record.Id}/specimen", new SetRecordSpecimenRequest(Guid.NewGuid())))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

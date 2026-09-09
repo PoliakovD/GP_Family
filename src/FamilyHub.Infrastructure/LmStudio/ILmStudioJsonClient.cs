@@ -27,8 +27,14 @@ public interface ILmStudioJsonClient
 /// Результат вызова: либо успешно распарсенный JSON-объект (значения как <see cref="JsonElement"/>,
 /// т.к. типы полей заранее неизвестны), либо человекочитаемая ошибка (сеть, таймаут, невалидный JSON) —
 /// без исключений наружу, чтобы вызывающий код мог показать пользователю понятный тост.
+///
+/// <see cref="IsTransient"/> — сбой ТЕХНИЧЕСКИЙ (сервер недоступен, таймаут, 5xx/429), а не
+/// смысловой (невалидный JSON, пустой ответ, отказ по содержимому) — гейты выше по конвейеру
+/// (LegitimacyGuardService/AnalytePlausibilityGuardService) пробрасывают его дальше, чтобы
+/// процессоры могли отличить "модель отклонила" от "модель недоступна" и не хоронить задачу
+/// навсегда, а дать Hangfire реально её повторить (см. план — заметки 5/6/7).
 /// </summary>
-public record LmStudioJsonResult(bool Success, Dictionary<string, JsonElement>? Payload, string? Error)
+public record LmStudioJsonResult(bool Success, Dictionary<string, JsonElement>? Payload, string? Error, bool IsTransient = false)
 {
-    public static LmStudioJsonResult Failure(string error) => new(false, null, error);
+    public static LmStudioJsonResult Failure(string error, bool isTransient = false) => new(false, null, error, isTransient);
 }

@@ -19,17 +19,28 @@ namespace FamilyHub.IntegrationTests;
 /// </summary>
 public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
-    private async Task<Guid> CreateAnalysisAsync(HttpClient owner, DateOnly date)
+    /// <summary>Источник — атрибут ВСЕЙ записи (заметка 1) — проставляется здесь сразу после
+    /// создания, не в запросе на показатель.</summary>
+    private async Task<Guid> CreateAnalysisAsync(HttpClient owner, DateOnly date, Guid? specimenId = null)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records", new CreateMedicalRecordRequest(date, null, null, null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+        var recordId = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+
+        if (specimenId is { } id)
+        {
+            var specimenResponse = await owner.PutAsJsonAsync(
+                $"/api/medical-records/{recordId}/specimen", new SetRecordSpecimenRequest(id));
+            specimenResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        return recordId;
     }
 
-    private async Task<Guid> CreateIndicatorAsync(HttpClient owner, Guid recordId, Guid specimenId)
+    private async Task<Guid> CreateIndicatorAsync(HttpClient owner, Guid recordId)
     {
         var response = await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators",
-            new CreateIndicatorRequest("Гемоглобин", "140", "г/л", specimenId, "130", "160", null));
+            new CreateIndicatorRequest("Гемоглобин", "140", "г/л", "130", "160", null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<IndicatorDto>())!.Id;
     }
@@ -67,8 +78,8 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
     {
         var owner = ClientAs(FreshTelegramId());
         var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
-        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        await CreateIndicatorAsync(owner, recordId, specimenId);
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
+        await CreateIndicatorAsync(owner, recordId);
 
         var stranger = ClientAs(FreshTelegramId());
         var response = await stranger.PostAsync($"/api/medical-records/{recordId}/summary/regenerate", null);
@@ -81,8 +92,8 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
     {
         var owner = ClientAs(FreshTelegramId());
         var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
-        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        await CreateIndicatorAsync(owner, recordId, specimenId);
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
+        await CreateIndicatorAsync(owner, recordId);
 
         var response = await owner.PostAsync($"/api/medical-records/{recordId}/summary/regenerate", null);
 

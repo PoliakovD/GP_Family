@@ -210,6 +210,14 @@ export interface MedicalRecord {
      * «Без нормы» на фронте = indicatorCount − abnormalIndicatorCount − normalIndicatorCount. */
     abnormalIndicatorCount: number;
     normalIndicatorCount: number;
+    /** Источник ВСЕЙ записи (заметка 1) — никогда не пустая строка, сентинел "не определено", если
+     * ещё не резолвлен. Меняется отдельно через SetRecordSpecimenRequest/PUT .../specimen. */
+    specimenKbId: string;
+    specimenDisplayName: string | null;
+    /** Обобщённое слово источника без локализации ("мазок"), которое модель увидела в документе,
+     * но не смогла уточнить, откуда именно (заметка 2) — non-null означает "спросите у пользователя,
+     * это ЕЩЁ НЕ сохранённый источник" (specimenKbId в этом случае остаётся сентинелом). */
+    specimenHint: string | null;
 }
 
 /** Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для поиска. */
@@ -462,6 +470,13 @@ export interface ExtractionStatusResponse {
     completedAt: string | null;
 }
 
+/** Тело ответа POST /extract на "мягких" исходах (см. ExtractionRequestResult на бэкенде) — на
+ * успехе (202 Accepted) тело пустое, эти поля отсутствуют. */
+export interface ExtractionRequestResponse {
+    code?: 'already_queued' | 'llm_unavailable';
+    message?: string;
+}
+
 export interface IndicatorDto {
     id: string;
     analyteKey: string;
@@ -491,12 +506,13 @@ export interface IndicatorDto {
     rawDisplayName: string | null;
 }
 
-/** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч. */
+/** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч.
+ * specimenKbId сюда не входит (заметка 1) — источник теперь атрибут ВСЕЙ записи, меняется
+ * отдельно через SetRecordSpecimenRequest/PUT .../specimen. */
 export interface UpdateIndicatorRequest {
     displayName: string;
     valueRaw: string;
     unit: string | null;
-    specimenKbId: string;
     refLowText: string | null;
     refHighText: string | null;
     refText: string | null;
@@ -505,6 +521,12 @@ export interface UpdateIndicatorRequest {
 /** Ручное добавление показателя, POST /api/medical-records/{recordId}/indicators — та же форма,
  * что UpdateIndicatorRequest. */
 export type CreateIndicatorRequest = UpdateIndicatorRequest;
+
+/** Ручная смена/уточнение источника ВСЕЙ записи (заметка 1), PUT /api/medical-records/{id}/specimen —
+ * каскадится на все показатели записи (см. ExtractionQueryService.SetRecordSpecimenAsync). */
+export interface SetRecordSpecimenRequest {
+    specimenKbId: string;
+}
 
 /** Одна точка истории показателя (GET /api/indicators/{analyteKey}?specimen=&customId=) — для спарклайна. */
 export interface IndicatorHistoryPoint {

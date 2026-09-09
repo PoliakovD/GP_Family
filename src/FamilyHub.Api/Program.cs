@@ -644,6 +644,10 @@ builder.Services.AddScoped<AnalyteSearchQueryBuilder>();
 builder.Services.AddScoped<LmStudioModelProvider>();
 builder.Services.AddScoped<ILmStudioModelProvider>(sp => sp.GetRequiredService<LmStudioModelProvider>());
 
+// Доступность LM Studio (GET /v1/models) — общая реализация для /health/llm и
+// LmStudioRecoverySweepJob (см. класс-doc ILmStudioAvailabilityProbe).
+builder.Services.AddScoped<ILmStudioAvailabilityProbe, LmStudioAvailabilityProbe>();
+
 // --- Документы: декодирование вложений под конвейер извлечения (ветка medicalrecords) ---
 builder.Services.AddScoped<PdfDocumentReader>();
 builder.Services.AddScoped<OfficeDocumentReader>();
@@ -1079,6 +1083,14 @@ app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<EncryptionRo
     "encryption-rotation-catchup",
     job => job.RunAsync(CancellationToken.None),
     "0 4 * * *");
+
+// Досып задач, упавших технически из-за недоступного LM Studio (ноутбук выключен/спит) — каждые
+// 5 минут проверяет доступность и возвращает такие задачи в очередь, как только сервер снова
+// отвечает (см. класс-doc LmStudioRecoverySweepJob, план часть 1.4).
+app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<LmStudioRecoverySweepJob>(
+    "lmstudio-recovery-sweep",
+    job => job.RunAsync(CancellationToken.None),
+    "*/5 * * * *");
 
 // Применение миграций с retry для transient-ошибок при старте (race-condition нескольких реплик)
     using (var scope = app.Services.CreateScope())

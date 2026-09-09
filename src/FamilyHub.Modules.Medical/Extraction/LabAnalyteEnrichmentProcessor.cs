@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Kb;
@@ -64,6 +65,12 @@ public class LabAnalyteEnrichmentProcessor(
             var guardResult = await legitimacyGuard.CheckAsync(job.SourceDisplayName, ct);
             if (!guardResult.IsLegitimate)
             {
+                // Технический отказ гейта (LM Studio недоступен) — пробрасываем исключение, чтобы
+                // Hangfire реально повторил задачу, вместо терминального Failed с первой попытки
+                // (см. план, часть 1).
+                if (guardResult.IsTransientFailure)
+                    throw new LmStudioUnavailableException(guardResult.Reason ?? "Локальный сервер распознавания недоступен.");
+
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = guardResult.Reason;
                 job.CompletedAt = DateTime.UtcNow;
@@ -84,6 +91,9 @@ public class LabAnalyteEnrichmentProcessor(
                 var plausibility = await plausibilityGuard.CheckAsync(job.SourceDisplayName, specimenDisplayName, ct);
                 if (!plausibility.IsPlausible)
                 {
+                    if (plausibility.IsTransientFailure)
+                        throw new LmStudioUnavailableException(plausibility.Reason ?? "Локальный сервер распознавания недоступен.");
+
                     job.Status = EnrichmentJobStatus.Failed;
                     job.Error = plausibility.Reason;
                     job.CompletedAt = DateTime.UtcNow;
@@ -208,6 +218,7 @@ public class LabAnalyteEnrichmentProcessor(
             {
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+                job.IsTransientFailure = ex is LmStudioUnavailableException;
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "LabAnalyteEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);

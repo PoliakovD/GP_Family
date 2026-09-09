@@ -51,6 +51,10 @@ public record VisitConclusion(
 /// не побочное поле промпта структурирования показателей — совмещение задач мешало обеим), сырой
 /// (ещё не сведённый к строке справочника) итог этого прохода лежит в <see cref="SpecimenResolution"/>.
 /// </summary>
+/// <see cref="IsTransientFailure"/> — true, когда причина Supported=false (или пустого результата)
+/// техническая (LM Studio недоступен), а не смысловая (формат не поддержан, легитимность
+/// отклонила по содержимому) — MedicalDocumentExtractionProcessor пробрасывает исключение вместо
+/// того, чтобы штамповать файл распознанным (см. план, часть 1).
 public record ExtractionResult(
     bool Supported,
     IReadOnlyList<ExtractedLabIndicator>? LabIndicators,
@@ -59,4 +63,5 @@ public record ExtractionResult(
     DateOnly? DocumentDate = null,
     string? SuggestedTitle = null,
     string? Doctor = null,
-    SpecimenDocumentResolution? SpecimenResolution = null);
+    SpecimenDocumentResolution? SpecimenResolution = null,
+    bool IsTransientFailure = false);

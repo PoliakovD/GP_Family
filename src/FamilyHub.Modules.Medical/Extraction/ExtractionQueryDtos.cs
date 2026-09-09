@@ -69,9 +69,11 @@ public record VisitConclusionResponse(
 /// <summary>Ручная правка показателя (ошибка OCR) — только владелец записи, см. ExtractionQueryService.
 /// Все поля — новое значение целиком (не патч), Flag пересчитывается сервером после сохранения по
 /// тому же IndicatorFlagCalculator, что и при распознавании (референс из формы приоритетнее KB,
-/// как и раньше — правка вручную это ещё один источник "из бланка").</summary>
+/// как и раньше — правка вручную это ещё один источник "из бланка"). Источник (SpecimenKbId) сюда
+/// больше не входит (заметка 1) — он атрибут ВСЕЙ записи, меняется отдельно через
+/// SetRecordSpecimenAsync/PUT .../specimen, показатель всегда наследует его от своей записи.</summary>
 public record UpdateIndicatorRequest(
-    string DisplayName, string ValueRaw, string? Unit, Guid SpecimenKbId,
+    string DisplayName, string ValueRaw, string? Unit,
     string? RefLowText, string? RefHighText, string? RefText);
 
 public enum UpdateIndicatorResult { Success, NotFound, Forbidden, Conflict }
@@ -81,9 +83,21 @@ public enum UpdateIndicatorResult { Success, NotFound, Forbidden, Conflict }
 /// бланка"). Та же форма, что UpdateIndicatorRequest — владелец записи, флаг считается тем же
 /// компаратором, RefSource.Blank.</summary>
 public record CreateIndicatorRequest(
-    string DisplayName, string ValueRaw, string? Unit, Guid SpecimenKbId,
+    string DisplayName, string ValueRaw, string? Unit,
     string? RefLowText, string? RefHighText, string? RefText);
 
 public enum CreateIndicatorResult { Success, NotFound, Forbidden, Conflict }
 
 public enum DeleteIndicatorResult { Success, NotFound, Forbidden }
+
+/// <summary>Ручная смена/уточнение источника ВСЕЙ записи (заметка 1) — единственная точка входа,
+/// которая может изменить MedicalRecord.SpecimenKbId после распознавания; каскадится на все
+/// LabIndicators записи (см. ExtractionQueryService.SetRecordSpecimenAsync).</summary>
+public record SetRecordSpecimenRequest(Guid SpecimenKbId);
+
+/// <summary>Conflict — после каскада на показатели столкнулись бы две строки с одинаковым
+/// (AnalyteKey, новый SpecimenKbId) в пределах записи (редкий унаследованный случай: запись,
+/// собранная ДО этой правки старым посекционным резолвером, могла нести один и тот же показатель
+/// дважды под разными источниками) — правка отклоняется, не оставляя запись в противоречивом
+/// состоянии.</summary>
+public enum SetRecordSpecimenResult { Success, NotFound, Forbidden, Conflict }

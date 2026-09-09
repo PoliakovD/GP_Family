@@ -40,6 +40,12 @@ public class MedicalDocumentExtractionJob
 
     public string? Error { get; set; }
 
+    /// <summary>true — последний отказ был техническим (LM Studio недоступен), не смысловым.
+    /// Проставляется только на терминальном Failed после исчерпания [AutomaticRetry]
+    /// (см. MedicalDocumentExtractionProcessor) — LmStudioRecoverySweepJob находит такие задачи и
+    /// возвращает их в очередь, когда сервер снова станет доступен.</summary>
+    public bool IsTransientFailure { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? StartedAt { get; set; }

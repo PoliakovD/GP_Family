@@ -1,10 +1,12 @@
 namespace FamilyHub.Modules.Medical.Pipeline;
 
-public record AnalytePlausibilityResult(bool IsPlausible, string? Reason)
+/// <summary>См. <see cref="LegitimacyCheckResult.IsTransientFailure"/> — то же различие
+/// "технически недоступно" vs "модель сознательно отклонила".</summary>
+public record AnalytePlausibilityResult(bool IsPlausible, string? Reason, bool IsTransientFailure = false)
 {
     public static AnalytePlausibilityResult Plausible() => new(true, null);
 
-    public static AnalytePlausibilityResult Implausible(string reason) => new(false, reason);
+    public static AnalytePlausibilityResult Implausible(string reason, bool isTransientFailure = false) => new(false, reason, isTransientFailure);
 }
 
 /// <summary>Гейт «на бред» для РУЧНОГО ввода показателя (см. class doc

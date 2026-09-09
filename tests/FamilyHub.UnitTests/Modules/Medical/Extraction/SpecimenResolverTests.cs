@@ -14,13 +14,9 @@ using Xunit;
 namespace FamilyHub.UnitTests.Modules.Medical.Extraction;
 
 /// <summary>
-/// Резолвинг источника показателя — ResolveAsync (парсинг ответа модели, включая секции с
-/// собственной confidence, см. class doc SpecimenSection) и ResolveKbIdAsync (детерминированный
-/// гейт поверх ответа: порог confidence + триграммное вето против rawLabel). Пересборка
-/// enrich-пайплайна: раньше секции многосекционных бланков ПОДДЕЛЫВАЛИ confidence=1.0 в
-/// MedicalDocumentExtractionProcessor, полностью обходя оба этих гейта — здесь проверяется, что
-/// сам гейт (одинаковый для документа и для секции) действительно отклоняет низкую уверенность и
-/// подмену понятия, если вызывающий передаёт честные значения.
+/// Резолвинг источника показателя — ResolveAsync (парсинг ответа модели, включая NeedsSite —
+/// обобщённое слово без локализации, см. class doc SpecimenDocumentResolution) и ResolveKbIdAsync
+/// (детерминированный гейт поверх ответа: порог confidence + триграммное вето против rawLabel).
 /// </summary>
 public class SpecimenResolverTests : SqliteTestBase
 {
@@ -44,40 +40,35 @@ public class SpecimenResolverTests : SqliteTestBase
                 true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(JsonSerializer.Serialize(payload)), null));
 
     [Fact]
-    public async Task ResolveAsync_ParsesSectionConfidence_NotHardcoded()
+    public async Task ResolveAsync_GenericSwabWithoutSite_ReturnsNullContextAndNeedsSiteHint()
     {
+        // Модель видит "мазок" без уточнения места — не регистрирует голый термин как context,
+        // возвращает его отдельно в needsSite (заметка 2 — UI должен спросить пользователя, откуда).
         SetUpModelResponse(new
         {
-            context = (string?)null, rawLabel = (string?)null, evidence = (string?)null, confidence = 0.0,
-            sections = new[]
-            {
-                new { context = "эякулят", confidence = 0.92, indicatorNames = new[] { "Объём" } },
-                new { context = "мутное пятно", confidence = 0.15, indicatorNames = new[] { "Странный показатель" } },
-            },
+            context = (string?)null, rawLabel = "мазок", evidence = "мазок", confidence = 0.0,
+            needsSite = "мазок",
         });
 
         var result = await _sut.ResolveAsync(TextContent("некий бланк"));
 
-        result.Sections.Should().HaveCount(2);
-        result.Sections.Should().Contain(s => s.Context == "эякулят" && Math.Abs(s.Confidence - 0.92) < 0.001);
-        result.Sections.Should().Contain(s => s.Context == "мутное пятно" && Math.Abs(s.Confidence - 0.15) < 0.001);
+        result.Context.Should().BeNull();
+        result.NeedsSite.Should().Be("мазок");
     }
 
     [Fact]
-    public async Task ResolveAsync_SectionWithoutConfidenceField_DefaultsToZero_NotOne()
+    public async Task ResolveAsync_SwabWithSite_ReturnsLocalizedContext_NeedsSiteNull()
     {
-        // Старый (ещё не обновлённый из админки) текст промпта не отдаёт "confidence" на уровне
-        // секции вовсе — дефолт должен быть консервативным (0), не воспроизводить прежний баг (1.0).
         SetUpModelResponse(new
         {
-            context = (string?)null, rawLabel = (string?)null, evidence = (string?)null, confidence = 0.0,
-            sections = new[] { new { context = "эякулят", indicatorNames = new[] { "Объём" } } },
+            context = "вагинальный мазок", rawLabel = "вагинальный мазок", evidence = "вагинальный мазок",
+            confidence = 0.9, needsSite = (string?)null,
         });
 
         var result = await _sut.ResolveAsync(TextContent("некий бланк"));
 
-        result.Sections.Should().ContainSingle();
-        result.Sections[0].Confidence.Should().Be(0);
+        result.Context.Should().Be("вагинальный мазок");
+        result.NeedsSite.Should().BeNull();
     }
 
     [Fact]

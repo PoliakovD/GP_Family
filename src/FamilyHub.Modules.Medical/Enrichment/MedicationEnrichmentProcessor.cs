@@ -2,6 +2,7 @@ using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
@@ -71,6 +72,12 @@ public class MedicationEnrichmentProcessor(
             var guardResult = await legitimacyGuard.CheckAsync(job.SourceDisplayName, ct);
             if (!guardResult.IsLegitimate)
             {
+                // Технический отказ гейта (LM Studio недоступен) — пробрасываем исключение, чтобы
+                // Hangfire реально повторил задачу, вместо терминального Failed с первой попытки
+                // (см. план, часть 1).
+                if (guardResult.IsTransientFailure)
+                    throw new LmStudioUnavailableException(guardResult.Reason ?? "Локальный сервер распознавания недоступен.");
+
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = guardResult.Reason;
                 job.CompletedAt = DateTime.UtcNow;
@@ -191,6 +198,7 @@ public class MedicationEnrichmentProcessor(
             {
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+                job.IsTransientFailure = ex is LmStudioUnavailableException;
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);

@@ -10,6 +10,7 @@ import {
   BirthdayInput, CurrentMember,
   CreateIndicatorRequest,
   EnrichmentRefreshOutcome,
+  ExtractionRequestResponse,
   ExtractionStatusResponse,
   FamilyDependent,
   FamilyDependentInput,
@@ -40,6 +41,7 @@ import {
   PagedResult,
   PendingMember, RecordSummaryResponse, RemoveMemberResult,
   SearchResponse,
+  SetRecordSpecimenRequest,
   UpdateIndicatorRequest,
   UserSpecimen,
   VapidPublicKeyResponse,
@@ -296,6 +298,10 @@ export class ApiService {
   updateMedicalRecord = (id: string, patch: UpdateMedicalRecordRequest) =>
     this.put<MedicalRecord>(`/api/medical-records/${id}`, patch);
 
+  /** Ручная смена/уточнение источника ВСЕЙ записи (заметка 1) — каскадится на все показатели. */
+  setRecordSpecimen = (recordId: string, specimenKbId: string) =>
+    this.put<void>(`/api/medical-records/${recordId}/specimen`, { specimenKbId } satisfies SetRecordSpecimenRequest);
+
   shareMedicalRecord = (familyId: string) =>
     this.post<void>('/api/medical-records/share', { familyId });
 
@@ -342,7 +348,7 @@ export class ApiService {
   // «Распознать» на ЗАПИСИ (обрабатывает все ещё не распознанные вложения последовательно),
   // статус/показатели/резюме записи, «мои показатели» + история для спарклайна.
   requestExtraction = (recordId: string) =>
-    this.post<void>(`/api/medical-records/${recordId}/extract`);
+    this.post<ExtractionRequestResponse | null>(`/api/medical-records/${recordId}/extract`);
 
   getExtractionStatus = (recordId: string) =>
     this.get<ExtractionStatusResponse>(`/api/medical-records/${recordId}/extraction`);

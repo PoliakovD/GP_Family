@@ -20,7 +20,21 @@ public static class ExtractionEndpoints
                 ExtractionRequestResult.NotFound => Results.NotFound(),
                 ExtractionRequestResult.Forbidden => Results.Forbid(),
                 ExtractionRequestResult.NothingToDo => Results.Json(
-                    new { code = "nothing_to_extract" }, statusCode: StatusCodes.Status409Conflict),
+                    new { code = "nothing_to_extract", message = "Все вложения этой записи уже распознаны." },
+                    statusCode: StatusCodes.Status409Conflict),
+                // 200, не 202/409 — это не ошибка и не новая постановка в очередь: задача уже
+                // реально исполняется/ждёт, фронт продолжает наблюдать за НЕЙ (см.
+                // class doc ExtractionRequestResult.AlreadyQueued).
+                ExtractionRequestResult.AlreadyQueued => Results.Ok(new
+                {
+                    code = "already_queued",
+                    message = "Распознавание уже в очереди — оно продолжится само, как только локальный сервер станет доступен.",
+                }),
+                ExtractionRequestResult.ServiceUnavailable => Results.Ok(new
+                {
+                    code = "llm_unavailable",
+                    message = "Локальный сервер распознавания пока недоступен, зайдите позже.",
+                }),
                 _ => Results.Accepted(),
             };
         });
@@ -73,6 +87,26 @@ public static class ExtractionEndpoints
         {
             var (result, item) = await service.GetConclusionAsync(recordId, currentUser.UserId, ct);
             return MapQueryResult(result, item);
+        });
+
+        // Ручная смена/уточнение источника ВСЕЙ записи (заметка 1) — единственный путь изменить
+        // MedicalRecord.SpecimenKbId после распознавания, каскадится на все показатели записи.
+        records.MapPut("/{recordId:guid}/specimen", async (
+            Guid recordId, SetRecordSpecimenRequest body, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, warning) = await service.SetRecordSpecimenAsync(recordId, currentUser.UserId, body.SpecimenKbId, ct);
+            return result switch
+            {
+                SetRecordSpecimenResult.NotFound => Results.NotFound(),
+                SetRecordSpecimenResult.Forbidden => Results.Forbid(),
+                SetRecordSpecimenResult.Conflict => Results.Json(
+                    new { code = "specimen_conflict", message = "Не удалось сменить источник — в записи уже есть одноимённые показатели под разными источниками (унаследовано из старого распознавания)." },
+                    statusCode: StatusCodes.Status409Conflict),
+                // 200 с warning (заметка 3), не 204 — источник сохранён, но гейт «на бред»
+                // отклонил обогащение справочника хотя бы для одного показателя под новым
+                // источником; сама правка при этом не блокируется.
+                _ => warning is not null ? Results.Ok(new { warning }) : Results.NoContent(),
+            };
         });
 
         // Ручное добавление показателя (UX-редизайн) — без ожидания следующего «Распознать»,

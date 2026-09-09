@@ -45,6 +45,10 @@ public class LabAnalyteEnrichmentJob
 
     public string? Error { get; set; }
 
+    /// <summary>См. MedicalDocumentExtractionJob.IsTransientFailure — тот же смысл, тот же
+    /// потребитель (LmStudioRecoverySweepJob).</summary>
+    public bool IsTransientFailure { get; set; }
+
     public string? Provider { get; set; }
 
     public DateTime? ExternalSearchAt { get; set; }

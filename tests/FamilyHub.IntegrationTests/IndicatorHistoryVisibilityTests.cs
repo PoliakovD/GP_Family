@@ -20,17 +20,23 @@ public class IndicatorHistoryVisibilityTests(FamilyHubWebFactory factory) : Inte
 
     private Guid? _bloodSpecimenId;
 
-    private async Task<CreateIndicatorRequest> HemoglobinAsync(string value)
-    {
-        _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
-        return new("Гемоглобин", value, "г/л", _bloodSpecimenId.Value, "130", "160", null);
-    }
+    private async Task<Guid> BloodSpecimenIdAsync() => _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
 
-    private static async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner, DateOnly date)
+    private static CreateIndicatorRequest Hemoglobin(string value) => new("Гемоглобин", value, "г/л", "130", "160", null);
+
+    /// <summary>Источник — атрибут ВСЕЙ записи (заметка 1) — проставляется здесь сразу после
+    /// создания, все показатели этого файла — кровь.</summary>
+    private async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner, DateOnly date)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records", new CreateMedicalRecordRequest(date, null, null, null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
+        var record = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
+
+        var specimenResponse = await owner.PutAsJsonAsync(
+            $"/api/medical-records/{record.Id}/specimen", new SetRecordSpecimenRequest(await BloodSpecimenIdAsync()));
+        specimenResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        return record;
     }
 
     private async Task<Guid> CreateFamilyAsync(HttpClient client)
@@ -66,9 +72,9 @@ public class IndicatorHistoryVisibilityTests(FamilyHubWebFactory factory) : Inte
         var visible = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
         var hiddenFromFamily = await CreateAnalysisAsync(owner, new DateOnly(2026, 2, 1));
 
-        var visibleIndicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{visible.Id}/indicators", await HemoglobinAsync("140")))
+        var visibleIndicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{visible.Id}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
-        await owner.PostAsJsonAsync($"/api/medical-records/{hiddenFromFamily.Id}/indicators", await HemoglobinAsync("150"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{hiddenFromFamily.Id}/indicators", Hemoglobin("150"));
 
         // L1: расшарить ВСЕ записи семье. L2: точечно скрыть hiddenFromFamily именно от неё.
         (await owner.PostAsJsonAsync("/api/medical-records/share", new { FamilyId = familyId }))
@@ -97,7 +103,7 @@ public class IndicatorHistoryVisibilityTests(FamilyHubWebFactory factory) : Inte
         var owner = ClientAs(FreshTelegramId());
         var stranger = ClientAs(FreshTelegramId());
         var record = await CreateAnalysisAsync(owner, DateOnly.FromDateTime(DateTime.UtcNow));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", await HemoglobinAsync("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record.Id}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await stranger.GetAsync($"/api/medical-records/{record.Id}/indicators/{indicator.Id}/history");

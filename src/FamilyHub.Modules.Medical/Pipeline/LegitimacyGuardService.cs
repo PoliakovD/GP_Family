@@ -70,7 +70,7 @@ public class LegitimacyGuardService(ILmStudioJsonClient client, IPromptProvider 
             logger.LogWarning(
                 "Проверка легитимности технически не удалась ({Error}) — блокируем по умолчанию (deny-by-default).",
                 result.Error);
-            return LegitimacyCheckResult.Rejected("Проверка легитимности временно недоступна.");
+            return LegitimacyCheckResult.Rejected("Проверка легитимности временно недоступна.", result.IsTransient);
         }
 
         if (!TryGetValue(result.Payload, "valid", out var validEl) ||

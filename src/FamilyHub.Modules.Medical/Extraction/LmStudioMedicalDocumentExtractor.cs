@@ -32,6 +32,7 @@ public class LmStudioMedicalDocumentExtractor(
     IDocumentTextExtractor documentTextExtractor,
     ILmStudioJsonClient lmStudioClient,
     SpecimenResolver specimenResolver,
+    AnalysisTitleGenerator titleGenerator,
     ILegitimacyGuardService legitimacyGuard,
     IPromptProvider promptProvider,
     IPipelineConfigService pipelineConfig,
@@ -59,7 +60,6 @@ public class LmStudioMedicalDocumentExtractor(
             }
           ],
           "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
-          "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай",
           "doctor": "ФИО и/или специальность врача, назначившего анализ, если указаны в бланке — иначе null, не придумывай"
         }
 
@@ -79,12 +79,12 @@ public class LmStudioMedicalDocumentExtractor(
         - "refLow"/"refHigh" — числа, только если референс — числовой диапазон (например,
           "130-160"). Если так — "refText" оставь null. Если референс не числовой — заполни
           только "refText", "refLow"/"refHigh" оставь null.
-        - "documentDate"/"suggestedTitle"/"doctor" — заполняй, только если это ДЕЙСТВИТЕЛЬНО есть
-          в этом фрагменте (обычно в шапке документа); если фрагмент — просто таблица показателей
-          без шапки, оставь все три null.
+        - "documentDate"/"doctor" — заполняй, только если это ДЕЙСТВИТЕЛЬНО есть в этом фрагменте
+          (обычно в шапке документа); если фрагмент — просто таблица показателей без шапки,
+          оставь оба null.
         - Если во фрагменте нет ни одного показателя анализа (это шапка документа, подпись врача,
-          пояснительный текст и т.п.) — indicators пустой массив, но documentDate/suggestedTitle
-          всё равно заполни, если они есть в этом фрагменте.
+          пояснительный текст и т.п.) — indicators пустой массив, но documentDate/doctor всё равно
+          заполни, если они есть в этом фрагменте.
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
@@ -141,7 +141,7 @@ public class LmStudioMedicalDocumentExtractor(
         {
             logger.LogWarning(
                 "Распознавание «{FileName}» остановлено проверкой легитимности: {Reason}", source.FileName, guardResult.Reason);
-            return new ExtractionResult(false, null, null, guardResult.Reason);
+            return new ExtractionResult(false, null, null, guardResult.Reason, IsTransientFailure: guardResult.IsTransientFailure);
         }
 
         return kind == MedicalRecordKind.Analysis
@@ -152,20 +152,26 @@ public class LmStudioMedicalDocumentExtractor(
     private async Task<ExtractionResult> ExtractAnalysisAsync(DocumentContent content, CancellationToken ct)
     {
         var indicators = new List<ExtractedLabIndicator>();
+        // Транзиентным весь документ считаем, только если НИ ОДИН структурирующий вызов не смог
+        // ответить (сервер лёг между гейтом легитимности и структурированием) И хотя бы один упал
+        // именно технически — частичный успех (часть кусков дала показатели, часть упала
+        // технически) не повод проваливать весь файл, отсутствующая часть просто не попадёт в
+        // результат этого прогона.
+        var hadAnySuccessfulCall = false;
+        var hadAnyTransientFailure = false;
 
-        // Поля уровня документа (documentDate/suggestedTitle/doctor) обычно есть только в ШАПКЕ
-        // бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные куски
-        // (таблица показателей без шапки) просто не заполняют эти поля повторно. Источник
-        // показателя (биоматериал/исследование) сюда больше не входит — резолвится отдельным
-        // проходом (см. SpecimenResolver), не как побочное поле промпта структурирования.
+        // Поля уровня документа (documentDate/doctor) обычно есть только в ШАПКЕ бланка — первый
+        // чанк/страница, где модель их реально нашла, побеждает; остальные куски (таблица
+        // показателей без шапки) просто не заполняют эти поля повторно. Источник показателя
+        // (биоматериал/исследование) и короткое название анализа сюда больше не входят —
+        // резолвятся отдельными проходами (см. SpecimenResolver/AnalysisTitleGenerator), не как
+        // побочные поля промпта структурирования (заметки 1/4 — совмещение задач мешало всем).
         DateOnly? documentDate = null;
-        string? suggestedTitle = null;
         string? doctor = null;
 
         void CaptureDocumentFields(Dictionary<string, JsonElement> payload)
         {
             documentDate ??= ParseDate(ReadString(payload, "documentDate"));
-            suggestedTitle ??= ReadString(payload, "suggestedTitle");
             doctor ??= ReadString(payload, "doctor");
         }
 
@@ -176,7 +182,12 @@ public class LmStudioMedicalDocumentExtractor(
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
             {
                 var result = await lmStudioClient.ExtractJsonAsync(analysisPrompt, chunk, ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 CaptureDocumentFields(result.Payload);
                 foreach (var indicator in ParseIndicators(result.Payload))
@@ -194,7 +205,12 @@ public class LmStudioMedicalDocumentExtractor(
             {
                 var result = await lmStudioClient.ExtractJsonAsync(
                     analysisPrompt, "Распознай показатели анализа на этом изображении.", [(image.Bytes, image.ContentType)], ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 CaptureDocumentFields(result.Payload);
                 indicators.AddRange(ParseIndicators(result.Payload));
@@ -215,10 +231,19 @@ public class LmStudioMedicalDocumentExtractor(
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
         {
+            var isTransientFailure = hadAnyTransientFailure && !hadAnySuccessfulCall;
             return new ExtractionResult(
-                true, [], null, "Не удалось распознать ни одного показателя.", documentDate, suggestedTitle, doctor,
-                specimenResolution);
+                true, [], null, "Не удалось распознать ни одного показателя.", documentDate, null, doctor,
+                specimenResolution, isTransientFailure);
         }
+
+        // Короткое название — отдельный проход по шапке + реальному составу показателей (заметка 4),
+        // не побочное поле промпта структурирования выше. Необязательный шаг (§2 плана) — выключен
+        // из админки означает, что название остаётся null (правится вручную через "Редактировать",
+        // не восполняется откуда-то ещё).
+        var suggestedTitle = await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "title", ct)
+            ? await titleGenerator.GenerateAsync(content, deduped.Select(d => d.Name).ToList(), ct)
+            : null;
 
         return new ExtractionResult(
             true, deduped, null, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor,
@@ -233,13 +258,20 @@ public class LmStudioMedicalDocumentExtractor(
     private async Task<ExtractionResult> ExtractVisitAsync(DocumentContent content, CancellationToken ct)
     {
         var visitPrompt = await promptProvider.GetAsync("visit.extract", VisitSystemPrompt, ct);
+        var hadAnySuccessfulCall = false;
+        var hadAnyTransientFailure = false;
 
         if (content.Kind == DocumentSourceKind.Text)
         {
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
             {
                 var result = await lmStudioClient.ExtractJsonAsync(visitPrompt, chunk, ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 var conclusion = ParseConclusion(result.Payload);
                 if (HasContent(conclusion))
@@ -258,7 +290,12 @@ public class LmStudioMedicalDocumentExtractor(
             {
                 var result = await lmStudioClient.ExtractJsonAsync(
                     visitPrompt, "Распознай заключение врача на этом изображении.", [(image.Bytes, image.ContentType)], ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 var conclusion = ParseConclusion(result.Payload);
                 if (HasContent(conclusion))
@@ -272,7 +309,9 @@ public class LmStudioMedicalDocumentExtractor(
             }
         }
 
-        return new ExtractionResult(true, null, null, "Не удалось распознать заключение врача.");
+        return new ExtractionResult(
+            true, null, null, "Не удалось распознать заключение врача.",
+            IsTransientFailure: hadAnyTransientFailure && !hadAnySuccessfulCall);
     }
 
     /// <summary>Плейсхолдеры "нет данных" — включает голый прочерк: в бланке он означает "поле не
