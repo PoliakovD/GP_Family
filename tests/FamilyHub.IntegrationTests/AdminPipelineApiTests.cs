@@ -89,7 +89,7 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
     }
 
     [Fact]
-    public async Task Prompts_SeededMigrationRows_AllFifteenSlotsHaveActiveVersion1()
+    public async Task Prompts_SeededMigrationRows_AllFifteenSlotsHaveActiveVersion()
     {
         var client = await AuthenticatedClientAsync();
 
@@ -98,9 +98,14 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         // 10 слотов LLM-промптов (AddPipelineConfig) + 3 шаблона поисковых запросов
         // (AddSearchQueryPrompts) + 1 фильтр легитимности/prompt injection (AddLegitimacyGuardPrompt)
         // + 1 гейт правдоподобности для ручного ввода (AddAnalytePlausibilityPrompt) — тот же
-        // механизм PipelinePrompt/PromptVersion на все четыре рода.
+        // механизм PipelinePrompt/PromptVersion на все четыре рода. analysis.specimen-resolve/
+        // analysis.specimen-validate получили версию 2 (UpdateSpecimenPromptsForSiteHint, заметки
+        // 1/2) — не все слоты обязаны застыть на версии 1 навсегда, важно только, что у каждого
+        // есть РОВНО одна активная версия.
         slots.Should().HaveCount(15);
-        slots.Should().OnlyContain(s => s.ActiveVersion == 1);
+        slots.Should().OnlyContain(s => s.ActiveVersion >= 1);
+        slots.Should().Contain(s => s.Key == "analysis.specimen-resolve" && s.ActiveVersion == 2);
+        slots.Should().Contain(s => s.Key == "analysis.specimen-validate" && s.ActiveVersion == 2);
         slots.Should().Contain(s => s.Key == "analysis.extract");
         slots.Should().Contain(s => s.Key == "lab-analyte.summarize");
         slots.Should().Contain(s => s.Key == "analysis.search-query");
