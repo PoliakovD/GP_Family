@@ -9,26 +9,35 @@ export interface PageAction {
     handler: () => void;
 }
 
+/** Редизайн v2.1 — раньше страница со своим локальным поиском (Анализы/Врачи/Аптечка) просто
+ * ПОДАВЛЯЛА общий поиск шапки (suppressGlobalSearch) и рисовала собственное поле НИЖЕ заголовка
+ * экрана (жалоба — «поиск находится под тайтлом экрана, а должен быть сверху»). Теперь страница
+ * отдаёт топбару своё поле целиком: value — геттер, а не снимок, потому что панель работает на
+ * zone-based CD с обычным полем searchQuery, а не на сигнале — снимок не отразил бы программный
+ * сброс (resetFilters() и т.п.). */
+export interface PageSearch {
+    placeholder: string;
+    value: () => string;
+    onChange: (v: string) => void;
+}
+
 @Injectable({providedIn: 'root'})
 export class PageActionService {
     readonly action = signal<PageAction | null>(null);
-
-    /** Редизайн v3 — «один поиск на экране»: страница со своим локальным полем поиска
-     * (Анализы/Врачи/Аптечка) подавляет общий поиск шапки, чтобы не показывать два поля разом.
-     * Сбрасывается вместе с action() в clear() — иначе «утечёт» на следующий экран без своего
-     * поиска (тот же класс бага, для которого уже существует эта симметрия у action). */
-    readonly suppressGlobalSearch = signal(false);
+    readonly pageSearch = signal<PageSearch | null>(null);
 
     set(action: PageAction): void {
         this.action.set(action);
     }
 
-    setSearchSuppressed(v: boolean): void {
-        this.suppressGlobalSearch.set(v);
+    setPageSearch(search: PageSearch | null): void {
+        this.pageSearch.set(search);
     }
 
+    /** Сбрасывается вместе с action() — иначе «протечёт» на следующий экран без своего поиска
+     * (тот же класс бага, для которого уже существует эта симметрия у action). */
     clear(): void {
         this.action.set(null);
-        this.suppressGlobalSearch.set(false);
+        this.pageSearch.set(null);
     }
 }

@@ -4,7 +4,7 @@
   <div class="d-flex align-items-center gap-3 mb-3">
     <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="lg" />
     <div>
-      <div class="card-title" style="font-size:20px">{{ formatPersonName(me, 'full') }}</div>
+      <div class="card-title" style="font-size:1.1765rem">{{ formatPersonName(me, 'full') }}</div>
       @if (me.username) {
         <div class="muted">&#64;{{ me.username }}</div>
       }
@@ -16,7 +16,7 @@
       <i class="ph-duotone ph-bell-slash" aria-hidden="true"></i>
       <div class="flex-fill">
         <div style="font-weight:600">Push выключены</div>
-        <div class="muted" style="font-size:13px">Напоминания не приходят</div>
+        <div class="muted" style="font-size:0.7647rem">Напоминания не приходят</div>
       </div>
     </div>
   }

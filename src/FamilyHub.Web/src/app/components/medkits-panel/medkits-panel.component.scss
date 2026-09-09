@@ -26,7 +26,7 @@
 
 .medkit-name {
   font-family: var(--font-heading);
-  font-size: 16px;
+  font-size: 0.9412rem;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -42,7 +42,7 @@
 
 .medkit-chevron {
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: 1.0588rem;
   color: var(--color-neutral-500);
   transition: transform 0.25s ease, color 0.25s ease;
 }

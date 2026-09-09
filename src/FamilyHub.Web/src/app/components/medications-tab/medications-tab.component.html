@@ -1,12 +1,6 @@
 <div>
   <h3 class="mb-3">Аптечка</h3>
 
-  <app-search-field
-    placeholder="Поиск по всем аптечкам…"
-    [value]="search.query"
-    (valueChange)="onQueryChange($event)"
-  />
-
   @if (search.query.trim().length > 0) {
     @if (search.error) {
       <div class="alert-danger mb-2">{{ search.error }}</div>

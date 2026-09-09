@@ -84,10 +84,25 @@
   // Редизайн v2 — базовый кегль поднят под аудиторию, включающую пожилых родителей (17px вместо
   // 16), плюс отдельные размеры для заголовков записей и минимальная высота интерактивных
   // элементов. Применяются точечно к существующим селекторам — см. риск Р1 в плане редизайна.
-  --font-size-body: 17px;
-  --font-size-meta: 15px;
-  --font-size-record-title: 19px;
-  --tap-min: 44px;
+  //
+  // Редизайн v2.1 — токены переведены в rem (1rem = 17px, прежний --font-size-body, теперь
+  // относительно html{font-size} ниже) и вместе с ним стали fluid: на узких экранах (390px)
+  // html{font-size} даёт ровно 17px — рендер идентичен тому, что было, — на широких плавно растёт
+  // до потолка 18.5px, чтобы не мельчить на большом экране, но и не разрастись сверх меры. Все
+  // ~150 точечных font-size в компонентах в этом же коммите переведены с px на rem той же
+  // формулой (N/17), поэтому масштабируются вместе с этими токенами.
+  --font-size-body: 1rem;
+  --font-size-meta: 0.8824rem;
+  --font-size-record-title: 1.1176rem;
+  --tap-min: 44px; // физическая величина (минимальная тач-цель) — не текст, не масштабируется.
+}
+
+// Редизайн v2.1 — единственный источник fluid-масштабирования: 17px на ≤390px (мобильный кегль
+// не мельчает и не двигается с места), дальше растёт вместе с шириной вьюпорта и останавливается
+// на потолке 18.5px уже к ~1070px (то есть на любом обычном десктопе — не «разрастается» сверх
+// этого и на 2560px). clamp() не даёт уйти ниже 17px и на экранах уже 390px.
+html {
+  font-size: clamp(17px, 16.15px + 0.22vw, 18.5px);
 }
 
 * {
@@ -115,12 +130,12 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0 0 var(--space-2);
 }
 
-h1 { font-size: 42px; }
-h2 { font-size: 32px; }
-h3 { font-size: 25px; }
-h4 { font-size: 20px; }
-h5 { font-size: 17px; }
-h6 { font-size: 17px; } // редизайн v2: было 15px
+h1 { font-size: 2.4706rem; }
+h2 { font-size: 1.8824rem; }
+h3 { font-size: 1.4706rem; }
+h4 { font-size: 1.1765rem; }
+h5 { font-size: 1rem; }
+h6 { font-size: 1rem; } // редизайн v2: было 15px
 
 p {
   margin: 0 0 var(--space-3);
@@ -159,7 +174,7 @@ a {
   text-decoration: none;
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
-  font-size: 15px; // редизайн v2: было 14px
+  font-size: 0.8824rem; // редизайн v2: было 14px
   line-height: 1.2;
   color: var(--color-text);
   background: transparent;
@@ -222,7 +237,7 @@ a {
   border: none;
   cursor: pointer;
   font-family: var(--font-heading);
-  font-size: 13px;
+  font-size: 0.7647rem;
   color: var(--color-accent);
   padding: var(--space-1) 0;
   text-decoration: underline;
@@ -262,14 +277,14 @@ a {
 // инлайн-редакторов, где 44px разорвал бы вёрстку (см. риск Р1 плана редизайна).
 .btn-sm {
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: 0.7059rem;
   min-height: 36px;
 }
 
 // Укрупнённый размер — для одиночного акцентного CTA шага (например, "Открыть Telegram").
 .btn-lg {
   padding: 12px 20px;
-  font-size: 16px;
+  font-size: 0.9412rem;
 }
 
 // ============================================================================
@@ -280,7 +295,7 @@ a {
   min-height: var(--tap-min); // редизайн v2: было 36px
   padding: 6px 10px;
   font: inherit;
-  font-size: 15px; // редизайн v2: было 14px
+  font-size: 0.8824rem; // редизайн v2: было 14px
   color: var(--color-text);
   caret-color: var(--color-accent);
   background: var(--color-surface);
@@ -331,7 +346,7 @@ select.input {
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  font-size: 13px;
+  font-size: 0.7647rem;
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
@@ -472,7 +487,7 @@ select.input {
 
 .card-kicker {
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: 0.5882rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-accent);
@@ -487,7 +502,7 @@ select.input {
 
 .card-body {
   margin: 0;
-  font-size: 15px; // редизайн v2: было 13px
+  font-size: 0.8824rem; // редизайн v2: было 13px
   opacity: 0.8;
   flex: 1;
 }
@@ -496,7 +511,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px; // редизайн v2: было 11px
+  font-size: 0.7647rem; // редизайн v2: было 11px
   color: color-mix(in srgb, var(--color-text) 50%, transparent);
 }
 
@@ -510,7 +525,7 @@ select.input {
 .tag {
   display: inline-flex;
   align-items: center;
-  font-size: 13px; // редизайн v2: было 11px
+  font-size: 0.7647rem; // редизайн v2: было 11px
   letter-spacing: 0.02em;
   padding: 3px 10px;
   border-radius: calc(var(--radius-md) * 0.75);
@@ -523,17 +538,30 @@ select.input {
 .tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
 .tag-outline { background: transparent; border: 1px solid var(--color-accent); color: var(--color-accent); }
 
+// Редизайн v2.1 — interactive-обёртка вокруг <app-person-chip> там, где чип служит
+// фильтром/пикером (кнопка нужна ради семантики/клавиатуры, все стили — на самом чипе внутри).
+.person-chip-btn {
+  display: inline-flex;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
 // ============================================================================
 // Таблицы
 // ============================================================================
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 0.8235rem;
 
   th {
     text-align: left;
-    font-size: 11px;
+    font-size: 0.6471rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: color-mix(in srgb, var(--color-text) 60%, transparent);
@@ -597,7 +625,7 @@ select.input {
 
 .form-label {
   display: block;
-  font-size: 12px;
+  font-size: 0.7059rem;
   color: var(--color-neutral-700);
   margin-bottom: var(--space-1);
 }
@@ -620,7 +648,7 @@ select.input {
 // ============================================================================
 .muted {
   color: var(--color-neutral-600);
-  font-size: 12px;
+  font-size: 0.7059rem;
   margin: 0;
 }
 
@@ -650,7 +678,7 @@ select.input {
   color: var(--color-accent-2-800);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
-  font-size: 13px;
+  font-size: 0.7647rem;
 }
 
 .alert-info {
@@ -658,7 +686,7 @@ select.input {
   color: var(--color-accent-800);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
-  font-size: 13px;
+  font-size: 0.7647rem;
 }
 
 // ============================================================================
@@ -669,7 +697,7 @@ select.input {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  font-size: 13px;
+  font-size: 0.7647rem;
   cursor: pointer;
 
   input[type="checkbox"] {
@@ -684,7 +712,7 @@ select.input {
 
 .field-hint {
   display: block;
-  font-size: 11px;
+  font-size: 0.6471rem;
   margin-top: 3px;
 }
 
@@ -757,13 +785,13 @@ select.input {
   }
 
   i {
-    font-size: 22px;
+    font-size: 1.2941rem;
     color: var(--color-neutral-600);
   }
 }
 
 .file-chip-name {
-  font-size: 9px;
+  font-size: 0.5294rem;
   line-height: 1.2;
   color: var(--color-neutral-700);
   overflow: hidden;
@@ -784,7 +812,7 @@ select.input {
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
   color: #fff;
-  font-size: 11px;
+  font-size: 0.6471rem;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -799,7 +827,7 @@ select.input {
   position: absolute;
   bottom: 3px;
   right: 3px;
-  font-size: 14px;
+  font-size: 0.8235rem;
   color: var(--color-accent);
   background: var(--color-bg);
   border-radius: 50%;
@@ -817,10 +845,10 @@ select.input {
   background: transparent;
   color: var(--color-neutral-600);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 0.5882rem;
   transition: border-color 0.15s ease, color 0.15s ease;
 
-  i { font-size: 22px; }
+  i { font-size: 1.2941rem; }
 
   &:active {
     border-color: var(--color-accent);
@@ -873,12 +901,21 @@ select.input {
 }
 
 .app-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 20px 20px 16px;
   border-bottom: 1px solid var(--color-divider);
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
-  font-size: 21px;
+  font-size: 1.2353rem;
   letter-spacing: -0.02em;
+
+  i {
+    font-size: 1.3529rem;
+    color: var(--color-accent);
+    flex: none;
+  }
 }
 
 .app-sidebar-nav {
@@ -900,7 +937,7 @@ select.input {
   min-height: var(--tap-min);
 
   i {
-    font-size: 22px;
+    font-size: 1.2941rem;
     color: var(--color-neutral-600);
     flex: none;
   }
@@ -940,7 +977,7 @@ select.input {
 
 .app-sidebar-child {
   padding: 7px 12px;
-  font-size: 15px;
+  font-size: 0.8824rem;
   color: var(--color-text);
   text-decoration: none;
   border-radius: var(--radius-md);
@@ -971,7 +1008,7 @@ select.input {
 
 .app-sidebar-kicker {
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: 0.5882rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-neutral-600);
@@ -1108,7 +1145,7 @@ select.input {
   min-height: var(--tap-min);
 
   i {
-    font-size: 21px;
+    font-size: 1.2353rem;
     color: var(--color-neutral-600);
   }
 
@@ -1157,7 +1194,7 @@ select.input {
   margin: var(--space-1) 0 var(--space-4);
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: 25px;
+  font-size: 1.4706rem;
   line-height: 1.25;
   letter-spacing: -0.015em;
   color: var(--color-text);
@@ -1176,21 +1213,21 @@ select.input {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  font-size: 14px;
+  font-size: 0.8235rem;
   line-height: 1.4;
   color: var(--color-text);
 }
 
 .login-intro-features i {
   flex: none;
-  font-size: 20px;
+  font-size: 1.1765rem;
   color: var(--color-accent);
   margin-top: 1px;
 }
 
 .login-intro-note {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.7059rem;
   line-height: 1.5;
   color: var(--color-neutral-600);
 }
@@ -1205,7 +1242,7 @@ select.input {
   }
 
   .login-intro-title {
-    font-size: 21px;
+    font-size: 1.2353rem;
   }
 
   .login-intro-features {
@@ -1219,7 +1256,7 @@ select.input {
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: 0.6471rem;
     max-width: 88px;
     text-align: center;
   }
@@ -1262,12 +1299,12 @@ select.input {
   color: var(--color-neutral-600);
 
   i {
-    font-size: 22px; // редизайн v2: было 21px
+    font-size: 1.2941rem; // редизайн v2: было 21px
   }
 
   span {
     font-family: var(--font-heading);
-    font-size: 11px; // редизайн v2: было 10px
+    font-size: 0.6471rem; // редизайн v2: было 10px
   }
 
   &.active {

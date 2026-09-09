@@ -92,11 +92,11 @@
 
 .viewer-header-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.8235rem;
 }
 
 .viewer-header-count {
-  font-size: 12px;
+  font-size: 0.7059rem;
   opacity: 0.75;
 }
 
@@ -134,7 +134,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 1.0588rem;
 
   &:hover { background: color-mix(in srgb, #000 60%, transparent); }
   &:disabled { opacity: 0.3; cursor: not-allowed; }

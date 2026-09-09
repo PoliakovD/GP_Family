@@ -14,7 +14,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 0.7059rem;
   color: var(--color-neutral-600);
   animation: pipeline-step-enter 0.2s ease-out;
 }
@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 0.7059rem;
 }
 
 .step-done .pipeline-step-icon {

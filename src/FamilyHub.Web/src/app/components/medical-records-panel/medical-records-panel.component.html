@@ -10,102 +10,124 @@
        боковая панель/полноэкранно), кнопка «Добавить» в топбаре теперь навигирует туда, не
        разворачивает форму инлайн (см. PR7 плана). -->
 
-  <!-- Редизайн v3 — «Фильтры» переехали из сворачиваемой панели над списком в кнопку рядом с
-       локальным поиском (один ряд), см. PR5.3/5.4 плана. Тот же приём двух обёрток на одном
-       наборе полей, что уже применён в shared/action-menu: попап на широких экранах, шторка на
-       узких. -->
-  <div class="d-flex gap-2 mb-2 align-items-start">
-    <app-search-field class="flex-fill" [placeholder]="labels.searchPlaceholder" [value]="searchQuery" (valueChange)="onSearchQueryChange($event)" />
-    <div class="filters-anchor" #filtersAnchor>
-      <button type="button" class="btn btn-secondary text-nowrap" (click)="filtersOpen = !filtersOpen">
-        <i class="ph ph-funnel" aria-hidden="true"></i> Фильтры
-        @if (activeFilterCount > 0) {
-          <span class="tag tag-accent" style="margin-left:6px">{{ activeFilterCount }}</span>
+  @if (!recordId()) {
+    <!-- Редизайн v2.1 — заголовок экрана + краткая сводка переехали сюда из Page-обёртки
+         (medical-records-tab/doctor-visits-tab печатали голый <h3>): экран сам знает счётчики,
+         обёртке незачем их дублировать отдельным запросом. Только в списочном режиме — в
+         singleMode (открытая запись) заголовок уже даёт back-хедер ниже. -->
+    <h3 class="mb-1">{{ labels.title }}</h3>
+    @if (!loading && totalCount > 0) {
+      <p class="muted mb-3" style="font-size:var(--font-size-meta)">
+        {{ totalCount }} {{ pluralizeRu(totalCount, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
+        @if (items.length === totalCount) {
+          · {{ groupedItems.length }} {{ pluralizeRu(groupedItems.length, 'человек', 'человека', 'человек') }}
         }
-      </button>
+        . {{ labels.accessHintLabel }}
+      </p>
+    }
 
-      @if (filtersOpen && isWide) {
-        <div class="card filters-popover">
-          <ng-container *ngTemplateOutlet="filterFields" />
-        </div>
-      }
+    <!-- Редизайн v2.1 — поле поиска переехало в топбар каркаса целиком (см.
+         PageActionService.pageSearch в конструкторе/ngOnInit), было полем прямо тут, под
+         заголовком экрана. «Фильтры» остаются на экране — это не текстовый поиск. -->
+    <div class="d-flex gap-2 mb-2 justify-content-end">
+      <div class="filters-anchor" #filtersAnchor>
+        <button type="button" class="btn btn-secondary text-nowrap" (click)="filtersOpen = !filtersOpen">
+          <i class="ph ph-funnel" aria-hidden="true"></i> Фильтры
+          @if (activeFilterCount > 0) {
+            <span class="tag tag-accent" style="margin-left:6px">{{ activeFilterCount }}</span>
+          }
+        </button>
+
+        @if (filtersOpen && isWide) {
+          <div class="card filters-popover">
+            <ng-container *ngTemplateOutlet="filterFields" />
+          </div>
+        }
+      </div>
     </div>
-  </div>
 
-  @if (filtersOpen && !isWide) {
-    <app-bottom-sheet title="Фильтры" [open]="true" (closed)="filtersOpen = false">
-      <ng-container *ngTemplateOutlet="filterFields" />
-    </app-bottom-sheet>
+    @if (filtersOpen && !isWide) {
+      <app-bottom-sheet title="Фильтры" [open]="true" (closed)="filtersOpen = false">
+        <ng-container *ngTemplateOutlet="filterFields" />
+      </app-bottom-sheet>
+    }
+
+    <ng-template #filterFields>
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        <div class="flex-fill" style="min-width:130px">
+          <label class="form-label">С даты</label>
+          <input class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
+        </div>
+        <div class="flex-fill" style="min-width:130px">
+          <label class="form-label">По дату</label>
+          <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
+        </div>
+      </div>
+      <label class="form-label">Врач</label>
+      <input
+        class="input mb-2"
+        [attr.list]="doctorsDatalistId"
+        [(ngModel)]="filters.doctor"
+        (ngModelChange)="onFilterChange()"
+        placeholder="Начните вводить имя врача…"
+      />
+      @if (activeFilterCount > 0) {
+        <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
+      }
+    </ng-template>
   }
 
-  <ng-template #filterFields>
-    <div class="d-flex flex-wrap gap-2 mb-2">
-      <div class="flex-fill" style="min-width:130px">
-        <label class="form-label">С даты</label>
-        <input class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
-      </div>
-      <div class="flex-fill" style="min-width:130px">
-        <label class="form-label">По дату</label>
-        <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
-      </div>
-    </div>
-    <label class="form-label">Врач</label>
-    <input
-      class="input mb-2"
-      [attr.list]="doctorsDatalistId"
-      [(ngModel)]="filters.doctor"
-      (ngModelChange)="onFilterChange()"
-      placeholder="Начните вводить имя врача…"
-    />
-    @if (activeFilterCount > 0) {
-      <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
-    }
-  </ng-template>
-
-  <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список (десктоп/
-       мобайл) и мобильный экран открытой записи показывают одно и то же содержимое, разница —
-       только в singleMode (детали всегда развёрнуты, «Открыть» не нужна). -->
+  <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список и отдельный
+       экран открытой записи показывают одно и то же содержимое, разница — только в singleMode
+       (детали всегда развёрнуты, «Открыть» не нужна). -->
   <ng-template #recordCard let-item let-singleMode="singleMode">
     <div class="card record-card flex-fill">
       <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
-           (см. PR5.1 плана). На мобильном списке (не singleMode, не isWide) действий нет вообще —
-           вся строка уводит на экран записи (PR6 плана), где singleMode=true. -->
+           (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
+           мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
+           и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
       <div
         class="record-card-row"
-        [class.clickable]="!singleMode && !isWide"
+        [class.clickable]="!singleMode"
         (click)="onRecordCardClick(item, singleMode)"
       >
         <div class="record-card-main">
           <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
 
-          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок. -->
+          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
+               чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
+               подписью, а не чипом. -->
           <div class="record-chips">
             @if (item.attachmentCount > 0) {
-              <span class="tag tag-neutral">{{ attachmentCountLabel(item) }}</span>
+              <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
             }
             @if (item.indicatorCount > 0) {
-              <span class="tag tag-neutral">{{ indicatorCountLabel(item) }}</span>
+              <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
             }
             @if (item.abnormalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));color:var(--color-status-danger-text)">
-                {{ item.abnormalIndicatorCount }} вне нормы
+              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
+                <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
               </span>
             } @else if (item.normalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));color:var(--color-status-ok-text)">
-                {{ item.normalIndicatorCount }} в норме
+              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
+                <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
               </span>
             }
             @if (item.doctor) {
-              <span class="muted" style="font-size:13px">Врач: {{ item.doctor }}</span>
+              <span class="tag tag-neutral">
+                <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
+              </span>
             }
           </div>
         </div>
 
         @if (singleMode || isWide) {
-          <div class="record-card-actions">
+          <!-- stopPropagation — теперь вся строка тоже кликабельна (см. выше), без этого клик по
+               кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
+          <div class="record-card-actions" (click)="$event.stopPropagation()">
             @if (!singleMode) {
-              <button class="btn btn-secondary text-nowrap" (click)="toggleExpandedRecord(item)">
-                {{ expandedRecordId === item.id ? 'Свернуть' : 'Открыть' }}
+              <button class="btn btn-secondary text-nowrap" (click)="onRecordCardClick(item, false)">
+                Открыть
               </button>
             }
             <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
@@ -133,13 +155,14 @@
       }
 
       @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
-        <div class="muted" style="font-size:12px">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
+        <div class="muted" style="font-size:0.7059rem">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
       }
 
       <!-- Редизайн v3 — «Подробнее» больше не отдельная свёртка со своим заголовком/шевроном
-           (см. PR5.2 плана). В singleMode (экран открытой записи) детали видны всегда — там нет
-           кнопки «Открыть», раскрывать нечего. -->
-      @if (singleMode || expandedRecordId === item.id) {
+           (см. PR5.2 плана). Редизайн v2.1 — инлайн-раскрытие в списке убрано целиком: «Открыть»
+           теперь всегда переходит на отдельную страницу записи (см. onRecordCardClick), детали
+           видны только там, где singleMode=true. -->
+      @if (singleMode) {
         @if (item.doctor) {
           <p class="muted mb-1">Врач: {{ item.doctor }}</p>
         }
@@ -158,12 +181,12 @@
                 (ngModelChange)="onSpecimenQueryInput($event)"
                 (blur)="resolveSpecimenQuery(recordSpecimenQuery, recordSpecimenForm)" />
               @if (savingCustomSpecimen) {
-                <div class="muted" style="font-size:12px">Проверяем источник…</div>
+                <div class="muted" style="font-size:0.7059rem">Проверяем источник…</div>
               } @else if (!recordSpecimenForm.specimenKbId && recordSpecimenQuery) {
-                <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
+                <div class="muted" style="font-size:0.7059rem">Источник ещё не подтверждён — уберите фокус с поля.</div>
               }
               @if (customSpecimenError) {
-                <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+                <div class="alert-danger mb-0" style="font-size:0.7059rem">{{ customSpecimenError }}</div>
               }
               <div class="d-flex gap-2">
                 <button class="btn btn-primary btn-sm" [disabled]="savingRecordSpecimen" (click)="saveRecordSpecimen(item.id)">Сохранить</button>
@@ -171,12 +194,12 @@
               </div>
             </div>
           } @else if (item.specimenHint) {
-            <div class="alert-info mb-2" style="font-size:13px">
+            <div class="alert-info mb-2" style="font-size:0.7647rem">
               Уточните источник: «{{ item.specimenHint }}» — откуда именно?
               <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item, item.specimenHint)">Уточнить</button>
             </div>
           } @else {
-            <p class="muted mb-1" style="font-size:13px">
+            <p class="muted mb-1" style="font-size:0.7647rem">
               Источник: {{ specimenLabelFor(item) }}
               <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item)">Изменить</button>
             </p>
@@ -193,7 +216,7 @@
         @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
           <div class="d-flex justify-content-between mt-2" style="align-items:center;">
             <div class="card-kicker mb-0">Резюме</div>
-            <button type="button" class="btn-link" style="font-size:12px"
+            <button type="button" class="btn-link" style="font-size:0.7059rem"
                     [disabled]="summaryRegeneratingRecordId === item.id"
                     (click)="regenerateSummary(item.id)">
               {{ summaryRegeneratingRecordId === item.id ? 'Пересчитываем…' : (summaryByRecord[item.id] ? 'Пересчитать резюме' : 'Составить резюме') }}
@@ -204,7 +227,7 @@
               <p class="mb-1">{{ summary.plainSummary }}</p>
             }
             @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:13px">
+              <ul class="mb-1" style="font-size:0.7647rem">
                 @for (d of summary.deviations; track d.name) {
                   <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
                 }
@@ -212,20 +235,20 @@
             }
             @if (summary.questionsForDoctor.length > 0) {
               <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:13px">
+              <ul class="mb-1" style="font-size:0.7647rem">
                 @for (q of summary.questionsForDoctor; track q) {
                   <li>{{ q }}</li>
                 }
               </ul>
             }
-            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+            <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
           } @else {
-            <p class="muted mb-1" style="font-size:13px">Резюме ещё не составлено.</p>
+            <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
           }
           <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
                а объяснить, что делать) — резюме строится по показателям на момент последнего
                распознавания/пересчёта и само не обновляется после ручной правки значения. -->
-          <p class="muted mb-0" style="font-size:11px">
+          <p class="muted mb-0" style="font-size:0.6471rem">
             Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
             пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
             нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
@@ -276,7 +299,7 @@
                     <td>
                       {{ shortIndicatorName(ind) }}
                       @if (indicatorReference(ind); as ref) {
-                        <div class="muted" style="font-size:11px">
+                        <div class="muted" style="font-size:0.6471rem">
                           {{ ref }}
                           @if (isCalculatedRef(ind)) {
                             <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
@@ -294,7 +317,7 @@
                           [unit]="ind.unit" [flag]="ind.flag" variant="mini"
                         />
                       } @else {
-                        <span class="muted" style="font-size:12px">—</span>
+                        <span class="muted" style="font-size:0.7059rem">—</span>
                       }
                     </td>
                     <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
@@ -370,7 +393,7 @@
                   @if (med.kbMedicationId; as kbId) {
                     <button type="button" class="btn-link" (click)="openKbCard(kbId)">Справка</button>
                   } @else {
-                    <span class="muted" style="font-size:12px">— справка уточняется</span>
+                    <span class="muted" style="font-size:0.7059rem">— справка уточняется</span>
                   }
                 </li>
               }
@@ -382,14 +405,15 @@
   </ng-template>
 
   @if (recordId()) {
-    <!-- Редизайн v3 — мобильный экран открытой записи (PR6 плана): та же карточка, что в
+    <!-- Редизайн v3/v2.1 — отдельный экран открытой записи, теперь на любой ширине (было —
+         только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
          списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». -->
     <div class="d-flex align-items-center gap-2 mb-3">
       <button type="button" class="btn-icon" (click)="goToList()" aria-label="Назад к списку">
         <i class="ph ph-arrow-left" aria-hidden="true"></i>
       </button>
       @if (items[0]; as only) {
-        <div class="card-title" style="font-size:19px">{{ shortName(only) }}</div>
+        <div class="card-title" style="font-size:1.1176rem">{{ shortName(only) }}</div>
       }
     </div>
 
@@ -411,18 +435,31 @@
     }
   } @else {
 
-  <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры"). -->
+  <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры");
+       редизайн v2.1 — настоящие люди (не «Все») показаны компактным app-person-chip (аватар +
+       короткое имя) вместо длинного ФИО с семьёй в скобках, полное — в тултипе при наведении. -->
   <div class="d-flex flex-wrap gap-2 mb-2">
     @for (opt of filterPatientOptions; track opt.key) {
-      <button
-        type="button"
-        class="tag"
-        [class.tag-accent]="filters.patientKey === opt.key"
-        style="cursor:pointer;border:none;font:inherit"
-        (click)="selectPatientFilter(opt.key)"
-      >
-        {{ opt.label }}
-      </button>
+      @if (opt.shortLabel) {
+        <button type="button" class="person-chip-btn" (click)="selectPatientFilter(opt.key)">
+          <app-person-chip
+            [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
+            [shortLabel]="opt.shortLabel"
+            [fullLabel]="opt.label"
+            [selected]="filters.patientKey === opt.key"
+          />
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="tag"
+          [class.tag-accent]="filters.patientKey === opt.key"
+          style="cursor:pointer;border:none;font:inherit"
+          (click)="selectPatientFilter(opt.key)"
+        >
+          {{ opt.label }}
+        </button>
+      }
     }
   </div>
 
@@ -442,13 +479,13 @@
           <div class="flex-fill" style="min-width:0">
             <!-- Редизайн v3 — короткое имя всегда (не полное ФИО), контрастнее; полное ФИО —
                  только в native-тултипе при наведении (см. PR5.5 плана). -->
-            <div class="card-title" style="font-size:19px" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
-            <div class="muted" style="font-size:14px">
-              {{ group.records.length }} {{ pluralizeRu(group.records.length, kind() === Kind.Analysis ? 'анализ' : 'посещение', kind() === Kind.Analysis ? 'анализа' : 'посещения', kind() === Kind.Analysis ? 'анализов' : 'посещений') }}
+            <div class="card-title" style="font-size:1.1176rem" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
+            <div class="muted" style="font-size:0.8235rem">
+              {{ group.records.length }} {{ pluralizeRu(group.records.length, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
               · последний {{ formatDayMonthYear(group.records[0].recordDate) }}
             </div>
           </div>
-          <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:13px">
+          <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:0.7647rem">
             <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
               <i class="ph-duotone ph-eye" aria-hidden="true"></i> {{ groupAccessLabel(group) }}
             </span>
@@ -485,7 +522,7 @@
          пассивная обратная связь, не элемент управления. На in-memory пути (поиск/врач) сервер
          и так уже отдал всё за один раз (см. usingTextFilter) — сентинел не нужен. -->
     @if (items.length > 0) {
-      <div class="muted mb-2" style="font-size:12px;text-align:center">
+      <div class="muted mb-2" style="font-size:0.7059rem;text-align:center">
         Показано {{ items.length }} из {{ totalCount }}
       </div>
     }
@@ -520,11 +557,11 @@
             <div class="d-flex align-items-center gap-2" style="padding:9px 0;border-bottom:1px solid var(--color-divider)">
               <i
                 class="ph-duotone ph-house"
-                style="font-size:20px"
+                style="font-size:1.1765rem"
                 [style.color]="isVisibleToFamily(record, f.id) ? 'var(--color-accent)' : 'var(--color-neutral-500)'"
                 aria-hidden="true"
               ></i>
-              <span class="flex-fill" style="font-size:14px">{{ f.name }}</span>
+              <span class="flex-fill" style="font-size:0.8235rem">{{ f.name }}</span>
               <label class="switch">
                 <input
                   type="checkbox"

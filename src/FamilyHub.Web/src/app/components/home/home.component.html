@@ -17,7 +17,7 @@
           <div class="home-section-kicker">
             <span>Требует внимания</span>
             <span class="home-section-line"></span>
-            <span class="muted" style="font-size:13px">{{ visibleCardCount }}</span>
+            <span class="muted" style="font-size:0.7647rem">{{ visibleCardCount }}</span>
           </div>
 
           @if (medicationSummary; as m) {
@@ -66,15 +66,24 @@
           <span class="home-section-line"></span>
         </div>
         <div class="d-flex flex-wrap gap-2">
-          <span class="home-ok-chip">
-            <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-            Аптечка: {{ summary.ok.medicationsInDate }} из {{ summary.ok.medicationsTotal }} в сроке
+          <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.medicationsExpired > 0">
+            <i [class]="summary.ok.medicationsExpired > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
+               [style.color]="summary.ok.medicationsExpired > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
+               aria-hidden="true"></i>
+            {{ medicationsOkLabel }}
           </span>
           <span class="home-ok-chip">
             <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-            Анализы: {{ summary.ok.analysesTotal }} записей
+            Анализы: {{ summary.ok.analysesTotal }} {{ pluralizeRu(summary.ok.analysesTotal, 'запись', 'записи', 'записей') }}
             @if (summary.ok.analysesAbnormal > 0) {
               , {{ summary.ok.analysesAbnormal }} с отклонениями
+            }
+          </span>
+          <span class="home-ok-chip">
+            <i class="ph ph-stethoscope" style="color:var(--color-status-ok)" aria-hidden="true"></i>
+            Посещения врачей: {{ summary.ok.visitsTotal }}
+            @if (summary.ok.visitsLastDate) {
+              · последнее {{ formatDayMonthYear(summary.ok.visitsLastDate) }}
             }
           </span>
           <span class="home-ok-chip">
@@ -96,19 +105,19 @@
           <div class="card">
             <div class="d-flex align-items-baseline justify-content-between mb-2">
               <div class="home-section-kicker" style="margin:0"><span>Кто в семье</span></div>
-              <a [routerLink]="['/families', fam.id]" style="font-size:13px">Открыть семью</a>
+              <a [routerLink]="['/families', fam.id]" style="font-size:0.7647rem">Открыть семью</a>
             </div>
             @for (m of fam.currentMembers ?? []; track m.id) {
               <div class="d-flex align-items-center gap-2 mb-2">
                 <app-avatar [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" />
                 <div class="flex-fill" style="min-width:0">
-                  <div class="card-title" style="font-size:16px"><app-person-name [person]="m" /></div>
+                  <div class="card-title" style="font-size:0.9412rem"><app-person-name [person]="m" /></div>
                   @if (isPending(m.id)) {
-                    <div style="font-size:13px;color:var(--color-accent-2)">ждёт подтверждения</div>
+                    <div style="font-size:0.7647rem;color:var(--color-accent-2)">ждёт подтверждения</div>
                   } @else if (m.id === auth.me()?.userId) {
-                    <div class="muted" style="font-size:13px">вы{{ m.role === 1 ? ' · админ' : '' }}</div>
+                    <div class="muted" style="font-size:0.7647rem">вы{{ m.role === 1 ? ' · админ' : '' }}</div>
                   } @else {
-                    <div class="muted" style="font-size:13px">{{ m.role === 1 ? 'админ' : 'участник' }}</div>
+                    <div class="muted" style="font-size:0.7647rem">{{ m.role === 1 ? 'админ' : 'участник' }}</div>
                   }
                 </div>
               </div>
@@ -126,8 +135,14 @@
                   <div class="home-birthday-month">{{ monthShort(b.date) }}</div>
                 </div>
                 <div class="flex-fill">
-                  <div class="card-title" style="font-size:16px">{{ b.personName }}</div>
-                  <div class="muted" style="font-size:13px">через {{ b.daysUntil }} · {{ b.turningAge }} лет</div>
+                  <div class="card-title" style="font-size:0.9412rem">{{ b.personName }}</div>
+                  <div class="muted" style="font-size:0.7647rem">
+                    @if (b.daysUntil === 0) {
+                      сегодня · {{ b.turningAge }} лет
+                    } @else {
+                      через {{ b.daysUntil }} {{ pluralizeRu(b.daysUntil, 'день', 'дня', 'дней') }} · {{ b.turningAge }} лет
+                    }
+                  </div>
                 </div>
               </div>
             }

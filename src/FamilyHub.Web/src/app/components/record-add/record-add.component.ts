@@ -13,6 +13,7 @@ import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '.
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { FileViewerComponent } from '../../shared/file-viewer/file-viewer.component';
+import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 
 /** Файл, ожидающий загрузки — ещё не отправленный (запись создастся только по «Сохранить»).
  * previewUrl — только для картинок (см. medications-panel.photos). */
@@ -40,7 +41,7 @@ let nextInstanceId = 0;
 @Component({
   selector: 'app-record-add',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent],
+  imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent, PersonChipComponent],
   templateUrl: './record-add.component.html',
   styleUrl: './record-add.component.scss',
 })

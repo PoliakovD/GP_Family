@@ -140,15 +140,27 @@ public class HomeSummaryService(
 
     private async Task<HomeOkChips> BuildOkChipsAsync(Guid userId, List<Guid> activeFamilyIds, CancellationToken ct)
     {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
         var medicationsTotal = activeFamilyIds.Count == 0
             ? 0
             : await db.Medications.AsNoTracking().CountAsync(m => activeFamilyIds.Contains(m.FamilyId), ct);
+        // Просрочено/истекает — раздельно (редизайн v2.1), тем же предиктом WhereExpiringOrExpired,
+        // что ReminderScanJob и карточка «Требует внимания» выше: ExpiryDate < today — просрочено,
+        // иначе (но в пределах ExpiryWarningDays) — истекает.
+        var medicationsExpired = activeFamilyIds.Count == 0
+            ? 0
+            : await db.Medications.AsNoTracking()
+                .Where(m => activeFamilyIds.Contains(m.FamilyId))
+                .WhereExpiringOrExpired(today, options.Value.ExpiryWarningDays)
+                .CountAsync(m => m.ExpiryDate!.Value < today, ct);
         var medicationsExpiringOrExpired = activeFamilyIds.Count == 0
             ? 0
             : await db.Medications.AsNoTracking()
                 .Where(m => activeFamilyIds.Contains(m.FamilyId))
-                .WhereExpiringOrExpired(DateOnly.FromDateTime(DateTime.UtcNow), options.Value.ExpiryWarningDays)
+                .WhereExpiringOrExpired(today, options.Value.ExpiryWarningDays)
                 .CountAsync(ct);
+        var medicationsExpiring = medicationsExpiringOrExpired - medicationsExpired;
 
         var visibleRecordIds = await medicalRecords.GetVisibleRecordIdsAsync(userId, MedicalRecordKind.Analysis, ct);
         var analysesAbnormal = visibleRecordIds.Count == 0
@@ -160,11 +172,17 @@ public class HomeSummaryService(
                 .Distinct()
                 .CountAsync(ct);
 
+        var (visitsTotal, visitsLastDate) =
+            await medicalRecords.GetVisibleRecordCountAndLastDateAsync(userId, MedicalRecordKind.DoctorVisit, ct);
+
         var pushEnabled = await db.PushSubscriptions.AsNoTracking().AnyAsync(s => s.UserId == userId, ct);
 
         return new HomeOkChips(
             medicationsTotal - medicationsExpiringOrExpired, medicationsTotal,
-            visibleRecordIds.Count, analysesAbnormal, pushEnabled);
+            medicationsExpired, medicationsExpiring,
+            visibleRecordIds.Count, analysesAbnormal,
+            visitsTotal, visitsLastDate,
+            pushEnabled);
     }
 
     private Task<int> GetUnreadCountAsync(Guid userId, CancellationToken ct) =>

@@ -1,5 +1,5 @@
 .home-header h2 {
-  font-size: 30px;
+  font-size: 1.7647rem;
 }
 
 .home-grid {
@@ -9,15 +9,14 @@
   align-items: start;
 }
 
-// Мокап мобильного экрана Главной не показывает правую колонку («Кто в семье»/«Ближайшие ДР»)
-// вовсе — только карточки внимания + чипы «В порядке». Тот же брейкпоинт, что у сайдбара шелла.
+// Редизайн v2.1 — правая колонка («Кто в семье»/«Ближайшие дни рождения») раньше была полностью
+// скрыта ниже 1024px (тот же брейкпоинт, что у сайдбара шелла), из-за чего блок «Ближайшие дни
+// рождения» не был виден ни на планшете, ни на мобильном, ни в любом некстремизированном окне
+// браузера — только на широком десктопе. Теперь колонка просто стекается под левую тем же grid,
+// вместо того чтобы пропадать целиком.
 @media (max-width: 1023px) {
   .home-grid {
     grid-template-columns: 1fr;
-  }
-
-  .home-right-col {
-    display: none;
   }
 }
 
@@ -27,7 +26,7 @@
   gap: 10px;
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 0.6471rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-neutral-600);
@@ -51,6 +50,13 @@
   color: var(--color-neutral-800);
 }
 
+// Аптечка с просроченными — тот же приём контраста, что чипы-метаданные записи (медалист "N вне
+// нормы"): "В порядке" в заголовке блока не значит "каждый чип обязан быть зелёным".
+.home-ok-chip-danger {
+  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-surface));
+  color: var(--color-status-danger-text);
+}
+
 .home-birthday-date {
   width: 44px;
   flex: none;
@@ -60,12 +66,12 @@
 .home-birthday-day {
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: 18px;
+  font-size: 1.0588rem;
   line-height: 1;
 }
 
 .home-birthday-month {
-  font-size: 11px;
+  font-size: 0.6471rem;
   color: var(--color-neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.05em;

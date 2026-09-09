@@ -8,7 +8,7 @@
       <i [class]="push.isSubscribed() ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash'" aria-hidden="true"></i>
       <div class="flex-fill">
         <div style="font-weight:600">Push-уведомления {{ push.isSubscribed() ? 'включены' : 'выключены' }}</div>
-        <div class="muted" style="font-size:14px">
+        <div class="muted" style="font-size:0.8235rem">
           @if (push.isSubscribed()) {
             Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
           } @else {

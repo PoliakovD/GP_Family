@@ -5,8 +5,11 @@ import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/typ
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
+import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import type { AvatarPerson } from '../../shared/avatar/avatar.component';
 import { specimenLabel } from '../../shared/util/specimen';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
+import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
 
@@ -15,7 +18,7 @@ const ALL_PATIENTS_KEY = 'all';
 /**
  * Page (таксономия — patterns/frontend_web.md): «мои показатели» — последнее значение по каждому
  * лабораторному показателю среди СОБСТВЕННЫХ записей владельца (задачи 5.2/5.3), вкладка
- * «Показатели» хаба «Здоровье». Список и график ПОПАЦИЕНТНЫЕ (реальный баг: несколько человек
+ * «Показатели анализов» хаба «Здоровье». Список и график ПОПАЦИЕНТНЫЕ (реальный баг: несколько человек
  * одной семьи сдавали один и тот же анализ — раньше схлопывались в одну строку/график, см.
  * class doc LabIndicator.FamilyDependentId на бэкенде) — тот же фильтр «Пациент», что уже есть в
  * панели записей (buildPatientOptions), плюс имя пациента прямо в строке списка. Клик по строке
@@ -24,7 +27,7 @@ const ALL_PATIENTS_KEY = 'all';
 @Component({
   selector: 'app-indicators-tab',
   standalone: true,
-  imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent],
+  imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent],
   templateUrl: './indicators-tab.component.html',
   styleUrl: './indicators-tab.component.scss',
 })
@@ -71,6 +74,13 @@ export class IndicatorsTabComponent implements OnInit {
     if (item.familyDependentId) return `dep:${item.familyDependentId}`;
     if (item.targetUserId) return `user:${item.targetUserId}`;
     return 'self';
+  }
+
+  /** Редизайн v2.1 — app-person-chip в строке списка (было — сырое item.patientName текстом). */
+  readonly shortenDisplayName = shortenDisplayName;
+
+  itemAvatarPerson(item: MyIndicatorSummary): AvatarPerson {
+    return { key: this.itemPatientKey(item), ...personAvatarPartsFromName(item.patientName) };
   }
 
   get filteredItems(): MyIndicatorSummary[] {

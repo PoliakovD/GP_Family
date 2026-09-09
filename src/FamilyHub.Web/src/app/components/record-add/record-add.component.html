@@ -18,15 +18,26 @@
       <div class="form-label">Чей анализ</div>
       <div class="d-flex flex-wrap gap-2">
         @for (opt of patientOptions; track opt.key) {
-          <button
-            type="button"
-            class="tag"
-            [class.tag-accent]="selectedPatientKey === opt.key"
-            style="cursor:pointer;border:none;font:inherit"
-            (click)="selectedPatientKey = opt.key"
-          >
-            {{ opt.label }}
-          </button>
+          @if (opt.shortLabel) {
+            <button type="button" class="person-chip-btn" (click)="selectedPatientKey = opt.key">
+              <app-person-chip
+                [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
+                [shortLabel]="opt.shortLabel"
+                [fullLabel]="opt.label"
+                [selected]="selectedPatientKey === opt.key"
+              />
+            </button>
+          } @else {
+            <button
+              type="button"
+              class="tag"
+              [class.tag-accent]="selectedPatientKey === opt.key"
+              style="cursor:pointer;border:none;font:inherit"
+              (click)="selectedPatientKey = opt.key"
+            >
+              {{ opt.label }}
+            </button>
+          }
         }
       </div>
     </div>
@@ -73,7 +84,7 @@
         (change)="onPendingFilesSelected($event)"
       />
       @if (attachmentLimits; as limits) {
-        <div class="muted mb-2" style="font-size:12px">
+        <div class="muted mb-2" style="font-size:0.7059rem">
           До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
         </div>
       }
@@ -85,7 +96,7 @@
     <div class="record-add-recognize mb-3">
       <div class="flex-fill">
         <div style="font-weight:600">Распознать бланк</div>
-        <div class="muted" style="font-size:13px">Название, дата и показатели заполнятся сами — проверите перед сохранением.</div>
+        <div class="muted" style="font-size:0.7647rem">Название, дата и показатели заполнятся сами — проверите перед сохранением.</div>
       </div>
       <label class="switch">
         <input type="checkbox" [(ngModel)]="autoRecognize" />

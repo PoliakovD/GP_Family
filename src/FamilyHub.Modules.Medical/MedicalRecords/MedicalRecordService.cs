@@ -277,7 +277,7 @@ public class MedicalRecordService(
         var dependentNames = dependentIds.Count == 0
             ? []
             : (await db.FamilyDependents.AsNoTracking().Where(d => dependentIds.Contains(d.Id)).ToListAsync(ct))
-                .ToDictionary(d => d.Id, d => FormatName(d.FirstName, d.LastName, null));
+                .ToDictionary(d => d.Id, d => FormatName(d.FirstName, d.LastName, d.MiddleName));
 
         var userNames = userIds.Count == 0
             ? []
@@ -342,6 +342,20 @@ public class MedicalRecordService(
     /// тот же единственный предикат видимости, а не собственную копию.</summary>
     public Task<List<Guid>> GetVisibleRecordIdsAsync(Guid userId, MedicalRecordKind? kind = null, CancellationToken ct = default) =>
         VisibleRecordsQuery(userId, kind).Select(r => r.Id).ToListAsync(ct);
+
+    /// <summary>Счётчик + дата последней записи заданного вида — для чипов «В порядке» на Главной
+    /// (HomeSummaryService.BuildOkChipsAsync, редизайн v2.1). RecordDate не зашифрован (в отличие
+    /// от PersonName/Doctor/Description), поэтому Count/Max считаются прямо в SQL, без выгрузки
+    /// строк на клиент — как и остальные счётчики в этом сервисе (см. GetVisibleRecordIdsAsync).</summary>
+    public async Task<(int Count, DateOnly? LastDate)> GetVisibleRecordCountAndLastDateAsync(
+        Guid userId, MedicalRecordKind kind, CancellationToken ct = default)
+    {
+        var query = VisibleRecordsQuery(userId, kind);
+        var count = await query.CountAsync(ct);
+        if (count == 0) return (0, null);
+        var lastDate = await query.MaxAsync(r => r.RecordDate, ct);
+        return (count, lastDate);
+    }
 
     /// <summary>
     /// Поиск по видимым медкартам (этап 3, ADR-0003). PersonName/Doctor/Description зашифрованы

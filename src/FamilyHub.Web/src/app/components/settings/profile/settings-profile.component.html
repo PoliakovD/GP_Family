@@ -63,12 +63,12 @@
         <div class="settings-data-row">
           <span class="settings-data-label">Дата рождения</span>
           <span class="flex-fill">{{ me.birthDate ?? '—' }}</span>
-          <span class="muted" style="font-size:13px">нужна для норм в анализах</span>
+          <span class="muted" style="font-size:0.7647rem">нужна для норм в анализах</span>
         </div>
         <div class="settings-data-row">
           <span class="settings-data-label">Пол</span>
           <span class="flex-fill">{{ me.gender === 1 ? 'Женский' : 'Мужской' }}</span>
-          <span class="muted" style="font-size:13px">нужен для норм в анализах</span>
+          <span class="muted" style="font-size:0.7647rem">нужен для норм в анализах</span>
         </div>
         <div class="settings-data-row">
           <span class="settings-data-label">Email</span>
@@ -86,7 +86,7 @@
       <i class="ph-duotone ph-globe" aria-hidden="true"></i>
       <div class="flex-fill">
         <div style="font-weight:600">Браузер · email и пароль</div>
-        <div class="muted" style="font-size:14px">{{ me.provider === 'email' ? 'Используется сейчас' : (me.hasPassword ? 'Доступен' : 'Не привязан') }}</div>
+        <div class="muted" style="font-size:0.8235rem">{{ me.provider === 'email' ? 'Используется сейчас' : (me.hasPassword ? 'Доступен' : 'Не привязан') }}</div>
       </div>
       @if (me.provider === 'email') {
         <span class="tag tag-accent">активен</span>
@@ -130,9 +130,9 @@
       <div class="flex-fill">
         <div style="font-weight:600">Telegram</div>
         @if (me.hasTelegram) {
-          <div class="muted" style="font-size:14px">{{ me.tgUsername ? '@' + me.tgUsername : 'Привязан' }}</div>
+          <div class="muted" style="font-size:0.8235rem">{{ me.tgUsername ? '@' + me.tgUsername : 'Привязан' }}</div>
         } @else if (me.provider === 'email') {
-          <div class="muted" style="font-size:14px">
+          <div class="muted" style="font-size:0.8235rem">
             Не привязан. После привязки можно входить через бота и Mini App; если этот Telegram
             уже писал боту, данные объединятся с текущим аккаунтом.
           </div>
@@ -151,7 +151,7 @@
       }
     </div>
     @if (telegramLink(); as link) {
-      <p class="muted mt-1 mb-0" style="font-size:13px">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
+      <p class="muted mt-1 mb-0" style="font-size:0.7647rem">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
     }
   </section>
 } @else {

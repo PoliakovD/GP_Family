@@ -3,12 +3,32 @@
     <div class="alert-danger mb-2">{{ error }}</div>
   }
 
+  <!-- Редизайн v2.1 — тот же вид фильтра по человеку, что на «Анализах»/«Врачах» (было —
+       сегментированный контрол .seg с полным ФИО, вложенный бордер плохо сочетался бы с
+       прямоугольником app-person-chip). -->
   @if (!loading && items.length > 0 && patientFilterOptions.length > 2) {
-    <div class="seg mb-3" style="flex-wrap: wrap;">
+    <div class="d-flex flex-wrap gap-2 mb-3">
       @for (opt of patientFilterOptions; track opt.key) {
-        <button type="button" class="seg-opt" [class.active]="patientFilterKey === opt.key" (click)="setPatientFilter(opt.key)">
-          {{ opt.label }}
-        </button>
+        @if (opt.shortLabel) {
+          <button type="button" class="person-chip-btn" (click)="setPatientFilter(opt.key)">
+            <app-person-chip
+              [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
+              [shortLabel]="opt.shortLabel"
+              [fullLabel]="opt.label"
+              [selected]="patientFilterKey === opt.key"
+            />
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="tag"
+            [class.tag-accent]="patientFilterKey === opt.key"
+            style="cursor:pointer;border:none;font:inherit"
+            (click)="setPatientFilter(opt.key)"
+          >
+            {{ opt.label }}
+          </button>
+        }
       }
     </div>
   }
@@ -26,11 +46,16 @@
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>
             <strong class="card-title">{{ item.displayName }}</strong>
-            <div class="card-meta">
-              {{ item.patientName }} · {{ specimenLabel(item) }} · {{ item.lastRecordDate }}
+            <div class="card-meta d-flex align-items-center gap-2 flex-wrap">
+              <app-person-chip
+                [avatarPerson]="itemAvatarPerson(item)"
+                [shortLabel]="shortenDisplayName(item.patientName)"
+                [fullLabel]="item.patientName"
+              />
+              <span>{{ specimenLabel(item) }} · {{ item.lastRecordDate }}</span>
             </div>
           </div>
-          <div [class]="flagClass(item.flag)" style="font-size:15px;font-weight:600;white-space:nowrap">
+          <div [class]="flagClass(item.flag)" style="font-size:0.8824rem;font-weight:600;white-space:nowrap">
             {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
           </div>
         </div>

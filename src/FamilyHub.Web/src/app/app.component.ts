@@ -18,6 +18,7 @@ import { CookieBannerComponent } from './shared/cookie-banner/cookie-banner.comp
 import { BottomSheetComponent } from './shared/bottom-sheet/bottom-sheet.component';
 import { AvatarComponent } from './shared/avatar/avatar.component';
 import { AppSearchComponent } from './components/app-search/app-search.component';
+import { SearchFieldComponent } from './shared/search-field/search-field.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения. */
@@ -49,6 +50,7 @@ interface SidebarItem {
     BottomSheetComponent,
     AvatarComponent,
     AppSearchComponent,
+    SearchFieldComponent,
   ],
   templateUrl: './app.component.html',
 })
@@ -97,9 +99,9 @@ export class AppComponent implements OnInit {
       children: [
         { path: '/health/medications', label: 'Аптечка' },
         { path: '/health/records', label: 'Анализы' },
-        { path: '/health/visits', label: 'Врачи' },
+        { path: '/health/visits', label: 'Посещения врачей' },
         { path: '/health/kb', label: 'Справочник' },
-        { path: '/health/indicators', label: 'Показатели' },
+        { path: '/health/indicators', label: 'Показатели анализов' },
       ],
     },
     { id: 'family', label: 'Семья', icon: 'ph-users-three' }, // path вычисляется — см. familyHref()

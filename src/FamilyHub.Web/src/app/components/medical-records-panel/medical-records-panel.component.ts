@@ -33,6 +33,7 @@ import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-p
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
+import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
 import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
@@ -40,7 +41,7 @@ import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { shortenDisplayName } from '../../shared/util/person-name';
+import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
@@ -103,7 +104,7 @@ let nextInstanceId = 0;
     NgTemplateOutlet,
     FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
     ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
-    AvatarComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
+    AvatarComponent, PersonChipComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
     ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
     AttachmentListComponent,
   ],
@@ -281,9 +282,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         icon: 'ph-bold ph-plus',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
-      // Редизайн v3 — своё поле поиска ниже уже покрывает этот экран, общий поиск шапки только
-      // дублировал бы его (см. PageActionService.suppressGlobalSearch).
-      this.pageAction.setSearchSuppressed(true);
+      // Редизайн v2.1 — своё поле поиска отдаётся топбару целиком (было — рисовалось инлайн под
+      // заголовком экрана, общий поиск шапки просто подавлялся), см. PageActionService.pageSearch.
+      this.pageAction.setPageSearch({
+        placeholder: this.labels.searchPlaceholder,
+        value: () => this.searchQuery,
+        onChange: (v) => this.onSearchQueryChange(v),
+      });
     });
   }
 
@@ -302,7 +307,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         icon: 'ph-bold ph-plus',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
-      this.pageAction.setSearchSuppressed(true);
+      this.pageAction.setPageSearch({
+        placeholder: this.labels.searchPlaceholder,
+        value: () => this.searchQuery,
+        onChange: (v) => this.onSearchQueryChange(v),
+      });
     }
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
@@ -339,11 +348,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return medicalRecordKindBasePath(this.kind());
   }
 
-  /** Редизайн v3 — на мобильном списке (не singleMode, не isWide) кнопок «Открыть»/«…» на
-   * карточке нет вообще, вся карточка уводит на экран записи (см. recordCard-ng-template в
-   * шаблоне). На десктопе/в самом экране записи — no-op, там навигация не нужна (см. PR6 плана). */
+  /** Редизайн v2.1 — клик по любому месту строки списка открывает запись отдельной страницей,
+   * на любой ширине экрана (было — только на мобильном; на десктопе запись раскрывалась инлайн
+   * кнопкой «Открыть», до которой мышью не всегда удобно дотягиваться, см. жалобу «клик по самой
+   * строке анализа на десктопе также должен раскрывать анализ»). В singleMode (сама страница
+   * записи) — no-op, там навигация не нужна. */
   onRecordCardClick(item: MedicalRecord, singleMode: boolean): void {
-    if (singleMode || this.isWide) return;
+    if (singleMode) return;
     void this.router.navigate([this.kindBasePath(), item.id]);
   }
 
@@ -377,13 +388,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return [...groups.values()];
   }
 
-  /** Инициалы аватара — из уже отформатированной строки personName (бэк не отдаёт ФИО отдельными
-   * полями для мед-записи, только резолвленное отображаемое имя, см. ResolvePersonNamesAsync).
-   * Первые два токена в том порядке, в каком они есть в строке — точный порядок (Фамилия/Имя)
-   * для инициалов не критичен, это чисто декоративный аватар. */
+  /** Инициалы аватара — см. shared/util/person-name.ts (переиспользуется и в indicators-tab). */
   personAvatarParts(name: string): { firstName: string; lastName: string | null } {
-    const parts = name.trim().split(/\s+/);
-    return { firstName: parts[0] ?? '', lastName: parts[1] ?? null };
+    return personAvatarPartsFromName(name);
   }
 
   private dependentFamilyName(dependentId: string): string | null {
@@ -457,12 +464,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return actions;
   }
 
-  toggleExpandedRecord(item: MedicalRecord): void {
-    this.expandedRecordId = this.expandedRecordId === item.id ? null : item.id;
-  }
-
+  /** Редизайн v2.1 — «скан» переименовано в «файл»: вложение не обязательно скан (PDF, фото с
+   * телефона), «скан» вводил в заблуждение. */
   attachmentCountLabel(item: MedicalRecord): string {
-    return `${item.attachmentCount} ${pluralizeRu(item.attachmentCount, 'скан', 'скана', 'сканов')}`;
+    return `${item.attachmentCount} ${pluralizeRu(item.attachmentCount, 'файл', 'файла', 'файлов')}`;
   }
 
   indicatorCountLabel(item: MedicalRecord): string {
@@ -897,11 +902,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   isCalculatedRef(indicator: IndicatorDto): boolean {
     return indicator.refSource === RefSource.KbCalculated;
   }
-
-  // --- «Открыть» на карточке (редизайн v2) — раскрывает ту же «Подробнее», что раньше
-  // открывалась только кликом по самому заголовку свёртки; теперь ещё и явной кнопкой рядом с
-  // меню «…» (см. record-card-actions в шаблоне). Один id — раскрыта максимум одна карточка.
-  expandedRecordId: string | null = null;
 
   // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
   // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.

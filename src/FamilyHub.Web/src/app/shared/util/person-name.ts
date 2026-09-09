@@ -25,6 +25,17 @@ function initial(part: string): string {
   return part.length > 0 ? part[0].toUpperCase() : '';
 }
 
+/** Инициалы аватара из уже отформатированной строки имени (бэк не отдаёт ФИО отдельными полями
+ * для мед-записи/показателя, только резолвленное отображаемое имя, см.
+ * MedicalRecordService.ResolvePersonNamesAsync) — первые два токена в том порядке, в каком они
+ * есть в строке; точный порядок (Фамилия/Имя) для инициалов не критичен, аватар чисто
+ * декоративный. Вынесено из medical-records-panel.component.ts (редизайн v2.1) — та же логика
+ * нужна и в indicators-tab (строки «Показателей»), см. app-person-chip. */
+export function personAvatarPartsFromName(name: string): { firstName: string; lastName: string | null } {
+  const parts = name.trim().split(/\s+/);
+  return { firstName: parts[0] ?? '', lastName: parts[1] ?? null };
+}
+
 /**
  * Редизайн v3 — «Анализы»: группа-человек показывает короткое имя всегда (не по брейкпойнту, как
  * formatPersonName выше), полное ФИО — только в title-тултипе. На вход — УЖЕ отформатированная
