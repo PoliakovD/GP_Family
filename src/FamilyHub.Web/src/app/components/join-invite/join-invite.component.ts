@@ -7,7 +7,7 @@ import { PendingInviteService } from '../../services/pending-invite.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import type { InvitePreview } from '../../models/types';
 
-type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 'exhausted';
+type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 'exhausted' | 'rate_limited';
 
 /**
  * Публичный лендинг приглашения (/join/:code, без гардов) — веб-альтернатива Telegram-инвайту
@@ -55,6 +55,9 @@ export class JoinInviteComponent implements OnInit {
             default: this.state.set('exhausted'); return;
           }
         }
+        // Рейт-лимит "invite-redeem" (InviteEndpoints.GetPreview) — транзиентная ошибка, не
+        // повод сообщать «ссылка недействительна» (см. заметку по /join/:code).
+        if (e.status === 429) { this.state.set('rate_limited'); return; }
       }
       this.state.set('not_found');
     }

@@ -9,6 +9,15 @@ import { TelegramService } from './telegram.service';
  * PWA-эндпоинты, где 401 — легитимный бизнес-ответ (неверный пароль, код и т.п.) или сам refresh,
  * а не признак истёкшей сессии: retry после refresh здесь бессмысленен (сессии ещё/уже нет),
  * плюс исключает бесконечный цикл на самом /refresh.
+ *
+ * /api/auth/me — отдельный случай: его дергают и на публичных страницах без гардов (/join/:code,
+ * /privacy, /consent-text — см. AppComponent.initAuth() и JoinInviteComponent.resolveAuth()),
+ * чтобы узнать, залогинен ли гость. 401 там — не разлогин, а штатный ответ для анонимного
+ * визитёра: AuthService.loadMe() сам корректно обнуляет me() по 401 (см. loadMe), а редиректом на
+ * /login занимается authGuard там, где страница ДЕЙСТВИТЕЛЬНО защищена. Без этого исключения
+ * анонимный заход на /join/:code уводило на /login раньше, чем успевал отрендериться лендинг
+ * приглашения — ветка ниже запускала refresh, он неизбежно проваливался (нет сессии вообще), и
+ * catchError уводил на /login.
  */
 const SESSION_LESS_AUTH_PATHS = [
   '/api/auth/register/start',
@@ -18,6 +27,7 @@ const SESSION_LESS_AUTH_PATHS = [
   '/api/auth/reset-password/start',
   '/api/auth/reset-password/confirm',
   '/api/auth/refresh',
+  '/api/auth/me',
 ];
 
 /** Общий in-flight refresh — параллельные 401 не должны бить по /api/auth/refresh каждый отдельно. */
