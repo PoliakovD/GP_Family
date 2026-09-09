@@ -25,6 +25,19 @@
   background: transparent;
 }
 
+// Редизайн v2.1 — саму ссылку раньше нигде не показывали текстом (только код + кнопка
+// «Поделиться», которая на десктопе с navigator.share никогда не давала скопировать вручную).
+.invite-link {
+  padding: 8px 12px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  font-family: monospace;
+  font-size: var(--font-size-meta);
+  word-break: break-all;
+  user-select: all;
+}
+
 .family-invite-icon {
   display: inline-flex;
   align-items: center;

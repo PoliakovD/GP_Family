@@ -22,6 +22,7 @@ import {TelegramService} from '../../services/telegram.service';
 import {PersonNameComponent} from '../../shared/person-name/person-name.component';
 import {AvatarComponent} from '../../shared/avatar/avatar.component';
 import {ActionMenuComponent, type ActionMenuItem} from '../../shared/action-menu/action-menu.component';
+import {copyToClipboard} from '../../shared/util/clipboard';
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
 
@@ -238,8 +239,19 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
                 // пользователь отменил диалог — игнорируем
             }
         } else {
-            await navigator.clipboard.writeText(link);
+            await this.copyInvite(link);
+        }
+    }
+
+    /** Кнопка «Скопировать» рядом с «Поделиться ссылкой» — нужна отдельно от shareInvite(),
+     * потому что на десктопе с navigator.share (Chrome/Edge) пользователь всегда получает
+     * системный шер-лист и никогда не попадает в clipboard-ветку выше. */
+    async copyInvite(link: string): Promise<void> {
+        const ok = await copyToClipboard(link);
+        if (ok) {
             this.toast.success('Ссылка скопирована в буфер обмена.');
+        } else {
+            this.toast.error('Не удалось скопировать — выделите ссылку вручную.');
         }
     }
 
