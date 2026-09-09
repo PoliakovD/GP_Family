@@ -67,6 +67,11 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteKbReenrichJob>();
         services.AddScoped<LabAnalyteKbRebuildJob>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
+        // Ночной добиватель транзиентных сбоев LM Studio (см. план часть 1.4) — резюмирует
+        // задачи, упавшие технически после исчерпания [AutomaticRetry], когда сервер снова стал
+        // доступен. Регистрация рекуррентного расписания — в Program.cs (тот же приём, что
+        // reminder-scan/audit-retention/encryption-rotation-catchup).
+        services.AddScoped<LmStudioRecoverySweepJob>();
         // Второй проход коррекции OCR (анализы + медикаменты, см. class doc) — общий на оба конвейера.
         services.AddScoped<OcrNameCorrector>();
         // Общий (не персональный) справочник источников показателя — биоматериал ИЛИ

@@ -2,6 +2,9 @@
   @if (error) {
     <div class="alert-danger mb-2">{{ error }}</div>
   }
+  @if (info) {
+    <div class="alert-info mb-2">{{ info }}</div>
+  }
 
   <!-- Редизайн v3 — форма создания переехала на отдельный роут (record-add.component.ts,
        боковая панель/полноэкранно), кнопка «Добавить» в топбаре теперь навигирует туда, не

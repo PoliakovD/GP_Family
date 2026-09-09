@@ -147,6 +147,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   items: MedicalRecord[] = [];
   loading = true;
   error: string | null = null;
+  /** Информационное сообщение (не ошибка) — «уже в очереди»/«сервер недоступен» на попытке
+   * «Распознать»: отдельно от error, чтобы не выглядеть как сбой (см. handleRecognize). */
+  info: string | null = null;
 
   // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
   // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
@@ -680,10 +683,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       [record.id]: [{ id: 'queued', label: 'В очереди', state: 'active' }],
     };
     try {
-      await this.api.requestExtraction(record.id);
+      const response = await this.api.requestExtraction(record.id);
+      this.error = null;
+      // already_queued/llm_unavailable — не ошибка и не новая постановка в очередь (см.
+      // ExtractionRequestResult на бэкенде): показываем как info-плашку и НЕ запускаем поллинг
+      // заново — на already_queued существующая задача уже опрашивается предыдущим вызовом (или
+      // будет подхвачена следующим обновлением списка), на llm_unavailable опрашивать нечего.
+      if (response?.code === 'already_queued' || response?.code === 'llm_unavailable') {
+        this.info = response.message ?? null;
+        this.recognizingRecordId = null;
+        this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [record.id]: [] };
+        return;
+      }
+      this.info = null;
       this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: null };
       this.startPolling(record);
-      this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось запустить распознавание.';
       this.recognizingRecordId = null;

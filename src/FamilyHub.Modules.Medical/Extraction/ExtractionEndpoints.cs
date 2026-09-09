@@ -20,7 +20,21 @@ public static class ExtractionEndpoints
                 ExtractionRequestResult.NotFound => Results.NotFound(),
                 ExtractionRequestResult.Forbidden => Results.Forbid(),
                 ExtractionRequestResult.NothingToDo => Results.Json(
-                    new { code = "nothing_to_extract" }, statusCode: StatusCodes.Status409Conflict),
+                    new { code = "nothing_to_extract", message = "Все вложения этой записи уже распознаны." },
+                    statusCode: StatusCodes.Status409Conflict),
+                // 200, не 202/409 — это не ошибка и не новая постановка в очередь: задача уже
+                // реально исполняется/ждёт, фронт продолжает наблюдать за НЕЙ (см.
+                // class doc ExtractionRequestResult.AlreadyQueued).
+                ExtractionRequestResult.AlreadyQueued => Results.Ok(new
+                {
+                    code = "already_queued",
+                    message = "Распознавание уже в очереди — оно продолжится само, как только локальный сервер станет доступен.",
+                }),
+                ExtractionRequestResult.ServiceUnavailable => Results.Ok(new
+                {
+                    code = "llm_unavailable",
+                    message = "Локальный сервер распознавания пока недоступен, зайдите позже.",
+                }),
                 _ => Results.Accepted(),
             };
         });

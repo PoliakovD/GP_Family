@@ -66,7 +66,7 @@ public class AnalytePlausibilityGuardService(
             logger.LogWarning(
                 "Проверка правдоподобности показателя технически не удалась ({Error}) — блокируем по умолчанию.",
                 result.Error);
-            return AnalytePlausibilityResult.Implausible("Проверка правдоподобности временно недоступна.");
+            return AnalytePlausibilityResult.Implausible("Проверка правдоподобности временно недоступна.", result.IsTransient);
         }
 
         if (!TryGetValue(result.Payload, "valid", out var validEl) ||

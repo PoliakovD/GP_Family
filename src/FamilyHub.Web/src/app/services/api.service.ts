@@ -10,6 +10,7 @@ import {
   BirthdayInput, CurrentMember,
   CreateIndicatorRequest,
   EnrichmentRefreshOutcome,
+  ExtractionRequestResponse,
   ExtractionStatusResponse,
   FamilyDependent,
   FamilyDependentInput,
@@ -342,7 +343,7 @@ export class ApiService {
   // «Распознать» на ЗАПИСИ (обрабатывает все ещё не распознанные вложения последовательно),
   // статус/показатели/резюме записи, «мои показатели» + история для спарклайна.
   requestExtraction = (recordId: string) =>
-    this.post<void>(`/api/medical-records/${recordId}/extract`);
+    this.post<ExtractionRequestResponse | null>(`/api/medical-records/${recordId}/extract`);
 
   getExtractionStatus = (recordId: string) =>
     this.get<ExtractionStatusResponse>(`/api/medical-records/${recordId}/extraction`);

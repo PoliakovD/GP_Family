@@ -462,6 +462,13 @@ export interface ExtractionStatusResponse {
     completedAt: string | null;
 }
 
+/** Тело ответа POST /extract на "мягких" исходах (см. ExtractionRequestResult на бэкенде) — на
+ * успехе (202 Accepted) тело пустое, эти поля отсутствуют. */
+export interface ExtractionRequestResponse {
+    code?: 'already_queued' | 'llm_unavailable';
+    message?: string;
+}
+
 export interface IndicatorDto {
     id: string;
     analyteKey: string;

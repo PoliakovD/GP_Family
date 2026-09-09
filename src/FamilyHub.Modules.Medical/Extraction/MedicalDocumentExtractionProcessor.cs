@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
@@ -137,6 +138,13 @@ public class MedicalDocumentExtractionProcessor(
                 var source = new DocumentSource(bytes, download.Value.ContentType, download.Value.FileName);
                 var result = await extractor.ExtractAsync(source, record.Kind, ct);
 
+                // Технический сбой (LM Studio недоступен) — НЕ проставляем ExtractedAt на
+                // непрочитанном файле (readAttachmentIds ниже не пополняется) и пробрасываем
+                // исключение: catch в RunAsync запустит Hangfire-ретрай по расписанию вместо того,
+                // чтобы навсегда похоронить файл как "распознанный" (см. план, часть 1).
+                if (result.IsTransientFailure)
+                    throw new LmStudioUnavailableException(result.FailureReason ?? "Локальный сервер распознавания недоступен.");
+
                 if (!result.Supported)
                     fileErrors.Add($"{attachment.FileName}: {result.FailureReason ?? "формат не поддержан распознаванием"}");
                 else
@@ -170,6 +178,10 @@ public class MedicalDocumentExtractionProcessor(
                 // блокировал бы повторную постановку в очередь для этой же записи.
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+                // Помечаем ТОЛЬКО технический сбой (LM Studio так и не ответил за все попытки) —
+                // по этому флагу LmStudioRecoverySweepJob находит задачи, которые стоит вернуть в
+                // очередь, когда сервер снова станет доступен (см. план, часть 1).
+                job.IsTransientFailure = ex is LmStudioUnavailableException;
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicalDocumentExtractionJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);

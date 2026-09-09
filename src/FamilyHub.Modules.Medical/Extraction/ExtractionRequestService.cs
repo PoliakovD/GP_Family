@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,13 @@ using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
-public enum ExtractionRequestResult { Success, NotFound, Forbidden, AlreadyQueued, NothingToDo }
+/// <summary><see cref="ServiceUnavailable"/> — последняя задача записи упала технически (LM
+/// Studio был недоступен) и сервер всё ещё недоступен прямо сейчас (см. класс-doc
+/// ExtractionRequestService) — отличается от <see cref="AlreadyQueued"/> (задача уже реально
+/// исполняется/ждёт) тем, что новая задача здесь СОЗНАТЕЛЬНО не создаётся: она немедленно упала
+/// бы тем же образом, а исходную задачу уже вернёт в очередь LmStudioRecoverySweepJob, как только
+/// сервер оживёт.</summary>
+public enum ExtractionRequestResult { Success, NotFound, Forbidden, AlreadyQueued, NothingToDo, ServiceUnavailable }
 
 /// <summary>
 /// Постановка ЗАПИСИ в очередь распознавания (ветка medicalrecords, редизайн v2 — раньше был
@@ -21,6 +28,7 @@ public enum ExtractionRequestResult { Success, NotFound, Forbidden, AlreadyQueue
 public class ExtractionRequestService(
     AppDbContext db,
     IBackgroundJobClient backgroundJobs,
+    ILmStudioAvailabilityProbe probe,
     ILogger<ExtractionRequestService> logger)
 {
     public async Task<ExtractionRequestResult> RequestAsync(
@@ -33,9 +41,28 @@ public class ExtractionRequestService(
         if (record is null) return ExtractionRequestResult.NotFound;
         if (record.OwnerUserId != requestedByUserId) return ExtractionRequestResult.Forbidden;
 
+        // Явная предпроверка живой задачи — вместо того, чтобы узнавать о дубле только постфактум
+        // по DbUpdateException на уникальном индексе ниже (та ловушка остаётся как подстраховка от
+        // гонки, см. catch). Даёт вернуть понятный AlreadyQueued без лишнего похода в транзакцию.
+        var hasLiveJob = await db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .AnyAsync(j => j.MedicalRecordId == recordId &&
+                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running), ct);
+        if (hasLiveJob) return ExtractionRequestResult.AlreadyQueued;
+
         var hasPendingAttachments = await db.FileAttachments.AsNoTracking()
             .AnyAsync(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId && a.ExtractedAt == null, ct);
         if (!hasPendingAttachments) return ExtractionRequestResult.NothingToDo;
+
+        // Последняя задача этой записи упала технически, и сервер всё ещё недоступен прямо сейчас —
+        // новая задача упала бы тем же образом немедленно; сообщаем понятно вместо того, чтобы
+        // тратить попытку впустую. LmStudioRecoverySweepJob сам вернёт исходную задачу в очередь,
+        // как только сервер снова ответит (см. план, часть 1).
+        var lastJob = await db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .Where(j => j.MedicalRecordId == recordId)
+            .OrderByDescending(j => j.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+        if (lastJob is { Status: EnrichmentJobStatus.Failed, IsTransientFailure: true } && !await probe.IsAvailableAsync(ct))
+            return ExtractionRequestResult.ServiceUnavailable;
 
         var job = new MedicalDocumentExtractionJob
         {

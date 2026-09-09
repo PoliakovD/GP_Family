@@ -34,6 +34,10 @@ public class MedicationEnrichmentJob
 
     public string? Error { get; set; }
 
+    /// <summary>См. MedicalDocumentExtractionJob.IsTransientFailure — тот же смысл, тот же
+    /// потребитель (LmStudioRecoverySweepJob).</summary>
+    public bool IsTransientFailure { get; set; }
+
     /// <summary>Провайдер внешнего поиска, фактически использованный (например, "Brave").</summary>
     public string? Provider { get; set; }
 

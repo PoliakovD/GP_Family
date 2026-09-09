@@ -76,8 +76,8 @@ public class LmStudioJsonClient(
     {
         var systemPromptWithReasoning = $"{systemPrompt}\n\n{ReasoningDirectives[options.Value.Reasoning]}";
 
-        var (rawContent, sendError) = await SendChatCompletionAsync(systemPromptWithReasoning, userText, images, ct);
-        if (sendError is not null) return LmStudioJsonResult.Failure(sendError);
+        var (rawContent, sendError, isTransient) = await SendChatCompletionAsync(systemPromptWithReasoning, userText, images, ct);
+        if (sendError is not null) return LmStudioJsonResult.Failure(sendError, isTransient);
         if (string.IsNullOrWhiteSpace(rawContent))
         {
             logger.LogWarning("LM Studio вернул пустой ответ на запрос распознавания препарата");
@@ -95,11 +95,13 @@ public class LmStudioJsonClient(
             "LM Studio вернул невалидный JSON ({Error}) — пробуем починить отдельным проходом. Сырой ответ: {Raw}",
             parseError, rawContent);
 
-        var (repairedRaw, repairSendError) = await SendChatCompletionAsync(JsonRepairSystemPrompt, candidate, [], ct);
+        var (repairedRaw, repairSendError, repairIsTransient) = await SendChatCompletionAsync(JsonRepairSystemPrompt, candidate, [], ct);
         if (repairSendError is not null || string.IsNullOrWhiteSpace(repairedRaw))
         {
             logger.LogWarning("LM Studio: починка JSON недоступна ({Error}).", repairSendError ?? "пустой ответ");
-            return LmStudioJsonResult.Failure("Модель вернула невалидный JSON, и починить его не удалось.");
+            return repairSendError is not null
+                ? LmStudioJsonResult.Failure("Модель вернула невалидный JSON, и починить его не удалось.", repairIsTransient)
+                : LmStudioJsonResult.Failure("Модель вернула невалидный JSON, и починить его не удалось.");
         }
 
         var (repairSuccess, repairedPayload, _, repairParseError) = TryParseJson(repairedRaw);
@@ -121,7 +123,7 @@ public class LmStudioJsonClient(
     /// не синхронным OCR-эндпоинтом, который шёл сюда напрямую из HTTP-запроса. Используется и
     /// основным вызовом, и починкой JSON (ExtractJsonAsync) — оба варианта одного и того же
     /// физического запроса к модели.</summary>
-    private async Task<(string? RawContent, string? Error)> SendChatCompletionAsync(
+    private async Task<(string? RawContent, string? Error, bool IsTransient)> SendChatCompletionAsync(
         string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images, CancellationToken ct)
     {
         var contentParts = new List<ContentPart> { new("text", Text: userText) };
@@ -152,13 +154,17 @@ public class LmStudioJsonClient(
                 // запросе — логируем его, а не только код: EnsureSuccessStatusCode() выбросил бы
                 // HttpRequestException без тела, и причина терялась бы за общим "недоступен".
                 var errorBody = await response.Content.ReadAsStringAsync(ct);
-                logger.LogWarning(
-                    "LM Studio вернул {StatusCode} на запрос: {Body}", (int)response.StatusCode, errorBody);
-                return (null, $"Локальный сервер распознавания вернул ошибку {(int)response.StatusCode}.");
+                var statusCode = (int)response.StatusCode;
+                logger.LogWarning("LM Studio вернул {StatusCode} на запрос: {Body}", statusCode, errorBody);
+                // 5xx/429 — сервер жив, но временно не может ответить (перегружен, модель ещё
+                // грузится и т.п.); 4xx (кроме 429) — постоянная проблема самого запроса, повтор
+                // без изменений ничего не даст.
+                var isTransient = statusCode >= 500 || statusCode == 429;
+                return (null, $"Локальный сервер распознавания вернул ошибку {statusCode}.", isTransient);
             }
 
             var parsed = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, ct);
-            return (parsed?.Choices?.FirstOrDefault()?.Message?.Content, null);
+            return (parsed?.Choices?.FirstOrDefault()?.Message?.Content, null, false);
         }
         // !ct.IsCancellationRequested исключает из этого catch отмену САМИМ вызывающим (аудит,
         // находка Medium #1) — TaskCanceledException прилетает и от клиентского HttpClient.Timeout
@@ -170,7 +176,7 @@ public class LmStudioJsonClient(
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
         {
             logger.LogWarning(ex, "LM Studio недоступен или запрос по фото препарата превысил таймаут");
-            return (null, "Локальный сервер распознавания недоступен.");
+            return (null, "Локальный сервер распознавания недоступен.", true);
         }
         finally
         {

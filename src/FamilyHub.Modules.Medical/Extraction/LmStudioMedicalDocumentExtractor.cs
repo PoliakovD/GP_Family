@@ -141,7 +141,7 @@ public class LmStudioMedicalDocumentExtractor(
         {
             logger.LogWarning(
                 "Распознавание «{FileName}» остановлено проверкой легитимности: {Reason}", source.FileName, guardResult.Reason);
-            return new ExtractionResult(false, null, null, guardResult.Reason);
+            return new ExtractionResult(false, null, null, guardResult.Reason, IsTransientFailure: guardResult.IsTransientFailure);
         }
 
         return kind == MedicalRecordKind.Analysis
@@ -152,6 +152,13 @@ public class LmStudioMedicalDocumentExtractor(
     private async Task<ExtractionResult> ExtractAnalysisAsync(DocumentContent content, CancellationToken ct)
     {
         var indicators = new List<ExtractedLabIndicator>();
+        // Транзиентным весь документ считаем, только если НИ ОДИН структурирующий вызов не смог
+        // ответить (сервер лёг между гейтом легитимности и структурированием) И хотя бы один упал
+        // именно технически — частичный успех (часть кусков дала показатели, часть упала
+        // технически) не повод проваливать весь файл, отсутствующая часть просто не попадёт в
+        // результат этого прогона.
+        var hadAnySuccessfulCall = false;
+        var hadAnyTransientFailure = false;
 
         // Поля уровня документа (documentDate/suggestedTitle/doctor) обычно есть только в ШАПКЕ
         // бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные куски
@@ -176,7 +183,12 @@ public class LmStudioMedicalDocumentExtractor(
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
             {
                 var result = await lmStudioClient.ExtractJsonAsync(analysisPrompt, chunk, ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 CaptureDocumentFields(result.Payload);
                 foreach (var indicator in ParseIndicators(result.Payload))
@@ -194,7 +206,12 @@ public class LmStudioMedicalDocumentExtractor(
             {
                 var result = await lmStudioClient.ExtractJsonAsync(
                     analysisPrompt, "Распознай показатели анализа на этом изображении.", [(image.Bytes, image.ContentType)], ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 CaptureDocumentFields(result.Payload);
                 indicators.AddRange(ParseIndicators(result.Payload));
@@ -215,9 +232,10 @@ public class LmStudioMedicalDocumentExtractor(
         var deduped = DeduplicateByName(indicators);
         if (deduped.Count == 0)
         {
+            var isTransientFailure = hadAnyTransientFailure && !hadAnySuccessfulCall;
             return new ExtractionResult(
                 true, [], null, "Не удалось распознать ни одного показателя.", documentDate, suggestedTitle, doctor,
-                specimenResolution);
+                specimenResolution, isTransientFailure);
         }
 
         return new ExtractionResult(
@@ -233,13 +251,20 @@ public class LmStudioMedicalDocumentExtractor(
     private async Task<ExtractionResult> ExtractVisitAsync(DocumentContent content, CancellationToken ct)
     {
         var visitPrompt = await promptProvider.GetAsync("visit.extract", VisitSystemPrompt, ct);
+        var hadAnySuccessfulCall = false;
+        var hadAnyTransientFailure = false;
 
         if (content.Kind == DocumentSourceKind.Text)
         {
             foreach (var chunk in SplitIntoChunks(content.Text!, options.Value.MaxCharsPerChunk, ChunkOverlapChars))
             {
                 var result = await lmStudioClient.ExtractJsonAsync(visitPrompt, chunk, ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 var conclusion = ParseConclusion(result.Payload);
                 if (HasContent(conclusion))
@@ -258,7 +283,12 @@ public class LmStudioMedicalDocumentExtractor(
             {
                 var result = await lmStudioClient.ExtractJsonAsync(
                     visitPrompt, "Распознай заключение врача на этом изображении.", [(image.Bytes, image.ContentType)], ct);
-                if (!result.Success || result.Payload is null) continue;
+                if (!result.Success || result.Payload is null)
+                {
+                    if (result.IsTransient) hadAnyTransientFailure = true;
+                    continue;
+                }
+                hadAnySuccessfulCall = true;
 
                 var conclusion = ParseConclusion(result.Payload);
                 if (HasContent(conclusion))
@@ -272,7 +302,9 @@ public class LmStudioMedicalDocumentExtractor(
             }
         }
 
-        return new ExtractionResult(true, null, null, "Не удалось распознать заключение врача.");
+        return new ExtractionResult(
+            true, null, null, "Не удалось распознать заключение врача.",
+            IsTransientFailure: hadAnyTransientFailure && !hadAnySuccessfulCall);
     }
 
     /// <summary>Плейсхолдеры "нет данных" — включает голый прочерк: в бланке он означает "поле не
