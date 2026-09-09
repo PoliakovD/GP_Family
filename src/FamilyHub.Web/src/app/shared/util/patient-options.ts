@@ -12,6 +12,13 @@ export interface PatientOption {
   familyDependentId: string | null;
   targetUserId: string | null;
   label: string;
+  /** Редизайн v2.1 — для компактного app-person-chip (аватар + короткое "Фамилия И.И.") вместо
+   * длинного `label` с семьёй в скобках. undefined у SELF_PATIENT_OPTION и у инлайновой опции
+   * «Все» (medical-records-panel.filterPatientOptions) — у них нет структурного ФИО, остаются
+   * обычным текстом. */
+  avatarFirstName?: string | null;
+  avatarLastName?: string | null;
+  shortLabel?: string;
 }
 
 export const SELF_PATIENT_OPTION: PatientOption = { key: 'self', familyDependentId: null, targetUserId: null, label: 'Я' };
@@ -29,6 +36,11 @@ export function buildPatientOptions(activeFamilies: readonly FamilySummary[], my
         familyDependentId: dep.id,
         targetUserId: null,
         label: `${dep.isPet ? dep.firstName : formatPersonName(dep, 'full')} (${family.name})`,
+        avatarFirstName: dep.firstName,
+        // Клички питомцев не разбиваются на "имя/фамилия" — LastName у них принудительно null
+        // и на бэке (FamilyDependent.cs), берём как есть без явного null для не-питомца.
+        avatarLastName: dep.isPet ? null : dep.lastName,
+        shortLabel: dep.isPet ? dep.firstName : formatPersonName(dep, 'initials'),
       });
     }
     for (const member of family.currentMembers ?? []) {
@@ -39,6 +51,9 @@ export function buildPatientOptions(activeFamilies: readonly FamilySummary[], my
         familyDependentId: null,
         targetUserId: member.id,
         label: `${formatPersonName(member, 'full')} (${family.name})`,
+        avatarFirstName: member.firstName,
+        avatarLastName: member.lastName,
+        shortLabel: formatPersonName(member, 'initials'),
       });
     }
   }

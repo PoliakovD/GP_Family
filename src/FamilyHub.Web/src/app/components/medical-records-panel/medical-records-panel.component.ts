@@ -33,6 +33,7 @@ import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-p
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
+import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
 import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
@@ -40,7 +41,7 @@ import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { shortenDisplayName } from '../../shared/util/person-name';
+import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
@@ -103,7 +104,7 @@ let nextInstanceId = 0;
     NgTemplateOutlet,
     FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
     ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
-    AvatarComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
+    AvatarComponent, PersonChipComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
     ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
     AttachmentListComponent,
   ],
@@ -385,13 +386,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return [...groups.values()];
   }
 
-  /** Инициалы аватара — из уже отформатированной строки personName (бэк не отдаёт ФИО отдельными
-   * полями для мед-записи, только резолвленное отображаемое имя, см. ResolvePersonNamesAsync).
-   * Первые два токена в том порядке, в каком они есть в строке — точный порядок (Фамилия/Имя)
-   * для инициалов не критичен, это чисто декоративный аватар. */
+  /** Инициалы аватара — см. shared/util/person-name.ts (переиспользуется и в indicators-tab). */
   personAvatarParts(name: string): { firstName: string; lastName: string | null } {
-    const parts = name.trim().split(/\s+/);
-    return { firstName: parts[0] ?? '', lastName: parts[1] ?? null };
+    return personAvatarPartsFromName(name);
   }
 
   private dependentFamilyName(dependentId: string): string | null {

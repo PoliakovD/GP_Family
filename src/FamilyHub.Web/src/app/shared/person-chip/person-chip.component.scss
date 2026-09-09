@@ -1,0 +1,27 @@
+// Прямоугольник (не пилюля-.tag) — заметка явно просила "обведено в прямоугольник", отдельно от
+// обычных .tag-фильтров.
+.person-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 10px 3px 3px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  color: var(--color-neutral-800);
+  font-size: var(--font-size-meta);
+  line-height: 1.2;
+}
+
+.person-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-chip-selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}

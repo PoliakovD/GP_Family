@@ -430,18 +430,31 @@
     }
   } @else {
 
-  <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры"). -->
+  <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры");
+       редизайн v2.1 — настоящие люди (не «Все») показаны компактным app-person-chip (аватар +
+       короткое имя) вместо длинного ФИО с семьёй в скобках, полное — в тултипе при наведении. -->
   <div class="d-flex flex-wrap gap-2 mb-2">
     @for (opt of filterPatientOptions; track opt.key) {
-      <button
-        type="button"
-        class="tag"
-        [class.tag-accent]="filters.patientKey === opt.key"
-        style="cursor:pointer;border:none;font:inherit"
-        (click)="selectPatientFilter(opt.key)"
-      >
-        {{ opt.label }}
-      </button>
+      @if (opt.shortLabel) {
+        <button type="button" class="person-chip-btn" (click)="selectPatientFilter(opt.key)">
+          <app-person-chip
+            [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
+            [shortLabel]="opt.shortLabel"
+            [fullLabel]="opt.label"
+            [selected]="filters.patientKey === opt.key"
+          />
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="tag"
+          [class.tag-accent]="filters.patientKey === opt.key"
+          style="cursor:pointer;border:none;font:inherit"
+          (click)="selectPatientFilter(opt.key)"
+        >
+          {{ opt.label }}
+        </button>
+      }
     }
   </div>
 
