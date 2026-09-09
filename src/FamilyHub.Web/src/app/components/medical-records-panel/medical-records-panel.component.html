@@ -93,25 +93,29 @@
         <div class="record-card-main">
           <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
 
-          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок. -->
+          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
+               чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
+               подписью, а не чипом. -->
           <div class="record-chips">
             @if (item.attachmentCount > 0) {
-              <span class="tag tag-neutral">{{ attachmentCountLabel(item) }}</span>
+              <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
             }
             @if (item.indicatorCount > 0) {
-              <span class="tag tag-neutral">{{ indicatorCountLabel(item) }}</span>
+              <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
             }
             @if (item.abnormalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));color:var(--color-status-danger-text)">
-                {{ item.abnormalIndicatorCount }} вне нормы
+              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
+                <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
               </span>
             } @else if (item.normalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));color:var(--color-status-ok-text)">
-                {{ item.normalIndicatorCount }} в норме
+              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
+                <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
               </span>
             }
             @if (item.doctor) {
-              <span class="muted" style="font-size:13px">Врач: {{ item.doctor }}</span>
+              <span class="tag tag-neutral">
+                <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
+              </span>
             }
           </div>
         </div>

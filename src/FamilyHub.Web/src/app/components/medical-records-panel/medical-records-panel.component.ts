@@ -469,8 +469,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.expandedRecordId = this.expandedRecordId === item.id ? null : item.id;
   }
 
+  /** Редизайн v2.1 — «скан» переименовано в «файл»: вложение не обязательно скан (PDF, фото с
+   * телефона), «скан» вводил в заблуждение. */
   attachmentCountLabel(item: MedicalRecord): string {
-    return `${item.attachmentCount} ${pluralizeRu(item.attachmentCount, 'скан', 'скана', 'сканов')}`;
+    return `${item.attachmentCount} ${pluralizeRu(item.attachmentCount, 'файл', 'файла', 'файлов')}`;
   }
 
   indicatorCountLabel(item: MedicalRecord): string {
