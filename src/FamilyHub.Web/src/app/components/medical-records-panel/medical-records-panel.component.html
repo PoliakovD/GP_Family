@@ -77,17 +77,18 @@
     </ng-template>
   }
 
-  <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список (десктоп/
-       мобайл) и мобильный экран открытой записи показывают одно и то же содержимое, разница —
-       только в singleMode (детали всегда развёрнуты, «Открыть» не нужна). -->
+  <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список и отдельный
+       экран открытой записи показывают одно и то же содержимое, разница — только в singleMode
+       (детали всегда развёрнуты, «Открыть» не нужна). -->
   <ng-template #recordCard let-item let-singleMode="singleMode">
     <div class="card record-card flex-fill">
       <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
-           (см. PR5.1 плана). На мобильном списке (не singleMode, не isWide) действий нет вообще —
-           вся строка уводит на экран записи (PR6 плана), где singleMode=true. -->
+           (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
+           мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
+           и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
       <div
         class="record-card-row"
-        [class.clickable]="!singleMode && !isWide"
+        [class.clickable]="!singleMode"
         (click)="onRecordCardClick(item, singleMode)"
       >
         <div class="record-card-main">
@@ -121,10 +122,12 @@
         </div>
 
         @if (singleMode || isWide) {
-          <div class="record-card-actions">
+          <!-- stopPropagation — теперь вся строка тоже кликабельна (см. выше), без этого клик по
+               кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
+          <div class="record-card-actions" (click)="$event.stopPropagation()">
             @if (!singleMode) {
-              <button class="btn btn-secondary text-nowrap" (click)="toggleExpandedRecord(item)">
-                {{ expandedRecordId === item.id ? 'Свернуть' : 'Открыть' }}
+              <button class="btn btn-secondary text-nowrap" (click)="onRecordCardClick(item, false)">
+                Открыть
               </button>
             }
             <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
@@ -156,9 +159,10 @@
       }
 
       <!-- Редизайн v3 — «Подробнее» больше не отдельная свёртка со своим заголовком/шевроном
-           (см. PR5.2 плана). В singleMode (экран открытой записи) детали видны всегда — там нет
-           кнопки «Открыть», раскрывать нечего. -->
-      @if (singleMode || expandedRecordId === item.id) {
+           (см. PR5.2 плана). Редизайн v2.1 — инлайн-раскрытие в списке убрано целиком: «Открыть»
+           теперь всегда переходит на отдельную страницу записи (см. onRecordCardClick), детали
+           видны только там, где singleMode=true. -->
+      @if (singleMode) {
         @if (item.doctor) {
           <p class="muted mb-1">Врач: {{ item.doctor }}</p>
         }
@@ -401,7 +405,8 @@
   </ng-template>
 
   @if (recordId()) {
-    <!-- Редизайн v3 — мобильный экран открытой записи (PR6 плана): та же карточка, что в
+    <!-- Редизайн v3/v2.1 — отдельный экран открытой записи, теперь на любой ширине (было —
+         только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
          списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». -->
     <div class="d-flex align-items-center gap-2 mb-3">
       <button type="button" class="btn-icon" (click)="goToList()" aria-label="Назад к списку">

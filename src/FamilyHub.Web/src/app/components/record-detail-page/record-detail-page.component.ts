@@ -3,11 +3,12 @@ import { MedicalRecordKind } from '../../models/types';
 import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-records-panel.component';
 
 /**
- * Page «Открытая запись» (редизайн v3, PR6) — мобильный экран, на который уводит тап по
- * карточке в списке «Анализы»/«Врачи» (десктоп продолжает раскрывать запись инлайн в списке,
- * см. medical-records-panel.component.ts/isWide). Тонкая обёртка, как medical-records-tab/
- * doctor-visits-tab: вся логика — в панели, здесь только фиксация вида записи и передача :id из
- * роута (withComponentInputBinding уже включён в app.config.ts — id биндится автоматически).
+ * Page «Открытая запись» — экран, на который уводит клик по записи в списке «Анализы»/«Врачи»,
+ * на любой ширине экрана (редизайн v2.1 — раньше десктоп раскрывал запись инлайн в списке,
+ * см. medical-records-panel.component.ts/onRecordCardClick). Тонкая обёртка, как
+ * medical-records-tab/doctor-visits-tab: вся логика — в панели, здесь только фиксация вида
+ * записи и передача :id из роута (withComponentInputBinding уже включён в app.config.ts — id
+ * биндится автоматически).
  */
 @Component({
   selector: 'app-record-detail-page',

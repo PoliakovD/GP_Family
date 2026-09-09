@@ -348,11 +348,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return medicalRecordKindBasePath(this.kind());
   }
 
-  /** Редизайн v3 — на мобильном списке (не singleMode, не isWide) кнопок «Открыть»/«…» на
-   * карточке нет вообще, вся карточка уводит на экран записи (см. recordCard-ng-template в
-   * шаблоне). На десктопе/в самом экране записи — no-op, там навигация не нужна (см. PR6 плана). */
+  /** Редизайн v2.1 — клик по любому месту строки списка открывает запись отдельной страницей,
+   * на любой ширине экрана (было — только на мобильном; на десктопе запись раскрывалась инлайн
+   * кнопкой «Открыть», до которой мышью не всегда удобно дотягиваться, см. жалобу «клик по самой
+   * строке анализа на десктопе также должен раскрывать анализ»). В singleMode (сама страница
+   * записи) — no-op, там навигация не нужна. */
   onRecordCardClick(item: MedicalRecord, singleMode: boolean): void {
-    if (singleMode || this.isWide) return;
+    if (singleMode) return;
     void this.router.navigate([this.kindBasePath(), item.id]);
   }
 
@@ -460,10 +462,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       actions.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDelete(item) });
     }
     return actions;
-  }
-
-  toggleExpandedRecord(item: MedicalRecord): void {
-    this.expandedRecordId = this.expandedRecordId === item.id ? null : item.id;
   }
 
   /** Редизайн v2.1 — «скан» переименовано в «файл»: вложение не обязательно скан (PDF, фото с
@@ -904,11 +902,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   isCalculatedRef(indicator: IndicatorDto): boolean {
     return indicator.refSource === RefSource.KbCalculated;
   }
-
-  // --- «Открыть» на карточке (редизайн v2) — раскрывает ту же «Подробнее», что раньше
-  // открывалась только кликом по самому заголовку свёртки; теперь ещё и явной кнопкой рядом с
-  // меню «…» (см. record-card-actions в шаблоне). Один id — раскрыта максимум одна карточка.
-  expandedRecordId: string | null = null;
 
   // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
   // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
