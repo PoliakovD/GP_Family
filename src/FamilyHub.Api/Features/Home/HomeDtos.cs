@@ -22,10 +22,17 @@ public record HomeBirthdayItem(
     Guid FamilyId, string FamilyName, string PersonName,
     DateOnly Date, int DaysUntil, int TurningAge, BirthdaySource Source);
 
-/// <summary>Блок «В порядке» — одна строка чипов, без отдельных запросов с фронта.</summary>
+/// <summary>Блок «В порядке» — одна строка чипов, без отдельных запросов с фронта.
+/// MedicationsExpired/MedicationsExpiring — редизайн v2.1: раньше отдавался только уже вычтенный
+/// MedicationsInDate, фронт не мог написать «X просрочено» отдельно от «ещё Y истекает» (см. заметку
+/// «на главной переделать статистику по аптечке»). VisitsTotal/VisitsLastDate — аналог
+/// AnalysesTotal для посещений врачей, тем же способом (MedicalRecordService.
+/// GetVisibleRecordCountAndLastDateAsync), без нового эндпоинта.</summary>
 public record HomeOkChips(
     int MedicationsInDate, int MedicationsTotal,
+    int MedicationsExpired, int MedicationsExpiring,
     int AnalysesTotal, int AnalysesAbnormal,
+    int VisitsTotal, DateOnly? VisitsLastDate,
     bool PushEnabled);
 
 public record HomeSummaryResponse(

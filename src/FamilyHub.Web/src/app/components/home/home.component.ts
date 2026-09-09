@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import type { HomeBirthdayItem, HomeJoinRequest, HomeMedicationAlert, HomeSummaryResponse } from '../../models/types';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { formatDayMonthYear } from '../../shared/util/date-format';
 import { AttentionCardComponent } from '../../shared/attention-card/attention-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { PersonNameComponent } from '../../shared/person-name/person-name.component';
@@ -58,6 +59,9 @@ export class HomeComponent implements OnInit {
   loading = true;
   error: string | null = null;
 
+  readonly pluralizeRu = pluralizeRu;
+  readonly formatDayMonthYear = formatDayMonthYear;
+
   ngOnInit(): void {
     void this.refresh();
   }
@@ -74,20 +78,22 @@ export class HomeComponent implements OnInit {
     }
   }
 
-  /** «{день недели}, {дата} · в семье «{X}» N дел» — N считается по фактически ПОКАЗАННЫМ
-   * карточкам (топикам), не по сырому количеству строк с бэка: лекарства/ДР схлопываются в одну
-   * карточку каждый, поэтому "3 дела" в тексте должно совпадать с "3 карточками на экране", а не
-   * с суммой отдельных лекарств+заявок+дней рождения. */
+  /** «{день недели}, {дата} · в семье «{X}» N уведомлений» — N берётся из unreadNotifications
+   * (непрочитанные, тот же счётчик, что бейдж в боковом меню — NotificationStateService), а не
+   * из числа показанных карточек «Требует внимания»: та цифра считает совсем другую вещь
+   * (сколько ТЕМ требуют разбора), и раньше в этой строке путалась с числом уведомлений
+   * (см. заметку редизайна v2.1 «3 дела → 3 уведомления»). Число видимых карточек по-прежнему
+   * доступно отдельно — см. visibleCardCount, используется у заголовка «Требует внимания». */
   get dateLine(): string {
     if (!this.summary) return '';
     const d = new Date(this.summary.today);
     const weekday = WEEKDAYS[d.getUTCDay()];
     const dateText = `${d.getUTCDate()} ${MONTHS_GEN[d.getUTCMonth()]}`;
     const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
-    const count = this.visibleCardCount;
-    if (count === 0) return `${capitalized}, ${dateText}`;
     const familyPart = this.summary.primaryFamilyName ? ` · в семье «${this.summary.primaryFamilyName}»` : '';
-    return `${capitalized}, ${dateText}${familyPart} ${count} ${pluralizeRu(count, 'дело', 'дела', 'дел')}`;
+    const count = this.summary.unreadNotifications;
+    const countPart = count > 0 ? ` ${count} ${pluralizeRu(count, 'уведомление', 'уведомления', 'уведомлений')}` : '';
+    return `${capitalized}, ${dateText}${familyPart}${countPart}`;
   }
 
   get visibleCardCount(): number {
@@ -134,6 +140,21 @@ export class HomeComponent implements OnInit {
       : '';
 
     return { title, subtitle };
+  }
+
+  /** Чип «В порядке» по аптечке — "нет просроченных" / "N просроченных[, ещё M истекает]"
+   * (заметка редизайна v2.1: было "11 из 13 в сроке", непонятно без вычитания в уме). */
+  get medicationsOkLabel(): string {
+    const ok = this.summary?.ok;
+    if (!ok) return '';
+    if (ok.medicationsExpired === 0) return 'Аптечка: нет просроченных';
+    const expiredWord = ok.medicationsExpired === 1 ? 'просроченное' : 'просроченных';
+    let text = `Аптечка: ${ok.medicationsExpired} ${expiredWord}`;
+    if (ok.medicationsExpiring > 0) {
+      const verb = ok.medicationsExpiring === 1 ? 'истекает' : 'истекают';
+      text += `, ещё ${ok.medicationsExpiring} ${verb}`;
+    }
+    return text;
   }
 
   goToMedkit(alert: HomeMedicationAlert): void {

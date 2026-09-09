@@ -66,15 +66,24 @@
           <span class="home-section-line"></span>
         </div>
         <div class="d-flex flex-wrap gap-2">
-          <span class="home-ok-chip">
-            <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-            Аптечка: {{ summary.ok.medicationsInDate }} из {{ summary.ok.medicationsTotal }} в сроке
+          <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.medicationsExpired > 0">
+            <i [class]="summary.ok.medicationsExpired > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
+               [style.color]="summary.ok.medicationsExpired > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
+               aria-hidden="true"></i>
+            {{ medicationsOkLabel }}
           </span>
           <span class="home-ok-chip">
             <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-            Анализы: {{ summary.ok.analysesTotal }} записей
+            Анализы: {{ summary.ok.analysesTotal }} {{ pluralizeRu(summary.ok.analysesTotal, 'запись', 'записи', 'записей') }}
             @if (summary.ok.analysesAbnormal > 0) {
               , {{ summary.ok.analysesAbnormal }} с отклонениями
+            }
+          </span>
+          <span class="home-ok-chip">
+            <i class="ph ph-stethoscope" style="color:var(--color-status-ok)" aria-hidden="true"></i>
+            Посещения врачей: {{ summary.ok.visitsTotal }}
+            @if (summary.ok.visitsLastDate) {
+              · последнее {{ formatDayMonthYear(summary.ok.visitsLastDate) }}
             }
           </span>
           <span class="home-ok-chip">
@@ -127,7 +136,13 @@
                 </div>
                 <div class="flex-fill">
                   <div class="card-title" style="font-size:16px">{{ b.personName }}</div>
-                  <div class="muted" style="font-size:13px">через {{ b.daysUntil }} · {{ b.turningAge }} лет</div>
+                  <div class="muted" style="font-size:13px">
+                    @if (b.daysUntil === 0) {
+                      сегодня · {{ b.turningAge }} лет
+                    } @else {
+                      через {{ b.daysUntil }} {{ pluralizeRu(b.daysUntil, 'день', 'дня', 'дней') }} · {{ b.turningAge }} лет
+                    }
+                  </div>
                 </div>
               </div>
             }

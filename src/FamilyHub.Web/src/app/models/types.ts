@@ -727,8 +727,12 @@ export interface HomeBirthdayItem {
 export interface HomeOkChips {
     medicationsInDate: number;
     medicationsTotal: number;
+    medicationsExpired: number;
+    medicationsExpiring: number;
     analysesTotal: number;
     analysesAbnormal: number;
+    visitsTotal: number;
+    visitsLastDate: string | null; // DateOnly "yyyy-MM-dd"
     pushEnabled: boolean;
 }
 

@@ -343,6 +343,20 @@ public class MedicalRecordService(
     public Task<List<Guid>> GetVisibleRecordIdsAsync(Guid userId, MedicalRecordKind? kind = null, CancellationToken ct = default) =>
         VisibleRecordsQuery(userId, kind).Select(r => r.Id).ToListAsync(ct);
 
+    /// <summary>Счётчик + дата последней записи заданного вида — для чипов «В порядке» на Главной
+    /// (HomeSummaryService.BuildOkChipsAsync, редизайн v2.1). RecordDate не зашифрован (в отличие
+    /// от PersonName/Doctor/Description), поэтому Count/Max считаются прямо в SQL, без выгрузки
+    /// строк на клиент — как и остальные счётчики в этом сервисе (см. GetVisibleRecordIdsAsync).</summary>
+    public async Task<(int Count, DateOnly? LastDate)> GetVisibleRecordCountAndLastDateAsync(
+        Guid userId, MedicalRecordKind kind, CancellationToken ct = default)
+    {
+        var query = VisibleRecordsQuery(userId, kind);
+        var count = await query.CountAsync(ct);
+        if (count == 0) return (0, null);
+        var lastDate = await query.MaxAsync(r => r.RecordDate, ct);
+        return (count, lastDate);
+    }
+
     /// <summary>
     /// Поиск по видимым медкартам (этап 3, ADR-0003). PersonName/Doctor/Description зашифрованы
     /// at-rest (ADR-0002) — Postgres-FTS по ним невозможен, поэтому поиск строится in-memory:
