@@ -5,14 +5,13 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
 /**
  * Page «Посещения врачей» (вкладка хаба «Здоровье») — тонкая обёртка над
  * MedicalRecordsPanelComponent с видом DoctorVisit. Плоский список посещений (не справочник
- * врачей) — см. план разделения.
+ * врачей) — см. план разделения. Заголовок экрана печатает панель (редизайн v2.1), не эта обёртка.
  */
 @Component({
   selector: 'app-doctor-visits-tab',
   standalone: true,
   imports: [MedicalRecordsPanelComponent],
-  template: `<h3 class="mb-3">Посещения врачей</h3>
-    <app-medical-records-panel [kind]="Kind.DoctorVisit" />`,
+  template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" />`,
 })
 export class DoctorVisitsTabComponent {
   readonly Kind = MedicalRecordKind;

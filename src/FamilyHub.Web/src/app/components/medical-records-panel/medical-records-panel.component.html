@@ -10,57 +10,72 @@
        боковая панель/полноэкранно), кнопка «Добавить» в топбаре теперь навигирует туда, не
        разворачивает форму инлайн (см. PR7 плана). -->
 
-  <!-- Редизайн v3 — «Фильтры» переехали из сворачиваемой панели над списком в кнопку рядом с
-       локальным поиском (один ряд), см. PR5.3/5.4 плана. Тот же приём двух обёрток на одном
-       наборе полей, что уже применён в shared/action-menu: попап на широких экранах, шторка на
-       узких. -->
-  <div class="d-flex gap-2 mb-2 align-items-start">
-    <app-search-field class="flex-fill" [placeholder]="labels.searchPlaceholder" [value]="searchQuery" (valueChange)="onSearchQueryChange($event)" />
-    <div class="filters-anchor" #filtersAnchor>
-      <button type="button" class="btn btn-secondary text-nowrap" (click)="filtersOpen = !filtersOpen">
-        <i class="ph ph-funnel" aria-hidden="true"></i> Фильтры
-        @if (activeFilterCount > 0) {
-          <span class="tag tag-accent" style="margin-left:6px">{{ activeFilterCount }}</span>
+  @if (!recordId()) {
+    <!-- Редизайн v2.1 — заголовок экрана + краткая сводка переехали сюда из Page-обёртки
+         (medical-records-tab/doctor-visits-tab печатали голый <h3>): экран сам знает счётчики,
+         обёртке незачем их дублировать отдельным запросом. Только в списочном режиме — в
+         singleMode (открытая запись) заголовок уже даёт back-хедер ниже. -->
+    <h3 class="mb-1">{{ labels.title }}</h3>
+    @if (!loading && totalCount > 0) {
+      <p class="muted mb-3" style="font-size:var(--font-size-meta)">
+        {{ totalCount }} {{ pluralizeRu(totalCount, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
+        @if (items.length === totalCount) {
+          · {{ groupedItems.length }} {{ pluralizeRu(groupedItems.length, 'человек', 'человека', 'человек') }}
         }
-      </button>
-
-      @if (filtersOpen && isWide) {
-        <div class="card filters-popover">
-          <ng-container *ngTemplateOutlet="filterFields" />
-        </div>
-      }
-    </div>
-  </div>
-
-  @if (filtersOpen && !isWide) {
-    <app-bottom-sheet title="Фильтры" [open]="true" (closed)="filtersOpen = false">
-      <ng-container *ngTemplateOutlet="filterFields" />
-    </app-bottom-sheet>
-  }
-
-  <ng-template #filterFields>
-    <div class="d-flex flex-wrap gap-2 mb-2">
-      <div class="flex-fill" style="min-width:130px">
-        <label class="form-label">С даты</label>
-        <input class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
-      </div>
-      <div class="flex-fill" style="min-width:130px">
-        <label class="form-label">По дату</label>
-        <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
-      </div>
-    </div>
-    <label class="form-label">Врач</label>
-    <input
-      class="input mb-2"
-      [attr.list]="doctorsDatalistId"
-      [(ngModel)]="filters.doctor"
-      (ngModelChange)="onFilterChange()"
-      placeholder="Начните вводить имя врача…"
-    />
-    @if (activeFilterCount > 0) {
-      <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
+        . {{ labels.accessHintLabel }}
+      </p>
     }
-  </ng-template>
+
+    <!-- Редизайн v2.1 — поле поиска переехало в топбар каркаса целиком (см.
+         PageActionService.pageSearch в конструкторе/ngOnInit), было полем прямо тут, под
+         заголовком экрана. «Фильтры» остаются на экране — это не текстовый поиск. -->
+    <div class="d-flex gap-2 mb-2 justify-content-end">
+      <div class="filters-anchor" #filtersAnchor>
+        <button type="button" class="btn btn-secondary text-nowrap" (click)="filtersOpen = !filtersOpen">
+          <i class="ph ph-funnel" aria-hidden="true"></i> Фильтры
+          @if (activeFilterCount > 0) {
+            <span class="tag tag-accent" style="margin-left:6px">{{ activeFilterCount }}</span>
+          }
+        </button>
+
+        @if (filtersOpen && isWide) {
+          <div class="card filters-popover">
+            <ng-container *ngTemplateOutlet="filterFields" />
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (filtersOpen && !isWide) {
+      <app-bottom-sheet title="Фильтры" [open]="true" (closed)="filtersOpen = false">
+        <ng-container *ngTemplateOutlet="filterFields" />
+      </app-bottom-sheet>
+    }
+
+    <ng-template #filterFields>
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        <div class="flex-fill" style="min-width:130px">
+          <label class="form-label">С даты</label>
+          <input class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
+        </div>
+        <div class="flex-fill" style="min-width:130px">
+          <label class="form-label">По дату</label>
+          <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
+        </div>
+      </div>
+      <label class="form-label">Врач</label>
+      <input
+        class="input mb-2"
+        [attr.list]="doctorsDatalistId"
+        [(ngModel)]="filters.doctor"
+        (ngModelChange)="onFilterChange()"
+        placeholder="Начните вводить имя врача…"
+      />
+      @if (activeFilterCount > 0) {
+        <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
+      }
+    </ng-template>
+  }
 
   <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список (десктоп/
        мобайл) и мобильный экран открытой записи показывают одно и то же содержимое, разница —
@@ -444,7 +459,7 @@
                  только в native-тултипе при наведении (см. PR5.5 плана). -->
             <div class="card-title" style="font-size:19px" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
             <div class="muted" style="font-size:14px">
-              {{ group.records.length }} {{ pluralizeRu(group.records.length, kind() === Kind.Analysis ? 'анализ' : 'посещение', kind() === Kind.Analysis ? 'анализа' : 'посещения', kind() === Kind.Analysis ? 'анализов' : 'посещений') }}
+              {{ group.records.length }} {{ pluralizeRu(group.records.length, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
               · последний {{ formatDayMonthYear(group.records[0].recordDate) }}
             </div>
           </div>

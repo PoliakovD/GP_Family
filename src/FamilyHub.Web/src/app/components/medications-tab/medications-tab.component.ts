@@ -7,14 +7,13 @@ import { PageActionService } from '../../services/page-action.service';
 import { SearchResultItem } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { expiryClass } from '../../shared/util/expiry';
-import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component';
 
 @Component({
   selector: 'app-medications-tab',
   standalone: true,
-  imports: [MedkitsPanelComponent, SearchFieldComponent, LoadingSpinnerComponent],
+  imports: [MedkitsPanelComponent, LoadingSpinnerComponent],
   templateUrl: './medications-tab.component.html',
 })
 export class MedicationsTabComponent implements OnInit, OnDestroy {
@@ -44,9 +43,14 @@ export class MedicationsTabComponent implements OnInit, OnDestroy {
       this.expandFamilyId.set(params.get('familyId'));
       this.expandMedkitId.set(params.get('medkitId'));
     });
-    // Редизайн v3 — «один поиск на экране»: своё поле поиска выше уже покрывает все аптечки
-    // всех семей, общий поиск шапки на этом экране только дублировал бы его.
-    this.pageAction.setSearchSuppressed(true);
+    // Редизайн v2.1 — поле поиска переехало в топбар каркаса целиком (было своим полем прямо на
+    // экране, ниже заголовка «Аптечка» — та же жалоба, что на «Анализах»), см.
+    // PageActionService.pageSearch. Результаты по-прежнему рендерятся здесь же, под сеткой аптечек.
+    this.pageAction.setPageSearch({
+      placeholder: 'Поиск по всем аптечкам…',
+      value: () => this.search.query,
+      onChange: (v) => this.onQueryChange(v),
+    });
   }
 
   ngOnDestroy(): void {

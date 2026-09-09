@@ -5,14 +5,14 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
 /**
  * Page «Анализы» (вкладка хаба «Здоровье») — тонкая обёртка над MedicalRecordsPanelComponent
  * с зафиксированным видом записи. Вся логика (список/форма/поиск/доступ/вложения) — в панели,
- * переиспользуемой ещё и DoctorVisitsTabComponent («Врачи», тот же хаб).
+ * переиспользуемой ещё и DoctorVisitsTabComponent («Посещения врачей», тот же хаб); заголовок
+ * экрана тоже печатает панель (редизайн v2.1, вместе со сводкой под ним), не Page-обёртка.
  */
 @Component({
   selector: 'app-medical-records-tab',
   standalone: true,
   imports: [MedicalRecordsPanelComponent],
-  template: `<h3 class="mb-3">Анализы</h3>
-    <app-medical-records-panel [kind]="Kind.Analysis" />`,
+  template: `<app-medical-records-panel [kind]="Kind.Analysis" />`,
 })
 export class MedicalRecordsTabComponent {
   readonly Kind = MedicalRecordKind;

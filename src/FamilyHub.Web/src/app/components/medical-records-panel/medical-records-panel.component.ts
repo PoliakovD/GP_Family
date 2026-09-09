@@ -281,9 +281,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         icon: 'ph-bold ph-plus',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
-      // Редизайн v3 — своё поле поиска ниже уже покрывает этот экран, общий поиск шапки только
-      // дублировал бы его (см. PageActionService.suppressGlobalSearch).
-      this.pageAction.setSearchSuppressed(true);
+      // Редизайн v2.1 — своё поле поиска отдаётся топбару целиком (было — рисовалось инлайн под
+      // заголовком экрана, общий поиск шапки просто подавлялся), см. PageActionService.pageSearch.
+      this.pageAction.setPageSearch({
+        placeholder: this.labels.searchPlaceholder,
+        value: () => this.searchQuery,
+        onChange: (v) => this.onSearchQueryChange(v),
+      });
     });
   }
 
@@ -302,7 +306,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         icon: 'ph-bold ph-plus',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
-      this.pageAction.setSearchSuppressed(true);
+      this.pageAction.setPageSearch({
+        placeholder: this.labels.searchPlaceholder,
+        value: () => this.searchQuery,
+        onChange: (v) => this.onSearchQueryChange(v),
+      });
     }
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
