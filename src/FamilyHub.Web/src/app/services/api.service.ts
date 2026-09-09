@@ -41,6 +41,7 @@ import {
   PagedResult,
   PendingMember, RecordSummaryResponse, RemoveMemberResult,
   SearchResponse,
+  SetRecordSpecimenRequest,
   UpdateIndicatorRequest,
   UserSpecimen,
   VapidPublicKeyResponse,
@@ -296,6 +297,10 @@ export class ApiService {
   /** Правка даты/врача/описания (UX-редизайн) — только владелец, пациент/вид записи неизменны. */
   updateMedicalRecord = (id: string, patch: UpdateMedicalRecordRequest) =>
     this.put<MedicalRecord>(`/api/medical-records/${id}`, patch);
+
+  /** Ручная смена/уточнение источника ВСЕЙ записи (заметка 1) — каскадится на все показатели. */
+  setRecordSpecimen = (recordId: string, specimenKbId: string) =>
+    this.put<void>(`/api/medical-records/${recordId}/specimen`, { specimenKbId } satisfies SetRecordSpecimenRequest);
 
   shareMedicalRecord = (familyId: string) =>
     this.post<void>('/api/medical-records/share', { familyId });

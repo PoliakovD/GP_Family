@@ -183,6 +183,7 @@ public class MedicalRecordService(
             })
             .ToListAsync(ct);
         var indicatorCountsById = indicatorCounts.ToDictionary(x => x.RecordId, x => x);
+        var specimenNames = await ResolveSpecimenNamesAsync(pageRecords.Select(r => r.SpecimenKbId), ct);
 
         var items = pageRecords
             .Select(r =>
@@ -197,7 +198,8 @@ public class MedicalRecordService(
                     counts?.Unrecognized ?? 0,
                     indicators?.Count ?? 0,
                     indicators?.Abnormal ?? 0,
-                    indicators?.Normal ?? 0);
+                    indicators?.Normal ?? 0,
+                    specimenNames.GetValueOrDefault(r.SpecimenKbId));
             })
             .ToList();
 
@@ -248,10 +250,13 @@ public class MedicalRecordService(
             })
             .FirstOrDefaultAsync(ct);
 
+        var specimenDisplayName = (await ResolveSpecimenNamesAsync([record.SpecimenKbId], ct)).GetValueOrDefault(record.SpecimenKbId);
+
         return (MedicalRecordAccessResult.Success, ToDto(
             record, hiddenFamilyIds, personName,
             attachmentCounts?.Total ?? 0, attachmentCounts?.Unrecognized ?? 0,
-            indicatorCounts?.Count ?? 0, indicatorCounts?.Abnormal ?? 0, indicatorCounts?.Normal ?? 0));
+            indicatorCounts?.Count ?? 0, indicatorCounts?.Abnormal ?? 0, indicatorCounts?.Normal ?? 0,
+            specimenDisplayName));
     }
 
     /// <summary>
@@ -366,6 +371,7 @@ public class MedicalRecordService(
         }
 
         var personNames = await ResolvePersonNamesAsync(records, userId, ct);
+        var specimenNames = await ResolveSpecimenNamesAsync(records.Select(r => r.SpecimenKbId), ct);
 
         var hits = new List<MedicalRecordSearchHit>();
         foreach (var record in records)
@@ -375,7 +381,9 @@ public class MedicalRecordService(
                     .Where(s => !string.IsNullOrWhiteSpace(s)));
             var score = searcher.Score(haystack, query);
             if (score > 0)
-                hits.Add(new MedicalRecordSearchHit(ToDto(record, [], personNames[record.Id]), score));
+                hits.Add(new MedicalRecordSearchHit(
+                    ToDto(record, [], personNames[record.Id], specimenDisplayName: specimenNames.GetValueOrDefault(record.SpecimenKbId)),
+                    score));
         }
 
         logger.LogDebug(
@@ -488,7 +496,8 @@ public class MedicalRecordService(
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Мед-запись {RecordId} создана владельцем {OwnerUserId}", record.Id, ownerUserId);
         var personName = (await ResolvePersonNamesAsync([record], ownerUserId, ct))[record.Id];
-        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName));
+        var specimenDisplayName = (await ResolveSpecimenNamesAsync([record.SpecimenKbId], ct)).GetValueOrDefault(record.SpecimenKbId);
+        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName, specimenDisplayName: specimenDisplayName));
     }
 
     /// <summary>
@@ -527,7 +536,8 @@ public class MedicalRecordService(
         var hiddenFamilyIds = await db.MedicalRecordHiddens
             .Where(h => h.MedicalRecordId == recordId).Select(h => h.FamilyId).ToListAsync(ct);
         var personName = (await ResolvePersonNamesAsync([record], ownerUserId, ct))[record.Id];
-        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName));
+        var specimenDisplayName = (await ResolveSpecimenNamesAsync([record.SpecimenKbId], ct)).GetValueOrDefault(record.SpecimenKbId);
+        return (MedicalRecordAccessResult.Success, ToDto(record, hiddenFamilyIds, personName, specimenDisplayName: specimenDisplayName));
     }
 
     /// <summary>УРОВЕНЬ 1: владелец открывает ВСЕ свои анализы выбранной семье одним действием.</summary>
@@ -726,9 +736,21 @@ public class MedicalRecordService(
     private static MedicalRecordDto ToDto(
         MedicalRecord r, IReadOnlyList<Guid> hiddenFamilyIds, string personName,
         int attachmentCount = 0, int unrecognizedAttachmentCount = 0, int indicatorCount = 0,
-        int abnormalIndicatorCount = 0, int normalIndicatorCount = 0) =>
+        int abnormalIndicatorCount = 0, int normalIndicatorCount = 0, string? specimenDisplayName = null) =>
         new(r.Id, r.OwnerUserId, r.Kind, personName, r.RecordDate, r.Doctor, r.Title, r.Description,
             r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId,
             attachmentCount, unrecognizedAttachmentCount, indicatorCount,
-            abnormalIndicatorCount, normalIndicatorCount);
+            abnormalIndicatorCount, normalIndicatorCount, r.SpecimenKbId, specimenDisplayName, r.SpecimenHint);
+
+    /// <summary>Батч-резолв DisplayName источников на набор SpecimenKbId — тот же приём, что
+    /// ExtractionQueryService.ResolveSpecimenNamesAsync (один запрос вместо N+1).</summary>
+    private async Task<Dictionary<Guid, string>> ResolveSpecimenNamesAsync(IEnumerable<Guid> specimenKbIds, CancellationToken ct)
+    {
+        var distinct = specimenKbIds.Distinct().ToList();
+        if (distinct.Count == 0) return [];
+
+        return await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => distinct.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.DisplayName, ct);
+    }
 }

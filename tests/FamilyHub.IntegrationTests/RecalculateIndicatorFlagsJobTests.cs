@@ -23,11 +23,19 @@ namespace FamilyHub.IntegrationTests;
 /// </summary>
 public class RecalculateIndicatorFlagsJobTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
-    private async Task<Guid> CreateAnalysisAsync(HttpClient owner, DateOnly date)
+    /// <summary>Источник — атрибут ВСЕЙ записи (заметка 1) — проставляется здесь сразу после
+    /// создания, не в запросе на показатель.</summary>
+    private async Task<Guid> CreateAnalysisAsync(HttpClient owner, DateOnly date, Guid specimenId)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records", new CreateMedicalRecordRequest(date, null, null, null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+        var recordId = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+
+        var specimenResponse = await owner.PutAsJsonAsync(
+            $"/api/medical-records/{recordId}/specimen", new SetRecordSpecimenRequest(specimenId));
+        specimenResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        return recordId;
     }
 
     private async Task<Guid> SeedKbAnalyteAsync(string normalizedName, Guid specimenId, double low, double high)
@@ -83,11 +91,11 @@ public class RecalculateIndicatorFlagsJobTests(FamilyHubWebFactory factory) : In
         var rawName = $"Гемоглобин {Guid.NewGuid():N}";
         var normalizedName = LabAnalyteNormalizer.Normalize(rawName);
 
-        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
         // refLow/refHigh заданы напрямую — тот же путь, что бланк, печатающий свой референс:
         // IndicatorFlagCalculator.Calculate сразу даёт RefSource.Blank (см. ExtractionQueryService.CreateIndicatorAsync).
         var createResponse = await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators",
-            new CreateIndicatorRequest(rawName, "140", "г/л", specimenId, "130", "160", null));
+            new CreateIndicatorRequest(rawName, "140", "г/л", "130", "160", null));
         createResponse.EnsureSuccessStatusCode();
         var indicator = (await createResponse.Content.ReadFromJsonAsync<IndicatorDto>())!;
 
@@ -122,10 +130,10 @@ public class RecalculateIndicatorFlagsJobTests(FamilyHubWebFactory factory) : In
         var rawName = $"Гемоглобин {Guid.NewGuid():N}";
         var normalizedName = LabAnalyteNormalizer.Normalize(rawName);
 
-        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
         // Без refLow/refHigh/refText — RefSource.None, ждёт справочник (прежнее, уже рабочее поведение).
         var createResponse = await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators",
-            new CreateIndicatorRequest(rawName, "140", "г/л", specimenId, null, null, null));
+            new CreateIndicatorRequest(rawName, "140", "г/л", null, null, null));
         createResponse.EnsureSuccessStatusCode();
         var indicator = (await createResponse.Content.ReadFromJsonAsync<IndicatorDto>())!;
 

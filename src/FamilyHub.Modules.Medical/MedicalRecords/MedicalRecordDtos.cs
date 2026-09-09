@@ -29,7 +29,14 @@ public record MedicalRecordDto(
     int UnrecognizedAttachmentCount = 0,
     int IndicatorCount = 0,
     int AbnormalIndicatorCount = 0,
-    int NormalIndicatorCount = 0);
+    int NormalIndicatorCount = 0,
+    // Источник ВСЕЙ записи (заметка 1) — SpecimenKbId никогда не null (сентинел
+    // SpecimenContextIds.Unresolved, если ещё не резолвлен). SpecimenHint — обобщённое слово без
+    // локализации (заметка 2: "мазок" без уточнения места), если модель его увидела, но SpecimenKbId
+    // остался Unresolved — UI просит пользователя уточнить именно этим словом.
+    Guid SpecimenKbId = default,
+    string? SpecimenDisplayName = null,
+    string? SpecimenHint = null);
 
 /// <summary>Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для
 /// глобального поиска. TotalPages вычисляется на сервере, а не на фронте, чтобы не дублировать

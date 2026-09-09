@@ -89,6 +89,23 @@ public static class ExtractionEndpoints
             return MapQueryResult(result, item);
         });
 
+        // Ручная смена/уточнение источника ВСЕЙ записи (заметка 1) — единственный путь изменить
+        // MedicalRecord.SpecimenKbId после распознавания, каскадится на все показатели записи.
+        records.MapPut("/{recordId:guid}/specimen", async (
+            Guid recordId, SetRecordSpecimenRequest body, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var result = await service.SetRecordSpecimenAsync(recordId, currentUser.UserId, body.SpecimenKbId, ct);
+            return result switch
+            {
+                SetRecordSpecimenResult.NotFound => Results.NotFound(),
+                SetRecordSpecimenResult.Forbidden => Results.Forbid(),
+                SetRecordSpecimenResult.Conflict => Results.Json(
+                    new { code = "specimen_conflict", message = "Не удалось сменить источник — в записи уже есть одноимённые показатели под разными источниками (унаследовано из старого распознавания)." },
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NoContent(),
+            };
+        });
+
         // Ручное добавление показателя (UX-редизайн) — без ожидания следующего «Распознать»,
         // тот же владелец-чек, что и у остальных мутаций записи.
         records.MapPost("/{recordId:guid}/indicators", async (

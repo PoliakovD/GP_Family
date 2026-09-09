@@ -147,6 +147,42 @@
           <p class="mb-1">{{ item.description }}</p>
         }
 
+        <!-- Источник анализа (заметка 1) — атрибут ВСЕЙ записи, не отдельного показателя: один
+             источник на карточке, меняется здесь и каскадится на все показатели записи. -->
+        @if (item.kind === Kind.Analysis) {
+          @if (editingSpecimenRecordId === item.id) {
+            <div class="d-flex flex-column gap-1 mb-2">
+              <label class="form-label">Источник анализа</label>
+              <input class="input" list="specimen-suggestions" placeholder="Источник (кровь, моча, ЭКГ…)"
+                [(ngModel)]="recordSpecimenQuery"
+                (ngModelChange)="onSpecimenQueryInput($event)"
+                (blur)="resolveSpecimenQuery(recordSpecimenQuery, recordSpecimenForm)" />
+              @if (savingCustomSpecimen) {
+                <div class="muted" style="font-size:12px">Проверяем источник…</div>
+              } @else if (!recordSpecimenForm.specimenKbId && recordSpecimenQuery) {
+                <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
+              }
+              @if (customSpecimenError) {
+                <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+              }
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm" [disabled]="savingRecordSpecimen" (click)="saveRecordSpecimen(item.id)">Сохранить</button>
+                <button class="btn btn-ghost btn-sm" [disabled]="savingRecordSpecimen" (click)="cancelEditRecordSpecimen()">Отмена</button>
+              </div>
+            </div>
+          } @else if (item.specimenHint) {
+            <div class="alert-info mb-2" style="font-size:13px">
+              Уточните источник: «{{ item.specimenHint }}» — откуда именно?
+              <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item, item.specimenHint)">Уточнить</button>
+            </div>
+          } @else {
+            <p class="muted mb-1" style="font-size:13px">
+              Источник: {{ specimenLabelFor(item) }}
+              <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item)">Изменить</button>
+            </p>
+          }
+        }
+
         <!-- Секция «Файлы» прямо в карточке (была модалка из меню «…» — недоступна на узком
              экране в списке, см. shared/attachment-list). Владеет своим fetch — грузится ровно
              тогда, когда карточка раскрыта, как и раньше при клике «Файлы». -->
@@ -220,18 +256,6 @@
                           <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
                           <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
                         </div>
-                        <input class="input" list="specimen-suggestions" placeholder="Источник (кровь, моча, ЭКГ…)"
-                          [(ngModel)]="editSpecimenQuery"
-                          (ngModelChange)="onSpecimenQueryInput($event)"
-                          (blur)="resolveSpecimenQuery(editSpecimenQuery, editIndicatorForm)" />
-                        @if (savingCustomSpecimen) {
-                          <div class="muted" style="font-size:12px">Проверяем источник…</div>
-                        } @else if (!editIndicatorForm.specimenKbId && editSpecimenQuery) {
-                          <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
-                        }
-                        @if (customSpecimenError) {
-                          <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
-                        }
                         <div class="d-flex gap-1">
                           <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
                           <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
@@ -296,18 +320,6 @@
                         <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
                         <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
                       </div>
-                      <input class="input" list="specimen-suggestions" placeholder="Источник (кровь, моча, ЭКГ…)"
-                        [(ngModel)]="newSpecimenQuery"
-                        (ngModelChange)="onSpecimenQueryInput($event)"
-                        (blur)="resolveSpecimenQuery(newSpecimenQuery, newIndicatorForm)" />
-                      @if (savingCustomSpecimen) {
-                        <div class="muted" style="font-size:12px">Проверяем источник…</div>
-                      } @else if (!newIndicatorForm.specimenKbId && newSpecimenQuery) {
-                        <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
-                      }
-                      @if (customSpecimenError) {
-                        <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
-                      }
                       <div class="d-flex gap-1">
                         <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
                         <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />

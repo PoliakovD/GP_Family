@@ -28,14 +28,23 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         return _bloodSpecimenId.Value;
     }
 
-    private async Task<CreateIndicatorRequest> HemoglobinAsync(string value) =>
-        new("Гемоглобин", value, "г/л", await BloodSpecimenIdAsync(), "130", "160", null);
+    private static CreateIndicatorRequest Hemoglobin(string value) =>
+        new("Гемоглобин", value, "г/л", "130", "160", null);
 
+    /// <summary>Источник — атрибут ВСЕЙ записи (заметка 1), не отдельного показателя запроса —
+    /// проставляется здесь через PUT .../specimen сразу после создания, все показатели этого
+    /// файла — кровь.</summary>
     private async Task<Guid> CreateAnalysisAsync(HttpClient owner, DateOnly date)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records", new CreateMedicalRecordRequest(date, null, null, null));
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+        var recordId = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+
+        var specimenResponse = await owner.PutAsJsonAsync(
+            $"/api/medical-records/{recordId}/specimen", new SetRecordSpecimenRequest(await BloodSpecimenIdAsync()));
+        specimenResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        return recordId;
     }
 
     private async Task SetOwnerIdentityAsync(Guid userId, DateOnly birthDate, Gender gender)
@@ -100,7 +109,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var kbId = await SeedKbAnalyteAsync();
 
         var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         await LinkIndicatorToKbAsync(indicator.Id, kbId);
 
@@ -118,7 +127,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var recordId = await CreateAnalysisAsync(owner, DateOnly.FromDateTime(DateTime.UtcNow));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await owner.GetAsync($"/api/indicators/{indicator.Id}/article");
@@ -135,14 +144,14 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var owner = ClientAs(FreshTelegramId());
         var record1 = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        var indicator1 = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record1}/indicators", await HemoglobinAsync("140")))
+        var indicator1 = (await (await owner.PostAsJsonAsync($"/api/medical-records/{record1}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var firstArticle = await owner.GetFromJsonAsync<IndicatorArticleResponse>($"/api/indicators/{indicator1.Id}/article", JsonOpts);
         firstArticle!.HistoryAvailable.Should().BeFalse("пока есть только одна точка того же показателя");
 
         var record2 = await CreateAnalysisAsync(owner, new DateOnly(2026, 2, 1));
-        await owner.PostAsJsonAsync($"/api/medical-records/{record2}/indicators", await HemoglobinAsync("145"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{record2}/indicators", Hemoglobin("145"));
 
         var secondArticle = await owner.GetFromJsonAsync<IndicatorArticleResponse>($"/api/indicators/{indicator1.Id}/article", JsonOpts);
         secondArticle!.HistoryAvailable.Should().BeTrue("появилась вторая точка того же показателя/биоматериала");
@@ -199,7 +208,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var kbId = await FindKbIdAsync("гемоглобин", specimenId);
 
         var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
         await LinkIndicatorToKbAsync(indicator.Id, kbId);
 
@@ -228,7 +237,7 @@ public class IndicatorArticleTests(FamilyHubWebFactory factory) : IntegrationTes
         var owner = ClientAs(FreshTelegramId());
         var stranger = ClientAs(FreshTelegramId());
         var recordId = await CreateAnalysisAsync(owner, DateOnly.FromDateTime(DateTime.UtcNow));
-        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", await HemoglobinAsync("140")))
+        var indicator = (await (await owner.PostAsJsonAsync($"/api/medical-records/{recordId}/indicators", Hemoglobin("140")))
             .Content.ReadFromJsonAsync<IndicatorDto>())!;
 
         var response = await stranger.GetAsync($"/api/indicators/{indicator.Id}/article");

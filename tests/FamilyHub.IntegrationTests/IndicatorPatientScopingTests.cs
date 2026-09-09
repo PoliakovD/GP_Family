@@ -28,18 +28,24 @@ public class IndicatorPatientScopingTests(FamilyHubWebFactory factory) : Integra
 
     private Guid? _bloodSpecimenId;
 
-    private async Task<CreateIndicatorRequest> HemoglobinAsync(string value)
-    {
-        _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
-        return new("Гемоглобин", value, "г/л", _bloodSpecimenId.Value, "130", "160", null);
-    }
+    private async Task<Guid> BloodSpecimenIdAsync() => _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
 
+    private static CreateIndicatorRequest Hemoglobin(string value) => new("Гемоглобин", value, "г/л", "130", "160", null);
+
+    /// <summary>Источник — атрибут ВСЕЙ записи (заметка 1) — проставляется здесь сразу после
+    /// создания, все показатели этого файла — кровь.</summary>
     private async Task<MedicalRecordDto> CreateAnalysisAsync(HttpClient owner, DateOnly date, Guid? familyDependentId = null)
     {
         var response = await owner.PostAsJsonAsync("/api/medical-records",
             new CreateMedicalRecordRequest(date, null, null, null, MedicalRecordKind.Analysis, familyDependentId));
         response.StatusCode.Should().Be(System.Net.HttpStatusCode.Created);
-        return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
+        var record = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
+
+        var specimenResponse = await owner.PutAsJsonAsync(
+            $"/api/medical-records/{record.Id}/specimen", new SetRecordSpecimenRequest(await BloodSpecimenIdAsync()));
+        specimenResponse.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        return record;
     }
 
     private async Task<Guid> CreateDependentAsync(HttpClient owner, Guid familyId, string name)
@@ -64,10 +70,10 @@ public class IndicatorPatientScopingTests(FamilyHubWebFactory factory) : Integra
         var dependentId = await CreateDependentAsync(owner, familyId, $"Ребёнок{Guid.NewGuid():N}");
 
         var selfRecord = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        await owner.PostAsJsonAsync($"/api/medical-records/{selfRecord.Id}/indicators", await HemoglobinAsync("140"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{selfRecord.Id}/indicators", Hemoglobin("140"));
 
         var dependentRecord = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 2), dependentId);
-        await owner.PostAsJsonAsync($"/api/medical-records/{dependentRecord.Id}/indicators", await HemoglobinAsync("110"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{dependentRecord.Id}/indicators", Hemoglobin("110"));
 
         var summaries = await owner.GetFromJsonAsync<List<MyIndicatorSummaryDto>>("/api/indicators", JsonOpts);
 
@@ -84,13 +90,13 @@ public class IndicatorPatientScopingTests(FamilyHubWebFactory factory) : Integra
         var owner = ClientAs(FreshTelegramId());
         var familyId = await CreateFamilyAsync(owner);
         var dependentId = await CreateDependentAsync(owner, familyId, $"Ребёнок{Guid.NewGuid():N}");
-        var specimenId = _bloodSpecimenId ??= await SeedSpecimenAsync("Кровь");
+        var specimenId = await BloodSpecimenIdAsync();
 
         var selfRecord = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1));
-        await owner.PostAsJsonAsync($"/api/medical-records/{selfRecord.Id}/indicators", await HemoglobinAsync("140"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{selfRecord.Id}/indicators", Hemoglobin("140"));
 
         var dependentRecord = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 2), dependentId);
-        await owner.PostAsJsonAsync($"/api/medical-records/{dependentRecord.Id}/indicators", await HemoglobinAsync("110"));
+        await owner.PostAsJsonAsync($"/api/medical-records/{dependentRecord.Id}/indicators", Hemoglobin("110"));
 
         var selfHistory = await owner.GetFromJsonAsync<List<IndicatorHistoryPoint>>(
             $"/api/indicators/гемоглобин?specimenKbId={specimenId}", JsonOpts);
