@@ -56,7 +56,7 @@ public static class PatientIdentityResolver
         var dependentNames = dependentIds.Count == 0
             ? new Dictionary<Guid, string>()
             : (await db.FamilyDependents.AsNoTracking().Where(d => dependentIds.Contains(d.Id)).ToListAsync(ct))
-                .ToDictionary(d => d.Id, d => MedicalRecords.MedicalRecordService.FormatName(d.FirstName, d.LastName, null));
+                .ToDictionary(d => d.Id, d => MedicalRecords.MedicalRecordService.FormatName(d.FirstName, d.LastName, d.MiddleName));
 
         var userNames = userIds.Count == 0
             ? new Dictionary<Guid, string>()
