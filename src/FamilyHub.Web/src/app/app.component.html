@@ -1,7 +1,10 @@
 <div class="app-shell" [class.app-shell-wide]="isWide()">
   @if (showTabs() && isWide()) {
     <aside class="app-sidebar">
-      <div class="app-sidebar-brand">FamilyHub</div>
+      <div class="app-sidebar-brand">
+        <i class="ph-fill ph-first-aid-kit" aria-hidden="true"></i>
+        FamilyHub
+      </div>
 
       <nav class="app-sidebar-nav">
         @for (item of sidebarItems; track item.id) {
