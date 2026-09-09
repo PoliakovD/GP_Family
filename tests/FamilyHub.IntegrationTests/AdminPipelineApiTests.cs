@@ -89,7 +89,7 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
     }
 
     [Fact]
-    public async Task Prompts_SeededMigrationRows_AllFifteenSlotsHaveActiveVersion()
+    public async Task Prompts_SeededMigrationRows_AllSixteenSlotsHaveActiveVersion()
     {
         var client = await AuthenticatedClientAsync();
 
@@ -97,16 +97,18 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
 
         // 10 слотов LLM-промптов (AddPipelineConfig) + 3 шаблона поисковых запросов
         // (AddSearchQueryPrompts) + 1 фильтр легитимности/prompt injection (AddLegitimacyGuardPrompt)
-        // + 1 гейт правдоподобности для ручного ввода (AddAnalytePlausibilityPrompt) — тот же
-        // механизм PipelinePrompt/PromptVersion на все четыре рода. analysis.specimen-resolve/
-        // analysis.specimen-validate получили версию 2 (UpdateSpecimenPromptsForSiteHint, заметки
-        // 1/2) — не все слоты обязаны застыть на версии 1 навсегда, важно только, что у каждого
-        // есть РОВНО одна активная версия.
-        slots.Should().HaveCount(15);
+        // + 1 гейт правдоподобности для ручного ввода (AddAnalytePlausibilityPrompt) + 1 короткое
+        // название анализа отдельным шагом (AddAnalysisTitlePrompt, заметка 4) — тот же механизм
+        // PipelinePrompt/PromptVersion на все пять родов. analysis.specimen-resolve/
+        // analysis.specimen-validate/analysis.extract получили версию 2
+        // (UpdateSpecimenPromptsForSiteHint/AddAnalysisTitlePrompt) — не все слоты обязаны застыть
+        // на версии 1 навсегда, важно только, что у каждого есть РОВНО одна активная версия.
+        slots.Should().HaveCount(16);
         slots.Should().OnlyContain(s => s.ActiveVersion >= 1);
         slots.Should().Contain(s => s.Key == "analysis.specimen-resolve" && s.ActiveVersion == 2);
         slots.Should().Contain(s => s.Key == "analysis.specimen-validate" && s.ActiveVersion == 2);
-        slots.Should().Contain(s => s.Key == "analysis.extract");
+        slots.Should().Contain(s => s.Key == "analysis.extract" && s.ActiveVersion == 2);
+        slots.Should().Contain(s => s.Key == "analysis.title" && s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "lab-analyte.summarize");
         slots.Should().Contain(s => s.Key == "analysis.search-query");
         slots.Should().Contain(s => s.Key == "medication.search-query.brave");

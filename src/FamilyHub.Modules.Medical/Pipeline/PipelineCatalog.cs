@@ -42,6 +42,7 @@ public static class PipelineCatalog
 
         new(AnalysisExtraction, "extract", "Структурирование показателей из текста/фото бланка", true, "analysis.extract"),
         new(AnalysisExtraction, "specimen-resolve", "Резолвинг источника показателя (биоматериал/исследование)", false, "analysis.specimen-resolve"),
+        new(AnalysisExtraction, "title", "Короткое название анализа отдельным LLM-проходом по уже извлечённым показателям", false, "analysis.title"),
         new(AnalysisExtraction, "ocr-correct", "Коррекция OCR-артефактов в названиях показателей", false, "analysis.ocr-correct"),
         new(AnalysisExtraction, "patient-reference", "Расчёт персонального референса по методике из справочника", false, "analysis.patient-reference"),
         new(AnalysisExtraction, "record-summary", "Суммаризация показателей записи для пользователя", false, "analysis.record-summary"),

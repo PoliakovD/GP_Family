@@ -32,6 +32,7 @@ public class LmStudioMedicalDocumentExtractor(
     IDocumentTextExtractor documentTextExtractor,
     ILmStudioJsonClient lmStudioClient,
     SpecimenResolver specimenResolver,
+    AnalysisTitleGenerator titleGenerator,
     ILegitimacyGuardService legitimacyGuard,
     IPromptProvider promptProvider,
     IPipelineConfigService pipelineConfig,
@@ -59,7 +60,6 @@ public class LmStudioMedicalDocumentExtractor(
             }
           ],
           "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
-          "suggestedTitle": "короткое название анализа, если оно прямо напечатано в шапке бланка (например, \"Общий анализ крови\", \"Биохимический анализ крови\") — иначе null, не придумывай",
           "doctor": "ФИО и/или специальность врача, назначившего анализ, если указаны в бланке — иначе null, не придумывай"
         }
 
@@ -79,12 +79,12 @@ public class LmStudioMedicalDocumentExtractor(
         - "refLow"/"refHigh" — числа, только если референс — числовой диапазон (например,
           "130-160"). Если так — "refText" оставь null. Если референс не числовой — заполни
           только "refText", "refLow"/"refHigh" оставь null.
-        - "documentDate"/"suggestedTitle"/"doctor" — заполняй, только если это ДЕЙСТВИТЕЛЬНО есть
-          в этом фрагменте (обычно в шапке документа); если фрагмент — просто таблица показателей
-          без шапки, оставь все три null.
+        - "documentDate"/"doctor" — заполняй, только если это ДЕЙСТВИТЕЛЬНО есть в этом фрагменте
+          (обычно в шапке документа); если фрагмент — просто таблица показателей без шапки,
+          оставь оба null.
         - Если во фрагменте нет ни одного показателя анализа (это шапка документа, подпись врача,
-          пояснительный текст и т.п.) — indicators пустой массив, но documentDate/suggestedTitle
-          всё равно заполни, если они есть в этом фрагменте.
+          пояснительный текст и т.п.) — indicators пустой массив, но documentDate/doctor всё равно
+          заполни, если они есть в этом фрагменте.
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
@@ -160,19 +160,18 @@ public class LmStudioMedicalDocumentExtractor(
         var hadAnySuccessfulCall = false;
         var hadAnyTransientFailure = false;
 
-        // Поля уровня документа (documentDate/suggestedTitle/doctor) обычно есть только в ШАПКЕ
-        // бланка — первый чанк/страница, где модель их реально нашла, побеждает; остальные куски
-        // (таблица показателей без шапки) просто не заполняют эти поля повторно. Источник
-        // показателя (биоматериал/исследование) сюда больше не входит — резолвится отдельным
-        // проходом (см. SpecimenResolver), не как побочное поле промпта структурирования.
+        // Поля уровня документа (documentDate/doctor) обычно есть только в ШАПКЕ бланка — первый
+        // чанк/страница, где модель их реально нашла, побеждает; остальные куски (таблица
+        // показателей без шапки) просто не заполняют эти поля повторно. Источник показателя
+        // (биоматериал/исследование) и короткое название анализа сюда больше не входят —
+        // резолвятся отдельными проходами (см. SpecimenResolver/AnalysisTitleGenerator), не как
+        // побочные поля промпта структурирования (заметки 1/4 — совмещение задач мешало всем).
         DateOnly? documentDate = null;
-        string? suggestedTitle = null;
         string? doctor = null;
 
         void CaptureDocumentFields(Dictionary<string, JsonElement> payload)
         {
             documentDate ??= ParseDate(ReadString(payload, "documentDate"));
-            suggestedTitle ??= ReadString(payload, "suggestedTitle");
             doctor ??= ReadString(payload, "doctor");
         }
 
@@ -234,9 +233,17 @@ public class LmStudioMedicalDocumentExtractor(
         {
             var isTransientFailure = hadAnyTransientFailure && !hadAnySuccessfulCall;
             return new ExtractionResult(
-                true, [], null, "Не удалось распознать ни одного показателя.", documentDate, suggestedTitle, doctor,
+                true, [], null, "Не удалось распознать ни одного показателя.", documentDate, null, doctor,
                 specimenResolution, isTransientFailure);
         }
+
+        // Короткое название — отдельный проход по шапке + реальному составу показателей (заметка 4),
+        // не побочное поле промпта структурирования выше. Необязательный шаг (§2 плана) — выключен
+        // из админки означает, что название остаётся null (правится вручную через "Редактировать",
+        // не восполняется откуда-то ещё).
+        var suggestedTitle = await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "title", ct)
+            ? await titleGenerator.GenerateAsync(content, deduped.Select(d => d.Name).ToList(), ct)
+            : null;
 
         return new ExtractionResult(
             true, deduped, null, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor,

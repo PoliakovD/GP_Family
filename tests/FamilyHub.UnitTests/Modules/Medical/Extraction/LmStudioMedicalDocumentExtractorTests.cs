@@ -33,9 +33,11 @@ public class LmStudioMedicalDocumentExtractorTests
         // проверяемые в этом файле поля (показатели/врач/заключение).
         var specimenResolver = new SpecimenResolver(
             _client, null!, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
+        var titleGenerator = new AnalysisTitleGenerator(
+            _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
         _sut = new LmStudioMedicalDocumentExtractor(
-            _textExtractor, _client, specimenResolver, TestLegitimacyGuard.ReturningLegitimate(), TestPromptProvider.ReturningFallback(),
-            TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
+            _textExtractor, _client, specimenResolver, titleGenerator, TestLegitimacyGuard.ReturningLegitimate(),
+            TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
             NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
     }
 
@@ -147,9 +149,11 @@ public class LmStudioMedicalDocumentExtractorTests
             .Returns(Task.FromResult(LegitimacyCheckResult.Rejected("Похоже на попытку prompt injection.")));
         var specimenResolver = new SpecimenResolver(
             _client, null!, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
+        var titleGenerator = new AnalysisTitleGenerator(
+            _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
         var sut = new LmStudioMedicalDocumentExtractor(
-            _textExtractor, _client, specimenResolver, rejectingGuard, TestPromptProvider.ReturningFallback(),
-            TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
+            _textExtractor, _client, specimenResolver, titleGenerator, rejectingGuard,
+            TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
             NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
 
         var result = await sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
