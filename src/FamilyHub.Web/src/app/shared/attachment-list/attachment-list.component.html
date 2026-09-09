@@ -5,7 +5,7 @@
     <app-loading-spinner />
   } @else {
     @if (error) {
-      <div class="alert-danger mb-0" style="font-size:13px">{{ error }}</div>
+      <div class="alert-danger mb-0" style="font-size:0.7647rem">{{ error }}</div>
     }
 
     <div class="file-chip-grid">
@@ -47,7 +47,7 @@
     />
 
     @if (limits; as l) {
-      <div class="muted" style="font-size:12px">
+      <div class="muted" style="font-size:0.7059rem">
         До {{ l.maxFilesPerRecord }} файлов, {{ (l.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
         @if (remainingSlots(); as room) {
           — осталось {{ room }}
@@ -62,7 +62,7 @@
     }
 
     @if (attachments.length === 0 && !uploading) {
-      <p class="muted mb-0" style="font-size:13px">Файлов пока нет.</p>
+      <p class="muted mb-0" style="font-size:0.7647rem">Файлов пока нет.</p>
     }
   }
 </div>

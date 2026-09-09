@@ -155,7 +155,7 @@
       }
 
       @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
-        <div class="muted" style="font-size:12px">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
+        <div class="muted" style="font-size:0.7059rem">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
       }
 
       <!-- Редизайн v3 — «Подробнее» больше не отдельная свёртка со своим заголовком/шевроном
@@ -181,12 +181,12 @@
                 (ngModelChange)="onSpecimenQueryInput($event)"
                 (blur)="resolveSpecimenQuery(recordSpecimenQuery, recordSpecimenForm)" />
               @if (savingCustomSpecimen) {
-                <div class="muted" style="font-size:12px">Проверяем источник…</div>
+                <div class="muted" style="font-size:0.7059rem">Проверяем источник…</div>
               } @else if (!recordSpecimenForm.specimenKbId && recordSpecimenQuery) {
-                <div class="muted" style="font-size:12px">Источник ещё не подтверждён — уберите фокус с поля.</div>
+                <div class="muted" style="font-size:0.7059rem">Источник ещё не подтверждён — уберите фокус с поля.</div>
               }
               @if (customSpecimenError) {
-                <div class="alert-danger mb-0" style="font-size:12px">{{ customSpecimenError }}</div>
+                <div class="alert-danger mb-0" style="font-size:0.7059rem">{{ customSpecimenError }}</div>
               }
               <div class="d-flex gap-2">
                 <button class="btn btn-primary btn-sm" [disabled]="savingRecordSpecimen" (click)="saveRecordSpecimen(item.id)">Сохранить</button>
@@ -194,12 +194,12 @@
               </div>
             </div>
           } @else if (item.specimenHint) {
-            <div class="alert-info mb-2" style="font-size:13px">
+            <div class="alert-info mb-2" style="font-size:0.7647rem">
               Уточните источник: «{{ item.specimenHint }}» — откуда именно?
               <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item, item.specimenHint)">Уточнить</button>
             </div>
           } @else {
-            <p class="muted mb-1" style="font-size:13px">
+            <p class="muted mb-1" style="font-size:0.7647rem">
               Источник: {{ specimenLabelFor(item) }}
               <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item)">Изменить</button>
             </p>
@@ -216,7 +216,7 @@
         @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
           <div class="d-flex justify-content-between mt-2" style="align-items:center;">
             <div class="card-kicker mb-0">Резюме</div>
-            <button type="button" class="btn-link" style="font-size:12px"
+            <button type="button" class="btn-link" style="font-size:0.7059rem"
                     [disabled]="summaryRegeneratingRecordId === item.id"
                     (click)="regenerateSummary(item.id)">
               {{ summaryRegeneratingRecordId === item.id ? 'Пересчитываем…' : (summaryByRecord[item.id] ? 'Пересчитать резюме' : 'Составить резюме') }}
@@ -227,7 +227,7 @@
               <p class="mb-1">{{ summary.plainSummary }}</p>
             }
             @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:13px">
+              <ul class="mb-1" style="font-size:0.7647rem">
                 @for (d of summary.deviations; track d.name) {
                   <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
                 }
@@ -235,20 +235,20 @@
             }
             @if (summary.questionsForDoctor.length > 0) {
               <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:13px">
+              <ul class="mb-1" style="font-size:0.7647rem">
                 @for (q of summary.questionsForDoctor; track q) {
                   <li>{{ q }}</li>
                 }
               </ul>
             }
-            <p class="muted mb-0" style="font-size:11px">{{ summary.disclaimer }}</p>
+            <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
           } @else {
-            <p class="muted mb-1" style="font-size:13px">Резюме ещё не составлено.</p>
+            <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
           }
           <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
                а объяснить, что делать) — резюме строится по показателям на момент последнего
                распознавания/пересчёта и само не обновляется после ручной правки значения. -->
-          <p class="muted mb-0" style="font-size:11px">
+          <p class="muted mb-0" style="font-size:0.6471rem">
             Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
             пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
             нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
@@ -299,7 +299,7 @@
                     <td>
                       {{ shortIndicatorName(ind) }}
                       @if (indicatorReference(ind); as ref) {
-                        <div class="muted" style="font-size:11px">
+                        <div class="muted" style="font-size:0.6471rem">
                           {{ ref }}
                           @if (isCalculatedRef(ind)) {
                             <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
@@ -317,7 +317,7 @@
                           [unit]="ind.unit" [flag]="ind.flag" variant="mini"
                         />
                       } @else {
-                        <span class="muted" style="font-size:12px">—</span>
+                        <span class="muted" style="font-size:0.7059rem">—</span>
                       }
                     </td>
                     <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
@@ -393,7 +393,7 @@
                   @if (med.kbMedicationId; as kbId) {
                     <button type="button" class="btn-link" (click)="openKbCard(kbId)">Справка</button>
                   } @else {
-                    <span class="muted" style="font-size:12px">— справка уточняется</span>
+                    <span class="muted" style="font-size:0.7059rem">— справка уточняется</span>
                   }
                 </li>
               }
@@ -413,7 +413,7 @@
         <i class="ph ph-arrow-left" aria-hidden="true"></i>
       </button>
       @if (items[0]; as only) {
-        <div class="card-title" style="font-size:19px">{{ shortName(only) }}</div>
+        <div class="card-title" style="font-size:1.1176rem">{{ shortName(only) }}</div>
       }
     </div>
 
@@ -479,13 +479,13 @@
           <div class="flex-fill" style="min-width:0">
             <!-- Редизайн v3 — короткое имя всегда (не полное ФИО), контрастнее; полное ФИО —
                  только в native-тултипе при наведении (см. PR5.5 плана). -->
-            <div class="card-title" style="font-size:19px" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
-            <div class="muted" style="font-size:14px">
+            <div class="card-title" style="font-size:1.1176rem" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
+            <div class="muted" style="font-size:0.8235rem">
               {{ group.records.length }} {{ pluralizeRu(group.records.length, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
               · последний {{ formatDayMonthYear(group.records[0].recordDate) }}
             </div>
           </div>
-          <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:13px">
+          <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:0.7647rem">
             <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
               <i class="ph-duotone ph-eye" aria-hidden="true"></i> {{ groupAccessLabel(group) }}
             </span>
@@ -522,7 +522,7 @@
          пассивная обратная связь, не элемент управления. На in-memory пути (поиск/врач) сервер
          и так уже отдал всё за один раз (см. usingTextFilter) — сентинел не нужен. -->
     @if (items.length > 0) {
-      <div class="muted mb-2" style="font-size:12px;text-align:center">
+      <div class="muted mb-2" style="font-size:0.7059rem;text-align:center">
         Показано {{ items.length }} из {{ totalCount }}
       </div>
     }
@@ -557,11 +557,11 @@
             <div class="d-flex align-items-center gap-2" style="padding:9px 0;border-bottom:1px solid var(--color-divider)">
               <i
                 class="ph-duotone ph-house"
-                style="font-size:20px"
+                style="font-size:1.1765rem"
                 [style.color]="isVisibleToFamily(record, f.id) ? 'var(--color-accent)' : 'var(--color-neutral-500)'"
                 aria-hidden="true"
               ></i>
-              <span class="flex-fill" style="font-size:14px">{{ f.name }}</span>
+              <span class="flex-fill" style="font-size:0.8235rem">{{ f.name }}</span>
               <label class="switch">
                 <input
                   type="checkbox"

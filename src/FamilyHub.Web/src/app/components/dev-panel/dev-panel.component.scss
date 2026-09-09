@@ -18,7 +18,7 @@
   border: none;
   background: rgba(0, 0, 0, 0.72);
   color: #fff;
-  font-size: 17px;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -43,7 +43,7 @@
   color: #dde1ec;
   border-radius: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
+  font-size: 0.6176rem;
   line-height: 1.45;
   display: flex;
   flex-direction: column;
@@ -64,7 +64,7 @@
 }
 
 .dp-title {
-  font-size: 11px;
+  font-size: 0.6471rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   color: #a5b4fc;
@@ -81,7 +81,7 @@
   cursor: pointer;
   padding: 2px 5px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 0.7059rem;
   line-height: 1;
 
   &:hover { background: rgba(255,255,255,0.08); color: #e5e7eb; }

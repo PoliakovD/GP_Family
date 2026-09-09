@@ -32,7 +32,7 @@
         @for (item of search.items; track item.type + ':' + item.id) {
           <div class="card mb-2" [class.card-clickable]="isNavigable(item)" (click)="open(item)">
             <div class="d-flex align-items-start gap-2">
-              <i [class]="typeIcon(item.type)" style="font-size:20px;color:var(--color-accent)" aria-hidden="true"></i>
+              <i [class]="typeIcon(item.type)" style="font-size:1.1765rem;color:var(--color-accent)" aria-hidden="true"></i>
               <div class="flex-fill">
                 <div class="name-with-tags mb-1">
                   <strong class="card-title">{{ item.title }}</strong>

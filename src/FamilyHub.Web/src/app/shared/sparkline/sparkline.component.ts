@@ -42,7 +42,7 @@ const PADDING = 6;
         }
       </svg>
     } @else {
-      <span class="muted" style="font-size:12px">Недостаточно данных</span>
+      <span class="muted" style="font-size:0.7059rem">Недостаточно данных</span>
     }
   `,
 })

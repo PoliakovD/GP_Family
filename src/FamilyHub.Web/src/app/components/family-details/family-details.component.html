@@ -41,7 +41,7 @@
                     <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
                         <div class="card-kicker" style="margin:0">Заявки на вступление</div>
                         @if (pendingMembers) {
-                            <span class="muted" style="font-size:13px">{{ pendingMembers.length }}</span>
+                            <span class="muted" style="font-size:0.7647rem">{{ pendingMembers.length }}</span>
                         }
                     </div>
 
@@ -148,7 +148,7 @@
                         <app-avatar [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" size="lg" />
                         <div class="flex-fill" style="min-width:0">
                             <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <span class="card-title" style="font-size:19px"><app-person-name [person]="m" /></span>
+                                <span class="card-title" style="font-size:1.1176rem"><app-person-name [person]="m" /></span>
                                 <span class="tag" [class.tag-accent]="m.role === FamilyRole.Admin" [class.tag-neutral]="m.role !== FamilyRole.Admin">
                                     {{ roleLabel(m.role) }}
                                 </span>
@@ -156,18 +156,18 @@
                                     <span class="tag tag-neutral">это вы</span>
                                 }
                             </div>
-                            <div class="muted" style="font-size:14px">
+                            <div class="muted" style="font-size:0.8235rem">
                                 @if (m.username) {
                                     &#64;{{ m.username }} ·
                                 }
                                 в семье с {{ m.joinedAt | date:'dd MMMM yyyy' }}
                             </div>
                             @if (m.id === auth.me()?.userId) {
-                                <div class="d-flex align-items-center gap-2 flex-wrap mt-1" style="font-size:14px">
+                                <div class="d-flex align-items-center gap-2 flex-wrap mt-1" style="font-size:0.8235rem">
                                     <span class="muted">
                                         {{ hasSharedWithThisFamily() ? 'Свои анализы открыл(а) этой семье' : 'Анализы этой семье не открыты' }}
                                     </span>
-                                    <a routerLink="/health/records" style="font-size:13px">Настроить доступ</a>
+                                    <a routerLink="/health/records" style="font-size:0.7647rem">Настроить доступ</a>
                                 </div>
                             }
                         </div>
@@ -180,8 +180,8 @@
                 <div class="card family-member-card family-invite-tile">
                     <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
                     <div class="flex-fill">
-                        <div class="card-title" style="font-size:18px">Пригласить в семью</div>
-                        <div class="muted" style="font-size:14px">
+                        <div class="card-title" style="font-size:1.0588rem">Пригласить в семью</div>
+                        <div class="muted" style="font-size:0.8235rem">
                             Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
                         </div>
                     </div>

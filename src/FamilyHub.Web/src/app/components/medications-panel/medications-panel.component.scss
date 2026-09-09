@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 0.6471rem;
   background: var(--color-bg);
   border: 2px solid var(--color-divider);
   color: var(--color-neutral-600);
@@ -46,7 +46,7 @@
 }
 
 .recognize-step-label {
-  font-size: 11px;
+  font-size: 0.6471rem;
   color: var(--color-neutral-600);
 }
 
@@ -139,7 +139,7 @@
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
   color: #fff;
-  font-size: 11px;
+  font-size: 0.6471rem;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -157,11 +157,11 @@
   background: transparent;
   color: var(--color-neutral-600);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 0.5882rem;
   transition: border-color 0.15s ease, color 0.15s ease;
 
   i {
-    font-size: 22px;
+    font-size: 1.2941rem;
   }
 
   &:active {
@@ -181,7 +181,7 @@
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 0.7059rem;
 
   tr + tr {
     border-top: 1px solid var(--color-divider);
@@ -210,7 +210,7 @@
 .expiry-legend-item {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 0.6471rem;
   color: var(--color-neutral-600);
   white-space: nowrap;
 }

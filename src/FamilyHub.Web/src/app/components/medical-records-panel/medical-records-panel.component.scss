@@ -39,14 +39,14 @@
 
 // Редизайн v3 — двухстрочный формат даты: день+месяц крупнее/контрастнее, год мельче/приглушённо.
 .record-timeline-day {
-  font-size: 15px;
+  font-size: 0.8824rem;
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.2;
 }
 
 .record-timeline-year {
-  font-size: 12px;
+  font-size: 0.7059rem;
   color: var(--color-neutral-600);
 }
 
@@ -120,7 +120,7 @@
 .indicators-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.7647rem;
   table-layout: fixed;
 
   th, td {
@@ -135,7 +135,7 @@
   th {
     color: var(--color-text);
     font-weight: 700;
-    font-size: 11px;
+    font-size: 0.6471rem;
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
@@ -152,7 +152,7 @@
 
 // Значение показателя — крупнее и контрастнее соседних колонок, это главное число в строке.
 .indicator-value-cell {
-  font-size: 14px;
+  font-size: 0.8235rem;
   white-space: nowrap;
 }
 
@@ -198,7 +198,7 @@
   border-radius: var(--radius-sm, 4px);
   background: var(--color-accent-100);
   color: var(--color-accent-700);
-  font-size: 10px;
+  font-size: 0.5882rem;
   font-weight: 600;
   line-height: 1.6;
   vertical-align: middle;

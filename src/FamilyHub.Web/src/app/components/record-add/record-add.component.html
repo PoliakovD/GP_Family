@@ -84,7 +84,7 @@
         (change)="onPendingFilesSelected($event)"
       />
       @if (attachmentLimits; as limits) {
-        <div class="muted mb-2" style="font-size:12px">
+        <div class="muted mb-2" style="font-size:0.7059rem">
           До {{ limits.maxFilesPerRecord }} файлов, {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый.
         </div>
       }
@@ -96,7 +96,7 @@
     <div class="record-add-recognize mb-3">
       <div class="flex-fill">
         <div style="font-weight:600">Распознать бланк</div>
-        <div class="muted" style="font-size:13px">Название, дата и показатели заполнятся сами — проверите перед сохранением.</div>
+        <div class="muted" style="font-size:0.7647rem">Название, дата и показатели заполнятся сами — проверите перед сохранением.</div>
       </div>
       <label class="switch">
         <input type="checkbox" [(ngModel)]="autoRecognize" />
