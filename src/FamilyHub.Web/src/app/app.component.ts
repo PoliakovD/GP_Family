@@ -97,9 +97,9 @@ export class AppComponent implements OnInit {
       children: [
         { path: '/health/medications', label: 'Аптечка' },
         { path: '/health/records', label: 'Анализы' },
-        { path: '/health/visits', label: 'Врачи' },
+        { path: '/health/visits', label: 'Посещения врачей' },
         { path: '/health/kb', label: 'Справочник' },
-        { path: '/health/indicators', label: 'Показатели' },
+        { path: '/health/indicators', label: 'Показатели анализов' },
       ],
     },
     { id: 'family', label: 'Семья', icon: 'ph-users-three' }, // path вычисляется — см. familyHref()

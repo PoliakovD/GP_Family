@@ -15,7 +15,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 })
 export class KbHubComponent {
   readonly sections: { path: string; label: string }[] = [
-    { path: 'medications', label: 'Препараты' },
-    { path: 'indicators', label: 'Показатели' },
+    { path: 'medications', label: 'Медицинские препараты' },
+    { path: 'indicators', label: 'Показатели анализов' },
   ];
 }

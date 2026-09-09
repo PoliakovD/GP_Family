@@ -20,8 +20,8 @@ export class HealthHubComponent {
   readonly sections: { path: string; label: string }[] = [
     { path: 'medications', label: 'Аптечка' },
     { path: 'records', label: 'Анализы' },
-    { path: 'visits', label: 'Врачи' },
+    { path: 'visits', label: 'Посещения врачей' },
     { path: 'kb', label: 'Справочник' },
-    { path: 'indicators', label: 'Показатели' },
+    { path: 'indicators', label: 'Показатели анализов' },
   ];
 }

@@ -39,7 +39,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
   { value: SearchResultType.Medication, label: 'Лекарства' },
   { value: SearchResultType.Kb, label: 'Справочник' },
   { value: SearchResultType.Record, label: 'Анализы' },
-  { value: SearchResultType.Visit, label: 'Врачи' },
+  { value: SearchResultType.Visit, label: 'Посещения врачей' },
   { value: SearchResultType.Birthday, label: 'Дни рождения' },
 ];
 
