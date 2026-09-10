@@ -456,6 +456,44 @@
           <app-action-menu [actions]="detailActions(only)" label="Действия с записью" />
         </div>
       }
+
+      <!-- Редизайн v2.2 — мета-строка записи (человек/дата/источник/доступ) не существовала
+           вообще, заголовок был единственной информацией на экране открытой записи. -->
+      <div class="record-detail-meta mb-3">
+        <app-person-chip
+          [avatarPerson]="{key: personKey(only), firstName: personAvatarParts(only.personName).firstName, lastName: personAvatarParts(only.personName).lastName}"
+          [shortLabel]="shortenDisplayName(only.personName)"
+          [fullLabel]="only.personName"
+        />
+        <span>{{ formatDayMonthYear(only.recordDate) }}</span>
+        @if (only.kind === Kind.Analysis) {
+          <span>{{ specimenLabelFor(only) }}</span>
+        }
+        <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
+          <i class="ph-duotone ph-eye" aria-hidden="true"></i>
+          {{ groupAccessLabel({key: personKey(only), personName: only.personName, records: [only]}) }}
+        </span>
+      </div>
+
+      <!-- Плитки статуса — N вне нормы / N в норме / N без нормы в бланке; те же счётчики, что
+           уже показывает чип списка (item.abnormalIndicatorCount и т.д.), просто крупнее и все
+           три сразу — раньше на открытой записи их не было вообще. -->
+      @if (only.kind === Kind.Analysis && only.indicatorCount > 0) {
+        <div class="record-status-tiles mb-3">
+          <div class="record-status-tile record-status-tile-bad">
+            <div class="record-status-tile-value">{{ only.abnormalIndicatorCount }}</div>
+            <div class="record-status-tile-label">вне нормы</div>
+          </div>
+          <div class="record-status-tile record-status-tile-ok">
+            <div class="record-status-tile-value">{{ only.normalIndicatorCount }}</div>
+            <div class="record-status-tile-label">в норме</div>
+          </div>
+          <div class="record-status-tile record-status-tile-none">
+            <div class="record-status-tile-value">{{ unknownIndicatorCount(only) }}</div>
+            <div class="record-status-tile-label">без нормы в бланке</div>
+          </div>
+        </div>
+      }
     }
 
     <!-- Редизайн v3 (PR7) — одноразовый баннер сразу после сохранения из record-add.component.ts:

@@ -28,6 +28,56 @@
   color: var(--color-accent);
 }
 
+// Мета-строка открытой записи (человек/дата/источник/доступ) — раньше не существовала вообще.
+.record-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--font-size-meta);
+  color: var(--color-neutral-700);
+}
+
+// Три плитки статуса (вне нормы/в норме/без нормы) — те же данные, что чип списка, но крупнее и
+// все три сразу; 22% color-mix — уже установленный в этом файле контраст для чипов (не проценты
+// референса).
+.record-status-tiles {
+  display: flex;
+  gap: 10px;
+}
+
+.record-status-tile {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+}
+
+.record-status-tile-value {
+  font-size: 1.1176rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.record-status-tile-label {
+  font-size: 0.7059rem;
+}
+
+.record-status-tile-bad {
+  background: color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));
+  color: var(--color-status-danger-text);
+}
+
+.record-status-tile-ok {
+  background: color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));
+  color: var(--color-status-ok-text);
+}
+
+.record-status-tile-none {
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-700);
+}
+
 // Редизайн v2 — группа = человек (аватар + имя + счётчик, шапка) и таймлайн записей внутри.
 .record-group-header {
   display: flex;

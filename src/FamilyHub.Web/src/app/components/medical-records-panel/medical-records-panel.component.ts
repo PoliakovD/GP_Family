@@ -522,6 +522,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return actions;
   }
 
+  /** Третья плитка статуса — «без нормы в бланке». abnormalIndicatorCount/normalIndicatorCount
+   * уже приходят с сервера (см. чип списка) — без нормы просто остаток, отдельно не считаем. */
+  unknownIndicatorCount(item: MedicalRecord): number {
+    return Math.max(0, item.indicatorCount - item.abnormalIndicatorCount - item.normalIndicatorCount);
+  }
+
   /** Редизайн v2.1 — «скан» переименовано в «файл»: вложение не обязательно скан (PDF, фото с
    * телефона), «скан» вводил в заблуждение. */
   attachmentCountLabel(item: MedicalRecord): string {
