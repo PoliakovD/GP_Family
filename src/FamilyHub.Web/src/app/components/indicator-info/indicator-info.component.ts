@@ -1,12 +1,16 @@
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import type { IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto } from '../../models/types';
+import { FormsModule } from '@angular/forms';
+import type {
+  IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto, PatientContextDto, UpdateIndicatorRequest,
+} from '../../models/types';
 import { Gender } from '../../models/types';
 import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { labPopulationLabel, shouldShowPopulationBadge } from '../../shared/util/lab-norm';
+import { pluralizeRu } from '../../shared/util/pluralize';
 
 /** Текущее значение показателя в контексте конкретной записи — есть только у первой из трёх
  * точек входа (клик по строке записи); у чипа «что смотрят вместе» и каталога reading=null. */
@@ -29,7 +33,7 @@ export interface IndicatorInfoReading {
 @Component({
   selector: 'app-indicator-info',
   standalone: true,
-  imports: [DatePipe, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
+  imports: [DatePipe, FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
   templateUrl: './indicator-info.component.html',
 })
 export class IndicatorInfoComponent {
@@ -38,6 +42,29 @@ export class IndicatorInfoComponent {
   readonly displayName = input<string>('');
   readonly reading = input<IndicatorInfoReading | null>(null);
   readonly history = input<IndicatorHistoryPoint[] | null>(null);
+  /** Редизайн v2.2 — GET /api/indicators/{id}/article уже отдаёт возраст/пол пациента на дату
+   * записи (см. PatientContextDto), раньше просто игнорировался (openIndicatorInfo не читал
+   * response.patient). displayName-имя пациента — отдельным входом, DTO его не содержит. */
+  readonly patient = input<PatientContextDto | null>(null);
+  readonly patientName = input<string>('');
+
+  /** Редизайн v2.2 — редактирование/удаление показателя переехали сюда из таблицы записи
+   * (medical-records-panel), где раньше жили карандаш/корзина в отдельной колонке + инлайн-форма
+   * в строке. Мутационная логика (startEditIndicator/saveEditIndicator/deleteIndicatorRow)
+   * остаётся у родителя — только у него есть recordId/refresh/confirm-диалог; сюда переехала
+   * только сама форма. canEdit=false у безличной статьи справочника (чип "что смотрят вместе",
+   * каталог /health/kb/indicators) — там нет ни indicatorId, ни recordId, редактировать нечего. */
+  readonly canEdit = input(false);
+  readonly editing = input(false);
+  /** Родительский объект передаётся по ссылке — [(ngModel)] на его полях мутирует его на месте
+   * (тот же приём, что раньше был у инлайн-формы прямо в таблице), поэтому saveEdit не должен
+   * нести значение формы отдельно. */
+  readonly editForm = input<UpdateIndicatorRequest | null>(null);
+  readonly saving = input(false);
+  readonly startEdit = output<void>();
+  readonly cancelEdit = output<void>();
+  readonly saveEdit = output<void>();
+  readonly requestDelete = output<void>();
 
   /** Клик по кликабельному чипу "что смотрят вместе" — id статьи, открыть её тем же путём. */
   readonly openRelated = output<string>();
@@ -75,7 +102,24 @@ export class IndicatorInfoComponent {
     return formatDeviation(r.valueNumeric, this.scaleLow(), this.scaleHigh());
   });
 
+  /** «Норма подобрана для Валерии: 28 лет, жен.» — рядом с текущим значением, только когда есть
+   * и возраст/пол пациента, и подобранный диапазон (иначе непонятно, к чему относится подпись). */
+  readonly patientContextLabel = computed(() => {
+    const p = this.patient();
+    if (!p || (p.ageYears === null && p.sex === null) || !this.matchedRange()) return null;
+    const parts: string[] = [];
+    if (p.ageYears !== null) parts.push(`${p.ageYears} ${pluralizeRu(p.ageYears, 'год', 'года', 'лет')}`);
+    if (p.sex !== null) parts.push(p.sex === Gender.Male ? 'муж.' : 'жен.');
+    return `Норма подобрана для ${this.patientName() || 'пациента'}: ${parts.join(', ')}`;
+  });
+
   readonly hasEnoughHistory = computed(() => (this.history()?.length ?? 0) >= 2);
+
+  /** Редизайн v2.2 — «Динамика» сворачивается по умолчанию и открывается кнопкой (см. шаблон),
+   * вместо того чтобы всегда показывать sparkline. history() уже строго по этому же пациенту
+   * (см. ExtractionQueryService.QueryVisibleHistoryAsync — фильтр по FamilyDependentId/
+   * TargetUserId) — кнопка только переключает видимость, новый запрос не заводит. */
+  readonly dynamicsOpen = signal(false);
 
   readonly sparklinePoints = computed<SparklinePoint[]>(() =>
     (this.history() ?? [])

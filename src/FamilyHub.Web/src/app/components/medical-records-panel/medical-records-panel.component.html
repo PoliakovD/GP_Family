@@ -82,58 +82,61 @@
        (детали всегда развёрнуты, «Открыть» не нужна). -->
   <ng-template #recordCard let-item let-singleMode="singleMode">
     <div class="card record-card flex-fill">
-      <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
-           (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
-           мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
-           и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
-      <div
-        class="record-card-row"
-        [class.clickable]="!singleMode"
-        (click)="onRecordCardClick(item, singleMode)"
-      >
-        <div class="record-card-main">
-          <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
+      <!-- Редизайн v2.2 — в singleMode заголовок+чипы+действия теперь рисует не эта строка, а
+           back-link/шапка вне ng-template (см. @if (recordId()) в шаблоне ниже) — своя мета-строка
+           (человек/дата/источник/доступ) и плитки статуса читаются лучше, чем чипы списка. Список
+           (не singleMode) — без изменений. -->
+      @if (!singleMode) {
+        <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
+             (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
+             мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
+             и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
+        <div
+          class="record-card-row clickable"
+          (click)="onRecordCardClick(item, singleMode)"
+        >
+          <div class="record-card-main">
+            <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
 
-          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
-               чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
-               подписью, а не чипом. -->
-          <div class="record-chips">
-            @if (item.attachmentCount > 0) {
-              <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
-            }
-            @if (item.indicatorCount > 0) {
-              <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
-            }
-            @if (item.abnormalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
-                <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
-              </span>
-            } @else if (item.normalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
-                <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
-              </span>
-            }
-            @if (item.doctor) {
-              <span class="tag tag-neutral">
-                <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
-              </span>
-            }
+            <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
+                 чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
+                 подписью, а не чипом. -->
+            <div class="record-chips">
+              @if (item.attachmentCount > 0) {
+                <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
+              }
+              @if (item.indicatorCount > 0) {
+                <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
+              }
+              @if (item.abnormalIndicatorCount > 0) {
+                <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
+                  <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
+                </span>
+              } @else if (item.normalIndicatorCount > 0) {
+                <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
+                  <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
+                </span>
+              }
+              @if (item.doctor) {
+                <span class="tag tag-neutral">
+                  <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
+                </span>
+              }
+            </div>
           </div>
-        </div>
 
-        @if (singleMode || isWide) {
-          <!-- stopPropagation — теперь вся строка тоже кликабельна (см. выше), без этого клик по
-               кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
-          <div class="record-card-actions" (click)="$event.stopPropagation()">
-            @if (!singleMode) {
+          @if (isWide) {
+            <!-- stopPropagation — строка тоже кликабельна (см. выше), без этого клик по
+                 кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
+            <div class="record-card-actions" (click)="$event.stopPropagation()">
               <button class="btn btn-secondary text-nowrap" (click)="onRecordCardClick(item, false)">
                 Открыть
               </button>
-            }
-            <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
-          </div>
-        }
-      </div>
+              <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
+            </div>
+          }
+        </div>
+      }
 
       @if (hasUnrecognizedAttachments(item)) {
         <button
@@ -206,14 +209,18 @@
           }
         }
 
-        <!-- Секция «Файлы» прямо в карточке (была модалка из меню «…» — недоступна на узком
-             экране в списке, см. shared/attachment-list). Владеет своим fetch — грузится ровно
-             тогда, когда карточка раскрыта, как и раньше при клике «Файлы». -->
-        <app-attachment-list [recordId]="item.id" (changed)="refresh()" />
+        <!-- Секция «Файлы» — редизайн v2.2: сворачивается по умолчанию, разворачивается кнопкой
+             «Файлы» в шапке (см. @if (recordId()) выше); shared/attachment-list владеет своим
+             fetch — грузится ровно тогда, когда открыта, а не всегда. -->
+        @if (filesOpen) {
+          <app-attachment-list [recordId]="item.id" (changed)="refresh()" />
+        }
 
         <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
-             читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
-        @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
+             читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). Редизайн
+             v2.2 — сама секция сворачивается по умолчанию (кнопка «Резюме» в шапке), заголовок с
+             «Составить/Пересчитать» остаётся якорем, тело — только когда summaryOpen. -->
+        @if (hasSummarySection(item)) {
           <div class="d-flex justify-content-between mt-2" style="align-items:center;">
             <div class="card-kicker mb-0">Резюме</div>
             <button type="button" class="btn-link" style="font-size:0.7059rem"
@@ -222,121 +229,119 @@
               {{ summaryRegeneratingRecordId === item.id ? 'Пересчитываем…' : (summaryByRecord[item.id] ? 'Пересчитать резюме' : 'Составить резюме') }}
             </button>
           </div>
-          @if (summaryByRecord[item.id]; as summary) {
-            @if (summary.plainSummary) {
-              <p class="mb-1">{{ summary.plainSummary }}</p>
+          @if (summaryOpen) {
+            @if (summaryByRecord[item.id]; as summary) {
+              @if (summary.plainSummary) {
+                <p class="mb-1">{{ summary.plainSummary }}</p>
+              }
+              @if (summary.deviations.length > 0) {
+                <ul class="mb-1" style="font-size:0.7647rem">
+                  @for (d of summary.deviations; track d.name) {
+                    <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                  }
+                </ul>
+              }
+              @if (summary.questionsForDoctor.length > 0) {
+                <div class="card-kicker mt-2">Вопросы врачу</div>
+                <ul class="mb-1" style="font-size:0.7647rem">
+                  @for (q of summary.questionsForDoctor; track q) {
+                    <li>{{ q }}</li>
+                  }
+                </ul>
+              }
+              <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
+            } @else {
+              <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
             }
-            @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:0.7647rem">
-                @for (d of summary.deviations; track d.name) {
-                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                }
-              </ul>
-            }
-            @if (summary.questionsForDoctor.length > 0) {
-              <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:0.7647rem">
-                @for (q of summary.questionsForDoctor; track q) {
-                  <li>{{ q }}</li>
-                }
-              </ul>
-            }
-            <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
-          } @else {
-            <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
+            <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
+                 а объяснить, что делать) — резюме строится по показателям на момент последнего
+                 распознавания/пересчёта и само не обновляется после ручной правки значения. -->
+            <p class="muted mb-0" style="font-size:0.6471rem">
+              Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
+              пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
+              нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
+            </p>
           }
-          <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
-               а объяснить, что делать) — резюме строится по показателям на момент последнего
-               распознавания/пересчёта и само не обновляется после ручной правки значения. -->
-          <p class="muted mb-0" style="font-size:0.6471rem">
-            Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
-            пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
-            нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
-          </p>
         }
 
         @if (item.kind === Kind.Analysis) {
         @if (indicatorsFor(item.id).length > 0) {
+        <!-- Редизайн v2.2 — сортировка + скрытие пустых строк (было — только исходный порядок
+             из бланка, без управления). -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'abnormal'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('abnormal')">Сначала отклонения</button>
+          <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'form'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('form')">Как в бланке</button>
+          <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'alpha'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('alpha')">По алфавиту</button>
+          @if (emptyIndicatorsFor(item.id).length > 0) {
+            <button type="button" class="btn-link" style="margin-left:auto;font-size:0.7647rem" (click)="toggleEmptyIndicators()">
+              <i [class]="hideEmptyIndicators ? 'ph ph-eye' : 'ph ph-eye-slash'" aria-hidden="true"></i>
+              {{ hideEmptyIndicators ? 'Показать' : 'Скрыть' }} пустые ({{ emptyIndicatorsFor(item.id).length }})
+            </button>
+          }
+        </div>
+
+        @if (isWide) {
         <div class="table-responsive">
           <table class="indicators-table">
             <thead>
               <tr>
                 <th>Показатель</th>
                 <th>Значение</th>
-                <th>Норма</th>
+                <th>Где в норме</th>
                 <th>Статус</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              @for (ind of indicatorsFor(item.id); track ind.id) {
-                @if (editingIndicatorId === ind.id) {
-                  <tr class="indicator-edit-row">
-                    <td colspan="5">
-                      <div class="d-flex flex-column gap-1">
-                        <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
-                        <div class="d-flex gap-1">
-                          <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                          <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
-                        </div>
-                        <div class="d-flex gap-1">
-                          <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                          <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
-                        </div>
-                        <input class="input" [ngModel]="editIndicatorForm.refText" (ngModelChange)="editIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
-                        <div class="d-flex gap-2">
-                          <button class="btn btn-primary btn-sm" [disabled]="savingIndicator" (click)="saveEditIndicator(item.id)">Сохранить</button>
-                          <button class="btn btn-ghost btn-sm" [disabled]="savingIndicator" (click)="cancelEditIndicator()">Отмена</button>
-                        </div>
+              @for (ind of visibleIndicatorsFor(item.id); track ind.id) {
+                <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
+                     шкала-референс / статус), клик по строке открывает панель справки.
+                     Редизайн v2.2 — правка/удаление переехали в панель справки (см.
+                     indicator-info.component), карандаш/корзина отсюда убраны; строка
+                     подсвечена по статусу (rowStatusClass). -->
+                <tr class="indicator-row" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
+                  <td>
+                    {{ shortIndicatorName(ind) }}
+                    @if (indicatorReference(ind); as ref) {
+                      <div class="muted" style="font-size:0.6471rem">
+                        {{ ref }}
+                        @if (isCalculatedRef(ind)) {
+                          <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
+                        }
                       </div>
-                    </td>
-                  </tr>
-                } @else {
-                  <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
-                       шкала-референс / статус), клик по строке открывает панель справки; правка
-                       и удаление — компактные иконки-аффордансы, не отдельные "колонки данных". -->
-                  <tr class="indicator-row" (click)="openIndicatorInfo(ind)">
-                    <td>
-                      {{ shortIndicatorName(ind) }}
-                      @if (indicatorReference(ind); as ref) {
-                        <div class="muted" style="font-size:0.6471rem">
-                          {{ ref }}
-                          @if (isCalculatedRef(ind)) {
-                            <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
-                          }
-                        </div>
+                    }
+                  </td>
+                  <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
+                    {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
+                  </td>
+                  <td>
+                    @if (scaleBounds(ind); as b) {
+                      <app-reference-scale
+                        [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
+                        [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                      />
+                      @if (deviationFor(ind, b); as d) {
+                        <div class="muted" style="font-size:0.6471rem">{{ d }}</div>
                       }
-                    </td>
-                    <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
-                      {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
-                    </td>
-                    <td>
-                      @if (scaleBounds(ind); as b) {
-                        <app-reference-scale
-                          [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-                          [unit]="ind.unit" [flag]="ind.flag" variant="mini"
-                        />
-                      } @else {
-                        <span class="muted" style="font-size:0.7059rem">—</span>
-                      }
-                    </td>
-                    <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
-                    <td class="indicator-actions-cell" (click)="$event.stopPropagation()">
-                      <span class="indicator-actions">
-                        <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
-                          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-                        </button>
-                        <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
-                          <i class="ph ph-trash" aria-hidden="true"></i>
-                        </button>
-                      </span>
-                    </td>
-                  </tr>
-                }
+                    } @else {
+                      <span class="muted" style="font-size:0.7059rem">—</span>
+                    }
+                  </td>
+                  <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
+                </tr>
+              }
+              @if (hideEmptyIndicators && emptyIndicatorsFor(item.id).length > 0) {
+                <tr>
+                  <td colspan="4" class="muted" style="font-size:0.8235rem">
+                    <i class="ph ph-eye-slash" aria-hidden="true"></i>
+                    {{ emptyIndicatorsFor(item.id).length }} {{ pluralizeRu(emptyIndicatorsFor(item.id).length, 'показатель', 'показателя', 'показателей') }}
+                    без значения или без нормы в бланке — {{ emptyIndicatorsSummary(item.id) }}
+                    <button type="button" class="btn-link" (click)="toggleEmptyIndicators()">Показать</button>
+                  </td>
+                </tr>
               }
               @if (creatingIndicatorRecordId === item.id) {
                 <tr class="indicator-edit-row">
-                  <td colspan="5">
+                  <td colspan="4">
                     <div class="d-flex flex-column gap-1">
                       <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
                       <div class="d-flex gap-1">
@@ -357,8 +362,10 @@
                 </tr>
               } @else {
                 <tr>
-                  <td colspan="5">
-                    <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+                  <td colspan="4">
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+                      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+                    </button>
                   </td>
                 </tr>
               }
@@ -366,7 +373,72 @@
           </table>
         </div>
         } @else {
-          <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+          <!-- Редизайн v2.2 — на узких экранах вместо таблицы компактные карточки: название +
+               значение, та же переработанная «полоска» (variant="mini") под ним, статус-чип.
+               Клик открывает тот же openIndicatorInfo(ind) — на этой ширине он уже сам уводит на
+               полноэкранный показатель (см. §9), не нижний лист. -->
+          <div class="d-flex flex-column gap-2 mb-2">
+            @for (ind of visibleIndicatorsFor(item.id); track ind.id) {
+              <button type="button" class="indicator-card" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
+                <div class="indicator-card-head">
+                  <div class="flex-fill" style="min-width:0">
+                    <div class="card-title" style="font-size:0.8824rem">{{ shortIndicatorName(ind) }}</div>
+                    @if (indicatorReference(ind); as ref) {
+                      <div class="muted" style="font-size:0.6471rem">{{ ref }}</div>
+                    }
+                  </div>
+                  <div [class]="flagClass(ind.flag)" style="flex:none;text-align:right;white-space:nowrap">
+                    {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
+                  </div>
+                </div>
+                @if (scaleBounds(ind); as b) {
+                  <app-reference-scale
+                    [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
+                    [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                  />
+                  @if (deviationFor(ind, b); as d) {
+                    <div class="muted" style="font-size:0.6471rem">{{ d }}</div>
+                  }
+                }
+                <app-status-chip [flag]="ind.flag" />
+              </button>
+            }
+            @if (hideEmptyIndicators && emptyIndicatorsFor(item.id).length > 0) {
+              <p class="muted mb-0" style="font-size:0.8235rem">
+                <i class="ph ph-eye-slash" aria-hidden="true"></i>
+                {{ emptyIndicatorsFor(item.id).length }} {{ pluralizeRu(emptyIndicatorsFor(item.id).length, 'показатель', 'показателя', 'показателей') }}
+                без значения или без нормы в бланке — {{ emptyIndicatorsSummary(item.id) }}
+                <button type="button" class="btn-link" (click)="toggleEmptyIndicators()">Показать</button>
+              </p>
+            }
+          </div>
+          @if (creatingIndicatorRecordId === item.id) {
+            <div class="d-flex flex-column gap-1 mb-2">
+              <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+              <div class="d-flex gap-1">
+                <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+              </div>
+              <div class="d-flex gap-1">
+                <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+              </div>
+              <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
+                <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
+              </div>
+            </div>
+          } @else {
+            <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+              <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+            </button>
+          }
+        }
+        } @else {
+          <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+            <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+          </button>
         }
         }
 
@@ -405,17 +477,98 @@
   </ng-template>
 
   @if (recordId()) {
+    @if (!isWide && infoOpen) {
+      <!-- Редизайн v2.2 — на мобиле показатель открывается ПОЛНОЭКРАННО (не нижним листом) —
+           заменяет содержимое записи целиком, а не накладывается на него. Своя back-link,
+           закрытие — на список показателей записи (не на список записей). URL уже синхронизирован
+           (?indicator=, см. openIndicatorInfo/closeIndicatorInfo) — общий топбар/шапка «Здоровье»
+           всё равно скрыты (immersive), лишней навигации тут не остаётся. -->
+      <div class="mb-3">
+        <app-back-link [label]="infoDisplayName || 'Показатель'" (activated)="closeIndicatorInfo()" />
+      </div>
+      <ng-container *ngTemplateOutlet="indicatorInfoBody" />
+    } @else {
     <!-- Редизайн v3/v2.1 — отдельный экран открытой записи, теперь на любой ширине (было —
          только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
-         списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». -->
-    <div class="d-flex align-items-center gap-2 mb-3">
-      <button type="button" class="btn-icon" (click)="goToList()" aria-label="Назад к списку">
-        <i class="ph ph-arrow-left" aria-hidden="true"></i>
-      </button>
-      @if (items[0]; as only) {
-        <div class="card-title" style="font-size:1.1176rem">{{ shortName(only) }}</div>
-      }
+         списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». Редизайн v2.2 —
+         «Назад» стилизована как ссылка (синяя стрелочка + название раздела), не голая иконка. -->
+    <div class="mb-3">
+      <app-back-link [label]="labels.title" (activated)="goToList()" />
     </div>
+    @if (items[0]; as only) {
+      <div class="card-title mb-2" style="font-size:1.1176rem">{{ shortName(only) }}</div>
+
+      <!-- Редизайн v2.2 — Редактировать/Доступ/Удалить видимыми кнопками (были только за «…»),
+           Файлы/Резюме тоже кнопками, сворачивают/разворачивают свои секции ниже. На мобиле —
+           тот же набор действий одним «…» (shared/action-menu уже умеет попап/шторку сам). -->
+      @if (isWide) {
+        <div class="record-detail-actions mb-3">
+          <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" (click)="toggleFiles()">
+            <i class="ph ph-paperclip" aria-hidden="true"></i> Файлы ({{ only.attachmentCount }})
+          </button>
+          @if (hasSummarySection(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" (click)="toggleSummary()">
+              <i class="ph ph-file-text" aria-hidden="true"></i> Резюме
+            </button>
+          }
+          @if (canDelete(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" (click)="openEditSheet(only)">
+              <i class="ph ph-pencil-simple" aria-hidden="true"></i> Редактировать
+            </button>
+          }
+          <button type="button" class="btn btn-secondary btn-sm" (click)="openAccessSheet(only)">
+            <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
+          </button>
+          @if (canDelete(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" style="color:var(--color-status-danger-text)" (click)="handleDelete(only)">
+              <i class="ph ph-trash" aria-hidden="true"></i> Удалить
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="mb-3">
+          <app-action-menu [actions]="detailActions(only)" label="Действия с записью" />
+        </div>
+      }
+
+      <!-- Редизайн v2.2 — мета-строка записи (человек/дата/источник/доступ) не существовала
+           вообще, заголовок был единственной информацией на экране открытой записи. -->
+      <div class="record-detail-meta mb-3">
+        <app-person-chip
+          [avatarPerson]="{key: personKey(only), firstName: personAvatarParts(only.personName).firstName, lastName: personAvatarParts(only.personName).lastName}"
+          [shortLabel]="shortenDisplayName(only.personName)"
+          [fullLabel]="only.personName"
+        />
+        <span>{{ formatDayMonthYear(only.recordDate) }}</span>
+        @if (only.kind === Kind.Analysis) {
+          <span>{{ specimenLabelFor(only) }}</span>
+        }
+        <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
+          <i class="ph-duotone ph-eye" aria-hidden="true"></i>
+          {{ groupAccessLabel({key: personKey(only), personName: only.personName, records: [only]}) }}
+        </span>
+      </div>
+
+      <!-- Плитки статуса — N вне нормы / N в норме / N без нормы в бланке; те же счётчики, что
+           уже показывает чип списка (item.abnormalIndicatorCount и т.д.), просто крупнее и все
+           три сразу — раньше на открытой записи их не было вообще. -->
+      @if (only.kind === Kind.Analysis && only.indicatorCount > 0) {
+        <div class="record-status-tiles mb-3">
+          <div class="record-status-tile record-status-tile-bad">
+            <div class="record-status-tile-value">{{ only.abnormalIndicatorCount }}</div>
+            <div class="record-status-tile-label">вне нормы</div>
+          </div>
+          <div class="record-status-tile record-status-tile-ok">
+            <div class="record-status-tile-value">{{ only.normalIndicatorCount }}</div>
+            <div class="record-status-tile-label">в норме</div>
+          </div>
+          <div class="record-status-tile record-status-tile-none">
+            <div class="record-status-tile-value">{{ unknownIndicatorCount(only) }}</div>
+            <div class="record-status-tile-label">без нормы в бланке</div>
+          </div>
+        </div>
+      }
+    }
 
     <!-- Редизайн v3 (PR7) — одноразовый баннер сразу после сохранения из record-add.component.ts:
          показатели ещё могут распознаваться (см. живой прогресс на карточке ниже). -->
@@ -432,6 +585,7 @@
       @if (items[0]; as only) {
         <ng-container *ngTemplateOutlet="recordCard; context: {$implicit: only, singleMode: true}" />
       }
+    }
     }
   } @else {
 
@@ -632,34 +786,38 @@
     }
   </app-bottom-sheet>
 
-  <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель; узкие экраны:
-       та же существующая шторка, что и остальные (тот же приём, что shared/action-menu). -->
+  <!-- Общее тело панели справки — вынесено в шаблон (редизайн v2.2), чтобы десктопная панель и
+       мобильная шторка не дублировали одинаковый набор пропсов на app-indicator-info по два раза
+       (раньше так и было — легко забыть один из двух при добавлении нового input/output). -->
+  <ng-template #indicatorInfoBody>
+    @if (infoLoading) {
+      <app-loading-spinner />
+    } @else if (infoError) {
+      <div class="alert-danger mb-0">{{ infoError }}</div>
+    } @else {
+      <app-indicator-info
+        [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
+        [patient]="infoPatient" [patientName]="items[0] ? shortenDisplayName(items[0].personName) : ''"
+        [canEdit]="!!infoIndicator" [editing]="editingIndicatorId === infoIndicatorId"
+        [editForm]="editIndicatorForm" [saving]="savingIndicator"
+        (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
+        (startEdit)="startEditIndicator(infoIndicator!)" (cancelEdit)="cancelEditIndicator()"
+        (saveEdit)="saveEditIndicator(infoIndicator!.medicalRecordId)"
+        (requestDelete)="deleteIndicatorRow(infoIndicator!.medicalRecordId, infoIndicator!)"
+      />
+    }
+  </ng-template>
+
+  <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель. Редизайн v2.2 —
+       на узких экранах справка больше не открывается нижним листом здесь: infoOpen возможен
+       только когда recordId() задан (единственные точки входа — клик по строке таблицы в
+       singleMode и чип "что смотрят вместе" внутри уже открытой справки), а для этого случая на
+       narrow теперь есть отдельный полноэкранный блок прямо в @if (recordId()) выше — второй
+       рендер тут был бы дублирующим нижним листом поверх уже полноэкранного показателя. -->
   @if (infoOpen && isWide) {
     <app-indicator-info-panel [title]="infoDisplayName || 'Показатель'" (closed)="closeIndicatorInfo()">
-      @if (infoLoading) {
-        <app-loading-spinner />
-      } @else if (infoError) {
-        <div class="alert-danger mb-0">{{ infoError }}</div>
-      } @else {
-        <app-indicator-info
-          [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
-          (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
-        />
-      }
+      <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     </app-indicator-info-panel>
-  } @else {
-    <app-bottom-sheet [title]="infoDisplayName || 'Показатель'" [open]="infoOpen" (closed)="closeIndicatorInfo()">
-      @if (infoLoading) {
-        <app-loading-spinner />
-      } @else if (infoError) {
-        <div class="alert-danger mb-0">{{ infoError }}</div>
-      } @else {
-        <app-indicator-info
-          [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
-          (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
-        />
-      }
-    </app-bottom-sheet>
   }
 
   <!-- Общий список подсказок для полей источника показателя (правка + создание) — подсказки

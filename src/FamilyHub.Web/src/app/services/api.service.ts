@@ -210,6 +210,10 @@ export class ApiService {
   // Аптечки
   getMedkits = (familyId: string) => this.get<Medkit[]>(`/api/families/${familyId}/medkits`);
 
+  /** Редизайн v2.2 — экран открытой аптечки (/health/medications/:id), по аналогии с
+   * getMedicalRecord для отдельной записи анализа. */
+  getMedkit = (id: string) => this.get<Medkit>(`/api/medkits/${id}`);
+
   createMedkit = (familyId: string, input: MedkitInput) =>
     this.post<Medkit>(`/api/families/${familyId}/medkits`, input);
 

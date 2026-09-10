@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
 using FluentAssertions;
 using Xunit;
@@ -69,5 +70,33 @@ public class MedkitsApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(
 
         var okDelete = await admin.DeleteAsync($"/api/medkits/{created.Id}");
         okDelete.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>Регресс-guard для MedkitService.GetByIdAsync — при чтении через
+    /// FirstOrDefaultAsync+ToDto (вместо инлайн-проекции) MedicationCount оставался бы 0 для
+    /// любой непустой аптечки, потому что Medications-навигация не подгружается без Include.</summary>
+    [Fact]
+    public async Task GetById_ReturnsMedkitWithMedicationCount_AndForbidsOutsider_AndUnknownId404()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        var created = await (await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits",
+            new CreateMedkitRequest("Аптечка"))).Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+        await admin.PostAsJsonAsync($"/api/medkits/{created!.Id}/medications",
+            new CreateMedicationRequest("Аспирин", null, null));
+
+        var ok = await admin.GetAsync($"/api/medkits/{created.Id}");
+        ok.StatusCode.Should().Be(HttpStatusCode.OK);
+        var dto = await ok.Content.ReadFromJsonAsync<MedkitDto>(JsonOpts);
+        dto!.Name.Should().Be("Аптечка");
+        dto.FamilyId.Should().Be(familyId);
+        dto.MedicationCount.Should().Be(1);
+
+        var outsider = ClientAs(FreshTelegramId());
+        var forbidden = await outsider.GetAsync($"/api/medkits/{created.Id}");
+        forbidden.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var notFound = await admin.GetAsync($"/api/medkits/{Guid.NewGuid()}");
+        notFound.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

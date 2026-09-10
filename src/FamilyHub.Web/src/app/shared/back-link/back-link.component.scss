@@ -1,0 +1,21 @@
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--font-size-meta);
+  color: var(--color-accent);
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  i {
+    font-size: 1.1em;
+  }
+}

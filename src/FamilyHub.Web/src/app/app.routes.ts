@@ -219,6 +219,17 @@ export const routes: Routes = [
           ),
       },
       {
+        // Экран открытой аптечки (редизайн v2.2) — та же пара, что records/records/:id: сосед
+        // 'medications', не потомок medications-tab (health-hub монтирует оба через свой
+        // router-outlet, см. health-hub.component.html). 'medications/new' сегодня не
+        // существует — конфликта порядка регистрации нет (см. комментарий у records/new ниже).
+        path: 'medications/:id',
+        loadComponent: () =>
+          import('./components/medkit-detail-page/medkit-detail-page.component').then(
+            (m) => m.MedkitDetailPageComponent,
+          ),
+      },
+      {
         path: 'records',
         loadComponent: () =>
           import('./components/medical-records-tab/medical-records-tab.component').then(
