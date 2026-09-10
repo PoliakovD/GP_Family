@@ -254,6 +254,34 @@
   }
 }
 
+// Редизайн v2.2 — компактная карточка показателя на узких экранах вместо строки таблицы (той же
+// нет смысла ужимать в table-responsive — четыре колонки на 390px нечитаемы). Подсветка по
+// статусу — те же классы, что у строки таблицы (rowStatusClass), только фон на весь блок, не td.
+.indicator-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+
+  &.indicator-row-ok { background: color-mix(in srgb, var(--color-status-ok) 7%, var(--color-paper)); }
+  &.indicator-row-bad { background: color-mix(in srgb, var(--color-status-danger) 7%, var(--color-paper)); }
+}
+
+.indicator-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
 // Бэйдж «рассчитано ИИ» (RefSource.KbCalculated) — норма посчитана локальной LLM по методике из
 // справочника под возраст/пол пациента, не фиксированный диапазон и не напечатана в бланке.
 .badge-ai {

@@ -280,6 +280,7 @@
           }
         </div>
 
+        @if (isWide) {
         <div class="table-responsive">
           <table class="indicators-table">
             <thead>
@@ -371,6 +372,69 @@
             </tbody>
           </table>
         </div>
+        } @else {
+          <!-- Редизайн v2.2 — на узких экранах вместо таблицы компактные карточки: название +
+               значение, та же переработанная «полоска» (variant="mini") под ним, статус-чип.
+               Клик открывает тот же openIndicatorInfo(ind) — на этой ширине он уже сам уводит на
+               полноэкранный показатель (см. §9), не нижний лист. -->
+          <div class="d-flex flex-column gap-2 mb-2">
+            @for (ind of visibleIndicatorsFor(item.id); track ind.id) {
+              <button type="button" class="indicator-card" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
+                <div class="indicator-card-head">
+                  <div class="flex-fill" style="min-width:0">
+                    <div class="card-title" style="font-size:0.8824rem">{{ shortIndicatorName(ind) }}</div>
+                    @if (indicatorReference(ind); as ref) {
+                      <div class="muted" style="font-size:0.6471rem">{{ ref }}</div>
+                    }
+                  </div>
+                  <div [class]="flagClass(ind.flag)" style="flex:none;text-align:right;white-space:nowrap">
+                    {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
+                  </div>
+                </div>
+                @if (scaleBounds(ind); as b) {
+                  <app-reference-scale
+                    [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
+                    [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                  />
+                  @if (deviationFor(ind, b); as d) {
+                    <div class="muted" style="font-size:0.6471rem">{{ d }}</div>
+                  }
+                }
+                <app-status-chip [flag]="ind.flag" />
+              </button>
+            }
+            @if (hideEmptyIndicators && emptyIndicatorsFor(item.id).length > 0) {
+              <p class="muted mb-0" style="font-size:0.8235rem">
+                <i class="ph ph-eye-slash" aria-hidden="true"></i>
+                {{ emptyIndicatorsFor(item.id).length }} {{ pluralizeRu(emptyIndicatorsFor(item.id).length, 'показатель', 'показателя', 'показателей') }}
+                без значения или без нормы в бланке — {{ emptyIndicatorsSummary(item.id) }}
+                <button type="button" class="btn-link" (click)="toggleEmptyIndicators()">Показать</button>
+              </p>
+            }
+          </div>
+          @if (creatingIndicatorRecordId === item.id) {
+            <div class="d-flex flex-column gap-1 mb-2">
+              <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+              <div class="d-flex gap-1">
+                <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+              </div>
+              <div class="d-flex gap-1">
+                <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+              </div>
+              <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
+                <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
+              </div>
+            </div>
+          } @else {
+            <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+              <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+            </button>
+          }
+        }
         } @else {
           <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
             <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
