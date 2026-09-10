@@ -711,33 +711,32 @@
     }
   </app-bottom-sheet>
 
+  <!-- Общее тело панели справки — вынесено в шаблон (редизайн v2.2), чтобы десктопная панель и
+       мобильная шторка не дублировали одинаковый набор пропсов на app-indicator-info по два раза
+       (раньше так и было — легко забыть один из двух при добавлении нового input/output). -->
+  <ng-template #indicatorInfoBody>
+    @if (infoLoading) {
+      <app-loading-spinner />
+    } @else if (infoError) {
+      <div class="alert-danger mb-0">{{ infoError }}</div>
+    } @else {
+      <app-indicator-info
+        [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
+        [patient]="infoPatient" [patientName]="items[0] ? shortenDisplayName(items[0].personName) : ''"
+        (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
+      />
+    }
+  </ng-template>
+
   <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель; узкие экраны:
        та же существующая шторка, что и остальные (тот же приём, что shared/action-menu). -->
   @if (infoOpen && isWide) {
     <app-indicator-info-panel [title]="infoDisplayName || 'Показатель'" (closed)="closeIndicatorInfo()">
-      @if (infoLoading) {
-        <app-loading-spinner />
-      } @else if (infoError) {
-        <div class="alert-danger mb-0">{{ infoError }}</div>
-      } @else {
-        <app-indicator-info
-          [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
-          (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
-        />
-      }
+      <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     </app-indicator-info-panel>
   } @else {
     <app-bottom-sheet [title]="infoDisplayName || 'Показатель'" [open]="infoOpen" (closed)="closeIndicatorInfo()">
-      @if (infoLoading) {
-        <app-loading-spinner />
-      } @else if (infoError) {
-        <div class="alert-danger mb-0">{{ infoError }}</div>
-      } @else {
-        <app-indicator-info
-          [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
-          (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
-        />
-      }
+      <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     </app-bottom-sheet>
   }
 

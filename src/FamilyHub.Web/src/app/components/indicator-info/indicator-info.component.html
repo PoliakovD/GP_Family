@@ -7,9 +7,11 @@
   </h4>
 
   @if (reading(); as r) {
+    <!-- Редизайн v2.2 — крупнее (было --font-size-record-title, 1.1176rem): текущее показание —
+         главное, на что смотрят, открыв справку. -->
     <div class="mb-2">
       <div class="d-flex align-items-center gap-2 mb-1">
-        <span style="font-size:var(--font-size-record-title);font-weight:600">
+        <span style="font-size:1.4118rem;font-weight:600">
           {{ r.valueRaw }}{{ r.unit ? ' ' + r.unit : '' }}
         </span>
         <app-status-chip [flag]="r.flag" />
@@ -19,6 +21,9 @@
         @if (deviationLabel(); as d) {
           <p class="muted mb-0" style="font-size:0.7647rem">{{ d }}</p>
         }
+      }
+      @if (patientContextLabel(); as pl) {
+        <p class="muted mb-0" style="font-size:0.7059rem">{{ pl }}</p>
       }
     </div>
   }
@@ -96,9 +101,18 @@
 
   @if (hasEnoughHistory() || (reading() && article())) {
     <div class="mt-2">
+      <!-- Редизайн v2.2 — «Динамика» сворачивается по умолчанию, разворачивается этой кнопкой
+           (было — sparkline всегда виден, если хватало точек). История уже строго по этому же
+           пациенту (см. докстринг dynamicsOpen выше) — кнопка только показывает/прячет её. -->
       @if (hasEnoughHistory()) {
-        <div class="card-kicker mb-1">Динамика</div>
-        <app-sparkline [points]="sparklinePoints()" />
+        <button type="button" class="btn btn-secondary btn-sm" [class.active]="dynamicsOpen()" (click)="dynamicsOpen.set(!dynamicsOpen())">
+          <i class="ph ph-chart-line" aria-hidden="true"></i> Динамика
+        </button>
+        @if (dynamicsOpen()) {
+          <div class="mt-2">
+            <app-sparkline [points]="sparklinePoints()" />
+          </div>
+        }
       }
       @if (reading() && article()) {
         <button type="button" class="btn-link mt-1" (click)="openInCatalog.emit()">Открыть в справочнике</button>

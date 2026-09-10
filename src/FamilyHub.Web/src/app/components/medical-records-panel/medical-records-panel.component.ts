@@ -19,6 +19,7 @@ import type {
   KbMedicationCard,
   MedicalRecord,
   MedicalRecordFilter,
+  PatientContextDto,
   RecordSummaryResponse,
   UpdateIndicatorRequest,
   UpdateMedicalRecordRequest,
@@ -1222,6 +1223,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   infoDisplayName = '';
   infoReading: IndicatorInfoReading | null = null;
   infoHistory: IndicatorHistoryPoint[] | null = null;
+  /** Редизайн v2.2 — возраст/пол пациента на дату записи, GET /api/indicators/{id}/article уже
+   * отдаёт (response.patient), раньше просто игнорировался. */
+  infoPatient: PatientContextDto | null = null;
   /** Id показателя, чья статья сейчас открыта reading-веткой — null, когда панель открыта чипом
    * "что смотрят вместе" (там нет конкретного показателя записи). Только для closeIndicatorInfo
    * при удалении строки — не путать с infoCard.id (это id статьи справочника, другое значение). */
@@ -1233,6 +1237,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.infoError = null;
     this.infoCard = null;
     this.infoHistory = null;
+    this.infoPatient = null;
     this.infoIndicatorId = indicator.id;
     this.infoDisplayName = this.shortIndicatorName(indicator);
     this.infoReading = {
@@ -1245,6 +1250,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     try {
       const response = await this.api.getIndicatorArticle(indicator.id);
       this.infoCard = response.article;
+      this.infoPatient = response.patient;
       this.infoReading = { ...this.infoReading, matchedRefRangeIndex: response.matchedRefRangeIndex };
       if (response.historyAvailable) {
         this.infoHistory = await this.api.getRecordIndicatorHistory(indicator.medicalRecordId, indicator.id);
@@ -1265,6 +1271,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.infoCard = null;
     this.infoReading = null;
     this.infoHistory = null;
+    this.infoPatient = null;
     this.infoDisplayName = '';
     this.infoIndicatorId = null;
     try {
