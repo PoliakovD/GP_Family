@@ -1,6 +1,9 @@
 import { Component, computed, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import type { IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto, PatientContextDto } from '../../models/types';
+import { FormsModule } from '@angular/forms';
+import type {
+  IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto, PatientContextDto, UpdateIndicatorRequest,
+} from '../../models/types';
 import { Gender } from '../../models/types';
 import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
@@ -30,7 +33,7 @@ export interface IndicatorInfoReading {
 @Component({
   selector: 'app-indicator-info',
   standalone: true,
-  imports: [DatePipe, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
+  imports: [DatePipe, FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
   templateUrl: './indicator-info.component.html',
 })
 export class IndicatorInfoComponent {
@@ -44,6 +47,24 @@ export class IndicatorInfoComponent {
    * response.patient). displayName-имя пациента — отдельным входом, DTO его не содержит. */
   readonly patient = input<PatientContextDto | null>(null);
   readonly patientName = input<string>('');
+
+  /** Редизайн v2.2 — редактирование/удаление показателя переехали сюда из таблицы записи
+   * (medical-records-panel), где раньше жили карандаш/корзина в отдельной колонке + инлайн-форма
+   * в строке. Мутационная логика (startEditIndicator/saveEditIndicator/deleteIndicatorRow)
+   * остаётся у родителя — только у него есть recordId/refresh/confirm-диалог; сюда переехала
+   * только сама форма. canEdit=false у безличной статьи справочника (чип "что смотрят вместе",
+   * каталог /health/kb/indicators) — там нет ни indicatorId, ни recordId, редактировать нечего. */
+  readonly canEdit = input(false);
+  readonly editing = input(false);
+  /** Родительский объект передаётся по ссылке — [(ngModel)] на его полях мутирует его на месте
+   * (тот же приём, что раньше был у инлайн-формы прямо в таблице), поэтому saveEdit не должен
+   * нести значение формы отдельно. */
+  readonly editForm = input<UpdateIndicatorRequest | null>(null);
+  readonly saving = input(false);
+  readonly startEdit = output<void>();
+  readonly cancelEdit = output<void>();
+  readonly saveEdit = output<void>();
+  readonly requestDelete = output<void>();
 
   /** Клик по кликабельному чипу "что смотрят вместе" — id статьи, открыть её тем же путём. */
   readonly openRelated = output<string>();

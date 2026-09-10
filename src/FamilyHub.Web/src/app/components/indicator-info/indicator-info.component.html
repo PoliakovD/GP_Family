@@ -28,6 +28,39 @@
     </div>
   }
 
+  <!-- Редизайн v2.2 — Редактировать/Удалить самого показателя переехали сюда из таблицы записи
+       (были карандаш/корзина в отдельной колонке). Видны только когда есть конкретный показатель
+       записи (canEdit) — у безличной статьи справочника (чип "что смотрят вместе", каталог)
+       редактировать нечего. -->
+  @if (canEdit() && !editing()) {
+    <div class="d-flex gap-1 mb-2">
+      <button type="button" class="btn btn-ghost btn-sm" title="Исправить" (click)="startEdit.emit()">
+        <i class="ph ph-pencil-simple" aria-hidden="true"></i> Исправить
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" title="Удалить" (click)="requestDelete.emit()">
+        <i class="ph ph-trash" aria-hidden="true"></i> Удалить
+      </button>
+    </div>
+  }
+  @if (editing() && editForm(); as f) {
+    <div class="d-flex flex-column gap-1 mb-2">
+      <input class="input" [(ngModel)]="f.displayName" placeholder="Название показателя" />
+      <div class="d-flex gap-1">
+        <input class="input" [ngModel]="f.valueRaw" (ngModelChange)="f.valueRaw = $event" placeholder="Значение" style="flex:1" />
+        <input class="input" [ngModel]="f.unit" (ngModelChange)="f.unit = $event" placeholder="Единица" style="flex:1" />
+      </div>
+      <div class="d-flex gap-1">
+        <input class="input" [ngModel]="f.refLowText" (ngModelChange)="f.refLowText = $event" placeholder="Норма от" style="flex:1" />
+        <input class="input" [ngModel]="f.refHighText" (ngModelChange)="f.refHighText = $event" placeholder="Норма до" style="flex:1" />
+      </div>
+      <input class="input" [ngModel]="f.refText" (ngModelChange)="f.refText = $event" placeholder="Норма текстом (если не число)" />
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary btn-sm" [disabled]="saving()" (click)="saveEdit.emit()">Сохранить</button>
+        <button type="button" class="btn btn-ghost btn-sm" [disabled]="saving()" (click)="cancelEdit.emit()">Отмена</button>
+      </div>
+    </div>
+  }
+
   @if (article(); as a) {
     @if (a.plainExplanation) {
       <div class="card-kicker mt-2">Что это</div>

@@ -993,13 +993,19 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   async saveEditIndicator(recordId: string): Promise<void> {
     if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
+    const savedId = this.editingIndicatorId;
     this.savingIndicator = true;
     try {
-      await this.api.updateIndicator(this.editingIndicatorId, sanitizeIndicatorForm(this.editIndicatorForm));
+      await this.api.updateIndicator(savedId, sanitizeIndicatorForm(this.editIndicatorForm));
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.cancelEditIndicator();
       this.error = null;
+      // Редизайн v2.2 — редактирование теперь открывается прямо из панели справки (не из
+      // таблицы): если правили именно тот показатель, чья статья сейчас открыта, панель должна
+      // сразу показать новое значение/статус/шкалу, а не то, что было до правки.
+      const updated = indicators.find((i) => i.id === savedId);
+      if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
     } finally {
@@ -1227,9 +1233,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * отдаёт (response.patient), раньше просто игнорировался. */
   infoPatient: PatientContextDto | null = null;
   /** Id показателя, чья статья сейчас открыта reading-веткой — null, когда панель открыта чипом
-   * "что смотрят вместе" (там нет конкретного показателя записи). Только для closeIndicatorInfo
-   * при удалении строки — не путать с infoCard.id (это id статьи справочника, другое значение). */
-  private infoIndicatorId: string | null = null;
+   * "что смотрят вместе" (там нет конкретного показателя записи). Не путать с infoCard.id (это
+   * id статьи справочника, другое значение). Не private — редизайн v2.2, шаблону нужен для
+   * editing="editingIndicatorId === infoIndicatorId". */
+  infoIndicatorId: string | null = null;
+  /** Редизайн v2.2 — сам показатель (не только id), чтобы Редактировать/Удалить в панели справки
+   * могли вызвать startEditIndicator/deleteIndicatorRow, которые принимают IndicatorDto целиком. */
+  infoIndicator: IndicatorDto | null = null;
 
   async openIndicatorInfo(indicator: IndicatorDto): Promise<void> {
     this.infoOpen = true;
@@ -1239,6 +1249,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.infoHistory = null;
     this.infoPatient = null;
     this.infoIndicatorId = indicator.id;
+    this.infoIndicator = indicator;
     this.infoDisplayName = this.shortIndicatorName(indicator);
     this.infoReading = {
       valueRaw: indicator.valueRaw,
@@ -1274,6 +1285,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.infoPatient = null;
     this.infoDisplayName = '';
     this.infoIndicatorId = null;
+    this.infoIndicator = null;
     try {
       this.infoCard = await this.api.getKbAnalyte(kbAnalyteId);
     } catch (err) {
@@ -1286,6 +1298,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   closeIndicatorInfo(): void {
     this.infoOpen = false;
     this.infoIndicatorId = null;
+    this.infoIndicator = null;
+    this.cancelEditIndicator();
   }
 
   /** Футер "Открыть в справочнике" — уходит на мини-хаб /health/kb/indicators с ?id=, тот же

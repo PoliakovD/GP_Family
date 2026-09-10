@@ -723,7 +723,12 @@
       <app-indicator-info
         [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
         [patient]="infoPatient" [patientName]="items[0] ? shortenDisplayName(items[0].personName) : ''"
+        [canEdit]="!!infoIndicator" [editing]="editingIndicatorId === infoIndicatorId"
+        [editForm]="editIndicatorForm" [saving]="savingIndicator"
         (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
+        (startEdit)="startEditIndicator(infoIndicator!)" (cancelEdit)="cancelEditIndicator()"
+        (saveEdit)="saveEditIndicator(infoIndicator!.medicalRecordId)"
+        (requestDelete)="deleteIndicatorRow(infoIndicator!.medicalRecordId, infoIndicator!)"
       />
     }
   </ng-template>
