@@ -34,6 +34,9 @@ public class MedicationEnrichmentJob
 
     public string? Error { get; set; }
 
+    /// <summary>См. LabAnalyteEnrichmentJob.FailureReason — та же машиночитаемая классификация.</summary>
+    public EnrichmentFailureReason? FailureReason { get; set; }
+
     /// <summary>См. MedicalDocumentExtractionJob.IsTransientFailure — тот же смысл, тот же
     /// потребитель (LmStudioRecoverySweepJob).</summary>
     public bool IsTransientFailure { get; set; }

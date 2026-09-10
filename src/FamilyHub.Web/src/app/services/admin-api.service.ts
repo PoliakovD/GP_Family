@@ -118,7 +118,13 @@ export interface AdminMedicationDetail {
   aliases: string[]; lockedFields: string[]; payloadVersion: number; createdAt: string; updatedAt: string;
 }
 
-export interface AdminKbEditRequest { displayName?: string | null; payloadJson?: string | null; aliases?: string[] | null; }
+/** lockedPayloadKeys — режим формы (§4/§10 плана): если задан вместе с payloadJson, лочатся
+ * отдельные "payload.<key>" (реально изменённые поля формы), а не весь "payload" целиком, как при
+ * отсутствии этого поля (режим сырого JSON). */
+export interface AdminKbEditRequest {
+  displayName?: string | null; payloadJson?: string | null; aliases?: string[] | null;
+  lockedPayloadKeys?: string[] | null;
+}
 
 export interface GlobalSpecimen { id: string; displayName: string; }
 
@@ -126,11 +132,49 @@ export interface DryRunResponse { success: boolean; error: string | null; payloa
 
 export type PipelineJobType = 'lab-analyte' | 'medication' | 'visit-medication' | 'extraction';
 
+/** См. FamilyHub.Domain.Enums.EnrichmentFailureReason — строкой (как Status), не числом (тот же
+ * приём, что PipelineJob.status). null — задача ни разу не падала. */
+export type EnrichmentFailureReasonValue =
+  | 'Legitimacy' | 'Plausibility' | 'NoTrustedSnippets' | 'NoSourcesCited' | 'SummarizerFailed'
+  | 'IsolationViolation' | 'LmStudioUnavailable' | 'ProviderFailed' | 'Unknown';
+
 export interface PipelineJob {
   id: string; type: PipelineJobType; displayName: string; status: string; attempts: number;
   error: string | null; createdAt: string; startedAt: string | null; completedAt: string | null;
+  failureReason: EnrichmentFailureReasonValue | null;
 }
 export interface PipelineJobListResponse { rows: PipelineJob[]; total: number; }
+
+/** Карточка одной задачи для боковой панели — то же, что PipelineJob, плюс всё нужное, чтобы
+ * разобрать и починить отказ, не переходя на другую вкладку (см. план, Context). Поля-специфика
+ * lab-analyte (specimenKbId/specimenDisplayName/origin/force) — null/false для остальных типов;
+ * searchCache — null, пока по этому имени не было ни одного платного поиска, либо для extraction
+ * (у него нет понятия сниппетов). */
+export interface PipelineJobDetail {
+  id: string; type: PipelineJobType; displayName: string; status: string; attempts: number;
+  error: string | null; failureReason: EnrichmentFailureReasonValue | null;
+  createdAt: string; startedAt: string | null; completedAt: string | null;
+  normalizedName: string | null; specimenKbId: string | null; specimenDisplayName: string | null;
+  origin: string | null; force: boolean; provider: string | null; externalSearchAt: string | null;
+  isTransientFailure: boolean; kbId: string | null;
+  searchCache: SearchCacheDetail | null; trustedDomains: TrustedDomain[];
+}
+
+export interface SnippetOverrideItem { url: string; enabled: boolean | null; }
+
+/** «Применить и перезапустить» из карточки задачи — оба поля необязательны и независимы. */
+export interface ResolveAndRetryRequest { overrides?: SnippetOverrideItem[]; trustDomains?: string[]; }
+
+export interface BulkRetryResponse { retriedCount: number; notFoundIds: string[]; }
+
+/** Один пункт инбокса «Требует внимания» — агрегат причин отказа по всем четырём конвейерам. */
+export interface AttentionReason {
+  reason: EnrichmentFailureReasonValue | 'Unclassified'; label: string; count: number;
+  byType: Record<string, number>;
+}
+export interface DroppedDomain { domain: string; topic: string; jobCount: number; sampleUrl: string; }
+export interface AdminAttention { reasons: AttentionReason[]; droppedDomains: DroppedDomain[]; }
+export interface TrustAndRetryResponse { retriedCount: number; }
 
 /** activeModel=null означает, что в БД ничего не выбрано и клиент шлёт fallbackModel
  * (LmStudioOptions.Model, appsettings/env) — см. ILmStudioModelProvider на бэкенде. */
@@ -269,14 +313,31 @@ export class AdminApiService {
 
   setLmStudioModel = (modelId: string | null) => this.put<void>('/api/admin/lmstudio/model', { modelId });
 
-  getPipelineJobs = (type: PipelineJobType, status: string | null, skip: number, take: number) =>
+  getPipelineJobs = (type: PipelineJobType, status: string | null, skip: number, take: number, reason: string | null = null) =>
     this.get<PipelineJobListResponse>(
-      `/api/admin/pipeline/jobs?type=${type}${status ? `&status=${status}` : ''}&skip=${skip}&take=${take}`);
+      `/api/admin/pipeline/jobs?type=${type}${status ? `&status=${status}` : ''}${reason ? `&reason=${reason}` : ''}&skip=${skip}&take=${take}`);
+
+  getPipelineJobDetail = (id: string, type: PipelineJobType) =>
+    this.get<PipelineJobDetail>(`/api/admin/pipeline/jobs/${id}?type=${type}`);
 
   retryPipelineJob = (id: string, type: PipelineJobType) =>
     this.post<void>(`/api/admin/pipeline/jobs/${id}/retry?type=${type}`);
 
+  /** «Применить и перезапустить» из карточки задачи — доверяет домены/override'ы конкретных URL
+   * и перезапускает одним запросом, без перехода на вкладку «Обогащение» и обратно. */
+  resolveAndRetryJob = (id: string, type: PipelineJobType, request: ResolveAndRetryRequest) =>
+    this.post<void>(`/api/admin/pipeline/jobs/${id}/resolve-and-retry?type=${type}`, request);
+
+  bulkRetryJobs = (type: PipelineJobType, ids: string[]) =>
+    this.post<BulkRetryResponse>('/api/admin/pipeline/jobs/bulk-retry', { type, ids });
+
   reenrichLabAnalyte = (id: string) => this.post<void>(`/api/admin/pipeline/kb/lab-analytes/${id}/reenrich`);
+
+  // Инбокс «Требует внимания» — точка входа админки в разбор падений конвейера (см. план, Context).
+  getAttention = () => this.get<AdminAttention>('/api/admin/pipeline/attention');
+
+  trustDomainsAndRetry = (topic: WebSearchTopicValue, domains: string[]) =>
+    this.post<TrustAndRetryResponse>('/api/admin/pipeline/attention/trust-and-retry', { topic, domains });
 
   // Ручная правка справочников после ИИ (§3 плана) — показатели, медикаменты, источники.
   searchLabAnalytes = (q: string, skip: number, take: number) =>

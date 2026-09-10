@@ -1,0 +1,101 @@
+@if (loading()) {
+  <p class="text-muted">Загрузка…</p>
+} @else if (detail()) {
+  @let d = detail()!;
+  <div class="mb-3">
+    <div class="d-flex gap-2 mb-1" style="align-items: center; flex-wrap: wrap;">
+      <span class="tag" [class.tag-accent-2]="d.status === 'Failed'" [class.tag-accent]="d.status === 'Completed'">
+        {{ d.status }}
+      </span>
+      <strong>{{ d.displayName }}</strong>
+    </div>
+    @if (d.normalizedName) {
+      <p class="text-muted mb-1">
+        {{ d.normalizedName }}
+        @if (d.specimenDisplayName) { · {{ d.specimenDisplayName }} }
+      </p>
+    }
+    <p class="text-muted mb-0">
+      Попыток: {{ d.attempts }} · создана {{ d.createdAt | date: 'dd.MM.yyyy HH:mm' }}
+      @if (d.completedAt) { · завершена {{ d.completedAt | date: 'dd.MM.yyyy HH:mm' }} }
+    </p>
+    @if (d.provider) {
+      <p class="text-muted mb-0">Провайдер: {{ d.provider }}</p>
+    }
+    @if (d.kbId) {
+      <p class="text-muted mb-0">Уже в справочнике (id {{ d.kbId }}).</p>
+    }
+  </div>
+
+  @if (d.status === 'Failed') {
+    <div class="alert-danger mb-3">
+      <strong>{{ reasonLabel(d.failureReason) ?? 'Причина не определена' }}</strong>
+      @if (d.error) {
+        <p class="mb-0" style="white-space: pre-wrap;">{{ d.error }}</p>
+      }
+    </div>
+  }
+
+  @if (d.searchCache) {
+    @let cache = d.searchCache;
+    <div class="card-title" style="font-size: 0.8235rem;">
+      Сниппеты из кэша ({{ cache.snippets.length }})
+    </div>
+    <p class="text-muted mb-2">
+      Найдено поиском {{ cache.lastUpdatedAt | date: 'dd.MM.yyyy' }} — то, что реально уйдёт
+      суммаризатору при следующем прогоне с текущими настройками (плюс черновик ниже, ещё не применённый).
+    </p>
+
+    <table class="table mb-3">
+      <thead><tr><th></th><th>Домен</th><th>Заголовок</th><th></th></tr></thead>
+      <tbody>
+        @for (s of cache.snippets; track s.url) {
+          <tr [class.text-muted]="!effectiveEnabled(s)">
+            <td>
+              <input type="checkbox" [checked]="effectiveEnabled(s)" (change)="cycleOverride(s)" />
+            </td>
+            <td>
+              {{ s.domain ?? '—' }}
+              @if (overrideDraftFor(s.url) !== undefined) {
+                <span class="tag tag-accent-2">черновик</span>
+              } @else if (s.override !== null) {
+                <span class="tag tag-neutral">override={{ s.override ? 'вкл' : 'выкл' }}</span>
+              } @else if (s.isTrustedByDomain) {
+                <span class="tag tag-accent">доверен</span>
+              }
+            </td>
+            <td class="text-muted">
+              <a [href]="s.url" target="_blank" rel="noopener noreferrer">{{ s.title || s.url }}</a>
+            </td>
+            <td>
+              @if (!s.isTrustedByDomain && s.domain) {
+                <button type="button" class="btn btn-secondary btn-sm"
+                        [class.btn-primary]="trustDraft().has(s.domain)"
+                        (click)="toggleTrustDomain(s.domain)">
+                  ✚ доверить домен
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" class="text-muted">Сниппетов нет.</td></tr>
+        }
+      </tbody>
+    </table>
+  } @else if (d.type !== 'extraction') {
+    <p class="text-muted mb-3">По этому названию ещё не было ни одного платного поиска.</p>
+  }
+
+  <div class="d-flex gap-2" style="flex-wrap: wrap;">
+    @if (d.searchCache) {
+      <button type="button" class="btn btn-primary btn-sm" [disabled]="busy() || !hasDraftChanges" (click)="applyAndRetry()">
+        Применить и перезапустить
+      </button>
+    }
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="retryOnly()">
+      Просто перезапустить
+    </button>
+  </div>
+} @else {
+  <p class="text-muted">Задача не найдена.</p>
+}

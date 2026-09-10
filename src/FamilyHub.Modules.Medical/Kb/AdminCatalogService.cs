@@ -60,7 +60,7 @@ public class AdminCatalogService(AppDbContext db)
 
         var lockedFields = existing.LockedFields.ToHashSet();
         if (request.DisplayName is not null) lockedFields.Add("displayName");
-        if (request.PayloadJson is not null) lockedFields.Add("payload");
+        if (request.PayloadJson is not null) ApplyPayloadLock(lockedFields, request.LockedPayloadKeys);
         if (request.Aliases is not null) lockedFields.Add("aliases");
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -179,7 +179,7 @@ public class AdminCatalogService(AppDbContext db)
 
         var lockedFields = existing.LockedFields.ToHashSet();
         if (request.DisplayName is not null) lockedFields.Add("displayName");
-        if (request.PayloadJson is not null) lockedFields.Add("payload");
+        if (request.PayloadJson is not null) ApplyPayloadLock(lockedFields, request.LockedPayloadKeys);
         if (request.Aliases is not null) lockedFields.Add("aliases");
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -248,6 +248,22 @@ public class AdminCatalogService(AppDbContext db)
                     break;
             }
         }
+    }
+
+    /// <summary>Режим формы (LockedPayloadKeys задан) лочит "payload.&lt;key&gt;" по каждому
+    /// реально изменённому полю формы; режим JSON (null) лочит "payload" целиком — прежнее
+    /// поведение сырого редактора. Если строка уже несёт лок на весь "payload", точечные локи
+    /// избыточны поверх уже более широкого — не добавляем их.</summary>
+    private static void ApplyPayloadLock(HashSet<string> lockedFields, IReadOnlyList<string>? lockedPayloadKeys)
+    {
+        if (lockedPayloadKeys is null)
+        {
+            lockedFields.Add("payload");
+            return;
+        }
+        if (lockedFields.Contains("payload")) return;
+        foreach (var key in lockedPayloadKeys)
+            if (key.Length > 0) lockedFields.Add($"payload.{key}");
     }
 
     private static bool IsValidJson(string json)

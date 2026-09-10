@@ -19,6 +19,7 @@ export class AdminHubComponent {
   private readonly router = inject(Router);
 
   readonly sections: { path: string; label: string }[] = [
+    { path: 'attention', label: 'Требует внимания' },
     { path: 'overview', label: 'Обзор' },
     { path: 'storage', label: 'Хранилище' },
     { path: 'system', label: 'Система' },

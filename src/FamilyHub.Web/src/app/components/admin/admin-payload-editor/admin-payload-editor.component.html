@@ -1,0 +1,154 @@
+<div class="d-flex justify-content-between mb-2" style="align-items: center; flex-wrap: wrap; gap: 8px;">
+  <div class="seg">
+    <button type="button" class="seg-opt" [class.active]="mode() === 'form'" (click)="setMode('form')">Форма</button>
+    <button type="button" class="seg-opt" [class.active]="mode() === 'json'" (click)="setMode('json')">JSON</button>
+  </div>
+  @if (unknownKeyCount > 0) {
+    <span class="tag tag-neutral">{{ unknownKeyCount }} неизвестных ключа сохранятся как есть</span>
+  }
+</div>
+
+@if (mode() === 'form') {
+  @if (schema === 'lab-analyte') {
+    <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
+      <div class="flex-fill">
+        <label class="form-label">LOINC</label>
+        <input class="input" style="width: 100%;" [ngModel]="loincCode()" (ngModelChange)="loincCode.set($event); markChanged('loincCode')" />
+      </div>
+      <div class="flex-fill">
+        <label class="form-label">Единица по умолчанию</label>
+        <input class="input" style="width: 100%;" [ngModel]="defaultUnit()" (ngModelChange)="defaultUnit.set($event); markChanged('defaultUnit')" />
+      </div>
+    </div>
+
+    <label class="form-label">Простыми словами</label>
+    <textarea class="input mb-2" rows="2" style="width: 100%;"
+              [ngModel]="plainExplanation()" (ngModelChange)="plainExplanation.set($event); markChanged('plainExplanation')"></textarea>
+
+    <label class="form-label">Зачем измеряют</label>
+    <textarea class="input mb-2" rows="2" style="width: 100%;"
+              [ngModel]="whyMeasured()" (ngModelChange)="whyMeasured.set($event); markChanged('whyMeasured')"></textarea>
+
+    <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
+      <div class="flex-fill">
+        <label class="form-label">Что значит высокое</label>
+        <textarea class="input" rows="2" style="width: 100%;"
+                  [ngModel]="highMeans()" (ngModelChange)="highMeans.set($event); markChanged('highMeans')"></textarea>
+      </div>
+      <div class="flex-fill">
+        <label class="form-label">Что значит низкое</label>
+        <textarea class="input" rows="2" style="width: 100%;"
+                  [ngModel]="lowMeans()" (ngModelChange)="lowMeans.set($event); markChanged('lowMeans')"></textarea>
+      </div>
+    </div>
+
+    <label class="form-label">Методика расчёта (если норма не фиксированная)</label>
+    <textarea class="input mb-2" rows="2" style="width: 100%;"
+              [ngModel]="calculationInstructions()" (ngModelChange)="calculationInstructions.set($event); markChanged('calculationInstructions')"></textarea>
+
+    <label class="form-label">Что смотрят вместе (через запятую)</label>
+    <input class="input mb-3" style="width: 100%;"
+           [ngModel]="relatedNames()" (ngModelChange)="relatedNames.set($event); markChanged('relatedNames')" />
+
+    <div class="d-flex justify-content-between mb-2" style="align-items: center;">
+      <div class="card-title" style="font-size: 0.8235rem;">Референсные диапазоны</div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="addRefRange()">+ Диапазон</button>
+    </div>
+    <div class="table-responsive mb-3">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>возр. от</th><th>возр. до</th><th>пол</th><th>low</th><th>high</th><th>ед.</th>
+            <th>вид</th><th>популяция</th><th>уточнение</th><th>источник</th><th>приоритет</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of refRanges(); track $index) {
+            <tr>
+              <td><input class="input" type="number" style="width: 64px;" [ngModel]="r.ageFrom" (ngModelChange)="updateRefRange($index, 'ageFrom', $event)" /></td>
+              <td><input class="input" type="number" style="width: 64px;" [ngModel]="r.ageTo" (ngModelChange)="updateRefRange($index, 'ageTo', $event)" /></td>
+              <td>
+                <select class="input" [ngModel]="r.sex" (ngModelChange)="updateRefRange($index, 'sex', $event)">
+                  <option value="">—</option>
+                  <option value="male">муж</option>
+                  <option value="female">жен</option>
+                </select>
+              </td>
+              <td><input class="input" type="number" style="width: 72px;" [ngModel]="r.low" (ngModelChange)="updateRefRange($index, 'low', $event)" /></td>
+              <td><input class="input" type="number" style="width: 72px;" [ngModel]="r.high" (ngModelChange)="updateRefRange($index, 'high', $event)" /></td>
+              <td><input class="input" style="width: 64px;" [ngModel]="r.unit" (ngModelChange)="updateRefRange($index, 'unit', $event)" /></td>
+              <td>
+                <select class="input" [ngModel]="r.normKind" (ngModelChange)="updateRefRange($index, 'normKind', $event)">
+                  <option value="fixed">фикс.</option>
+                  <option value="calculated">расчёт</option>
+                  <option value="qualitative">кач.</option>
+                </select>
+              </td>
+              <td>
+                <select class="input" [ngModel]="r.population" (ngModelChange)="updateRefRange($index, 'population', $event)">
+                  <option value="general">общая</option>
+                  <option value="pregnancy">берем.</option>
+                  <option value="children">дети</option>
+                  <option value="cyclePhase">фаза цикла</option>
+                </select>
+              </td>
+              <td><input class="input" style="width: 100px;" [ngModel]="r.populationDetail" (ngModelChange)="updateRefRange($index, 'populationDetail', $event)" /></td>
+              <td><input class="input" style="width: 100px;" [ngModel]="r.sourceDomain" (ngModelChange)="updateRefRange($index, 'sourceDomain', $event)" /></td>
+              <td><input class="input" type="number" style="width: 56px;" [ngModel]="r.sourceRank" (ngModelChange)="updateRefRange($index, 'sourceRank', $event)" /></td>
+              <td class="d-flex gap-1">
+                <button type="button" class="btn-icon" aria-label="Дублировать" (click)="duplicateRefRange($index)"><i class="ph ph-copy" aria-hidden="true"></i></button>
+                <button type="button" class="btn-icon" aria-label="Удалить" (click)="removeRefRange($index)"><i class="ph ph-trash" aria-hidden="true"></i></button>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="12" class="text-muted">Диапазонов нет.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <label class="form-label">МНН</label>
+    <input class="input mb-2" style="width: 100%;" [ngModel]="internationalName()" (ngModelChange)="internationalName.set($event); markChanged('internationalName')" />
+
+    <label class="form-label">Торговые названия (через запятую)</label>
+    <input class="input mb-2" style="width: 100%;" [ngModel]="tradeNames()" (ngModelChange)="tradeNames.set($event); markChanged('tradeNames')" />
+
+    <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
+      <div class="flex-fill">
+        <label class="form-label">Форма выпуска</label>
+        <input class="input" style="width: 100%;" [ngModel]="form()" (ngModelChange)="form.set($event); markChanged('form')" />
+      </div>
+    </div>
+
+    <label class="form-label">Назначение</label>
+    <textarea class="input mb-2" rows="2" style="width: 100%;" [ngModel]="purpose()" (ngModelChange)="purpose.set($event); markChanged('purpose')"></textarea>
+
+    <label class="form-label">Назначение простыми словами</label>
+    <textarea class="input mb-2" rows="2" style="width: 100%;" [ngModel]="simplePurpose()" (ngModelChange)="simplePurpose.set($event); markChanged('simplePurpose')"></textarea>
+
+    <label class="form-label">Способ применения и дозы</label>
+    <textarea class="input mb-2" rows="3" style="width: 100%;" [ngModel]="usage()" (ngModelChange)="usage.set($event); markChanged('usage')"></textarea>
+
+    <label class="form-label">Хранение</label>
+    <input class="input mb-2" style="width: 100%;" [ngModel]="storage()" (ngModelChange)="storage.set($event); markChanged('storage')" />
+
+    <label class="form-label">Влияние на вождение</label>
+    <input class="input mb-2" style="width: 100%;" [ngModel]="driving()" (ngModelChange)="driving.set($event); markChanged('driving')" />
+
+    <label class="form-label">Противопоказания и рекомендации</label>
+    <textarea class="input mb-3" rows="3" style="width: 100%;" [ngModel]="specialNotes()" (ngModelChange)="specialNotes.set($event); markChanged('specialNotes')"></textarea>
+  }
+
+  <button type="button" class="btn btn-primary btn-sm" [disabled]="busy" (click)="saveFromForm()">
+    Сохранить и залочить изменённые поля
+  </button>
+} @else {
+  <textarea class="input mb-2" rows="16" style="width: 100%; font-family: monospace;"
+            [ngModel]="jsonDraft()" (ngModelChange)="jsonDraft.set($event)"></textarea>
+  @if (jsonError()) {
+    <p class="text-danger mb-2">{{ jsonError() }}</p>
+  }
+  <button type="button" class="btn btn-primary btn-sm" [disabled]="busy" (click)="saveFromJson()">
+    Сохранить JSON целиком (лочит payload полностью)
+  </button>
+}

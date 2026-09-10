@@ -19,7 +19,16 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/admin/admin-hub/admin-hub.component').then((m) => m.AdminHubComponent),
     children: [
-      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: '', redirectTo: 'attention', pathMatch: 'full' },
+      {
+        // Инбокс «Требует внимания» (§3/§7 плана) — точка входа: что сломано в конвейере
+        // обогащения и почему, сгруппировано, вместо ручного разбора списка задач построчно.
+        path: 'attention',
+        loadComponent: () =>
+          import('./components/admin/admin-attention/admin-attention.component').then(
+            (m) => m.AdminAttentionComponent,
+          ),
+      },
       {
         path: 'overview',
         loadComponent: () =>

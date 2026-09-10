@@ -43,6 +43,20 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
 
         var payloadJson = LabAnalyteKbPayload.Build(summary);
 
+        // Гранулярные локи подполей (§4 плана) — LockedFields может нести "payload.<key>" помимо
+        // "payload" целиком (см. KbPayloadLockMerger); лишнее чтение на upsert, но обогащение и
+        // так уже сделало платный веб-запрос выше по цепочке — не узкое место.
+        var existingLocks = await db.Database.SqlQuery<ExistingPayloadRow>($"""
+            SELECT "PayloadJson", "LockedFields" FROM kb.global_lab_analytes_kb
+            WHERE "NormalizedName" = {normalizedName} AND "SpecimenKbId" = {specimenKbId}
+            """).FirstOrDefaultAsync(ct);
+        if (existingLocks is not null && !existingLocks.LockedFields.Contains("payload"))
+        {
+            var lockedKeys = KbPayloadLockMerger.ExtractLockedPayloadKeys(existingLocks.LockedFields);
+            if (lockedKeys.Count > 0)
+                payloadJson = KbPayloadLockMerger.MergeLockedKeys(existingLocks.PayloadJson, payloadJson, lockedKeys);
+        }
+
         var aliases = summary.Aliases
             .Select(LabAnalyteNormalizer.Normalize)
             .Where(a => a.Length > 0 && a != normalizedName)
@@ -97,5 +111,11 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
         candidates.AddRange(summary.Aliases);
 
         return KbIsolationGuard.FindViolation(candidates);
+    }
+
+    private sealed class ExistingPayloadRow
+    {
+        public string PayloadJson { get; set; } = "{}";
+        public string[] LockedFields { get; set; } = [];
     }
 }

@@ -95,15 +95,28 @@
         </div>
 
         <div class="mb-2">
-          <label class="d-flex justify-content-between" style="align-items: center;">
-            <span>Payload (JSON)</span>
+          <label class="d-flex justify-content-between mb-1" style="align-items: center;">
+            <span>Payload</span>
             @if (d.lockedFields.includes('payload')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('payload')">🔒 залочено — снять</span>
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('payload')">🔒 залочен целиком — снять</span>
             }
           </label>
-          <textarea class="input mb-2" rows="16" style="width: 100%; font-family: monospace;"
-                    [ngModel]="analyteEditorPayload()" (ngModelChange)="analyteEditorPayload.set($event)"></textarea>
-          <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="saveAnalyteField('payloadJson')">Сохранить payload</button>
+          @if (partialPayloadLocks(d.lockedFields); as partial) {
+            @if (partial.length > 0) {
+              <p class="text-muted mb-2">
+                Залочены отдельные поля:
+                @for (key of partial; track key) {
+                  <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('payload.' + key)">🔒 {{ key }} — снять</span>
+                }
+              </p>
+            }
+          }
+          <app-admin-payload-editor
+            schema="lab-analyte"
+            [payloadJson]="d.payloadJson"
+            [busy]="analyteBusy()"
+            (save)="onAnalytePayloadSave($event)"
+          />
         </div>
       </div>
     </div>
@@ -179,15 +192,28 @@
         </div>
 
         <div class="mb-2">
-          <label class="d-flex justify-content-between" style="align-items: center;">
-            <span>Payload (JSON)</span>
+          <label class="d-flex justify-content-between mb-1" style="align-items: center;">
+            <span>Payload</span>
             @if (d.lockedFields.includes('payload')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('payload')">🔒 залочено — снять</span>
+              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('payload')">🔒 залочен целиком — снять</span>
             }
           </label>
-          <textarea class="input mb-2" rows="16" style="width: 100%; font-family: monospace;"
-                    [ngModel]="medicationEditorPayload()" (ngModelChange)="medicationEditorPayload.set($event)"></textarea>
-          <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="saveMedicationField('payloadJson')">Сохранить payload</button>
+          @if (partialPayloadLocks(d.lockedFields); as partial) {
+            @if (partial.length > 0) {
+              <p class="text-muted mb-2">
+                Залочены отдельные поля:
+                @for (key of partial; track key) {
+                  <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('payload.' + key)">🔒 {{ key }} — снять</span>
+                }
+              </p>
+            }
+          }
+          <app-admin-payload-editor
+            schema="medication"
+            [payloadJson]="d.payloadJson"
+            [busy]="medicationBusy()"
+            (save)="onMedicationPayloadSave($event)"
+          />
         </div>
       </div>
     </div>

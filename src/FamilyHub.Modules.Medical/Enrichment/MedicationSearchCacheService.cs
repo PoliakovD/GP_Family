@@ -79,6 +79,12 @@ public class MedicationSearchCacheService(
     public async Task<MedicationSearchCache?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         await db.MedicationSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    /// <summary>Обратный поиск строки кэша по названию — карточка задачи в админке знает
+    /// NormalizedName (из самой задачи), не Id строки кэша. Общий кэш для Medication и
+    /// VisitMedication задач (см. VisitMedicationEnrichmentJob class doc).</summary>
+    public async Task<MedicationSearchCache?> GetByNameAsync(string normalizedName, CancellationToken ct = default) =>
+        await db.MedicationSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
+
     private static Dictionary<string, bool>? ParseOverrides(string? overridesJson) =>
         overridesJson is null ? null : JsonSerializer.Deserialize<Dictionary<string, bool>>(overridesJson, JsonOptions);
 

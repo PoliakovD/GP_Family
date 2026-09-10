@@ -200,18 +200,29 @@ public class LabAnalyteKbRebuildJob(
 
     private async Task ClearCatalogAsync(KbRebuildRun run, CancellationToken ct)
     {
-        // Обнулить связи ДО удаления справочника — иначе показатели временно указывали бы на уже
-        // удалённую строку (не FK — БД не запретит, но следующий каскад расчёта увидел бы "чужой"
-        // Id, которого больше нет).
-        await db.LabIndicators.ExecuteUpdateAsync(s => s
-            .SetProperty(i => i.KbAnalyteId, (Guid?)null)
-            .SetProperty(i => i.RefSource, i =>
-                i.RefSource == RefSource.KbFixed || i.RefSource == RefSource.KbCalculated ? RefSource.None : i.RefSource),
-            ct);
+        // Строки с ручной правкой (LockedFields непусто, см. AdminCatalogService/LabAnalyteKbWriter)
+        // переживают пересборку — админ уже подтвердил их содержание, обычное автообогащение и так
+        // их не трогает; безусловный DELETE стирал бы эту работу без возможности отличить её от
+        // строк, наполненных только конвейером. LockedFields вне EF-модели (Postgres text[], см.
+        // GlobalLabAnalyteKbConfiguration) — членство читается raw SQL, тем же приёмом, что AdminCatalogService.
+        var lockedIds = await db.Database.SqlQuery<Guid>($"""
+            SELECT "Id" FROM kb.global_lab_analytes_kb WHERE cardinality("LockedFields") > 0
+            """).ToListAsync(ct);
+        var lockedSet = lockedIds.ToHashSet();
 
-        // LockedFields (§3 плана) здесь пока не проверяется — колонки ещё нет в этой пересборке;
-        // когда появится, сюда добавится "WHERE cardinality(\"LockedFields\") = 0 OR \"LockedFields\" IS NULL".
-        run.CatalogDeleted = await db.Database.ExecuteSqlRawAsync("DELETE FROM kb.global_lab_analytes_kb", ct);
+        // Обнулить связи ДО удаления справочника — только для показателей, чья KB-строка реально
+        // будет удалена. Показатель, указывающий на залоченную (сохраняемую) строку, не должен
+        // потерять ссылку — она остаётся валидной и после пересборки.
+        await db.LabIndicators
+            .Where(i => i.KbAnalyteId != null && !lockedSet.Contains(i.KbAnalyteId!.Value))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(i => i.KbAnalyteId, (Guid?)null)
+                .SetProperty(i => i.RefSource, i =>
+                    i.RefSource == RefSource.KbFixed || i.RefSource == RefSource.KbCalculated ? RefSource.None : i.RefSource),
+                ct);
+
+        run.CatalogDeleted = await db.Database.ExecuteSqlRawAsync(
+            "DELETE FROM kb.global_lab_analytes_kb WHERE cardinality(\"LockedFields\") = 0", ct);
         await db.SaveChangesAsync(ct);
     }
 

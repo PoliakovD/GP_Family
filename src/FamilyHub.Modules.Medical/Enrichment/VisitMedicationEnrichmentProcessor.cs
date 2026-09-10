@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Kb;
 using Hangfire;
@@ -96,11 +97,24 @@ public class VisitMedicationEnrichmentProcessor(
                 .Take(options.Value.MaxSnippets)
                 .ToList();
 
+            // См. MedicationEnrichmentProcessor — проверяем ДО суммаризатора, единственный воркер
+            // очереди enrichment не должен тратиться на вызов LLM, заведомо обречённый на отказ.
+            if (snippets.Count == 0)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.Error = "Нет сниппетов от доверенных источников — суммаризировать нечего.";
+                job.FailureReason = EnrichmentFailureReason.NoTrustedSnippets;
+                job.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+
             var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, snippets, ct);
             if (!summarized.Success || summarized.Summary is null)
             {
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = summarized.Error;
+                job.FailureReason = summarized.Reason;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 return;
@@ -117,6 +131,7 @@ public class VisitMedicationEnrichmentProcessor(
                 await tx.RollbackAsync(ct);
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = writeResult.RejectionReason;
+                job.FailureReason = EnrichmentFailureReason.IsolationViolation;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 return;
@@ -142,6 +157,9 @@ public class VisitMedicationEnrichmentProcessor(
             {
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+                job.FailureReason = ex is LmStudioUnavailableException
+                    ? EnrichmentFailureReason.LmStudioUnavailable
+                    : EnrichmentFailureReason.Unknown;
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "VisitMedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
