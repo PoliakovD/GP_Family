@@ -62,6 +62,35 @@ public class MedkitService(AppDbContext db, IFamilyAccessService access, ILogger
         return (MedkitAccessResult.Success, ToDto(medkit));
     }
 
+    /// <summary>Одна аптечка по id (редизайн v2.2 — «Аптечка» открывается отдельной страницей,
+    /// как «Анализы»). Тот же порядок проверок, что у Update/DeleteAsync (NotFound → Forbidden),
+    /// но читает через инлайн-проекцию, а не FirstOrDefaultAsync+ToDto — на загруженной без
+    /// Include сущности k.Medications.Count дал бы 0 для любой непустой аптечки (навигация не
+    /// подгружена); ToDto корректен только сразу после CreateAsync, где Count и так 0.</summary>
+    public async Task<(MedkitAccessResult Result, MedkitDto? Item)> GetByIdAsync(
+        Guid medkitId, Guid userId, CancellationToken ct = default)
+    {
+        var item = await db.Medkits.AsNoTracking()
+            .Where(k => k.Id == medkitId)
+            .Select(k => new MedkitDto(k.Id, k.FamilyId, k.Name, k.CreatedByUserId, k.CreatedAt, k.Medications.Count))
+            .FirstOrDefaultAsync(ct);
+        if (item is null)
+        {
+            logger.LogWarning("Чтение аптечки {MedkitId}: не найдена (запросил {UserId})", medkitId, userId);
+            return (MedkitAccessResult.NotFound, null);
+        }
+
+        if (!await access.HasRoleAsync(userId, item.FamilyId, FamilyRole.Member, ct))
+        {
+            logger.LogWarning(
+                "Чтение аптечки {MedkitId} отклонено: {UserId} не состоит в семье {FamilyId}",
+                medkitId, userId, item.FamilyId);
+            return (MedkitAccessResult.Forbidden, null);
+        }
+
+        return (MedkitAccessResult.Success, item);
+    }
+
     public async Task<MedkitAccessResult> UpdateAsync(
         Guid medkitId, Guid userId, UpdateMedkitRequest request, CancellationToken ct = default)
     {

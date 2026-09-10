@@ -15,6 +15,20 @@ public static class MedkitEndpoints
             return result == MedkitAccessResult.Forbidden ? Results.Forbid() : Results.Ok(items);
         });
 
+        // Редизайн v2.2 — «Аптечка» открывается отдельной страницей (/health/medications/{id}),
+        // как «Анализы»; странице нужно название/семью аптечки без похода за списком всей семьи.
+        group.MapGet("/medkits/{medkitId:guid}", async (
+            Guid medkitId, MedkitService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var (result, item) = await service.GetByIdAsync(medkitId, currentUser.UserId, ct);
+            return result switch
+            {
+                MedkitAccessResult.NotFound => Results.NotFound(),
+                MedkitAccessResult.Forbidden => Results.Forbid(),
+                _ => Results.Ok(item),
+            };
+        });
+
         group.MapPost("/families/{familyId:guid}/medkits", async (
             Guid familyId, CreateMedkitRequest request, MedkitService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
