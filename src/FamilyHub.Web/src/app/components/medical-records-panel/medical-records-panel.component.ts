@@ -34,6 +34,7 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
 import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
@@ -104,7 +105,7 @@ let nextInstanceId = 0;
     NgTemplateOutlet,
     FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
     ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
-    AvatarComponent, PersonChipComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
+    AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
     ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
     AttachmentListComponent,
   ],
@@ -266,10 +267,14 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       if (recordId) {
         // Одиночный режим (PR6) — не список: без пагинации/фильтров/формы создания, кнопка
         // «Добавить» и общий поиск шапки этому экрану не нужны (см. ngOnInit — та же проверка).
+        // Редизайн v2.2 — сама открытая запись рисует свою шапку (back-link + действия), общий
+        // топбар каркаса целиком не нужен, см. PageActionService.immersive.
+        this.pageAction.setImmersive(true);
         void this.refresh();
         return;
       }
 
+      this.pageAction.setImmersive(false);
       this.resetFilters();
       this.accessRecord = null;
       this.page = 1;
@@ -312,6 +317,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         value: () => this.searchQuery,
         onChange: (v) => this.onSearchQueryChange(v),
       });
+    } else {
+      this.pageAction.setImmersive(true);
     }
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));

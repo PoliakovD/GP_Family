@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { PageActionService } from '../../services/page-action.service';
 
 /**
  * Хаб «Здоровье» (редизайн навигации): объединяет Аптечку, Анализы и Врачей под одним табом
@@ -8,6 +9,10 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
  * router-outlet этого хаба, а не корневого. «Анализы» и «Врачи» — тонкие Page-обёртки над одной
  * MedicalRecordsPanelComponent с разным MedicalRecordKind (см. medical-records-panel).
  * Расширяемо: «Таймлайн» (этап 6) добавляется сюда же.
+ *
+ * Редизайн v2.2 — собственная шапка «Здоровье» + таб-бар секций прячутся, когда открыт дочерний
+ * экран «одиночного режима» (открытая запись/аптечка) — см. PageActionService.immersive,
+ * который такой дочерний компонент выставляет сам (шаблон).
  */
 @Component({
   selector: 'app-health-hub',
@@ -17,6 +22,8 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   styleUrl: './health-hub.component.scss',
 })
 export class HealthHubComponent {
+  readonly pageAction = inject(PageActionService);
+
   readonly sections: { path: string; label: string }[] = [
     { path: 'medications', label: 'Аптечка' },
     { path: 'records', label: 'Анализы' },

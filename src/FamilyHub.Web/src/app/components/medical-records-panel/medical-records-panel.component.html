@@ -407,15 +407,14 @@
   @if (recordId()) {
     <!-- Редизайн v3/v2.1 — отдельный экран открытой записи, теперь на любой ширине (было —
          только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
-         списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». -->
-    <div class="d-flex align-items-center gap-2 mb-3">
-      <button type="button" class="btn-icon" (click)="goToList()" aria-label="Назад к списку">
-        <i class="ph ph-arrow-left" aria-hidden="true"></i>
-      </button>
-      @if (items[0]; as only) {
-        <div class="card-title" style="font-size:1.1176rem">{{ shortName(only) }}</div>
-      }
+         списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». Редизайн v2.2 —
+         «Назад» стилизована как ссылка (синяя стрелочка + название раздела), не голая иконка. -->
+    <div class="mb-3">
+      <app-back-link [label]="labels.title" (activated)="goToList()" />
     </div>
+    @if (items[0]; as only) {
+      <div class="card-title mb-2" style="font-size:1.1176rem">{{ shortName(only) }}</div>
+    }
 
     <!-- Редизайн v3 (PR7) — одноразовый баннер сразу после сохранения из record-add.component.ts:
          показатели ещё могут распознаваться (см. живой прогресс на карточке ниже). -->
