@@ -40,7 +40,7 @@
     @for (f of state.activeFamilies(); track f.id) {
       <div class="mb-4">
         <div class="card-kicker mb-2">{{ f.name }}</div>
-        <app-medkits-panel [familyId]="f.id" [expandMedkitId]="f.id === expandFamilyId() ? expandMedkitId() : null" />
+        <app-medkits-panel [familyId]="f.id" [linkMode]="true" />
       </div>
     }
   }

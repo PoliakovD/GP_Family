@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -29,19 +29,20 @@ export class MedicationsTabComponent implements OnInit, OnDestroy {
     (err) => (err instanceof ApiError ? err.message : 'Не удалось выполнить поиск.'),
   );
 
-  // Куда автораскрыть аптечку при переходе с результата поиска (Главная или клик по своему же
-  // результату) — query-параметры, не in-page state: переживают refresh, работают с browser back.
-  readonly expandFamilyId = signal<string | null>(null);
-  readonly expandMedkitId = signal<string | null>(null);
-
   readonly expiryClass = expiryClass;
 
   private paramsSub?: Subscription;
 
   ngOnInit(): void {
+    // Редизайн v2.2 — раньше ?medkitId= из результата поиска (Главная/app-search/эта же
+    // страница) двигал expandMedkitId, который medkits-panel ловил эффектом и раскрывал
+    // аккордеон. Строка аптечки теперь ведёт на отдельную страницу (linkMode на
+    // app-medkits-panel ниже), аккордеона нет — тот же query-параметр просто перенаправляет на
+    // неё. Один переход обслуживает все три источника ссылки (Главная, поиск в шапке, поиск на
+    // этой же вкладке — см. openResult) без изменений в них самих.
     this.paramsSub = this.route.queryParamMap.subscribe((params) => {
-      this.expandFamilyId.set(params.get('familyId'));
-      this.expandMedkitId.set(params.get('medkitId'));
+      const medkitId = params.get('medkitId');
+      if (medkitId) void this.router.navigate(['/health/medications', medkitId], { replaceUrl: true });
     });
     // Редизайн v2.1 — поле поиска переехало в топбар каркаса целиком (было своим полем прямо на
     // экране, ниже заголовка «Аптечка» — та же жалоба, что на «Анализах»), см.
@@ -66,10 +67,6 @@ export class MedicationsTabComponent implements OnInit, OnDestroy {
   openResult(item: SearchResultItem): void {
     if (!item.medication) return;
     this.search.reset();
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { familyId: item.medication.familyId, medkitId: item.medication.medkitId },
-      queryParamsHandling: 'merge',
-    });
+    void this.router.navigate(['/health/medications', item.medication.medkitId]);
   }
 }

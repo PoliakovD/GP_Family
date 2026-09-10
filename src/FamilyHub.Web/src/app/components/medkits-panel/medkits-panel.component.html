@@ -35,16 +35,20 @@
   } @else {
     @for (item of items; track item.id) {
       <div class="card mb-2 medkit-card" [class.open]="expandedId === item.id">
-        <div class="medkit-header" (click)="toggleExpanded(item.id)">
+        <div class="medkit-header" (click)="onHeaderClick(item)">
           <strong class="medkit-name">{{ item.name }}</strong>
-          @if (expandedId !== item.id) {
+          @if (linkMode() || expandedId !== item.id) {
             <span class="tag tag-neutral medkit-count">{{ medicationCountLabel(item.medicationCount) }}</span>
           }
-          <div class="d-flex gap-2" (click)="$event.stopPropagation()">
-            <button class="btn btn-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
-            <button class="btn btn-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
-          </div>
-          <i class="ph ph-caret-down medkit-chevron" aria-hidden="true"></i>
+          @if (!linkMode()) {
+            <div class="d-flex gap-2" (click)="$event.stopPropagation()">
+              <button class="btn btn-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
+              <button class="btn btn-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+            </div>
+          }
+          <!-- Редизайн v2.2 — в linkMode строка ведёт на отдельную страницу, не раскрывает
+               аккордеон: стрелка вправо (навигация), не вниз (раскрытие). -->
+          <i class="ph medkit-chevron" [class.ph-caret-down]="!linkMode()" [class.ph-caret-right]="linkMode()" aria-hidden="true"></i>
         </div>
 
         <div class="medkit-body">

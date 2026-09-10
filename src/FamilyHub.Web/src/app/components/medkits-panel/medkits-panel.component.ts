@@ -1,5 +1,6 @@
 import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Medkit } from '../../models/types';
 import { MedicationsPanelComponent } from '../medications-panel/medications-panel.component';
@@ -19,11 +20,16 @@ import { pluralizeRu } from '../../shared/util/pluralize';
 export class MedkitsPanelComponent implements OnInit {
   readonly familyId = input.required<string>();
 
-  /** Аптечка, которую нужно автоматически раскрыть — клик по результату поиска (Главная/поиск
-   * в Аптечке) знает конкретный medkitId заранее, ждать загрузки items для этого не нужно. */
-  readonly expandMedkitId = input<string | null>(null);
+  /** Редизайн v2.2 — на вкладке «Аптечка» (medications-tab) строка аптечки уводит на отдельную
+   * страницу (/health/medications/:id), как уже сделано для «Анализов» — тот же экран несёт и
+   * «Изменить»/«Удалить» самой аптечки, поэтому в этом режиме они скрыты из строки списка (см.
+   * шаблон). false по умолчанию сохраняет прежний аккордеон без изменений — этой же панелью
+   * пользуется family-details.component.html («Семья» → «Аптечки»), где отдельной
+   * деталь-страницы нет и заводить её не просили. */
+  readonly linkMode = input(false);
 
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
@@ -54,16 +60,6 @@ export class MedkitsPanelComponent implements OnInit {
       this.expandedId = null;
       this.everOpenedIds.clear();
       void this.refresh();
-    });
-
-    // Автораскрытие по клику из поиска — expandedId/everOpenedIds здесь обычные поля, не
-    // сигналы, поэтому запись в них из effect() не требует allowSignalWrites (см. правило в
-    // patterns/frontend_web.md — оно про запись именно в signal, не в произвольное поле).
-    effect(() => {
-      const id = this.expandMedkitId();
-      if (!id) return;
-      this.expandedId = id;
-      this.everOpenedIds.add(id);
     });
   }
 
@@ -139,6 +135,17 @@ export class MedkitsPanelComponent implements OnInit {
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось удалить аптечку.');
     }
+  }
+
+  /** Клик по строке аптечки — в linkMode уводит на отдельную страницу (как «Открыть» у записи
+   * анализа, только тут кликабельна вся строка сразу, без промежуточной кнопки), иначе — старый
+   * аккордеон. */
+  onHeaderClick(item: Medkit): void {
+    if (this.linkMode()) {
+      void this.router.navigate(['/health/medications', item.id]);
+      return;
+    }
+    this.toggleExpanded(item.id);
   }
 
   toggleExpanded(id: string): void {

@@ -1,0 +1,47 @@
+<div>
+  @if (error) {
+    <div class="alert-danger mb-2">{{ error }}</div>
+  }
+
+  <div class="mb-3">
+    <app-back-link label="Аптечка" (activated)="goBack()" />
+  </div>
+
+  @if (loading) {
+    <app-loading-spinner />
+  } @else if (medkit) {
+    <div class="d-flex align-items-start justify-content-between gap-2 mb-3 flex-wrap">
+      <div>
+        <h2 class="mb-1">{{ medkit.name }}</h2>
+        <span class="tag tag-neutral">{{ medicationCountLabel(medkit.medicationCount) }}</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-secondary btn-sm" (click)="startEdit()">
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i> Изменить
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" style="color:var(--color-status-danger-text)" (click)="handleDelete()">
+          <i class="ph ph-trash" aria-hidden="true"></i> Удалить
+        </button>
+      </div>
+    </div>
+
+    <app-modal title="Изменить аптечку" [open]="showFormModal" (closed)="closeFormModal()">
+      <div class="d-flex flex-column gap-2">
+        <input
+          class="input"
+          [(ngModel)]="form.name"
+          placeholder="Название аптечки"
+          (keydown.enter)="saveEdit()"
+        />
+        <div class="d-flex justify-content-end gap-2">
+          <button class="btn btn-secondary btn-sm" (click)="closeFormModal()">Отмена</button>
+          <button class="btn btn-primary btn-sm" (click)="saveEdit()">Сохранить</button>
+        </div>
+      </div>
+    </app-modal>
+
+    <app-medications-panel [medkitId]="id()" (countChanged)="onCountChanged($event)" />
+  } @else {
+    <p class="muted">Аптечка не найдена.</p>
+  }
+</div>
