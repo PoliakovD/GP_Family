@@ -1,3 +1,5 @@
+using FamilyHub.Domain.Enums;
+
 namespace FamilyHub.Modules.Medical.Enrichment;
 
 /// <summary>Версия схемы <see cref="MedicationSummary"/> — записывается в GlobalMedicationKb.PayloadVersion.
@@ -40,9 +42,11 @@ public record MedicationSummary(
     // именем (похоже на другой препарат, не на опечатку) коррекция отбрасывается.
     string? CorrectedName = null);
 
-/// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина отказа записи в справочник.</summary>
-public record SummarizeResult(bool Success, MedicationSummary? Summary, string? Error)
+/// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина
+/// отказа записи в справочник. Reason — см. LabAnalyteSummarizeResult.Reason, тот же приём.</summary>
+public record SummarizeResult(bool Success, MedicationSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None)
 {
-    public static SummarizeResult Failure(string error) => new(false, null, error);
-    public static SummarizeResult Ok(MedicationSummary summary) => new(true, summary, null);
+    public static SummarizeResult Failure(string error, EnrichmentFailureReason reason = EnrichmentFailureReason.SummarizerFailed) =>
+        new(false, null, error, reason);
+    public static SummarizeResult Ok(MedicationSummary summary) => new(true, summary, null, EnrichmentFailureReason.None);
 }

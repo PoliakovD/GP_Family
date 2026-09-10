@@ -67,9 +67,14 @@ public record LabAnalyteSummary(
     /// появиться в справочнике позже, чем эта (тот же приём, что PrescribedMedicationDto.KbMedicationId).</summary>
     IReadOnlyList<string>? RelatedAnalytes = null);
 
-/// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина отказа записи в справочник.</summary>
-public record LabAnalyteSummarizeResult(bool Success, LabAnalyteSummary? Summary, string? Error)
+/// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина
+/// отказа записи в справочник. Reason — машиночитаемая классификация Error (см.
+/// EnrichmentFailureReason) для группировки падений в админке; по умолчанию SummarizerFailed —
+/// самая частая причина в этом месте, вызывающий код (LabAnalyteEnrichmentProcessor) переопределяет
+/// её там, где отказ смысловой, а не технический (см. вызовы Failure ниже).</summary>
+public record LabAnalyteSummarizeResult(bool Success, LabAnalyteSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None)
 {
-    public static LabAnalyteSummarizeResult Failure(string error) => new(false, null, error);
-    public static LabAnalyteSummarizeResult Ok(LabAnalyteSummary summary) => new(true, summary, null);
+    public static LabAnalyteSummarizeResult Failure(string error, EnrichmentFailureReason reason = EnrichmentFailureReason.SummarizerFailed) =>
+        new(false, null, error, reason);
+    public static LabAnalyteSummarizeResult Ok(LabAnalyteSummary summary) => new(true, summary, null, EnrichmentFailureReason.None);
 }

@@ -33,6 +33,9 @@ public class VisitMedicationEnrichmentJob
 
     public string? Error { get; set; }
 
+    /// <summary>См. LabAnalyteEnrichmentJob.FailureReason — та же машиночитаемая классификация.</summary>
+    public EnrichmentFailureReason? FailureReason { get; set; }
+
     public string? Provider { get; set; }
 
     public DateTime? ExternalSearchAt { get; set; }

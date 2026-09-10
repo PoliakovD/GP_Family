@@ -15,8 +15,13 @@ public record AdminMedicationDetail(
     DateTime CreatedAt, DateTime UpdatedAt);
 
 /// <summary>Поле, присланное в теле PUT (не null), автоматически лочится — см. AdminCatalogService.
-/// Aliases — null означает "не трогать", пустой список — явно очистить.</summary>
-public record AdminKbEditRequest(string? DisplayName, string? PayloadJson, IReadOnlyList<string>? Aliases);
+/// Aliases — null означает "не трогать", пустой список — явно очистить. LockedPayloadKeys — режим
+/// формы (§4 плана «Форма ⇄ JSON»): если задан вместе с PayloadJson, лочатся отдельные
+/// "payload.&lt;key&gt;" (реально изменённые поля формы), а не весь "payload" целиком, как при
+/// null (обычная правка сырого JSON). Игнорируется, если PayloadJson не прислан.</summary>
+public record AdminKbEditRequest(
+    string? DisplayName, string? PayloadJson, IReadOnlyList<string>? Aliases,
+    IReadOnlyList<string>? LockedPayloadKeys = null);
 
 public enum AdminKbEditResult { Ok, NotFound, InvalidPayloadJson, IsolationViolation }
 

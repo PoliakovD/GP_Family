@@ -1,0 +1,63 @@
+@if (loading()) {
+  <p class="text-muted">Загрузка…</p>
+} @else if (attention()) {
+  @let a = attention()!;
+  @if (a.reasons.length === 0 && a.droppedDomains.length === 0) {
+    <div class="card">
+      <div class="card-body">
+        <p class="text-muted mb-0">Падений нет — конвейер обогащения работает штатно.</p>
+      </div>
+    </div>
+  }
+
+  @if (a.reasons.length > 0) {
+    <div class="card-title mb-2">Причины отказа</div>
+    <div class="mb-3" style="display: grid; gap: 8px;">
+      @for (r of a.reasons; track r.reason) {
+        <app-attention-card
+          icon="ph-duotone ph-warning-circle"
+          color="var(--color-status-danger)"
+          [title]="r.label"
+          [subtitle]="reasonSubtitle(r)"
+        >
+          <div actions>
+            <button type="button" class="btn btn-secondary btn-sm" (click)="openJobs(r.reason, r.byType)">
+              Открыть задачи
+            </button>
+          </div>
+        </app-attention-card>
+      }
+    </div>
+  }
+
+  @if (a.droppedDomains.length > 0) {
+    <div class="card">
+      <div class="card-title">Чаще всего отбрасываются</div>
+      <div class="card-body">
+        <p class="text-muted mb-2">
+          Эти домены встречаются в сниппетах Failed-задач («нет доверенных сниппетов»), но ещё не
+          в списке доверенных — добавление разблокирует все задачи темы одним действием.
+        </p>
+        <table class="table">
+          <thead><tr><th>Домен</th><th>Тема</th><th>Задач</th><th>Пример</th><th></th></tr></thead>
+          <tbody>
+            @for (d of a.droppedDomains; track d.domain + d.topic) {
+              <tr>
+                <td>{{ d.domain }}</td>
+                <td class="text-muted">{{ d.topic }}</td>
+                <td>{{ d.jobCount }}</td>
+                <td class="text-muted"><a [href]="d.sampleUrl" target="_blank" rel="noopener noreferrer">пример</a></td>
+                <td>
+                  <button type="button" class="btn btn-primary btn-sm" [disabled]="busyDomain() === d.domain"
+                          (click)="trustAndRetry(d.domain, d.topic)">
+                    ✚ Доверить и перезапустить
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+}

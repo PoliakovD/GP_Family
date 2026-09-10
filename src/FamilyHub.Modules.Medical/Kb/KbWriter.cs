@@ -51,6 +51,18 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
             specialNotes = summary.SpecialNotes,
         });
 
+        // Гранулярные локи подполей (§4 плана) — см. LabAnalyteKbWriter.UpsertAsync, тот же приём
+        // на другую таблицу (KbPayloadLockMerger общий для обоих writer'ов).
+        var existingLocks = await db.Database.SqlQuery<ExistingPayloadRow>($"""
+            SELECT "PayloadJson", "LockedFields" FROM kb.global_medications_kb WHERE "NormalizedName" = {normalizedName}
+            """).FirstOrDefaultAsync(ct);
+        if (existingLocks is not null && !existingLocks.LockedFields.Contains("payload"))
+        {
+            var lockedKeys = KbPayloadLockMerger.ExtractLockedPayloadKeys(existingLocks.LockedFields);
+            if (lockedKeys.Count > 0)
+                payloadJson = KbPayloadLockMerger.MergeLockedKeys(existingLocks.PayloadJson, payloadJson, lockedKeys);
+        }
+
         // Алиасы — нормализованные торговые названия (та же функция, что и ключ дедупликации) плюс
         // extraAliases (исходное искажённое OCR название при переименовании, см. параметр выше),
         // без самого NormalizedName (иначе он же попал бы и в основной ключ, и в алиасы).
@@ -108,5 +120,11 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         if (extraAliases is not null) candidates.AddRange(extraAliases);
 
         return KbIsolationGuard.FindViolation(candidates);
+    }
+
+    private sealed class ExistingPayloadRow
+    {
+        public string PayloadJson { get; set; } = "{}";
+        public string[] LockedFields { get; set; } = [];
     }
 }

@@ -102,7 +102,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
         string displayName, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
     {
         if (snippets.Count == 0)
-            return LabAnalyteSummarizeResult.Failure("Нет сниппетов от доверенных источников — суммаризировать нечего.");
+            return LabAnalyteSummarizeResult.Failure(
+                "Нет сниппетов от доверенных источников — суммаризировать нечего.", EnrichmentFailureReason.NoTrustedSnippets);
 
         var userText = BuildUserText(displayName, snippets);
         var prompt = await promptProvider.GetAsync("lab-analyte.summarize", SystemPrompt, ct);
@@ -124,7 +125,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
             logger.LogInformation(
                 "Суммаризация показателя «{DisplayName}»: модель не сослалась ни на один источник — запись в справочник отклонена.",
                 displayName);
-            return LabAnalyteSummarizeResult.Failure("Модель не смогла подтвердить ответ ни одним источником.");
+            return LabAnalyteSummarizeResult.Failure(
+                "Модель не смогла подтвердить ответ ни одним источником.", EnrichmentFailureReason.NoSourcesCited);
         }
 
         var refRanges = ReadRefRanges(result.Payload, snippets.Count);

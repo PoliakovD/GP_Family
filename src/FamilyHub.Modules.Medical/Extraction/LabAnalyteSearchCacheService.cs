@@ -75,6 +75,13 @@ public class LabAnalyteSearchCacheService(
     public async Task<LabAnalyteSearchCache?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         await db.LabAnalyteSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    /// <summary>Обратный поиск строки кэша по ключу (название, источник) — карточка задачи в
+    /// админке знает NormalizedName+SpecimenKbId (из самой задачи), не Id строки кэша.</summary>
+    public async Task<LabAnalyteSearchCache?> GetByNameAsync(
+        string normalizedName, Guid specimenKbId, CancellationToken ct = default) =>
+        await db.LabAnalyteSearchCaches.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
+
     /// <summary>Массовая очистка кэша от строк с нерезолвленным источником — жёсткий гейт
     /// (LabAnalyteEnrichmentRequestService) не даёт новым задачам с SpecimenKbId=Unresolved
     /// ставиться в очередь, поэтому такие строки кэша (наследие до пересборки enrich-пайплайна,

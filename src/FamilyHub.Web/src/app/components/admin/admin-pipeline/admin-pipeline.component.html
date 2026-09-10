@@ -147,7 +147,7 @@
   <div class="card">
     <div class="card-title">Задачи конвейеров</div>
     <div class="card-body">
-      <div class="d-flex gap-2 mb-3" style="flex-wrap: wrap;">
+      <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
         <div class="seg">
           @for (t of jobTypes; track t.value) {
             <button type="button" class="seg-opt" [class.active]="jobType() === t.value" (click)="selectJobType(t.value)">
@@ -155,7 +155,7 @@
             </button>
           }
         </div>
-        <select class="input" [ngModel]="jobStatus()" (ngModelChange)="jobStatus.set($event); loadJobs()">
+        <select class="input" [ngModel]="jobStatus()" (ngModelChange)="selectJobStatus($event)">
           <option value="">Любой статус</option>
           <option value="Pending">Pending</option>
           <option value="Running">Running</option>
@@ -163,17 +163,35 @@
           <option value="Failed">Failed</option>
           <option value="Skipped">Skipped</option>
         </select>
+        @if (jobReason()) {
+          <span class="tag tag-accent-2">
+            причина: {{ jobReason() }}
+            <button type="button" class="btn-icon" style="padding: 0 4px;" aria-label="Снять фильтр по причине" (click)="clearJobReason()">
+              <i class="ph ph-x" aria-hidden="true"></i>
+            </button>
+          </span>
+        }
+        @if (selectedJobIds().size > 0) {
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="jobsBusy()" (click)="bulkRetrySelected()">
+            Перезапустить выбранные ({{ selectedJobIds().size }})
+          </button>
+        }
       </div>
 
       @if (jobsLoading()) {
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th></tr></thead>
           <tbody>
             @for (j of jobs(); track j.id) {
               <tr>
-                <td>{{ j.displayName }}</td>
+                <td>
+                  @if (j.status === 'Failed') {
+                    <input type="checkbox" [checked]="selectedJobIds().has(j.id)" (click)="$event.stopPropagation(); toggleJobSelection(j.id)" />
+                  }
+                </td>
+                <td class="card-clickable" (click)="openJob(j)">{{ j.displayName }}</td>
                 <td>{{ j.status }}</td>
                 <td>{{ j.attempts }}</td>
                 <td class="text-muted">{{ j.error }}</td>
@@ -187,7 +205,7 @@
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="6" class="text-muted">Задач нет.</td></tr>
+              <tr><td colspan="7" class="text-muted">Задач нет.</td></tr>
             }
           </tbody>
         </table>
@@ -196,6 +214,12 @@
     </div>
   </div>
 }
+
+<app-side-panel [open]="!!openJobId()" title="Задача" (closed)="closeJobPanel()">
+  @if (openJobId()) {
+    <app-admin-job-panel [jobId]="openJobId()!" [jobType]="jobType()" (changed)="loadJobs()" />
+  }
+</app-side-panel>
 
 @if (tab() === 'lmstudio') {
   <div class="card">

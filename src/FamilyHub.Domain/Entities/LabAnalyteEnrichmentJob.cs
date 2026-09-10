@@ -45,6 +45,11 @@ public class LabAnalyteEnrichmentJob
 
     public string? Error { get; set; }
 
+    /// <summary>Машиночитаемая классификация Error (см. EnrichmentFailureReason) — null, пока
+    /// задача не падала. Используется админкой для группировки падений («Требует внимания») без
+    /// парсинга свободного текста.</summary>
+    public EnrichmentFailureReason? FailureReason { get; set; }
+
     /// <summary>См. MedicalDocumentExtractionJob.IsTransientFailure — тот же смысл, тот же
     /// потребитель (LmStudioRecoverySweepJob).</summary>
     public bool IsTransientFailure { get; set; }

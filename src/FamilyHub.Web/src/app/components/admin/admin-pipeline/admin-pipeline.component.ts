@@ -1,8 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   AdminApiService,
+  EnrichmentFailureReasonValue,
   LmStudioAvailableModels,
   PipelineJob,
   PipelineJobType,
@@ -12,6 +14,10 @@ import {
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { SidePanelComponent } from '../../../shared/side-panel/side-panel.component';
+import { AdminJobPanelComponent } from '../admin-job-panel/admin-job-panel.component';
+
+const JOB_POLL_INTERVAL_MS = 3000;
 
 const JOB_TYPES: { value: PipelineJobType; label: string }[] = [
   { value: 'lab-analyte', label: 'Обогащение показателей' },
@@ -30,13 +36,15 @@ const JOB_TYPES: { value: PipelineJobType; label: string }[] = [
 @Component({
   selector: 'app-admin-pipeline',
   standalone: true,
-  imports: [FormsModule, DatePipe, JsonPipe],
+  imports: [FormsModule, DatePipe, JsonPipe, SidePanelComponent, AdminJobPanelComponent],
   templateUrl: './admin-pipeline.component.html',
 })
-export class AdminPipelineComponent implements OnInit {
+export class AdminPipelineComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   readonly jobTypes = JOB_TYPES;
 
@@ -61,10 +69,17 @@ export class AdminPipelineComponent implements OnInit {
 
   readonly jobType = signal<PipelineJobType>('lab-analyte');
   readonly jobStatus = signal<string>('');
+  readonly jobReason = signal<EnrichmentFailureReasonValue | null>(null);
   readonly jobs = signal<PipelineJob[]>([]);
   readonly jobsTotal = signal(0);
   readonly jobsLoading = signal(false);
   readonly jobsBusy = signal(false);
+  readonly selectedJobIds = signal<Set<string>>(new Set());
+
+  /** Карточка задачи (§7 плана) — открывается из этой же таблицы задач и из инбокса «Требует
+   * внимания» (через query-параметр job, см. ngOnInit). null — панель закрыта. */
+  readonly openJobId = signal<string | null>(null);
+  private jobPollTimer?: ReturnType<typeof setTimeout>;
 
   readonly lmStudioActiveModel = signal<string | null>(null);
   readonly lmStudioFallbackModel = signal('');
@@ -74,11 +89,47 @@ export class AdminPipelineComponent implements OnInit {
   readonly lmStudioBusy = signal(false);
 
   ngOnInit(): void {
-    void this.loadSteps();
+    // Состояние в URL (§8 плана) — переход из «Требует внимания» (?tab=jobs&type=&status=&reason=)
+    // и прямые ссылки на конкретную задачу (?job=<guid>) открывают нужный вид без ручных кликов;
+    // F5/«назад» сохраняют контекст. Читается один раз при входе — дальнейшая навигация внутри
+    // компонента сама пишет параметры обратно (см. updateQueryParams).
+    const params = this.route.snapshot.queryParamMap;
+    const tab = params.get('tab');
+    const type = params.get('type') as PipelineJobType | null;
+    const status = params.get('status');
+    const reason = params.get('reason') as EnrichmentFailureReasonValue | null;
+    const job = params.get('job');
+
+    if (type) this.jobType.set(type);
+    if (status) this.jobStatus.set(status);
+    if (reason) this.jobReason.set(reason);
+
+    if (tab === 'jobs' || type || status || reason || job) {
+      this.tab.set('jobs');
+      void this.loadJobs();
+    } else {
+      void this.loadSteps();
+    }
+
+    if (job) this.openJobId.set(job);
+  }
+
+  ngOnDestroy(): void {
+    clearTimeout(this.jobPollTimer);
+  }
+
+  private updateQueryParams(extra: Record<string, string | null>): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: this.tab(), ...extra },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   selectTab(tab: 'steps' | 'prompts' | 'jobs' | 'lmstudio'): void {
     this.tab.set(tab);
+    this.updateQueryParams({});
     if (tab === 'prompts' && this.promptSlots().length === 0) void this.loadPrompts();
     if (tab === 'jobs' && this.jobs().length === 0) void this.loadJobs();
     if (tab === 'lmstudio' && this.lmStudioFallbackModel() === '') void this.loadLmStudioModel();
@@ -202,9 +253,11 @@ export class AdminPipelineComponent implements OnInit {
   async loadJobs(): Promise<void> {
     this.jobsLoading.set(true);
     try {
-      const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, 25);
+      const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, 25, this.jobReason());
       this.jobs.set(page.rows);
       this.jobsTotal.set(page.total);
+      this.selectedJobIds.set(new Set());
+      this.scheduleJobsPollIfRunning();
     } catch {
       this.toast.error('Не удалось загрузить список задач.');
     } finally {
@@ -212,9 +265,50 @@ export class AdminPipelineComponent implements OnInit {
     }
   }
 
+  /** Автообновление (§8 плана) — пока в выдаче есть Pending/Running, список сам подтягивает
+   * актуальные статусы; тот же приём, что AdminEnrichmentComponent.scheduleRebuildPollIfRunning. */
+  private scheduleJobsPollIfRunning(): void {
+    clearTimeout(this.jobPollTimer);
+    if (!this.jobs().some((j) => j.status === 'Pending' || j.status === 'Running')) return;
+
+    this.jobPollTimer = setTimeout(async () => {
+      try {
+        const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, 25, this.jobReason());
+        this.jobs.set(page.rows);
+        this.jobsTotal.set(page.total);
+      } catch {
+        // Транзиентная ошибка поллинга — пробуем снова на следующем тике.
+      }
+      this.scheduleJobsPollIfRunning();
+    }, JOB_POLL_INTERVAL_MS);
+  }
+
   async selectJobType(type: PipelineJobType): Promise<void> {
     this.jobType.set(type);
+    this.updateQueryParams({ type });
     await this.loadJobs();
+  }
+
+  async selectJobStatus(status: string): Promise<void> {
+    this.jobStatus.set(status);
+    this.updateQueryParams({ status: status || null });
+    await this.loadJobs();
+  }
+
+  clearJobReason(): void {
+    this.jobReason.set(null);
+    this.updateQueryParams({ reason: null });
+    void this.loadJobs();
+  }
+
+  openJob(job: PipelineJob): void {
+    this.openJobId.set(job.id);
+    this.updateQueryParams({ job: job.id });
+  }
+
+  closeJobPanel(): void {
+    this.openJobId.set(null);
+    this.updateQueryParams({ job: null });
   }
 
   async retryJob(job: PipelineJob): Promise<void> {
@@ -225,6 +319,31 @@ export class AdminPipelineComponent implements OnInit {
       await this.loadJobs();
     } catch {
       this.toast.error('Не удалось перезапустить задачу.');
+    } finally {
+      this.jobsBusy.set(false);
+    }
+  }
+
+  toggleJobSelection(id: string): void {
+    this.selectedJobIds.update((set) => {
+      const copy = new Set(set);
+      if (copy.has(id)) copy.delete(id);
+      else copy.add(id);
+      return copy;
+    });
+  }
+
+  async bulkRetrySelected(): Promise<void> {
+    const ids = [...this.selectedJobIds()];
+    if (ids.length === 0) return;
+
+    this.jobsBusy.set(true);
+    try {
+      const result = await this.api.bulkRetryJobs(this.jobType(), ids);
+      this.toast.success(`Перезапущено задач: ${result.retriedCount}.`);
+      await this.loadJobs();
+    } catch {
+      this.toast.error('Не удалось перезапустить выбранные задачи.');
     } finally {
       this.jobsBusy.set(false);
     }

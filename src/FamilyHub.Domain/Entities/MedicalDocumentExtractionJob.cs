@@ -40,6 +40,11 @@ public class MedicalDocumentExtractionJob
 
     public string? Error { get; set; }
 
+    /// <summary>См. LabAnalyteEnrichmentJob.FailureReason — та же машиночитаемая классификация.
+    /// В этом конвейере сегодня заполняется только для терминального LmStudioUnavailable/Unknown
+    /// (см. MedicalDocumentExtractionProcessor) — извлечение не проходит через доверенные домены.</summary>
+    public EnrichmentFailureReason? FailureReason { get; set; }
+
     /// <summary>true — последний отказ был техническим (LM Studio недоступен), не смысловым.
     /// Проставляется только на терминальном Failed после исчерпания [AutomaticRetry]
     /// (см. MedicalDocumentExtractionProcessor) — LmStudioRecoverySweepJob находит такие задачи и

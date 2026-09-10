@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   AdminApiService,
+  AdminKbEditRequest,
   AdminLabAnalyteDetail,
   AdminMedicationDetail,
   GlobalSpecimen,
@@ -11,20 +12,22 @@ import {
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
 
 const PAGE_SIZE = 20;
 
 /**
- * Ручная правка справочников после ИИ из админки (§3 плана) — показатели, медикаменты,
+ * Ручная правка справочников после ИИ из админки (§3/§10 плана) — показатели, медикаменты,
  * источники. Каждое сохранённое поле (имя/payload/алиасы) автоматически лочится — следующий
  * проход автообогащения его не тронет (см. class doc AdminCatalogService на бэкенде). Payload
- * редактируется как сырой JSON-текст (тот же выбор, что редактор промптов) — проще и честнее
- * формы по каждому подполю: автообогащение всё равно пишет payload целиком.
+ * редактируется через `app-admin-payload-editor` — тумблер «Форма ⇄ JSON»: форма лочит только
+ * реально изменённые "payload.&lt;key&gt;", JSON — payload целиком (тот же выбор, что раньше был
+ * единственным, теперь ветка на случай схемы/полей вне формы).
  */
 @Component({
   selector: 'app-admin-catalog',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, AdminPayloadEditorComponent],
   templateUrl: './admin-catalog.component.html',
 })
 export class AdminCatalogComponent implements OnInit {
@@ -40,7 +43,6 @@ export class AdminCatalogComponent implements OnInit {
   readonly analytesLoading = signal(false);
   readonly analyteDetail = signal<AdminLabAnalyteDetail | null>(null);
   readonly analyteEditorDisplayName = signal('');
-  readonly analyteEditorPayload = signal('');
   readonly analyteEditorAliases = signal('');
   readonly analyteBusy = signal(false);
   /** Мердж дублей (§ ручной мердж): id строки, отмеченной как "проигравшая" — следующий клик
@@ -53,7 +55,6 @@ export class AdminCatalogComponent implements OnInit {
   readonly medicationsLoading = signal(false);
   readonly medicationDetail = signal<AdminMedicationDetail | null>(null);
   readonly medicationEditorDisplayName = signal('');
-  readonly medicationEditorPayload = signal('');
   readonly medicationEditorAliases = signal('');
   readonly medicationBusy = signal(false);
 
@@ -98,29 +99,45 @@ export class AdminCatalogComponent implements OnInit {
       const detail = await this.api.getLabAnalyte(item.id);
       this.analyteDetail.set(detail);
       this.analyteEditorDisplayName.set(detail.displayName);
-      this.analyteEditorPayload.set(this.prettyJson(detail.payloadJson));
       this.analyteEditorAliases.set(detail.aliases.join(', '));
     } catch {
       this.toast.error('Не удалось загрузить показатель.');
     }
   }
 
-  async saveAnalyteField(field: 'displayName' | 'payloadJson' | 'aliases'): Promise<void> {
+  async saveAnalyteField(field: 'displayName' | 'aliases'): Promise<void> {
     const detail = this.analyteDetail();
     if (!detail) return;
 
     this.analyteBusy.set(true);
     try {
-      const request =
+      const request: AdminKbEditRequest =
         field === 'displayName'
           ? { displayName: this.analyteEditorDisplayName() }
-          : field === 'payloadJson'
-            ? { payloadJson: this.analyteEditorPayload() }
-            : { aliases: this.splitAliases(this.analyteEditorAliases()) };
+          : { aliases: this.splitAliases(this.analyteEditorAliases()) };
 
-      const updated = await this.api.updateLabAnalyte(detail.id, request);
-      this.analyteDetail.set(updated);
-      this.analyteEditorPayload.set(this.prettyJson(updated.payloadJson));
+      this.analyteDetail.set(await this.api.updateLabAnalyte(detail.id, request));
+      this.toast.success('Сохранено и залочено.');
+      await this.searchAnalytes();
+    } catch {
+      this.toast.error('Не удалось сохранить — проверьте текст на персональные данные.');
+    } finally {
+      this.analyteBusy.set(false);
+    }
+  }
+
+  /** См. app-admin-payload-editor.PayloadSaveEvent — changedKeys=null (режим JSON) лочит payload
+   * целиком, changedKeys=[] (режим формы) лочит только реально изменённые "payload.&lt;key&gt;". */
+  async onAnalytePayloadSave(event: PayloadSaveEvent): Promise<void> {
+    const detail = this.analyteDetail();
+    if (!detail) return;
+
+    this.analyteBusy.set(true);
+    try {
+      const request: AdminKbEditRequest = { payloadJson: event.payloadJson };
+      if (event.changedKeys !== null) request.lockedPayloadKeys = event.changedKeys;
+
+      this.analyteDetail.set(await this.api.updateLabAnalyte(detail.id, request));
       this.toast.success('Сохранено и залочено.');
       await this.searchAnalytes();
     } catch {
@@ -238,29 +255,43 @@ export class AdminCatalogComponent implements OnInit {
       const detail = await this.api.getMedication(item.id);
       this.medicationDetail.set(detail);
       this.medicationEditorDisplayName.set(detail.displayName);
-      this.medicationEditorPayload.set(this.prettyJson(detail.payloadJson));
       this.medicationEditorAliases.set(detail.aliases.join(', '));
     } catch {
       this.toast.error('Не удалось загрузить медикамент.');
     }
   }
 
-  async saveMedicationField(field: 'displayName' | 'payloadJson' | 'aliases'): Promise<void> {
+  async saveMedicationField(field: 'displayName' | 'aliases'): Promise<void> {
     const detail = this.medicationDetail();
     if (!detail) return;
 
     this.medicationBusy.set(true);
     try {
-      const request =
+      const request: AdminKbEditRequest =
         field === 'displayName'
           ? { displayName: this.medicationEditorDisplayName() }
-          : field === 'payloadJson'
-            ? { payloadJson: this.medicationEditorPayload() }
-            : { aliases: this.splitAliases(this.medicationEditorAliases()) };
+          : { aliases: this.splitAliases(this.medicationEditorAliases()) };
 
-      const updated = await this.api.updateMedication(detail.id, request);
-      this.medicationDetail.set(updated);
-      this.medicationEditorPayload.set(this.prettyJson(updated.payloadJson));
+      this.medicationDetail.set(await this.api.updateMedication(detail.id, request));
+      this.toast.success('Сохранено и залочено.');
+      await this.searchMedications();
+    } catch {
+      this.toast.error('Не удалось сохранить — проверьте текст на персональные данные.');
+    } finally {
+      this.medicationBusy.set(false);
+    }
+  }
+
+  async onMedicationPayloadSave(event: PayloadSaveEvent): Promise<void> {
+    const detail = this.medicationDetail();
+    if (!detail) return;
+
+    this.medicationBusy.set(true);
+    try {
+      const request: AdminKbEditRequest = { payloadJson: event.payloadJson };
+      if (event.changedKeys !== null) request.lockedPayloadKeys = event.changedKeys;
+
+      this.medicationDetail.set(await this.api.updateMedication(detail.id, request));
       this.toast.success('Сохранено и залочено.');
       await this.searchMedications();
     } catch {
@@ -404,11 +435,9 @@ export class AdminCatalogComponent implements OnInit {
     return raw.split(',').map((a) => a.trim()).filter((a) => a.length > 0);
   }
 
-  private prettyJson(json: string): string {
-    try {
-      return JSON.stringify(JSON.parse(json), null, 2);
-    } catch {
-      return json;
-    }
+  /** "payload.<key>" -> "<key>" — гранулярные локи (§4/§10 плана) рядом с локом всего "payload"
+   * в том же массиве LockedFields. */
+  partialPayloadLocks(lockedFields: readonly string[]): string[] {
+    return lockedFields.filter((f) => f.startsWith('payload.')).map((f) => f.slice('payload.'.length));
   }
 }

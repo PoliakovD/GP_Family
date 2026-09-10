@@ -167,6 +167,103 @@ public class LabAnalyteKbRebuildJobTests(AdminWebFactory factory)
             .Should().BeFalse("жёсткое требование — обогащение никогда не ставится в очередь для нерезолвленного источника");
     }
 
+    /// <summary>Регресс-тест на баг, найденный при разборе конвейера (§4 плана «удобное
+    /// администрирование»): ClearCatalogAsync раньше делал безусловный DELETE, уничтожая ручные
+    /// правки администратора вместе со всем остальным. Залоченная строка должна пережить пересборку
+    /// нетронутой, а привязанный к ней показатель — не потерять ссылку/RefSource; незалоченная
+    /// строка удаляется, как и раньше.</summary>
+    [Fact]
+    public async Task Rebuild_PreservesLockedCatalogRow_DeletesUnlockedRow()
+    {
+        var admin = await AdminClientAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        var lockedName = $"калийлок{suffix}";
+        var unlockedName = $"натрийнелок{suffix}";
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var bloodId = await SeedSpecimenAsync(db, $"Кровь{suffix}");
+
+        var lockedKbId = Guid.NewGuid();
+        var unlockedKbId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        db.GlobalLabAnalytesKb.AddRange(
+            new GlobalLabAnalyteKb
+            {
+                Id = lockedKbId, NormalizedName = lockedName, SpecimenKbId = bloodId, DisplayName = "Калий (ручная правка)",
+                PayloadJson = """{"plainExplanation":"правка администратора"}""", Source = "тест",
+                PayloadVersion = 4, CreatedAt = now, UpdatedAt = now,
+            },
+            new GlobalLabAnalyteKb
+            {
+                Id = unlockedKbId, NormalizedName = unlockedName, SpecimenKbId = bloodId, DisplayName = "Натрий",
+                PayloadJson = "{}", Source = "тест", PayloadVersion = 4, CreatedAt = now, UpdatedAt = now,
+            });
+
+        var recordId = Guid.NewGuid();
+        db.MedicalRecords.Add(new MedicalRecord
+        {
+            Id = recordId, OwnerUserId = OwnerUserId, Kind = MedicalRecordKind.Analysis,
+            RecordDate = new DateOnly(2026, 1, 1), ExtractionStatus = ExtractionStatus.Ready, CreatedAt = now,
+        });
+
+        var lockedIndicatorId = Guid.NewGuid();
+        var unlockedIndicatorId = Guid.NewGuid();
+        db.LabIndicators.AddRange(
+            new LabIndicator
+            {
+                Id = lockedIndicatorId, MedicalRecordId = recordId, RecordDate = new DateOnly(2026, 1, 1), OwnerUserId = OwnerUserId,
+                AnalyteKey = lockedName, DisplayName = "Калий (ручная правка)", SpecimenKbId = bloodId, Position = 0,
+                ValueRaw = "4.5", Flag = IndicatorFlag.Normal, CreatedAt = now,
+                KbAnalyteId = lockedKbId, RefSource = RefSource.KbFixed,
+            },
+            new LabIndicator
+            {
+                Id = unlockedIndicatorId, MedicalRecordId = recordId, RecordDate = new DateOnly(2026, 1, 1), OwnerUserId = OwnerUserId,
+                AnalyteKey = unlockedName, DisplayName = "Натрий", SpecimenKbId = bloodId, Position = 1,
+                ValueRaw = "140", Flag = IndicatorFlag.Normal, CreatedAt = now,
+                KbAnalyteId = unlockedKbId, RefSource = RefSource.KbFixed,
+            });
+        await db.SaveChangesAsync();
+
+        // Лочим payload ТОЛЬКО у первой строки — тем же путём, что администратор в реальности
+        // (PUT из карточки справочника), не прямой записью LockedFields в БД.
+        var lockResponse = await admin.PutAsJsonAsync(
+            $"/api/admin/kb/lab-analytes/{lockedKbId}", new { payloadJson = """{"plainExplanation":"правка администратора"}""" });
+        lockResponse.EnsureSuccessStatusCode();
+
+        var startResponse = await admin.PostAsync("/api/admin/kb/lab-analytes/rebuild", null);
+        startResponse.EnsureSuccessStatusCode();
+
+        await WaitForAsync(async () =>
+        {
+            var status = await admin.GetFromJsonAsync<RebuildStatusDto>("/api/admin/kb/lab-analytes/rebuild/status");
+            return status!.Status is "Completed" or "Failed";
+        }, "пересборка должна завершиться (Hangfire, очередь enrichment)");
+
+        var finalStatus = await admin.GetFromJsonAsync<RebuildStatusDto>("/api/admin/kb/lab-analytes/rebuild/status");
+        finalStatus!.Status.Should().Be("Completed", finalStatus.LastError);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var lockedRow = await verifyDb.GlobalLabAnalytesKb.AsNoTracking().FirstOrDefaultAsync(k => k.Id == lockedKbId);
+        lockedRow.Should().NotBeNull("залоченная строка не должна удаляться безусловным DELETE пересборки");
+        lockedRow!.PayloadJson.Should().Contain("правка администратора", "содержимое залоченной строки не должно меняться");
+
+        (await verifyDb.GlobalLabAnalytesKb.AnyAsync(k => k.Id == unlockedKbId))
+            .Should().BeFalse("незалоченная строка удаляется пересборкой как раньше");
+
+        var lockedIndicator = await verifyDb.LabIndicators.AsNoTracking().SingleAsync(i => i.Id == lockedIndicatorId);
+        lockedIndicator.KbAnalyteId.Should().Be(lockedKbId, "ссылка на сохранённую (залоченную) строку не должна сбрасываться");
+        lockedIndicator.RefSource.Should().Be(RefSource.KbFixed, "RefSource не должен откатываться для показателя, чья KB-строка осталась валидной");
+
+        var unlockedIndicator = await verifyDb.LabIndicators.AsNoTracking().SingleAsync(i => i.Id == unlockedIndicatorId);
+        unlockedIndicator.KbAnalyteId.Should().BeNull("ссылка на удалённую строку должна сброситься, как и раньше");
+        unlockedIndicator.RefSource.Should().Be(RefSource.None, "RefSource сбрасывается вместе со ссылкой на удалённую строку");
+    }
+
     private record RebuildStatusDto(Guid? RunId, string? Status, DateTime? StartedAt, DateTime? FinishedAt, string? LastError,
         int StageIndex, int CacheMerged, int IndicatorsUpdated, int IndicatorsMerged, int CatalogDeleted, int ReseedRequested);
 }

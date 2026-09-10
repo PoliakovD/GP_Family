@@ -7,6 +7,7 @@ using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FamilyHub.Api.Features.Admin;
 
@@ -26,9 +27,63 @@ namespace FamilyHub.Api.Features.Admin;
 /// </summary>
 public static class AdminPipelineEndpoints
 {
+    private const string AttentionCacheKey = "admin:pipeline:attention";
+    private static readonly TimeSpan AttentionCacheTtl = TimeSpan.FromSeconds(60);
+
     public static void MapAdminPipelineEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/pipeline").RequireAuthorization("PlatformAdmin");
+
+        // Инбокс «Требует внимания» — точка входа админки в этот раздел (см. §3/§7 плана): что
+        // сломано и почему, сгруппировано, вместо ручного разбора списка задач построчно.
+        // Разбор кэша поиска по каждой Failed-задаче не бесплатен — короткий TTL, тот же приём,
+        // что AdminEndpoints.GetStorageStatsAsync (там 15 минут — там дороже и меняется реже).
+        group.MapGet("/attention", async (AdminAttentionService attention, IMemoryCache cache, CancellationToken ct) =>
+        {
+            if (cache.TryGetValue(AttentionCacheKey, out AdminAttentionDto? cached) && cached is not null)
+                return Results.Ok(cached);
+
+            var fresh = await attention.GetAttentionAsync(ct);
+            cache.Set(AttentionCacheKey, fresh, AttentionCacheTtl);
+            return Results.Ok(fresh);
+        });
+
+        // «Доверить все и перезапустить N» — батч-действие на самый частый отброшенный домен(ы)
+        // прямо из инбокса, без перехода в «Обогащение» и без открытия каждой задачи по отдельности.
+        group.MapPost("/attention/trust-and-retry", async (
+            TrustAndRetryRequest request, AppDbContext db, EnrichmentTrustedDomainService trustedDomains,
+            IBackgroundJobClient backgroundJobs, IMemoryCache cache, CancellationToken ct) =>
+        {
+            foreach (var domain in request.Domains)
+                await trustedDomains.AddAsync(request.Topic, domain, ct);
+
+            var retried = 0;
+            if (request.Topic == WebSearchTopic.LabAnalyte)
+            {
+                var ids = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
+                    .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == EnrichmentFailureReason.NoTrustedSnippets)
+                    .Select(j => j.Id).Take(100).ToListAsync(ct);
+                foreach (var id in ids)
+                    if (await ResetAndEnqueueAsync("lab-analyte", id, db, backgroundJobs, ct)) retried++;
+            }
+            else
+            {
+                var medIds = await db.MedicationEnrichmentJobs.AsNoTracking()
+                    .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == EnrichmentFailureReason.NoTrustedSnippets)
+                    .Select(j => j.Id).Take(100).ToListAsync(ct);
+                foreach (var id in medIds)
+                    if (await ResetAndEnqueueAsync("medication", id, db, backgroundJobs, ct)) retried++;
+
+                var visitIds = await db.VisitMedicationEnrichmentJobs.AsNoTracking()
+                    .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == EnrichmentFailureReason.NoTrustedSnippets)
+                    .Select(j => j.Id).Take(100 - retried).ToListAsync(ct);
+                foreach (var id in visitIds)
+                    if (await ResetAndEnqueueAsync("visit-medication", id, db, backgroundJobs, ct)) retried++;
+            }
+
+            cache.Remove(AttentionCacheKey);
+            return Results.Ok(new TrustAndRetryResponse(retried));
+        });
 
         group.MapGet("/pipelines", async (AppDbContext db, CancellationToken ct) =>
         {
@@ -194,33 +249,38 @@ public static class AdminPipelineEndpoints
         });
 
         group.MapGet("/jobs", async (
-            string? type, string? status, int? skip, int? take, AppDbContext db, CancellationToken ct) =>
+            string? type, string? status, string? reason, int? skip, int? take, AppDbContext db, CancellationToken ct) =>
         {
             var take2 = Math.Clamp(take ?? 25, 1, 100);
             var skip2 = Math.Max(skip ?? 0, 0);
             EnrichmentJobStatus? statusFilter = Enum.TryParse<EnrichmentJobStatus>(status, true, out var s) ? s : null;
+            EnrichmentFailureReason? reasonFilter = Enum.TryParse<EnrichmentFailureReason>(reason, true, out var r) ? r : null;
 
             var response = type switch
             {
                 "lab-analyte" => await ListAsync(db.LabAnalyteEnrichmentJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
+                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
                     .OrderByDescending(j => j.CreatedAt),
-                    j => new PipelineJobDto(j.Id, "lab-analyte", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt),
+                    j => new PipelineJobDto(j.Id, "lab-analyte", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 "medication" => await ListAsync(db.MedicationEnrichmentJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
+                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
                     .OrderByDescending(j => j.CreatedAt),
-                    j => new PipelineJobDto(j.Id, "medication", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt),
+                    j => new PipelineJobDto(j.Id, "medication", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 "visit-medication" => await ListAsync(db.VisitMedicationEnrichmentJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
+                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
                     .OrderByDescending(j => j.CreatedAt),
-                    j => new PipelineJobDto(j.Id, "visit-medication", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt),
+                    j => new PipelineJobDto(j.Id, "visit-medication", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 "extraction" => await ListAsync(db.MedicalDocumentExtractionJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
+                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
                     .OrderByDescending(j => j.CreatedAt),
-                    j => new PipelineJobDto(j.Id, "extraction", j.MedicalRecordId.ToString(), j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt),
+                    j => new PipelineJobDto(j.Id, "extraction", j.MedicalRecordId.ToString(), j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 _ => (PipelineJobListResponse?)null,
             };
@@ -230,56 +290,223 @@ public static class AdminPipelineEndpoints
                 : Results.Ok(response);
         });
 
-        group.MapPost("/jobs/{id:guid}/retry", async (
-            Guid id, string type, AppDbContext db, IBackgroundJobClient backgroundJobs, CancellationToken ct) =>
+        // Карточка одной задачи для боковой панели («Требует внимания» → карточка, список задач →
+        // карточка — тот же компонент на фронте) — раньше причину отказа и связанные сниппеты
+        // приходилось искать вручную на двух разных вкладках (см. план, Context).
+        group.MapGet("/jobs/{id:guid}", async (
+            Guid id, string type, AppDbContext db, LabAnalyteSearchCacheService labCache,
+            MedicationSearchCacheService medCache, EnrichmentTrustedDomainService trustedDomains, CancellationToken ct) =>
         {
             switch (type)
             {
                 case "lab-analyte":
                 {
-                    var job = await db.LabAnalyteEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                    var job = await db.LabAnalyteEnrichmentJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
                     if (job is null) return Results.NotFound();
-                    job.Status = EnrichmentJobStatus.Pending;
-                    job.Error = null;
-                    await db.SaveChangesAsync(ct);
-                    backgroundJobs.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                    break;
+
+                    var specimenName = await db.GlobalSpecimensKb.AsNoTracking()
+                        .Where(sp => sp.Id == job.SpecimenKbId).Select(sp => sp.DisplayName).FirstOrDefaultAsync(ct);
+                    var allDomains = await trustedDomains.GetAllAsync(WebSearchTopic.LabAnalyte, ct);
+                    var activeDomains = allDomains.Where(d => d.IsEnabled).OrderBy(d => d.Rank).Select(d => d.Domain).ToList();
+
+                    var cacheRow = await labCache.GetByNameAsync(job.NormalizedName, job.SpecimenKbId, ct);
+                    SearchCacheDetailDto? searchCache = null;
+                    if (cacheRow is not null)
+                    {
+                        var cached = await labCache.GetCachedAsync(job.NormalizedName, job.SpecimenKbId, ct);
+                        searchCache = AdminEnrichmentEndpoints.BuildDetail(
+                            cacheRow.Id, cacheRow.NormalizedName, specimenName, cacheRow.Provider,
+                            cacheRow.LastUpdatedAt, cacheRow.CanBeUpdatedAfter,
+                            cached?.Snippets ?? [], cached?.Overrides, activeDomains);
+                    }
+
+                    return Results.Ok(new PipelineJobDetailDto(
+                        job.Id, "lab-analyte", job.SourceDisplayName, job.Status.ToString(), job.Attempts, job.Error,
+                        job.FailureReason?.ToString(), job.CreatedAt, job.StartedAt, job.CompletedAt,
+                        job.NormalizedName, job.SpecimenKbId, specimenName, job.Origin.ToString(), job.Force,
+                        job.Provider, job.ExternalSearchAt, job.IsTransientFailure, job.KbId,
+                        searchCache, allDomains.Select(d => new TrustedDomainDto(d.Id, d.Domain, d.Rank, d.IsEnabled)).ToList()));
                 }
                 case "medication":
                 {
-                    var job = await db.MedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                    var job = await db.MedicationEnrichmentJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
                     if (job is null) return Results.NotFound();
-                    job.Status = EnrichmentJobStatus.Pending;
-                    job.Error = null;
-                    await db.SaveChangesAsync(ct);
-                    backgroundJobs.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                    break;
+
+                    var allDomains = await trustedDomains.GetAllAsync(WebSearchTopic.Medication, ct);
+                    var activeDomains = allDomains.Where(d => d.IsEnabled).OrderBy(d => d.Rank).Select(d => d.Domain).ToList();
+
+                    var cacheRow = await medCache.GetByNameAsync(job.NormalizedName, ct);
+                    SearchCacheDetailDto? searchCache = null;
+                    if (cacheRow is not null)
+                    {
+                        var cached = await medCache.GetCachedAsync(job.NormalizedName, ct);
+                        searchCache = AdminEnrichmentEndpoints.BuildDetail(
+                            cacheRow.Id, cacheRow.NormalizedName, null, cacheRow.Provider,
+                            cacheRow.LastUpdatedAt, cacheRow.CanBeUpdatedAfter,
+                            cached?.Snippets ?? [], cached?.Overrides, activeDomains);
+                    }
+
+                    return Results.Ok(new PipelineJobDetailDto(
+                        job.Id, "medication", job.SourceDisplayName, job.Status.ToString(), job.Attempts, job.Error,
+                        job.FailureReason?.ToString(), job.CreatedAt, job.StartedAt, job.CompletedAt,
+                        job.NormalizedName, null, null, null, false,
+                        job.Provider, job.ExternalSearchAt, job.IsTransientFailure, job.KbId,
+                        searchCache, allDomains.Select(d => new TrustedDomainDto(d.Id, d.Domain, d.Rank, d.IsEnabled)).ToList()));
                 }
                 case "visit-medication":
                 {
-                    var job = await db.VisitMedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                    var job = await db.VisitMedicationEnrichmentJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
                     if (job is null) return Results.NotFound();
-                    job.Status = EnrichmentJobStatus.Pending;
-                    job.Error = null;
-                    await db.SaveChangesAsync(ct);
-                    backgroundJobs.Enqueue<VisitMedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                    break;
+
+                    var allDomains = await trustedDomains.GetAllAsync(WebSearchTopic.Medication, ct);
+                    var activeDomains = allDomains.Where(d => d.IsEnabled).OrderBy(d => d.Rank).Select(d => d.Domain).ToList();
+
+                    var cacheRow = await medCache.GetByNameAsync(job.NormalizedName, ct);
+                    SearchCacheDetailDto? searchCache = null;
+                    if (cacheRow is not null)
+                    {
+                        var cached = await medCache.GetCachedAsync(job.NormalizedName, ct);
+                        searchCache = AdminEnrichmentEndpoints.BuildDetail(
+                            cacheRow.Id, cacheRow.NormalizedName, null, cacheRow.Provider,
+                            cacheRow.LastUpdatedAt, cacheRow.CanBeUpdatedAfter,
+                            cached?.Snippets ?? [], cached?.Overrides, activeDomains);
+                    }
+
+                    // VisitMedicationEnrichmentJob не несёт IsTransientFailure (см. class doc —
+                    // зеркало MedicationEnrichmentJob без семейного контура) — терминальный технический
+                    // сбой здесь неотличим от смыслового кроме как по FailureReason.
+                    return Results.Ok(new PipelineJobDetailDto(
+                        job.Id, "visit-medication", job.SourceDisplayName, job.Status.ToString(), job.Attempts, job.Error,
+                        job.FailureReason?.ToString(), job.CreatedAt, job.StartedAt, job.CompletedAt,
+                        job.NormalizedName, null, null, null, false,
+                        job.Provider, job.ExternalSearchAt, false, job.KbId,
+                        searchCache, allDomains.Select(d => new TrustedDomainDto(d.Id, d.Domain, d.Rank, d.IsEnabled)).ToList()));
                 }
                 case "extraction":
                 {
-                    var job = await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                    var job = await db.MedicalDocumentExtractionJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
                     if (job is null) return Results.NotFound();
-                    job.Status = EnrichmentJobStatus.Pending;
-                    job.Error = null;
-                    await db.SaveChangesAsync(ct);
-                    backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                    break;
+
+                    return Results.Ok(new PipelineJobDetailDto(
+                        job.Id, "extraction", job.MedicalRecordId.ToString(), job.Status.ToString(), job.Attempts, job.Error,
+                        job.FailureReason?.ToString(), job.CreatedAt, job.StartedAt, job.CompletedAt,
+                        null, null, null, null, false, null, null, job.IsTransientFailure, null, null, []));
                 }
                 default:
                     return Results.BadRequest(new { message = "type обязателен: lab-analyte|medication|visit-medication|extraction." });
             }
+        });
 
-            return Results.Accepted();
+        group.MapPost("/jobs/{id:guid}/retry", async (
+            Guid id, string type, AppDbContext db, IBackgroundJobClient backgroundJobs, IMemoryCache cache, CancellationToken ct) =>
+        {
+            if (type is not ("lab-analyte" or "medication" or "visit-medication" or "extraction"))
+                return Results.BadRequest(new { message = "type обязателен: lab-analyte|medication|visit-medication|extraction." });
+
+            var reset = await ResetAndEnqueueAsync(type, id, db, backgroundJobs, ct);
+            if (reset) cache.Remove(AttentionCacheKey);
+            return reset ? Results.Accepted() : Results.NotFound();
+        });
+
+        // «Применить и перезапустить» из карточки задачи — доверяет домены/override'ы конкретных
+        // URL и перезапускает ОДНИМ запросом, вместо перехода на вкладку «Обогащение» и обратно
+        // (см. план, Context). У extraction нет ни доменов, ни сниппетов — не поддерживается.
+        group.MapPost("/jobs/{id:guid}/resolve-and-retry", async (
+            Guid id, string type, ResolveAndRetryRequest request, AppDbContext db,
+            LabAnalyteSearchCacheService labCache, MedicationSearchCacheService medCache,
+            EnrichmentTrustedDomainService trustedDomains, IBackgroundJobClient backgroundJobs,
+            IMemoryCache cache, CancellationToken ct) =>
+        {
+            string normalizedName;
+            Guid? specimenKbId;
+            WebSearchTopic topic;
+
+            switch (type)
+            {
+                case "lab-analyte":
+                {
+                    var job = await db.LabAnalyteEnrichmentJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
+                    if (job is null) return Results.NotFound();
+                    normalizedName = job.NormalizedName;
+                    specimenKbId = job.SpecimenKbId;
+                    topic = WebSearchTopic.LabAnalyte;
+                    break;
+                }
+                case "medication":
+                {
+                    var job = await db.MedicationEnrichmentJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
+                    if (job is null) return Results.NotFound();
+                    normalizedName = job.NormalizedName;
+                    specimenKbId = null;
+                    topic = WebSearchTopic.Medication;
+                    break;
+                }
+                case "visit-medication":
+                {
+                    var job = await db.VisitMedicationEnrichmentJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, ct);
+                    if (job is null) return Results.NotFound();
+                    normalizedName = job.NormalizedName;
+                    specimenKbId = null;
+                    topic = WebSearchTopic.Medication;
+                    break;
+                }
+                default:
+                    return Results.BadRequest(new { message = "type должен быть lab-analyte|medication|visit-medication — у extraction нет сниппетов/доменов." });
+            }
+
+            // 1. Домены доверия — раньше override'ов: сам факт добавления домена уже включает
+            // все его сниппеты (EnrichmentSnippetFilter), дубликат — success:false, не ошибка запроса.
+            foreach (var domain in request.TrustDomains ?? [])
+                await trustedDomains.AddAsync(topic, domain, ct);
+
+            // 2. Override конкретных URL — строка кэша существует, только если по этому имени уже
+            // был хотя бы один платный поиск (иначе фронт не смог бы прислать Overrides вовсе).
+            if (request.Overrides is { Count: > 0 })
+            {
+                var cacheId = topic == WebSearchTopic.LabAnalyte
+                    ? (await labCache.GetByNameAsync(normalizedName, specimenKbId!.Value, ct))?.Id
+                    : (await medCache.GetByNameAsync(normalizedName, ct))?.Id;
+
+                if (cacheId is not null)
+                {
+                    foreach (var item in request.Overrides)
+                    {
+                        if (topic == WebSearchTopic.LabAnalyte)
+                            await labCache.SetSnippetOverrideAsync(cacheId.Value, item.Url, item.Enabled, ct);
+                        else
+                            await medCache.SetSnippetOverrideAsync(cacheId.Value, item.Url, item.Enabled, ct);
+                    }
+                }
+            }
+
+            // 3. Сброс задачи и перезапуск — после того, как БД уже видит новые домены/override'ы
+            // (единственный воркер очереди enrichment не должен подхватить задачу раньше коммита).
+            var reset = await ResetAndEnqueueAsync(type, id, db, backgroundJobs, ct);
+            if (reset) cache.Remove(AttentionCacheKey);
+            return reset ? Results.Accepted() : Results.NotFound();
+        });
+
+        // Массовый перезапуск — чекбоксы в списке задач («Требует внимания» → «Доверить все и
+        // перезапустить N», список задач → «Перезапустить N выбранных»).
+        group.MapPost("/jobs/bulk-retry", async (
+            BulkRetryRequest request, AppDbContext db, IBackgroundJobClient backgroundJobs, IMemoryCache cache, CancellationToken ct) =>
+        {
+            if (request.Type is not ("lab-analyte" or "medication" or "visit-medication" or "extraction"))
+                return Results.BadRequest(new { message = "type обязателен: lab-analyte|medication|visit-medication|extraction." });
+            if (request.Ids.Count == 0)
+                return Results.BadRequest(new { message = "ids не может быть пустым." });
+            if (request.Ids.Count > 100)
+                return Results.BadRequest(new { message = "не более 100 задач за один запрос." });
+
+            var notFound = new List<Guid>();
+            var retried = 0;
+            foreach (var id in request.Ids.Distinct())
+            {
+                if (await ResetAndEnqueueAsync(request.Type, id, db, backgroundJobs, ct)) retried++;
+                else notFound.Add(id);
+            }
+            if (retried > 0) cache.Remove(AttentionCacheKey);
+            return Results.Ok(new BulkRetryResponse(retried, notFound));
         });
 
         // Точечное принудительное переобогащение одной уже существующей строки справочника
@@ -306,6 +533,63 @@ public static class AdminPipelineEndpoints
             backgroundJobs.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
             return Results.Accepted();
         });
+    }
+
+    /// <summary>Сброс задачи в Pending (снимает Error/FailureReason — задача перезапускается
+    /// начисто) + постановка в очередь тем же процессором. Общий хвост для одиночного retry,
+    /// resolve-and-retry и bulk-retry — раньше было четыре независимые копии этого switch.</summary>
+    private static async Task<bool> ResetAndEnqueueAsync(
+        string type, Guid id, AppDbContext db, IBackgroundJobClient backgroundJobs, CancellationToken ct)
+    {
+        switch (type)
+        {
+            case "lab-analyte":
+            {
+                var job = await db.LabAnalyteEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                if (job is null) return false;
+                job.Status = EnrichmentJobStatus.Pending;
+                job.Error = null;
+                job.FailureReason = null;
+                await db.SaveChangesAsync(ct);
+                backgroundJobs.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+                return true;
+            }
+            case "medication":
+            {
+                var job = await db.MedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                if (job is null) return false;
+                job.Status = EnrichmentJobStatus.Pending;
+                job.Error = null;
+                job.FailureReason = null;
+                await db.SaveChangesAsync(ct);
+                backgroundJobs.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+                return true;
+            }
+            case "visit-medication":
+            {
+                var job = await db.VisitMedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                if (job is null) return false;
+                job.Status = EnrichmentJobStatus.Pending;
+                job.Error = null;
+                job.FailureReason = null;
+                await db.SaveChangesAsync(ct);
+                backgroundJobs.Enqueue<VisitMedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+                return true;
+            }
+            case "extraction":
+            {
+                var job = await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
+                if (job is null) return false;
+                job.Status = EnrichmentJobStatus.Pending;
+                job.Error = null;
+                job.FailureReason = null;
+                await db.SaveChangesAsync(ct);
+                backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+                return true;
+            }
+            default:
+                return false;
+        }
     }
 
     private static async Task<PipelineJobListResponse> ListAsync<TEntity>(

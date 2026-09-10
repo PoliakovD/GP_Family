@@ -138,7 +138,9 @@ public static class AdminEnrichmentEndpoints
         });
     }
 
-    private static SearchCacheDetailDto BuildDetail(
+    /// <summary>internal, не private — переиспользуется AdminPipelineEndpoints (карточка задачи
+    /// показывает те же сниппеты с тем же вычисленным Enabled, что и эта страница кэша, одним кодом).</summary>
+    internal static SearchCacheDetailDto BuildDetail(
         Guid id, string normalizedName, string? specimen, string provider, DateTime lastUpdatedAt, DateTime canBeUpdatedAfter,
         IReadOnlyList<WebSnippet> snippets, IReadOnlyDictionary<string, bool>? overrides, IReadOnlyList<string> activeDomains)
     {

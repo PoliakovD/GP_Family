@@ -73,6 +73,7 @@ public class LabAnalyteEnrichmentProcessor(
 
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = guardResult.Reason;
+                job.FailureReason = EnrichmentFailureReason.Legitimacy;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 logger.LogWarning(
@@ -96,6 +97,7 @@ public class LabAnalyteEnrichmentProcessor(
 
                     job.Status = EnrichmentJobStatus.Failed;
                     job.Error = plausibility.Reason;
+                    job.FailureReason = EnrichmentFailureReason.Plausibility;
                     job.CompletedAt = DateTime.UtcNow;
                     await db.SaveChangesAsync(ct);
                     logger.LogWarning(
@@ -171,11 +173,28 @@ public class LabAnalyteEnrichmentProcessor(
                 .Take(options.Value.MaxSnippets)
                 .ToList();
 
+            // Пустой результат фильтрации — самый частый и самый дешёвый в починке отказ (см.
+            // «Требует внимания» в админке): всё, что вернул поиск, отбросил домен-фильтр.
+            // Проверяем ДО суммаризатора, а не полагаемся на его собственную проверку
+            // (LabAnalyteKbSummarizer.SummarizeAsync тоже отказывает на пустом списке) — так
+            // единственный воркер очереди enrichment не тратится на локальный вызов LLM, заведомо
+            // обречённый на тот же отказ.
+            if (sortedSnippets.Count == 0)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.Error = "Нет сниппетов от доверенных источников — суммаризировать нечего.";
+                job.FailureReason = EnrichmentFailureReason.NoTrustedSnippets;
+                job.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+
             var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, sortedSnippets, ct);
             if (!summarized.Success || summarized.Summary is null)
             {
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = summarized.Error;
+                job.FailureReason = summarized.Reason;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 return;
@@ -193,6 +212,7 @@ public class LabAnalyteEnrichmentProcessor(
                 await tx.RollbackAsync(ct);
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = writeResult.RejectionReason;
+                job.FailureReason = EnrichmentFailureReason.IsolationViolation;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 return;
@@ -219,6 +239,9 @@ public class LabAnalyteEnrichmentProcessor(
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
                 job.IsTransientFailure = ex is LmStudioUnavailableException;
+                job.FailureReason = ex is LmStudioUnavailableException
+                    ? EnrichmentFailureReason.LmStudioUnavailable
+                    : EnrichmentFailureReason.Unknown;
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "LabAnalyteEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);

@@ -196,6 +196,152 @@ public class EnrichmentRejectedCollection : ICollectionFixture<EnrichmentRejecte
     public const string Name = "EnrichmentRejectedIntegration";
 }
 
+/// <summary>Возвращает один сниппет с домена, заведомо отсутствующего в EnrichmentTrustedDomain
+/// (см. миграцию AddEnrichmentTrustedDomains — там только grls.rosminzdrav.ru/vidal.ru/rlsnet.ru
+/// для Medication) — имитирует главный сценарий плана «удобное администрирование обогащения»:
+/// поиск что-то нашёл, но ни один результат не прошёл фильтр доверия.</summary>
+file sealed class FakeUntrustedDomainSearchProvider : IMedicationSearchProvider
+{
+    public string Name => "FakeUntrustedProvider";
+
+    public Task<IReadOnlyList<WebSnippet>> SearchAsync(
+        string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
+        string? specimenDisplayName = null, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<WebSnippet>>(
+        [
+            new WebSnippet(
+                "Недоверенный источник",
+                "https://untrusted-test-domain.example/page",
+                $"{normalizedName} — сниппет с домена, которого нет в списке доверенных."),
+        ]);
+}
+
+/// <summary>Всегда отвечает "valid: true" (проходит гейт легитимности) и считает КАЖДЫЙ вызов —
+/// используется, чтобы доказать, что суммаризатор (LabAnalyteKbSummarizer/MedicationSummarizer)
+/// НЕ вызывается вовсе, когда после фильтрации по доверенным доменам не осталось ни одного
+/// сниппета (§1 плана): единственный воркер очереди enrichment не должен тратиться на локальный
+/// вызов LLM, заведомо обречённый на тот же отказ. Без этой проверки регрессия (возврат старого
+/// поведения — вызов суммаризатора на пустом списке) была бы неотличима по внешнему исходу
+/// (задача всё равно падает Failed с тем же текстом ошибки), только по числу вызовов LM Studio.</summary>
+file sealed class FakeCountingLmStudioJsonClient : ILmStudioJsonClient
+{
+    private static int _callCount;
+
+    public static int CallCount => Volatile.Read(ref _callCount);
+
+    public static void Reset() => Volatile.Write(ref _callCount, 0);
+
+    public Task<LmStudioJsonResult> ExtractJsonAsync(
+        string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images,
+        CancellationToken ct = default) =>
+        ExtractJsonAsync(systemPrompt, userText, ct);
+
+    public Task<LmStudioJsonResult> ExtractJsonAsync(string systemPrompt, string userText, CancellationToken ct = default)
+    {
+        Interlocked.Increment(ref _callCount);
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["valid"] = JsonSerializer.SerializeToElement(true),
+            ["reason"] = JsonSerializer.SerializeToElement((string?)null),
+        };
+        return Task.FromResult(new LmStudioJsonResult(true, payload, null));
+    }
+}
+
+public class EnrichmentNoTrustedDomainWebFactory : FamilyHubWebFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services =>
+        {
+            services.AddScoped<IMedicationSearchProvider, FakeUntrustedDomainSearchProvider>();
+            services.AddScoped<ILmStudioJsonClient, FakeCountingLmStudioJsonClient>();
+        });
+    }
+}
+
+[CollectionDefinition(Name)]
+public class EnrichmentNoTrustedDomainCollection : ICollectionFixture<EnrichmentNoTrustedDomainWebFactory>
+{
+    public const string Name = "EnrichmentNoTrustedDomainIntegration";
+}
+
+[Collection(EnrichmentNoTrustedDomainCollection.Name)]
+public class EnrichmentNoTrustedSnippetsTests(EnrichmentNoTrustedDomainWebFactory factory)
+{
+    private record CreateFamilyResponseDto(Guid Id);
+
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
+
+    private HttpClient ClientAs(long telegramId)
+    {
+        var client = factory.CreateClientAs(telegramId);
+        ConsentHelper.AcceptCurrent(client);
+        return client;
+    }
+
+    private static async Task WaitForAsync(Func<Task<bool>> condition, string because, int timeoutMs = 45_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition()) return;
+            await Task.Delay(300);
+        }
+
+        (await condition()).Should().BeTrue(because);
+    }
+
+    [Fact]
+    public async Task SavedMedication_AllSnippetsUntrusted_JobFailsWithNoTrustedSnippets_SummarizerNeverCalled()
+    {
+        FakeCountingLmStudioJsonClient.Reset();
+
+        var admin = ClientAs(Random.Shared.NextInt64(1_000_000_000, 9_000_000_000));
+        var familyResponse = await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" });
+        var familyId = (await familyResponse.Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts))!.Id;
+        var medkitResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/medkits", new CreateMedkitRequest("Аптечка"));
+        var medkitId = (await medkitResponse.Content.ReadFromJsonAsync<MedkitDto>(JsonOpts))!.Id;
+
+        var medicationName = $"Недоверпрепарат{Guid.NewGuid():N}";
+        var medicationResponse = await admin.PostAsJsonAsync(
+            $"/api/medkits/{medkitId}/medications", new CreateMedicationRequest(medicationName, null, null));
+        medicationResponse.EnsureSuccessStatusCode();
+
+        var normalizedName = MedicationNameNormalizer.Normalize(medicationName);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await WaitForAsync(async () =>
+        {
+            var job = await db.MedicationEnrichmentJobs.AsNoTracking()
+                .Where(j => j.NormalizedName == normalizedName)
+                .OrderByDescending(j => j.CreatedAt)
+                .FirstOrDefaultAsync();
+            return job is { Status: EnrichmentJobStatus.Failed };
+        }, "фильтрация по доверенным доменам должна остановить конвейер — задача обязана завершиться Failed");
+
+        var failedJob = await db.MedicationEnrichmentJobs.AsNoTracking()
+            .Where(j => j.NormalizedName == normalizedName)
+            .OrderByDescending(j => j.CreatedAt)
+            .FirstAsync();
+        failedJob.FailureReason.Should().Be(EnrichmentFailureReason.NoTrustedSnippets,
+            "структурная причина должна отличать «нет доверенных сниппетов» от прочих отказов — именно она группируется в «Требует внимания»");
+        failedJob.ExternalSearchAt.Should().NotBeNull("платный поиск реально произошёл — просто ни один результат не прошёл фильтр доверия");
+
+        // Главное утверждение: суммаризатор вызывается ОДИН раз (только гейт легитимности,
+        // PipelineCatalog.LegitimacyCheckStep) — на пустом после фильтрации списке сниппетов
+        // MedicationSummarizer.SummarizeAsync не должен вызываться вовсе.
+        FakeCountingLmStudioJsonClient.CallCount.Should().Be(1,
+            "суммаризация не должна вызываться на пустом после фильтрации списке сниппетов — единственный воркер очереди enrichment не тратится впустую");
+
+        (await db.GlobalMedicationsKb.AnyAsync(k => k.NormalizedName == normalizedName)).Should().BeFalse(
+            "справочник не должен пополниться — ни один сниппет не прошёл фильтр доверия");
+    }
+}
+
 [Collection(EnrichmentRejectedCollection.Name)]
 public class EnrichmentLegitimacyGuardTests(EnrichmentRejectedWebFactory factory)
 {

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
@@ -68,7 +69,8 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
     {
         if (snippets.Count == 0)
         {
-            return SummarizeResult.Failure("Нет сниппетов от доверенных источников — суммаризировать нечего.");
+            return SummarizeResult.Failure(
+                "Нет сниппетов от доверенных источников — суммаризировать нечего.", EnrichmentFailureReason.NoTrustedSnippets);
         }
 
         var userText = BuildUserText(displayName, snippets);
@@ -93,7 +95,8 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
             logger.LogInformation(
                 "Суммаризация «{DisplayName}»: модель не сослалась ни на один источник — запись в справочник отклонена.",
                 displayName);
-            return SummarizeResult.Failure("Модель не смогла подтвердить ответ ни одним источником.");
+            return SummarizeResult.Failure(
+                "Модель не смогла подтвердить ответ ни одним источником.", EnrichmentFailureReason.NoSourcesCited);
         }
 
         // Clean, не Normalize — торговые названия/исправленное имя идут дальше как отображаемый
