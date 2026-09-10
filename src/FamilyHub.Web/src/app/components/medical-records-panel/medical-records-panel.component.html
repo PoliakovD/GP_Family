@@ -266,86 +266,81 @@
 
         @if (item.kind === Kind.Analysis) {
         @if (indicatorsFor(item.id).length > 0) {
+        <!-- Редизайн v2.2 — сортировка + скрытие пустых строк (было — только исходный порядок
+             из бланка, без управления). -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'abnormal'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('abnormal')">Сначала отклонения</button>
+          <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'form'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('form')">Как в бланке</button>
+          <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'alpha'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('alpha')">По алфавиту</button>
+          @if (emptyIndicatorsFor(item.id).length > 0) {
+            <button type="button" class="btn-link" style="margin-left:auto;font-size:0.7647rem" (click)="toggleEmptyIndicators()">
+              <i [class]="hideEmptyIndicators ? 'ph ph-eye' : 'ph ph-eye-slash'" aria-hidden="true"></i>
+              {{ hideEmptyIndicators ? 'Показать' : 'Скрыть' }} пустые ({{ emptyIndicatorsFor(item.id).length }})
+            </button>
+          }
+        </div>
+
         <div class="table-responsive">
           <table class="indicators-table">
             <thead>
               <tr>
                 <th>Показатель</th>
                 <th>Значение</th>
-                <th>Норма</th>
+                <th>Где в норме</th>
                 <th>Статус</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              @for (ind of indicatorsFor(item.id); track ind.id) {
-                @if (editingIndicatorId === ind.id) {
-                  <tr class="indicator-edit-row">
-                    <td colspan="5">
-                      <div class="d-flex flex-column gap-1">
-                        <input class="input" [(ngModel)]="editIndicatorForm.displayName" placeholder="Название показателя" />
-                        <div class="d-flex gap-1">
-                          <input class="input" [(ngModel)]="editIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                          <input class="input" [ngModel]="editIndicatorForm.unit" (ngModelChange)="editIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
-                        </div>
-                        <div class="d-flex gap-1">
-                          <input class="input" [ngModel]="editIndicatorForm.refLowText" (ngModelChange)="editIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                          <input class="input" [ngModel]="editIndicatorForm.refHighText" (ngModelChange)="editIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
-                        </div>
-                        <input class="input" [ngModel]="editIndicatorForm.refText" (ngModelChange)="editIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
-                        <div class="d-flex gap-2">
-                          <button class="btn btn-primary btn-sm" [disabled]="savingIndicator" (click)="saveEditIndicator(item.id)">Сохранить</button>
-                          <button class="btn btn-ghost btn-sm" [disabled]="savingIndicator" (click)="cancelEditIndicator()">Отмена</button>
-                        </div>
+              @for (ind of visibleIndicatorsFor(item.id); track ind.id) {
+                <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
+                     шкала-референс / статус), клик по строке открывает панель справки.
+                     Редизайн v2.2 — правка/удаление переехали в панель справки (см.
+                     indicator-info.component), карандаш/корзина отсюда убраны; строка
+                     подсвечена по статусу (rowStatusClass). -->
+                <tr class="indicator-row" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
+                  <td>
+                    {{ shortIndicatorName(ind) }}
+                    @if (indicatorReference(ind); as ref) {
+                      <div class="muted" style="font-size:0.6471rem">
+                        {{ ref }}
+                        @if (isCalculatedRef(ind)) {
+                          <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
+                        }
                       </div>
-                    </td>
-                  </tr>
-                } @else {
-                  <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
-                       шкала-референс / статус), клик по строке открывает панель справки; правка
-                       и удаление — компактные иконки-аффордансы, не отдельные "колонки данных". -->
-                  <tr class="indicator-row" (click)="openIndicatorInfo(ind)">
-                    <td>
-                      {{ shortIndicatorName(ind) }}
-                      @if (indicatorReference(ind); as ref) {
-                        <div class="muted" style="font-size:0.6471rem">
-                          {{ ref }}
-                          @if (isCalculatedRef(ind)) {
-                            <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
-                          }
-                        </div>
+                    }
+                  </td>
+                  <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
+                    {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
+                  </td>
+                  <td>
+                    @if (scaleBounds(ind); as b) {
+                      <app-reference-scale
+                        [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
+                        [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                      />
+                      @if (deviationFor(ind, b); as d) {
+                        <div class="muted" style="font-size:0.6471rem">{{ d }}</div>
                       }
-                    </td>
-                    <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
-                      {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
-                    </td>
-                    <td>
-                      @if (scaleBounds(ind); as b) {
-                        <app-reference-scale
-                          [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-                          [unit]="ind.unit" [flag]="ind.flag" variant="mini"
-                        />
-                      } @else {
-                        <span class="muted" style="font-size:0.7059rem">—</span>
-                      }
-                    </td>
-                    <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
-                    <td class="indicator-actions-cell" (click)="$event.stopPropagation()">
-                      <span class="indicator-actions">
-                        <button class="btn btn-ghost btn-sm" title="Исправить" (click)="startEditIndicator(ind)">
-                          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-                        </button>
-                        <button class="btn btn-ghost btn-sm" title="Удалить" (click)="deleteIndicatorRow(item.id, ind)">
-                          <i class="ph ph-trash" aria-hidden="true"></i>
-                        </button>
-                      </span>
-                    </td>
-                  </tr>
-                }
+                    } @else {
+                      <span class="muted" style="font-size:0.7059rem">—</span>
+                    }
+                  </td>
+                  <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
+                </tr>
+              }
+              @if (hideEmptyIndicators && emptyIndicatorsFor(item.id).length > 0) {
+                <tr>
+                  <td colspan="4" class="muted" style="font-size:0.8235rem">
+                    <i class="ph ph-eye-slash" aria-hidden="true"></i>
+                    {{ emptyIndicatorsFor(item.id).length }} {{ pluralizeRu(emptyIndicatorsFor(item.id).length, 'показатель', 'показателя', 'показателей') }}
+                    без значения или без нормы в бланке — {{ emptyIndicatorsSummary(item.id) }}
+                    <button type="button" class="btn-link" (click)="toggleEmptyIndicators()">Показать</button>
+                  </td>
+                </tr>
               }
               @if (creatingIndicatorRecordId === item.id) {
                 <tr class="indicator-edit-row">
-                  <td colspan="5">
+                  <td colspan="4">
                     <div class="d-flex flex-column gap-1">
                       <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
                       <div class="d-flex gap-1">
@@ -366,8 +361,10 @@
                 </tr>
               } @else {
                 <tr>
-                  <td colspan="5">
-                    <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+                  <td colspan="4">
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+                      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+                    </button>
                   </td>
                 </tr>
               }
@@ -375,7 +372,9 @@
           </table>
         </div>
         } @else {
-          <button type="button" class="btn-link" (click)="startCreateIndicator(item.id)">+ Добавить показатель</button>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+            <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+          </button>
         }
         }
 

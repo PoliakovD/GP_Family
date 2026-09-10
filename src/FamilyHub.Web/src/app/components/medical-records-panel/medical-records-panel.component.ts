@@ -38,7 +38,7 @@ import { PersonChipComponent } from '../../shared/person-chip/person-chip.compon
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
-import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
+import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
 import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
@@ -903,8 +903,70 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
+  // --- Редизайн v2.2 — сортировка/скрытие пустых строк таблицы показателей. Индикаторы обычно
+  // от единиц до пары десятков на запись — сортируем по месту на каждый рендер без мемоизации,
+  // усложнять ради этого объёма не стоит. ---
+  indicatorSortMode: 'abnormal' | 'form' | 'alpha' = 'abnormal';
+  hideEmptyIndicators = true;
+
+  setIndicatorSort(mode: 'abnormal' | 'form' | 'alpha'): void {
+    this.indicatorSortMode = mode;
+  }
+
+  toggleEmptyIndicators(): void {
+    this.hideEmptyIndicators = !this.hideEmptyIndicators;
+  }
+
   indicatorsFor(recordId: string): IndicatorDto[] {
-    return this.indicatorsByRecord[recordId] ?? [];
+    const items = [...(this.indicatorsByRecord[recordId] ?? [])];
+    if (this.indicatorSortMode === 'alpha') {
+      items.sort((a, b) => this.shortIndicatorName(a).localeCompare(this.shortIndicatorName(b), 'ru'));
+    } else if (this.indicatorSortMode === 'abnormal') {
+      // Стабильная сортировка (гарантия спецификации Array.prototype.sort) — внутри каждой
+      // группы порядок из бланка сохраняется, меняется только относительный порядок двух групп.
+      items.sort((a, b) => Number(a.flag === IndicatorFlag.Normal) - Number(b.flag === IndicatorFlag.Normal));
+    }
+    // 'form' — как пришло с сервера (порядок из бланка), без изменений.
+    return items;
+  }
+
+  /** «Пустой» показатель — без значения (прочерк/пробел) ИЛИ без нормы в бланке вовсе (см.
+   * indicatorReference) — сворачивается в одну строку по умолчанию (hideEmptyIndicators). */
+  isEmptyIndicator(indicator: IndicatorDto): boolean {
+    return !indicator.valueRaw.trim() || /^[-–—]+$/.test(indicator.valueRaw.trim()) || this.indicatorReference(indicator) === null;
+  }
+
+  visibleIndicatorsFor(recordId: string): IndicatorDto[] {
+    const items = this.indicatorsFor(recordId);
+    return this.hideEmptyIndicators ? items.filter((i) => !this.isEmptyIndicator(i)) : items;
+  }
+
+  emptyIndicatorsFor(recordId: string): IndicatorDto[] {
+    return this.indicatorsFor(recordId).filter((i) => this.isEmptyIndicator(i));
+  }
+
+  /** «серповидные эритроциты, тельца Жолли и др.» — первые три имени свёрнутой строки, как в
+   * референсе. */
+  emptyIndicatorsSummary(recordId: string): string {
+    const empty = this.emptyIndicatorsFor(recordId);
+    const names = empty.slice(0, 3).map((i) => this.shortIndicatorName(i)).join(', ');
+    return empty.length > 3 ? `${names} и др.` : names;
+  }
+
+  /** Подсветка строки по статусу — зелёная/красная, ровно два состояния (не по градации
+   * Low/High/Critical) по тому же принципу, что палочка на шкале (см. reference-scale). */
+  rowStatusClass(ind: IndicatorDto): string {
+    if (ind.flag === IndicatorFlag.Normal) return 'indicator-row-ok';
+    if (ind.flag === IndicatorFlag.Unknown) return '';
+    return 'indicator-row-bad';
+  }
+
+  /** Подпись под шкалой ("ниже нормы на 0,8") — formatDeviation уже экспортирован
+   * reference-scale.component.ts и переиспользуется indicator-info, здесь просто подставляем
+   * значение/границы этой строки. */
+  deviationFor(ind: IndicatorDto, bounds: { low: number; high: number }): string | null {
+    const v = this.scaleValue(ind);
+    return v === null ? null : formatDeviation(v, bounds.low, bounds.high);
   }
 
   /** Только для окраски ячейки "Значение" — статус-чип со стрелкой/текстом теперь рендерит

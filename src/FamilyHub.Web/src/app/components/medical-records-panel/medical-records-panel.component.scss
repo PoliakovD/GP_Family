@@ -206,13 +206,25 @@
   }
 
   // Явные доли ширины (table-layout:fixed берёт их из первой строки — thead) — иначе с fixed-
-  // раскладкой все колонки получили бы поровну места независимо от содержимого.
-  th:nth-child(1), td:nth-child(1) { width: 32%; }
-  th:nth-child(2), td:nth-child(2) { width: 13%; }
-  th:nth-child(3), td:nth-child(3) { width: 11%; }
-  th:nth-child(4), td:nth-child(4) { width: 15%; }
-  th:nth-child(5), td:nth-child(5) { width: 17%; }
-  th:nth-child(6), td:nth-child(6) { width: 12%; }
+  // раскладкой все колонки получили бы поровну места независимо от содержимого. Редизайн v2.2 —
+  // таблица стала 4-колоночной (карандаш/корзина переехали в панель справки, колонка ∅ убрана);
+  // раньше здесь по ошибке было 6 правил nth-child на 5 колонок, реально занято было 88% —
+  // колонка шкалы досталась заметно больше места под расширенный SIZE.mini (см. reference-scale).
+  th:nth-child(1), td:nth-child(1) { width: 34%; }
+  th:nth-child(2), td:nth-child(2) { width: 16%; }
+  th:nth-child(3), td:nth-child(3) { width: 34%; }
+  th:nth-child(4), td:nth-child(4) { width: 16%; }
+}
+
+// Подсветка строки по статусу — зелёная/красная, тот же принцип, что палочка на шкале (только
+// два состояния, не по градации Low/High/Critical). 7% — заметно мягче, чем 22% у чипов списка:
+// здесь это фон целой строки, а не маленький бейдж.
+.indicator-row-ok td {
+  background: color-mix(in srgb, var(--color-status-ok) 7%, var(--color-paper));
+}
+
+.indicator-row-bad td {
+  background: color-mix(in srgb, var(--color-status-danger) 7%, var(--color-paper));
 }
 
 // Значение показателя — крупнее и контрастнее соседних колонок, это главное число в строке.
@@ -222,20 +234,6 @@
 }
 
 .indicator-flag-cell {
-  white-space: nowrap;
-}
-
-// table-layout:fixed делает ширины колонок стабильными между строками — без него блок с кнопками
-// "съезжал" по горизонтали от строки к строке (ширина последней колонки гуляла вместе с длиной
-// текста в соседних ячейках). Колонка действий — фиксированная и не сжимается.
-.indicator-actions-cell {
-  width: 64px;
-  white-space: nowrap;
-}
-
-.indicator-actions {
-  display: inline-flex;
-  gap: 2px;
   white-space: nowrap;
 }
 
@@ -249,7 +247,9 @@
 .indicator-row {
   cursor: pointer;
 
-  &:hover {
+  // На td, не на tr — редизайн v2.2 добавил свой background на td у indicator-row-ok/-bad
+  // (окраска строки по статусу), а background строки-родителя (tr) под ним не видно вовсе.
+  &:hover td {
     background: color-mix(in srgb, var(--color-text) 4%, transparent);
   }
 }
