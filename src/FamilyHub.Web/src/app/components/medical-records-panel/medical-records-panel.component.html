@@ -413,6 +413,17 @@
   </ng-template>
 
   @if (recordId()) {
+    @if (!isWide && infoOpen) {
+      <!-- Редизайн v2.2 — на мобиле показатель открывается ПОЛНОЭКРАННО (не нижним листом) —
+           заменяет содержимое записи целиком, а не накладывается на него. Своя back-link,
+           закрытие — на список показателей записи (не на список записей). URL уже синхронизирован
+           (?indicator=, см. openIndicatorInfo/closeIndicatorInfo) — общий топбар/шапка «Здоровье»
+           всё равно скрыты (immersive), лишней навигации тут не остаётся. -->
+      <div class="mb-3">
+        <app-back-link [label]="infoDisplayName || 'Показатель'" (activated)="closeIndicatorInfo()" />
+      </div>
+      <ng-container *ngTemplateOutlet="indicatorInfoBody" />
+    } @else {
     <!-- Редизайн v3/v2.1 — отдельный экран открытой записи, теперь на любой ширине (было —
          только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
          списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». Редизайн v2.2 —
@@ -510,6 +521,7 @@
       @if (items[0]; as only) {
         <ng-container *ngTemplateOutlet="recordCard; context: {$implicit: only, singleMode: true}" />
       }
+    }
     }
   } @else {
 
@@ -732,16 +744,16 @@
     }
   </ng-template>
 
-  <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель; узкие экраны:
-       та же существующая шторка, что и остальные (тот же приём, что shared/action-menu). -->
+  <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель. Редизайн v2.2 —
+       на узких экранах справка больше не открывается нижним листом здесь: infoOpen возможен
+       только когда recordId() задан (единственные точки входа — клик по строке таблицы в
+       singleMode и чип "что смотрят вместе" внутри уже открытой справки), а для этого случая на
+       narrow теперь есть отдельный полноэкранный блок прямо в @if (recordId()) выше — второй
+       рендер тут был бы дублирующим нижним листом поверх уже полноэкранного показателя. -->
   @if (infoOpen && isWide) {
     <app-indicator-info-panel [title]="infoDisplayName || 'Показатель'" (closed)="closeIndicatorInfo()">
       <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     </app-indicator-info-panel>
-  } @else {
-    <app-bottom-sheet [title]="infoDisplayName || 'Показатель'" [open]="infoOpen" (closed)="closeIndicatorInfo()">
-      <ng-container *ngTemplateOutlet="indicatorInfoBody" />
-    </app-bottom-sheet>
   }
 
   <!-- Общий список подсказок для полей источника показателя (правка + создание) — подсказки

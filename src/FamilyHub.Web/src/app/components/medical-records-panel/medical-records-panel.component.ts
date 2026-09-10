@@ -1,7 +1,8 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
@@ -131,6 +132,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly confirm = inject(ConfirmService);
   private readonly pageAction = inject(PageActionService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly breakpoints = inject(BreakpointService);
 
   /** Доступен в шаблоне для сравнения с this.kind(). */
@@ -179,6 +181,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   filters = { from: '', to: '', patientKey: 'all', doctor: '' };
   searchQuery = '';
   private searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+
+  /** Редизайн v2.2 — на мобиле показатель открывается отдельным экраном с настоящим URL
+   * (?indicator=), не нижним листом; тот же приём, что kb-analyte-tab.component.ts уже
+   * применяет для ?id=. На wide экранах эта подписка ничего не делает — панель справки там
+   * остаётся чисто in-memory состоянием, как и раньше. */
+  private indicatorParamSub?: Subscription;
 
   /** Автоподсказка «Врач» (v2) — доктора, которых пользователь уже вводил в своих записях;
    * грузится один раз, независимо от вида записи (общий пул для «Анализов» и «Врачей»). Форма
@@ -336,6 +344,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (this.customSpecimens.length === 0) {
       void this.api.getSpecimens().then((s) => (this.customSpecimens = s));
     }
+    this.indicatorParamSub = this.route.queryParamMap.subscribe(() => this.syncIndicatorFromRoute());
   }
 
   /** Опрос статуса распознавания использует setInterval — без явной остановки таймеры
@@ -346,6 +355,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     for (const handle of this.pipelineClearHandles.values()) clearTimeout(handle);
     this.pipelineClearHandles.clear();
     if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
+    this.indicatorParamSub?.unsubscribe();
     this.pageAction.clear();
   }
 
@@ -681,6 +691,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           .filter((item) => item.extractionStatus === ExtractionStatus.Ready)
           .map((item) => this.loadExtractionResult(item)),
       );
+      // Редизайн v2.2 — ?indicator= в URL может прийти раньше, чем показатели этой записи
+      // загрузятся (первый заход по ссылке/обновление страницы) — на момент первого срабатывания
+      // подписки в ngOnInit indicatorsByRecord ещё пуст, повторяем попытку здесь.
+      if (recordId) this.syncIndicatorFromRoute();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить данные.';
     } finally {
@@ -1067,7 +1081,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // таблицы): если правили именно тот показатель, чья статья сейчас открыта, панель должна
       // сразу показать новое значение/статус/шкалу, а не то, что было до правки.
       const updated = indicators.find((i) => i.id === savedId);
-      if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated);
+      if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated, false);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
     } finally {
@@ -1303,7 +1317,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * могли вызвать startEditIndicator/deleteIndicatorRow, которые принимают IndicatorDto целиком. */
   infoIndicator: IndicatorDto | null = null;
 
-  async openIndicatorInfo(indicator: IndicatorDto): Promise<void> {
+  /** navigate=false — вызов из самой подписки на маршрут (syncIndicatorFromRoute) или
+   * переоткрытие после правки (saveEditIndicator): URL уже соответствует, повторная навигация
+   * лишняя. По умолчанию true — обычный клик по строке/карточке показателя. */
+  async openIndicatorInfo(indicator: IndicatorDto, navigate = true): Promise<void> {
     this.infoOpen = true;
     this.infoLoading = true;
     this.infoError = null;
@@ -1313,6 +1330,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.infoIndicatorId = indicator.id;
     this.infoIndicator = indicator;
     this.infoDisplayName = this.shortIndicatorName(indicator);
+    // Редизайн v2.2 — на мобиле показатель открывается своим URL (?indicator=), не просто
+    // in-memory состоянием: apparatus «назад» должен закрыть именно его, не всю запись (тот же
+    // приём, что kb-analyte-tab уже применяет для ?id=). На wide экранах URL не трогаем — там
+    // панель справки остаётся чисто in-memory, как и раньше.
+    if (navigate && !this.isWide) {
+      void this.router.navigate([], {
+        relativeTo: this.route, queryParams: { indicator: indicator.id }, queryParamsHandling: 'merge',
+      });
+    }
     this.infoReading = {
       valueRaw: indicator.valueRaw,
       valueNumeric: indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null,
@@ -1357,11 +1383,35 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  closeIndicatorInfo(): void {
+  /** navigate=false — вызов из syncIndicatorFromRoute (URL уже без ?indicator=) или там, где
+   * следом всё равно уходим на другой URL (openIndicatorInCatalog) — см. openIndicatorInfo. */
+  closeIndicatorInfo(navigate = true): void {
     this.infoOpen = false;
     this.infoIndicatorId = null;
     this.infoIndicator = null;
     this.cancelEditIndicator();
+    if (navigate && !this.isWide) {
+      void this.router.navigate([], {
+        relativeTo: this.route, queryParams: { indicator: null }, queryParamsHandling: 'merge',
+      });
+    }
+  }
+
+  /** Редизайн v2.2 — синхронизирует infoOpen/infoIndicator* с ?indicator= в URL (мобильный
+   * полноэкранный показатель). Вызывается из подписки на queryParamMap (ngOnInit) и из refresh()
+   * — на первом срабатывании подписки indicatorsByRecord может быть ещё не загружен. */
+  private syncIndicatorFromRoute(): void {
+    if (this.isWide) return;
+    const recordId = this.recordId();
+    if (!recordId) return;
+    const id = this.route.snapshot.queryParamMap.get('indicator');
+    if (id) {
+      if (this.infoIndicatorId === id) return;
+      const found = (this.indicatorsByRecord[recordId] ?? []).find((i) => i.id === id);
+      if (found) void this.openIndicatorInfo(found, false);
+    } else if (this.infoOpen) {
+      this.closeIndicatorInfo(false);
+    }
   }
 
   /** Футер "Открыть в справочнике" — уходит на мини-хаб /health/kb/indicators с ?id=, тот же
@@ -1369,7 +1419,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   openIndicatorInCatalog(): void {
     if (!this.infoCard) return;
     const id = this.infoCard.id;
-    this.closeIndicatorInfo();
+    this.closeIndicatorInfo(false); // уходим на другой роут ниже — чистить ?indicator= здесь незачем
     void this.router.navigate(['/health/kb/indicators'], { queryParams: { id } });
   }
 
