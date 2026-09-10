@@ -82,58 +82,61 @@
        (детали всегда развёрнуты, «Открыть» не нужна). -->
   <ng-template #recordCard let-item let-singleMode="singleMode">
     <div class="card record-card flex-fill">
-      <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
-           (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
-           мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
-           и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
-      <div
-        class="record-card-row"
-        [class.clickable]="!singleMode"
-        (click)="onRecordCardClick(item, singleMode)"
-      >
-        <div class="record-card-main">
-          <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
+      <!-- Редизайн v2.2 — в singleMode заголовок+чипы+действия теперь рисует не эта строка, а
+           back-link/шапка вне ng-template (см. @if (recordId()) в шаблоне ниже) — своя мета-строка
+           (человек/дата/источник/доступ) и плитки статуса читаются лучше, чем чипы списка. Список
+           (не singleMode) — без изменений. -->
+      @if (!singleMode) {
+        <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
+             (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
+             мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
+             и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
+        <div
+          class="record-card-row clickable"
+          (click)="onRecordCardClick(item, singleMode)"
+        >
+          <div class="record-card-main">
+            <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
 
-          <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
-               чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
-               подписью, а не чипом. -->
-          <div class="record-chips">
-            @if (item.attachmentCount > 0) {
-              <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
-            }
-            @if (item.indicatorCount > 0) {
-              <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
-            }
-            @if (item.abnormalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
-                <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
-              </span>
-            } @else if (item.normalIndicatorCount > 0) {
-              <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
-                <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
-              </span>
-            }
-            @if (item.doctor) {
-              <span class="tag tag-neutral">
-                <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
-              </span>
-            }
+            <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
+                 чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
+                 подписью, а не чипом. -->
+            <div class="record-chips">
+              @if (item.attachmentCount > 0) {
+                <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
+              }
+              @if (item.indicatorCount > 0) {
+                <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
+              }
+              @if (item.abnormalIndicatorCount > 0) {
+                <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
+                  <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
+                </span>
+              } @else if (item.normalIndicatorCount > 0) {
+                <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
+                  <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
+                </span>
+              }
+              @if (item.doctor) {
+                <span class="tag tag-neutral">
+                  <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
+                </span>
+              }
+            </div>
           </div>
-        </div>
 
-        @if (singleMode || isWide) {
-          <!-- stopPropagation — теперь вся строка тоже кликабельна (см. выше), без этого клик по
-               кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
-          <div class="record-card-actions" (click)="$event.stopPropagation()">
-            @if (!singleMode) {
+          @if (isWide) {
+            <!-- stopPropagation — строка тоже кликабельна (см. выше), без этого клик по
+                 кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
+            <div class="record-card-actions" (click)="$event.stopPropagation()">
               <button class="btn btn-secondary text-nowrap" (click)="onRecordCardClick(item, false)">
                 Открыть
               </button>
-            }
-            <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
-          </div>
-        }
-      </div>
+              <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
+            </div>
+          }
+        </div>
+      }
 
       @if (hasUnrecognizedAttachments(item)) {
         <button
@@ -206,14 +209,18 @@
           }
         }
 
-        <!-- Секция «Файлы» прямо в карточке (была модалка из меню «…» — недоступна на узком
-             экране в списке, см. shared/attachment-list). Владеет своим fetch — грузится ровно
-             тогда, когда карточка раскрыта, как и раньше при клике «Файлы». -->
-        <app-attachment-list [recordId]="item.id" (changed)="refresh()" />
+        <!-- Секция «Файлы» — редизайн v2.2: сворачивается по умолчанию, разворачивается кнопкой
+             «Файлы» в шапке (см. @if (recordId()) выше); shared/attachment-list владеет своим
+             fetch — грузится ровно тогда, когда открыта, а не всегда. -->
+        @if (filesOpen) {
+          <app-attachment-list [recordId]="item.id" (changed)="refresh()" />
+        }
 
         <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
-             читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). -->
-        @if (item.kind === Kind.Analysis && indicatorsFor(item.id).length > 0) {
+             читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). Редизайн
+             v2.2 — сама секция сворачивается по умолчанию (кнопка «Резюме» в шапке), заголовок с
+             «Составить/Пересчитать» остаётся якорем, тело — только когда summaryOpen. -->
+        @if (hasSummarySection(item)) {
           <div class="d-flex justify-content-between mt-2" style="align-items:center;">
             <div class="card-kicker mb-0">Резюме</div>
             <button type="button" class="btn-link" style="font-size:0.7059rem"
@@ -222,37 +229,39 @@
               {{ summaryRegeneratingRecordId === item.id ? 'Пересчитываем…' : (summaryByRecord[item.id] ? 'Пересчитать резюме' : 'Составить резюме') }}
             </button>
           </div>
-          @if (summaryByRecord[item.id]; as summary) {
-            @if (summary.plainSummary) {
-              <p class="mb-1">{{ summary.plainSummary }}</p>
+          @if (summaryOpen) {
+            @if (summaryByRecord[item.id]; as summary) {
+              @if (summary.plainSummary) {
+                <p class="mb-1">{{ summary.plainSummary }}</p>
+              }
+              @if (summary.deviations.length > 0) {
+                <ul class="mb-1" style="font-size:0.7647rem">
+                  @for (d of summary.deviations; track d.name) {
+                    <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                  }
+                </ul>
+              }
+              @if (summary.questionsForDoctor.length > 0) {
+                <div class="card-kicker mt-2">Вопросы врачу</div>
+                <ul class="mb-1" style="font-size:0.7647rem">
+                  @for (q of summary.questionsForDoctor; track q) {
+                    <li>{{ q }}</li>
+                  }
+                </ul>
+              }
+              <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
+            } @else {
+              <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
             }
-            @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:0.7647rem">
-                @for (d of summary.deviations; track d.name) {
-                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                }
-              </ul>
-            }
-            @if (summary.questionsForDoctor.length > 0) {
-              <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:0.7647rem">
-                @for (q of summary.questionsForDoctor; track q) {
-                  <li>{{ q }}</li>
-                }
-              </ul>
-            }
-            <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
-          } @else {
-            <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
+            <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
+                 а объяснить, что делать) — резюме строится по показателям на момент последнего
+                 распознавания/пересчёта и само не обновляется после ручной правки значения. -->
+            <p class="muted mb-0" style="font-size:0.6471rem">
+              Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
+              пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
+              нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
+            </p>
           }
-          <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
-               а объяснить, что делать) — резюме строится по показателям на момент последнего
-               распознавания/пересчёта и само не обновляется после ручной правки значения. -->
-          <p class="muted mb-0" style="font-size:0.6471rem">
-            Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
-            пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
-            нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
-          </p>
         }
 
         @if (item.kind === Kind.Analysis) {
@@ -414,6 +423,39 @@
     </div>
     @if (items[0]; as only) {
       <div class="card-title mb-2" style="font-size:1.1176rem">{{ shortName(only) }}</div>
+
+      <!-- Редизайн v2.2 — Редактировать/Доступ/Удалить видимыми кнопками (были только за «…»),
+           Файлы/Резюме тоже кнопками, сворачивают/разворачивают свои секции ниже. На мобиле —
+           тот же набор действий одним «…» (shared/action-menu уже умеет попап/шторку сам). -->
+      @if (isWide) {
+        <div class="record-detail-actions mb-3">
+          <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" (click)="toggleFiles()">
+            <i class="ph ph-paperclip" aria-hidden="true"></i> Файлы ({{ only.attachmentCount }})
+          </button>
+          @if (hasSummarySection(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" (click)="toggleSummary()">
+              <i class="ph ph-file-text" aria-hidden="true"></i> Резюме
+            </button>
+          }
+          @if (canDelete(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" (click)="openEditSheet(only)">
+              <i class="ph ph-pencil-simple" aria-hidden="true"></i> Редактировать
+            </button>
+          }
+          <button type="button" class="btn btn-secondary btn-sm" (click)="openAccessSheet(only)">
+            <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
+          </button>
+          @if (canDelete(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" style="color:var(--color-status-danger-text)" (click)="handleDelete(only)">
+              <i class="ph ph-trash" aria-hidden="true"></i> Удалить
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="mb-3">
+          <app-action-menu [actions]="detailActions(only)" label="Действия с записью" />
+        </div>
+      }
     }
 
     <!-- Редизайн v3 (PR7) — одноразовый баннер сразу после сохранения из record-add.component.ts:

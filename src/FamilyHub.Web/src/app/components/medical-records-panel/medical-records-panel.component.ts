@@ -153,6 +153,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * «Распознать»: отдельно от error, чтобы не выглядеть как сбой (см. handleRecognize). */
   info: string | null = null;
 
+  // --- Редизайн v2.2 — действия открытой записи видимыми кнопками (было — за «…»), Файлы и
+  // Резюме сворачиваются по умолчанию и разворачиваются этими же кнопками. Одна запись в
+  // singleMode — простых булевых достаточно, сбрасываются при смене id записи (эффект в
+  // конструкторе, ветка recordId).
+  filesOpen = false;
+  summaryOpen = false;
+
   // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
   // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
   // см. риск Р2 плана редизайна). pageSize 50 (было 15); при активном текстовом поиске/фильтре
@@ -270,6 +277,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         // Редизайн v2.2 — сама открытая запись рисует свою шапку (back-link + действия), общий
         // топбар каркаса целиком не нужен, см. PageActionService.immersive.
         this.pageAction.setImmersive(true);
+        this.filesOpen = false;
+        this.summaryOpen = false;
         void this.refresh();
         return;
       }
@@ -461,6 +470,48 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * (app-attachment-list), отдельный пункт меню/модалка больше не нужны. */
   recordMenuActions(item: MedicalRecord): ActionMenuItem[] {
     const actions: ActionMenuItem[] = [];
+    if (this.canDelete(item)) {
+      actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
+    }
+    actions.push({ label: 'Доступ', icon: 'ph ph-share-network', handler: () => this.openAccessSheet(item) });
+    if (this.canDelete(item)) {
+      actions.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDelete(item) });
+    }
+    return actions;
+  }
+
+  toggleFiles(): void {
+    this.filesOpen = !this.filesOpen;
+  }
+
+  toggleSummary(): void {
+    this.summaryOpen = !this.summaryOpen;
+  }
+
+  /** Есть ли что сворачивать/разворачивать кнопкой «Резюме» — тот же гейт, что раньше стоял
+   * прямо над блоком резюме (единственное место, где он проверялся). */
+  hasSummarySection(item: MedicalRecord): boolean {
+    return item.kind === MedicalRecordKind.Analysis && this.indicatorsFor(item.id).length > 0;
+  }
+
+  /** Редизайн v2.2 — те же 5 действий открытой записи, что видимыми кнопками на десктопе
+   * (см. шаблон, @if (recordId())), но одним списком для мобильного «…» (уже умеет
+   * попап/шторку сам, см. shared/action-menu) — Файлы/Резюме переключают те же булевы. */
+  detailActions(item: MedicalRecord): ActionMenuItem[] {
+    const actions: ActionMenuItem[] = [
+      {
+        label: this.filesOpen ? 'Скрыть файлы' : `Файлы (${item.attachmentCount})`,
+        icon: 'ph ph-paperclip',
+        handler: () => this.toggleFiles(),
+      },
+    ];
+    if (this.hasSummarySection(item)) {
+      actions.push({
+        label: this.summaryOpen ? 'Скрыть резюме' : 'Резюме',
+        icon: 'ph ph-file-text',
+        handler: () => this.toggleSummary(),
+      });
+    }
     if (this.canDelete(item)) {
       actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
     }
