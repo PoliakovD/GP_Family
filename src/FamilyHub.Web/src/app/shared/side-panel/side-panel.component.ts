@@ -24,30 +24,41 @@ import { OverlayA11y } from '../util/overlay-a11y';
  * возвращает `job` обратно, и панель никогда не закрывается по-настоящему (баг, найденный в
  * проде: «вечно висит открытая задача»). Урок: для оверлея, чьё состояние уже отражено в URL,
  * не заводить вторую, независимую систему адресации той же истории.
+ *
+ * Шаблон обязан оборачивать саму разметку в `@if (open)` (см. `shared/modal`, `shared/bottom-sheet`)
+ * — без этого `.overlay-backdrop` (`position: fixed; inset: 0`) рендерится в DOM всегда, как только
+ * `<app-side-panel>` смонтирован родителем, и перекрывает всю страницу независимо от значения
+ * `open` (второй баг из той же серии «вечно висит открытая задача» — панель было physически
+ * невозможно закрыть, потому что она никогда не пропадала из DOM). `indicator-info-panel`, на
+ * который эта обёртка ссылается как на прототип, здесь не образец: у него вообще нет `@Input open` —
+ * решение монтировать/не монтировать компонент целиком лежит на потребителе (`@if` снаружи), а не
+ * внутри самого компонента.
  */
 @Component({
   selector: 'app-side-panel',
   standalone: true,
   template: `
-    <div class="overlay-backdrop side-panel-backdrop" (click)="closed.emit()">
-      <aside
-        #overlayRoot
-        class="side-panel"
-        [style.width]="width"
-        tabindex="-1"
-        (click)="$event.stopPropagation()"
-      >
-        <div class="side-panel-header">
-          <h4 class="mb-0">{{ title }}</h4>
-          <button type="button" class="btn-icon" aria-label="Закрыть" (click)="closed.emit()">
-            <i class="ph ph-x" aria-hidden="true"></i>
-          </button>
-        </div>
-        <div class="side-panel-body">
-          <ng-content />
-        </div>
-      </aside>
-    </div>
+    @if (open) {
+      <div class="overlay-backdrop side-panel-backdrop" (click)="closed.emit()">
+        <aside
+          #overlayRoot
+          class="side-panel"
+          [style.width]="width"
+          tabindex="-1"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="side-panel-header">
+            <h4 class="mb-0">{{ title }}</h4>
+            <button type="button" class="btn-icon" aria-label="Закрыть" (click)="closed.emit()">
+              <i class="ph ph-x" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div class="side-panel-body">
+            <ng-content />
+          </div>
+        </aside>
+      </div>
+    }
   `,
   styleUrl: './side-panel.component.scss',
 })
