@@ -28,3 +28,12 @@ public record SearchCacheDetailDto(
     DateTime LastUpdatedAt, DateTime CanBeUpdatedAfter, List<SearchCacheSnippetDto> Snippets);
 
 public record SetSnippetOverrideRequest(WebSearchTopic Topic, string Url, bool? Enabled);
+
+/// <summary>Один сниппет на запись — форма ввода, без вычисленных Enabled/IsTrustedByDomain
+/// (это read-only проекция для отображения, см. SearchCacheSnippetDto).</summary>
+public record SearchCacheSnippetInput(string Title, string Url, string Text);
+
+/// <summary>Полное редактирование строки кэша (§ полного CRUD кэша) — Snippets заменяет
+/// SnippetsJson целиком (тот же приём, что payload-редактор справочника — весь список разом,
+/// не позиционные add/edit/remove). Provider — null, чтобы не трогать текущее значение.</summary>
+public record UpdateSearchCacheRequest(WebSearchTopic Topic, string? Provider, List<SearchCacheSnippetInput> Snippets);

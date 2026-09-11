@@ -1,10 +1,10 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   AdminApiService,
   KbRebuildStatus,
-  SearchCacheDetail,
   SearchCacheRow,
   TrustedDomain,
   WebSearchTopic,
@@ -12,6 +12,8 @@ import {
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { SidePanelComponent } from '../../../shared/side-panel/side-panel.component';
+import { AdminCachePanelComponent } from '../admin-cache-panel/admin-cache-panel.component';
 
 const PAGE_SIZE = 25;
 const REBUILD_POLL_INTERVAL_MS = 2000;
@@ -21,17 +23,22 @@ const REBUILD_POLL_INTERVAL_MS = 2000;
  * (провайдер больше не фильтрует по домену сам, кэш хранит ВСЕ сниппеты, см. class doc
  * AdminEnrichmentEndpoints на бэкенде). Один компонент с двумя вкладками (не вложенные роуты —
  * страница второстепенная, обе вкладки делят выбор темы, отдельные URL не нужны).
+ *
+ * Состояние в URL (?tab=&topic=&row=, тот же приём, что AdminPipelineComponent) — F5/«назад» не
+ * теряют контекст, ссылку на конкретную строку кэша можно переслать.
  */
 @Component({
   selector: 'app-admin-enrichment',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent],
   templateUrl: './admin-enrichment.component.html',
 })
 export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   readonly WebSearchTopic = WebSearchTopic;
 
@@ -47,8 +54,8 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   readonly cacheTotal = signal(0);
   readonly cacheQuery = signal('');
   readonly cacheLoading = signal(false);
-  readonly cacheDetail = signal<SearchCacheDetail | null>(null);
-  readonly cacheDetailLoading = signal(false);
+  /** Открытая строка кэша (§ боковая панель) — null, панель закрыта. */
+  readonly openRowId = signal<string | null>(null);
   readonly purgeBusy = signal(false);
 
   readonly rebuild = signal<KbRebuildStatus | null>(null);
@@ -57,22 +64,44 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   private rebuildPollTimer?: ReturnType<typeof setTimeout>;
 
   ngOnInit(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const tab = params.get('tab') as 'domains' | 'cache' | 'rebuild' | null;
+    const topicParam = params.get('topic');
+    const row = params.get('row');
+
+    if (topicParam === '0' || topicParam === '1') this.topic.set(Number(topicParam) as WebSearchTopicValue);
+    if (tab) this.tab.set(tab);
+    if (row) this.openRowId.set(row);
+
     void this.loadDomains();
+    if (this.tab() === 'cache' || row) void this.loadCache();
+    if (this.tab() === 'rebuild') void this.loadRebuildStatus();
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.rebuildPollTimer);
   }
 
+  private updateQueryParams(extra: Record<string, string | null>): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: this.tab(), topic: String(this.topic()), ...extra },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   selectTab(tab: 'domains' | 'cache' | 'rebuild'): void {
     this.tab.set(tab);
+    this.updateQueryParams({});
     if (tab === 'cache' && this.cacheRows().length === 0) void this.loadCache();
     if (tab === 'rebuild' && this.rebuild() === null) void this.loadRebuildStatus();
   }
 
   async selectTopic(topic: WebSearchTopicValue): Promise<void> {
     this.topic.set(topic);
-    this.cacheDetail.set(null);
+    this.openRowId.set(null);
+    this.updateQueryParams({ row: null });
     await Promise.all([this.loadDomains(), this.tab() === 'cache' ? this.loadCache() : Promise.resolve()]);
   }
 
@@ -195,39 +224,14 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
     }
   }
 
-  async openCacheRow(row: SearchCacheRow): Promise<void> {
-    this.cacheDetailLoading.set(true);
-    this.cacheDetail.set(null);
-    try {
-      this.cacheDetail.set(await this.api.getSearchCacheDetail(row.id, this.topic()));
-    } catch {
-      this.toast.error('Не удалось загрузить сниппеты.');
-    } finally {
-      this.cacheDetailLoading.set(false);
-    }
+  openCacheRow(row: SearchCacheRow): void {
+    this.openRowId.set(row.id);
+    this.updateQueryParams({ row: row.id });
   }
 
   closeCacheDetail(): void {
-    this.cacheDetail.set(null);
-  }
-
-  /** Тройной клик по чекбоксу: не задано → включено (override=true) → выключено (override=false) →
-   * не задано (override=null, снова решает домен) — проще, чем два отдельных элемента управления. */
-  async cycleSnippetOverride(url: string): Promise<void> {
-    const detail = this.cacheDetail();
-    if (!detail) return;
-
-    const snippet = detail.snippets.find((s) => s.url === url);
-    if (!snippet) return;
-
-    const nextOverride = snippet.override === null ? true : snippet.override === true ? false : null;
-
-    try {
-      await this.api.setSnippetOverride(detail.id, this.topic(), url, nextOverride);
-      this.cacheDetail.set(await this.api.getSearchCacheDetail(detail.id, this.topic()));
-    } catch {
-      this.toast.error('Не удалось изменить сниппет.');
-    }
+    this.openRowId.set(null);
+    this.updateQueryParams({ row: null });
   }
 
   // --- Пересборка справочника показателей (§4.2 плана) — поллинг статуса, пока прогон Running,

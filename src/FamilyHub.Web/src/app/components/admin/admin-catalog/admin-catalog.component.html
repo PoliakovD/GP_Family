@@ -115,7 +115,9 @@
             schema="lab-analyte"
             [payloadJson]="d.payloadJson"
             [busy]="analyteBusy()"
+            [excludeId]="d.id"
             (save)="onAnalytePayloadSave($event)"
+            (openRelated)="openAnalyteById($event.id)"
           />
         </div>
       </div>

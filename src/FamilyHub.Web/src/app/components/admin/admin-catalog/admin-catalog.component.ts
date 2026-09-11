@@ -95,8 +95,16 @@ export class AdminCatalogComponent implements OnInit {
   }
 
   async openAnalyte(item: KbAnalyteListItem): Promise<void> {
+    await this.openAnalyteById(item.id);
+  }
+
+  /** Переход по ссылке «Что смотрят вместе» из редактора payload — та же загрузка, что
+   * openAnalyte, но по одному id, без строки списка (клик мог прийти из статьи, которой сейчас
+   * нет в текущей выдаче поиска). */
+  async openAnalyteById(id: string): Promise<void> {
     try {
-      const detail = await this.api.getLabAnalyte(item.id);
+      const detail = await this.api.getLabAnalyte(id);
+      this.tab.set('analytes');
       this.analyteDetail.set(detail);
       this.analyteEditorDisplayName.set(detail.displayName);
       this.analyteEditorAliases.set(detail.aliases.join(', '));
