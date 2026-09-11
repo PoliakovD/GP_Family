@@ -141,10 +141,10 @@
       @if (hasUnrecognizedAttachments(item)) {
         <button
           class="btn btn-primary btn-sm align-self-start mt-1"
-          [disabled]="recognizingRecordId === item.id"
+          [disabled]="recognizingRecordIds.has(item.id)"
           (click)="handleRecognize(item)"
         >
-          @if (recognizingRecordId === item.id) {
+          @if (recognizingRecordIds.has(item.id)) {
             <span class="recognize-spinner" aria-hidden="true"></span>
           } @else {
             <i class="ph ph-magic-wand" aria-hidden="true"></i>
