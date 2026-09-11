@@ -254,31 +254,40 @@ public static class AdminPipelineEndpoints
             var take2 = Math.Clamp(take ?? 25, 1, 100);
             var skip2 = Math.Max(skip ?? 0, 0);
             EnrichmentJobStatus? statusFilter = Enum.TryParse<EnrichmentJobStatus>(status, true, out var s) ? s : null;
-            EnrichmentFailureReason? reasonFilter = Enum.TryParse<EnrichmentFailureReason>(reason, true, out var r) ? r : null;
+
+            // "Unclassified" — синтетический фильтр (см. AdminAttentionService), не член
+            // EnrichmentFailureReason: задачи, упавшие ДО появления структурной причины, у них
+            // FailureReason=NULL. Отличаем его от "фильтр не задан" (reason пуст), иначе клик
+            // «Открыть задачи» из карточки Unclassified в «Требует внимания» молча показал бы ВСЕ
+            // Failed-задачи типа, а не только те самые "без объяснений".
+            var hasReasonFilter = !string.IsNullOrEmpty(reason);
+            var reasonIsUnclassified = string.Equals(reason, "Unclassified", StringComparison.OrdinalIgnoreCase);
+            EnrichmentFailureReason? reasonFilter = hasReasonFilter && !reasonIsUnclassified
+                && Enum.TryParse<EnrichmentFailureReason>(reason, true, out var r) ? r : null;
 
             var response = type switch
             {
                 "lab-analyte" => await ListAsync(db.LabAnalyteEnrichmentJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
-                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
+                    .Where(j => !hasReasonFilter || (reasonIsUnclassified ? j.FailureReason == null : j.FailureReason == reasonFilter))
                     .OrderByDescending(j => j.CreatedAt),
                     j => new PipelineJobDto(j.Id, "lab-analyte", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 "medication" => await ListAsync(db.MedicationEnrichmentJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
-                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
+                    .Where(j => !hasReasonFilter || (reasonIsUnclassified ? j.FailureReason == null : j.FailureReason == reasonFilter))
                     .OrderByDescending(j => j.CreatedAt),
                     j => new PipelineJobDto(j.Id, "medication", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 "visit-medication" => await ListAsync(db.VisitMedicationEnrichmentJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
-                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
+                    .Where(j => !hasReasonFilter || (reasonIsUnclassified ? j.FailureReason == null : j.FailureReason == reasonFilter))
                     .OrderByDescending(j => j.CreatedAt),
                     j => new PipelineJobDto(j.Id, "visit-medication", j.SourceDisplayName, j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
                 "extraction" => await ListAsync(db.MedicalDocumentExtractionJobs.AsNoTracking()
                     .Where(j => statusFilter == null || j.Status == statusFilter)
-                    .Where(j => reasonFilter == null || j.FailureReason == reasonFilter)
+                    .Where(j => !hasReasonFilter || (reasonIsUnclassified ? j.FailureReason == null : j.FailureReason == reasonFilter))
                     .OrderByDescending(j => j.CreatedAt),
                     j => new PipelineJobDto(j.Id, "extraction", j.MedicalRecordId.ToString(), j.Status.ToString(), j.Attempts, j.Error, j.CreatedAt, j.StartedAt, j.CompletedAt, j.FailureReason == null ? null : j.FailureReason.ToString()),
                     skip2, take2, ct),
@@ -509,6 +518,65 @@ public static class AdminPipelineEndpoints
             return Results.Ok(new BulkRetryResponse(retried, notFound));
         });
 
+        // Удаление одной задачи — не перезапуск, строка убирается насовсем (карточка задачи,
+        // список задач). Безопасно для любого статуса: процессоры уже устойчивы к "задача не
+        // найдена" (см. каждый RunAsync — не найдена, значит уже обработана/удалена, тихий выход).
+        group.MapDelete("/jobs/{id:guid}", async (
+            Guid id, string type, AppDbContext db, IMemoryCache cache, CancellationToken ct) =>
+        {
+            if (type is not ("lab-analyte" or "medication" or "visit-medication" or "extraction"))
+                return Results.BadRequest(new { message = "type обязателен: lab-analyte|medication|visit-medication|extraction." });
+
+            var deleted = await DeleteJobAsync(type, id, db, ct);
+            if (deleted) cache.Remove(AttentionCacheKey);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        });
+
+        // Массовое удаление — чекбоксы в списке задач, тот же принцип, что bulk-retry.
+        group.MapPost("/jobs/bulk-delete", async (
+            BulkDeleteRequest request, AppDbContext db, IMemoryCache cache, CancellationToken ct) =>
+        {
+            if (request.Type is not ("lab-analyte" or "medication" or "visit-medication" or "extraction"))
+                return Results.BadRequest(new { message = "type обязателен: lab-analyte|medication|visit-medication|extraction." });
+            if (request.Ids.Count == 0)
+                return Results.BadRequest(new { message = "ids не может быть пустым." });
+            if (request.Ids.Count > 100)
+                return Results.BadRequest(new { message = "не более 100 задач за один запрос." });
+
+            var notFound = new List<Guid>();
+            var deleted = 0;
+            foreach (var id in request.Ids.Distinct())
+            {
+                if (await DeleteJobAsync(request.Type, id, db, ct)) deleted++;
+                else notFound.Add(id);
+            }
+            if (deleted > 0) cache.Remove(AttentionCacheKey);
+            return Results.Ok(new BulkDeleteResponse(deleted, notFound));
+        });
+
+        // Чистка задач, упавших ДО этой правки (FailureReason ещё не проставлялся — см.
+        // EnrichmentFailureReason) — «Требует внимания» показывает их отдельным пунктом
+        // "Unclassified", разбирать их по одной незачем: причины у них по определению нет,
+        // структурно они больше ничего не расскажут. Один запрос чистит все четыре конвейера сразу.
+        group.MapPost("/jobs/purge-unclassified", async (AppDbContext db, IMemoryCache cache, CancellationToken ct) =>
+        {
+            var lab = await db.LabAnalyteEnrichmentJobs
+                .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == null)
+                .ExecuteDeleteAsync(ct);
+            var med = await db.MedicationEnrichmentJobs
+                .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == null)
+                .ExecuteDeleteAsync(ct);
+            var visit = await db.VisitMedicationEnrichmentJobs
+                .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == null)
+                .ExecuteDeleteAsync(ct);
+            var extraction = await db.MedicalDocumentExtractionJobs
+                .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason == null)
+                .ExecuteDeleteAsync(ct);
+
+            cache.Remove(AttentionCacheKey);
+            return Results.Ok(new PurgeUnclassifiedResponse(lab, med, visit, extraction, lab + med + visit + extraction));
+        });
+
         // Точечное принудительное переобогащение одной уже существующей строки справочника
         // показателей (см. LabAnalyteEnrichmentJob.Force) — не батч, как /api/admin/kb/lab-analytes/reenrich.
         group.MapPost("/kb/lab-analytes/{id:guid}/reenrich", async (
@@ -590,6 +658,21 @@ public static class AdminPipelineEndpoints
             default:
                 return false;
         }
+    }
+
+    /// <summary>Удаляет одну задачу по (type, id) — общий хвост для одиночного и массового
+    /// удаления, тот же приём, что ResetAndEnqueueAsync для retry.</summary>
+    private static async Task<bool> DeleteJobAsync(string type, Guid id, AppDbContext db, CancellationToken ct)
+    {
+        var affected = type switch
+        {
+            "lab-analyte" => await db.LabAnalyteEnrichmentJobs.Where(j => j.Id == id).ExecuteDeleteAsync(ct),
+            "medication" => await db.MedicationEnrichmentJobs.Where(j => j.Id == id).ExecuteDeleteAsync(ct),
+            "visit-medication" => await db.VisitMedicationEnrichmentJobs.Where(j => j.Id == id).ExecuteDeleteAsync(ct),
+            "extraction" => await db.MedicalDocumentExtractionJobs.Where(j => j.Id == id).ExecuteDeleteAsync(ct),
+            _ => 0,
+        };
+        return affected > 0;
     }
 
     private static async Task<PipelineJobListResponse> ListAsync<TEntity>(

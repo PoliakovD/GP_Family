@@ -95,6 +95,9 @@
     <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="retryOnly()">
       Просто перезапустить
     </button>
+    <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="deleteJob()">
+      Удалить
+    </button>
   </div>
 } @else {
   <p class="text-muted">Задача не найдена.</p>

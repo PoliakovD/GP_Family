@@ -175,6 +175,9 @@
           <button type="button" class="btn btn-primary btn-sm" [disabled]="jobsBusy()" (click)="bulkRetrySelected()">
             Перезапустить выбранные ({{ selectedJobIds().size }})
           </button>
+          <button type="button" class="btn btn-danger btn-sm" [disabled]="jobsBusy()" (click)="bulkDeleteSelected()">
+            Удалить выбранные ({{ selectedJobIds().size }})
+          </button>
         }
       </div>
 
@@ -196,10 +199,13 @@
                 <td>{{ j.attempts }}</td>
                 <td class="text-muted">{{ j.error }}</td>
                 <td>{{ j.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
-                <td>
+                <td class="d-flex gap-1">
                   @if (j.status === 'Failed') {
                     <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsBusy()" (click)="retryJob(j)">
                       Повторить
+                    </button>
+                    <button type="button" class="btn-icon" aria-label="Удалить задачу" [disabled]="jobsBusy()" (click)="deleteJob(j)">
+                      <i class="ph ph-trash" aria-hidden="true"></i>
                     </button>
                   }
                 </td>
@@ -217,7 +223,12 @@
 
 <app-side-panel [open]="!!openJobId()" title="Задача" (closed)="closeJobPanel()">
   @if (openJobId()) {
-    <app-admin-job-panel [jobId]="openJobId()!" [jobType]="jobType()" (changed)="loadJobs()" />
+    <app-admin-job-panel
+      [jobId]="openJobId()!"
+      [jobType]="jobType()"
+      (changed)="loadJobs()"
+      (deleted)="closeJobPanel(); loadJobs()"
+    />
   }
 </app-side-panel>
 

@@ -349,6 +349,51 @@ export class AdminPipelineComponent implements OnInit, OnDestroy {
     }
   }
 
+  async deleteJob(job: PipelineJob): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Удалить задачу?',
+      message: `«${job.displayName}» будет удалена насовсем — это не перезапуск, а очистка списка.`,
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.jobsBusy.set(true);
+    try {
+      await this.api.deleteJob(job.id, job.type);
+      if (this.openJobId() === job.id) this.closeJobPanel();
+      await this.loadJobs();
+    } catch {
+      this.toast.error('Не удалось удалить задачу.');
+    } finally {
+      this.jobsBusy.set(false);
+    }
+  }
+
+  async bulkDeleteSelected(): Promise<void> {
+    const ids = [...this.selectedJobIds()];
+    if (ids.length === 0) return;
+
+    const ok = await this.confirm.confirm({
+      title: `Удалить ${ids.length} задач?`,
+      message: 'Насовсем — это не перезапуск, а очистка списка.',
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.jobsBusy.set(true);
+    try {
+      const result = await this.api.bulkDeleteJobs(this.jobType(), ids);
+      this.toast.success(`Удалено задач: ${result.deletedCount}.`);
+      await this.loadJobs();
+    } catch {
+      this.toast.error('Не удалось удалить выбранные задачи.');
+    } finally {
+      this.jobsBusy.set(false);
+    }
+  }
+
   // --- LM Studio ---
 
   async loadLmStudioModel(): Promise<void> {
