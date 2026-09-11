@@ -57,6 +57,10 @@ const EXTRACTION_TERMINAL_STATUSES: number[] = [
 ];
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
+/** Подряд неудачных опросов статуса, после которых поллинг реально останавливается — 5 × 1.5с ≈
+ * 7.5с непрерывных сбоев переживает короткий блип сети/фоновую вкладку, не маскирует настоящий
+ * обрыв связи навсегда. См. pollFailureCounts. */
+const MAX_CONSECUTIVE_POLL_FAILURES = 5;
 const SEARCH_DEBOUNCE_MS = 300;
 /** Сколько ждать после Completed, прежде чем убрать живой прогресс — успевает мигнуть галочка
  * «Готово», не исчезает мгновенно. */
@@ -207,13 +211,24 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * кнопку именно этой записи и переключает её подпись на "Пересчитываем…". */
   summaryRegeneratingRecordId: string | null = null;
   conclusionByRecord: Record<string, VisitConclusion | null> = {};
-  /** Id записи, для которой сейчас идёт запрос «Распознать» — дизейблит кнопку именно этой записи. */
-  recognizingRecordId: string | null = null;
+  /** Id записей, для которых сейчас идёт запрос «Распознать» — дизейблит кнопку именно этих
+   * записей. Множество, а не одиночный id (было раньше) — единственная задача-на-запись
+   * (v2 задача — на всю запись, не вложение), но одновременно распознаваться могут НЕСКОЛЬКО РАЗНЫХ
+   * записей (у одного пользователя открыты и «Анализы», и «Врачи», или несколько записей подряд) —
+   * одиночный id затирал бы отметку предыдущей записи, преждевременно разблокируя её кнопку, пока
+   * та ещё реально распознаётся на бэкенде (баг, найденный на живом отчёте). */
+  recognizingRecordIds = new Set<string>();
   /** Живой список шагов на карточку (UX-редизайн) — история, не только текущая стадия, см.
    * shared/pipeline-progress. */
   pipelineStepsByRecord: Record<string, PipelineStep[]> = {};
   private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
   private readonly pipelineClearHandles = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Подряд неудачных опросов статуса на запись — сетевой сбой ОДНОГО тика (моргнула сеть, вкладка
+   * была в фоне) не должен останавливать живой прогресс и разблокировать кнопку «Распознать», пока
+   * задача на бэкенде продолжает идти независимо от этого (баг, найденный на живом отчёте: "процесс
+   * шёл дальше, а UI считал, что распознавание остановилось"). Останавливаем поллинг только после
+   * MAX_CONSECUTIVE_POLL_FAILURES подряд неудач — это уже похоже на настоящий обрыв связи, не блип. */
+  private readonly pollFailureCounts = new Map<string, number>();
 
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
   readonly RefSource = RefSource;
@@ -353,6 +368,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     for (const handle of this.pollHandles.values()) clearInterval(handle);
     this.pollHandles.clear();
+    this.pollFailureCounts.clear();
     for (const handle of this.pipelineClearHandles.values()) clearTimeout(handle);
     this.pipelineClearHandles.clear();
     if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
@@ -765,7 +781,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async handleRecognize(record: MedicalRecord): Promise<void> {
-    this.recognizingRecordId = record.id;
+    this.setRecognizing(record.id, true);
     this.clearPipelineTimer(record.id);
     this.pipelineStepsByRecord = {
       ...this.pipelineStepsByRecord,
@@ -780,7 +796,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // будет подхвачена следующим обновлением списка), на llm_unavailable опрашивать нечего.
       if (response?.code === 'already_queued' || response?.code === 'llm_unavailable') {
         this.info = response.message ?? null;
-        this.recognizingRecordId = null;
+        this.setRecognizing(record.id, false);
         this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [record.id]: [] };
         return;
       }
@@ -789,7 +805,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.startPolling(record);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось запустить распознавание.';
-      this.recognizingRecordId = null;
+      this.setRecognizing(record.id, false);
     }
   }
 
@@ -803,26 +819,37 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private resumeLivePolling(items: MedicalRecord[]): void {
     for (const item of items) {
       if (item.extractionStatus === ExtractionStatus.Pending && !this.pollHandles.has(item.id)) {
-        this.recognizingRecordId = item.id;
+        this.setRecognizing(item.id, true);
         this.startPolling(item);
       }
     }
   }
 
+  /** Единая точка мутации recognizingRecordIds (Set) — новый Set-инстанс на каждое изменение
+   * (не мутация на месте), тот же приём иммутабельных обновлений, что и у Record-полей панели
+   * (extractionStatusByRecord и т.п.) — гарантирует, что Angular увидит изменение ссылки. */
+  private setRecognizing(recordId: string, on: boolean): void {
+    const next = new Set(this.recognizingRecordIds);
+    if (on) next.add(recordId); else next.delete(recordId);
+    this.recognizingRecordIds = next;
+  }
+
   private startPolling(record: MedicalRecord): void {
     const existing = this.pollHandles.get(record.id);
     if (existing) clearInterval(existing);
+    this.pollFailureCounts.delete(record.id);
 
     const tick = async () => {
       try {
         const prev = this.extractionStatusByRecord[record.id] ?? null;
         const status = await this.api.getExtractionStatus(record.id);
+        this.pollFailureCounts.delete(record.id);
         this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
         this.updatePipelineSteps(record.id, status, prev);
 
         if (EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
           this.stopPolling(record.id);
-          this.recognizingRecordId = null;
+          this.setRecognizing(record.id, false);
           if (status.status === ExtractionJobStatus.Completed) {
             await this.loadExtractionResult(record);
             await this.refresh();
@@ -832,8 +859,20 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           this.schedulePipelineClear(record.id);
         }
       } catch (err) {
+        // Сетевой блип/вкладка была в фоне — сама задача на бэкенде продолжает идти независимо
+        // от того, долетел ли этот один запрос статуса. Останавливаем поллинг (и разблокируем
+        // кнопку) только после нескольких подряд неудач — раньше ЛЮБАЯ первая ошибка тут же
+        // прекращала опрос и снимала recognizing, хотя распознавание фактически продолжалось
+        // (баг, найденный на живом отчёте: "UI считает, что процесс остановился, а по факту
+        // шёл дальше"). Молча повторяем на следующем тике, ничего не показываем пользователю.
+        const failures = (this.pollFailureCounts.get(record.id) ?? 0) + 1;
+        if (failures < MAX_CONSECUTIVE_POLL_FAILURES) {
+          this.pollFailureCounts.set(record.id, failures);
+          return;
+        }
+        this.pollFailureCounts.delete(record.id);
         this.stopPolling(record.id);
-        this.recognizingRecordId = null;
+        this.setRecognizing(record.id, false);
         this.error = err instanceof ApiError ? err.message : 'Не удалось получить статус распознавания.';
       }
     };
@@ -858,6 +897,17 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } else if (status.status === ExtractionJobStatus.Completed) {
       markLastDone();
       steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
+    } else if (status.status === ExtractionJobStatus.Pending) {
+      // В очереди — задача ещё не начата (TotalFiles/Stage у нового джоба ещё нулевые/дефолтные,
+      // показывать их бессмысленно). Позиция обновляется по мере того, как задачи впереди
+      // распознаются, — отдельная строка на каждое изменение, как и у смены стадии ниже.
+      if (!prev || prev.queuePosition !== status.queuePosition || steps.length === 0) {
+        markLastDone();
+        const label = status.queuePosition > 0
+          ? `В очереди — ещё ${status.queuePosition} ${pluralizeRu(status.queuePosition, 'документ', 'документа', 'документов')} впереди`
+          : 'В очереди — следующая на распознавание';
+        steps.push({ id: `queue-${status.queuePosition}`, label, state: 'active' });
+      }
     } else {
       // Новый обработанный файл — отдельная строка с галочкой, до перехода к следующей стадии.
       if (prev && status.processedFiles > prev.processedFiles) {
@@ -867,7 +917,17 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       if (!prev || prev.stage !== status.stage || steps.length === 0) {
         markLastDone();
         const base = this.stageLabel[status.stage] ?? 'Обрабатываем…';
-        const label = status.totalFiles > 1 ? `${base} — файл ${this.currentFileNumber(status)} из ${status.totalFiles}` : base;
+        // "файл N из M" — только на ПОФАЙЛОВЫХ стадиях (Decoding/Ocr): Structuring/Linking/
+        // Summarizing идут ОДИН раз на всю запись, после того как ВСЕ файлы уже прочитаны —
+        // ProcessedFiles/TotalFiles к этому моменту заморожены (оба равны), и суффикс "файл 5 из 5"
+        // ошибочно читался как "всё ещё обрабатываем файл 5", хотя на деле файлы давно прочитаны, а
+        // конвейер уже сверяет показатели со справочником/считает резюме (баг, найденный на живом
+        // отчёте — это и создавало впечатление, что процесс "завис"/остановился именно в момент
+        // перехода от файлов к этим стадиям).
+        const isPerFileStage = status.stage === ExtractionStage.Decoding || status.stage === ExtractionStage.Ocr;
+        const label = isPerFileStage && status.totalFiles > 1
+          ? `${base} — файл ${this.currentFileNumber(status)} из ${status.totalFiles}`
+          : base;
         steps.push({ id: `stage-${status.stage}-${steps.length}`, label, state: 'active' });
       }
     }
@@ -899,6 +959,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       clearInterval(handle);
       this.pollHandles.delete(recordId);
     }
+    this.pollFailureCounts.delete(recordId);
   }
 
   private async loadExtractionResult(record: MedicalRecord): Promise<void> {

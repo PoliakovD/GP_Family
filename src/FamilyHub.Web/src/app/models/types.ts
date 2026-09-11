@@ -468,6 +468,9 @@ export interface ExtractionStatusResponse {
     processedFiles: number;
     createdAt: string;
     completedAt: string | null;
+    /** Сколько ещё не начатых задач (любой записи — очередь общая, один воркер LM Studio) стоят
+     * раньше этой; осмысленна, только пока status === Pending (иначе всегда 0). */
+    queuePosition: number;
 }
 
 /** Тело ответа POST /extract на "мягких" исходах (см. ExtractionRequestResult на бэкенде) — на

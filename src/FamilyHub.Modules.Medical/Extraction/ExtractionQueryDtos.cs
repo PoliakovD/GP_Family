@@ -3,9 +3,13 @@ using FamilyHub.Modules.Medical.Kb;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
+/// <summary>QueuePosition — сколько ЕЩЁ НЕ начатых задач извлечения (Status=Pending, любой
+/// записи/пользователя — очередь "extraction" общая на всех, один воркер) стоят раньше этой; 0,
+/// пока задача сама не Pending (уже Running либо уже завершилась) — тогда позиция бессмысленна,
+/// фронт её не показывает. См. ExtractionQueryService.GetStatusAsync.</summary>
 public record ExtractionStatusResponse(
     EnrichmentJobStatus Status, ExtractionStage Stage, int IndicatorCount, string? Error,
-    int TotalFiles, int ProcessedFiles, DateTime CreatedAt, DateTime? CompletedAt);
+    int TotalFiles, int ProcessedFiles, DateTime CreatedAt, DateTime? CompletedAt, int QueuePosition = 0);
 
 /// <summary>ValueNumericText/KbAnalyteId — редизайн v2 (шкала-референс + панель справки).
 /// RefLowText/RefHighText — либо `double.ToString(InvariantCulture)`, либо null; нечисловой

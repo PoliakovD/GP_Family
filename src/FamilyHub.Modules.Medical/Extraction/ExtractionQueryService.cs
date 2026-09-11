@@ -53,8 +53,22 @@ public class ExtractionQueryService(
             .FirstOrDefaultAsync(ct);
         if (job is null) return (ExtractionQueryResult.NotFound, null);
 
+        // Позиция в очереди — только пока задача реально ждёт (Pending): считаем по самой таблице
+        // задач (частичный уникальный индекс уже гарантирует не больше одной живой задачи на
+        // запись, см. ExtractionRequestService), не через Hangfire IMonitoringApi — переживает
+        // requeue LmStudioRecoverySweepJob (тот меняет Status обратно на Pending с тем же
+        // CreatedAt/новым Hangfire job id, порядок в очереди определяется этим полем, не
+        // внутренним id очереди) и не требует хранить Hangfire job id отдельно. Один воркер на
+        // очередь "extraction" (LM Studio — один ноутбук за WireGuard) — впереди все Pending-задачи
+        // С БОЛЕЕ РАННИМ CreatedAt, ровно то же самое FIFO, что и Hangfire по умолчанию.
+        var queuePosition = job.Status == EnrichmentJobStatus.Pending
+            ? await db.MedicalDocumentExtractionJobs.AsNoTracking()
+                .CountAsync(j => j.Status == EnrichmentJobStatus.Pending && j.CreatedAt < job.CreatedAt, ct)
+            : 0;
+
         return (ExtractionQueryResult.Success, new ExtractionStatusResponse(
-            job.Status, job.Stage, job.IndicatorCount, job.Error, job.TotalFiles, job.ProcessedFiles, job.CreatedAt, job.CompletedAt));
+            job.Status, job.Stage, job.IndicatorCount, job.Error, job.TotalFiles, job.ProcessedFiles,
+            job.CreatedAt, job.CompletedAt, queuePosition));
     }
 
     public async Task<(ExtractionQueryResult Result, List<IndicatorDto> Items)> GetIndicatorsAsync(
