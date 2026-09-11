@@ -36,6 +36,7 @@ export class AdminAttentionComponent implements OnInit {
   readonly attention = signal<AdminAttention | null>(null);
   readonly loading = signal(true);
   readonly busyDomain = signal<string | null>(null);
+  readonly purgeBusy = signal(false);
 
   ngOnInit(): void {
     void this.load();
@@ -76,6 +77,30 @@ export class AdminAttentionComponent implements OnInit {
     void this.router.navigate(['/admin/pipeline'], {
       queryParams: { tab: 'jobs', type: topType as PipelineJobType, status: 'Failed', reason },
     });
+  }
+
+  /** Задачи "Unclassified" упали ДО появления структурной причины отказа (см.
+   * EnrichmentFailureReason) — разбирать их по одной незачем, причины у них нет и не появится;
+   * единственное осмысленное действие — очистить список от них насовсем. */
+  async purgeUnclassified(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Удалить задачи без объяснения причины?',
+      message: 'Эти задачи упали до того, как конвейер начал записывать причину отказа — разобрать их по одной уже нельзя. Будут удалены насовсем во всех четырёх конвейерах.',
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.purgeBusy.set(true);
+    try {
+      const result = await this.api.purgeUnclassifiedJobs();
+      this.toast.success(`Удалено задач: ${result.totalDeleted}.`);
+      await this.load();
+    } catch {
+      this.toast.error('Не удалось удалить задачи.');
+    } finally {
+      this.purgeBusy.set(false);
+    }
   }
 
   async trustAndRetry(domain: string, topic: string): Promise<void> {

@@ -9,6 +9,7 @@ import {
   SnippetOverrideItem,
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { ConfirmService } from '../../../shared/confirm/confirm.service';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -49,9 +50,13 @@ export class AdminJobPanelComponent implements OnChanges, OnDestroy {
   /** Эмитится после успешного retry/resolve-and-retry — родитель (список задач/инбокс) обновляет
    * свой список, не дожидаясь закрытия панели. */
   @Output() readonly changed = new EventEmitter<void>();
+  /** Эмитится после удаления задачи — родитель обязан закрыть панель (задачи для отображения
+   * больше нет) и обновить список. */
+  @Output() readonly deleted = new EventEmitter<void>();
 
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly detail = signal<PipelineJobDetail | null>(null);
   readonly loading = signal(true);
@@ -178,6 +183,27 @@ export class AdminJobPanelComponent implements OnChanges, OnDestroy {
       this.changed.emit();
     } catch {
       this.toast.error('Не удалось перезапустить задачу.');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async deleteJob(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Удалить задачу?',
+      message: 'Задача будет удалена насовсем — это не перезапуск, а очистка списка.',
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.busy.set(true);
+    try {
+      await this.api.deleteJob(this.jobId, this.jobType);
+      this.toast.success('Задача удалена.');
+      this.deleted.emit();
+    } catch {
+      this.toast.error('Не удалось удалить задачу.');
     } finally {
       this.busy.set(false);
     }

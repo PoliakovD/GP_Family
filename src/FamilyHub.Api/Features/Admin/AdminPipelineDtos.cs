@@ -64,3 +64,16 @@ public record ResolveAndRetryRequest(List<SnippetOverrideItem>? Overrides, List<
 public record BulkRetryRequest(string Type, List<Guid> Ids);
 
 public record BulkRetryResponse(int RetriedCount, List<Guid> NotFoundIds);
+
+/// <summary>Массовое удаление — тот же дискриминатор Type/Ids, что BulkRetryRequest, но убирает
+/// строки насовсем, не перезапускает. Для задач, упавших без структурной причины (FailureReason
+/// не проставлен — упали до этой правки, см. AttentionReasonDto), а также любых устаревших/более
+/// не интересных Failed-строк, засоряющих список.</summary>
+public record BulkDeleteRequest(string Type, List<Guid> Ids);
+
+public record BulkDeleteResponse(int DeletedCount, List<Guid> NotFoundIds);
+
+/// <summary>Итог purge-unclassified — по одному счётчику на конвейер плюс общий, чтобы админ видел,
+/// откуда именно были удалены строки.</summary>
+public record PurgeUnclassifiedResponse(
+    int LabAnalyteDeleted, int MedicationDeleted, int VisitMedicationDeleted, int ExtractionDeleted, int TotalDeleted);

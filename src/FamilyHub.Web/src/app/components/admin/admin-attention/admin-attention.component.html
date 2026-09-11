@@ -24,6 +24,11 @@
             <button type="button" class="btn btn-secondary btn-sm" (click)="openJobs(r.reason, r.byType)">
               Открыть задачи
             </button>
+            @if (r.reason === 'Unclassified') {
+              <button type="button" class="btn btn-danger btn-sm" [disabled]="purgeBusy()" (click)="purgeUnclassified()">
+                Удалить все ({{ r.count }})
+              </button>
+            }
           </div>
         </app-attention-card>
       }

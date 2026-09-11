@@ -1,6 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -18,6 +23,9 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
     private record PromptVersionDto(Guid Id, int Version, bool IsActive, string? Note, DateTime CreatedAt, string Body);
     private record DryRunResponseDto(bool Success, string? Error, Dictionary<string, object>? Payload);
     private record PipelineJobListDto(List<object> Rows, int Total);
+    private record PipelineJobRowDto(Guid Id, string Type, string DisplayName, string Status, string? FailureReason);
+    private record PipelineJobListTypedDto(List<PipelineJobRowDto> Rows, int Total);
+    private record PurgeUnclassifiedResponseDto(int LabAnalyteDeleted, int MedicationDeleted, int VisitMedicationDeleted, int ExtractionDeleted, int TotalDeleted);
 
     private async Task<HttpClient> AuthenticatedClientAsync()
     {
@@ -26,6 +34,32 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
             new { user = AdminWebFactory.TestUser, password = AdminWebFactory.TestPassword }))
             .EnsureSuccessStatusCode();
         return client;
+    }
+
+    /// <summary>Заводит одну Failed-задачу показателя напрямую через AppDbContext — тест бьёт по
+    /// listing/delete/purge-логике самой админки, не по конвейеру, который её создаёт (тот же
+    /// приём, что LabAnalyteKbRebuildJobTests). reason=null имитирует задачу, упавшую ДО появления
+    /// EnrichmentFailureReason ("Unclassified" в «Требует внимания»).</summary>
+    private async Task<Guid> SeedFailedLabAnalyteJobAsync(EnrichmentFailureReason? reason)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var job = new LabAnalyteEnrichmentJob
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = $"тестпоказатель{Guid.NewGuid():N}",
+            SpecimenKbId = Guid.NewGuid(),
+            SourceDisplayName = "Тестовый показатель",
+            RequestedByUserId = Guid.Empty,
+            Status = EnrichmentJobStatus.Failed,
+            Error = reason is null ? "старая ошибка без структурной причины" : "нет доверенных сниппетов",
+            FailureReason = reason,
+            CreatedAt = DateTime.UtcNow,
+            CompletedAt = DateTime.UtcNow,
+        };
+        db.LabAnalyteEnrichmentJobs.Add(job);
+        await db.SaveChangesAsync();
+        return job.Id;
     }
 
     [Fact]
@@ -226,5 +260,92 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         var response = await client.PostAsync($"/api/admin/pipeline/jobs/{Guid.NewGuid()}/retry?type=lab-analyte", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DeleteJob_UnknownId_Returns404()
+    {
+        var client = await AuthenticatedClientAsync();
+
+        var response = await client.DeleteAsync($"/api/admin/pipeline/jobs/{Guid.NewGuid()}?type=lab-analyte");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>Регресс-тест на баг «вечно висит открытая задача»: закрытие карточки задачи теперь
+    /// требует, чтобы удаление реально убирало строку — иначе «Удалить» из карточки выглядело бы
+    /// как успех, но задача осталась бы в списке.</summary>
+    [Fact]
+    public async Task DeleteJob_KnownId_RemovesRowFromDb()
+    {
+        var client = await AuthenticatedClientAsync();
+        var id = await SeedFailedLabAnalyteJobAsync(EnrichmentFailureReason.NoTrustedSnippets);
+
+        var response = await client.DeleteAsync($"/api/admin/pipeline/jobs/{id}?type=lab-analyte");
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.Id == id)).Should().BeFalse();
+    }
+
+    /// <summary>Регресс-тест на запрос «почистить неудавшиеся jobs, которые без объяснений» —
+    /// задачи, упавшие ДО появления EnrichmentFailureReason (FailureReason=NULL, "Unclassified"
+    /// в «Требует внимания»), удаляются одним действием; задачи с уже проставленной причиной,
+    /// которые ещё можно чинить через карточку, purge не трогает.</summary>
+    [Fact]
+    public async Task PurgeUnclassified_DeletesOnlyJobsWithoutFailureReason_KeepsClassifiedOnes()
+    {
+        var client = await AuthenticatedClientAsync();
+        var unclassifiedId = await SeedFailedLabAnalyteJobAsync(reason: null);
+        var classifiedId = await SeedFailedLabAnalyteJobAsync(EnrichmentFailureReason.NoTrustedSnippets);
+
+        try
+        {
+            var response = await client.PostAsync("/api/admin/pipeline/jobs/purge-unclassified", null);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var body = await response.Content.ReadFromJsonAsync<PurgeUnclassifiedResponseDto>();
+            body!.LabAnalyteDeleted.Should().BeGreaterThanOrEqualTo(1);
+
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.Id == unclassifiedId)).Should().BeFalse(
+                "задача без структурной причины должна быть удалена");
+            (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.Id == classifiedId)).Should().BeTrue(
+                "задача с уже проставленной причиной — не мусор, purge её не трогает");
+        }
+        finally
+        {
+            // Не оставляем классифицированную строку в общей БД коллекции — другие тесты
+            // (Jobs_KnownType_ReturnsEmptyList_NotError) рассчитывают на пустую таблицу.
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.LabAnalyteEnrichmentJobs.Where(j => j.Id == classifiedId).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Jobs_ReasonUnclassified_FiltersOnlyNullFailureReasonJobs()
+    {
+        var client = await AuthenticatedClientAsync();
+        var unclassifiedId = await SeedFailedLabAnalyteJobAsync(reason: null);
+        var classifiedId = await SeedFailedLabAnalyteJobAsync(EnrichmentFailureReason.NoTrustedSnippets);
+
+        try
+        {
+            var response = await client.GetAsync("/api/admin/pipeline/jobs?type=lab-analyte&status=Failed&reason=Unclassified");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var body = await response.Content.ReadFromJsonAsync<PipelineJobListTypedDto>();
+
+            body!.Rows.Should().Contain(r => r.Id == unclassifiedId);
+            body.Rows.Should().NotContain(r => r.Id == classifiedId,
+                "reason=Unclassified — синтетический фильтр на FailureReason IS NULL, не 'фильтр не задан'");
+        }
+        finally
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.LabAnalyteEnrichmentJobs.Where(j => j.Id == unclassifiedId || j.Id == classifiedId).ExecuteDeleteAsync();
+        }
     }
 }

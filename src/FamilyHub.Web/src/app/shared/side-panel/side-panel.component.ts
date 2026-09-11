@@ -2,7 +2,6 @@ import {
   Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output,
   SimpleChanges, ViewChild,
 } from '@angular/core';
-import { HistoryDismissController } from '../util/history-dismiss';
 import { OverlayA11y } from '../util/overlay-a11y';
 
 /**
@@ -13,11 +12,18 @@ import { OverlayA11y } from '../util/overlay-a11y';
  * `indicator-info-panel` НЕ переведена на эту обёртку задним числом (нулевая функциональная
  * польза, см. правило «не переименовывать существующее под новую таксономию»).
  *
- * В отличие от `indicator-info-panel`, сразу заводит фокус-трап и блокировку скролла фона
- * (`OverlayA11y`) и синхронизацию с History API (`HistoryDismissController`, аппаратная/жестовая
- * «назад» закрывает панель, не уводит с текущего экрана) — тот же приём, что `file-viewer`
- * (модальные размеры `narrow`/`medium`) и `bottom-sheet`, которого не было у более старой
- * `indicator-info-panel` (исторический долг, не тронутый там намеренно).
+ * Заводит фокус-трап и блокировку скролла фона (`OverlayA11y`), но НЕ `HistoryDismissController`
+ * (в отличие от `file-viewer`/`bottom-sheet`) — тот трюк (push/pop фиктивной записи истории)
+ * предполагает, что открытие/закрытие оверлея НИКАК не отражено в URL. Консьюмеры этой панели в
+ * админке (карточка задачи/справочника) уже сами синхронизируют open/closed с query-параметром
+ * (`?job=<id>` и т.п., см. AdminPipelineComponent.openJob/closeJobPanel) через собственный
+ * `router.navigate(..., {replaceUrl: true})`. Если бы обе синхронизации (query-параметр И
+ * push/pop истории) работали одновременно, `replaceUrl` от закрытия панели затирает state
+ * фиктивной записи, `history.back()` из HistoryDismissController уводит на предыдущую запись,
+ * где `?job=` ещё был, а Router восстанавливает эту query-строку — следующий `merge` навигации
+ * возвращает `job` обратно, и панель никогда не закрывается по-настоящему (баг, найденный в
+ * проде: «вечно висит открытая задача»). Урок: для оверлея, чьё состояние уже отражено в URL,
+ * не заводить вторую, независимую систему адресации той же истории.
  */
 @Component({
   selector: 'app-side-panel',
@@ -55,13 +61,11 @@ export class SidePanelComponent implements OnChanges, OnDestroy {
 
   @ViewChild('overlayRoot') private overlayRoot?: ElementRef<HTMLElement>;
 
-  private readonly history = new HistoryDismissController(() => this.closed.emit());
   private readonly a11y = new OverlayA11y();
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!changes['open']) return;
 
-    this.history.sync(this.open);
     if (this.open) {
       queueMicrotask(() => this.overlayRoot && this.a11y.activate(this.overlayRoot.nativeElement));
     } else {
@@ -70,13 +74,7 @@ export class SidePanelComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.history.destroy();
     this.a11y.deactivate();
-  }
-
-  @HostListener('window:popstate')
-  onPopState(): void {
-    this.history.onPopState(this.open);
   }
 
   @HostListener('document:keydown', ['$event'])

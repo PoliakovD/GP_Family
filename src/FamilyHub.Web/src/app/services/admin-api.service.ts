@@ -166,6 +166,14 @@ export interface SnippetOverrideItem { url: string; enabled: boolean | null; }
 export interface ResolveAndRetryRequest { overrides?: SnippetOverrideItem[]; trustDomains?: string[]; }
 
 export interface BulkRetryResponse { retriedCount: number; notFoundIds: string[]; }
+export interface BulkDeleteResponse { deletedCount: number; notFoundIds: string[]; }
+
+/** Итог очистки задач, упавших до появления структурной причины (FailureReason=null,
+ * «Unclassified» в инбоксе «Требует внимания») — по конвейеру и общий. */
+export interface PurgeUnclassifiedResponse {
+  labAnalyteDeleted: number; medicationDeleted: number; visitMedicationDeleted: number;
+  extractionDeleted: number; totalDeleted: number;
+}
 
 /** Один пункт инбокса «Требует внимания» — агрегат причин отказа по всем четырём конвейерам. */
 export interface AttentionReason {
@@ -330,6 +338,15 @@ export class AdminApiService {
 
   bulkRetryJobs = (type: PipelineJobType, ids: string[]) =>
     this.post<BulkRetryResponse>('/api/admin/pipeline/jobs/bulk-retry', { type, ids });
+
+  deleteJob = (id: string, type: PipelineJobType) => this.del<void>(`/api/admin/pipeline/jobs/${id}?type=${type}`);
+
+  bulkDeleteJobs = (type: PipelineJobType, ids: string[]) =>
+    this.post<BulkDeleteResponse>('/api/admin/pipeline/jobs/bulk-delete', { type, ids });
+
+  /** Чистка задач, упавших до появления структурной причины отказа (FailureReason=null,
+   * «Unclassified» в «Требует внимания») — их незачем разбирать по одной, причины у них нет. */
+  purgeUnclassifiedJobs = () => this.post<PurgeUnclassifiedResponse>('/api/admin/pipeline/jobs/purge-unclassified');
 
   reenrichLabAnalyte = (id: string) => this.post<void>(`/api/admin/pipeline/kb/lab-analytes/${id}/reenrich`);
 
