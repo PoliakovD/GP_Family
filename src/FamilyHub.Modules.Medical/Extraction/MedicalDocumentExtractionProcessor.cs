@@ -60,6 +60,12 @@ public class MedicalDocumentExtractionProcessor(
     /// уникальным индексом (Status IN (0,1)) — см. аудит, находка Critical #3.</summary>
     public const int MaxAttempts = 3;
 
+    /// <summary>Потолок числа показателей в файле, при котором ещё имеет смысл переписать их
+    /// имена по AnalyteSubjectResolver — премисса шага "весь этот файл посвящён одному объекту
+    /// поиска" неправдоподобна для бланка-панели с большим числом строк, что бы ни ответила
+    /// модель на конкретный файл.</summary>
+    private const int MaxIndicatorsForSubjectRewrite = 5;
+
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
@@ -182,6 +188,10 @@ public class MedicalDocumentExtractionProcessor(
                 // по этому флагу LmStudioRecoverySweepJob находит задачи, которые стоит вернуть в
                 // очередь, когда сервер снова станет доступен (см. план, часть 1).
                 job.IsTransientFailure = ex is LmStudioUnavailableException;
+                // См. комментарий у FailAsync — та же причина: запись должна сама отражать
+                // терминальный отказ, не только job-таблица.
+                await db.MedicalRecords.Where(r => r.Id == job.MedicalRecordId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Failed), ct);
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicalDocumentExtractionJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
@@ -196,23 +206,34 @@ public class MedicalDocumentExtractionProcessor(
         DateOnly? documentDate = null;
         string? suggestedTitle = null;
         string? doctor = null;
-        var rawIndicators = new List<ExtractedLabIndicator>();
+
+        // Группа на файл (не плоский список, как раньше) — связь показателя с конкретным файлом
+        // нужна для уточнения родового названия по разделу "Оказанные услуги" (см.
+        // AnalyteSubjectResolver: субъект резолвится на файл целиком, не на отдельный показатель) и
+        // для разведения коллизий ключа между файлами, когда субъект не определился (см.
+        // AnalyteKeyDisambiguator ниже).
+        var fileGroups = results
+            .Where(r => r.LabIndicators is { Count: > 0 })
+            .Select(r => (FileGroupId: Guid.NewGuid(), Result: r))
+            .ToList();
 
         foreach (var result in results)
         {
             if (result.DocumentDate is not null) documentDate = result.DocumentDate;
             if (suggestedTitle is null && !string.IsNullOrWhiteSpace(result.SuggestedTitle)) suggestedTitle = result.SuggestedTitle;
             if (doctor is null && !string.IsNullOrWhiteSpace(result.Doctor)) doctor = result.Doctor;
-            if (result.LabIndicators is null) continue;
-            rawIndicators.AddRange(result.LabIndicators);
         }
 
-        if (rawIndicators.Count == 0)
+        if (fileGroups.Count == 0)
         {
             var reason = fileErrors.Count > 0 ? string.Join("; ", fileErrors) : "Не удалось распознать ни одного показателя.";
             await FailAsync(job, reason, readAttachmentIds, ct);
             return;
         }
+
+        var rawIndicators = fileGroups
+            .SelectMany(fg => fg.Result.LabIndicators!.Select(dto => (Dto: dto, fg.FileGroupId)))
+            .ToList();
 
         job.Stage = ExtractionStage.Linking;
         await db.SaveChangesAsync(ct);
@@ -267,30 +288,84 @@ public class MedicalDocumentExtractionProcessor(
         if (await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "ocr-correct", ct))
         {
             var correctedNames = await ocrNameCorrector.CorrectBatchAsync(
-                rawIndicators.Select(x => x.Name).ToList(), ct);
+                rawIndicators.Select(x => x.Dto.Name).ToList(), ct);
             rawIndicators = rawIndicators
-                .Select((x, i) => x with { Name = correctedNames[i] })
+                .Select((x, i) => (x.Dto with { Name = correctedNames[i] }, x.FileGroupId))
                 .ToList();
         }
 
-        var normalized = new List<(ExtractedLabIndicator Dto, string AnalyteKey, Guid SpecimenKbId)>();
-        foreach (var dto in rawIndicators)
+        // Уточнение родового названия по разделу "Оказанные услуги" (см. AnalyteSubjectResolver) —
+        // применяется ко ВСЕМ показателям файла целиком: резолвер уже проверил, что документ
+        // посвящён одному объекту, разбирать показатели файла по отдельности не нужно. Потолок
+        // MaxIndicatorsForSubjectRewrite — премисса "весь файл про один объект" не выдержана для
+        // бланков-панелей с большим числом строк, что бы ни ответила модель на этот файл.
+        var subjectByFileGroup = fileGroups
+            .Where(fg => !string.IsNullOrWhiteSpace(fg.Result.SubjectResolution?.Subject))
+            .ToDictionary(fg => fg.FileGroupId, fg => fg.Result.SubjectResolution!);
+
+        if (subjectByFileGroup.Count > 0)
         {
-            var analyteKey = LabAnalyteNormalizer.Normalize(dto.Name);
-            if (analyteKey.Length == 0) continue;
-            normalized.Add((dto, analyteKey, recordSpecimenKbId));
+            var countByFileGroup = rawIndicators
+                .GroupBy(x => x.FileGroupId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            rawIndicators = rawIndicators
+                .Select(x =>
+                {
+                    if (!subjectByFileGroup.TryGetValue(x.FileGroupId, out var subject)) return x;
+                    if (countByFileGroup[x.FileGroupId] > MaxIndicatorsForSubjectRewrite) return x;
+
+                    var normalizedSubject = LabAnalyteNormalizer.Normalize(subject.Subject);
+                    if (LabAnalyteNormalizer.Normalize(x.Dto.Name) == normalizedSubject) return x; // уточнять нечего
+
+                    return (x.Dto with { Name = $"{subject.Subject} ({x.Dto.Name})" }, x.FileGroupId);
+                })
+                .ToList();
         }
+
+        // Базовый ключ (без разведения коллизий) — то, что реально ищется в справочнике/ставится в
+        // очередь обогащения ниже (§4 плана: суффикс — техническая деталь ХРАНЕНИЯ, KB не должен
+        // получить в качестве имени "бактериальные микроорганизмы файл 2").
+        var withBaseKey = rawIndicators
+            .Select(x => (x.Dto, x.FileGroupId, BaseAnalyteKey: LabAnalyteNormalizer.Normalize(x.Dto.Name)))
+            .Where(x => x.BaseAnalyteKey.Length > 0)
+            .ToList();
+
+        // Запасной вариант (не LLM) — разводим оставшиеся коллизии МЕЖДУ РАЗНЫМИ файлами, когда
+        // субъект не определился (модель не уверена, шаг выключен, LM Studio недоступен), а
+        // базовый ключ всё равно совпал у нескольких файлов этого прогона. Без этого второй файл
+        // молча перезаписал бы первый (upsert по (AnalyteKey, SpecimenKbId) ниже) — см.
+        // AnalyteKeyDisambiguator. Кандидаты с одинаковым FileGroupId (повтор строки ОДНОГО
+        // бланка) уже схлопнуты DeduplicateByName в экстракторе, разводке не подлежат.
+        var disambiguation = AnalyteKeyDisambiguator.Disambiguate(
+            withBaseKey.Select(x => new AnalyteKeyDisambiguator.Candidate(x.BaseAnalyteKey, x.FileGroupId)).ToList());
+
+        // AnalyteKey — ключ ХРАНЕНИЯ (с суффиксом при коллизии), LookupKey — ключ ПОИСКА в
+        // справочнике (всегда базовый, без суффикса), DisplaySuffix — хвост для DisplayName/
+        // RawDisplayName, когда показатель разведён (см. AnalyteKeyDisambiguator class doc).
+        var normalized = withBaseKey
+            .Select(x =>
+            {
+                var hasSuffix = disambiguation.TryGetValue((x.BaseAnalyteKey, x.FileGroupId), out var d);
+                return (
+                    Dto: x.Dto,
+                    AnalyteKey: hasSuffix ? d!.AnalyteKey : x.BaseAnalyteKey,
+                    SpecimenKbId: recordSpecimenKbId,
+                    LookupKey: x.BaseAnalyteKey,
+                    DisplaySuffix: hasSuffix ? d!.DisplaySuffix : null);
+            })
+            .ToList();
 
         // Один Lookup на уникальную пару (имя, источник) — один и тот же показатель из одного и
         // того же источника может повторяться на одном бланке; тот же показатель из РАЗНОГО
         // источника (кровь/моча) ищется отдельно (пересборка enrich-пайплайна, см.
         // LabAnalyteKbLookupService).
-        var lookups = new Dictionary<(string AnalyteKey, Guid SpecimenKbId), Kb.KbLookupResult>();
-        foreach (var (_, analyteKey, specimenKbId) in normalized)
+        var lookups = new Dictionary<(string LookupKey, Guid SpecimenKbId), Kb.KbLookupResult>();
+        foreach (var item in normalized)
         {
-            var key = (analyteKey, specimenKbId);
+            var key = (item.LookupKey, item.SpecimenKbId);
             if (!lookups.ContainsKey(key))
-                lookups[key] = await kbLookup.LookupAsync(analyteKey, specimenKbId, ct);
+                lookups[key] = await kbLookup.LookupAsync(item.LookupKey, item.SpecimenKbId, ct);
         }
 
         var hitIds = lookups.Values.Where(l => l.Kind == Kb.KbLookupKind.Hit).Select(l => l.KbId!.Value).Distinct().ToList();
@@ -310,9 +385,9 @@ public class MedicalDocumentExtractionProcessor(
         var existingByKey = existing.ToDictionary(i => (i.AnalyteKey, i.SpecimenKbId));
         var nextPosition = existing.Count == 0 ? 0 : existing.Max(i => i.Position) + 1;
 
-        foreach (var (dto, analyteKey, specimenKbId) in normalized)
+        foreach (var (dto, analyteKey, specimenKbId, lookupKey, displaySuffix) in normalized)
         {
-            var lookup = lookups[(analyteKey, specimenKbId)];
+            var lookup = lookups[(lookupKey, specimenKbId)];
             var kbAnalyteId = lookup.Kind == Kb.KbLookupKind.Hit ? lookup.KbId : null;
             var kbRow = kbAnalyteId is not null && kbRows.TryGetValue(kbAnalyteId.Value, out var row) ? row : ((string PayloadJson, string DisplayName)?)null;
 
@@ -378,6 +453,16 @@ public class MedicalDocumentExtractionProcessor(
                 entity.RawDisplayName = string.Equals(cleanedFromForm, dto.Name, StringComparison.Ordinal) ? null : dto.Name;
             }
 
+            // Разведённый ключ (AnalyteKeyDisambiguator, §4 плана) — DisplayName из KB совпал бы у
+            // всех коллизирующих файлов дословно, суффикс здесь единственное, что отличает их для
+            // пользователя. RawDisplayName принудительно непустой в этом случае — иначе подсказка
+            // пропала бы именно тогда, когда она нужнее всего.
+            if (displaySuffix is not null)
+            {
+                entity.DisplayName += displaySuffix;
+                entity.RawDisplayName = dto.Name + displaySuffix;
+            }
+
             entity.RecordDate = recordDate;
             entity.KbAnalyteId = kbAnalyteId;
             entity.Flag = flag;
@@ -390,11 +475,13 @@ public class MedicalDocumentExtractionProcessor(
             entity.RefText = dto.RefText;
 
             // Промах/неуверенный кандидат — ставим показатель в очередь обогащения справочника.
+            // ПО БАЗОВОМУ ключу (lookupKey), не по разведённому analyteKey — иначе в
+            // kb.global_lab_analytes_kb ушло бы суффиксированное имя вида "... файл 2" (§4 плана).
             // Дедуп на уровне БД + жёсткий гейт на нерезолвленный источник — оба внутри
             // LabAnalyteEnrichmentRequestService.RequestAsync (единственная точка входа).
             if (lookup.Kind != Kb.KbLookupKind.Hit)
                 await enrichmentRequest.RequestAsync(
-                    analyteKey, specimenKbId, entity.DisplayName, null, ownerUserId,
+                    lookupKey, specimenKbId, entity.DisplayName, null, ownerUserId,
                     origin: EnrichmentRequestOrigin.Extraction, ct: ct);
         }
 
@@ -517,6 +604,14 @@ public class MedicalDocumentExtractionProcessor(
         job.Status = EnrichmentJobStatus.Failed;
         job.Error = reason;
         job.CompletedAt = DateTime.UtcNow;
+
+        // Всегда терминальный исход (нет запланированного ретрая) — запись должна сразу отражать
+        // отказ, а не молча оставаться на "None"/"Pending", как будто распознавание ещё не
+        // запускалось или всё ещё идёт (см. класс-doc ExtractionStatus enum: раньше в это поле
+        // никогда не писался ни Pending, ни Failed — фронт был не в состоянии показать
+        // живой/провальный статус после ухода со страницы или F5). No-op, если запись уже удалена.
+        await db.MedicalRecords.Where(r => r.Id == job.MedicalRecordId)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Failed), ct);
 
         if (readAttachmentIds.Count > 0)
         {

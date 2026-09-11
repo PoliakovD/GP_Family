@@ -138,6 +138,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Доступен в шаблоне для сравнения с this.kind(). */
   readonly Kind = MedicalRecordKind;
   readonly ExtractionJobStatus = ExtractionJobStatus;
+  readonly ExtractionStatus = ExtractionStatus;
   readonly IndicatorFlag = IndicatorFlag;
   readonly stageLabel = STAGE_LABEL;
   readonly pluralizeRu = pluralizeRu;
@@ -691,6 +692,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           .filter((item) => item.extractionStatus === ExtractionStatus.Ready)
           .map((item) => this.loadExtractionResult(item)),
       );
+      this.resumeLivePolling(this.items);
       // Редизайн v2.2 — ?indicator= в URL может прийти раньше, чем показатели этой записи
       // загрузятся (первый заход по ссылке/обновление страницы) — на момент первого срабатывания
       // подписки в ngOnInit indicatorsByRecord ещё пуст, повторяем попытку здесь.
@@ -717,6 +719,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           .filter((item) => item.extractionStatus === ExtractionStatus.Ready)
           .map((item) => this.loadExtractionResult(item)),
       );
+      this.resumeLivePolling(page.items);
     } catch (err) {
       this.page--; // откат — иначе следующая попытка пропустит эту страницу
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить ещё записи.';
@@ -787,6 +790,22 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось запустить распознавание.';
       this.recognizingRecordId = null;
+    }
+  }
+
+  /** Резюмирует живой прогресс распознавания на (пере)монтировании панели — без этого пользователь,
+   * ушедший со страницы (или обновивший её, F5) во время работы фонового LLM-конвейера, не видел бы
+   * вообще никакого признака, что распознавание всё ещё идёт, до следующего ручного клика
+   * «Распознать» (баг). Опирается на item.extractionStatus === Pending — это поле теперь честно
+   * проставляется бэкендом (ExtractionRequestService/MedicalDocumentExtractionProcessor), а не
+   * только None/Ready, как было раньше. pollHandles уже используется как «эта запись опрашивается
+   * прямо сейчас» — вызов идемпотентен при повторных refresh(). */
+  private resumeLivePolling(items: MedicalRecord[]): void {
+    for (const item of items) {
+      if (item.extractionStatus === ExtractionStatus.Pending && !this.pollHandles.has(item.id)) {
+        this.recognizingRecordId = item.id;
+        this.startPolling(item);
+      }
     }
   }
 

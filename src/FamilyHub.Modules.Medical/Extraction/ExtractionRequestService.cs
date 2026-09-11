@@ -81,6 +81,12 @@ public class ExtractionRequestService(
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
+            // Отражаем "задача в очереди" на самой записи (не только в таблице job) — без этого
+            // пользователь, ушедший со страницы или обновивший её, не видит, что распознавание ещё
+            // идёт (UI молчит до следующего ручного клика «Распознать», см. MedicalRecordsPanelComponent
+            // .refresh/resumeLivePolling на фронте, которые как раз читают это поле).
+            await db.MedicalRecords.Where(r => r.Id == recordId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Pending), ct);
             await db.SaveChangesAsync(ct);
             backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
             await tx.CommitAsync(ct);

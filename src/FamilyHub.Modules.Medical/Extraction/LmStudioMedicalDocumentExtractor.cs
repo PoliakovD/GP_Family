@@ -32,6 +32,7 @@ public class LmStudioMedicalDocumentExtractor(
     IDocumentTextExtractor documentTextExtractor,
     ILmStudioJsonClient lmStudioClient,
     SpecimenResolver specimenResolver,
+    AnalyteSubjectResolver subjectResolver,
     AnalysisTitleGenerator titleGenerator,
     ILegitimacyGuardService legitimacyGuard,
     IPromptProvider promptProvider,
@@ -245,9 +246,19 @@ public class LmStudioMedicalDocumentExtractor(
             ? await titleGenerator.GenerateAsync(content, deduped.Select(d => d.Name).ToList(), ct)
             : null;
 
+        // Уточнение родового названия по разделу "Оказанные услуги" (см. AnalyteSubjectResolver) —
+        // отдельный проход по реальному составу показателей ЭТОГО файла, тем же приёмом, что и
+        // title/specimen-resolve выше: совмещение задач в одном вызове мешало бы всем. Необязательный
+        // шаг (§2 плана) — выключен из админки означает, что показатели остаются с родовым именем
+        // с бланка (MedicalDocumentExtractionProcessor разводит коллизии между файлами сам, см.
+        // AnalyteKeyDisambiguator).
+        var subjectResolution = await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "subject-resolve", ct)
+            ? await subjectResolver.ResolveAsync(content, deduped.Select(d => d.Name).ToList(), ct)
+            : AnalyteSubjectResolution.Empty;
+
         return new ExtractionResult(
             true, deduped, null, DocumentDate: documentDate, SuggestedTitle: suggestedTitle, Doctor: doctor,
-            SpecimenResolution: specimenResolution);
+            SpecimenResolution: specimenResolution, SubjectResolution: subjectResolution);
     }
 
     private static DateOnly? ParseDate(string? value) =>

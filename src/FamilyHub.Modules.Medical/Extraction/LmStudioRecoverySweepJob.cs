@@ -68,6 +68,11 @@ public class LmStudioRecoverySweepJob(
             if (hasLiveJob) continue;
 
             ResetForRetry(job);
+            // Запись была помечена Failed терминальным catch в RunAsync — теперь задача снова
+            // живая, запись должна опять показывать "в процессе", а не оставаться замороженной на
+            // Failed до следующего ручного клика «Распознать».
+            await db.MedicalRecords.Where(r => r.Id == job.MedicalRecordId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Pending), ct);
             await db.SaveChangesAsync(ct);
             backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
             requeued++;

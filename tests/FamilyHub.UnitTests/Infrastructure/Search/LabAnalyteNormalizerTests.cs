@@ -23,6 +23,19 @@ public class LabAnalyteNormalizerTests
     }
 
     [Fact]
+    public void Normalize_SubjectWithGenericLabelInParentheses_KeysOnSubjectOnly()
+    {
+        // Ключевой регрессионный тест уточнения родовых названий (AnalyteSubjectResolver,
+        // AnalyteKeyDisambiguator) — вся схема держится на том, что скобки вырезаются ЦЕЛИКОМ,
+        // а не только код/аббревиатура внутри них. Пять файлов посева на разных микроорганизмов
+        // с одинаковой родовой фразой на бланке ("Бактериальные микроорганизмы") получают разные
+        // AnalyteKey именно потому, что конкретный объект становится ОСНОВНЫМ именем, а родовая
+        // фраза уходит в скобки — если этот тест падает, схема развода коллизий сломана.
+        LabAnalyteNormalizer.Normalize("Сальмонеллы (Бактериальные микроорганизмы)").Should().Be("сальмонеллы");
+        LabAnalyteNormalizer.Normalize("Стафилококк (Бактериальные микроорганизмы)").Should().Be("стафилококк");
+    }
+
+    [Fact]
     public void Normalize_EmptyOrWhitespace_ReturnsEmpty()
     {
         LabAnalyteNormalizer.Normalize("   ").Should().BeEmpty();

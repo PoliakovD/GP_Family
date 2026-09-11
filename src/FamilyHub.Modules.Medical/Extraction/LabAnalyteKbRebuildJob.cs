@@ -25,7 +25,12 @@ namespace FamilyHub.Modules.Medical.Extraction;
 ///    SpecimenKbId уже сделан миграцией ReworkSpecimenAsData, здесь ему взяться неоткуда.
 /// 2. Пересчёт показателей — AnalyteKey/DisplayName/RawDisplayName из ИСХОДНОГО текста бланка
 ///    (RawDisplayName, если есть — для записей, распознанных до этой пересборки, его нет, тогда
-///    источник — DisplayName как есть). Схлопнувшиеся на новом ключе строки одной записи сливаются.
+///    источник — DisplayName как есть). Схлопнувшиеся на новом ключе строки одной записи БЕЗ
+///    реального значения (ValueRaw пуст — фантомный OCR-дубль вроде "1. Гемоглобин"/"Гемоглобин")
+///    сливаются как раньше; строки С реальным значением — РАЗВОДЯТСЯ суффиксом
+///    (AnalyteKeyDisambiguator, §6 плана уточнения родовых названий), а не удаляются, даже если их
+///    значения текстуально совпадают ("не выявлено" у обоих) — это могут быть два реальных разных
+///    измерения под одинаковым родовым именем бланка (посев на сальмонеллы/на стафилококк).
 /// 3. Очистка справочника — сами объяснения/нормы всё равно устарели вместе со старым
 ///    "грязным" ключом, пересчитывать их на месте нет смысла (LockedFields из §3 плана здесь
 ///    пока не проверяется — колонки ещё нет; когда появится, сюда добавится фильтр).
@@ -147,8 +152,14 @@ public class LabAnalyteKbRebuildJob(
     private async Task RecalculateIndicatorsAsync(KbRebuildRun run, CancellationToken ct)
     {
         var all = await db.LabIndicators.ToListAsync(ct);
-        var byKey = new Dictionary<(Guid MedicalRecordId, string AnalyteKey, Guid SpecimenKbId), LabIndicator>();
-        var toDelete = new List<LabIndicator>();
+
+        // Группа на (запись, новый ключ, источник), не единственный "победитель" сразу — коллизия
+        // после пересчёта ключа не всегда значит "один и тот же показатель продублирован": для
+        // записей, распознанных ДО AnalyteSubjectResolver/AnalyteKeyDisambiguator (§6 плана), это
+        // могут быть ДВА РЕАЛЬНЫХ разных измерения с одинаковым родовым именем на бланке (посев на
+        // сальмонеллы и посев на стафилококк, оба — "Бактериальные микроорганизмы"). Порядок
+        // групп — Position, тот же приоритет, что раньше отдавал "победителя" при слиянии.
+        var groups = new Dictionary<(Guid MedicalRecordId, string AnalyteKey, Guid SpecimenKbId), List<LabIndicator>>();
 
         foreach (var indicator in all.OrderBy(i => i.Position))
         {
@@ -163,33 +174,71 @@ public class LabAnalyteKbRebuildJob(
             var newDisplayName = LabAnalyteNameCleaner.Clean(rawSource);
             var newRawDisplayName = string.Equals(newDisplayName, rawSource, StringComparison.Ordinal) ? null : rawSource;
 
-            var key = (indicator.MedicalRecordId, newAnalyteKey, indicator.SpecimenKbId);
-            if (byKey.TryGetValue(key, out var existing))
-            {
-                // Коллизия внутри одной записи — до пересчёта эти показатели различались по
-                // "грязному" ключу (например, "1. Гемоглобин" и "Гемоглобин"), теперь схлопнулись.
-                // Побеждает непустое значение, при равенстве — меньший Position (см. §4.2 плана).
-                var keepExisting = !string.IsNullOrWhiteSpace(existing.ValueRaw)
-                    || string.IsNullOrWhiteSpace(indicator.ValueRaw)
-                    || existing.Position <= indicator.Position;
-                var drop = keepExisting ? indicator : existing;
-                if (!keepExisting)
-                {
-                    indicator.AnalyteKey = newAnalyteKey;
-                    indicator.DisplayName = newDisplayName;
-                    indicator.RawDisplayName = newRawDisplayName;
-                    byKey[key] = indicator;
-                }
-                toDelete.Add(drop);
-                run.IndicatorsMerged++;
-                continue;
-            }
-
             indicator.AnalyteKey = newAnalyteKey;
             indicator.DisplayName = newDisplayName;
             indicator.RawDisplayName = newRawDisplayName;
-            byKey[key] = indicator;
-            run.IndicatorsUpdated++;
+
+            var groupKey = (indicator.MedicalRecordId, newAnalyteKey, indicator.SpecimenKbId);
+            if (!groups.TryGetValue(groupKey, out var group))
+            {
+                group = [];
+                groups[groupKey] = group;
+            }
+            group.Add(indicator);
+        }
+
+        var toDelete = new List<LabIndicator>();
+        foreach (var group in groups.Values)
+        {
+            if (group.Count == 1) { run.IndicatorsUpdated++; continue; }
+
+            // Сигнал "это OCR-дубль одной и той же строки, не два разных измерения" — ПУСТОЕ
+            // значение, не совпадение/расхождение текста: реальные разные измерения под одинаковым
+            // родовым именем бланка (§6 плана — посев на сальмонеллы vs на стафилококк) сплошь и
+            // рядом печатают ТЕКСТУАЛЬНО ОДИНАКОВЫЙ результат ("не выявлено" у обоих) — сравнивать
+            // тексты значений между собой означало бы схлопнуть именно тот случай, ради которого
+            // весь этот план и затевался. Пустое ValueRaw, наоборот, однозначно значит "у этой
+            // строки никогда не было собственных данных" (старый "грязный"-ключевой дубль вроде
+            // "1. Гемоглобин" рядом с фантомной "Гемоглобин" без значения) — такие всегда лишние.
+            var withValue = group.Where(i => !string.IsNullOrWhiteSpace(i.ValueRaw)).ToList();
+            var empty = group.Where(i => string.IsNullOrWhiteSpace(i.ValueRaw)).ToList();
+
+            if (withValue.Count == 0)
+            {
+                // Ни у одного нет реальных данных — сохранять нечего, оставляем один экземпляр
+                // (меньший Position, как раньше отдавал приоритет победителю при слиянии).
+                var keep = empty.OrderBy(i => i.Position).First();
+                toDelete.AddRange(empty.Where(i => i != keep));
+                run.IndicatorsMerged += empty.Count - 1;
+                continue;
+            }
+
+            if (empty.Count > 0)
+            {
+                toDelete.AddRange(empty);
+                run.IndicatorsMerged += empty.Count;
+            }
+
+            if (withValue.Count == 1) { run.IndicatorsUpdated++; continue; }
+
+            // 2+ показателя с РЕАЛЬНЫМ значением схлопнулись на одном ключе — никогда не удаляем ни
+            // один из них (даже если тексты значений совпадают дословно, см. комментарий выше) —
+            // только разводим ключ тем же AnalyteKeyDisambiguator, что использует
+            // MedicalDocumentExtractionProcessor при первичном сохранении. FileGroupId разведения
+            // здесь — Id самого показателя (эквивалент "своя группа на строку": в отличие от
+            // процессора извлечения, у уже сохранённых LabIndicator нет ссылки на исходный файл, но
+            // каждая строка и так обязана остаться отдельной).
+            var candidates = withValue.Select(i => new AnalyteKeyDisambiguator.Candidate(i.AnalyteKey, i.Id)).ToList();
+            var disambiguation = AnalyteKeyDisambiguator.Disambiguate(candidates);
+            foreach (var indicator in withValue)
+            {
+                if (!disambiguation.TryGetValue((indicator.AnalyteKey, indicator.Id), out var d)) continue;
+                var rawHint = indicator.RawDisplayName ?? indicator.DisplayName; // до суффикса
+                indicator.AnalyteKey = d.AnalyteKey;
+                indicator.DisplayName += d.DisplaySuffix;
+                indicator.RawDisplayName = rawHint + d.DisplaySuffix;
+            }
+            run.IndicatorsMerged += withValue.Count - 1;
         }
 
         foreach (var d in toDelete) db.LabIndicators.Remove(d);

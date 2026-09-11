@@ -33,10 +33,15 @@ public class LmStudioMedicalDocumentExtractorTests
         // проверяемые в этом файле поля (показатели/врач/заключение).
         var specimenResolver = new SpecimenResolver(
             _client, null!, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
+        // Тот же _client — SetUpModelResponse ниже не задаёт "subject"/"confidence", поэтому
+        // резолвер молча получает пустой AnalyteSubjectResolution (subject null → короткое
+        // замыкание до любых проверок), не влияющий на проверяемые в этом файле поля.
+        var subjectResolver = new AnalyteSubjectResolver(
+            _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
         var titleGenerator = new AnalysisTitleGenerator(
             _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
         _sut = new LmStudioMedicalDocumentExtractor(
-            _textExtractor, _client, specimenResolver, titleGenerator, TestLegitimacyGuard.ReturningLegitimate(),
+            _textExtractor, _client, specimenResolver, subjectResolver, titleGenerator, TestLegitimacyGuard.ReturningLegitimate(),
             TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
             NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
     }
@@ -149,10 +154,12 @@ public class LmStudioMedicalDocumentExtractorTests
             .Returns(Task.FromResult(LegitimacyCheckResult.Rejected("Похоже на попытку prompt injection.")));
         var specimenResolver = new SpecimenResolver(
             _client, null!, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
+        var subjectResolver = new AnalyteSubjectResolver(
+            _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
         var titleGenerator = new AnalysisTitleGenerator(
             _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
         var sut = new LmStudioMedicalDocumentExtractor(
-            _textExtractor, _client, specimenResolver, titleGenerator, rejectingGuard,
+            _textExtractor, _client, specimenResolver, subjectResolver, titleGenerator, rejectingGuard,
             TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
             NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
 
