@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Pipeline;
 using FamilyHub.UnitTests.TestSupport;
@@ -37,7 +38,7 @@ public class LmStudioMedicalDocumentExtractorTests
         // резолвер молча получает пустой AnalyteSubjectResolution (subject null → короткое
         // замыкание до любых проверок), не влияющий на проверяемые в этом файле поля.
         var subjectResolver = new AnalyteSubjectResolver(
-            _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
+            _client, new RussianTextSearcher(), TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
         var titleGenerator = new AnalysisTitleGenerator(
             _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
         _sut = new LmStudioMedicalDocumentExtractor(
@@ -87,6 +88,38 @@ public class LmStudioMedicalDocumentExtractorTests
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
 
         result.LabIndicators.Should().ContainSingle(i => i.Name == "Глюкоза" && i.Value == value);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_LongButRealCompoundIndicatorName_IsKept()
+    {
+        // Живой пример (протокол ГБУЗ РК) — колонка "Показатель" печатает ПОЛНОЕ название теста,
+        // не короткое имя: 90 символов, честно распознанное моделью, ранее отбрасывалось порогом
+        // в 80 символов (см. MaxIndicatorNameLength) целиком, хотя это не выдумка модели, а
+        // дословный текст бланка.
+        const string name = "Бактериальный микроорганизм, концентрация в условных единицах в кале культуральным методом";
+        name.Length.Should().BeInRange(81, 160, "тест должен реально бить мимо старого порога 80 и внутрь нового 160");
+        SetUpTextChunk($"{name} не обнаружены");
+        SetUpModelResponse((name, "не обнаружены"));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators.Should().ContainSingle(i => i.Name == name);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ImplausiblyLongName_StillDropped()
+    {
+        // Порог поднят, но не снят — модель, сгенерировавшая целое предложение вместо названия
+        // показателя, всё ещё должна быть отсечена.
+        var sentence = string.Join(" ", Enumerable.Repeat("выдуманное-объяснение-показателя", 10));
+        sentence.Length.Should().BeGreaterThan(160);
+        SetUpTextChunk($"{sentence} 5");
+        SetUpModelResponse((sentence, "5"));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators.Should().BeEmpty();
     }
 
     [Fact]
@@ -155,7 +188,7 @@ public class LmStudioMedicalDocumentExtractorTests
         var specimenResolver = new SpecimenResolver(
             _client, null!, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
         var subjectResolver = new AnalyteSubjectResolver(
-            _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
+            _client, new RussianTextSearcher(), TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
         var titleGenerator = new AnalysisTitleGenerator(
             _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
         var sut = new LmStudioMedicalDocumentExtractor(

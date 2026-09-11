@@ -279,6 +279,21 @@ public class MedicalDocumentExtractionProcessor(
         var familyDependentId = record.FamilyDependentId;
         var targetUserId = record.TargetUserId;
 
+        // Существующие показатели записи (из прошлых прогонов «Распознать» на этой же записи) —
+        // загружаем ЗДЕСЬ, а не только перед финальным сохранением: набор нужен уже
+        // AnalyteKeyDisambiguator ниже — коллизия ключа возникает не только МЕЖДУ файлами одного
+        // прогона, но и между новым файлом и УЖЕ СОХРАНЁННЫМ показателем прошлого прогона (обычная
+        // картина — «Распознать» нажимается по одному файлу за раз, см. §доп. плана). Без этого
+        // второй по счёту файл посева, распознанный ОТДЕЛЬНЫМ кликом, молча переписал бы первый —
+        // ровно баг, который весь этот план должен был устранить.
+        var existing = await db.LabIndicators.Where(i => i.MedicalRecordId == recordId).ToListAsync(ct);
+        var existingByKey = existing.ToDictionary(i => (i.AnalyteKey, i.SpecimenKbId));
+        var nextPosition = existing.Count == 0 ? 0 : existing.Max(i => i.Position) + 1;
+        var existingAnalyteKeysForRecord = existing
+            .Where(i => i.SpecimenKbId == recordSpecimenKbId)
+            .Select(i => i.AnalyteKey)
+            .ToHashSet(StringComparer.Ordinal);
+
         // Второй проход коррекции OCR — ДО нормализации/сопоставления со справочником: смешение
         // кириллицы/латиницы и КАПС в сыром имени снижают триграммную схожесть в pg_trgm-каскаде
         // ниже и порождают ложные промахи (см. OcrNameCorrector). Один батч-вызов на весь набор
@@ -331,14 +346,18 @@ public class MedicalDocumentExtractionProcessor(
             .Where(x => x.BaseAnalyteKey.Length > 0)
             .ToList();
 
-        // Запасной вариант (не LLM) — разводим оставшиеся коллизии МЕЖДУ РАЗНЫМИ файлами, когда
-        // субъект не определился (модель не уверена, шаг выключен, LM Studio недоступен), а
-        // базовый ключ всё равно совпал у нескольких файлов этого прогона. Без этого второй файл
-        // молча перезаписал бы первый (upsert по (AnalyteKey, SpecimenKbId) ниже) — см.
-        // AnalyteKeyDisambiguator. Кандидаты с одинаковым FileGroupId (повтор строки ОДНОГО
-        // бланка) уже схлопнуты DeduplicateByName в экстракторе, разводке не подлежат.
+        // Запасной вариант (не LLM) — разводим оставшиеся коллизии, когда субъект не определился
+        // (модель не уверена, шаг выключен, LM Studio недоступен), а базовый ключ всё равно
+        // совпал — МЕЖДУ файлами этого прогона (см. AnalyteKeyDisambiguator) И между новым файлом
+        // и УЖЕ СОХРАНЁННЫМ показателем прошлого прогона (existingAnalyteKeysForRecord — «Распознать»
+        // обычно нажимается по одному файлу за раз, коллизия с прошлым прогоном — типичный случай,
+        // не редкий). Без второго — второй по счёту файл посева, распознанный отдельным кликом,
+        // молча переписал бы первый (upsert по (AnalyteKey, SpecimenKbId) ниже). Кандидаты с
+        // одинаковым FileGroupId (повтор строки ОДНОГО бланка) уже схлопнуты DeduplicateByName
+        // в экстракторе, разводке не подлежат.
         var disambiguation = AnalyteKeyDisambiguator.Disambiguate(
-            withBaseKey.Select(x => new AnalyteKeyDisambiguator.Candidate(x.BaseAnalyteKey, x.FileGroupId)).ToList());
+            withBaseKey.Select(x => new AnalyteKeyDisambiguator.Candidate(x.BaseAnalyteKey, x.FileGroupId)).ToList(),
+            existingAnalyteKeysForRecord);
 
         // AnalyteKey — ключ ХРАНЕНИЯ (с суффиксом при коллизии), LookupKey — ключ ПОИСКА в
         // справочнике (всегда базовый, без суффикса), DisplaySuffix — хвост для DisplayName/
@@ -377,13 +396,6 @@ public class MedicalDocumentExtractionProcessor(
                 .ToDictionaryAsync(x => x.Id, x => (x.PayloadJson, x.DisplayName), ct);
 
         var (ageYears, sex) = await PatientIdentityResolver.ResolveAsync(db, record, ct);
-
-        // Существующие показатели записи (из прошлых прогонов «Распознать» на этой же записи) —
-        // upsert по (AnalyteKey, SpecimenKbId), НЕ blanket-delete: повторный клик с новым файлом не
-        // должен стирать результаты уже распознанных ранее файлов той же записи.
-        var existing = await db.LabIndicators.Where(i => i.MedicalRecordId == recordId).ToListAsync(ct);
-        var existingByKey = existing.ToDictionary(i => (i.AnalyteKey, i.SpecimenKbId));
-        var nextPosition = existing.Count == 0 ? 0 : existing.Max(i => i.Position) + 1;
 
         foreach (var (dto, analyteKey, specimenKbId, lookupKey, displaySuffix) in normalized)
         {

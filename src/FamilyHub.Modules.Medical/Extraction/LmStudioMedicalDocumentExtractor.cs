@@ -42,6 +42,11 @@ public class LmStudioMedicalDocumentExtractor(
 {
     private const int ChunkOverlapChars = 200;
 
+    /// <summary>Потолок длины имени показателя (см. ParseIndicators) — отсекает случаи, когда
+    /// модель вернула предложение/пояснение вместо названия, не полные (но настоящие) составные
+    /// названия лабораторных тестов реальных бланков.</summary>
+    private const int MaxIndicatorNameLength = 160;
+
     private const string AnalysisSystemPrompt = """
         Ты — оцифровщик бланков лабораторных анализов. На входе — текст или фото бланка анализа
         (может быть только часть бланка, если документ большой). Извлеки ВСЕ показатели, которые
@@ -346,8 +351,12 @@ public class LmStudioMedicalDocumentExtractor(
             var value = ReadString(item, "value")?.Trim();
             // Показатель без имени/значения, с неправдоподобно длинным именем (модель
             // сгенерировала предложение, не название показателя), или со значением-плейсхолдером
-            // "нет данных" вместо реального пропуска ячейки — отбрасываем.
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(value) || name.Length > 80) continue;
+            // "нет данных" вместо реального пропуска ячейки — отбрасываем. Порог поднят с 80 до 160
+            // (живой пример — протокол ГБУЗ РК, "Показатель" колонка печатает ПОЛНОЕ название
+            // лабораторного теста, а не короткое имя: "Бактериальный микроорганизм, концентрация в
+            // условных единицах в кале культуральным методом" — 90 символов, честно распознанное
+            // имя с бланка, отбрасывалось прежним порогом целиком).
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(value) || name.Length > MaxIndicatorNameLength) continue;
             if (EmptyValuePlaceholders.Contains(value)) continue;
 
             yield return new ExtractedLabIndicator(

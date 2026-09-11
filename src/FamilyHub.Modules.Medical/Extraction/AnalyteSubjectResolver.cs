@@ -33,17 +33,29 @@ public record AnalyteSubjectResolution(string? Subject, string? RawLabel, string
 /// LmStudioMedicalDocumentExtractor, которому этот резолвер не подчиняется напрямую — он вызывается
 /// уже ПОСЛЕ структурирования показателей, отдельным проходом, а не побочным полем того промпта:
 /// совмещение задач в одном вызове мешало бы обеим, тот же довод, что в SpecimenResolver).
+///
+/// Оба детерминированных вето — ЧЕРЕЗ <see cref="IRussianTextSearcher"/> (стемминг + AND по
+/// словам), не через <see cref="TrigramSimilarity"/> строки целиком, как у SpecimenResolver/
+/// OcrNameCorrector: там обе стороны сравнения — короткие однословные понятия ("кровь" vs "кровь",
+/// "Ибупрофен" vs "Парацетамол"), здесь же "subject" — короткое название (1-3 слова), а "rawLabel"/
+/// текст документа — предложение или весь документ целиком. Триграммное сходство ЦЕЛОЙ строки
+/// в этом случае тонет в шуме длинного текста, даже когда субъект в нём дословно есть, И не
+/// переживает обычную русскую морфологию (бланк пишет «рода сальмонелла», модель называет субъект
+/// «Сальмонеллы» — разные окончания, но то же слово) — оба случая ловились этим гейтом как
+/// «модель придумала», хотя ответ был верным (см. живой пример, план "5 файлов посева").
 /// </summary>
 public class AnalyteSubjectResolver(
-    ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<AnalyteSubjectResolver> logger)
+    ILmStudioJsonClient client, IRussianTextSearcher searcher, IPromptProvider promptProvider,
+    ILogger<AnalyteSubjectResolver> logger)
 {
     /// <summary>Тот же порог, что SpecimenResolver.MinConfidence — ниже него субъект считается
     /// нерезолвленным.</summary>
     public const double MinConfidence = 0.7;
 
-    /// <summary>Тот же порог, что SpecimenResolver/OcrNameCorrector — предложенный "subject" не
-    /// должен оказаться другим понятием, чем то, что реально написано в документе ("rawLabel").</summary>
-    private const double MinRawLabelSimilarity = 0.3;
+    /// <summary>Тот же дефолт, что pg_trgm.similarity_threshold (см. RussianTextSearcher) —
+    /// предложенный "subject" обязан реально встречаться (морфологически, не дословно) и в
+    /// "rawLabel", и в тексте документа.</summary>
+    private const double MinRelevance = 0.3;
 
     /// <summary>Хвост документа читается ПОЛНОСТЬЮ (в отличие от SpecimenResolver.HeaderChars) —
     /// "Оказанные услуги"/"Наименование исследования" печатаются внизу бланка, шапки одной
@@ -125,32 +137,37 @@ public class AnalyteSubjectResolver(
 
         // Детерминированное вето — та же форма, что SpecimenResolver.ResolveKbIdAsync/
         // OcrNameCorrector.RequestCorrectionsAsync: предложенное название не должно оказаться
-        // другим понятием, чем то, что реально написано в документе.
+        // другим понятием, чем то, что реально написано в документе. IRussianTextSearcher.Score —
+        // по словам с русской морфологией (AND-семантика), не по строке целиком: "rawLabel"
+        // обычно целая фраза услуги ("...на микроорганизмы рода сальмонелла (Salmonella spp.)"),
+        // а не короткое понятие вроде specimen — целостное триграммное сравнение тонуло бы в её
+        // длине, даже когда субъект в ней дословно есть.
         if (!string.IsNullOrWhiteSpace(rawLabel))
         {
-            var similarity = TrigramSimilarity.Similarity(
-                LabAnalyteNormalizer.Normalize(subject), LabAnalyteNormalizer.Normalize(rawLabel));
-            if (similarity < MinRawLabelSimilarity)
+            var relevance = searcher.Score(rawLabel, subject);
+            if (relevance < MinRelevance)
             {
                 logger.LogWarning(
-                    "Резолвинг объекта исследования: модель предложила «{Subject}» для «{RawLabel}», но схожесть " +
-                    "{Similarity:F2} слишком низкая — отклонено.", subject, rawLabel, similarity);
+                    "Резолвинг объекта исследования: модель предложила «{Subject}» для «{RawLabel}», но релевантность " +
+                    "{Relevance:F2} слишком низкая — отклонено.", subject, rawLabel, relevance);
                 return AnalyteSubjectResolution.Empty;
             }
         }
 
         // Антигаллюцинационный гейт: субъект обязан реально встречаться в тексте документа — иначе
-        // модель его придумала. На vision-пути (нет исходного текста) проверка недоступна по
-        // построению, тот же компромисс, что у LmStudioMedicalDocumentExtractor.
+        // модель его придумала. Тот же IRussianTextSearcher, не дословный Contains — бланк почти
+        // всегда склоняет название ("рода сальмонелла"), а модель называет субъект литературно
+        // ("Сальмонеллы") — разные окончания одного слова, дословное совпадение после Normalize
+        // здесь систематически не срабатывает. На vision-пути (нет исходного текста) проверка
+        // недоступна по построению, тот же компромисс, что у LmStudioMedicalDocumentExtractor.
         if (content.Kind == DocumentSourceKind.Text && !string.IsNullOrEmpty(content.Text))
         {
-            var normalizedSubject = LabAnalyteNormalizer.Normalize(subject);
-            var normalizedDocument = LabAnalyteNormalizer.Normalize(content.Text);
-            if (normalizedSubject.Length == 0 || !normalizedDocument.Contains(normalizedSubject, StringComparison.Ordinal))
+            var relevance = searcher.Score(content.Text, subject);
+            if (relevance < MinRelevance)
             {
                 logger.LogWarning(
                     "Резолвинг объекта исследования: модель предложила «{Subject}», но это не встречается в " +
-                    "тексте документа — отклонено.", subject);
+                    "тексте документа (релевантность {Relevance:F2}) — отклонено.", subject, relevance);
                 return AnalyteSubjectResolution.Empty;
             }
         }
