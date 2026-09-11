@@ -161,6 +161,18 @@
         <div class="muted" style="font-size:0.7059rem">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
       }
 
+      <!-- Живой прогресс (pipelineStepsByRecord) уже сам показывает исход "Не удалось распознать"
+           на несколько секунд после сбоя (см. schedulePipelineClear), но это временное окно — на
+           свежем монтировании (ушли со страницы/обновили её) этой истории уже нет. Отдельная
+           постоянная плашка по item.extractionStatus (честно проставляется бэкендом) — единственный
+           способ узнать о сбое, не нажимая «Распознать» вслепую ещё раз. -->
+      @if (item.extractionStatus === ExtractionStatus.Failed && !pipelineStepsByRecord[item.id]) {
+        <div class="alert-danger" style="font-size:0.7059rem; margin-top:4px;">
+          Не удалось распознать документ в прошлый раз.
+          @if (hasUnrecognizedAttachments(item)) { Нажмите «Распознать» ещё раз. }
+        </div>
+      }
+
       <!-- Редизайн v3 — «Подробнее» больше не отдельная свёртка со своим заголовком/шевроном
            (см. PR5.2 плана). Редизайн v2.1 — инлайн-раскрытие в списке убрано целиком: «Открыть»
            теперь всегда переходит на отдельную страницу записи (см. onRecordCardClick), детали
