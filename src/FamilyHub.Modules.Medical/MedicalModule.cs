@@ -80,6 +80,10 @@ public static class MedicalModule
         // (UserSpecimenService), и резолвингом при извлечении документа (SpecimenResolver).
         services.AddScoped<GlobalSpecimenKbService>();
         services.AddScoped<SpecimenResolver>();
+        // Уточнение родового названия показателя по разделу "Оказанные услуги" (посев на
+        // конкретный микроорганизм и т.п.) — та же роль в конвейере, что у SpecimenResolver,
+        // только субъект показателя, не источник.
+        services.AddScoped<AnalyteSubjectResolver>();
         // Короткое название анализа отдельным LLM-проходом (заметка 4) — та же роль в конвейере,
         // что у SpecimenResolver, только для названия, не источника.
         services.AddScoped<AnalysisTitleGenerator>();

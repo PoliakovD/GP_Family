@@ -50,6 +50,12 @@ public record VisitConclusion(
 /// определяется отдельным проходом SpecimenResolver по документу целиком (один вызов LLM на файл,
 /// не побочное поле промпта структурирования показателей — совмещение задач мешало обеим), сырой
 /// (ещё не сведённый к строке справочника) итог этого прохода лежит в <see cref="SpecimenResolution"/>.
+///
+/// <see cref="SubjectResolution"/> — тот же приём для родовых названий показателей на бланках,
+/// посвящённых ОДНОМУ конкретному объекту поиска (посев на определённый микроорганизм, один
+/// аллерген, одно антитело), где сама таблица печатает только родовое слово ("Бактериальные
+/// микроорганизмы"), а объект назван лишь в разделе "Оказанные услуги" — см. AnalyteSubjectResolver.
+/// Пусто, если бланк не такого рода (общий анализ, панель из многих показателей).
 /// </summary>
 /// <see cref="IsTransientFailure"/> — true, когда причина Supported=false (или пустого результата)
 /// техническая (LM Studio недоступен), а не смысловая (формат не поддержан, легитимность
@@ -64,4 +70,5 @@ public record ExtractionResult(
     string? SuggestedTitle = null,
     string? Doctor = null,
     SpecimenDocumentResolution? SpecimenResolution = null,
-    bool IsTransientFailure = false);
+    bool IsTransientFailure = false,
+    AnalyteSubjectResolution? SubjectResolution = null);
