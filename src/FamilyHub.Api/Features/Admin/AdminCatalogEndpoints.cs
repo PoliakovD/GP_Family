@@ -49,6 +49,13 @@ public static class AdminCatalogEndpoints
         group.MapDelete("/lab-analytes/{id:guid}", async (Guid id, AdminCatalogService admin, CancellationToken ct) =>
             await admin.DeleteLabAnalyteAsync(id, ct) ? Results.NoContent() : Results.NotFound());
 
+        // Резолв имён «Что смотрят вместе» в реальные строки справочника (пикер в форме payload-
+        // редактора) — POST с телом-списком, не GET с query-строкой: список имён может быть
+        // длинным/содержать спецсимволы, тот же выбор, что у bulk-операций в остальной админке.
+        group.MapPost("/lab-analytes/resolve-related", async (
+            List<string> names, AdminCatalogService admin, CancellationToken ct) =>
+            Results.Ok(await admin.ResolveRelatedNamesAsync(names, ct)));
+
         group.MapPost("/lab-analytes/{loserId:guid}/merge-into/{winnerId:guid}", async (
             Guid loserId, Guid winnerId, AdminCatalogService admin, CancellationToken ct) =>
         {

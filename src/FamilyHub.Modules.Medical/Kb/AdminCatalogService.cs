@@ -139,6 +139,40 @@ public class AdminCatalogService(AppDbContext db)
         return AdminKbMergeResult.Ok;
     }
 
+    /// <summary>Резолвит имена "Что смотрят вместе" (LabAnalyteKbPayload.relatedNames — плоские
+    /// строки, не хранимые ссылки, см. class doc LabAnalyteSummary.RelatedAnalytes) в реальные
+    /// строки справочника по точному совпадению NormalizedName — тот же приём, что публичный
+    /// KbAnalyteCatalogService.ResolveRelatedAsync использует для карточки пользователя, отдельная
+    /// копия здесь (не переиспользуем ту приватную), чтобы админка не зависела от internals
+    /// публичного read-сервиса. Используется редактором формы, чтобы: (1) при открытии показателя
+    /// подсветить, какие из уже сохранённых related-имён реально резолвятся в существующую статью
+    /// (а какие — оборванная ссылка/опечатка), и (2) сразу дать кликабельный переход на неё.
+    /// Ненайденное имя — Id=null, не ошибка (см. тот же комментарий в публичном резолвере).</summary>
+    public async Task<List<AdminRelatedAnalyteMatch>> ResolveRelatedNamesAsync(
+        IReadOnlyList<string> names, CancellationToken ct = default)
+    {
+        if (names.Count == 0) return [];
+
+        var normalizedToOriginal = names
+            .Select(name => (Name: name, Normalized: LabAnalyteNormalizer.Normalize(name)))
+            .Where(p => p.Normalized.Length > 0)
+            .ToList();
+        if (normalizedToOriginal.Count == 0) return [];
+
+        var normalizedKeys = normalizedToOriginal.Select(p => p.Normalized).Distinct().ToArray();
+        var matches = await db.Database.SqlQuery<AdminRelatedMatchRow>($"""
+            SELECT a."Id", a."DisplayName", a."NormalizedName", s."DisplayName" AS "SpecimenDisplayName"
+            FROM kb.global_lab_analytes_kb a
+            LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
+            WHERE a."NormalizedName" = ANY({normalizedKeys})
+            """).ToListAsync(ct);
+        var byNormalized = matches.ToDictionary(m => m.NormalizedName, m => m);
+
+        return normalizedToOriginal.Select(p => byNormalized.TryGetValue(p.Normalized, out var m)
+            ? new AdminRelatedAnalyteMatch(p.Name, m.Id, m.DisplayName, m.SpecimenDisplayName)
+            : new AdminRelatedAnalyteMatch(p.Name, null, null, null)).ToList();
+    }
+
     // --- Медикаменты ---
 
     public async Task<AdminMedicationDetail?> GetMedicationAsync(Guid id, CancellationToken ct = default)

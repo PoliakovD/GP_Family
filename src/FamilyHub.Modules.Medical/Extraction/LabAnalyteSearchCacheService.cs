@@ -82,6 +82,41 @@ public class LabAnalyteSearchCacheService(
         await db.LabAnalyteSearchCaches.AsNoTracking()
             .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
 
+    /// <summary>Полное редактирование строки кэша из админки — снипеты (заголовок/ссылка/текст)
+    /// заменяются целиком присланным списком (тот же приём, что у payload-редактора справочника:
+    /// админ видит и правит весь список сразу, не позиционными add/edit/remove запросами).
+    /// Provider не трогается, если не передан (null — оставить как есть). Overrides,
+    /// ссылающиеся на URL, которых больше нет в новом списке, вычищаются — иначе они бы
+    /// молча висели в БД, ни на что не влияя (EnrichmentSnippetFilter сверяет override только
+    /// с URL реально пришедших сниппетов).</summary>
+    public async Task<bool> UpdateAsync(
+        Guid id, string? provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
+    {
+        var cache = await db.LabAnalyteSearchCaches.FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (cache is null) return false;
+
+        if (provider is not null) cache.Provider = provider;
+        cache.SnippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
+
+        var overrides = ParseOverrides(cache.OverridesJson);
+        if (overrides is not null)
+        {
+            var urls = snippets.Select(s => s.Url).ToHashSet();
+            var pruned = overrides.Where(kv => urls.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            cache.OverridesJson = pruned.Count == 0 ? null : JsonSerializer.Serialize(pruned, JsonOptions);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>Удаление строки целиком — следующая задача обогащения по этому (названию,
+    /// источнику) увидит "не кэшировано" и оплатит новый поиск, как если бы кэша никогда не
+    /// было (см. AdminAttentionService/AdminPipelineEndpoints — по Id их ничего не держит,
+    /// см. class doc сервиса).</summary>
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default) =>
+        await db.LabAnalyteSearchCaches.Where(c => c.Id == id).ExecuteDeleteAsync(ct) > 0;
+
     /// <summary>Массовая очистка кэша от строк с нерезолвленным источником — жёсткий гейт
     /// (LabAnalyteEnrichmentRequestService) не даёт новым задачам с SpecimenKbId=Unresolved
     /// ставиться в очередь, поэтому такие строки кэша (наследие до пересборки enrich-пайплайна,

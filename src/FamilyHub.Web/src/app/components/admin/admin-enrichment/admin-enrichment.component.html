@@ -133,46 +133,16 @@
     </div>
   </div>
 
-  @if (cacheDetailLoading()) {
-    <div class="card"><div class="card-body"><p class="text-muted mb-0">Загрузка сниппетов…</p></div></div>
-  } @else if (cacheDetail()) {
-    @let detail = cacheDetail()!;
-    <div class="card">
-      <div class="card-title d-flex justify-content-between" style="align-items: center;">
-        <span>{{ detail.normalizedName }}@if (detail.specimen) { &nbsp;({{ detail.specimen }}) }</span>
-        <button type="button" class="btn-link" (click)="closeCacheDetail()">Закрыть</button>
-      </div>
-      <div class="card-body">
-        <p class="text-muted mb-2">
-          Клик по чекбоксу переключает: не задано (решает домен) → включено вручную → выключено вручную → снова не задано.
-        </p>
-        <table class="table">
-          <thead><tr><th>Вкл.</th><th>Домен</th><th>Заголовок</th><th>Текст</th></tr></thead>
-          <tbody>
-            @for (s of detail.snippets; track s.url) {
-              <tr [class.text-muted]="!s.enabled">
-                <td>
-                  <input type="checkbox" [checked]="s.enabled"
-                         [title]="s.override === null ? 'по домену (' + (s.isTrustedByDomain ? 'доверен' : 'не доверен') + ')' : (s.override ? 'включён вручную' : 'выключен вручную')"
-                         (change)="cycleSnippetOverride(s.url)" />
-                  @if (s.override !== null) {
-                    <span class="tag tag-neutral">вручную</span>
-                  }
-                </td>
-                <td>{{ s.domain }}</td>
-                <td>
-                  <a [href]="s.url" target="_blank" rel="noopener">{{ s.title }}</a>
-                </td>
-                <td class="text-muted">{{ s.text }}</td>
-              </tr>
-            } @empty {
-              <tr><td colspan="4" class="text-muted">Сниппетов нет.</td></tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    </div>
-  }
+  <app-side-panel [open]="!!openRowId()" title="Кэш поиска" width="min(760px, 100vw)" (closed)="closeCacheDetail()">
+    @if (openRowId()) {
+      <app-admin-cache-panel
+        [cacheId]="openRowId()!"
+        [topic]="topic()"
+        (changed)="loadCache(true)"
+        (deleted)="closeCacheDetail(); loadCache(true)"
+      />
+    }
+  </app-side-panel>
 }
 
 @if (tab() === 'rebuild') {

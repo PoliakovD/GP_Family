@@ -136,6 +136,39 @@ public static class AdminEnrichmentEndpoints
                 : await analyteCache.SetSnippetOverrideAsync(id, request.Url, request.Enabled, ct);
             return updated ? Results.NoContent() : Results.NotFound();
         });
+
+        // Полное редактирование строки — снипеты (заголовок/ссылка/текст) заменяются целиком
+        // присланным списком: можно добавить новый сниппет (просто включить его в список),
+        // отредактировать существующий (title/url/text) или убрать (не включить в список).
+        // NormalizedName/SpecimenKbId НЕ редактируются намеренно — это бизнес-ключ, по которому
+        // задачи конвейера ищут строку кэша (см. GetByNameAsync); смена имени молча отвязала бы
+        // строку от задач, которые её ищут, и следующий прогон заново оплатил бы поиск.
+        group.MapPut("/search-cache/{id:guid}", async (
+            Guid id, UpdateSearchCacheRequest request, MedicationSearchCacheService medicationCache,
+            LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+        {
+            foreach (var s in request.Snippets)
+                if (string.IsNullOrWhiteSpace(s.Url))
+                    return Results.BadRequest(new { code = "empty_url", message = "У сниппета не может быть пустая ссылка." });
+
+            var snippets = request.Snippets.Select(s => new WebSnippet(s.Title, s.Url, s.Text)).ToList();
+            var updated = request.Topic == WebSearchTopic.Medication
+                ? await medicationCache.UpdateAsync(id, request.Provider, snippets, ct)
+                : await analyteCache.UpdateAsync(id, request.Provider, snippets, ct);
+            return updated ? Results.NoContent() : Results.NotFound();
+        });
+
+        // Удаление строки целиком — следующая задача, ссылающаяся на это (название[, источник]),
+        // увидит "не кэшировано" и оплатит поиск заново, как будто кэша никогда не было.
+        group.MapDelete("/search-cache/{id:guid}", async (
+            Guid id, WebSearchTopic topic, MedicationSearchCacheService medicationCache,
+            LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+        {
+            var deleted = topic == WebSearchTopic.Medication
+                ? await medicationCache.DeleteAsync(id, ct)
+                : await analyteCache.DeleteAsync(id, ct);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        });
     }
 
     /// <summary>internal, не private — переиспользуется AdminPipelineEndpoints (карточка задачи

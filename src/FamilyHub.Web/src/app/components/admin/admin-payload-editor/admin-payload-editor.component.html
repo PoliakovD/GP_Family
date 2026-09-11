@@ -46,9 +46,50 @@
     <textarea class="input mb-2" rows="2" style="width: 100%;"
               [ngModel]="calculationInstructions()" (ngModelChange)="calculationInstructions.set($event); markChanged('calculationInstructions')"></textarea>
 
-    <label class="form-label">Что смотрят вместе (через запятую)</label>
-    <input class="input mb-3" style="width: 100%;"
-           [ngModel]="relatedNames()" (ngModelChange)="relatedNames.set($event); markChanged('relatedNames')" />
+    <label class="form-label">Что смотрят вместе</label>
+    <p class="text-muted mb-2" style="margin-top: -4px;">
+      Добавляется только поиском по справочнику — так ссылка гарантированно ведёт на реальную
+      статью, а не на опечатку.
+    </p>
+    @if (relatedNames().length > 0) {
+      <div class="d-flex gap-1 mb-2" style="flex-wrap: wrap;">
+        @for (name of relatedNames(); track name) {
+          @let match = relatedMatchFor(name);
+          <span class="tag" [class.tag-accent]="match?.id" [class.tag-neutral]="!match?.id">
+            @if (match?.id) {
+              <button type="button" class="btn-link" (click)="openRelatedChip(name)">{{ name }}</button>
+              @if (match?.specimenDisplayName) {
+                <span class="text-muted">&nbsp;({{ match?.specimenDisplayName }})</span>
+              }
+            } @else {
+              <span [title]="'Не найдено в справочнике — проверьте, не переименован ли показатель'">{{ name }} ⚠</span>
+            }
+            <button type="button" class="btn-icon" style="padding: 0 2px;" aria-label="Убрать" (click)="removeRelated(name)">
+              <i class="ph ph-x" aria-hidden="true"></i>
+            </button>
+          </span>
+        }
+      </div>
+    }
+    <div style="position: relative;">
+      <input class="input mb-1" style="width: 100%;" placeholder="искать показатель для добавления…"
+             [ngModel]="relatedSearchQuery()" (ngModelChange)="onRelatedSearchInput($event)" />
+      @if (relatedSearchLoading()) {
+        <p class="text-muted mb-2">Поиск…</p>
+      } @else if (relatedSearchResults().length > 0) {
+        <div class="card elev-md mb-2" style="max-height: 220px; overflow-y: auto;">
+          @for (item of relatedSearchResults(); track item.id) {
+            <button type="button" class="card-clickable d-flex justify-content-between"
+                    style="width: 100%; text-align: left; border: none; background: none; padding: 6px 10px;"
+                    (click)="pickRelated(item)">
+              <span>{{ item.displayName }}</span>
+              <span class="text-muted">{{ item.specimenDisplayName }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+    <div class="mb-2"></div>
 
     <div class="d-flex justify-content-between mb-2" style="align-items: center;">
       <div class="card-title" style="font-size: 0.8235rem;">Референсные диапазоны</div>

@@ -85,6 +85,32 @@ public class MedicationSearchCacheService(
     public async Task<MedicationSearchCache?> GetByNameAsync(string normalizedName, CancellationToken ct = default) =>
         await db.MedicationSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
 
+    /// <summary>Полное редактирование строки кэша из админки — см. LabAnalyteSearchCacheService.UpdateAsync,
+    /// тот же приём на другую таблицу.</summary>
+    public async Task<bool> UpdateAsync(
+        Guid id, string? provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
+    {
+        var cache = await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (cache is null) return false;
+
+        if (provider is not null) cache.Provider = provider;
+        cache.SnippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
+
+        var overrides = ParseOverrides(cache.OverridesJson);
+        if (overrides is not null)
+        {
+            var urls = snippets.Select(s => s.Url).ToHashSet();
+            var pruned = overrides.Where(kv => urls.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            cache.OverridesJson = pruned.Count == 0 ? null : JsonSerializer.Serialize(pruned, JsonOptions);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default) =>
+        await db.MedicationSearchCaches.Where(c => c.Id == id).ExecuteDeleteAsync(ct) > 0;
+
     private static Dictionary<string, bool>? ParseOverrides(string? overridesJson) =>
         overridesJson is null ? null : JsonSerializer.Deserialize<Dictionary<string, bool>>(overridesJson, JsonOptions);
 

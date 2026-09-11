@@ -1,5 +1,9 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AdminApiService, AdminRelatedAnalyteMatch, KbAnalyteListItem } from '../../../services/admin-api.service';
+import { ToastService } from '../../../shared/toast/toast.service';
+
+const RELATED_SEARCH_DEBOUNCE_MS = 300;
 
 export type PayloadEditorSchema = 'lab-analyte' | 'medication';
 
@@ -115,7 +119,17 @@ export class AdminPayloadEditorComponent implements OnChanges {
   @Input({ required: true }) schema!: PayloadEditorSchema;
   @Input() payloadJson = '{}';
   @Input() busy = false;
+  /** Id текущей открытой статьи — исключается из результатов поиска пикера «Что смотрят
+   * вместе» (показатель не может ссылаться сам на себя) и из состава её собственных чипов при
+   * желании админа так поступить, но это уже его решение — здесь только фильтр поиска. */
+  @Input() excludeId: string | null = null;
   @Output() readonly save = new EventEmitter<PayloadSaveEvent>();
+  /** Клик по уже резолвленному чипу «Что смотрят вместе» — родитель (admin-catalog) открывает
+   * ту статью, переключая текущий выбор в списке показателей. */
+  @Output() readonly openRelated = new EventEmitter<{ id: string; displayName: string }>();
+
+  private readonly api = inject(AdminApiService);
+  private readonly toast = inject(ToastService);
 
   readonly mode = signal<'form' | 'json'>('form');
   readonly jsonDraft = signal('{}');
@@ -129,7 +143,16 @@ export class AdminPayloadEditorComponent implements OnChanges {
   readonly highMeans = signal('');
   readonly lowMeans = signal('');
   readonly calculationInstructions = signal('');
-  readonly relatedNames = signal('');
+  /** «Что смотрят вместе» — пикер, не свободный текст (см. class doc): каждое имя добавляется
+   * ТОЛЬКО через поиск по справочнику, чтобы гарантированно резолвиться в реальную статью, а не
+   * быть опечаткой/оборванной ссылкой. relatedMatches — кэш резолва по точному имени (id/специмен
+   * для disambiguation и кликабельной ссылки), ключ — само имя. */
+  readonly relatedNames = signal<string[]>([]);
+  readonly relatedMatches = signal<Record<string, AdminRelatedAnalyteMatch>>({});
+  readonly relatedSearchQuery = signal('');
+  readonly relatedSearchResults = signal<KbAnalyteListItem[]>([]);
+  readonly relatedSearchLoading = signal(false);
+  private relatedSearchDebounce?: ReturnType<typeof setTimeout>;
   readonly refRanges = signal<RefRangeRow[]>([]);
 
   // --- Медикаменты ---
@@ -181,7 +204,9 @@ export class AdminPayloadEditorComponent implements OnChanges {
       this.highMeans.set(asString(r['highMeans']));
       this.lowMeans.set(asString(r['lowMeans']));
       this.calculationInstructions.set(asString(r['calculationInstructions']));
-      this.relatedNames.set(asStringArray(r['relatedNames']).join(', '));
+      this.relatedNames.set(asStringArray(r['relatedNames']));
+      this.relatedMatches.set({});
+      void this.resolveRelated();
       this.refRanges.set(asRefRanges(r['refRanges']));
     } else {
       this.internationalName.set(asString(r['internationalName']));
@@ -206,7 +231,7 @@ export class AdminPayloadEditorComponent implements OnChanges {
       next['highMeans'] = orNull(this.highMeans());
       next['lowMeans'] = orNull(this.lowMeans());
       next['calculationInstructions'] = orNull(this.calculationInstructions());
-      next['relatedNames'] = splitList(this.relatedNames());
+      next['relatedNames'] = this.relatedNames();
       next['refRanges'] = this.refRanges().map(refRangeToJson);
     } else {
       next['internationalName'] = orNull(this.internationalName());
@@ -232,6 +257,81 @@ export class AdminPayloadEditorComponent implements OnChanges {
 
   markChanged(key: string): void {
     this.changedKeys.add(key);
+  }
+
+  // --- «Что смотрят вместе» — пикер по справочнику, не свободный текст ---
+
+  /** Резолвит уже сохранённые related-имена в реальные строки справочника — best-effort, ошибка
+   * сети не должна ломать редактор, просто чипы останутся без бейджа/ссылки до следующей попытки. */
+  private async resolveRelated(): Promise<void> {
+    const names = this.relatedNames();
+    if (names.length === 0) {
+      this.relatedMatches.set({});
+      return;
+    }
+    try {
+      const matches = await this.api.resolveRelatedAnalytes(names);
+      const map: Record<string, AdminRelatedAnalyteMatch> = {};
+      for (const m of matches) map[m.name] = m;
+      this.relatedMatches.set(map);
+    } catch {
+      // Не критично — чипы отрисуются без резолва, форма остаётся рабочей.
+    }
+  }
+
+  onRelatedSearchInput(value: string): void {
+    this.relatedSearchQuery.set(value);
+    clearTimeout(this.relatedSearchDebounce);
+    if (!value.trim()) {
+      this.relatedSearchResults.set([]);
+      return;
+    }
+    this.relatedSearchDebounce = setTimeout(() => void this.runRelatedSearch(value), RELATED_SEARCH_DEBOUNCE_MS);
+  }
+
+  private async runRelatedSearch(query: string): Promise<void> {
+    this.relatedSearchLoading.set(true);
+    try {
+      const page = await this.api.searchLabAnalytes(query, 0, 8);
+      const already = new Set(this.relatedNames());
+      this.relatedSearchResults.set(
+        page.items.filter((item) => item.id !== this.excludeId && !already.has(item.displayName)),
+      );
+    } catch {
+      this.toast.error('Не удалось найти показатели.');
+      this.relatedSearchResults.set([]);
+    } finally {
+      this.relatedSearchLoading.set(false);
+    }
+  }
+
+  pickRelated(item: KbAnalyteListItem): void {
+    this.markChanged('relatedNames');
+    this.relatedNames.update((names) => [...names, item.displayName]);
+    this.relatedMatches.update((map) => ({
+      ...map,
+      [item.displayName]: {
+        name: item.displayName, id: item.id, displayName: item.displayName, specimenDisplayName: item.specimenDisplayName,
+      },
+    }));
+    this.relatedSearchQuery.set('');
+    this.relatedSearchResults.set([]);
+  }
+
+  removeRelated(name: string): void {
+    this.markChanged('relatedNames');
+    this.relatedNames.update((names) => names.filter((n) => n !== name));
+  }
+
+  /** null для имени, ещё не резолвленного (запрос в процессе) или без совпадения в справочнике —
+   * шаблон показывает чип без ссылки/бейджа в обоих случаях, разница не критична для UX. */
+  relatedMatchFor(name: string): AdminRelatedAnalyteMatch | null {
+    return this.relatedMatches()[name] ?? null;
+  }
+
+  openRelatedChip(name: string): void {
+    const match = this.relatedMatchFor(name);
+    if (match?.id && match.displayName) this.openRelated.emit({ id: match.id, displayName: match.displayName });
   }
 
   addRefRange(): void {

@@ -46,6 +46,28 @@ public class AdminCatalogApiTests(AdminWebFactory factory)
         return id;
     }
 
+    private record AdminRelatedAnalyteMatchDto(string Name, Guid? Id, string? DisplayName, string? SpecimenDisplayName);
+
+    /// <summary>Пикер «Что смотрят вместе» (§ ссылка из справочника вместо свободного текста) —
+    /// точное совпадение NormalizedName резолвится в id/displayName, незнакомое имя — Id=null, не
+    /// ошибка (оборванная ссылка/опечатка).</summary>
+    [Fact]
+    public async Task ResolveRelatedAnalytes_ExactMatch_ReturnsId_UnknownName_ReturnsNullId()
+    {
+        var client = await AuthenticatedClientAsync();
+        var normalizedName = $"related{Guid.NewGuid():N}";
+        var id = await SeedLabAnalyteAsync(normalizedName, "Связанный показатель", "{}");
+        var unknownName = $"нетвсправочнике{Guid.NewGuid():N}";
+
+        var response = await client.PostAsJsonAsync(
+            "/api/admin/kb/lab-analytes/resolve-related", new[] { normalizedName, unknownName });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var results = await response.Content.ReadFromJsonAsync<List<AdminRelatedAnalyteMatchDto>>();
+        results.Should().Contain(r => r.Name == normalizedName && r.Id == id && r.DisplayName == "Связанный показатель");
+        results.Should().Contain(r => r.Name == unknownName && r.Id == null);
+    }
+
     private async Task<Guid> SeedMedicationAsync(string normalizedName, string displayName, string payloadJson)
     {
         using var scope = factory.Services.CreateScope();

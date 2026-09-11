@@ -168,4 +168,105 @@ public class AdminEnrichmentApiTests(AdminWebFactory factory)
         (await checkDb.LabAnalyteSearchCaches.AnyAsync(c => c.Id == unresolvedId)).Should().BeFalse();
         (await checkDb.LabAnalyteSearchCaches.AnyAsync(c => c.NormalizedName == resolvedName)).Should().BeTrue();
     }
+
+    // --- Полное редактирование/удаление строки кэша ---
+
+    private record SearchCacheSnippetDto(string Title, string Url, string Text, string? Domain, bool IsTrustedByDomain, bool? Override, bool Enabled);
+    private record SearchCacheDetailDto(Guid Id, string NormalizedName, string? Specimen, string Provider, DateTime LastUpdatedAt, DateTime CanBeUpdatedAfter, List<SearchCacheSnippetDto> Snippets);
+
+    [Fact]
+    public async Task UpdateSearchCache_ReplacesSnippetsWholesale_AndPrunesOverridesForRemovedUrls()
+    {
+        var client = await AuthenticatedClientAsync();
+        var normalizedName = $"кэштест{Guid.NewGuid():N}";
+        var oldUrl = "https://vidal.ru/old";
+        var keptUrl = "https://vidal.ru/kept";
+
+        Guid id;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            id = Guid.NewGuid();
+            var now = DateTime.UtcNow;
+            db.MedicationSearchCaches.Add(new MedicationSearchCache
+            {
+                Id = id, NormalizedName = normalizedName, Provider = "тест", LastUpdatedAt = now, CanBeUpdatedAfter = now,
+                SnippetsJson = $$"""[{"title":"Старый","url":"{{oldUrl}}","text":"текст"},{"title":"Оставить","url":"{{keptUrl}}","text":"текст"}]""",
+                OverridesJson = $$"""{"{{oldUrl}}":true,"{{keptUrl}}":false}""",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Убираем oldUrl, добавляем новый, keptUrl остаётся с изменённым текстом — тот же
+        // приём, что payload-редактор: весь список пересылается целиком.
+        var newUrl = "https://rlsnet.ru/new";
+        var updateResponse = await client.PutAsJsonAsync($"/api/admin/enrichment/search-cache/{id}", new
+        {
+            topic = 0,
+            provider = "обновлённый-провайдер",
+            snippets = new object[]
+            {
+                new { title = "Оставить (правка)", url = keptUrl, text = "новый текст" },
+                new { title = "Новый", url = newUrl, text = "текст" },
+            },
+        });
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var detail = await client.GetFromJsonAsync<SearchCacheDetailDto>($"/api/admin/enrichment/search-cache/{id}?topic=0");
+        detail!.Provider.Should().Be("обновлённый-провайдер");
+        detail.Snippets.Should().HaveCount(2);
+        detail.Snippets.Should().NotContain(s => s.Url == oldUrl);
+        detail.Snippets.Should().Contain(s => s.Url == keptUrl && s.Text == "новый текст");
+        detail.Snippets.Single(s => s.Url == keptUrl).Override.Should().Be(false, "override уцелевшего URL должен пережить редактирование остального списка");
+        detail.Snippets.Single(s => s.Url == newUrl).Override.Should().BeNull("у нового сниппета не может быть override, которого никто не ставил");
+
+        using var checkScope = factory.Services.CreateScope();
+        var checkDb = checkScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await checkDb.MedicationSearchCaches.AsNoTracking().SingleAsync(c => c.Id == id);
+        row.OverridesJson.Should().NotContain(oldUrl, "override удалённого сниппета должен вычищаться, а не висеть мёртвым грузом");
+    }
+
+    [Fact]
+    public async Task UpdateSearchCache_UnknownId_Returns404()
+    {
+        var client = await AuthenticatedClientAsync();
+
+        var response = await client.PutAsJsonAsync($"/api/admin/enrichment/search-cache/{Guid.NewGuid()}",
+            new { topic = 0, provider = (string?)null, snippets = Array.Empty<object>() });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UpdateSearchCache_EmptyUrl_ReturnsBadRequest()
+    {
+        var client = await AuthenticatedClientAsync();
+        var id = await SeedLabAnalyteSearchCacheAsync($"пустаяссылка{Guid.NewGuid():N}", SpecimenContextIds.Unresolved);
+
+        var response = await client.PutAsJsonAsync($"/api/admin/enrichment/search-cache/{id}", new
+        {
+            topic = 1,
+            provider = (string?)null,
+            snippets = new object[] { new { title = "Т", url = "", text = "текст" } },
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task DeleteSearchCache_KnownId_RemovesRow_UnknownId_Returns404()
+    {
+        var client = await AuthenticatedClientAsync();
+        var id = await SeedLabAnalyteSearchCacheAsync($"удалитькэш{Guid.NewGuid():N}", SpecimenContextIds.Unresolved);
+
+        var missingResponse = await client.DeleteAsync($"/api/admin/enrichment/search-cache/{Guid.NewGuid()}?topic=1");
+        missingResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var deleteResponse = await client.DeleteAsync($"/api/admin/enrichment/search-cache/{id}?topic=1");
+        deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var checkScope = factory.Services.CreateScope();
+        var checkDb = checkScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await checkDb.LabAnalyteSearchCaches.AnyAsync(c => c.Id == id)).Should().BeFalse();
+    }
 }

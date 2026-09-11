@@ -75,6 +75,18 @@ export interface SearchCacheDetail {
   lastUpdatedAt: string; canBeUpdatedAfter: string; snippets: SearchCacheSnippet[];
 }
 
+/** Черновик правки сниппета — только то, что реально редактируется (без вычисленных
+ * enabled/isTrustedByDomain — это read-only проекция сервера). */
+export interface SearchCacheSnippetInput { title: string; url: string; text: string; }
+
+/** Полное редактирование строки кэша (§ CRUD кэша) — snippets заменяет список целиком: добавить =
+ * включить новую запись, отредактировать = поменять поля существующей, убрать = не включить в
+ * список. NormalizedName/SpecimenKbId не редактируются — см. class doc UpdateSearchCacheRequest
+ * на бэкенде (бизнес-ключ, по которому задачи ищут строку). */
+export interface UpdateSearchCacheRequest {
+  topic: WebSearchTopicValue; provider?: string | null; snippets: SearchCacheSnippetInput[];
+}
+
 /** Прогон пересборки справочника показателей (пересборка enrich-пайплайна, §4.2 плана) — зеркало
  * RotationStatus на LabAnalyteKbRebuildJob. status: "Running" | "Completed" | "Failed" | null. */
 export interface KbRebuildStatus {
@@ -127,6 +139,12 @@ export interface AdminKbEditRequest {
 }
 
 export interface GlobalSpecimen { id: string; displayName: string; }
+
+/** Итог резолва одного related-имени по точному NormalizedName — id/displayName/specimenDisplayName
+ * все null, если статьи с таким именем в справочнике ещё нет (оборванная ссылка/опечатка, не ошибка). */
+export interface AdminRelatedAnalyteMatch {
+  name: string; id: string | null; displayName: string | null; specimenDisplayName: string | null;
+}
 
 export interface DryRunResponse { success: boolean; error: string | null; payload: Record<string, unknown> | null; }
 
@@ -283,6 +301,14 @@ export class AdminApiService {
   setSnippetOverride = (id: string, topic: WebSearchTopicValue, url: string, enabled: boolean | null) =>
     this.post<void>(`/api/admin/enrichment/search-cache/${id}/override`, { topic, url, enabled });
 
+  /** Полное редактирование строки кэша — snippets заменяет весь список (добавить/отредактировать/
+   * убрать сниппет — одно и то же действие «сохранить новый список»). */
+  updateSearchCache = (id: string, request: UpdateSearchCacheRequest) =>
+    this.put<void>(`/api/admin/enrichment/search-cache/${id}`, request);
+
+  deleteSearchCache = (id: string, topic: WebSearchTopicValue) =>
+    this.del<void>(`/api/admin/enrichment/search-cache/${id}?topic=${topic}`);
+
   /** Массовая очистка кэша показателей с нерезолвленным источником — наследие до пересборки
    * enrich-пайплайна анализов (жёсткий гейт больше не даёт таким строкам появляться заново). */
   purgeUnresolvedSpecimenSearchCache = () =>
@@ -366,6 +392,11 @@ export class AdminApiService {
     this.put<AdminLabAnalyteDetail>(`/api/admin/kb/lab-analytes/${id}`, request);
 
   unlockLabAnalyteField = (id: string, field: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}/locks/${field}`);
+
+  /** Пикер «Что смотрят вместе» — резолвит имена в реальные строки справочника (id/специмен для
+   * disambiguation/кликабельной ссылки), точным совпадением NormalizedName. */
+  resolveRelatedAnalytes = (names: string[]) =>
+    this.post<AdminRelatedAnalyteMatch[]>('/api/admin/kb/lab-analytes/resolve-related', names);
 
   deleteLabAnalyte = (id: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}`);
 

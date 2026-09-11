@@ -31,6 +31,18 @@ public enum AdminKbDeleteResult { Ok, NotFound }
 /// прислали одну и ту же строку и победителем, и проигравшим.</summary>
 public enum AdminKbMergeResult { Ok, NotFound, SameId }
 
+/// <summary>Итог резолва одного related-имени — Id/DisplayName/SpecimenDisplayName все null,
+/// если по точному NormalizedName ничего не нашлось (оборванная ссылка/опечатка, не ошибка).</summary>
+public record AdminRelatedAnalyteMatch(string Name, Guid? Id, string? DisplayName, string? SpecimenDisplayName);
+
+internal sealed class AdminRelatedMatchRow
+{
+    public Guid Id { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string NormalizedName { get; set; } = string.Empty;
+    public string? SpecimenDisplayName { get; set; }
+}
+
 internal sealed class AdminLabAnalyteRow
 {
     public Guid Id { get; set; }
