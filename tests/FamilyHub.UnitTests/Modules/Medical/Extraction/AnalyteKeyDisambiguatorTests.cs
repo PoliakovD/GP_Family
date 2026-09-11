@@ -90,4 +90,47 @@ public class AnalyteKeyDisambiguatorTests
         suffixedKey.Should().Be(LabAnalyteNormalizer.Normalize(suffixedKey),
             "разведённый ключ должен быть уже в нормализованной форме — идемпотентен относительно Normalize");
     }
+
+    [Fact]
+    public void Disambiguate_BaseKeyAlreadySavedFromPastRun_NewFileGetsSuffixEvenAsFirstInThisRun()
+    {
+        // Ровно сценарий из живого отчёта: «Распознать» нажимается по одному файлу за раз — 5
+        // отдельных прогонов, в каждом fileGroups.Count == 1 (разводить внутри прогона нечего). Без
+        // existingAnalyteKeysForRecord второй файл молча переписал бы первый по ключу upsert'а.
+        var newFileId = Guid.NewGuid();
+        var candidates = new[] { new AnalyteKeyDisambiguator.Candidate(GenericKey, newFileId) };
+
+        var result = AnalyteKeyDisambiguator.Disambiguate(candidates, existingAnalyteKeysForRecord: [GenericKey]);
+
+        result.Should().ContainKey((GenericKey, newFileId));
+        result[(GenericKey, newFileId)].AnalyteKey.Should().NotBe(GenericKey);
+    }
+
+    [Fact]
+    public void Disambiguate_MultipleSequentialRuns_EachNewFileGetsNextFreeOrdinal_NoCollisionWithPastSuffixes()
+    {
+        // Третий по счёту файл (третий отдельный клик «Распознать» на эту запись) не должен
+        // столкнуться с суффиксом, уже занятым ВТОРЫМ файлом из прошлого прогона.
+        var secondFileKey = LabAnalyteNormalizer.Normalize($"{GenericKey} — файл 2");
+        var thirdFileId = Guid.NewGuid();
+        var candidates = new[] { new AnalyteKeyDisambiguator.Candidate(GenericKey, thirdFileId) };
+
+        var result = AnalyteKeyDisambiguator.Disambiguate(
+            candidates, existingAnalyteKeysForRecord: [GenericKey, secondFileKey]);
+
+        var assignedKey = result[(GenericKey, thirdFileId)].AnalyteKey;
+        assignedKey.Should().NotBe(GenericKey).And.NotBe(secondFileKey);
+    }
+
+    [Fact]
+    public void Disambiguate_NoExistingKeys_BehavesLikeOmittedParameter()
+    {
+        // Пустая/null коллекция — эквивалентны (первый файл прогона без суффикса).
+        var fileId = Guid.NewGuid();
+        var candidates = new[] { new AnalyteKeyDisambiguator.Candidate(GenericKey, fileId) };
+
+        var result = AnalyteKeyDisambiguator.Disambiguate(candidates, existingAnalyteKeysForRecord: []);
+
+        result.Should().NotContainKey((GenericKey, fileId));
+    }
 }
