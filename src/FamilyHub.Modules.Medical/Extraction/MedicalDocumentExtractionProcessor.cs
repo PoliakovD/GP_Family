@@ -192,6 +192,23 @@ public class MedicalDocumentExtractionProcessor(
                 // терминальный отказ, не только job-таблица.
                 await db.MedicalRecords.Where(r => r.Id == job.MedicalRecordId)
                     .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Failed), ct);
+
+                // Уведомляем только о настоящем терминальном отказе — техническую недоступность
+                // LM Studio LmStudioRecoverySweepJob резюмирует молча в течение 7 дней (см.
+                // IsTransientFailure выше); сообщать "не удалось" в этот момент было бы
+                // дезинформацией. record — переменная из try-блока, здесь недоступна, поэтому
+                // владельца читаем отдельно тем же MedicalRecordId, что и в ExecuteUpdateAsync.
+                if (!job.IsTransientFailure)
+                {
+                    var ownerUserId = await db.MedicalRecords.AsNoTracking()
+                        .Where(r => r.Id == job.MedicalRecordId).Select(r => r.OwnerUserId).FirstOrDefaultAsync(ct);
+                    if (ownerUserId != Guid.Empty)
+                    {
+                        await publisher.PublishAsync(
+                            new MedicalDocumentExtractionFailedEvent(job.Id, job.MedicalRecordId, ownerUserId, job.Error ?? "Не удалось распознать документ."),
+                            ct);
+                    }
+                }
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicalDocumentExtractionJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);

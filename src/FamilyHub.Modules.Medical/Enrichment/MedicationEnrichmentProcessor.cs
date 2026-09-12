@@ -82,6 +82,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = guardResult.Reason;
                 job.FailureReason = EnrichmentFailureReason.Legitimacy;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 logger.LogWarning(
                     "MedicationEnrichmentJob {JobId} остановлена проверкой легитимности: {Reason}", job.Id, guardResult.Reason);
@@ -158,6 +159,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = "Нет сниппетов от доверенных источников — суммаризировать нечего.";
                 job.FailureReason = EnrichmentFailureReason.NoTrustedSnippets;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 return;
             }
@@ -169,6 +171,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = summarized.Error;
                 job.FailureReason = summarized.Reason;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 return;
             }
@@ -188,6 +191,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = writeResult.RejectionReason;
                 job.FailureReason = EnrichmentFailureReason.IsolationViolation;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 return;
             }
@@ -218,11 +222,27 @@ public class MedicationEnrichmentProcessor(
                 job.FailureReason = ex is LmStudioUnavailableException
                     ? EnrichmentFailureReason.LmStudioUnavailable
                     : EnrichmentFailureReason.Unknown;
+                await PublishFailureAsync(job, ct);
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;
         }
+    }
+
+    /// <summary>Уведомляем только о настоящем терминальном отказе — техническую недоступность LM
+    /// Studio LmStudioRecoverySweepJob резюмирует молча в течение 7 дней (см. IsTransientFailure),
+    /// сообщать "не удалось" в этот момент было бы дезинформацией. Вызывается из пяти мест, где
+    /// job окончательно уходит в Failed (четыре штатных исхода внутри try — гейт легитимности,
+    /// нет доверенных сниппетов, суммаризатор отказал, изоляция справочника — плюс сам catch на
+    /// последней попытке); все нужные поля (RequestedByUserId/FamilyId/SourceDisplayName) уже на
+    /// самой job, отдельный запрос не нужен (в отличие от MedicalDocumentExtractionProcessor, где
+    /// OwnerUserId лежит на записи, не на job).</summary>
+    private async Task PublishFailureAsync(MedicationEnrichmentJob job, CancellationToken ct)
+    {
+        if (job.IsTransientFailure) return;
+        await publisher.PublishAsync(
+            new MedicationEnrichmentFailedEvent(job.Id, job.SourceDisplayName, job.RequestedByUserId, job.FamilyId), ct);
     }
 
     /// <summary>

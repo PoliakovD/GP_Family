@@ -126,6 +126,8 @@ public static class MassTransitRegistration
                     r.AddProducer<BirthdayApproachingEvent>(KafkaTopics.BirthdayApproaching);
                     r.AddProducer<MedicationEnrichedEvent>(KafkaTopics.MedicationEnriched);
                     r.AddProducer<MedicalDocumentExtractedEvent>(KafkaTopics.MedicalDocumentExtracted);
+                    r.AddProducer<MedicalDocumentExtractionFailedEvent>(KafkaTopics.MedicalDocumentExtractionFailed);
+                    r.AddProducer<MedicationEnrichmentFailedEvent>(KafkaTopics.MedicationEnrichmentFailed);
                     // Единственный топик, который Api публикует, но НЕ потребляет — читает его
                     // только FamilyHub.TelegramBot (см. TelegramOutboundPublisher/TelegramOutboundConsumer).
                     r.AddProducer<TelegramMessageRequestedEvent>(KafkaTopics.TelegramOutbound);
@@ -165,6 +167,8 @@ public static class MassTransitRegistration
                         WireTopic<BirthdayApproachingEvent>(KafkaTopics.BirthdayApproaching);
                         WireTopic<MedicationEnrichedEvent>(KafkaTopics.MedicationEnriched);
                         WireTopic<MedicalDocumentExtractedEvent>(KafkaTopics.MedicalDocumentExtracted);
+                        WireTopic<MedicalDocumentExtractionFailedEvent>(KafkaTopics.MedicalDocumentExtractionFailed);
+                        WireTopic<MedicationEnrichmentFailedEvent>(KafkaTopics.MedicationEnrichmentFailed);
                         // TelegramOutbound сюда намеренно не добавлен: у Api нет записи в
                         // kafkaConsumers для TelegramMessageRequestedEvent (WireTopic просто не
                         // найдёт совпадений в kafkaConsumers.Where(...) и не создаст endpoint) —

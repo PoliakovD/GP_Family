@@ -21,6 +21,8 @@ public static class KafkaTopics
     public const string BirthdayApproaching = "birthday-approaching";
     public const string MedicationEnriched = "medication-enriched";
     public const string MedicalDocumentExtracted = "medical-document-extracted";
+    public const string MedicalDocumentExtractionFailed = "medical-document-extraction-failed";
+    public const string MedicationEnrichmentFailed = "medication-enrichment-failed";
 
     /// <summary>
     /// Исходящие сообщения для Telegram-бота (TelegramOutboundPublisher → TelegramOutboundConsumer).
@@ -37,6 +39,8 @@ public static class KafkaTopics
         [typeof(BirthdayApproachingEvent)] = BirthdayApproaching,
         [typeof(MedicationEnrichedEvent)] = MedicationEnriched,
         [typeof(MedicalDocumentExtractedEvent)] = MedicalDocumentExtracted,
+        [typeof(MedicalDocumentExtractionFailedEvent)] = MedicalDocumentExtractionFailed,
+        [typeof(MedicationEnrichmentFailedEvent)] = MedicationEnrichmentFailed,
         [typeof(TelegramMessageRequestedEvent)] = TelegramOutbound,
     };
 }

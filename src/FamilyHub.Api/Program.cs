@@ -220,6 +220,8 @@ var kafkaConsumers = new KafkaConsumerRegistration[]
     new(typeof(BirthdayApproachingEvent), typeof(BirthdayApproachingNotificationConsumer), "notifications-birthday-approaching"),
     new(typeof(MedicationEnrichedEvent), typeof(MedicationEnrichedNotificationConsumer), "notifications-medication-enriched"),
     new(typeof(MedicalDocumentExtractedEvent), typeof(MedicalDocumentExtractedNotificationConsumer), "notifications-medical-document-extracted"),
+    new(typeof(MedicalDocumentExtractionFailedEvent), typeof(MedicalDocumentExtractionFailedNotificationConsumer), "notifications-medical-document-extraction-failed"),
+    new(typeof(MedicationEnrichmentFailedEvent), typeof(MedicationEnrichmentFailedNotificationConsumer), "notifications-medication-enrichment-failed"),
 };
 builder.Services.AddFamilyHubMessaging(builder.Configuration, kafkaConsumers,
     typeof(DomainEventPublisher).Assembly,

@@ -16,6 +16,10 @@ export const NOTIFICATION_TYPE_LABEL: Record<number, string> = {
   // ключ, см. Screen - Profile settings.dc.html).
   [NotificationType.MedicationEnriched]: 'Справочник по лекарству обновлён',
   [NotificationType.MedicalDocumentExtracted]: 'Медицинский документ распознан',
+  // Терминальный отказ (не техническая недоступность LM Studio — та молча резюмируется, см.
+  // LmStudioRecoverySweepJob, и уведомления не создаёт).
+  [NotificationType.MedicalDocumentExtractionFailed]: 'Не удалось распознать документ',
+  [NotificationType.MedicationEnrichmentFailed]: 'Не удалось найти информацию о препарате',
 };
 
 export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
@@ -27,6 +31,8 @@ export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
   [NotificationType.MedicalRecordShared]: 'ph-duotone ph-file-text',
   [NotificationType.MedicationEnriched]: 'ph-duotone ph-book-open-text',
   [NotificationType.MedicalDocumentExtracted]: 'ph-duotone ph-magic-wand',
+  [NotificationType.MedicalDocumentExtractionFailed]: 'ph-duotone ph-warning-circle',
+  [NotificationType.MedicationEnrichmentFailed]: 'ph-duotone ph-warning-circle',
 };
 
 export function notificationTypeLabel(type: number): string {
@@ -43,11 +49,13 @@ export const NOTIFICATION_TYPE_SECTION: Record<number, string> = {
   [NotificationType.MedicationExpiringSoon]: 'Аптечка',
   [NotificationType.MedicationExpired]: 'Аптечка',
   [NotificationType.MedicationEnriched]: 'Аптечка',
+  [NotificationType.MedicationEnrichmentFailed]: 'Аптечка',
   [NotificationType.BirthdayUpcoming]: 'Семья',
   [NotificationType.MemberLeft]: 'Семья',
   [NotificationType.MemberApproved]: 'Семья',
   [NotificationType.MedicalRecordShared]: 'Доступ к записям',
   [NotificationType.MedicalDocumentExtracted]: 'Доступ к записям',
+  [NotificationType.MedicalDocumentExtractionFailed]: 'Доступ к записям',
 };
 
 export function notificationTypeSection(type: number): string {

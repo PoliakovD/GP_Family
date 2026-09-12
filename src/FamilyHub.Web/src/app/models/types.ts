@@ -28,6 +28,8 @@ export const NotificationType = {
     MedicalRecordShared: 5,
     MedicationEnriched: 6,
     MedicalDocumentExtracted: 7,
+    MedicalDocumentExtractionFailed: 8,
+    MedicationEnrichmentFailed: 9,
 } as const;
 
 export interface FamilySummary {
