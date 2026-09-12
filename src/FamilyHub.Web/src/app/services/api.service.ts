@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {
+  ActiveJobsSummaryResponse,
   AppNotification,
   Attachment,
   AttachmentLimits,
@@ -435,6 +436,9 @@ export class ApiService {
    * getNotifications(true).length: список тянет полные (частично шифрованные) тела ради одного
    * числа, а бейдж опрашивается на каждом экране (см. NotificationStateService). */
   getUnreadNotificationCount = () => this.get<{ count: number }>('/api/notifications/unread-count');
+
+  // Глобальный индикатор фоновых процессов (§4 плана «живой конвейер») — см. BackgroundJobsStateService.
+  getActiveJobsSummary = () => this.get<ActiveJobsSummaryResponse>('/api/jobs/active-summary');
 
   // Предпочтения доставки по типу оповещения (вкладка «Настройки → Уведомления»).
   getNotificationPreferences = () => this.get<NotificationPreference[]>('/api/notifications/preferences');

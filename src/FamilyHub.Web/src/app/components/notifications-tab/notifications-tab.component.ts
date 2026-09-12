@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { NotificationStateService } from '../../services/notification-state.service';
-import { type AppNotification, NotificationRelatedKind } from '../../models/types';
+import { type AppNotification } from '../../models/types';
+import { relatedKindBasePath } from '../../shared/util/related-kind-route';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { notificationTypeIcon, notificationTypeLabel } from '../../shared/util/notification-type-labels';
 
@@ -88,18 +89,7 @@ export class NotificationsTabComponent implements OnInit {
   async openRelated(n: AppNotification): Promise<void> {
     if (n.relatedEntityKind === null) return;
     if (!n.isRead) await this.handleMarkRead(n.id);
-
-    switch (n.relatedEntityKind) {
-      case NotificationRelatedKind.MedicalRecordAnalysis:
-        void this.router.navigate(['/health/records', n.relatedEntityId]);
-        break;
-      case NotificationRelatedKind.MedicalRecordVisit:
-        void this.router.navigate(['/health/visits', n.relatedEntityId]);
-        break;
-      case NotificationRelatedKind.Medkit:
-        void this.router.navigate(['/health/medications', n.relatedEntityId]);
-        break;
-    }
+    void this.router.navigate([relatedKindBasePath(n.relatedEntityKind), n.relatedEntityId]);
   }
 
   /** "Сегодня" / "Вчера" / "18 июля" — кикер группы даты (см. дизайн-дэк). */

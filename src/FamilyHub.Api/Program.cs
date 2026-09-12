@@ -9,6 +9,7 @@ using FamilyHub.Api.Features.Dependents;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Home;
 using FamilyHub.Api.Features.Invites;
+using FamilyHub.Api.Features.Jobs;
 using FamilyHub.Api.Features.Members;
 using FamilyHub.Api.Health;
 using Microsoft.AspNetCore.DataProtection;
@@ -740,6 +741,10 @@ builder.Services.AddBirthdayModule();
 // --- которые не могут зависеть друг от друга напрямую (см. HomeSummaryService). ---
 builder.Services.AddScoped<HomeSummaryService>();
 
+// --- Глобальный индикатор фоновых процессов (§4 плана «живой конвейер») — та же причина, что у
+// --- HomeSummaryService: агрегирует все четыре таблицы задач Medical по текущему пользователю. ---
+builder.Services.AddScoped<UserJobsService>();
+
 // --- Swagger (ручное тестирование) ---
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -969,6 +974,9 @@ app.MapMedicalModule();
 app.MapBirthdayModule();
 // Агрегат Главной содержит медданные (статус анализов) — та же консент-гарантия (редизайн v2).
 app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapHomeEndpoints();
+// Глобальный индикатор фоновых процессов содержит медданные (названия записей/показателей/
+// препаратов) — та же консент-гарантия, что у Главной/Medical выше.
+app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapUserJobsEndpoints();
 app.MapNotificationEndpoints();
 app.MapPushEndpoints();
 if (internalBotApiConfigured)

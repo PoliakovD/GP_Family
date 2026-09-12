@@ -443,6 +443,29 @@ export interface AppNotification {
     readAt: string | null;
 }
 
+/** Глобальный индикатор фоновых процессов (§4 плана «живой конвейер»), GET /api/jobs/active-summary
+ * — см. FamilyHub.Api.Features.Jobs.UserJobsService. recordId/recordKind — null, когда цель уже не
+ * существует (запись/медикамент удалены к моменту опроса) — строка тогда без навигации. */
+export interface ActiveJobItem {
+    jobId: string;
+    label: string;
+    recordId: string | null;
+    recordKind: NotificationRelatedKind | null;
+    createdAt: string;
+}
+
+export interface ActiveJobsGroup {
+    total: number;
+    items: ActiveJobItem[];
+}
+
+export interface ActiveJobsSummaryResponse {
+    extraction: ActiveJobsGroup;
+    labAnalyte: ActiveJobsGroup;
+    medication: ActiveJobsGroup;
+    visitMedication: ActiveJobsGroup;
+}
+
 // Ветка medicalrecords (задачи 5.2/5.3): конвейер извлечения показателей анализов и заключений
 // врача — см. FamilyHub.Modules.Medical.Extraction.
 

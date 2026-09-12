@@ -18,6 +18,9 @@
             @if (item.id === 'notifications' && notifications.unread() > 0) {
               <span class="app-sidebar-badge">{{ notifications.unread() }}</span>
             }
+            @if (item.id === 'health' && backgroundJobs.totalActive() > 0) {
+              <span class="app-sidebar-badge" title="Идёт распознавание/обогащение в фоне">{{ backgroundJobs.totalActive() }}</span>
+            }
           </a>
 
           @if (item.id === 'health' && isHealthActive()) {
@@ -105,6 +108,7 @@
         } @else {
           <app-search />
         }
+        <app-background-jobs-dropdown />
         @if (pageAction.action(); as action) {
           <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
             @if (action.icon) {
@@ -135,7 +139,12 @@
         <span>Главная</span>
       </button>
       <button type="button" [routerLink]="'/health'" [class.active]="isHealthActive()">
-        <i [class]="(isHealthActive() ? 'ph-fill ' : 'ph ') + 'ph-heartbeat'" aria-hidden="true"></i>
+        <span class="tab-bar-more-icon">
+          <i [class]="(isHealthActive() ? 'ph-fill ' : 'ph ') + 'ph-heartbeat'" aria-hidden="true"></i>
+          @if (backgroundJobs.totalActive() > 0) {
+            <span class="tab-bar-dot" title="Идёт распознавание/обогащение в фоне"></span>
+          }
+        </span>
         <span>Здоровье</span>
       </button>
       <button type="button" [routerLink]="familyHref()" [class.active]="isFamilyActive()">
