@@ -132,6 +132,11 @@
           @if (quantityOf(item)) {
             <span class="muted text-nowrap">кол-во: {{ quantityOf(item) }}</span>
           }
+          @if (item.enrichmentPending) {
+            <span class="tag tag-neutral" title="Справочник пока не знает этот препарат — идёт фоновый поиск">
+              <span class="pipeline-step-spinner" aria-hidden="true"></span> ищем описание препарата…
+            </span>
+          }
         </div>
         @if (instructionsOf(item)) {
           <p class="muted mb-1">{{ instructionsOf(item) }}</p>

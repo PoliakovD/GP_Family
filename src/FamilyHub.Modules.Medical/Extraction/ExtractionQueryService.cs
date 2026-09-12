@@ -83,8 +83,39 @@ public class ExtractionQueryService(
             .ToListAsync(ct);
 
         var specimenNames = await ResolveSpecimenNamesAsync(items.Select(i => i.SpecimenKbId), ct);
-        return (ExtractionQueryResult.Success, items.Select(i => ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId))).ToList());
+        var pendingKeys = await GetPendingEnrichmentKeysAsync(items, ct);
+
+        return (ExtractionQueryResult.Success, items
+            .Select(i => ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), IsEnrichmentPending(i, pendingKeys)))
+            .ToList());
     }
+
+    /// <summary>§5 плана «живой конвейер» — один доп. запрос на всю СТРАНИЦУ показателей (не на
+    /// каждый), т.к. GetIndicatorsAsync и так вызывается на каждое открытие записи.</summary>
+    private async Task<List<(string NormalizedName, Guid SpecimenKbId)>> GetPendingEnrichmentKeysAsync(
+        List<DomainLabIndicator> items, CancellationToken ct)
+    {
+        var specimenIds = items.Select(i => i.SpecimenKbId).Distinct().ToList();
+        if (specimenIds.Count == 0) return [];
+
+        var rows = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
+            .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+                && specimenIds.Contains(j.SpecimenKbId))
+            .Select(j => new { j.NormalizedName, j.SpecimenKbId })
+            .ToListAsync(ct);
+
+        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId)).ToList();
+    }
+
+    /// <summary>Матчинг НЕ точным равенством — LabIndicator.AnalyteKey иногда несёт суффикс
+    /// разведения коллизий («… — файл 2», см. AnalyteKeyDisambiguator), а джоба всегда стоит по
+    /// БАЗОВОМУ ключу без суффикса (MedicalDocumentExtractionProcessor, комментарий "ПО БАЗОВОМУ
+    /// ключу (lookupKey), не по разведённому analyteKey") — поэтому StartsWith, не ==. Ложных
+    /// совпадений на практике не бывает: коллизия имени ПОСЛЕ нормализации в пределах одного
+    /// источника — редкий случай, который и разводит AnalyteKeyDisambiguator.</summary>
+    private static bool IsEnrichmentPending(DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId)> pendingKeys) =>
+        pendingKeys.Any(k => k.SpecimenKbId == indicator.SpecimenKbId
+            && indicator.AnalyteKey.StartsWith(k.NormalizedName, StringComparison.Ordinal));
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
     /// GetSummaryAsync для показателей анализа (Kind=Analysis использует SummaryJson, не это поле).
@@ -590,10 +621,10 @@ public class ExtractionQueryService(
         return ExtractionQueryResult.Success;
     }
 
-    private static IndicatorDto ToDto(DomainLabIndicator i, string? specimenDisplayName) => new(
+    private static IndicatorDto ToDto(DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false) => new(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
         i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
-        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName);
+        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending);
 
     private static double? ParseNumeric(string? value)
     {

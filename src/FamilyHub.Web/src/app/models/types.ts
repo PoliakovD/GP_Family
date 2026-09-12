@@ -137,6 +137,9 @@ export interface Medication {
     data: Record<string, string>;
     createdByUserId: string;
     createdAt: string;
+    /** §5 плана «живой конвейер» — зеркало IndicatorDto.enrichmentPending, см.
+     * FamilyHub.Modules.Medical.Medications.MedicationDto. */
+    enrichmentPending: boolean;
 }
 
 export interface MedicationInput {
@@ -542,6 +545,10 @@ export interface IndicatorDto {
      * справочника) — заполнено, только когда отличается от displayName (пересборка enrich-пайплайна:
      * канон справочника подставляется в displayName при попадании). Подсказка "в бланке: …" в UI. */
     rawDisplayName: string | null;
+    /** §5 плана «живой конвейер» — промах по справочнику, обогащение ещё не завершилось (см.
+     * FamilyHub.Modules.Medical.Extraction.ExtractionQueryDtos.IndicatorDto). UI показывает чип
+     * «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда. */
+    enrichmentPending: boolean;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч.

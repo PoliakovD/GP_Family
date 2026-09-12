@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnInit, Output, effect, inject, input } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, OnInit, Output, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication, MedicationKbResponse } from '../../models/types';
@@ -14,6 +14,9 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
 
 const MAX_PHOTOS = 5;
 const KNOWN_KEYS = ['instructions', 'quantity'];
+/** §5 плана «живой конвейер» — тот же интервал и тот же самоостанавливающийся принцип, что у
+ * medical-records-panel.component.ts (ENRICHMENT_POLL_INTERVAL_MS)/BackgroundJobsStateService. */
+const ENRICHMENT_POLL_INTERVAL_MS = 5000;
 
 interface DataRow {
   key: string;
@@ -33,7 +36,7 @@ let nextInstanceId = 0;
   templateUrl: './medications-panel.component.html',
   styleUrl: './medications-panel.component.scss',
 })
-export class MedicationsPanelComponent implements OnInit {
+export class MedicationsPanelComponent implements OnInit, OnDestroy {
   readonly medkitId = input.required<string>();
 
   /** Сообщает родителю (карточке аптечки) актуальное число медикаментов — она показывает
@@ -163,18 +166,64 @@ export class MedicationsPanelComponent implements OnInit {
     }
   }
 
+  /** Поллинг привязан не к аптечке, а к самому инстансу компонента — на экране открыта только
+   * одна аптечка за раз (медикаменты другой перезатёрли бы this.items, если старый интервал
+   * продолжил бы тикать после переключения, поэтому refresh() всегда останавливает прежний,
+   * прежде чем решить, нужен ли новый). См. syncEnrichmentPolling. */
+  private enrichmentPollHandle: ReturnType<typeof setInterval> | null = null;
+
+  ngOnDestroy(): void {
+    this.stopEnrichmentPolling();
+  }
+
   async refresh(): Promise<void> {
     const id = this.medkitId();
     this.loadedMedkitId = id;
     this.loading = true;
+    this.stopEnrichmentPolling();
     try {
       this.items = await this.api.getMedications(id);
       this.error = null;
       this.countChanged.emit(this.items.length);
+      this.syncEnrichmentPolling();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить аптечку.';
     } finally {
       this.loading = false;
+    }
+  }
+
+  /** §5 плана «живой конвейер» — самоостанавливающийся поллинг (тот же принцип, что у
+   * BackgroundJobsStateService.refresh/medical-records-panel.syncEnrichmentPolling): пока хотя бы
+   * один медикамент enrichmentPending, перечитываем аптечку каждые ENRICHMENT_POLL_INTERVAL_MS,
+   * иначе останавливаем сами себя. */
+  private syncEnrichmentPolling(): void {
+    if (!this.items.some((i) => i.enrichmentPending)) {
+      this.stopEnrichmentPolling();
+      return;
+    }
+    if (this.enrichmentPollHandle !== null) return; // уже опрашивается
+
+    const medkitId = this.medkitId();
+    const tick = async () => {
+      try {
+        this.items = await this.api.getMedications(medkitId);
+        this.countChanged.emit(this.items.length);
+      } catch {
+        // Транзиентный сбой — молча пробуем на следующем тике (тот же принцип, что у
+        // medical-records-panel): фоновое обогащение продолжается на бэкенде независимо.
+        return;
+      }
+      this.syncEnrichmentPolling();
+    };
+
+    this.enrichmentPollHandle = setInterval(() => void tick(), ENRICHMENT_POLL_INTERVAL_MS);
+  }
+
+  private stopEnrichmentPolling(): void {
+    if (this.enrichmentPollHandle !== null) {
+      clearInterval(this.enrichmentPollHandle);
+      this.enrichmentPollHandle = null;
     }
   }
 
