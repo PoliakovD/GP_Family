@@ -1,5 +1,7 @@
+using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.TestUtils;
@@ -38,6 +40,66 @@ public class MedicationServiceTests : SqliteTestBase
 
         result.Should().Be(MedicationAccessResult.Success);
         items.Should().ContainSingle();
+    }
+
+    /// <summary>§5 плана «живой конвейер» — GetForMedkitAsync теперь джойнит на
+    /// MedicationEnrichmentJobs (Pending/Running, точное совпадение NormalizedName, см. class doc
+    /// MedicationDto.EnrichmentPending) и должно выставить чип "уточняем…", когда обогащение
+    /// этого медикамента ещё не завершилось.</summary>
+    [Fact]
+    public async Task GetForMedkitAsync_MatchingPendingEnrichmentJob_MarksEnrichmentPending()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        var medication = TestData.NewMedication(medkit.Id, family.Id, admin.Id);
+        Db.Medications.Add(medication);
+        Db.MedicationEnrichmentJobs.Add(new MedicationEnrichmentJob
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = MedicationNameNormalizer.Normalize(medication.Name),
+            SourceDisplayName = medication.Name,
+            MedicationId = medication.Id,
+            RequestedByUserId = admin.Id,
+            FamilyId = family.Id,
+            Status = EnrichmentJobStatus.Pending,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var (result, items) = await _sut.GetForMedkitAsync(medkit.Id, admin.Id);
+
+        result.Should().Be(MedicationAccessResult.Success);
+        items.Should().ContainSingle().Which.EnrichmentPending.Should().BeTrue();
+    }
+
+    /// <summary>Зеркало теста выше — задача уже Completed, значит обогащение завершилось и чип
+    /// показывать не за что (не только "нет джобы вовсе", но и "джоба была и закрылась").</summary>
+    [Fact]
+    public async Task GetForMedkitAsync_CompletedEnrichmentJob_EnrichmentPendingFalse()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var medkit = TestData.NewMedkit(family.Id, admin.Id);
+        Db.Medkits.Add(medkit);
+        var medication = TestData.NewMedication(medkit.Id, family.Id, admin.Id);
+        Db.Medications.Add(medication);
+        Db.MedicationEnrichmentJobs.Add(new MedicationEnrichmentJob
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = MedicationNameNormalizer.Normalize(medication.Name),
+            SourceDisplayName = medication.Name,
+            MedicationId = medication.Id,
+            RequestedByUserId = admin.Id,
+            FamilyId = family.Id,
+            Status = EnrichmentJobStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+            CompletedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var (_, items) = await _sut.GetForMedkitAsync(medkit.Id, admin.Id);
+
+        items.Should().ContainSingle().Which.EnrichmentPending.Should().BeFalse();
     }
 
     [Fact]

@@ -131,6 +131,65 @@ public class IndicatorEnrichmentGateTests(GuardPassingWebFactory factory) : Inte
             "правка — ручной ввод, задача должна пройти дополнительный гейт правдоподобности в процессоре");
     }
 
+    /// <summary>§5 плана «живой конвейер» — ExtractionQueryService.GetIndicatorsAsync теперь
+    /// джойнит показатели на LabAnalyteEnrichmentJobs (Pending/Running) той же записи, чтобы UI мог
+    /// показать чип «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда.
+    /// Показатель и джоба сеются напрямую в БД (не через POST .../indicators) — этот хост (
+    /// GuardPassingWebFactory) держит настоящий Hangfire, реальный вызов поставил бы настоящую
+    /// задачу, которую воркер мог успеть обработать (Null-провайдер веб-поиска обычно фейлится
+    /// быстро) ДО того, как этот тест успеет прочитать статус — гонка с фоновым воркером, не с
+    /// логикой самого джойна, которую и проверяет этот тест (сам факт постановки в очередь уже
+    /// покрыт CreateIndicator_KbMiss_QueuesEnrichmentJob_ForResolvedSpecimen выше).</summary>
+    [Fact]
+    public async Task GetIndicators_KbMissWithPendingEnrichmentJob_EnrichmentPendingIsTrue()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var bloodId = await BloodSpecimenIdAsync();
+        var record = await CreateAnalysisAsync(owner, bloodId);
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(
+            $"Тестовыйпоказатель{Guid.NewGuid():N}");
+
+        Guid indicatorId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var indicator = new LabIndicator
+            {
+                Id = Guid.NewGuid(),
+                MedicalRecordId = record.Id,
+                RecordDate = record.RecordDate,
+                OwnerUserId = record.OwnerUserId,
+                AnalyteKey = analyteKey,
+                DisplayName = analyteKey,
+                SpecimenKbId = bloodId,
+                ValueRaw = "10",
+                CreatedAt = DateTime.UtcNow,
+            };
+            db.LabIndicators.Add(indicator);
+            db.LabAnalyteEnrichmentJobs.Add(new LabAnalyteEnrichmentJob
+            {
+                Id = Guid.NewGuid(),
+                NormalizedName = analyteKey,
+                SpecimenKbId = bloodId,
+                SourceDisplayName = analyteKey,
+                LabIndicatorId = indicator.Id,
+                RequestedByUserId = record.OwnerUserId,
+                Status = EnrichmentJobStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+            indicatorId = indicator.Id;
+        }
+
+        var indicators = await (await owner.GetAsync($"/api/medical-records/{record.Id}/indicators"))
+            .Content.ReadFromJsonAsync<List<IndicatorDto>>();
+
+        indicators!.Should().ContainSingle(i => i.Id == indicatorId)
+            .Which.EnrichmentPending.Should().BeTrue(
+                "показатель промахнулся по справочнику, а обогащение (LabAnalyteEnrichmentJob) ещё Pending — " +
+                "GetIndicatorsAsync должен отразить это чипом enrichmentPending");
+    }
+
     [Fact]
     public async Task SetRecordSpecimen_CascadesToAllIndicators_AndQueuesEnrichmentOnMiss()
     {

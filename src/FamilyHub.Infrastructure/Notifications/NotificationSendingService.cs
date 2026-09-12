@@ -24,7 +24,7 @@ public class NotificationSendingService(
     /// её доберёт ежедневный свип ReminderScanJob.SendPendingAsync.
     /// </summary>
     public async Task NotifyAsync(
-        IReadOnlyCollection<Guid> userIds, Guid familyId, NotificationType type,
+        IReadOnlyCollection<Guid> userIds, Guid? familyId, NotificationType type,
         string title, string body, Guid relatedEntityId, Func<Guid, string> dedupKeyFor,
         CancellationToken ct = default, NotificationRelatedKind? relatedEntityKind = null)
     {
@@ -43,9 +43,11 @@ public class NotificationSendingService(
             await db.SaveChangesAsync(ct); // фиксация проставленных SentAt
     }
 
-    /// <summary>Вставка с защитой от дублей: гонка по UNIQUE DedupKey не считается ошибкой.</summary>
+    /// <summary>Вставка с защитой от дублей: гонка по UNIQUE DedupKey не считается ошибкой.
+    /// familyId — null для персональных ресурсов без семейного контекста (см. class doc
+    /// Notification.FamilyId — НЕ Guid.Empty, тот на Postgres реально бросал бы FK violation).</summary>
     public async Task<Notification?> AddIfNewAsync(
-        Guid userId, Guid familyId, NotificationType type, string title, string body,
+        Guid userId, Guid? familyId, NotificationType type, string title, string body,
         Guid relatedEntityId, string dedupKey, CancellationToken ct = default,
         NotificationRelatedKind? relatedEntityKind = null)
     {
