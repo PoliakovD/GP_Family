@@ -28,6 +28,8 @@ export const NotificationType = {
     MedicalRecordShared: 5,
     MedicationEnriched: 6,
     MedicalDocumentExtracted: 7,
+    MedicalDocumentExtractionFailed: 8,
+    MedicationEnrichmentFailed: 9,
 } as const;
 
 export interface FamilySummary {
@@ -135,6 +137,9 @@ export interface Medication {
     data: Record<string, string>;
     createdByUserId: string;
     createdAt: string;
+    /** §5 плана «живой конвейер» — зеркало IndicatorDto.enrichmentPending, см.
+     * FamilyHub.Modules.Medical.Medications.MedicationDto. */
+    enrichmentPending: boolean;
 }
 
 export interface MedicationInput {
@@ -420,15 +425,48 @@ export interface NotificationPreference {
     telegramEnabled: boolean;
 }
 
+/** См. FamilyHub.Domain.Enums.NotificationRelatedKind — null у типов оповещений без устоявшегося
+ * целевого экрана в рамках задачи (карточка остаётся некликабельной, см. openRelated). */
+export const NotificationRelatedKind = {
+    MedicalRecordAnalysis: 0,
+    MedicalRecordVisit: 1,
+    Medkit: 2,
+} as const;
+export type NotificationRelatedKind = typeof NotificationRelatedKind[keyof typeof NotificationRelatedKind];
+
 export interface AppNotification {
     id: string;
     type: number; // NotificationType
     title: string;
     body: string;
     relatedEntityId: string;
+    relatedEntityKind: NotificationRelatedKind | null;
     createdAt: string;
     isRead: boolean;
     readAt: string | null;
+}
+
+/** Глобальный индикатор фоновых процессов (§4 плана «живой конвейер»), GET /api/jobs/active-summary
+ * — см. FamilyHub.Api.Features.Jobs.UserJobsService. recordId/recordKind — null, когда цель уже не
+ * существует (запись/медикамент удалены к моменту опроса) — строка тогда без навигации. */
+export interface ActiveJobItem {
+    jobId: string;
+    label: string;
+    recordId: string | null;
+    recordKind: NotificationRelatedKind | null;
+    createdAt: string;
+}
+
+export interface ActiveJobsGroup {
+    total: number;
+    items: ActiveJobItem[];
+}
+
+export interface ActiveJobsSummaryResponse {
+    extraction: ActiveJobsGroup;
+    labAnalyte: ActiveJobsGroup;
+    medication: ActiveJobsGroup;
+    visitMedication: ActiveJobsGroup;
 }
 
 // Ветка medicalrecords (задачи 5.2/5.3): конвейер извлечения показателей анализов и заключений
@@ -507,6 +545,10 @@ export interface IndicatorDto {
      * справочника) — заполнено, только когда отличается от displayName (пересборка enrich-пайплайна:
      * канон справочника подставляется в displayName при попадании). Подсказка "в бланке: …" в UI. */
     rawDisplayName: string | null;
+    /** §5 плана «живой конвейер» — промах по справочнику, обогащение ещё не завершилось (см.
+     * FamilyHub.Modules.Medical.Extraction.ExtractionQueryDtos.IndicatorDto). UI показывает чип
+     * «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда. */
+    enrichmentPending: boolean;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч.

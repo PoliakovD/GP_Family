@@ -65,6 +65,10 @@ const SEARCH_DEBOUNCE_MS = 300;
 /** Сколько ждать после Completed, прежде чем убрать живой прогресс — успевает мигнуть галочка
  * «Готово», не исчезает мгновенно. */
 const PIPELINE_CLEAR_DELAY_MS = 2500;
+/** §5 плана «живой конвейер» — опрос показателей ЗАПИСИ, пока хотя бы один из них
+ * enrichmentPending (обогащение справочника ещё не завершилось); реже, чем EXTRACTION_POLL_
+ * INTERVAL_MS выше — это фоновый процесс, который может идти минутами, не секундами. */
+const ENRICHMENT_POLL_INTERVAL_MS = 5000;
 
 // Информативнее прежних коротких подписей ("Распознаём"/"Извлекаем данные") — пользователь просил
 // видеть, что именно сейчас происходит на каждом шаге, а не общие слова.
@@ -229,6 +233,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * шёл дальше, а UI считал, что распознавание остановилось"). Останавливаем поллинг только после
    * MAX_CONSECUTIVE_POLL_FAILURES подряд неудач — это уже похоже на настоящий обрыв связи, не блип. */
   private readonly pollFailureCounts = new Map<string, number>();
+  /** §5 плана «живой конвейер» — отдельный от pollHandles поллинг: тот следит за самой
+   * экстракцией (короче, до "Готово"), этот — за обогащением ОТДЕЛЬНЫХ показателей после неё
+   * (может идти и после того, как экстракция давно завершилась). См. syncEnrichmentPolling. */
+  private readonly enrichmentPollHandles = new Map<string, ReturnType<typeof setInterval>>();
 
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
   readonly RefSource = RefSource;
@@ -369,6 +377,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     for (const handle of this.pollHandles.values()) clearInterval(handle);
     this.pollHandles.clear();
     this.pollFailureCounts.clear();
+    for (const handle of this.enrichmentPollHandles.values()) clearInterval(handle);
+    this.enrichmentPollHandles.clear();
     for (const handle of this.pipelineClearHandles.values()) clearTimeout(handle);
     this.pipelineClearHandles.clear();
     if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
@@ -762,6 +772,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     try {
       await this.api.deleteMedicalRecord(record.id);
       if (this.accessRecord?.id === record.id) this.accessRecord = null;
+      if (this.recordId() === record.id) {
+        // Одиночный режим (открытая запись) — перечитывать здесь нечего, запись только что
+        // удалена: refresh() позвал бы getMedicalRecord(recordId) и получил бы 404, оставляя
+        // пользователя на пустом/устаревшем экране записи без какой-либо навигации (баг).
+        this.goToList();
+        return;
+      }
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';
@@ -852,6 +869,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           this.setRecognizing(record.id, false);
           if (status.status === ExtractionJobStatus.Completed) {
             await this.loadExtractionResult(record);
+            this.appendEnrichmentFollowupStep(record.id);
             await this.refresh();
           } else if (status.error) {
             this.error = status.error;
@@ -935,6 +953,25 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
   }
 
+  /** §6 плана «живой конвейер» — после «Готово» (см. вызов из startPolling.tick, ПОСЛЕ
+   * loadExtractionResult — indicatorsByRecord должен быть уже свежим) предупреждаем, что часть
+   * работы продолжится в фоне, если среди только что сохранённых показателей есть промахнувшиеся
+   * по справочнику. Не активная/пульсирующая строка (state: 'done') — не блокирует «Готово», сам
+   * живой статус конкретного показателя — уже у его чипа (§5)/у глобального индикатора (§4), эта
+   * строка — просто финальная сводка перед тем, как весь виджет исчезнет (schedulePipelineClear). */
+  private appendEnrichmentFollowupStep(recordId: string): void {
+    const pendingCount = (this.indicatorsByRecord[recordId] ?? []).filter((i) => i.enrichmentPending).length;
+    if (pendingCount === 0) return;
+
+    const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
+    steps.push({
+      id: 'enrichment-followup',
+      label: `${pendingCount} ${pluralizeRu(pendingCount, 'показатель', 'показателя', 'показателей')} — уточняем норму в справочнике (можно закрыть страницу, продолжится в фоне)`,
+      state: 'done',
+    });
+    this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
+  }
+
   private schedulePipelineClear(recordId: string): void {
     this.clearPipelineTimer(recordId);
     const handle = setTimeout(() => {
@@ -971,6 +1008,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         ]);
         this.indicatorsByRecord = { ...this.indicatorsByRecord, [record.id]: indicators };
         this.summaryByRecord = { ...this.summaryByRecord, [record.id]: summary };
+        this.syncEnrichmentPolling(record.id);
       } else {
         const conclusion = await this.api.getRecordConclusion(record.id).catch(() => null);
         this.conclusionByRecord = { ...this.conclusionByRecord, [record.id]: conclusion };
@@ -978,6 +1016,42 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить результат распознавания.';
     }
+  }
+
+  /** §5 плана «живой конвейер» — самоостанавливающийся поллинг показателей ЗАПИСИ (тот же
+   * принцип, что у BackgroundJobsStateService.refresh на уровень выше): пока хотя бы один
+   * показатель enrichmentPending, перечитываем показатели каждые ENRICHMENT_POLL_INTERVAL_MS,
+   * чтобы чип «уточняем норму…» сам пропал, когда обогащение завершится, без обновления страницы
+   * — как только пропадает последний pending, останавливаем себя же. Вызывается после каждого
+   * обновления indicatorsByRecord[recordId] (idempotent — новый вызов не плодит второй интервал).*/
+  private syncEnrichmentPolling(recordId: string): void {
+    const hasPending = (this.indicatorsByRecord[recordId] ?? []).some((i) => i.enrichmentPending);
+
+    if (!hasPending) {
+      const handle = this.enrichmentPollHandles.get(recordId);
+      if (handle) {
+        clearInterval(handle);
+        this.enrichmentPollHandles.delete(recordId);
+      }
+      return;
+    }
+
+    if (this.enrichmentPollHandles.has(recordId)) return; // уже опрашивается
+
+    const tick = async () => {
+      try {
+        const indicators = await this.api.getRecordIndicators(recordId);
+        this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      } catch {
+        // Транзиентный сбой — молча пробуем на следующем тике (тот же принцип, что и у основного
+        // поллинга экстракции выше): фоновое обогащение продолжается на бэкенде независимо от
+        // того, долетел ли этот один запрос.
+        return;
+      }
+      this.syncEnrichmentPolling(recordId); // останавливает себя же, когда pending не осталось
+    };
+
+    this.enrichmentPollHandles.set(recordId, setInterval(() => void tick(), ENRICHMENT_POLL_INTERVAL_MS));
   }
 
   /** Пересчитывает "Резюме"/"Вопросы врачу" по текущим (в т.ч. вручную поправленным) показателям
@@ -1155,6 +1229,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       await this.api.updateIndicator(savedId, sanitizeIndicatorForm(this.editIndicatorForm));
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      this.syncEnrichmentPolling(recordId);
       this.cancelEditIndicator();
       this.error = null;
       // Редизайн v2.2 — редактирование теперь открывается прямо из панели справки (не из
@@ -1182,6 +1257,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       await this.api.deleteIndicator(indicator.id);
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      this.syncEnrichmentPolling(recordId);
       if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить показатель.';
@@ -1209,6 +1285,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       await this.api.createIndicator(recordId, sanitizeIndicatorForm(this.newIndicatorForm));
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      this.syncEnrichmentPolling(recordId);
       await this.refresh();
       this.cancelCreateIndicator();
       this.error = null;

@@ -23,8 +23,15 @@ public class MedicationEnrichedNotificationConsumer(NotificationSendingService n
             NotificationType.MedicationEnriched,
             $"Справочник пополнен: {notification.DisplayName}",
             $"Мы нашли и добавили информацию о препарате «{notification.DisplayName}» в общий справочник.",
-            relatedEntityId: notification.KbId,
+            // RelatedEntityId раньше был KbId — сам справочник не привязан к семье и никуда не
+            // ведёт на фронте, поэтому под клик-через (§3 плана) здесь MedkitId: аптечка, из
+            // которой запущено обогащение, когда она ещё существует (см.
+            // MedicationEnrichmentProcessor.ResolveMedkitIdAsync). Guid.Empty без RelatedEntityKind —
+            // карточка остаётся некликабельной (ничего не сломано — до этой задачи relatedEntityId
+            // никем на фронте не читался, см. AppNotification).
+            relatedEntityId: notification.MedkitId ?? Guid.Empty,
             dedupKeyFor: _ => $"kb-enriched:{notification.JobId}",
-            ct: context.CancellationToken);
+            ct: context.CancellationToken,
+            relatedEntityKind: notification.MedkitId is not null ? NotificationRelatedKind.Medkit : null);
     }
 }

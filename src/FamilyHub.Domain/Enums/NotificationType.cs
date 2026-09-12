@@ -26,4 +26,14 @@ public enum NotificationType
 
     /// <summary>Распознавание вложения (анализ/выписка врача) завершено (ветка medicalrecords).</summary>
     MedicalDocumentExtracted = 7,
+
+    /// <summary>Распознавание вложения окончательно не удалось (ветка medicalrecords) — публикуется
+    /// только на настоящий терминальный отказ, не на техническую недоступность LM Studio
+    /// (та резюмируется молча, см. LmStudioRecoverySweepJob, а сообщать "не удалось" в этот момент
+    /// было бы дезинформацией).</summary>
+    MedicalDocumentExtractionFailed = 8,
+
+    /// <summary>Обогащение справочника препаратом окончательно не удалось (этап 4) — тот же
+    /// принцип, что MedicalDocumentExtractionFailed: не на технический сбой LM Studio.</summary>
+    MedicationEnrichmentFailed = 9,
 }

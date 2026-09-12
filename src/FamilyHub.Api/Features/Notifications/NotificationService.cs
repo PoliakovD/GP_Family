@@ -11,6 +11,7 @@ public record NotificationDto(
     string Title,
     string Body,
     Guid RelatedEntityId,
+    NotificationRelatedKind? RelatedEntityKind,
     DateTime CreatedAt,
     bool IsRead,
     DateTime? ReadAt);
@@ -28,7 +29,8 @@ public class NotificationService(AppDbContext db, ILogger<NotificationService> l
 
         var result = await query
             .OrderByDescending(n => n.CreatedAt)
-            .Select(n => new NotificationDto(n.Id, n.Type, n.Title, n.Body, n.RelatedEntityId, n.CreatedAt, n.IsRead, n.ReadAt))
+            .Select(n => new NotificationDto(
+                n.Id, n.Type, n.Title, n.Body, n.RelatedEntityId, n.RelatedEntityKind, n.CreatedAt, n.IsRead, n.ReadAt))
             .ToListAsync(ct);
 
         logger.LogDebug(

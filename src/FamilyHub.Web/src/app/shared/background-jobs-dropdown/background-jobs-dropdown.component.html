@@ -1,0 +1,66 @@
+@if (jobs.totalActive() > 0) {
+  <div class="background-jobs-dropdown">
+    <button
+      type="button"
+      class="btn btn-ghost btn-icon background-jobs-trigger"
+      aria-label="Фоновые процессы"
+      title="Идёт распознавание/обогащение в фоне"
+      (click)="toggle()"
+    >
+      <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+      <span class="background-jobs-trigger-badge">{{ jobs.totalActive() }}</span>
+    </button>
+
+    @if (isWide && open()) {
+      <div class="background-jobs-popover elev-md">
+        @for (section of sections(); track section.title) {
+          <div class="background-jobs-section">
+            <div class="background-jobs-section-title">
+              <i [class]="'ph ' + section.icon" aria-hidden="true"></i>
+              {{ section.title }} · {{ section.group.total }}
+            </div>
+            @for (item of section.group.items; track item.jobId) {
+              <button
+                type="button"
+                class="background-jobs-item"
+                [class.non-interactive]="item.recordId === null"
+                (click)="select(item)"
+              >
+                {{ item.label }}
+              </button>
+            }
+            @if (section.group.total > section.group.items.length) {
+              <div class="background-jobs-more">и ещё {{ section.group.total - section.group.items.length }}</div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  @if (!isWide) {
+    <app-bottom-sheet title="Фоновые процессы" [open]="open()" (closed)="open.set(false)">
+      @for (section of sections(); track section.title) {
+        <div class="background-jobs-section">
+          <div class="background-jobs-section-title">
+            <i [class]="'ph ' + section.icon" aria-hidden="true"></i>
+            {{ section.title }} · {{ section.group.total }}
+          </div>
+          @for (item of section.group.items; track item.jobId) {
+            <button
+              type="button"
+              class="background-jobs-item background-jobs-item-sheet"
+              [class.non-interactive]="item.recordId === null"
+              (click)="select(item)"
+            >
+              {{ item.label }}
+            </button>
+          }
+          @if (section.group.total > section.group.items.length) {
+            <div class="background-jobs-more">и ещё {{ section.group.total - section.group.items.length }}</div>
+          }
+        </div>
+      }
+    </app-bottom-sheet>
+  }
+}

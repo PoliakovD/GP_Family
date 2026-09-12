@@ -321,6 +321,11 @@
                         }
                       </div>
                     }
+                    @if (ind.enrichmentPending) {
+                      <span class="tag tag-neutral" title="Справочник пока не знает норму — идёт фоновый поиск">
+                        <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+                      </span>
+                    }
                   </td>
                   <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
                     {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
@@ -397,6 +402,11 @@
                     <div class="card-title" style="font-size:0.8824rem">{{ shortIndicatorName(ind) }}</div>
                     @if (indicatorReference(ind); as ref) {
                       <div class="muted" style="font-size:0.6471rem">{{ ref }}</div>
+                    }
+                    @if (ind.enrichmentPending) {
+                      <span class="tag tag-neutral" title="Справочник пока не знает норму — идёт фоновый поиск">
+                        <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+                      </span>
                     }
                   </div>
                   <div [class]="flagClass(ind.flag)" style="flex:none;text-align:right;white-space:nowrap">

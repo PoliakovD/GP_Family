@@ -86,6 +86,8 @@ public class MedicalDocumentExtractionProcessor(
             var record = await db.MedicalRecords.FirstOrDefaultAsync(r => r.Id == job.MedicalRecordId, ct);
             if (record is null)
             {
+                // Запись удалена — некому уведомлять (OwnerUserId неизвестен), FailAsync ниже без
+                // record публикацию и не пытается.
                 await FailAsync(job, "Мед-запись не найдена (возможно, удалена).", [], ct);
                 return;
             }
@@ -192,6 +194,17 @@ public class MedicalDocumentExtractionProcessor(
                 // терминальный отказ, не только job-таблица.
                 await db.MedicalRecords.Where(r => r.Id == job.MedicalRecordId)
                     .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Failed), ct);
+
+                // record — переменная из try-блока, здесь недоступна, поэтому владельца/вид читаем
+                // отдельно тем же MedicalRecordId, что и в ExecuteUpdateAsync выше.
+                var owner = await db.MedicalRecords.AsNoTracking()
+                    .Where(r => r.Id == job.MedicalRecordId)
+                    .Select(r => new { r.OwnerUserId, r.Kind })
+                    .FirstOrDefaultAsync(ct);
+                if (owner is not null)
+                    await PublishFailureAsync(
+                        job, owner.OwnerUserId, owner.Kind == MedicalRecordKind.DoctorVisit,
+                        job.Error ?? "Не удалось распознать документ.", ct);
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicalDocumentExtractionJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
@@ -227,7 +240,7 @@ public class MedicalDocumentExtractionProcessor(
         if (fileGroups.Count == 0)
         {
             var reason = fileErrors.Count > 0 ? string.Join("; ", fileErrors) : "Не удалось распознать ни одного показателя.";
-            await FailAsync(job, reason, readAttachmentIds, ct);
+            await FailAsync(job, reason, readAttachmentIds, ct, record);
             return;
         }
 
@@ -525,7 +538,8 @@ public class MedicalDocumentExtractionProcessor(
         // ExtractedAt проставляется здесь же — одной транзакцией с показателями/summary (см.
         // комментарий у readAttachmentIds в RunAsync): либо оба сохраняются, либо оба откатываются.
         await MarkAttachmentsExtractedAsync(readAttachmentIds, ct);
-        await publisher.PublishAsync(new MedicalDocumentExtractedEvent(job.Id, recordId, ownerUserId, allIndicators.Count, deviationCount), ct);
+        await publisher.PublishAsync(
+            new MedicalDocumentExtractedEvent(job.Id, recordId, ownerUserId, IsDoctorVisit: false, allIndicators.Count, deviationCount), ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -542,7 +556,7 @@ public class MedicalDocumentExtractionProcessor(
         if (conclusion is null)
         {
             var reason = fileErrors.Count > 0 ? string.Join("; ", fileErrors) : "Не удалось распознать заключение врача.";
-            await FailAsync(job, reason, readAttachmentIds, ct);
+            await FailAsync(job, reason, readAttachmentIds, ct, record);
             return;
         }
 
@@ -591,7 +605,8 @@ public class MedicalDocumentExtractionProcessor(
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await MarkAttachmentsExtractedAsync(readAttachmentIds, ct);
-        await publisher.PublishAsync(new MedicalDocumentExtractedEvent(job.Id, record.Id, record.OwnerUserId, 0, 0), ct);
+        await publisher.PublishAsync(
+            new MedicalDocumentExtractedEvent(job.Id, record.Id, record.OwnerUserId, IsDoctorVisit: true, 0, 0), ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -609,13 +624,22 @@ public class MedicalDocumentExtractionProcessor(
             .ExecuteUpdateAsync(s => s.SetProperty(a => a.ExtractedAt, DateTime.UtcNow), ct);
     }
 
+    /// <summary>
+    /// Terminal-без-ретрая исход внутри try (в отличие от катастрофы в catch блоке RunAsync —
+    /// LM Studio недоступен и т.п., где ретрай ещё имеет смысл). record — null только когда сама
+    /// запись уже удалена (единственный вызов без record, см. RunAsync выше) — тогда некому
+    /// уведомлять, PublishFailureAsync ниже не вызывается вовсе.
+    /// </summary>
     private async Task FailAsync(
         Domain.Entities.MedicalDocumentExtractionJob job, string reason,
-        List<Guid> readAttachmentIds, CancellationToken ct)
+        List<Guid> readAttachmentIds, CancellationToken ct, Domain.Entities.MedicalRecord? record = null)
     {
         job.Status = EnrichmentJobStatus.Failed;
         job.Error = reason;
         job.CompletedAt = DateTime.UtcNow;
+        // IsTransientFailure остаётся false (дефолт) — все вызовы FailAsync это штатные "не
+        // получилось разобрать документ", а не техническая недоступность LM Studio (та всегда
+        // идёт через исключение → catch в RunAsync, не через FailAsync).
 
         // Всегда терминальный исход (нет запланированного ретрая) — запись должна сразу отражать
         // отказ, а не молча оставаться на "None"/"Pending", как будто распознавание ещё не
@@ -624,6 +648,9 @@ public class MedicalDocumentExtractionProcessor(
         // живой/провальный статус после ухода со страницы или F5). No-op, если запись уже удалена.
         await db.MedicalRecords.Where(r => r.Id == job.MedicalRecordId)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Failed), ct);
+
+        if (record is not null)
+            await PublishFailureAsync(job, record.OwnerUserId, record.Kind == MedicalRecordKind.DoctorVisit, reason, ct);
 
         if (readAttachmentIds.Count > 0)
         {
@@ -638,6 +665,19 @@ public class MedicalDocumentExtractionProcessor(
         }
 
         logger.LogInformation("MedicalDocumentExtractionJob {JobId}: {Reason}", job.Id, reason);
+    }
+
+    /// <summary>Уведомляем только о настоящем терминальном отказе — техническую недоступность LM
+    /// Studio LmStudioRecoverySweepJob резюмирует молча в течение 7 дней (см. IsTransientFailure на
+    /// job), сообщать "не удалось" в этот момент было бы дезинформацией. Общая точка для всех
+    /// terminal-путей (три вызова из FailAsync + сам catch в RunAsync) — та же причина, что у
+    /// MedicationEnrichmentProcessor.PublishFailureAsync.</summary>
+    private async Task PublishFailureAsync(
+        Domain.Entities.MedicalDocumentExtractionJob job, Guid ownerUserId, bool isDoctorVisit, string reason, CancellationToken ct)
+    {
+        if (job.IsTransientFailure || ownerUserId == Guid.Empty) return;
+        await publisher.PublishAsync(
+            new MedicalDocumentExtractionFailedEvent(job.Id, job.MedicalRecordId, ownerUserId, isDoctorVisit, reason), ct);
     }
 
     private static string? TryFormatNumeric(string value)

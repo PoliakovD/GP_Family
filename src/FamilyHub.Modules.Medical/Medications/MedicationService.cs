@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Enrichment;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -40,12 +41,36 @@ public class MedicationService(
             .Where(m => m.MedkitId == medkitId)
             .ToListAsync(ct);
 
+        // §5 плана «живой конвейер» — один доп. запрос на всю аптечку (не на медикамент), тем же
+        // приёмом, что ExtractionQueryService.GetIndicatorsAsync. Точное равенство (не StartsWith,
+        // как у показателей) — MedicationEnrichmentJob.NormalizedName не знает суффиксного
+        // разведения коллизий (то — только у LabIndicator/LabAnalyteEnrichmentJob).
+        var pendingNames = await GetPendingEnrichmentNamesAsync(entities, ct);
+
         // ToDto десериализует DataJson — это не транслируется в SQL, поэтому маппим в память
         // уже после загрузки (список медикаментов аптечки — не тот объём, где это критично).
-        var items = entities.Select(ToDto).ToList();
+        var items = entities.Select(m => ToDto(m, pendingNames.Contains(MedicationNameNormalizer.Normalize(m.Name)))).ToList();
 
         logger.LogDebug("Загружено {Count} медикаментов аптечки {MedkitId}", items.Count, medkitId);
         return (MedicationAccessResult.Success, items);
+    }
+
+    private async Task<HashSet<string>> GetPendingEnrichmentNamesAsync(List<Medication> entities, CancellationToken ct)
+    {
+        var normalizedNames = entities
+            .Select(m => MedicationNameNormalizer.Normalize(m.Name))
+            .Where(n => n.Length > 0)
+            .Distinct()
+            .ToList();
+        if (normalizedNames.Count == 0) return [];
+
+        var pending = await db.MedicationEnrichmentJobs.AsNoTracking()
+            .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+                && normalizedNames.Contains(j.NormalizedName))
+            .Select(j => j.NormalizedName)
+            .ToListAsync(ct);
+
+        return pending.ToHashSet(StringComparer.Ordinal);
     }
 
     public async Task<(MedicationAccessResult Result, MedicationDto? Item)> CreateAsync(
@@ -147,8 +172,8 @@ public class MedicationService(
         return MedicationAccessResult.Success;
     }
 
-    private static MedicationDto ToDto(Medication m) =>
-        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.ExpiryDate, DeserializeData(m.DataJson), m.CreatedByUserId, m.CreatedAt);
+    private static MedicationDto ToDto(Medication m, bool enrichmentPending = false) =>
+        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.ExpiryDate, DeserializeData(m.DataJson), m.CreatedByUserId, m.CreatedAt, enrichmentPending);
 
     private static string? SerializeData(Dictionary<string, string>? data) =>
         data is null || data.Count == 0 ? null : JsonSerializer.Serialize(data);

@@ -15,8 +15,16 @@ public class Notification
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
 
-    public Guid FamilyId { get; set; }
-    public Family Family { get; set; } = null!;
+    /// <summary>null — оповещение о персональном ресурсе без семейного контекста (мед-запись:
+    /// см. MedicalDocumentExtracted(Failed)NotificationConsumer). Раньше это поле хранило
+    /// Guid.Empty вместо null — FamilyId — required NOT NULL FK на Families (см. миграцию
+    /// AddNotifications), а строки с Guid.Empty не существует ни в одной реальной семье, поэтому
+    /// каждая такая вставка на Postgres реально бросала FK violation, которую AddIfNewAsync
+    /// (нужный для дедупа по DedupKey) неотличимо от гонки дедупа ловил как DbUpdateException и
+    /// тихо проглатывал — оповещение никогда не создавалось. NULL в FK-колонке Postgres не
+    /// проверяется constraint'ом вовсе (MATCH SIMPLE) — правильный способ выразить "нет семьи".</summary>
+    public Guid? FamilyId { get; set; }
+    public Family? Family { get; set; }
 
     public NotificationType Type { get; set; }
 
@@ -26,6 +34,10 @@ public class Notification
 
     /// <summary>Id лекарства/дня рождения, по которому сформировано оповещение.</summary>
     public Guid RelatedEntityId { get; set; }
+
+    /// <summary>Что представляет собой RelatedEntityId (для клик-через на фронте) — null у типов
+    /// оповещений без устоявшегося целевого экрана в рамках этой задачи, см. NotificationRelatedKind.</summary>
+    public NotificationRelatedKind? RelatedEntityKind { get; set; }
 
     /// <summary>
     /// Ключ идемпотентности повторных прогонов джобы (UNIQUE), например

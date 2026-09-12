@@ -82,6 +82,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = guardResult.Reason;
                 job.FailureReason = EnrichmentFailureReason.Legitimacy;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 logger.LogWarning(
                     "MedicationEnrichmentJob {JobId} остановлена проверкой легитимности: {Reason}", job.Id, guardResult.Reason);
@@ -158,6 +159,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = "Нет сниппетов от доверенных источников — суммаризировать нечего.";
                 job.FailureReason = EnrichmentFailureReason.NoTrustedSnippets;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 return;
             }
@@ -169,6 +171,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = summarized.Error;
                 job.FailureReason = summarized.Reason;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 return;
             }
@@ -188,6 +191,7 @@ public class MedicationEnrichmentProcessor(
                 job.Error = writeResult.RejectionReason;
                 job.FailureReason = EnrichmentFailureReason.IsolationViolation;
                 job.CompletedAt = DateTime.UtcNow;
+                await PublishFailureAsync(job, ct);
                 await db.SaveChangesAsync(ct);
                 return;
             }
@@ -199,8 +203,9 @@ public class MedicationEnrichmentProcessor(
             // (корректно — тот же AppDbContext), но delivery-service шины "будится" сразу после
             // SaveChangesAsync, ДО commit — строку он ещё не увидит и подхватит только на
             // следующем тике Messaging:Outbox:QueryDelay. Не ошибка, просто небольшая задержка.
+            var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
             await publisher.PublishAsync(new MedicationEnrichedEvent(
-                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId), ct);
+                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
@@ -218,11 +223,40 @@ public class MedicationEnrichmentProcessor(
                 job.FailureReason = ex is LmStudioUnavailableException
                     ? EnrichmentFailureReason.LmStudioUnavailable
                     : EnrichmentFailureReason.Unknown;
+                await PublishFailureAsync(job, ct);
             }
             await db.SaveChangesAsync(ct);
             logger.LogError(ex, "MedicationEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;
         }
+    }
+
+    /// <summary>Уведомляем только о настоящем терминальном отказе — техническую недоступность LM
+    /// Studio LmStudioRecoverySweepJob резюмирует молча в течение 7 дней (см. IsTransientFailure),
+    /// сообщать "не удалось" в этот момент было бы дезинформацией. Вызывается из пяти мест, где
+    /// job окончательно уходит в Failed (четыре штатных исхода внутри try — гейт легитимности,
+    /// нет доверенных сниппетов, суммаризатор отказал, изоляция справочника — плюс сам catch на
+    /// последней попытке); все нужные поля (RequestedByUserId/FamilyId/SourceDisplayName) уже на
+    /// самой job, отдельный запрос не нужен (в отличие от MedicalDocumentExtractionProcessor, где
+    /// OwnerUserId лежит на записи, не на job) — кроме MedkitId для клик-через ниже, которого на
+    /// job нет вовсе (только справочный MedicationId).</summary>
+    private async Task PublishFailureAsync(MedicationEnrichmentJob job, CancellationToken ct)
+    {
+        if (job.IsTransientFailure) return;
+        var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
+        await publisher.PublishAsync(
+            new MedicationEnrichmentFailedEvent(job.Id, job.SourceDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);
+    }
+
+    /// <summary>MedicationId на job — справочный, не FK (см. класс-doc MedicationEnrichmentJob):
+    /// медикамент мог быть удалён между сохранением и завершением задачи — тогда null, уведомление
+    /// уйдёт без клик-через (RelatedEntityKind не проставится, см. consumer'ы).</summary>
+    private async Task<Guid?> ResolveMedkitIdAsync(Guid? medicationId, CancellationToken ct)
+    {
+        if (medicationId is null) return null;
+        var medkitId = await db.Set<Medication>().AsNoTracking()
+            .Where(m => m.Id == medicationId.Value).Select(m => (Guid?)m.MedkitId).FirstOrDefaultAsync(ct);
+        return medkitId;
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, Navig
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
 import { NotificationStateService } from './services/notification-state.service';
+import { BackgroundJobsStateService } from './services/background-jobs-state.service';
 import { PageActionService } from './services/page-action.service';
 import { BreakpointService } from './services/breakpoint.service';
 import { AuthService } from './services/auth.service';
@@ -19,6 +20,7 @@ import { BottomSheetComponent } from './shared/bottom-sheet/bottom-sheet.compone
 import { AvatarComponent } from './shared/avatar/avatar.component';
 import { AppSearchComponent } from './components/app-search/app-search.component';
 import { SearchFieldComponent } from './shared/search-field/search-field.component';
+import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdown/background-jobs-dropdown.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения. */
@@ -51,6 +53,7 @@ interface SidebarItem {
     AvatarComponent,
     AppSearchComponent,
     SearchFieldComponent,
+    BackgroundJobsDropdownComponent,
   ],
   templateUrl: './app.component.html',
 })
@@ -58,6 +61,7 @@ export class AppComponent implements OnInit {
   readonly state = inject(FamilyStateService);
   readonly auth = inject(AuthService);
   readonly notifications = inject(NotificationStateService);
+  readonly backgroundJobs = inject(BackgroundJobsStateService);
   readonly pageAction = inject(PageActionService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly tg = inject(TelegramService);
@@ -187,6 +191,7 @@ export class AppComponent implements OnInit {
       if (this.auth.mode === 'pwa' && this.auth.me() !== null) {
         this.state.refresh();
         void this.notifications.refresh();
+        void this.backgroundJobs.refresh();
         void this.tryRedeemPendingInvite();
       }
     }, { allowSignalWrites: true });
@@ -203,6 +208,7 @@ export class AppComponent implements OnInit {
       if (this.auth.mode === 'telegram' && this.auth.telegramBound() === true) {
         this.state.refresh();
         void this.notifications.refresh();
+        void this.backgroundJobs.refresh();
         void this.auth.loadMe();
         void this.tryRedeemPendingInvite();
       }
@@ -267,6 +273,7 @@ export class AppComponent implements OnInit {
       void this.auth.loadMe();
       this.state.refresh();
       void this.notifications.refresh();
+      void this.backgroundJobs.refresh();
       return;
     }
 
@@ -293,7 +300,10 @@ export class AppComponent implements OnInit {
         // Редизайн v2 — бейдж уведомлений: обновляем счётчик на каждой навигации (дёшево, один
         // COUNT-запрос), пока показан таб-бар/сайдбар — покрывает и "прочитано на другом
         // устройстве", не только markNotificationRead в этой же вкладке.
-        if (this.showTabs()) void this.notifications.refresh();
+        if (this.showTabs()) {
+          void this.notifications.refresh();
+          void this.backgroundJobs.refresh();
+        }
         this.log.log('nav', 'info', `✓ ${e.urlAfterRedirects}`);
       } else if (e instanceof NavigationError) {
         this.log.log('nav', 'error', `✗ ${e.url}: ${String(e.error)}`);
