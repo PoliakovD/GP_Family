@@ -27,6 +27,10 @@ public class Notification
     /// <summary>Id лекарства/дня рождения, по которому сформировано оповещение.</summary>
     public Guid RelatedEntityId { get; set; }
 
+    /// <summary>Что представляет собой RelatedEntityId (для клик-через на фронте) — null у типов
+    /// оповещений без устоявшегося целевого экрана в рамках этой задачи, см. NotificationRelatedKind.</summary>
+    public NotificationRelatedKind? RelatedEntityKind { get; set; }
+
     /// <summary>
     /// Ключ идемпотентности повторных прогонов джобы (UNIQUE), например
     /// "med-exp:{medId}:{userId}" или "bday:{subjectKind}:{subjectId}:{familyId}:{userId}:{year}"

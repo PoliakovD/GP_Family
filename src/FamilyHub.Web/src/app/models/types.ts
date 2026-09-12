@@ -422,12 +422,22 @@ export interface NotificationPreference {
     telegramEnabled: boolean;
 }
 
+/** См. FamilyHub.Domain.Enums.NotificationRelatedKind — null у типов оповещений без устоявшегося
+ * целевого экрана в рамках задачи (карточка остаётся некликабельной, см. openRelated). */
+export const NotificationRelatedKind = {
+    MedicalRecordAnalysis: 0,
+    MedicalRecordVisit: 1,
+    Medkit: 2,
+} as const;
+export type NotificationRelatedKind = typeof NotificationRelatedKind[keyof typeof NotificationRelatedKind];
+
 export interface AppNotification {
     id: string;
     type: number; // NotificationType
     title: string;
     body: string;
     relatedEntityId: string;
+    relatedEntityKind: NotificationRelatedKind | null;
     createdAt: string;
     isRead: boolean;
     readAt: string | null;

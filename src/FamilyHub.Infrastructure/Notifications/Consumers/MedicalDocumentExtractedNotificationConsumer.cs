@@ -33,6 +33,7 @@ public class MedicalDocumentExtractedNotificationConsumer(NotificationSendingSer
             body,
             relatedEntityId: e.RecordId,
             dedupKeyFor: _ => $"document-extracted:{e.JobId}",
-            ct: context.CancellationToken);
+            ct: context.CancellationToken,
+            relatedEntityKind: e.IsDoctorVisit ? NotificationRelatedKind.MedicalRecordVisit : NotificationRelatedKind.MedicalRecordAnalysis);
     }
 }

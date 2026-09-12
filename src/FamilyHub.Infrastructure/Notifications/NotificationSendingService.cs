@@ -26,12 +26,13 @@ public class NotificationSendingService(
     public async Task NotifyAsync(
         IReadOnlyCollection<Guid> userIds, Guid familyId, NotificationType type,
         string title, string body, Guid relatedEntityId, Func<Guid, string> dedupKeyFor,
-        CancellationToken ct = default)
+        CancellationToken ct = default, NotificationRelatedKind? relatedEntityKind = null)
     {
         var sentAny = false;
         foreach (var userId in userIds)
         {
-            var notification = await AddIfNewAsync(userId, familyId, type, title, body, relatedEntityId, dedupKeyFor(userId), ct);
+            var notification = await AddIfNewAsync(
+                userId, familyId, type, title, body, relatedEntityId, dedupKeyFor(userId), ct, relatedEntityKind);
             if (notification is null) continue;
 
             await TrySendAsync(notification, ct);
@@ -45,7 +46,8 @@ public class NotificationSendingService(
     /// <summary>Вставка с защитой от дублей: гонка по UNIQUE DedupKey не считается ошибкой.</summary>
     public async Task<Notification?> AddIfNewAsync(
         Guid userId, Guid familyId, NotificationType type, string title, string body,
-        Guid relatedEntityId, string dedupKey, CancellationToken ct = default)
+        Guid relatedEntityId, string dedupKey, CancellationToken ct = default,
+        NotificationRelatedKind? relatedEntityKind = null)
     {
         if (await db.Notifications.AnyAsync(n => n.DedupKey == dedupKey, ct)) return null;
 
@@ -58,6 +60,7 @@ public class NotificationSendingService(
             Title = title,
             Body = body,
             RelatedEntityId = relatedEntityId,
+            RelatedEntityKind = relatedEntityKind,
             DedupKey = dedupKey,
             CreatedAt = DateTime.UtcNow,
         };

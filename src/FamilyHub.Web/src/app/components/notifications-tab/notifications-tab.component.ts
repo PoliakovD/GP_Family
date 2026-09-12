@@ -1,8 +1,9 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { NotificationStateService } from '../../services/notification-state.service';
-import { type AppNotification } from '../../models/types';
+import { type AppNotification, NotificationRelatedKind } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { notificationTypeIcon, notificationTypeLabel } from '../../shared/util/notification-type-labels';
 
@@ -20,6 +21,7 @@ const MONTHS_GEN = [
 export class NotificationsTabComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly notificationState = inject(NotificationStateService);
+  private readonly router = inject(Router);
 
   items: AppNotification[] = [];
   unreadOnly = false;
@@ -73,6 +75,31 @@ export class NotificationsTabComponent implements OnInit {
 
   typeIcon(type: number): string {
     return notificationTypeIcon(type);
+  }
+
+  /** RelatedEntityKind===null — тип оповещения без устоявшегося целевого экрана (напр.
+   * BirthdayUpcoming/MedicationExpiring) — карточка не кликабельна, см. NotificationRelatedKind. */
+  isClickable(n: AppNotification): boolean {
+    return n.relatedEntityKind !== null;
+  }
+
+  /** Клик по карточке — сначала отмечаем прочитанным (как и явная кнопка), затем ведём на
+   * связанный экран. Не блокируем навигацию ошибкой отметки — сама навигация важнее. */
+  async openRelated(n: AppNotification): Promise<void> {
+    if (n.relatedEntityKind === null) return;
+    if (!n.isRead) await this.handleMarkRead(n.id);
+
+    switch (n.relatedEntityKind) {
+      case NotificationRelatedKind.MedicalRecordAnalysis:
+        void this.router.navigate(['/health/records', n.relatedEntityId]);
+        break;
+      case NotificationRelatedKind.MedicalRecordVisit:
+        void this.router.navigate(['/health/visits', n.relatedEntityId]);
+        break;
+      case NotificationRelatedKind.Medkit:
+        void this.router.navigate(['/health/medications', n.relatedEntityId]);
+        break;
+    }
   }
 
   /** "Сегодня" / "Вчера" / "18 июля" — кикер группы даты (см. дизайн-дэк). */

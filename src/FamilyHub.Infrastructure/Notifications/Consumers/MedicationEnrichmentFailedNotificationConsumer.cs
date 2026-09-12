@@ -22,8 +22,11 @@ public class MedicationEnrichmentFailedNotificationConsumer(NotificationSendingS
             NotificationType.MedicationEnrichmentFailed,
             $"Не удалось найти информацию о препарате «{e.DisplayName}»",
             "Мы поискали в открытых источниках, но не нашли описание этого препарата.",
-            relatedEntityId: Guid.Empty,
+            // MedkitId — null, если медикамент уже удалён к моменту отказа (справочно, не FK —
+            // см. MedicationEnrichmentJob.MedicationId); тогда карточка остаётся некликабельной.
+            relatedEntityId: e.MedkitId ?? Guid.Empty,
             dedupKeyFor: _ => $"medication-enrichment-failed:{e.JobId}",
-            ct: context.CancellationToken);
+            ct: context.CancellationToken,
+            relatedEntityKind: e.MedkitId is not null ? NotificationRelatedKind.Medkit : null);
     }
 }

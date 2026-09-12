@@ -203,8 +203,9 @@ public class MedicationEnrichmentProcessor(
             // (корректно — тот же AppDbContext), но delivery-service шины "будится" сразу после
             // SaveChangesAsync, ДО commit — строку он ещё не увидит и подхватит только на
             // следующем тике Messaging:Outbox:QueryDelay. Не ошибка, просто небольшая задержка.
+            var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
             await publisher.PublishAsync(new MedicationEnrichedEvent(
-                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId), ct);
+                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
@@ -237,12 +238,25 @@ public class MedicationEnrichmentProcessor(
     /// нет доверенных сниппетов, суммаризатор отказал, изоляция справочника — плюс сам catch на
     /// последней попытке); все нужные поля (RequestedByUserId/FamilyId/SourceDisplayName) уже на
     /// самой job, отдельный запрос не нужен (в отличие от MedicalDocumentExtractionProcessor, где
-    /// OwnerUserId лежит на записи, не на job).</summary>
+    /// OwnerUserId лежит на записи, не на job) — кроме MedkitId для клик-через ниже, которого на
+    /// job нет вовсе (только справочный MedicationId).</summary>
     private async Task PublishFailureAsync(MedicationEnrichmentJob job, CancellationToken ct)
     {
         if (job.IsTransientFailure) return;
+        var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
         await publisher.PublishAsync(
-            new MedicationEnrichmentFailedEvent(job.Id, job.SourceDisplayName, job.RequestedByUserId, job.FamilyId), ct);
+            new MedicationEnrichmentFailedEvent(job.Id, job.SourceDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);
+    }
+
+    /// <summary>MedicationId на job — справочный, не FK (см. класс-doc MedicationEnrichmentJob):
+    /// медикамент мог быть удалён между сохранением и завершением задачи — тогда null, уведомление
+    /// уйдёт без клик-через (RelatedEntityKind не проставится, см. consumer'ы).</summary>
+    private async Task<Guid?> ResolveMedkitIdAsync(Guid? medicationId, CancellationToken ct)
+    {
+        if (medicationId is null) return null;
+        var medkitId = await db.Set<Medication>().AsNoTracking()
+            .Where(m => m.Id == medicationId.Value).Select(m => (Guid?)m.MedkitId).FirstOrDefaultAsync(ct);
+        return medkitId;
     }
 
     /// <summary>

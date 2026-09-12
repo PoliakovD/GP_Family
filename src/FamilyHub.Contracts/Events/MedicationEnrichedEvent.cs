@@ -7,10 +7,13 @@ namespace FamilyHub.Contracts.Events;
 /// сохранение медикамента которым запустило обогащение (только его — дедуп задач по
 /// NormalizedName означает, что при параллельном сохранении того же препарата в другой семье
 /// новая задача не создаётся вовсе, см. EnrichmentRequestService).
+/// MedkitId — см. MedicationEnrichmentFailedEvent, тот же смысл (клик-через на аптечку, не на
+/// сам справочник — KbId остаётся в событии отдельно, справочник глобален и не привязан к семье).
 /// </summary>
 public record MedicationEnrichedEvent(
     Guid JobId,
     Guid KbId,
     string DisplayName,
     Guid RequestedByUserId,
-    Guid FamilyId);
+    Guid FamilyId,
+    Guid? MedkitId);

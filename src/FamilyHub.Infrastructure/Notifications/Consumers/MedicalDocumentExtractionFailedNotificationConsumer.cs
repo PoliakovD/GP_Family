@@ -24,6 +24,7 @@ public class MedicalDocumentExtractionFailedNotificationConsumer(NotificationSen
             $"{e.Reason} Откройте запись и попробуйте распознать ещё раз.",
             relatedEntityId: e.RecordId,
             dedupKeyFor: _ => $"document-extraction-failed:{e.JobId}",
-            ct: context.CancellationToken);
+            ct: context.CancellationToken,
+            relatedEntityKind: e.IsDoctorVisit ? NotificationRelatedKind.MedicalRecordVisit : NotificationRelatedKind.MedicalRecordAnalysis);
     }
 }

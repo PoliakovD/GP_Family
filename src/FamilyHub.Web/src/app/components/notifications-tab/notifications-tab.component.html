@@ -25,7 +25,11 @@
     @for (group of groupedByDate; track $index) {
       <div class="card-kicker mb-2">{{ group.kicker }}</div>
       @for (n of group.items; track n.id) {
-        <div class="card mb-2">
+        <div
+          class="card mb-2"
+          [class.card-clickable]="isClickable(n)"
+          (click)="isClickable(n) && openRelated(n)"
+        >
           <div class="d-flex align-items-start gap-2">
             <i [class]="typeIcon(n.type)" style="font-size:1.1765rem;color:var(--color-accent)" aria-hidden="true"></i>
             <div class="flex-fill">
@@ -38,7 +42,7 @@
               <p class="muted mb-1">{{ typeLabel(n.type) }}</p>
               <p class="mb-2">{{ n.body }}</p>
               @if (!n.isRead) {
-                <button class="btn btn-ghost btn-sm" (click)="handleMarkRead(n.id)">
+                <button class="btn btn-ghost btn-sm" (click)="$event.stopPropagation(); handleMarkRead(n.id)">
                   Отметить прочитанным
                 </button>
               }
