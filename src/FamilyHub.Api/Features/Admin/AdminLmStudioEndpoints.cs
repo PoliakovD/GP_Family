@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -87,6 +88,45 @@ public static class AdminLmStudioEndpoints
             modelProvider.Invalidate();
             return Results.NoContent();
         });
+
+        // Уровень "размышлений" (см. LmStudioReasoning) — тот же приём "БД + фолбэк на
+        // appsettings/env", что и модель выше, только тут ещё и позволяет сравнивать скорость на
+        // лету, без передеплоя (см. план "живой поток мыслей").
+        group.MapGet("/reasoning", async (AppDbContext db, IOptions<LmStudioOptions> options, CancellationToken ct) =>
+        {
+            var configured = await db.LmStudioReasoningConfigs.AsNoTracking()
+                .Select(c => (LmStudioReasoning?)c.Reasoning)
+                .FirstOrDefaultAsync(ct);
+            return Results.Ok(new LmStudioReasoningResponse(configured, options.Value.Reasoning));
+        });
+
+        group.MapPut("/reasoning", async (
+            SetLmStudioReasoningRequest request, AppDbContext db, ILmStudioModelProvider modelProvider, CancellationToken ct) =>
+        {
+            var row = await db.LmStudioReasoningConfigs.FirstOrDefaultAsync(ct);
+
+            if (request.Reasoning is null)
+            {
+                // Откат на фолбэк из appsettings/env — тот же приём, что пустой ModelId выше.
+                if (row is not null) db.LmStudioReasoningConfigs.Remove(row);
+            }
+            else if (row is null)
+            {
+                db.LmStudioReasoningConfigs.Add(new LmStudioReasoningConfig
+                {
+                    Id = Guid.NewGuid(), Reasoning = request.Reasoning.Value, UpdatedAt = DateTime.UtcNow,
+                });
+            }
+            else
+            {
+                row.Reasoning = request.Reasoning.Value;
+                row.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await db.SaveChangesAsync(ct);
+            modelProvider.InvalidateReasoning();
+            return Results.NoContent();
+        });
     }
 
     private record LmStudioModelResponse(string? ActiveModel, string FallbackModel);
@@ -94,6 +134,10 @@ public static class AdminLmStudioEndpoints
     private record LmStudioAvailableModelsResponse(List<string> Models, bool LmStudioReachable);
 
     private record SetLmStudioModelRequest(string? ModelId);
+
+    private record LmStudioReasoningResponse(LmStudioReasoning? ActiveReasoning, LmStudioReasoning FallbackReasoning);
+
+    private record SetLmStudioReasoningRequest(LmStudioReasoning? Reasoning);
 
     // --- DTO ответа LM Studio GET /v1/models (OpenAI-совместимый, только нужное поле) ---
 

@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using FamilyHub.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -74,7 +75,8 @@ public class LmStudioJsonClient(
         IReadOnlyList<(byte[] Bytes, string ContentType)> images,
         CancellationToken ct = default)
     {
-        var systemPromptWithReasoning = $"{systemPrompt}\n\n{ReasoningDirectives[options.Value.Reasoning]}";
+        var reasoning = await modelProvider.GetActiveReasoningAsync(options.Value.Reasoning, ct);
+        var systemPromptWithReasoning = $"{systemPrompt}\n\n{ReasoningDirectives[reasoning]}";
 
         var (rawContent, sendError, isTransient) = await SendChatCompletionAsync(systemPromptWithReasoning, userText, images, ct);
         if (sendError is not null) return LmStudioJsonResult.Failure(sendError, isTransient);

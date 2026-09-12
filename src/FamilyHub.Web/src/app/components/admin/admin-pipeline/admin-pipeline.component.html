@@ -285,4 +285,44 @@
       }
     </div>
   </div>
+
+  <div class="card mt-2">
+    <div class="card-title">Уровень рассуждений LM Studio</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Насколько подробно модель "думает" перед ответом (директива в системном промпте — ни один
+        API-параметр LM Studio не даёт предсказуемого контроля глубины, см. LmStudioReasoning).
+        Выше уровень — обычно медленнее ответ, но не всегда: зависит от конкретной модели/квантизации.
+        Смена применяется сразу, без передеплоя.
+      </p>
+
+      @if (lmStudioReasoningLoading()) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <p class="mb-2">
+          Сейчас активен:
+          <strong>{{ reasoningLabel(lmStudioReasoningActive() ?? lmStudioReasoningFallback()!) }}</strong>
+          @if (lmStudioReasoningActive() === null) {
+            <span class="tag tag-neutral">по умолчанию (appsettings)</span>
+          }
+        </p>
+
+        <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+          <select class="input" [ngModel]="lmStudioReasoningSelected()" (ngModelChange)="lmStudioReasoningSelected.set($event)">
+            @for (o of reasoningOptions; track o.value) {
+              <option [ngValue]="o.value">{{ o.label }}</option>
+            }
+          </select>
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="lmStudioReasoningBusy()"
+                  (click)="saveLmStudioReasoning()">
+            Сохранить
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="lmStudioReasoningBusy() || lmStudioReasoningActive() === null"
+                  (click)="resetLmStudioReasoning()">
+            Сбросить на по умолчанию
+          </button>
+        </div>
+      }
+    </div>
+  </div>
 }
