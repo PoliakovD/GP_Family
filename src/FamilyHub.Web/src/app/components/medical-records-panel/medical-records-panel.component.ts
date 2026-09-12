@@ -762,6 +762,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     try {
       await this.api.deleteMedicalRecord(record.id);
       if (this.accessRecord?.id === record.id) this.accessRecord = null;
+      if (this.recordId() === record.id) {
+        // Одиночный режим (открытая запись) — перечитывать здесь нечего, запись только что
+        // удалена: refresh() позвал бы getMedicalRecord(recordId) и получил бы 404, оставляя
+        // пользователя на пустом/устаревшем экране записи без какой-либо навигации (баг).
+        this.goToList();
+        return;
+      }
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';
