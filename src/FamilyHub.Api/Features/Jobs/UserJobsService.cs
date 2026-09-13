@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,10 +12,12 @@ namespace FamilyHub.Api.Features.Jobs;
 /// в выпадающем списке остаётся просто текстом, без навигации. LiveText — живой обрывок "мысли"
 /// модели (план "живой поток мыслей"), non-null максимум у ОДНОЙ строки за раз во всей системе —
 /// LmStudioConcurrencyGate сериализует все вызовы LM Studio, значит "думает" всегда только одна
-/// задача из всех четырёх таблиц одновременно, остальные Pending просто ждут очередь.</summary>
+/// задача из всех четырёх таблиц одновременно, остальные Pending просто ждут очередь. QueueAhead
+/// — сколько задач из ЛЮБОГО из четырёх конвейеров реально стоят раньше этой в общей очереди к
+/// LLM (см. LlmQueuePositionService) — 0 у той самой строки, что реально держит гейт прямо сейчас.</summary>
 public record ActiveJobItem(
     Guid JobId, string Label, Guid? RecordId, NotificationRelatedKind? RecordKind, DateTime CreatedAt,
-    string? LiveText = null);
+    string? LiveText = null, int QueueAhead = 0);
 
 /// <summary>Total — реальный COUNT (для бейджа), Items — top-N старейших (для выпадающего списка,
 /// не грузим сотни строк ради индикатора).</summary>
@@ -30,21 +33,25 @@ public record ActiveJobsSummaryResponse(
 /// что HomeSummaryService — RequestedByUserId есть на всех четырёх таблицах задач Medical, но
 /// сама Medical не должна знать об этом пользовательском агрегате.
 /// </summary>
-public class UserJobsService(AppDbContext db)
+public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePositionService)
 {
     /// <summary>Top-N в выпадающем списке — Total (COUNT) отдельно показывает, что реально задач больше.</summary>
     private const int MaxItemsPerGroup = 5;
 
     public async Task<ActiveJobsSummaryResponse> BuildAsync(Guid userId, CancellationToken ct = default)
     {
-        var extraction = await BuildExtractionGroupAsync(userId, ct);
-        var labAnalyte = await BuildLabAnalyteGroupAsync(userId, ct);
-        var medication = await BuildMedicationGroupAsync(userId, ct);
-        var visitMedication = await BuildVisitMedicationGroupAsync(userId, ct);
+        // Один поход в БД на все четыре группы разом (см. class doc LlmQueuePositionService) — не
+        // по отдельному запросу на каждую, дропдаун и так уже строит четыре группы за один вызов.
+        var activeTimestamps = await queuePositionService.GetActiveJobTimestampsAsync(ct);
+
+        var extraction = await BuildExtractionGroupAsync(userId, activeTimestamps, ct);
+        var labAnalyte = await BuildLabAnalyteGroupAsync(userId, activeTimestamps, ct);
+        var medication = await BuildMedicationGroupAsync(userId, activeTimestamps, ct);
+        var visitMedication = await BuildVisitMedicationGroupAsync(userId, activeTimestamps, ct);
         return new ActiveJobsSummaryResponse(extraction, labAnalyte, medication, visitMedication);
     }
 
-    private async Task<ActiveJobsGroup> BuildExtractionGroupAsync(Guid userId, CancellationToken ct)
+    private async Task<ActiveJobsGroup> BuildExtractionGroupAsync(Guid userId, List<DateTime> activeTimestamps, CancellationToken ct)
     {
         var query = db.MedicalDocumentExtractionJobs.AsNoTracking()
             .Where(j => j.RequestedByUserId == userId
@@ -64,19 +71,20 @@ public class UserJobsService(AppDbContext db)
 
         var items = rows.Select(r =>
         {
+            var queueAhead = LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt);
             if (!records.TryGetValue(r.MedicalRecordId, out var mr))
-                return new ActiveJobItem(r.Id, "Медицинская запись", null, null, r.CreatedAt, r.CurrentThought);
+                return new ActiveJobItem(r.Id, "Медицинская запись", null, null, r.CreatedAt, r.CurrentThought, queueAhead);
 
             var isVisit = mr.Kind == MedicalRecordKind.DoctorVisit;
             var label = mr.Title ?? (isVisit ? "Приём врача" : "Анализ");
             var kind = isVisit ? NotificationRelatedKind.MedicalRecordVisit : NotificationRelatedKind.MedicalRecordAnalysis;
-            return new ActiveJobItem(r.Id, label, mr.Id, kind, r.CreatedAt, r.CurrentThought);
+            return new ActiveJobItem(r.Id, label, mr.Id, kind, r.CreatedAt, r.CurrentThought, queueAhead);
         }).ToList();
 
         return new ActiveJobsGroup(total, items);
     }
 
-    private async Task<ActiveJobsGroup> BuildLabAnalyteGroupAsync(Guid userId, CancellationToken ct)
+    private async Task<ActiveJobsGroup> BuildLabAnalyteGroupAsync(Guid userId, List<DateTime> activeTimestamps, CancellationToken ct)
     {
         var query = db.LabAnalyteEnrichmentJobs.AsNoTracking()
             .Where(j => j.RequestedByUserId == userId
@@ -108,13 +116,13 @@ public class UserJobsService(AppDbContext db)
             // (Kind=DoctorVisit) хранят PrescribedMedications, не LabIndicators.
             return new ActiveJobItem(
                 r.Id, r.SourceDisplayName, recordId, recordId is null ? null : NotificationRelatedKind.MedicalRecordAnalysis,
-                r.CreatedAt, r.CurrentThought);
+                r.CreatedAt, r.CurrentThought, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
         }).ToList();
 
         return new ActiveJobsGroup(total, items);
     }
 
-    private async Task<ActiveJobsGroup> BuildMedicationGroupAsync(Guid userId, CancellationToken ct)
+    private async Task<ActiveJobsGroup> BuildMedicationGroupAsync(Guid userId, List<DateTime> activeTimestamps, CancellationToken ct)
     {
         var query = db.MedicationEnrichmentJobs.AsNoTracking()
             .Where(j => j.RequestedByUserId == userId
@@ -143,13 +151,13 @@ public class UserJobsService(AppDbContext db)
                 ? mk : null;
             return new ActiveJobItem(
                 r.Id, r.SourceDisplayName, medkitId, medkitId is null ? null : NotificationRelatedKind.Medkit,
-                r.CreatedAt, r.CurrentThought);
+                r.CreatedAt, r.CurrentThought, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
         }).ToList();
 
         return new ActiveJobsGroup(total, items);
     }
 
-    private async Task<ActiveJobsGroup> BuildVisitMedicationGroupAsync(Guid userId, CancellationToken ct)
+    private async Task<ActiveJobsGroup> BuildVisitMedicationGroupAsync(Guid userId, List<DateTime> activeTimestamps, CancellationToken ct)
     {
         var query = db.VisitMedicationEnrichmentJobs.AsNoTracking()
             .Where(j => j.RequestedByUserId == userId
@@ -175,7 +183,7 @@ public class UserJobsService(AppDbContext db)
                 ? r.MedicalRecordId : null;
             return new ActiveJobItem(
                 r.Id, r.SourceDisplayName, recordId, recordId is null ? null : NotificationRelatedKind.MedicalRecordVisit,
-                r.CreatedAt, r.CurrentThought);
+                r.CreatedAt, r.CurrentThought, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
         }).ToList();
 
         return new ActiveJobsGroup(total, items);

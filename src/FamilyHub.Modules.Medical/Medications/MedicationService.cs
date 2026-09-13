@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Enrichment;
@@ -17,7 +18,8 @@ namespace FamilyHub.Modules.Medical.Medications;
 /// доступа к его семье.
 /// </summary>
 public class MedicationService(
-    AppDbContext db, IFamilyAccessService access, IEnrichmentRequestService enrichment, ILogger<MedicationService> logger)
+    AppDbContext db, IFamilyAccessService access, IEnrichmentRequestService enrichment,
+    LlmQueuePositionService queuePositionService, ILogger<MedicationService> logger)
 {
     public async Task<(MedicationAccessResult Result, List<MedicationDto> Items)> GetForMedkitAsync(
         Guid medkitId, Guid userId, CancellationToken ct = default)
@@ -46,23 +48,31 @@ public class MedicationService(
         // как у показателей) — MedicationEnrichmentJob.NormalizedName не знает суффиксного
         // разведения коллизий (то — только у LabIndicator/LabAnalyteEnrichmentJob).
         var pendingByName = await GetPendingEnrichmentNamesAsync(entities, ct);
+        // Один поход в БД на всю аптечку (см. class doc LlmQueuePositionService) — не на каждый
+        // промахнувшийся медикамент отдельно; лишний запрос вообще не делаем, если промахов нет.
+        var activeTimestamps = pendingByName.Count > 0
+            ? await queuePositionService.GetActiveJobTimestampsAsync(ct)
+            : [];
 
         // ToDto десериализует DataJson — это не транслируется в SQL, поэтому маппим в память
         // уже после загрузки (список медикаментов аптечки — не тот объём, где это критично).
         var items = entities.Select(m =>
         {
-            var hasMatch = pendingByName.TryGetValue(MedicationNameNormalizer.Normalize(m.Name), out var liveText);
-            return ToDto(m, hasMatch, liveText);
+            var hasMatch = pendingByName.TryGetValue(MedicationNameNormalizer.Normalize(m.Name), out var match);
+            var queueAhead = hasMatch ? LlmQueuePositionService.CountAhead(activeTimestamps, match.CreatedAt) : 0;
+            return ToDto(m, hasMatch, match.CurrentThought, queueAhead);
         }).ToList();
 
         logger.LogDebug("Загружено {Count} медикаментов аптечки {MedkitId}", items.Count, medkitId);
         return (MedicationAccessResult.Success, items);
     }
 
-    /// <summary>NormalizedName → живой обрывок "мысли" модели (может быть null даже для реально
-    /// Pending-задачи — план "живой поток мыслей" пишет его только пока сама эта задача держит
-    /// глобальный гейт LM Studio, см. class doc ActiveJobItem).</summary>
-    private async Task<Dictionary<string, string?>> GetPendingEnrichmentNamesAsync(List<Medication> entities, CancellationToken ct)
+    /// <summary>NormalizedName → (живой обрывок "мысли" модели, время создания задачи).
+    /// CurrentThought может быть null даже для реально Pending-задачи — план "живой поток мыслей"
+    /// пишет его только пока сама эта задача держит глобальный гейт LM Studio, см. class doc
+    /// ActiveJobItem. CreatedAt — для позиции в ОБЩЕЙ очереди к LLM (см. LlmQueuePositionService).</summary>
+    private async Task<Dictionary<string, (string? CurrentThought, DateTime CreatedAt)>> GetPendingEnrichmentNamesAsync(
+        List<Medication> entities, CancellationToken ct)
     {
         var normalizedNames = entities
             .Select(m => MedicationNameNormalizer.Normalize(m.Name))
@@ -74,14 +84,14 @@ public class MedicationService(
         var pending = await db.MedicationEnrichmentJobs.AsNoTracking()
             .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
                 && normalizedNames.Contains(j.NormalizedName))
-            .Select(j => new { j.NormalizedName, j.CurrentThought })
+            .Select(j => new { j.NormalizedName, j.CurrentThought, j.CreatedAt })
             .ToListAsync(ct);
 
         // DistinctBy на всякий случай — частичный уникальный индекс дедупит Pending/Running по
         // NormalizedName, дублей не бывает, но словарь не должен упасть, если это когда-нибудь
         // перестанет быть верно.
         return pending.GroupBy(p => p.NormalizedName, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First().CurrentThought, StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => (g.First().CurrentThought, g.First().CreatedAt), StringComparer.Ordinal);
     }
 
     public async Task<(MedicationAccessResult Result, MedicationDto? Item)> CreateAsync(
@@ -183,9 +193,10 @@ public class MedicationService(
         return MedicationAccessResult.Success;
     }
 
-    private static MedicationDto ToDto(Medication m, bool enrichmentPending = false, string? enrichmentLiveText = null) =>
+    private static MedicationDto ToDto(
+        Medication m, bool enrichmentPending = false, string? enrichmentLiveText = null, int enrichmentQueueAhead = 0) =>
         new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.ExpiryDate, DeserializeData(m.DataJson), m.CreatedByUserId, m.CreatedAt,
-            enrichmentPending, enrichmentLiveText);
+            enrichmentPending, enrichmentLiveText, enrichmentQueueAhead);
 
     private static string? SerializeData(Dictionary<string, string>? data) =>
         data is null || data.Count == 0 ? null : JsonSerializer.Serialize(data);

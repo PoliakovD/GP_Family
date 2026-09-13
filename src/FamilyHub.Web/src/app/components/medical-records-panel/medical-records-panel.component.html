@@ -324,7 +324,7 @@
                     @if (ind.enrichmentPending) {
                       <span
                         class="tag tag-neutral"
-                        [title]="ind.enrichmentLiveText ?? 'Справочник пока не знает норму — идёт фоновый поиск'"
+                        [title]="indicatorEnrichmentTitle(ind)"
                       >
                         <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
                       </span>
@@ -409,7 +409,7 @@
                     @if (ind.enrichmentPending) {
                       <span
                         class="tag tag-neutral"
-                        [title]="ind.enrichmentLiveText ?? 'Справочник пока не знает норму — идёт фоновый поиск'"
+                        [title]="indicatorEnrichmentTitle(ind)"
                       >
                         <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
                       </span>

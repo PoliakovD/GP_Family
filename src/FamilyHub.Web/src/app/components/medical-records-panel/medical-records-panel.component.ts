@@ -46,6 +46,7 @@ import { AttachmentListComponent } from '../../shared/attachment-list/attachment
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
@@ -150,6 +151,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly IndicatorFlag = IndicatorFlag;
   readonly stageLabel = STAGE_LABEL;
   readonly pluralizeRu = pluralizeRu;
+
+  /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
+   * задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
+  indicatorEnrichmentTitle(ind: IndicatorDto): string {
+    return enrichmentStatusTitle(
+      ind.enrichmentLiveText, ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
+  }
   readonly shortenDisplayName = shortenDisplayName;
   readonly formatDayMonth = formatDayMonth;
   readonly formatDayMonthYear = formatDayMonthYear;
@@ -915,16 +923,27 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } else if (status.status === ExtractionJobStatus.Completed) {
       markLastDone();
       steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
-    } else if (status.status === ExtractionJobStatus.Pending) {
-      // В очереди — задача ещё не начата (TotalFiles/Stage у нового джоба ещё нулевые/дефолтные,
-      // показывать их бессмысленно). Позиция обновляется по мере того, как задачи впереди
-      // распознаются, — отдельная строка на каждое изменение, как и у смены стадии ниже.
+    } else if (status.queuePosition > 0) {
+      // Общая очередь к единственной локальной модели (баг с живого отчёта — под нагрузкой,
+      // когда параллельно идёт большой поток задач обогащения справочника, Status уже мог стать
+      // Running и Stage уже "Ocr"/"Decoding": Hangfire взял задачу в отдельный воркер очереди
+      // "extraction", но сама модель прямо сейчас занята задачей ДРУГОГО конвейера — см.
+      // ExtractionStatusResponse.QueuePosition/LlmQueuePositionService на бэкенде. Без этой
+      // проверки пользователь видел бы "Читаем текст" и думал, что идёт реальная работа, хотя
+      // задача просто ждёт своей очереди у общего семафора. Проверяется ДО branch по
+      // Pending/построчной логике по стадиям ниже.
       if (!prev || prev.queuePosition !== status.queuePosition || steps.length === 0) {
         markLastDone();
-        const label = status.queuePosition > 0
-          ? `В очереди — ещё ${status.queuePosition} ${pluralizeRu(status.queuePosition, 'документ', 'документа', 'документов')} впереди`
-          : 'В очереди — следующая на распознавание';
-        steps.push({ id: `queue-${status.queuePosition}`, label, state: 'active' });
+        const label = `Общая очередь к модели — ещё ${status.queuePosition} ` +
+          `${pluralizeRu(status.queuePosition, 'задача', 'задачи', 'задач')} впереди (аптечка и другие анализы тоже её используют)`;
+        steps.push({ id: `global-queue-${status.queuePosition}`, label, state: 'active' });
+      }
+    } else if (status.status === ExtractionJobStatus.Pending) {
+      // Никого нет впереди ни в одном из четырёх конвейеров (queuePosition===0) — просто ждём,
+      // пока воркер Hangfire реально возьмёт задачу в работу.
+      if (!prev || steps.length === 0 || prev.queuePosition > 0) {
+        markLastDone();
+        steps.push({ id: 'queue-next', label: 'В очереди — следующая на распознавание', state: 'active' });
       }
     } else {
       // Новый обработанный файл — отдельная строка с галочкой, до перехода к следующей стадии.

@@ -14,10 +14,13 @@ namespace FamilyHub.IntegrationTests;
 
 /// <summary>
 /// GET /api/medical-records/{id}/extraction — QueuePosition (UI-редизайн: "какой я в очереди",
-/// живой отчёт про запутывающий прогресс распознавания). Очередь "extraction" общая на всех
-/// пользователей/записи (один воркер, LM Studio — один ноутбук за WireGuard) — позиция считается
-/// напрямую по таблице задач (см. ExtractionQueryService.GetStatusAsync), не через Hangfire
-/// IMonitoringApi.
+/// живой отчёт про запутывающий прогресс распознавания). Позиция считается по ОБЩЕЙ очереди к
+/// единственному локальному LLM — по ВСЕМ четырём таблицам задач конвейера (не только
+/// MedicalDocumentExtractionJobs — "extraction" и "enrichment" делят одну и ту же модель, см.
+/// class doc LlmQueuePositionService/ExtractionQueryService.GetStatusAsync), не через Hangfire
+/// IMonitoringApi. Раньше считалось только по своей таблице — систематически недооценивало
+/// реальное ожидание под большим потоком задач обогащения справочника (баг, найденный на живом
+/// отчёте).
 /// </summary>
 public class ExtractionStatusApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
@@ -28,6 +31,25 @@ public class ExtractionStatusApiTests(FamilyHubWebFactory factory) : Integration
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var record = (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
         return record.Id;
+    }
+
+    /// <summary>Считает Active-задачи (Pending/Running) по ВСЕМ четырём таблицам с CreatedAt
+    /// строго раньше отсечки — тот же расчёт, что LlmQueuePositionService, но напрямую по БД, без
+    /// зависимости от самого сервиса: тест должен проверять контракт эндпоинта, а не то, что
+    /// сервис вызывает сам себя правильно. "Дельта", не абсолютное число — другие тесты этой же
+    /// коллекции вполне могут оставить свои Active-задачи с более ранним CreatedAt (см.
+    /// patterns/backend.md — тот же принцип, что у сид-хелперов).</summary>
+    private static async Task<int> CountActiveAcrossAllTablesAsync(AppDbContext db, DateTime before)
+    {
+        var extraction = await db.MedicalDocumentExtractionJobs.CountAsync(
+            j => j.CreatedAt < before && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running));
+        var labAnalyte = await db.LabAnalyteEnrichmentJobs.CountAsync(
+            j => j.CreatedAt < before && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running));
+        var medication = await db.MedicationEnrichmentJobs.CountAsync(
+            j => j.CreatedAt < before && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running));
+        var visitMedication = await db.VisitMedicationEnrichmentJobs.CountAsync(
+            j => j.CreatedAt < before && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running));
+        return extraction + labAnalyte + medication + visitMedication;
     }
 
     /// <summary>Заводит минимальную запись + Pending-задачу извлечения напрямую через AppDbContext —
@@ -63,11 +85,7 @@ public class ExtractionStatusApiTests(FamilyHubWebFactory factory) : Integration
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var now = DateTime.UtcNow;
-        // Очередь общая на всю (реальную для интеграционных тестов) БД — считаем ДЕЛЬТУ, не
-        // абсолютное число: другие тесты этой же коллекции вполне могут оставить свои Pending-задачи
-        // с CreatedAt раньше `now` (см. patterns/backend.md — тот же принцип, что у сид-хелперов).
-        var baseline = await db.MedicalDocumentExtractionJobs
-            .CountAsync(j => j.Status == EnrichmentJobStatus.Pending && j.CreatedAt < now);
+        var baseline = await CountActiveAcrossAllTablesAsync(db, now);
 
         // Три Pending-задачи ДРУГИХ записей раньше нашей — должны попасть в позицию.
         await SeedPendingJobAsync(db, now.AddSeconds(-30));
@@ -105,25 +123,25 @@ public class ExtractionStatusApiTests(FamilyHubWebFactory factory) : Integration
     }
 
     [Fact]
-    public async Task GetStatus_RunningJob_QueuePositionIsZero()
+    public async Task GetStatus_RunningJob_WithNothingAheadAnywhere_QueuePositionIsZero()
     {
-        // Позиция бессмысленна для уже начатой задачи — фронт её не показывает, но контракт должен
-        // отдавать 0, не какое-то случайное число из подсчёта.
+        // Running и правда ничего не ждёт впереди — модель прямо сейчас работает над этой задачей.
+        // Дельта, не абсолютный 0 — параллельно идущие тесты этой же коллекции вполне могут
+        // оставить свои Active-задачи раньше `now` (та же оговорка, что и у соседних тестов).
         var owner = ClientAs(FreshTelegramId());
         var recordId = await CreateAnalysisRecordAsync(owner);
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        // Другая Pending-задача раньше по времени — если бы позиция считалась не глядя на статус
-        // ЭТОЙ задачи, она бы просочилась в QueuePosition.
-        await SeedPendingJobAsync(db, DateTime.UtcNow.AddMinutes(-1));
+        var now = DateTime.UtcNow;
+        var baseline = await CountActiveAcrossAllTablesAsync(db, now);
 
         db.MedicalDocumentExtractionJobs.Add(new MedicalDocumentExtractionJob
         {
             Id = Guid.NewGuid(), MedicalRecordId = recordId, RequestedByUserId = Guid.NewGuid(),
             Status = EnrichmentJobStatus.Running, Stage = ExtractionStage.Ocr,
-            TotalFiles = 1, CreatedAt = DateTime.UtcNow, StartedAt = DateTime.UtcNow,
+            TotalFiles = 1, CreatedAt = now, StartedAt = now,
         });
         await db.SaveChangesAsync();
 
@@ -132,6 +150,51 @@ public class ExtractionStatusApiTests(FamilyHubWebFactory factory) : Integration
         var status = await response.Content.ReadFromJsonAsync<ExtractionStatusResponse>();
 
         status!.Status.Should().Be(EnrichmentJobStatus.Running);
-        status.QueuePosition.Should().Be(0);
+        (status.QueuePosition - baseline).Should().Be(0, "ничего НОВОГО не добавлено раньше `now` — сама задача не должна считать себя");
+    }
+
+    /// <summary>Регрессия для самого бага, найденного на живом отчёте: Hangfire дежурит
+    /// "extraction" и "enrichment" РАЗНЫМИ серверами (см. Program.cs) — задача извлечения может
+    /// стать Running (Hangfire её уже взял), пока модель прямо сейчас занята ДРУГИМ конвейером
+    /// (здесь — обогащение справочника показателей). Раньше QueuePosition в этом случае молча
+    /// был 0 (считался только по своей таблице) — пользователь видел "Читаем текст" и не понимал,
+    /// почему прогресс не двигается. Теперь позиция отражает реальную очередь к общей модели.</summary>
+    [Fact]
+    public async Task GetStatus_RunningJob_WithEarlierActiveJobInAnotherPipeline_QueuePositionIsNotZero()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var recordId = await CreateAnalysisRecordAsync(owner);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var now = DateTime.UtcNow;
+        var baseline = await CountActiveAcrossAllTablesAsync(db, now);
+
+        // Задача обогащения справочника показателей — ДРУГОЙ конвейер, ДРУГАЯ таблица, но та же
+        // единственная локальная модель (LmStudioConcurrencyGate) — реально держит гейт, пока
+        // наша задача извлечения просто дожидается своей очереди.
+        db.LabAnalyteEnrichmentJobs.Add(new LabAnalyteEnrichmentJob
+        {
+            Id = Guid.NewGuid(), NormalizedName = "тест", SpecimenKbId = Guid.NewGuid(), SourceDisplayName = "Тест",
+            RequestedByUserId = Guid.NewGuid(), Status = EnrichmentJobStatus.Running, CreatedAt = now.AddSeconds(-10),
+        });
+
+        db.MedicalDocumentExtractionJobs.Add(new MedicalDocumentExtractionJob
+        {
+            Id = Guid.NewGuid(), MedicalRecordId = recordId, RequestedByUserId = Guid.NewGuid(),
+            Status = EnrichmentJobStatus.Running, Stage = ExtractionStage.Ocr,
+            TotalFiles = 1, CreatedAt = now, StartedAt = now,
+        });
+        await db.SaveChangesAsync();
+
+        var response = await owner.GetAsync($"/api/medical-records/{recordId}/extraction");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var status = await response.Content.ReadFromJsonAsync<ExtractionStatusResponse>();
+
+        status!.Status.Should().Be(EnrichmentJobStatus.Running);
+        (status.QueuePosition - baseline).Should().Be(1,
+            "задача обогащения показателей из ДРУГОЙ таблицы, но с более ранним CreatedAt, реально держит " +
+            "гейт LM Studio — Stage=Ocr здесь не значит, что модель отвечает именно по этой задаче");
     }
 }

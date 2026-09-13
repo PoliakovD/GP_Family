@@ -7,6 +7,7 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { compressImage } from '../../shared/util/image-compression';
 import { expiryClass } from '../../shared/util/expiry';
 import { matchesQuery } from '../../shared/util/local-filter';
+import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
@@ -230,6 +231,13 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   /** Цветовая индикация по сроку годности — общая с плоским списком поиска Аптечки (MedicationsTabComponent). */
   expiryClassFor(item: Medication): string {
     return expiryClass(item.expiryDate);
+  }
+
+  /** Тултип чипа «ищем описание препарата…» (§5 + план "живой поток мыслей") — живая "мысль"
+   * модели, если задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
+  medicationEnrichmentTitle(item: Medication): string {
+    return enrichmentStatusTitle(
+      item.enrichmentLiveText, item.enrichmentQueueAhead, 'Справочник пока не знает этот препарат — идёт фоновый поиск');
   }
 
   dataEntries(item: Medication): DataRow[] {

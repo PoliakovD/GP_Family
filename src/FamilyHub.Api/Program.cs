@@ -632,6 +632,10 @@ builder.Services.AddSingleton<LmStudioConcurrencyGate>();
 // таблиц задач, см. class doc. Scoped (берёт AppDbContext) — безопасно как зависимость типизированного
 // HttpClient ниже (тот резолвится внутри того же DI-скоупа, что и вызывающий Hangfire-job/HTTP-запрос).
 builder.Services.AddScoped<LlmThinkingReportService>();
+// Реальная позиция в ОБЩЕЙ очереди к единственному локальному LLM (не только своей таблицы задач)
+// — "extraction" и "enrichment" — разные Hangfire-серверы, задача может дойти до Running в обеих
+// одновременно, и только LmStudioConcurrencyGate решает, кто говорит с моделью прямо сейчас.
+builder.Services.AddScoped<LlmQueuePositionService>();
 builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, client) =>
 {
     var lmStudioOptions = sp.GetRequiredService<IOptions<LmStudioOptions>>().Value;
