@@ -26,7 +26,10 @@
                 [class.non-interactive]="item.recordId === null"
                 (click)="select(item)"
               >
-                {{ item.label }}
+                <span class="background-jobs-item-label">{{ item.label }}</span>
+                @if (item.liveText) {
+                  <span class="background-jobs-item-thought" [title]="item.liveText">{{ item.liveText }}</span>
+                }
               </button>
             }
             @if (section.group.total > section.group.items.length) {
@@ -53,7 +56,10 @@
               [class.non-interactive]="item.recordId === null"
               (click)="select(item)"
             >
-              {{ item.label }}
+              <span class="background-jobs-item-label">{{ item.label }}</span>
+              @if (item.liveText) {
+                <span class="background-jobs-item-thought" [title]="item.liveText">{{ item.liveText }}</span>
+              }
             </button>
           }
           @if (section.group.total > section.group.items.length) {

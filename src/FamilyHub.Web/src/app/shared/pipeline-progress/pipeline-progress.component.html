@@ -17,6 +17,9 @@
             <span></span><span></span><span></span>
           </span>
         }
+        @if (step.state === 'active' && step.thought) {
+          <span class="pipeline-step-thought" [title]="step.thought">{{ step.thought }}</span>
+        }
       </span>
     </div>
   }

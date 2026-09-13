@@ -4,6 +4,10 @@ export interface PipelineStep {
   id: string;
   label: string;
   state: 'done' | 'active' | 'error';
+  /** Живой обрывок "мысли" модели (план "живой поток мыслей") — только у активного шага, пока
+   * реально идёт LLM-вызов. Мутируется НА МЕСТЕ (не через push нового шага) на каждый тик поллинга
+   * — не переигрывает entrance-анимацию строки (см. class doc компонента про track по id). */
+  thought?: string | null;
 }
 
 /**

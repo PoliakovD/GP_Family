@@ -73,6 +73,23 @@
   span:nth-child(3) { animation-delay: 0.4s; }
 }
 
+// Живой обрывок "мысли" модели (план "живой поток мыслей") — намеренно INLINE и обрезанный
+// эллипсисом, не своя строка: .pipeline-progress держит фиксированную высоту в 4 строки
+// (max-height: 112px), а длина мысли непредсказуема — второй уровень строки сломал бы этот расчёт.
+.pipeline-step-thought {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 6px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--color-neutral-500, var(--color-neutral-600));
+  opacity: 0.85;
+}
+
 @keyframes pipeline-step-enter {
   from {
     opacity: 0;

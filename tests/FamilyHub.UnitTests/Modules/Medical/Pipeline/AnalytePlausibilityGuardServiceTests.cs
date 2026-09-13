@@ -40,7 +40,7 @@ public class AnalytePlausibilityGuardServiceTests
     [Fact]
     public async Task ModelSaysValidTrue_IsPlausible()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new { valid = true, reason = (string?)null }), null));
 
         var result = await _sut.CheckAsync("Гемоглобин", "Кровь");
@@ -52,7 +52,7 @@ public class AnalytePlausibilityGuardServiceTests
     [Fact]
     public async Task ModelSaysValidFalse_IsImplausible_WithReason()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new { valid = false, reason = "Показатель не может быть измерен в этом источнике." }), null));
 
         var result = await _sut.CheckAsync("Плотность мочи", "Кал");
@@ -64,7 +64,7 @@ public class AnalytePlausibilityGuardServiceTests
     [Fact]
     public async Task ModelCallFails_DeniesByDefault()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен."));
 
         var result = await _sut.CheckAsync("Гемоглобин", "Кровь");
@@ -75,7 +75,7 @@ public class AnalytePlausibilityGuardServiceTests
     [Fact]
     public async Task ModelResponseMissingValidField_DeniesByDefault()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new { somethingElse = "не то поле" }), null));
 
         var result = await _sut.CheckAsync("Гемоглобин", "Кровь");
@@ -86,7 +86,7 @@ public class AnalytePlausibilityGuardServiceTests
     [Fact]
     public async Task NoSpecimenGiven_StillChecksNamePlausibility()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new { valid = true, reason = (string?)null }), null));
 
         var result = await _sut.CheckAsync("Гемоглобин", null);

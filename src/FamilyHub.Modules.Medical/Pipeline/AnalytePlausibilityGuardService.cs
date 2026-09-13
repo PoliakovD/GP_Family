@@ -60,7 +60,8 @@ public class AnalytePlausibilityGuardService(
             ? $"Показатель: {analyteName}"
             : $"Показатель: {analyteName}\nИсточник: {specimenDisplayName}";
 
-        var result = await client.ExtractJsonAsync(prompt, userText, ct);
+        // suppressThinking: true — security-гейт, та же причина, что у LegitimacyGuardService.
+        var result = await client.ExtractJsonAsync(prompt, userText, ct, suppressThinking: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogWarning(

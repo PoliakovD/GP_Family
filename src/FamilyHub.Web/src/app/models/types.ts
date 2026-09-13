@@ -140,6 +140,8 @@ export interface Medication {
     /** §5 плана «живой конвейер» — зеркало IndicatorDto.enrichmentPending, см.
      * FamilyHub.Modules.Medical.Medications.MedicationDto. */
     enrichmentPending: boolean;
+    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — см. IndicatorDto.enrichmentLiveText. */
+    enrichmentLiveText: string | null;
 }
 
 export interface MedicationInput {
@@ -455,6 +457,10 @@ export interface ActiveJobItem {
     recordId: string | null;
     recordKind: NotificationRelatedKind | null;
     createdAt: string;
+    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — non-null максимум у ОДНОЙ
+     * строки из всех активных задач всей системы одновременно (LmStudioConcurrencyGate
+     * сериализует все вызовы LM Studio) — у остальных Pending это просто null, они ждут очередь. */
+    liveText: string | null;
 }
 
 export interface ActiveJobsGroup {
@@ -509,6 +515,9 @@ export interface ExtractionStatusResponse {
     /** Сколько ещё не начатых задач (любой записи — очередь общая, один воркер LM Studio) стоят
      * раньше этой; осмысленна, только пока status === Pending (иначе всегда 0). */
     queuePosition: number;
+    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — null между вызовами/на
+     * security-гейтах/когда задача не Running. */
+    currentThought: string | null;
 }
 
 /** Тело ответа POST /extract на "мягких" исходах (см. ExtractionRequestResult на бэкенде) — на
@@ -549,6 +558,10 @@ export interface IndicatorDto {
      * FamilyHub.Modules.Medical.Extraction.ExtractionQueryDtos.IndicatorDto). UI показывает чип
      * «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда. */
     enrichmentPending: boolean;
+    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — null почти всегда, даже когда
+     * enrichmentPending===true: непусто только пока эта конкретная задача реально держит гейт LM
+     * Studio, не просто ждёт очередь (см. class doc ActiveJobItem.LiveText). */
+    enrichmentLiveText: string | null;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч.

@@ -7,9 +7,13 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// записи/пользователя — очередь "extraction" общая на всех, один воркер) стоят раньше этой; 0,
 /// пока задача сама не Pending (уже Running либо уже завершилась) — тогда позиция бессмысленна,
 /// фронт её не показывает. См. ExtractionQueryService.GetStatusAsync.</summary>
+/// <summary>CurrentThought — живой обрывок "мысли" модели (план "живой поток мыслей"), пока
+/// задача реально думает — null между вызовами/на security-гейтах/когда задача не Running, см.
+/// class doc MedicalDocumentExtractionJob.CurrentThought.</summary>
 public record ExtractionStatusResponse(
     EnrichmentJobStatus Status, ExtractionStage Stage, int IndicatorCount, string? Error,
-    int TotalFiles, int ProcessedFiles, DateTime CreatedAt, DateTime? CompletedAt, int QueuePosition = 0);
+    int TotalFiles, int ProcessedFiles, DateTime CreatedAt, DateTime? CompletedAt, int QueuePosition = 0,
+    string? CurrentThought = null);
 
 /// <summary>ValueNumericText/KbAnalyteId — редизайн v2 (шкала-референс + панель справки).
 /// RefLowText/RefHighText — либо `double.ToString(InvariantCulture)`, либо null; нечисловой
@@ -27,7 +31,7 @@ public record IndicatorDto(
     string ValueRaw, string? Unit, string? RefLowText, string? RefHighText, string? RefText,
     DateOnly RecordDate, Guid MedicalRecordId,
     string? ValueNumericText = null, Guid? KbAnalyteId = null, string? RawDisplayName = null,
-    bool EnrichmentPending = false);
+    bool EnrichmentPending = false, string? EnrichmentLiveText = null);
 
 public record IndicatorHistoryPoint(DateOnly RecordDate, string ValueRaw, string? ValueNumericText, IndicatorFlag Flag, Guid MedicalRecordId);
 
