@@ -58,6 +58,9 @@ public class MedicationEnrichmentProcessor(
             return;
         }
 
+        // Ambient-контекст для живого потока "мыслей" (план) — см. class doc LmStudioThinkingContext.
+        using var _ = LmStudioThinkingContext.Begin(LlmJobKind.MedicationEnrichment, job.Id);
+
         job.Attempts++;
         job.Status = EnrichmentJobStatus.Running;
         job.StartedAt ??= DateTime.UtcNow;

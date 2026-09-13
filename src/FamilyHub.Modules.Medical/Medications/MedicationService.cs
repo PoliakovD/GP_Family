@@ -45,17 +45,24 @@ public class MedicationService(
         // приёмом, что ExtractionQueryService.GetIndicatorsAsync. Точное равенство (не StartsWith,
         // как у показателей) — MedicationEnrichmentJob.NormalizedName не знает суффиксного
         // разведения коллизий (то — только у LabIndicator/LabAnalyteEnrichmentJob).
-        var pendingNames = await GetPendingEnrichmentNamesAsync(entities, ct);
+        var pendingByName = await GetPendingEnrichmentNamesAsync(entities, ct);
 
         // ToDto десериализует DataJson — это не транслируется в SQL, поэтому маппим в память
         // уже после загрузки (список медикаментов аптечки — не тот объём, где это критично).
-        var items = entities.Select(m => ToDto(m, pendingNames.Contains(MedicationNameNormalizer.Normalize(m.Name)))).ToList();
+        var items = entities.Select(m =>
+        {
+            var hasMatch = pendingByName.TryGetValue(MedicationNameNormalizer.Normalize(m.Name), out var liveText);
+            return ToDto(m, hasMatch, liveText);
+        }).ToList();
 
         logger.LogDebug("Загружено {Count} медикаментов аптечки {MedkitId}", items.Count, medkitId);
         return (MedicationAccessResult.Success, items);
     }
 
-    private async Task<HashSet<string>> GetPendingEnrichmentNamesAsync(List<Medication> entities, CancellationToken ct)
+    /// <summary>NormalizedName → живой обрывок "мысли" модели (может быть null даже для реально
+    /// Pending-задачи — план "живой поток мыслей" пишет его только пока сама эта задача держит
+    /// глобальный гейт LM Studio, см. class doc ActiveJobItem).</summary>
+    private async Task<Dictionary<string, string?>> GetPendingEnrichmentNamesAsync(List<Medication> entities, CancellationToken ct)
     {
         var normalizedNames = entities
             .Select(m => MedicationNameNormalizer.Normalize(m.Name))
@@ -67,10 +74,14 @@ public class MedicationService(
         var pending = await db.MedicationEnrichmentJobs.AsNoTracking()
             .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
                 && normalizedNames.Contains(j.NormalizedName))
-            .Select(j => j.NormalizedName)
+            .Select(j => new { j.NormalizedName, j.CurrentThought })
             .ToListAsync(ct);
 
-        return pending.ToHashSet(StringComparer.Ordinal);
+        // DistinctBy на всякий случай — частичный уникальный индекс дедупит Pending/Running по
+        // NormalizedName, дублей не бывает, но словарь не должен упасть, если это когда-нибудь
+        // перестанет быть верно.
+        return pending.GroupBy(p => p.NormalizedName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().CurrentThought, StringComparer.Ordinal);
     }
 
     public async Task<(MedicationAccessResult Result, MedicationDto? Item)> CreateAsync(
@@ -172,8 +183,9 @@ public class MedicationService(
         return MedicationAccessResult.Success;
     }
 
-    private static MedicationDto ToDto(Medication m, bool enrichmentPending = false) =>
-        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.ExpiryDate, DeserializeData(m.DataJson), m.CreatedByUserId, m.CreatedAt, enrichmentPending);
+    private static MedicationDto ToDto(Medication m, bool enrichmentPending = false, string? enrichmentLiveText = null) =>
+        new(m.Id, m.MedkitId, m.FamilyId, m.Name, m.ExpiryDate, DeserializeData(m.DataJson), m.CreatedByUserId, m.CreatedAt,
+            enrichmentPending, enrichmentLiveText);
 
     private static string? SerializeData(Dictionary<string, string>? data) =>
         data is null || data.Count == 0 ? null : JsonSerializer.Serialize(data);

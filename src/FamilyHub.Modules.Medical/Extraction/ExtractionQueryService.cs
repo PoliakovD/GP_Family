@@ -68,7 +68,7 @@ public class ExtractionQueryService(
 
         return (ExtractionQueryResult.Success, new ExtractionStatusResponse(
             job.Status, job.Stage, job.IndicatorCount, job.Error, job.TotalFiles, job.ProcessedFiles,
-            job.CreatedAt, job.CompletedAt, queuePosition));
+            job.CreatedAt, job.CompletedAt, queuePosition, job.CurrentThought));
     }
 
     public async Task<(ExtractionQueryResult Result, List<IndicatorDto> Items)> GetIndicatorsAsync(
@@ -86,13 +86,19 @@ public class ExtractionQueryService(
         var pendingKeys = await GetPendingEnrichmentKeysAsync(items, ct);
 
         return (ExtractionQueryResult.Success, items
-            .Select(i => ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), IsEnrichmentPending(i, pendingKeys)))
+            .Select(i =>
+            {
+                var (pending, liveText) = FindPendingEnrichment(i, pendingKeys);
+                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, liveText);
+            })
             .ToList());
     }
 
     /// <summary>§5 плана «живой конвейер» — один доп. запрос на всю СТРАНИЦУ показателей (не на
-    /// каждый), т.к. GetIndicatorsAsync и так вызывается на каждое открытие записи.</summary>
-    private async Task<List<(string NormalizedName, Guid SpecimenKbId)>> GetPendingEnrichmentKeysAsync(
+    /// каждый), т.к. GetIndicatorsAsync и так вызывается на каждое открытие записи. CurrentThought
+    /// — живой обрывок "мысли" модели (план "живой поток мыслей") — non-null максимум на одной
+    /// строке из всех активных задач всей системы одновременно, см. class doc ActiveJobItem.</summary>
+    private async Task<List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought)>> GetPendingEnrichmentKeysAsync(
         List<DomainLabIndicator> items, CancellationToken ct)
     {
         var specimenIds = items.Select(i => i.SpecimenKbId).Distinct().ToList();
@@ -101,10 +107,10 @@ public class ExtractionQueryService(
         var rows = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
             .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
                 && specimenIds.Contains(j.SpecimenKbId))
-            .Select(j => new { j.NormalizedName, j.SpecimenKbId })
+            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought })
             .ToListAsync(ct);
 
-        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId)).ToList();
+        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CurrentThought)).ToList();
     }
 
     /// <summary>Матчинг НЕ точным равенством — LabIndicator.AnalyteKey иногда несёт суффикс
@@ -113,9 +119,13 @@ public class ExtractionQueryService(
     /// ключу (lookupKey), не по разведённому analyteKey") — поэтому StartsWith, не ==. Ложных
     /// совпадений на практике не бывает: коллизия имени ПОСЛЕ нормализации в пределах одного
     /// источника — редкий случай, который и разводит AnalyteKeyDisambiguator.</summary>
-    private static bool IsEnrichmentPending(DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId)> pendingKeys) =>
-        pendingKeys.Any(k => k.SpecimenKbId == indicator.SpecimenKbId
+    private static (bool Pending, string? LiveText) FindPendingEnrichment(
+        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought)> pendingKeys)
+    {
+        var match = pendingKeys.FirstOrDefault(k => k.SpecimenKbId == indicator.SpecimenKbId
             && indicator.AnalyteKey.StartsWith(k.NormalizedName, StringComparison.Ordinal));
+        return match.NormalizedName is null ? (false, null) : (true, match.CurrentThought);
+    }
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
     /// GetSummaryAsync для показателей анализа (Kind=Analysis использует SummaryJson, не это поле).
@@ -621,10 +631,11 @@ public class ExtractionQueryService(
         return ExtractionQueryResult.Success;
     }
 
-    private static IndicatorDto ToDto(DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false) => new(
+    private static IndicatorDto ToDto(
+        DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false, string? enrichmentLiveText = null) => new(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
         i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
-        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending);
+        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentLiveText);
 
     private static double? ParseNumeric(string? value)
     {

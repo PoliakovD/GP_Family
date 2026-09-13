@@ -628,6 +628,10 @@ if (!telegramBotConfigured && !webPushConfigured)
 // прежде мог прийти в обход дисциплины WorkerCount=1 фоновых Hangfire-очередей через синхронный
 // OCR-эндпоинт (POST /api/medications/ocr).
 builder.Services.AddSingleton<LmStudioConcurrencyGate>();
+// Живой поток "мыслей" модели (план) — throttled-запись CurrentThought на нужную из четырёх
+// таблиц задач, см. class doc. Scoped (берёт AppDbContext) — безопасно как зависимость типизированного
+// HttpClient ниже (тот резолвится внутри того же DI-скоупа, что и вызывающий Hangfire-job/HTTP-запрос).
+builder.Services.AddScoped<LlmThinkingReportService>();
 builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, client) =>
 {
     var lmStudioOptions = sp.GetRequiredService<IOptions<LmStudioOptions>>().Value;

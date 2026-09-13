@@ -75,6 +75,13 @@ public class MedicalDocumentExtractionProcessor(
             return;
         }
 
+        // Ambient-контекст для живого потока "мыслей" (план) — на весь остаток метода: любой
+        // вложенный вызов LmStudioJsonClient.ExtractJsonAsync ниже (напрямую или через
+        // LmStudioMedicalDocumentExtractor/SpecimenResolver/AnalysisTitleGenerator/
+        // AnalyteSubjectResolver/OcrNameCorrector/PatientReferenceCalculator/LabSummarizer)
+        // подхватит его сам, без передачи через сигнатуры этих методов — см. LmStudioThinkingContext.
+        using var _ = LmStudioThinkingContext.Begin(LlmJobKind.Extraction, job.Id);
+
         job.Attempts++;
         job.Status = EnrichmentJobStatus.Running;
         job.Stage = ExtractionStage.Decoding;

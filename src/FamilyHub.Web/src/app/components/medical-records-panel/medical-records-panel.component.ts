@@ -950,6 +950,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       }
     }
 
+    // Живой обрывок "мысли" модели (план "живой поток мыслей") — мутируем ПОСЛЕДНИЙ шаг НА МЕСТЕ
+    // (не push нового), если он ещё active: это не новый шаг конвейера, просто уточнение текста
+    // уже показанной строки на очередной тик поллинга — не должно переигрывать её entrance-
+    // анимацию (см. class doc PipelineStep.thought/pipeline-progress.component.ts про track по id).
+    const lastStep = steps[steps.length - 1];
+    if (lastStep && lastStep.state === 'active' && lastStep.thought !== status.currentThought) {
+      steps[steps.length - 1] = { ...lastStep, thought: status.currentThought };
+    }
+
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
   }
 

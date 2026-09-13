@@ -81,6 +81,24 @@
   padding-left: 16px;
 }
 
+.background-jobs-item-label {
+  display: block;
+}
+
+// Живой обрывок "мысли" модели (план "живой поток мыслей") — вторая строка, только у той ОДНОЙ
+// задачи из всех активных, что реально держит гейт LM Studio прямо сейчас (см. class doc
+// ActiveJobItem.LiveText).
+.background-jobs-item-thought {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+  font-size: 0.7059rem;
+  font-style: italic;
+  color: var(--color-neutral-600);
+}
+
 .background-jobs-more {
   padding: 4px 16px 4px 40px;
   font-size: 0.7647rem;

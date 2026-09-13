@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using FamilyHub.Domain.Enums;
 using FluentAssertions;
 using Xunit;
 
@@ -17,6 +18,7 @@ public class AdminLmStudioApiTests(AdminWebFactory factory)
 {
     private record LmStudioModelInfo(string? ActiveModel, string FallbackModel);
     private record LmStudioAvailableModels(List<string> Models, bool LmStudioReachable);
+    private record LmStudioReasoningInfo(LmStudioReasoning? ActiveReasoning, LmStudioReasoning FallbackReasoning);
 
     private async Task<HttpClient> AuthenticatedClientAsync()
     {
@@ -74,5 +76,44 @@ public class AdminLmStudioApiTests(AdminWebFactory factory)
 
         var afterReset = await client.GetFromJsonAsync<LmStudioModelInfo>("/api/admin/lmstudio/model");
         afterReset!.ActiveModel.Should().BeNull("пустой modelId — откат на фолбэк, не отдельное значение по умолчанию в БД");
+    }
+
+    // --- Уровень "размышлений" (§1 плана "живой поток мыслей") — зеркало модели выше. ---
+
+    [Fact]
+    public async Task Reasoning_WithoutSession_Returns401()
+    {
+        var response = await factory.CreateClient().GetAsync("/api/admin/lmstudio/reasoning");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Reasoning_NoRowYet_ReturnsNullActive_WithFallback()
+    {
+        var client = await AuthenticatedClientAsync();
+
+        var info = await client.GetFromJsonAsync<LmStudioReasoningInfo>("/api/admin/lmstudio/reasoning");
+
+        info!.ActiveReasoning.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SetReasoning_ThenReset_RoundTrips()
+    {
+        var client = await AuthenticatedClientAsync();
+
+        var setResponse = await client.PutAsJsonAsync(
+            "/api/admin/lmstudio/reasoning", new { reasoning = LmStudioReasoning.Maximum });
+        setResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var afterSet = await client.GetFromJsonAsync<LmStudioReasoningInfo>("/api/admin/lmstudio/reasoning");
+        afterSet!.ActiveReasoning.Should().Be(LmStudioReasoning.Maximum);
+
+        var resetResponse = await client.PutAsJsonAsync(
+            "/api/admin/lmstudio/reasoning", new { reasoning = (LmStudioReasoning?)null });
+        resetResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var afterReset = await client.GetFromJsonAsync<LmStudioReasoningInfo>("/api/admin/lmstudio/reasoning");
+        afterReset!.ActiveReasoning.Should().BeNull("null reasoning — откат на фолбэк, не отдельное значение по умолчанию в БД");
     }
 }

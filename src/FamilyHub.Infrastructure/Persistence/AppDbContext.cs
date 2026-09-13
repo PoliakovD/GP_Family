@@ -65,6 +65,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>Выбор активной модели LM Studio из админки — см. ILmStudioModelProvider.</summary>
     public DbSet<LmStudioModelConfig> LmStudioModelConfigs => Set<LmStudioModelConfig>();
 
+    /// <summary>Выбор активного уровня "размышлений" LM Studio из админки — см.
+    /// ILmStudioModelProvider.GetActiveReasoningAsync.</summary>
+    public DbSet<LmStudioReasoningConfig> LmStudioReasoningConfigs => Set<LmStudioReasoningConfig>();
+
     /// <summary>Пользовательский справочник биоматериалов (UX-редизайн) — см. UserSpecimenService.</summary>
     public DbSet<UserSpecimen> UserSpecimens => Set<UserSpecimen>();
 

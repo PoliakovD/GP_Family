@@ -133,7 +133,10 @@
             <span class="muted text-nowrap">кол-во: {{ quantityOf(item) }}</span>
           }
           @if (item.enrichmentPending) {
-            <span class="tag tag-neutral" title="Справочник пока не знает этот препарат — идёт фоновый поиск">
+            <span
+              class="tag tag-neutral"
+              [title]="item.enrichmentLiveText ?? 'Справочник пока не знает этот препарат — идёт фоновый поиск'"
+            >
               <span class="pipeline-step-spinner" aria-hidden="true"></span> ищем описание препарата…
             </span>
           }

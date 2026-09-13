@@ -40,7 +40,13 @@ public class LmStudioJsonClientTests
         var modelProvider = Substitute.For<ILmStudioModelProvider>();
         modelProvider.GetActiveModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult((string)ci[0]));
-        return new LmStudioJsonClient(httpClient, options, new LmStudioConcurrencyGate(), modelProvider, NullLogger<LmStudioJsonClient>.Instance);
+        modelProvider.GetActiveReasoningAsync(Arg.Any<FamilyHub.Domain.Enums.LmStudioReasoning>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult((FamilyHub.Domain.Enums.LmStudioReasoning)ci[0]));
+        // null! — этот тест никогда не устанавливает LmStudioThinkingContext.Current, поэтому
+        // ветка живого потока "мыслей" (план) не выполняется вовсе — LlmThinkingReportService
+        // здесь недостижим, поднимать под него реальный AppDbContext незачем.
+        return new LmStudioJsonClient(
+            httpClient, options, new LmStudioConcurrencyGate(), modelProvider, null!, NullLogger<LmStudioJsonClient>.Instance);
     }
 
     private static HttpResponseMessage ChatResponse(string content) => new(HttpStatusCode.OK)

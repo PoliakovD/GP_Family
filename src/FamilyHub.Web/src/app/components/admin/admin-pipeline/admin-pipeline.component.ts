@@ -6,6 +6,7 @@ import {
   AdminApiService,
   EnrichmentFailureReasonValue,
   LmStudioAvailableModels,
+  LmStudioReasoning,
   PipelineJob,
   PipelineJobType,
   PipelineStep,
@@ -88,6 +89,25 @@ export class AdminPipelineComponent implements OnInit, OnDestroy {
   readonly lmStudioLoading = signal(false);
   readonly lmStudioBusy = signal(false);
 
+  /** Уровень "размышлений" — отдельные сигналы от модели выше: независимая загрузка/сохранение,
+   * ошибка сохранения одного не должна блокировать кнопку у другого. */
+  readonly lmStudioReasoningActive = signal<LmStudioReasoning | null>(null);
+  readonly lmStudioReasoningFallback = signal<LmStudioReasoning | null>(null);
+  readonly lmStudioReasoningSelected = signal<LmStudioReasoning>(LmStudioReasoning.None);
+  readonly lmStudioReasoningLoading = signal(false);
+  readonly lmStudioReasoningBusy = signal(false);
+
+  readonly reasoningOptions: { value: LmStudioReasoning; label: string }[] = [
+    { value: LmStudioReasoning.None, label: 'Без рассуждений (быстрее)' },
+    { value: LmStudioReasoning.Minimal, label: 'Минимальные' },
+    { value: LmStudioReasoning.Medium, label: 'Умеренные' },
+    { value: LmStudioReasoning.Maximum, label: 'Максимальные (медленнее)' },
+  ];
+
+  reasoningLabel(value: LmStudioReasoning): string {
+    return this.reasoningOptions.find((o) => o.value === value)?.label ?? String(value);
+  }
+
   ngOnInit(): void {
     // Состояние в URL (§8 плана) — переход из «Требует внимания» (?tab=jobs&type=&status=&reason=)
     // и прямые ссылки на конкретную задачу (?job=<guid>) открывают нужный вид без ручных кликов;
@@ -133,6 +153,7 @@ export class AdminPipelineComponent implements OnInit, OnDestroy {
     if (tab === 'prompts' && this.promptSlots().length === 0) void this.loadPrompts();
     if (tab === 'jobs' && this.jobs().length === 0) void this.loadJobs();
     if (tab === 'lmstudio' && this.lmStudioFallbackModel() === '') void this.loadLmStudioModel();
+    if (tab === 'lmstudio' && this.lmStudioReasoningFallback() === null) void this.loadLmStudioReasoning();
   }
 
   // --- Шаги ---
@@ -434,6 +455,46 @@ export class AdminPipelineComponent implements OnInit, OnDestroy {
       this.toast.error('Не удалось сбросить модель.');
     } finally {
       this.lmStudioBusy.set(false);
+    }
+  }
+
+  async loadLmStudioReasoning(): Promise<void> {
+    this.lmStudioReasoningLoading.set(true);
+    try {
+      const info = await this.api.getLmStudioReasoning();
+      this.lmStudioReasoningActive.set(info.activeReasoning);
+      this.lmStudioReasoningFallback.set(info.fallbackReasoning);
+      this.lmStudioReasoningSelected.set(info.activeReasoning ?? info.fallbackReasoning);
+    } catch {
+      this.toast.error('Не удалось загрузить уровень рассуждений.');
+    } finally {
+      this.lmStudioReasoningLoading.set(false);
+    }
+  }
+
+  async saveLmStudioReasoning(): Promise<void> {
+    this.lmStudioReasoningBusy.set(true);
+    try {
+      await this.api.setLmStudioReasoning(this.lmStudioReasoningSelected());
+      this.toast.success('Уровень рассуждений обновлён.');
+      await this.loadLmStudioReasoning();
+    } catch {
+      this.toast.error('Не удалось сохранить уровень рассуждений.');
+    } finally {
+      this.lmStudioReasoningBusy.set(false);
+    }
+  }
+
+  async resetLmStudioReasoning(): Promise<void> {
+    this.lmStudioReasoningBusy.set(true);
+    try {
+      await this.api.setLmStudioReasoning(null);
+      this.toast.success('Возврат к уровню рассуждений по умолчанию.');
+      await this.loadLmStudioReasoning();
+    } catch {
+      this.toast.error('Не удалось сбросить уровень рассуждений.');
+    } finally {
+      this.lmStudioReasoningBusy.set(false);
     }
   }
 }

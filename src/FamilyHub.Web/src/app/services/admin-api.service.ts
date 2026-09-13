@@ -207,6 +207,22 @@ export interface TrustAndRetryResponse { retriedCount: number; }
 export interface LmStudioModelInfo { activeModel: string | null; fallbackModel: string; }
 export interface LmStudioAvailableModels { models: string[]; lmStudioReachable: boolean; }
 
+/** См. FamilyHub.Domain.Enums.LmStudioReasoning — зеркало NotificationType и т.п. (число, не строка). */
+export const LmStudioReasoning = {
+  None: 0,
+  Minimal: 1,
+  Medium: 2,
+  Maximum: 3,
+} as const;
+export type LmStudioReasoning = typeof LmStudioReasoning[keyof typeof LmStudioReasoning];
+
+/** activeReasoning=null означает, что в БД ничего не выбрано и клиент шлёт fallbackReasoning
+ * (LmStudioOptions.Reasoning, appsettings/env) — тот же приём, что LmStudioModelInfo выше. */
+export interface LmStudioReasoningInfo {
+  activeReasoning: LmStudioReasoning | null;
+  fallbackReasoning: LmStudioReasoning;
+}
+
 /**
  * Клиент /api/admin/*. Отдельно от ApiService (api.service.ts) намеренно — другая поверхность
  * аутентификации (cookie familyhub.admin, схема AuthSchemes.Admin, см. ADR-0009), не должна
@@ -346,6 +362,13 @@ export class AdminApiService {
   getAvailableLmStudioModels = () => this.get<LmStudioAvailableModels>('/api/admin/lmstudio/available-models');
 
   setLmStudioModel = (modelId: string | null) => this.put<void>('/api/admin/lmstudio/model', { modelId });
+
+  // Уровень "размышлений" LM Studio из админки — тот же приём, что модель выше, позволяет
+  // сравнивать скорость/глубину рассуждений на лету, без передеплоя.
+  getLmStudioReasoning = () => this.get<LmStudioReasoningInfo>('/api/admin/lmstudio/reasoning');
+
+  setLmStudioReasoning = (reasoning: LmStudioReasoning | null) =>
+    this.put<void>('/api/admin/lmstudio/reasoning', { reasoning });
 
   getPipelineJobs = (type: PipelineJobType, status: string | null, skip: number, take: number, reason: string | null = null) =>
     this.get<PipelineJobListResponse>(

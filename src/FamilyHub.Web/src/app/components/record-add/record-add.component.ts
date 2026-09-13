@@ -198,12 +198,19 @@ export class RecordAddComponent implements OnInit, OnDestroy {
         this.toast.error(`Запись сохранена, но ${uploadFailed} файлов не загрузилось — прикрепите их к записи ниже.`);
       }
 
-      // Редизайн v3 (PR7) — автораспознавание при сохранении: fire-and-forget, не дожидаемся
-      // завершения — живой прогресс дальше показывает уже существующий pipelineStepsByRecord на
-      // карточке списка/экране записи (та же UI, что и у ручной кнопки «Распознать»).
+      // Редизайн v3 (PR7) — автораспознавание при сохранении: не дожидаемся ЗАВЕРШЕНИЯ
+      // распознавания (живой прогресс дальше показывает уже существующий pipelineStepsByRecord
+      // на карточке списка/экране записи, та же UI, что и у ручной кнопки «Распознать») — но САМ
+      // запрос на постановку в очередь дожидаемся. Без этого await навигация ниже случалась
+      // раньше, чем сервер успевал проставить record.ExtractionStatus=Pending: список/деталь-
+      // страница делали refresh() и видели ещё старый (None) статус → resumeLivePolling не
+      // стартовал поллинг → кнопка «Распознать» оставалась активной, хотя распознавание уже
+      // реально шло на бэкенде (баг, найденный на живом отчёте). Сам запрос — быстрая вставка
+      // Pending-строки + Hangfire-энкью (см. ExtractionRequestService.RequestAsync), не долгий
+      // OCR — ждать его не задерживает навигацию заметно.
       const uploadedCount = this.pendingFiles.length - uploadFailed;
       if (this.autoRecognize && uploadedCount > 0) {
-        void this.api.requestExtraction(created.id).catch(() => {});
+        await this.api.requestExtraction(created.id).catch(() => {});
       }
 
       this.clearPendingFiles();

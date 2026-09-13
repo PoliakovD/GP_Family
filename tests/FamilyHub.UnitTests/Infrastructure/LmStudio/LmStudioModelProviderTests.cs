@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.TestUtils;
 using FluentAssertions;
@@ -64,5 +65,72 @@ public class LmStudioModelProviderTests : SqliteTestBase
         _sut.Invalidate();
 
         (await _sut.GetActiveModelAsync("фолбэк")).Should().Be("model-v2");
+    }
+
+    // --- Уровень "размышлений" (§1 плана "живой поток мыслей") — тот же приём/те же гарантии,
+    // что у GetActiveModelAsync выше, отдельным кэш-ключом. ---
+
+    [Fact]
+    public async Task GetActiveReasoningAsync_NoRow_ReturnsFallback()
+    {
+        var result = await _sut.GetActiveReasoningAsync(LmStudioReasoning.None);
+
+        result.Should().Be(LmStudioReasoning.None);
+    }
+
+    [Fact]
+    public async Task GetActiveReasoningAsync_RowExists_ReturnsConfiguredReasoning_NotFallback()
+    {
+        Db.LmStudioReasoningConfigs.Add(new LmStudioReasoningConfig
+        {
+            Id = Guid.NewGuid(), Reasoning = LmStudioReasoning.Maximum, UpdatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var result = await _sut.GetActiveReasoningAsync(LmStudioReasoning.None);
+
+        result.Should().Be(LmStudioReasoning.Maximum);
+    }
+
+    /// <summary>Регрессия для дизайн-заметки в LmStudioModelProvider.GetActiveReasoningAsync —
+    /// закэшированное None (реально сохранённое значение) не должно путаться с "нет строки вовсе"
+    /// (default(LmStudioReasoning) тоже None) и не должно быть перезаписано фолбэком.</summary>
+    [Fact]
+    public async Task GetActiveReasoningAsync_ConfiguredAsNone_DoesNotFallBackOnRefetch()
+    {
+        Db.LmStudioReasoningConfigs.Add(new LmStudioReasoningConfig
+        {
+            Id = Guid.NewGuid(), Reasoning = LmStudioReasoning.None, UpdatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        (await _sut.GetActiveReasoningAsync(LmStudioReasoning.Maximum)).Should().Be(LmStudioReasoning.None);
+        // Второй вызов — из кэша, не из БД; тот же результат подтверждает, что кэш хранит
+        // "реально None", а не "нет значения, кэш пуст".
+        (await _sut.GetActiveReasoningAsync(LmStudioReasoning.Maximum)).Should().Be(LmStudioReasoning.None);
+    }
+
+    [Fact]
+    public async Task GetActiveReasoningAsync_CachesResult_DoesNotSeeChangeUntilInvalidated()
+    {
+        Db.LmStudioReasoningConfigs.Add(new LmStudioReasoningConfig
+        {
+            Id = Guid.NewGuid(), Reasoning = LmStudioReasoning.Minimal, UpdatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+        (await _sut.GetActiveReasoningAsync(LmStudioReasoning.None)).Should().Be(LmStudioReasoning.Minimal);
+
+        await using (var db2 = NewContext())
+        {
+            db2.LmStudioReasoningConfigs.Single().Reasoning = LmStudioReasoning.Maximum;
+            await db2.SaveChangesAsync();
+        }
+
+        (await _sut.GetActiveReasoningAsync(LmStudioReasoning.None)).Should().Be(
+            LmStudioReasoning.Minimal, "кэш ещё не инвалидирован");
+
+        _sut.InvalidateReasoning();
+
+        (await _sut.GetActiveReasoningAsync(LmStudioReasoning.None)).Should().Be(LmStudioReasoning.Maximum);
     }
 }
