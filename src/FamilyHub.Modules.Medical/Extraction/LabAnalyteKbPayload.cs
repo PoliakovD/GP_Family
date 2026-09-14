@@ -69,6 +69,27 @@ public static class LabAnalyteKbPayload
         }
     }
 
+    /// <summary>Пояснения статьи справочника (plainExplanation/highMeans/lowMeans), собранные в
+    /// одну строку-подсказку для QualitativeNormJudge — последнего резервного шага каскада, когда
+    /// ни диапазон, ни полярность не применимы. Null, если ни одно из полей не заполнено (строки
+    /// v1/v2 схемы или ещё не обогащённая запись) — не ошибка, просто подсказки нет.</summary>
+    public static string? ParseNormHint(string payloadJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            var parts = new[] { "plainExplanation", "highMeans", "lowMeans" }
+                .Select(key => doc.RootElement.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+            return parts.Count == 0 ? null : string.Join(" ", parts);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Null, если справочник не даёт числового диапазона — PatientReferenceCalculator
     /// пробует расчёт по методике, ParseRefRanges на это не отвечает (см. Build выше).</summary>
     public static string? ParseCalculationInstructions(string payloadJson)

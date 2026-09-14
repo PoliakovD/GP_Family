@@ -47,6 +47,7 @@ public class MedicalDocumentExtractionProcessor(
     OcrNameCorrector ocrNameCorrector,
     SpecimenResolver specimenResolver,
     PatientReferenceCalculator referenceCalculator,
+    QualitativeNormJudge qualitativeJudge,
     LabSummarizer summarizer,
     Kb.KbLookupService medicationKbLookup,
     VisitMedicationEnrichmentRequestService visitMedicationEnrichment,
@@ -464,6 +465,27 @@ public class MedicalDocumentExtractionProcessor(
                     refSource = RefSource.Inferred;
                     effLow = inferred.Value.Low;
                     effHigh = inferred.Value.High;
+                }
+            }
+
+            // Каскад, самый дорогой и самый редкий резервный шаг (RefSource.Inferred,
+            // QualitativeNormJudge) — TryApplyInferred выше умеет только числовой диапазон и
+            // бинарную полярность "обнаружено/не обнаружено"; описательные качественные результаты
+            // (шкалы обильности "+"/"++"/"+++", развёрнутые находки мазка вроде "коккобацилярная,
+            // обильно") ни тем, ни другим не раскладываются — короткий прицельный вызов LLM с уже
+            // известным контекстом (dto.RefExpected — собственная более ранняя догадка модели;
+            // пояснения статьи справочника, если показатель уже привязан к KB). Отдельный тумблер
+            // ("qualitative-judge", не "patient-reference") — принципиально другой по цене и
+            // природе вызов, админ может выключить его отдельно.
+            if (refSource == RefSource.None &&
+                await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "qualitative-judge", ct))
+            {
+                var kbHint = kbRow is not null ? LabAnalyteKbPayload.ParseNormHint(kbRow.Value.PayloadJson) : null;
+                var isNormal = await qualitativeJudge.JudgeAsync(dto.Name, dto.Value, dto.Unit, dto.RefExpected, kbHint, ct);
+                if (isNormal is not null)
+                {
+                    flag = isNormal.Value ? IndicatorFlag.Normal : IndicatorFlag.High;
+                    refSource = RefSource.Inferred;
                 }
             }
 
