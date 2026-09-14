@@ -10,9 +10,14 @@ namespace FamilyHub.Domain.Enums;
 /// 3. KbCalculated — фиксированного диапазона нет, но у показателя в KB есть
 ///    CalculationInstructions — локальная LLM посчитала low/high под конкретного пациента
 ///    (PatientReferenceCalculator). Фронт показывает бэйдж "рассчитано ИИ" только для этого случая.
-/// 4. None — промах KB целиком (или методика есть, но модель не смогла посчитать) — Flag=Unknown,
-///    показатель ждёт RecalculateIndicatorFlagsJob после того, как LabAnalyteEnrichmentProcessor
-///    наполнит справочник.
+/// 4. Inferred — ни бланк, ни справочник ничего не дали, но модель САМА предположила ожидаемую
+///    норму по общемедицинским знаниям (ExtractedLabIndicator.RefExpected, заполняется моделью
+///    только когда в бланке референса нет вовсе — типичный случай ИППП/качественных панелей).
+///    Наименее надёжный источник каскада — MedicalDocumentExtractionProcessor использует его
+///    только когда KbFixed/KbCalculated не сработали, и RecalculateIndicatorFlagsJob уступает ему
+///    приоритет, как только справочник наполнится. Фронт показывает бэйдж "норма от ИИ".
+/// 5. None — промах KB и модели целиком — Flag=Unknown, показатель ждёт RecalculateIndicatorFlagsJob
+///    после того, как LabAnalyteEnrichmentProcessor наполнит справочник.
 /// </summary>
 public enum RefSource
 {
@@ -20,4 +25,5 @@ public enum RefSource
     Blank = 1,
     KbFixed = 2,
     KbCalculated = 3,
+    Inferred = 4,
 }

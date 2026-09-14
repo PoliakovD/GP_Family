@@ -449,6 +449,24 @@ public class MedicalDocumentExtractionProcessor(
                 }
             }
 
+            // Каскад, последний шаг (RefSource.Inferred, план "нормы из знаний модели") — ни бланк,
+            // ни фиксированный, ни расчётный диапазон KB не дали ответа; если модель САМА
+            // предположила ожидаемую норму (dto.RefExpected — заполняется только когда решила, что
+            // референса в бланке нет вовсе), используем её как наименее надёжный источник. Проверяем
+            // именно после попытки KbCalculated выше — тот надёжнее догадки модели и должен успеть
+            // первым.
+            if (refSource == RefSource.None)
+            {
+                var inferred = IndicatorFlagCalculator.TryApplyInferred(dto);
+                if (inferred is not null)
+                {
+                    flag = inferred.Value.Flag;
+                    refSource = RefSource.Inferred;
+                    effLow = inferred.Value.Low;
+                    effHigh = inferred.Value.High;
+                }
+            }
+
             var key = (analyteKey, specimenKbId);
             if (!existingByKey.TryGetValue(key, out var entity))
             {

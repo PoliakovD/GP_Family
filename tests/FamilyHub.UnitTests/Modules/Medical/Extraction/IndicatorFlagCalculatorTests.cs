@@ -47,11 +47,107 @@ public class IndicatorFlagCalculatorTests
         IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null).Flag.Should().Be(IndicatorFlag.Normal);
     }
 
+    /// <summary>Раньше это было ...ReturnsUnknown — явное РАСХОЖДЕНИЕ смысла ("положительно" при
+    /// напечатанной норме "отрицательно") молчало серым "?" из-за голого сравнения строк.
+    /// QualitativeResultClassifier различает полярность — расхождение теперь однозначный High, не
+    /// "нет данных" (см. IndicatorFlagCalculator.CompareQualitative).</summary>
     [Fact]
-    public void Calculate_QualitativeValueMismatchesRefText_ReturnsUnknown()
+    public void Calculate_QualitativeValueMismatchesRefText_ReturnsHigh()
     {
         var indicator = new ExtractedLabIndicator("Белок в моче", "положительно", null, null, null, "отрицательно");
-        IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null).Flag.Should().Be(IndicatorFlag.Unknown);
+        IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null).Flag.Should().Be(IndicatorFlag.High);
+    }
+
+    [Fact]
+    public void Calculate_QualitativeSynonymMatchesRefText_ReturnsNormal()
+    {
+        // "не обнаружены" (мн.ч.) против нормы "не обнаружено" (ед.ч.) — раньше не совпадало ни
+        // числом, ни родом (голое равенство строк), молчало Unknown. Тот же смысл — теперь Normal.
+        var indicator = new ExtractedLabIndicator("Chlamydia trachomatis", "не обнаружены", null, null, null, "не обнаружено");
+        IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null).Flag.Should().Be(IndicatorFlag.Normal);
+    }
+
+    [Theory]
+    [InlineData("<47", "12", IndicatorFlag.Normal, 0, 47.0)]
+    [InlineData("<47", "60", IndicatorFlag.High, 0, 47.0)]
+    [InlineData(">47", "50", IndicatorFlag.Normal, 47, null)]
+    [InlineData(">47", "30", IndicatorFlag.Low, 47, null)]
+    public void Calculate_OneSidedTextualRefText_ParsesIntoOneSidedBounds(
+        string refText, string value, IndicatorFlag expectedFlag, double expectedLow, double? expectedHigh)
+    {
+        var indicator = new ExtractedLabIndicator("Показатель", value, null, null, null, refText);
+        var (flag, source, effLow, effHigh) = IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null);
+
+        flag.Should().Be(expectedFlag);
+        source.Should().Be(RefSource.Blank);
+        effLow.Should().Be(expectedLow);
+        effHigh.Should().Be(expectedHigh);
+    }
+
+    [Fact]
+    public void Calculate_CensoredValueBelowUpperBound_ReturnsNormal()
+    {
+        // "<0,5" — за пределами чувствительности метода, а не "нет данных": числовая часть
+        // сравнивается с диапазоном как обычное значение (см. ReferenceRangeTextParser.ParseCensoredValue).
+        var indicator = new ExtractedLabIndicator("Показатель", "<0,5", null, 0, 1, null);
+        IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null).Flag.Should().Be(IndicatorFlag.Normal);
+    }
+
+    [Fact]
+    public void Calculate_NegativeFindingValue_NoReferenceAtAll_ReturnsNormalWithoutKbFallback()
+    {
+        // Типичный бланк ИППП: колонки референса нет вовсе (не число, не текст), но "не
+        // обнаружено" само по себе — осмысленная норма для такого теста, а не "нет данных".
+        var indicator = new ExtractedLabIndicator("Chlamydia trachomatis", "не обнаружено", null, null, null, null);
+        var (flag, source, _, _) = IndicatorFlagCalculator.Calculate(indicator, kbFallback: null, ageYears: null, sex: null);
+        flag.Should().Be(IndicatorFlag.Normal);
+        source.Should().Be(RefSource.Blank);
+    }
+
+    [Fact]
+    public void Calculate_NonNumericValue_DoesNotConsumeNumericKbRange_FallsThroughToNone()
+    {
+        // Раньше нечисловое значение против числового KB-диапазона давало (Unknown, KbFixed) и
+        // НАВСЕГДА блокировало дальнейший пересчёт (KbFixed не уступает место ни KbCalculated, ни
+        // Inferred) — должно проваливаться дальше по каскаду.
+        var indicator = new ExtractedLabIndicator("Показатель", "норма", null, null, null, null);
+        var kbRange = new KbReferenceRange(AgeFrom: null, AgeTo: null, Sex: null, Low: 5, High: 8, Unit: null);
+
+        var (flag, source, _, _) = IndicatorFlagCalculator.Calculate(indicator, kbFallback: kbRange, ageYears: null, sex: null);
+        flag.Should().Be(IndicatorFlag.Unknown);
+        source.Should().Be(RefSource.None);
+    }
+
+    [Fact]
+    public void TryApplyInferred_NumericRefExpected_ReturnsInferredSource()
+    {
+        var indicator = new ExtractedLabIndicator("Показатель", "6", null, null, null, null, RefExpected: "3,5-5,0");
+        var result = IndicatorFlagCalculator.TryApplyInferred(indicator);
+
+        result.Should().NotBeNull();
+        result!.Value.Flag.Should().Be(IndicatorFlag.High);
+        result.Value.Source.Should().Be(RefSource.Inferred);
+        result.Value.Low.Should().Be(3.5);
+        result.Value.High.Should().Be(5.0);
+    }
+
+    [Fact]
+    public void TryApplyInferred_QualitativeRefExpected_MatchingValue_ReturnsNormal()
+    {
+        // Бланк ИППП без референса вовсе — модель сама предположила ожидаемую норму.
+        var indicator = new ExtractedLabIndicator("Chlamydia trachomatis", "не обнаружено", null, null, null, null, RefExpected: "не обнаружено");
+        var result = IndicatorFlagCalculator.TryApplyInferred(indicator);
+
+        result.Should().NotBeNull();
+        result!.Value.Flag.Should().Be(IndicatorFlag.Normal);
+        result.Value.Source.Should().Be(RefSource.Inferred);
+    }
+
+    [Fact]
+    public void TryApplyInferred_NoRefExpected_ReturnsNull()
+    {
+        var indicator = new ExtractedLabIndicator("Показатель", "10", null, null, null, null);
+        IndicatorFlagCalculator.TryApplyInferred(indicator).Should().BeNull();
     }
 
     [Fact]

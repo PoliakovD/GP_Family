@@ -601,6 +601,15 @@ public static class AdminPipelineEndpoints
             backgroundJobs.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
             return Results.Accepted();
         });
+
+        // Одноразовый перепрогон (план "нормы из бланка: односторонние референсы и качественные
+        // результаты") — чинит показатели, застрявшие на Flag.Unknown ДО фикса каскада
+        // IndicatorFlagCalculator (RecomputeIndicatorFlagsBackfillJob), не часть обычного конвейера.
+        group.MapPost("/recompute-indicator-flags", (IBackgroundJobClient backgroundJobs) =>
+        {
+            backgroundJobs.Enqueue<RecomputeIndicatorFlagsBackfillJob>(j => j.RunAsync(CancellationToken.None));
+            return Results.Accepted();
+        });
     }
 
     /// <summary>Сброс задачи в Pending (снимает Error/FailureReason — задача перезапускается
