@@ -540,34 +540,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return item.kind === MedicalRecordKind.Analysis && this.indicatorsFor(item.id).length > 0;
   }
 
-  /** Редизайн v2.2 — те же 5 действий открытой записи, что видимыми кнопками на десктопе
-   * (см. шаблон, @if (recordId())), но одним списком для мобильного «…» (уже умеет
-   * попап/шторку сам, см. shared/action-menu) — Файлы/Резюме переключают те же булевы. */
-  detailActions(item: MedicalRecord): ActionMenuItem[] {
-    const actions: ActionMenuItem[] = [
-      {
-        label: this.filesOpen ? 'Скрыть файлы' : `Файлы (${item.attachmentCount})`,
-        icon: 'ph ph-paperclip',
-        handler: () => this.toggleFiles(),
-      },
-    ];
-    if (this.hasSummarySection(item)) {
-      actions.push({
-        label: this.summaryOpen ? 'Скрыть резюме' : 'Резюме',
-        icon: 'ph ph-file-text',
-        handler: () => this.toggleSummary(),
-      });
-    }
-    if (this.canDelete(item)) {
-      actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
-    }
-    actions.push({ label: 'Доступ', icon: 'ph ph-share-network', handler: () => this.openAccessSheet(item) });
-    if (this.canDelete(item)) {
-      actions.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDelete(item) });
-    }
-    return actions;
-  }
-
   /** Третья плитка статуса — «без нормы в бланке». abnormalIndicatorCount/normalIndicatorCount
    * уже приходят с сервера (см. чип списка) — без нормы просто остаток, отдельно не считаем. */
   unknownIndicatorCount(item: MedicalRecord): number {
@@ -1099,18 +1071,14 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Редизайн v2.2 — сортировка/скрытие пустых строк таблицы показателей. Индикаторы обычно
-  // от единиц до пары десятков на запись — сортируем по месту на каждый рендер без мемоизации,
-  // усложнять ради этого объёма не стоит. ---
+  // --- Редизайн v2.2 — сортировка строк таблицы показателей (скрытие пустых строк убрано по
+  // отзыву — все показатели всегда видны, сортировка осталась). Индикаторы обычно от единиц до
+  // пары десятков на запись — сортируем по месту на каждый рендер без мемоизации, усложнять ради
+  // этого объёма не стоит. ---
   indicatorSortMode: 'abnormal' | 'form' | 'alpha' = 'abnormal';
-  hideEmptyIndicators = true;
 
   setIndicatorSort(mode: 'abnormal' | 'form' | 'alpha'): void {
     this.indicatorSortMode = mode;
-  }
-
-  toggleEmptyIndicators(): void {
-    this.hideEmptyIndicators = !this.hideEmptyIndicators;
   }
 
   indicatorsFor(recordId: string): IndicatorDto[] {
@@ -1124,29 +1092,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
     // 'form' — как пришло с сервера (порядок из бланка), без изменений.
     return items;
-  }
-
-  /** «Пустой» показатель — без значения (прочерк/пробел) ИЛИ без нормы в бланке вовсе (см.
-   * indicatorReference) — сворачивается в одну строку по умолчанию (hideEmptyIndicators). */
-  isEmptyIndicator(indicator: IndicatorDto): boolean {
-    return !indicator.valueRaw.trim() || /^[-–—]+$/.test(indicator.valueRaw.trim()) || this.indicatorReference(indicator) === null;
-  }
-
-  visibleIndicatorsFor(recordId: string): IndicatorDto[] {
-    const items = this.indicatorsFor(recordId);
-    return this.hideEmptyIndicators ? items.filter((i) => !this.isEmptyIndicator(i)) : items;
-  }
-
-  emptyIndicatorsFor(recordId: string): IndicatorDto[] {
-    return this.indicatorsFor(recordId).filter((i) => this.isEmptyIndicator(i));
-  }
-
-  /** «серповидные эритроциты, тельца Жолли и др.» — первые три имени свёрнутой строки, как в
-   * референсе. */
-  emptyIndicatorsSummary(recordId: string): string {
-    const empty = this.emptyIndicatorsFor(recordId);
-    const names = empty.slice(0, 3).map((i) => this.shortIndicatorName(i)).join(', ');
-    return empty.length > 3 ? `${names} и др.` : names;
   }
 
   /** Подсветка строки по статусу — зелёная/красная, ровно два состояния (не по градации
