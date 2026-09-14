@@ -54,6 +54,7 @@ export class AdminPipelineComponent implements OnInit, OnDestroy {
   readonly steps = signal<PipelineStep[]>([]);
   readonly stepsLoading = signal(true);
   readonly stepsBusy = signal(false);
+  readonly recomputeFlagsBusy = signal(false);
 
   readonly promptSlots = signal<PromptSlot[]>([]);
   readonly promptsLoading = signal(true);
@@ -179,6 +180,30 @@ export class AdminPipelineComponent implements OnInit, OnDestroy {
       this.toast.error('Не удалось изменить шаг.');
     } finally {
       this.stepsBusy.set(false);
+    }
+  }
+
+  /** Одноразовый перепрогон показателей, застрявших на Flag.Unknown ДО фикса каскада
+   * IndicatorFlagCalculator (план "нормы из бланка") — RecomputeIndicatorFlagsBackfillJob, фон,
+   * без прогресс-бара: задача разовая и не привязана ни к одной из четырёх таблиц задач конвейера
+   * (не показатель для admin-job-panel), поэтому статус здесь не отслеживается — только тост
+   * "поставлено в очередь", результат смотреть в логах Hangfire либо по факту позеленевших строк. */
+  async recomputeIndicatorFlags(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Перепрогнать нормы показателей?',
+      message: 'Все показатели, застрявшие на "нет данных" из-за старого бага (одностороннего "<47"/">47" или качественного результата типа "не обнаружено"), будут пересчитаны заново по уже сохранённым данным. Задача фоновая — результат не отображается здесь напрямую.',
+      confirmText: 'Перепрогнать',
+    });
+    if (!ok) return;
+
+    this.recomputeFlagsBusy.set(true);
+    try {
+      await this.api.recomputeIndicatorFlags();
+      this.toast.success('Перепрогон поставлен в очередь.');
+    } catch {
+      this.toast.error('Не удалось поставить перепрогон в очередь.');
+    } finally {
+      this.recomputeFlagsBusy.set(false);
     }
   }
 

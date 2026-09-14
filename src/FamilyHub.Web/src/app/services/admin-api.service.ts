@@ -399,6 +399,12 @@ export class AdminApiService {
 
   reenrichLabAnalyte = (id: string) => this.post<void>(`/api/admin/pipeline/kb/lab-analytes/${id}/reenrich`);
 
+  /** Одноразовый перепрогон показателей, застрявших на Flag.Unknown ДО фикса каскада
+   * IndicatorFlagCalculator (односторонние референсы "<47"/">47", качественные результаты вида
+   * "не обнаружено") — RecomputeIndicatorFlagsBackfillJob, ставится в Hangfire-очередь и работает
+   * в фоне, эндпоинт сразу отвечает 202. */
+  recomputeIndicatorFlags = () => this.post<void>('/api/admin/pipeline/recompute-indicator-flags');
+
   // Инбокс «Требует внимания» — точка входа админки в разбор падений конвейера (см. план, Context).
   getAttention = () => this.get<AdminAttention>('/api/admin/pipeline/attention');
 
