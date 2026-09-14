@@ -1,6 +1,7 @@
 using System.Globalization;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -21,10 +22,17 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// Однократный ручной триггер (POST /api/admin/pipeline/recompute-indicator-flags), не часть
 /// обычного конвейера — новые записи чинятся самим фиксом на этапе распознавания, старые лечит
 /// этот прогон один раз.
+///
+/// Плюс QualitativeNormJudge (см. class doc) — тот же последний резервный шаг, что в
+/// MedicalDocumentExtractionProcessor, только без dto.RefExpected (никогда не персистится, у
+/// старых записей его и не было): судит по названию/значению/пояснению справочника, если
+/// показатель уже привязан к KB-записи.
 /// </summary>
 [Queue("enrichment")]
 [AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
-public class RecomputeIndicatorFlagsBackfillJob(AppDbContext db, ILogger<RecomputeIndicatorFlagsBackfillJob> logger)
+public class RecomputeIndicatorFlagsBackfillJob(
+    AppDbContext db, QualitativeNormJudge qualitativeJudge, IPipelineConfigService pipelineConfig,
+    ILogger<RecomputeIndicatorFlagsBackfillJob> logger)
 {
     public async Task RunAsync(CancellationToken ct = default)
     {
@@ -46,13 +54,15 @@ public class RecomputeIndicatorFlagsBackfillJob(AppDbContext db, ILogger<Recompu
             foreach (var indicator in group)
             {
                 // RefExpected никогда не персистится (только этап распознавания знает о нём) —
-                // у старых записей его и не было, воссоздать нечем; каскад Calculate дальше сам
-                // проваливается до (Unknown, None), если ничего другое не подошло — как и раньше.
+                // у старых записей его и не было, воссоздать нечем; TryApplyInferred здесь не
+                // вызывается вовсе (ему нечего разбирать), но QualitativeNormJudge ниже всё равно
+                // может помочь по названию/значению/пояснению справочника.
                 var dto = new ExtractedLabIndicator(
                     indicator.DisplayName, indicator.ValueRaw, indicator.Unit,
                     ParseDouble(indicator.RefLowText), ParseDouble(indicator.RefHighText), indicator.RefText);
 
                 KbReferenceRange? kbFallback = null;
+                string? kbHint = null;
                 if (indicator.KbAnalyteId is not null)
                 {
                     var kb = await db.GlobalLabAnalytesKb.AsNoTracking()
@@ -61,10 +71,28 @@ public class RecomputeIndicatorFlagsBackfillJob(AppDbContext db, ILogger<Recompu
                     {
                         kbFallback = IndicatorFlagCalculator.PickBestRange(
                             LabAnalyteKbPayload.ParseRefRanges(kb.PayloadJson), ageYears, sex);
+                        kbHint = LabAnalyteKbPayload.ParseNormHint(kb.PayloadJson);
                     }
                 }
 
                 var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex);
+
+                // Последний резервный шаг (см. class doc) — только когда деterministic-каскад
+                // выше не дал вообще ничего; RefExpected здесь всегда null (никогда не
+                // персистится), но пояснение справочника и само название/значение — уже полезный
+                // контекст сами по себе.
+                if (flag == IndicatorFlag.Unknown &&
+                    await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "qualitative-judge", ct))
+                {
+                    var isNormal = await qualitativeJudge.JudgeAsync(
+                        indicator.DisplayName, indicator.ValueRaw, indicator.Unit, modelExpectedNorm: null, kbHint, ct);
+                    if (isNormal is not null)
+                    {
+                        flag = isNormal.Value ? IndicatorFlag.Normal : IndicatorFlag.High;
+                        refSource = RefSource.Inferred;
+                    }
+                }
+
                 if (flag == IndicatorFlag.Unknown) continue;
 
                 indicator.Flag = flag;

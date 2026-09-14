@@ -52,6 +52,10 @@ public static class MedicalModule
         services.AddScoped<IMedicalDocumentExtractor, NullMedicalDocumentExtractor>();
         services.AddScoped<LabAnalyteKbLookupService>();
         services.AddScoped<PatientReferenceCalculator>();
+        // Последний резервный шаг каскада (RefSource.Inferred) — судит по смыслу свободного
+        // текста, когда ни диапазон, ни полярность "обнаружено/не обнаружено" не применимы (см.
+        // class doc QualitativeNormJudge).
+        services.AddScoped<QualitativeNormJudge>();
         services.AddScoped<LabSummarizer>();
         services.AddScoped<ExtractionRequestService>();
         services.AddScoped<ExtractionQueryService>();

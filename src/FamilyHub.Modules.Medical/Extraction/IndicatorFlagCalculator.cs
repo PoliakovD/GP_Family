@@ -16,8 +16,11 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// PatientReferenceCalculator и ApplyCalculatedRange ниже, вызывается процессором отдельно, когда
 /// этот метод вернул RefSource.None, а у KB-записи есть CalculationInstructions.
 /// 4. Ожидаемая норма от МОДЕЛИ (RefSource.Inferred) — тоже не умещается в Calculate (должна
-///    уступать шагу 3 выше), см. TryApplyInferred ниже — наименее надёжный шаг, вызывается
-///    процессором/job'ом только когда шаги 1-3 не дали результата.
+///    уступать шагу 3 выше), см. TryApplyInferred ниже — дешёвый детерминированный разбор,
+///    вызывается процессором/job'ом только когда шаги 1-3 не дали результата.
+/// 5. Судейская оценка МОДЕЛИ по смыслу свободного текста (тоже RefSource.Inferred) — см.
+///    QualitativeNormJudge (отдельный файл), последний и самый дорогой резервный шаг: когда
+///    TryApplyInferred тоже не смог разобрать текст (шкалы обильности, описательные находки).
 /// </summary>
 public static class IndicatorFlagCalculator
 {

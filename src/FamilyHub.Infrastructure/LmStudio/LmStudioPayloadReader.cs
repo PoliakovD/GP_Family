@@ -74,6 +74,19 @@ public static class LmStudioPayloadReader
         _ => null,
     };
 
+    /// <summary>true/false → значение; JSON null или отсутствие поля → null ("модель не уверена" —
+    /// вызывающая сторона должна оставить прежний результат, не подставлять ни один флаг).</summary>
+    public static bool? ReadBool(Dictionary<string, JsonElement> payload, string key)
+    {
+        if (!TryGetValue(payload, key, out var el)) return null;
+        return el.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null,
+        };
+    }
+
     public static List<string> ReadStringArray(Dictionary<string, JsonElement> payload, string key)
     {
         if (!TryGetValue(payload, key, out var el) || el.ValueKind != JsonValueKind.Array) return [];
