@@ -5,7 +5,8 @@ namespace FamilyHub.Modules.Medical.Medications;
 /// — UI показывает чип «уточняем норму…» (см. MedicationService.GetForMedkitAsync).</summary>
 public record MedicationDto(
     Guid Id, Guid MedkitId, Guid FamilyId, string Name, DateOnly? ExpiryDate, Dictionary<string, string> Data,
-    Guid CreatedByUserId, DateTime CreatedAt, bool EnrichmentPending = false, string? EnrichmentLiveText = null);
+    Guid CreatedByUserId, DateTime CreatedAt, bool EnrichmentPending = false, string? EnrichmentLiveText = null,
+    int EnrichmentQueueAhead = 0);
 
 public record CreateMedicationRequest(string Name, DateOnly? ExpiryDate, Dictionary<string, string>? Data);
 

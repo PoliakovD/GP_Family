@@ -135,7 +135,7 @@
           @if (item.enrichmentPending) {
             <span
               class="tag tag-neutral"
-              [title]="item.enrichmentLiveText ?? 'Справочник пока не знает этот препарат — идёт фоновый поиск'"
+              [title]="medicationEnrichmentTitle(item)"
             >
               <span class="pipeline-step-spinner" aria-hidden="true"></span> ищем описание препарата…
             </span>

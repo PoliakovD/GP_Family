@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Medications;
@@ -24,6 +25,7 @@ public class MedicationServiceTests : SqliteTestBase
             Db,
             new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
             Substitute.For<IEnrichmentRequestService>(),
+            new LlmQueuePositionService(Db),
             NullLogger<MedicationService>.Instance);
     }
 

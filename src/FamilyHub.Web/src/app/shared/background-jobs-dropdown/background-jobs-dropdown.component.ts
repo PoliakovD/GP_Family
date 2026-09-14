@@ -4,6 +4,7 @@ import { BreakpointService } from '../../services/breakpoint.service';
 import { BackgroundJobsStateService } from '../../services/background-jobs-state.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
 import { relatedKindBasePath } from '../util/related-kind-route';
+import { pluralizeRu } from '../util/pluralize';
 import type { ActiveJobItem, ActiveJobsGroup } from '../../models/types';
 
 /** Одна секция выпадающего списка — заголовок + иконка конвейера + сама группа (§4 плана). */
@@ -59,6 +60,18 @@ export class BackgroundJobsDropdownComponent {
     this.open.set(false);
     if (item.recordKind === null || item.recordId === null) return;
     void this.router.navigate([relatedKindBasePath(item.recordKind), item.recordId]);
+  }
+
+  /** Живая "мысль" модели, если задача реально держит гейт LM Studio прямо сейчас; иначе — её
+   * позиция в общей очереди к LLM (план "живой поток мыслей" — не путать пользователя тем, что
+   * задача "висит" Running без объяснений, пока справочник насыщается или идёт большой поток
+   * анализов); null — вообще ничего показывать не нужно (задача Pending и никого нет впереди).*/
+  itemStatusText(item: ActiveJobItem): string | null {
+    if (item.liveText) return item.liveText;
+    if (item.queueAhead > 0) {
+      return `в очереди — ещё ${item.queueAhead} ${pluralizeRu(item.queueAhead, 'задача', 'задачи', 'задач')} впереди`;
+    }
+    return null;
   }
 
   @HostListener('document:click', ['$event'])

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.MedicalRecords;
@@ -24,7 +25,8 @@ public class ExtractionQueryService(
     AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup,
     Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer,
     LabAnalyteKbLookupService analyteKbLookup, LabAnalyteEnrichmentRequestService enrichmentRequest,
-    ILegitimacyGuardService legitimacyGuard, IAnalytePlausibilityGuardService plausibilityGuard)
+    ILegitimacyGuardService legitimacyGuard, IAnalytePlausibilityGuardService plausibilityGuard,
+    LlmQueuePositionService queuePositionService)
 {
     /// <summary>Заметка 3 — гейты проверяются СИНХРОННО, до постановки обогащения в очередь, а не
     /// только внутри фонового LabAnalyteEnrichmentProcessor (тот же порог для ManualEntry, что уже
@@ -53,22 +55,21 @@ public class ExtractionQueryService(
             .FirstOrDefaultAsync(ct);
         if (job is null) return (ExtractionQueryResult.NotFound, null);
 
-        // Позиция в очереди — только пока задача реально ждёт (Pending): считаем по самой таблице
-        // задач (частичный уникальный индекс уже гарантирует не больше одной живой задачи на
-        // запись, см. ExtractionRequestService), не через Hangfire IMonitoringApi — переживает
-        // requeue LmStudioRecoverySweepJob (тот меняет Status обратно на Pending с тем же
-        // CreatedAt/новым Hangfire job id, порядок в очереди определяется этим полем, не
-        // внутренним id очереди) и не требует хранить Hangfire job id отдельно. Один воркер на
-        // очередь "extraction" (LM Studio — один ноутбук за WireGuard) — впереди все Pending-задачи
-        // С БОЛЕЕ РАННИМ CreatedAt, ровно то же самое FIFO, что и Hangfire по умолчанию.
-        var queuePosition = job.Status == EnrichmentJobStatus.Pending
-            ? await db.MedicalDocumentExtractionJobs.AsNoTracking()
-                .CountAsync(j => j.Status == EnrichmentJobStatus.Pending && j.CreatedAt < job.CreatedAt, ct)
+        // Позиция в ОБЩЕЙ очереди к единственному локальному LLM — пока задача реально ждёт своей
+        // очереди (Pending ИЛИ Running: "extraction"/"enrichment" — разные Hangfire-серверы,
+        // задача может дойти до Running, пока Hangfire её взял, но модель всё ещё занята другой
+        // задачей другого конвейера, см. class doc LlmQueuePositionService/LmStudioConcurrencyGate).
+        // Раньше считалось только по своей таблице задач — систематически недооценивало реальное
+        // ожидание при большом потоке задач обогащения справочника (баг, найденный на живом
+        // отчёте: кнопка «Распознать» блокирована верно, а бейдж стадии создавал впечатление
+        // активной работы, хотя задача просто стояла в общей очереди у семафора).
+        var queueAhead = job.Status is EnrichmentJobStatus.Pending or EnrichmentJobStatus.Running
+            ? await queuePositionService.GetQueueAheadAsync(job.CreatedAt, ct)
             : 0;
 
         return (ExtractionQueryResult.Success, new ExtractionStatusResponse(
             job.Status, job.Stage, job.IndicatorCount, job.Error, job.TotalFiles, job.ProcessedFiles,
-            job.CreatedAt, job.CompletedAt, queuePosition, job.CurrentThought));
+            job.CreatedAt, job.CompletedAt, queueAhead, job.CurrentThought));
     }
 
     public async Task<(ExtractionQueryResult Result, List<IndicatorDto> Items)> GetIndicatorsAsync(
@@ -84,12 +85,18 @@ public class ExtractionQueryService(
 
         var specimenNames = await ResolveSpecimenNamesAsync(items.Select(i => i.SpecimenKbId), ct);
         var pendingKeys = await GetPendingEnrichmentKeysAsync(items, ct);
+        // Один поход в БД на всю страницу (см. class doc LlmQueuePositionService) — не на каждый
+        // промахнувшийся показатель отдельно; лишний запрос вообще не делаем, если промахов нет.
+        var activeTimestamps = pendingKeys.Count > 0
+            ? await queuePositionService.GetActiveJobTimestampsAsync(ct)
+            : [];
 
         return (ExtractionQueryResult.Success, items
             .Select(i =>
             {
-                var (pending, liveText) = FindPendingEnrichment(i, pendingKeys);
-                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, liveText);
+                var (pending, liveText, createdAt) = FindPendingEnrichment(i, pendingKeys);
+                var queueAhead = pending ? LlmQueuePositionService.CountAhead(activeTimestamps, createdAt) : 0;
+                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, liveText, queueAhead);
             })
             .ToList());
     }
@@ -97,8 +104,10 @@ public class ExtractionQueryService(
     /// <summary>§5 плана «живой конвейер» — один доп. запрос на всю СТРАНИЦУ показателей (не на
     /// каждый), т.к. GetIndicatorsAsync и так вызывается на каждое открытие записи. CurrentThought
     /// — живой обрывок "мысли" модели (план "живой поток мыслей") — non-null максимум на одной
-    /// строке из всех активных задач всей системы одновременно, см. class doc ActiveJobItem.</summary>
-    private async Task<List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought)>> GetPendingEnrichmentKeysAsync(
+    /// строке из всех активных задач всей системы одновременно, см. class doc ActiveJobItem.
+    /// CreatedAt — для позиции в ОБЩЕЙ очереди к LLM (см. LlmQueuePositionService), не только
+    /// среди показателей этой записи.</summary>
+    private async Task<List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt)>> GetPendingEnrichmentKeysAsync(
         List<DomainLabIndicator> items, CancellationToken ct)
     {
         var specimenIds = items.Select(i => i.SpecimenKbId).Distinct().ToList();
@@ -107,10 +116,10 @@ public class ExtractionQueryService(
         var rows = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
             .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
                 && specimenIds.Contains(j.SpecimenKbId))
-            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought })
+            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought, j.CreatedAt })
             .ToListAsync(ct);
 
-        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CurrentThought)).ToList();
+        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CurrentThought, r.CreatedAt)).ToList();
     }
 
     /// <summary>Матчинг НЕ точным равенством — LabIndicator.AnalyteKey иногда несёт суффикс
@@ -119,12 +128,12 @@ public class ExtractionQueryService(
     /// ключу (lookupKey), не по разведённому analyteKey") — поэтому StartsWith, не ==. Ложных
     /// совпадений на практике не бывает: коллизия имени ПОСЛЕ нормализации в пределах одного
     /// источника — редкий случай, который и разводит AnalyteKeyDisambiguator.</summary>
-    private static (bool Pending, string? LiveText) FindPendingEnrichment(
-        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought)> pendingKeys)
+    private static (bool Pending, string? LiveText, DateTime CreatedAt) FindPendingEnrichment(
+        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt)> pendingKeys)
     {
         var match = pendingKeys.FirstOrDefault(k => k.SpecimenKbId == indicator.SpecimenKbId
             && indicator.AnalyteKey.StartsWith(k.NormalizedName, StringComparison.Ordinal));
-        return match.NormalizedName is null ? (false, null) : (true, match.CurrentThought);
+        return match.NormalizedName is null ? (false, null, default) : (true, match.CurrentThought, match.CreatedAt);
     }
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
@@ -632,10 +641,11 @@ public class ExtractionQueryService(
     }
 
     private static IndicatorDto ToDto(
-        DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false, string? enrichmentLiveText = null) => new(
+        DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false, string? enrichmentLiveText = null,
+        int enrichmentQueueAhead = 0) => new(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
         i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
-        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentLiveText);
+        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentLiveText, enrichmentQueueAhead);
 
     private static double? ParseNumeric(string? value)
     {

@@ -3,10 +3,12 @@ using FamilyHub.Modules.Medical.Kb;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
-/// <summary>QueuePosition — сколько ЕЩЁ НЕ начатых задач извлечения (Status=Pending, любой
-/// записи/пользователя — очередь "extraction" общая на всех, один воркер) стоят раньше этой; 0,
-/// пока задача сама не Pending (уже Running либо уже завершилась) — тогда позиция бессмысленна,
-/// фронт её не показывает. См. ExtractionQueryService.GetStatusAsync.</summary>
+/// <summary>QueuePosition — сколько задач стоят раньше этой в ОБЩЕЙ очереди к единственному
+/// локальному LLM (не только своей таблицы задач — см. LlmQueuePositionService: "extraction" и
+/// "enrichment" — разные Hangfire-серверы, задача может дойти до Running независимо от того,
+/// говорит ли модель прямо сейчас с ней или с задачей другого конвейера). Считается, пока задача
+/// Pending ИЛИ Running; 0, когда задача уже завершилась — тогда позиция бессмысленна, фронт её не
+/// показывает. См. ExtractionQueryService.GetStatusAsync.</summary>
 /// <summary>CurrentThought — живой обрывок "мысли" модели (план "живой поток мыслей"), пока
 /// задача реально думает — null между вызовами/на security-гейтах/когда задача не Running, см.
 /// class doc MedicalDocumentExtractionJob.CurrentThought.</summary>
@@ -31,7 +33,7 @@ public record IndicatorDto(
     string ValueRaw, string? Unit, string? RefLowText, string? RefHighText, string? RefText,
     DateOnly RecordDate, Guid MedicalRecordId,
     string? ValueNumericText = null, Guid? KbAnalyteId = null, string? RawDisplayName = null,
-    bool EnrichmentPending = false, string? EnrichmentLiveText = null);
+    bool EnrichmentPending = false, string? EnrichmentLiveText = null, int EnrichmentQueueAhead = 0);
 
 public record IndicatorHistoryPoint(DateOnly RecordDate, string ValueRaw, string? ValueNumericText, IndicatorFlag Flag, Guid MedicalRecordId);
 

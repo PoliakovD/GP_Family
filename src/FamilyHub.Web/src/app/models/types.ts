@@ -142,6 +142,8 @@ export interface Medication {
     enrichmentPending: boolean;
     /** Живой обрывок "мысли" модели (план "живой поток мыслей") — см. IndicatorDto.enrichmentLiveText. */
     enrichmentLiveText: string | null;
+    /** См. ActiveJobItem.queueAhead — позиция в общей очереди к LLM, не только конвейера обогащения препаратов. */
+    enrichmentQueueAhead: number;
 }
 
 export interface MedicationInput {
@@ -461,6 +463,10 @@ export interface ActiveJobItem {
      * строки из всех активных задач всей системы одновременно (LmStudioConcurrencyGate
      * сериализует все вызовы LM Studio) — у остальных Pending это просто null, они ждут очередь. */
     liveText: string | null;
+    /** Сколько задач из ЛЮБОГО из четырёх конвейеров реально стоят раньше этой в общей очереди к
+     * LLM (не только своего конвейера — "extraction"/"enrichment" делят одну модель) — 0 у той
+     * самой строки, что реально держит гейт прямо сейчас (см. liveText выше). */
+    queueAhead: number;
 }
 
 export interface ActiveJobsGroup {
@@ -514,8 +520,10 @@ export interface ExtractionStatusResponse {
     processedFiles: number;
     createdAt: string;
     completedAt: string | null;
-    /** Сколько ещё не начатых задач (любой записи — очередь общая, один воркер LM Studio) стоят
-     * раньше этой; осмысленна, только пока status === Pending (иначе всегда 0). */
+    /** Сколько задач из ЛЮБОГО из четырёх конвейеров (не только извлечения — показатели/
+     * медикаменты делят с ним одну и ту же локальную LLM) реально стоят раньше этой в общей
+     * очереди; осмысленна, пока status === Pending или Running (иначе всегда 0) — Running не
+     * значит "модель прямо сейчас отвечает по этой задаче", только что Hangfire её уже взял. */
     queuePosition: number;
     /** Живой обрывок "мысли" модели (план "живой поток мыслей") — null между вызовами/на
      * security-гейтах/когда задача не Running. */
@@ -564,6 +572,8 @@ export interface IndicatorDto {
      * enrichmentPending===true: непусто только пока эта конкретная задача реально держит гейт LM
      * Studio, не просто ждёт очередь (см. class doc ActiveJobItem.LiveText). */
     enrichmentLiveText: string | null;
+    /** См. ActiveJobItem.queueAhead — позиция в общей очереди к LLM, не только конвейера обогащения показателей. */
+    enrichmentQueueAhead: number;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч.
