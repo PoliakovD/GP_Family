@@ -278,18 +278,12 @@
 
         @if (item.kind === Kind.Analysis) {
         @if (indicatorsFor(item.id).length > 0) {
-        <!-- Редизайн v2.2 — сортировка + скрытие пустых строк (было — только исходный порядок
-             из бланка, без управления). -->
+        <!-- Редизайн v2.2 — сортировка (было — только исходный порядок из бланка, без
+             управления). Скрытие пустых строк убрано по отзыву — все показатели видны всегда. -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
           <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'abnormal'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('abnormal')">Сначала отклонения</button>
           <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'form'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('form')">Как в бланке</button>
           <button type="button" class="tag" [class.tag-accent]="indicatorSortMode === 'alpha'" style="cursor:pointer;border:none;font:inherit" (click)="setIndicatorSort('alpha')">По алфавиту</button>
-          @if (emptyIndicatorsFor(item.id).length > 0) {
-            <button type="button" class="btn-link" style="margin-left:auto;font-size:0.7647rem" (click)="toggleEmptyIndicators()">
-              <i [class]="hideEmptyIndicators ? 'ph ph-eye' : 'ph ph-eye-slash'" aria-hidden="true"></i>
-              {{ hideEmptyIndicators ? 'Показать' : 'Скрыть' }} пустые ({{ emptyIndicatorsFor(item.id).length }})
-            </button>
-          }
         </div>
 
         @if (isWide) {
@@ -304,7 +298,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (ind of visibleIndicatorsFor(item.id); track ind.id) {
+              @for (ind of indicatorsFor(item.id); track ind.id) {
                 <!-- Редизайн v2 — 4 колонки данных (Показатель+норма-подстрока / Значение /
                      шкала-референс / статус), клик по строке открывает панель справки.
                      Редизайн v2.2 — правка/удаление переехали в панель справки (см.
@@ -358,16 +352,6 @@
                   <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
                 </tr>
               }
-              @if (hideEmptyIndicators && emptyIndicatorsFor(item.id).length > 0) {
-                <tr>
-                  <td colspan="4" class="muted" style="font-size:0.8235rem">
-                    <i class="ph ph-eye-slash" aria-hidden="true"></i>
-                    {{ emptyIndicatorsFor(item.id).length }} {{ pluralizeRu(emptyIndicatorsFor(item.id).length, 'показатель', 'показателя', 'показателей') }}
-                    без значения или без нормы в бланке — {{ emptyIndicatorsSummary(item.id) }}
-                    <button type="button" class="btn-link" (click)="toggleEmptyIndicators()">Показать</button>
-                  </td>
-                </tr>
-              }
               @if (creatingIndicatorRecordId === item.id) {
                 <tr class="indicator-edit-row">
                   <td colspan="4">
@@ -407,7 +391,7 @@
                Клик открывает тот же openIndicatorInfo(ind) — на этой ширине он уже сам уводит на
                полноэкранный показатель (см. §9), не нижний лист. -->
           <div class="d-flex flex-column gap-2 mb-2">
-            @for (ind of visibleIndicatorsFor(item.id); track ind.id) {
+            @for (ind of indicatorsFor(item.id); track ind.id) {
               <button type="button" class="indicator-card" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
                 <div class="indicator-card-head">
                   <div class="flex-fill" style="min-width:0">
@@ -439,14 +423,6 @@
                 }
                 <app-status-chip [flag]="ind.flag" />
               </button>
-            }
-            @if (hideEmptyIndicators && emptyIndicatorsFor(item.id).length > 0) {
-              <p class="muted mb-0" style="font-size:0.8235rem">
-                <i class="ph ph-eye-slash" aria-hidden="true"></i>
-                {{ emptyIndicatorsFor(item.id).length }} {{ pluralizeRu(emptyIndicatorsFor(item.id).length, 'показатель', 'показателя', 'показателей') }}
-                без значения или без нормы в бланке — {{ emptyIndicatorsSummary(item.id) }}
-                <button type="button" class="btn-link" (click)="toggleEmptyIndicators()">Показать</button>
-              </p>
             }
           </div>
           @if (creatingIndicatorRecordId === item.id) {
@@ -536,37 +512,33 @@
       <div class="card-title mb-2" style="font-size:1.1176rem">{{ shortName(only) }}</div>
 
       <!-- Редизайн v2.2 — Редактировать/Доступ/Удалить видимыми кнопками (были только за «…»),
-           Файлы/Резюме тоже кнопками, сворачивают/разворачивают свои секции ниже. На мобиле —
-           тот же набор действий одним «…» (shared/action-menu уже умеет попап/шторку сам). -->
-      @if (isWide) {
-        <div class="record-detail-actions mb-3">
-          <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" (click)="toggleFiles()">
-            <i class="ph ph-paperclip" aria-hidden="true"></i> Файлы ({{ only.attachmentCount }})
+           Файлы/Резюме тоже кнопками, сворачивают/разворачивают свои секции ниже. Раньше на
+           мобиле тот же набор прятался за одним «…» (app-action-menu) — по отзыву кнопки должны
+           быть видны сразу, как на десктопе; .record-detail-actions уже flex-wrap, переносится
+           на следующую строку на узкой ширине без горизонтального скролла. -->
+      <div class="record-detail-actions mb-3">
+        <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" (click)="toggleFiles()">
+          <i class="ph ph-paperclip" aria-hidden="true"></i> Файлы ({{ only.attachmentCount }})
+        </button>
+        @if (hasSummarySection(only)) {
+          <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" (click)="toggleSummary()">
+            <i class="ph ph-file-text" aria-hidden="true"></i> Резюме
           </button>
-          @if (hasSummarySection(only)) {
-            <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" (click)="toggleSummary()">
-              <i class="ph ph-file-text" aria-hidden="true"></i> Резюме
-            </button>
-          }
-          @if (canDelete(only)) {
-            <button type="button" class="btn btn-secondary btn-sm" (click)="openEditSheet(only)">
-              <i class="ph ph-pencil-simple" aria-hidden="true"></i> Редактировать
-            </button>
-          }
-          <button type="button" class="btn btn-secondary btn-sm" (click)="openAccessSheet(only)">
-            <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
+        }
+        @if (canDelete(only)) {
+          <button type="button" class="btn btn-secondary btn-sm" (click)="openEditSheet(only)">
+            <i class="ph ph-pencil-simple" aria-hidden="true"></i> Редактировать
           </button>
-          @if (canDelete(only)) {
-            <button type="button" class="btn btn-secondary btn-sm" style="color:var(--color-status-danger-text)" (click)="handleDelete(only)">
-              <i class="ph ph-trash" aria-hidden="true"></i> Удалить
-            </button>
-          }
-        </div>
-      } @else {
-        <div class="mb-3">
-          <app-action-menu [actions]="detailActions(only)" label="Действия с записью" />
-        </div>
-      }
+        }
+        <button type="button" class="btn btn-secondary btn-sm" (click)="openAccessSheet(only)">
+          <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
+        </button>
+        @if (canDelete(only)) {
+          <button type="button" class="btn btn-secondary btn-sm" style="color:var(--color-status-danger-text)" (click)="handleDelete(only)">
+            <i class="ph ph-trash" aria-hidden="true"></i> Удалить
+          </button>
+        }
+      </div>
 
       <!-- Редизайн v2.2 — мета-строка записи (человек/дата/источник/доступ) не существовала
            вообще, заголовок был единственной информацией на экране открытой записи. -->
