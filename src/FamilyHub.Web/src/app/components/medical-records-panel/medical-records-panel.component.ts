@@ -1124,6 +1124,14 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return indicator.refSource === RefSource.KbCalculated;
   }
 
+  /** Бэйдж «норма от ИИ» — наименее надёжный шаг каскада (план "нормы из бланка"): ни бланк, ни
+   * справочник не дали ответа, модель САМА предположила ожидаемую норму по общемедицинским
+   * знаниям (RefSource.Inferred) — в отличие от KbCalculated, это не расчёт по методике
+   * справочника, а догадка, потому бейдж отдельный и текст title другой. */
+  isInferredRef(indicator: IndicatorDto): boolean {
+    return indicator.refSource === RefSource.Inferred;
+  }
+
   // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
   // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
 

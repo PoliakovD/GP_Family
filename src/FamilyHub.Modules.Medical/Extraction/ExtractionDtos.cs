@@ -8,9 +8,16 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// превращает ExtractedLabIndicator[] в LabIndicator[]). RefLow/RefHigh — границы референсного
 /// диапазона, если распознаны в самом бланке.
 /// RefText — референс как напечатан целиком, когда он не раскладывается на
-/// RefLow/RefHigh ("отрицательно", "1-3 в п/зр", "норма"). RefLow/RefHigh заполняются только
-/// когда референс — числовой диапазон.</summary>
-public record ExtractedLabIndicator(string Name, string Value, string? Unit, double? RefLow, double? RefHigh, string? RefText);
+/// RefLow/RefHigh ("отрицательно", "1-3 в п/зр", "норма", а также односторонний "&lt;47"/"&gt;47" —
+/// см. ReferenceRangeTextParser, который его дальше разбирает). RefLow/RefHigh заполняются только
+/// когда референс — простой числовой диапазон ("130-160"). RefExpected — ожидаемый нормальный
+/// результат по общемедицинским знаниям МОДЕЛИ (не то, что напечатано в бланке!) — заполняется
+/// моделью только когда в бланке референса нет вовсе (см. промпт analysis.extract); последний,
+/// наименее надёжный источник каскада (IndicatorFlagCalculator.Calculate → RefSource.Inferred),
+/// null у всех путей, кроме LLM-распознавания (ручной ввод/правка показателя его не заполняют).</summary>
+public record ExtractedLabIndicator(
+    string Name, string Value, string? Unit, double? RefLow, double? RefHigh, string? RefText,
+    string? RefExpected = null);
 
 /// <summary>Один назначенный препарат из заключения врача (UX-редизайн) — DosageInstructions как
 /// написано в документе ("по 1 таблетке 2 раза в день после еды"), не структурировано дальше.

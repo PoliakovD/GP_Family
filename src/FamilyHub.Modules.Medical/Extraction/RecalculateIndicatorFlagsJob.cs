@@ -77,7 +77,11 @@ public class RecalculateIndicatorFlagsJob(
                 var changed = indicator.KbAnalyteId is null;
                 indicator.KbAnalyteId ??= kbAnalyteId;
 
-                if (indicator.RefSource == RefSource.None)
+                // None ждёт справочник с самого начала; Inferred — норма, которую предположила
+                // МОДЕЛЬ (план "нормы из знаний модели", RefSource.Inferred) — курируемый
+                // справочник надёжнее догадки модели и должен переопределить её, как только
+                // появится (Blank/KbFixed/KbCalculated в приоритете и сюда не попадают — см. class doc).
+                if (indicator.RefSource is RefSource.None or RefSource.Inferred)
                 {
                     var kbFallback = IndicatorFlagCalculator.PickBestRange(refRanges, ageYears, sex);
                     if (kbFallback is not null)
@@ -102,12 +106,14 @@ public class RecalculateIndicatorFlagsJob(
                             changed = true;
                         }
                     }
-                    // Ни диапазон, ни методика не дали результата под этого пациента — остаётся
-                    // RefSource.None/Flag.Unknown, справочник просто не покрывает его случай
-                    // (пол/возраст) — но привязка к статье (если она была нужна) уже применена выше.
+                    // Ни диапазон, ни методика не дали результата под этого пациента — RefSource
+                    // остаётся тем, каким был (None/Flag.Unknown, либо прежний Inferred/Flag от
+                    // догадки модели) — справочник просто не покрывает его случай (пол/возраст), но
+                    // привязка к статье (если она была нужна) уже применена выше.
                 }
                 // RefSource уже Blank/KbFixed/KbCalculated — он в приоритете и не переопределяется
                 // справочником (см. IndicatorFlagCalculator.Calculate), трогаем только KbAnalyteId выше.
+                // (Inferred сюда не попадает — он обрабатывается веткой выше, вместе с None.)
 
                 if (changed) updated++;
             }

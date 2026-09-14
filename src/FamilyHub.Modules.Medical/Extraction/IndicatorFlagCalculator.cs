@@ -6,13 +6,18 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// <summary>
 /// Сравнивает распознанный показатель с референсным диапазоном (ветка medicalrecords, редизайн
 /// v2) — каскад приоритетов (см. FamilyHub.Domain.Enums.RefSource):
-/// 1. Референс из самого бланка — лаборатория печатает диапазон под свою методику/единицы.
+/// 1. Референс из самого бланка — лаборатория печатает диапазон под свою методику/единицы, числом
+///    (refLow/refHigh) или текстом ("&lt;47", "&gt;47", "отрицательно" — см. ReferenceRangeTextParser/
+///    QualitativeResultClassifier ниже).
 /// 2. Фиксированный диапазон из GlobalLabAnalyteKb, подобранный по полу (identity rework:
 ///    User.Gender/FamilyDependent.Gender) и возрасту пациента.
 /// Диапазон, посчитанный локальной LLM по методике из KB (RefSource.KbCalculated) — ТРЕТИЙ шаг
 /// каскада, но он не умещается в этот чистый компаратор (требует внешнего вызова) — см.
 /// PatientReferenceCalculator и ApplyCalculatedRange ниже, вызывается процессором отдельно, когда
 /// этот метод вернул RefSource.None, а у KB-записи есть CalculationInstructions.
+/// 4. Ожидаемая норма от МОДЕЛИ (RefSource.Inferred) — тоже не умещается в Calculate (должна
+///    уступать шагу 3 выше), см. TryApplyInferred ниже — наименее надёжный шаг, вызывается
+///    процессором/job'ом только когда шаги 1-3 не дали результата.
 /// </summary>
 public static class IndicatorFlagCalculator
 {
@@ -23,23 +28,50 @@ public static class IndicatorFlagCalculator
     public static (IndicatorFlag Flag, RefSource Source, double? EffectiveLow, double? EffectiveHigh) Calculate(
         ExtractedLabIndicator indicator, KbReferenceRange? kbFallback, int? ageYears, Gender? sex)
     {
-        var numericValue = ParseNumeric(indicator.Value);
+        // Censored-значение самого показателя ("<0,5", ">1000" — за пределами чувствительности
+        // метода) — числовая часть служит точкой сравнения (см. ReferenceRangeTextParser).
+        var numericValue = ParseNumeric(indicator.Value) ?? ReferenceRangeTextParser.ParseCensoredValue(indicator.Value);
 
-        if (indicator.RefLow is not null || indicator.RefHigh is not null)
+        // 1. Числовые границы бланка — явные refLow/refHigh, либо разобранный текстовый refText
+        //    ("<47" → (0, 47), ">47" → (47, null), а также обычный "130-160", если модель всё же
+        //    положила его в refText целиком, а не разложила).
+        var refLow = indicator.RefLow;
+        var refHigh = indicator.RefHigh;
+        if (refLow is null && refHigh is null && !string.IsNullOrWhiteSpace(indicator.RefText))
         {
-            return (CompareToRange(numericValue, indicator.RefLow, indicator.RefHigh), RefSource.Blank, indicator.RefLow, indicator.RefHigh);
+            var parsed = ReferenceRangeTextParser.TryParse(indicator.RefText);
+            if (parsed is not null) (refLow, refHigh) = parsed.Value;
+        }
+        if (refLow is not null || refHigh is not null)
+        {
+            return (CompareToRange(numericValue, refLow, refHigh), RefSource.Blank, refLow, refHigh);
         }
 
+        // 2. Качественный референс напечатан в бланке ("отрицательно", "не обнаружено") —
+        //    сравниваем по СМЫСЛУ (полярность: найдено/не найдено), не голым равенством строк —
+        //    "не обнаружены" должно совпасть с нормой "не обнаружено" (см. QualitativeResultClassifier).
+        //    Формулировки, которых классификатор не разобрал ни у значения, ни у референса,
+        //    падают на прежнее точное сравнение строк — не отбираем то немногое, что уже работало.
         if (!string.IsNullOrWhiteSpace(indicator.RefText))
         {
-            // Качественный референс ("отрицательно", "не обнаружено") — сравниваем текстом, не числом.
-            var flag = string.Equals(indicator.Value.Trim(), indicator.RefText.Trim(), StringComparison.OrdinalIgnoreCase)
-                ? IndicatorFlag.Normal
-                : IndicatorFlag.Unknown;
-            return (flag, RefSource.Blank, null, null);
+            return (CompareQualitative(indicator.Value, indicator.RefText), RefSource.Blank, null, null);
         }
 
-        if (kbFallback is not null && MatchesPatient(kbFallback, ageYears, sex))
+        // 3. Референса в бланке нет вовсе, но само значение — однозначный отрицательный
+        //    результат ("не обнаружено", без колонки нормы — типичный бланк ИППП/качественной
+        //    панели) — это осмысленная норма, а не "нет данных": для такого теста "не обнаружено"
+        //    и есть здоровый результат. Никакого бейджа ИИ — в бланке буквально так и написано,
+        //    ничего не выведено из общих знаний (см. §5 ниже, TryApplyInferred, — та другая ветка).
+        if (QualitativeResultClassifier.Classify(indicator.Value) == QualitativePolarity.NegativeFinding)
+        {
+            return (IndicatorFlag.Normal, RefSource.Blank, null, null);
+        }
+
+        // 4. Фиксированный диапазон KB — только для НАСТОЯЩЕГО числового значения: раньше
+        //    нечисловое значение против числового KB-диапазона давало (Unknown, KbFixed) и
+        //    навсегда блокировало дальнейший пересчёт (KbFixed в приоритете и не уступает место
+        //    ни KbCalculated, ни Inferred) — должно проваливаться дальше по каскаду, а не застревать.
+        if (numericValue is not null && kbFallback is not null && MatchesPatient(kbFallback, ageYears, sex))
         {
             return (CompareToRange(numericValue, kbFallback.Low, kbFallback.High), RefSource.KbFixed, kbFallback.Low, kbFallback.High);
         }
@@ -50,7 +82,61 @@ public static class IndicatorFlagCalculator
     /// <summary>Применяет уже посчитанный диапазон (PatientReferenceCalculator, RefSource.KbCalculated) —
     /// тот же числовой компаратор, что Calculate, чтобы не дублировать пороговую логику.</summary>
     public static IndicatorFlag ApplyCalculatedRange(string value, double? low, double? high) =>
-        CompareToRange(ParseNumeric(value), low, high);
+        CompareToRange(ParseNumeric(value) ?? ReferenceRangeTextParser.ParseCensoredValue(value), low, high);
+
+    /// <summary>Последний, наименее надёжный шаг каскада (RefSource.Inferred, план "нормы из
+    /// знаний модели") — ExtractedLabIndicator.RefExpected заполняет модель ТОЛЬКО когда решила,
+    /// что в бланке референса нет вовсе. Вызывается явно процессором/job'ом, а не изнутри
+    /// Calculate — тот должен первым успеть попробовать KbFixed и (если в KB есть методика расчёта)
+    /// KbCalculated, которые надёжнее догадки модели; Calculate ничего не знает о том, шёл ли уже
+    /// такой попытка расчёта, только вызывающая сторона (см. MedicalDocumentExtractionProcessor).
+    /// Null, если RefExpected пуст или классификатор/парсер не смогли его разобрать — в этом случае
+    /// вызывающая сторона оставляет прежний (Unknown, None).</summary>
+    public static (IndicatorFlag Flag, RefSource Source, double? Low, double? High)? TryApplyInferred(
+        ExtractedLabIndicator indicator)
+    {
+        if (string.IsNullOrWhiteSpace(indicator.RefExpected)) return null;
+
+        var numericValue = ParseNumeric(indicator.Value) ?? ReferenceRangeTextParser.ParseCensoredValue(indicator.Value);
+
+        var range = ReferenceRangeTextParser.TryParse(indicator.RefExpected);
+        if (range is not null)
+        {
+            return (CompareToRange(numericValue, range.Value.Low, range.Value.High), RefSource.Inferred, range.Value.Low, range.Value.High);
+        }
+
+        var expectedPolarity = QualitativeResultClassifier.Classify(indicator.RefExpected);
+        if (expectedPolarity != QualitativePolarity.Unknown)
+        {
+            var valuePolarity = QualitativeResultClassifier.Classify(indicator.Value);
+            if (valuePolarity != QualitativePolarity.Unknown)
+            {
+                var flag = valuePolarity == expectedPolarity ? IndicatorFlag.Normal : IndicatorFlag.High;
+                return (flag, RefSource.Inferred, null, null);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Качественное сравнение "по смыслу" (см. QualitativeResultClassifier) с фолбэком на
+    /// точное равенство строк для формулировок, которые классификатор не разобрал ни у значения,
+    /// ни у референса — тот же результат, что был раньше у ЛЮБОЙ формулировки, просто теперь не
+    /// единственный путь к Normal. Явное РАСХОЖДЕНИЕ полярностей ("положительно" при норме
+    /// "отрицательно") теперь High, а не Unknown — прежде очевидное отклонение молчало серым "?".</summary>
+    private static IndicatorFlag CompareQualitative(string value, string refText)
+    {
+        var valuePolarity = QualitativeResultClassifier.Classify(value);
+        var refPolarity = QualitativeResultClassifier.Classify(refText);
+        if (valuePolarity != QualitativePolarity.Unknown && refPolarity != QualitativePolarity.Unknown)
+        {
+            return valuePolarity == refPolarity ? IndicatorFlag.Normal : IndicatorFlag.High;
+        }
+
+        return string.Equals(value.Trim(), refText.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? IndicatorFlag.Normal
+            : IndicatorFlag.Unknown;
+    }
 
     /// <summary>Диапазон под конкретные пол+возраст, если есть; иначе общий (без ограничений),
     /// иначе первый попавшийся — лучше приблизительный ориентир, чем никакого. Общий для

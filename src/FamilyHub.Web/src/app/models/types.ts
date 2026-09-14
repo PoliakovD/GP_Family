@@ -439,8 +439,10 @@ export const IndicatorFlag = { Unknown: 0, Low: 1, Normal: 2, High: 3, Critical:
 export type IndicatorFlag = typeof IndicatorFlag[keyof typeof IndicatorFlag];
 
 /** Откуда взят референс (v2, каскад приоритетов) — KbCalculated показывается на фронте
- * бэйджем «рассчитано ИИ». См. FamilyHub.Domain.Enums.RefSource. */
-export const RefSource = { None: 0, Blank: 1, KbFixed: 2, KbCalculated: 3 } as const;
+ * бэйджем «рассчитано ИИ», Inferred — бэйджем «норма от ИИ» (модель сама предположила норму по
+ * общемедицинским знаниям, когда в бланке референса не было вовсе — план "нормы из бланка").
+ * См. FamilyHub.Domain.Enums.RefSource. */
+export const RefSource = { None: 0, Blank: 1, KbFixed: 2, KbCalculated: 3, Inferred: 4 } as const;
 export type RefSource = typeof RefSource[keyof typeof RefSource];
 
 // Источник показателя (пересборка enrich-пайплайна) — раньше фиксированный enum SpecimenType,
