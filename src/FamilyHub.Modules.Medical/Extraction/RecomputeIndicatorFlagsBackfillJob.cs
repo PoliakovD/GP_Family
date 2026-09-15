@@ -62,7 +62,7 @@ public class RecomputeIndicatorFlagsBackfillJob(
                     ParseDouble(indicator.RefLowText), ParseDouble(indicator.RefHighText), indicator.RefText);
 
                 KbReferenceRange? kbFallback = null;
-                string? kbHint = null;
+                LabAnalyteKbPayload.KbNormExplanations? kbNorm = null;
                 if (indicator.KbAnalyteId is not null)
                 {
                     var kb = await db.GlobalLabAnalytesKb.AsNoTracking()
@@ -71,7 +71,7 @@ public class RecomputeIndicatorFlagsBackfillJob(
                     {
                         kbFallback = IndicatorFlagCalculator.PickBestRange(
                             LabAnalyteKbPayload.ParseRefRanges(kb.PayloadJson), ageYears, sex);
-                        kbHint = LabAnalyteKbPayload.ParseNormHint(kb.PayloadJson);
+                        kbNorm = LabAnalyteKbPayload.ParseNormExplanations(kb.PayloadJson);
                     }
                 }
 
@@ -79,13 +79,15 @@ public class RecomputeIndicatorFlagsBackfillJob(
 
                 // Последний резервный шаг (см. class doc) — только когда деterministic-каскад
                 // выше не дал вообще ничего; RefExpected здесь всегда null (никогда не
-                // персистится), но пояснение справочника и само название/значение — уже полезный
-                // контекст сами по себе.
+                // персистится), но границы диапазона (свои или из KB) и пояснения справочника —
+                // уже полезный контекст сами по себе (живой случай: отсутствие — норма, хотя
+                // диапазон в справочнике начинается не с нуля, например "2-10" — см. LowMeans).
                 if (flag == IndicatorFlag.Unknown &&
                     await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "qualitative-judge", ct))
                 {
                     var isNormal = await qualitativeJudge.JudgeAsync(
-                        indicator.DisplayName, indicator.ValueRaw, indicator.Unit, modelExpectedNorm: null, kbHint, ct);
+                        indicator.DisplayName, indicator.ValueRaw, indicator.Unit, modelExpectedNorm: null,
+                        effLow ?? kbFallback?.Low, effHigh ?? kbFallback?.High, kbNorm, ct);
                     if (isNormal is not null)
                     {
                         flag = isNormal.Value ? IndicatorFlag.Normal : IndicatorFlag.High;

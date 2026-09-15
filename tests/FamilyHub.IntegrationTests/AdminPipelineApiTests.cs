@@ -137,7 +137,8 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         // нормы по смыслу свободного текста (AddQualitativeJudgePrompt) — тот же механизм
         // PipelinePrompt/PromptVersion на все семь родов. analysis.specimen-resolve/
         // analysis.specimen-validate получили версию 2 (UpdateSpecimenPromptsForSiteHint),
-        // analysis.extract — версию 3 (AddAnalysisTitlePrompt → 2, AddReferenceRangePrompt → 3) —
+        // analysis.extract — версию 3 (AddAnalysisTitlePrompt → 2, AddReferenceRangePrompt → 3),
+        // analysis.qualitative-judge — версию 2 (UpdateQualitativeJudgePromptForRangeContext) —
         // не все слоты обязаны застыть на версии 1 навсегда, важно только, что у каждого есть
         // РОВНО одна активная версия.
         slots.Should().HaveCount(18);
@@ -147,7 +148,7 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         slots.Should().Contain(s => s.Key == "analysis.extract" && s.ActiveVersion == 3);
         slots.Should().Contain(s => s.Key == "analysis.title" && s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.subject-resolve" && s.ActiveVersion == 1);
-        slots.Should().Contain(s => s.Key == "analysis.qualitative-judge" && s.ActiveVersion == 1);
+        slots.Should().Contain(s => s.Key == "analysis.qualitative-judge" && s.ActiveVersion == 2);
         slots.Should().Contain(s => s.Key == "lab-analyte.summarize");
         slots.Should().Contain(s => s.Key == "analysis.search-query");
         slots.Should().Contain(s => s.Key == "medication.search-query.brave");
