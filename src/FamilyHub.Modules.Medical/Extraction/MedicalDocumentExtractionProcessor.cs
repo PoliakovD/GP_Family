@@ -455,8 +455,14 @@ public class MedicalDocumentExtractionProcessor(
             // предположила ожидаемую норму (dto.RefExpected — заполняется только когда решила, что
             // референса в бланке нет вовсе), используем её как наименее надёжный источник. Проверяем
             // именно после попытки KbCalculated выше — тот надёжнее догадки модели и должен успеть
-            // первым.
-            if (refSource == RefSource.None)
+            // первым. Условие — Flag.Unknown, не RefSource.None: печатный числовой референс,
+            // распознанный шагом 1 (например "2-10"), но не сравнимый с качественным значением
+            // ("не обнаружено" не парсится как число), тоже даёт Unknown, только с RefSource.Blank —
+            // такую запись раньше не пересматривали НИКОГДА (Blank считается терминальным для
+            // УСПЕШНОГО определения, но это не он — числа для сравнения не было). TryApplyInferred
+            // здесь чаще всего вернёт null (RefExpected пуст, раз RefText был непустым), но пробуем
+            // на случай пограничных данных — дёшево, ничего не теряем.
+            if (flag == IndicatorFlag.Unknown)
             {
                 var inferred = IndicatorFlagCalculator.TryApplyInferred(dto);
                 if (inferred is not null)
@@ -472,16 +478,22 @@ public class MedicalDocumentExtractionProcessor(
             // QualitativeNormJudge) — TryApplyInferred выше умеет только числовой диапазон и
             // бинарную полярность "обнаружено/не обнаружено"; описательные качественные результаты
             // (шкалы обильности "+"/"++"/"+++", развёрнутые находки мазка вроде "коккобацилярная,
-            // обильно") ни тем, ни другим не раскладываются — короткий прицельный вызов LLM с уже
-            // известным контекстом (dto.RefExpected — собственная более ранняя догадка модели;
-            // пояснения статьи справочника, если показатель уже привязан к KB). Отдельный тумблер
-            // ("qualitative-judge", не "patient-reference") — принципиально другой по цене и
-            // природе вызов, админ может выключить его отдельно.
-            if (refSource == RefSource.None &&
+            // обильно") ни тем, ни другим не раскладываются, а печатный/KB-диапазон, начинающийся
+            // не с нуля (например "2-10"), может ошибочно читаться как "отсутствие ⇒ ниже нормы" —
+            // короткий прицельный вызов LLM с уже известным контекстом: границы диапазона (что уже
+            // определил Calculate ИЛИ, если он вообще ничего не нашёл, общий диапазон из KB), что
+            // означают повышенный/пониженный результат ИМЕННО для этого показателя (HighMeans/
+            // LowMeans статьи справочника — раздельно, не одной строкой), и dto.RefExpected —
+            // собственная более ранняя догадка модели. Отдельный тумблер ("qualitative-judge", не
+            // "patient-reference") — принципиально другой по цене и природе вызов, админ может
+            // выключить его отдельно.
+            if (flag == IndicatorFlag.Unknown &&
                 await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "qualitative-judge", ct))
             {
-                var kbHint = kbRow is not null ? LabAnalyteKbPayload.ParseNormHint(kbRow.Value.PayloadJson) : null;
-                var isNormal = await qualitativeJudge.JudgeAsync(dto.Name, dto.Value, dto.Unit, dto.RefExpected, kbHint, ct);
+                var kbNorm = kbRow is not null ? LabAnalyteKbPayload.ParseNormExplanations(kbRow.Value.PayloadJson) : null;
+                var isNormal = await qualitativeJudge.JudgeAsync(
+                    dto.Name, dto.Value, dto.Unit, dto.RefExpected,
+                    effLow ?? kbFallback?.Low, effHigh ?? kbFallback?.High, kbNorm, ct);
                 if (isNormal is not null)
                 {
                     flag = isNormal.Value ? IndicatorFlag.Normal : IndicatorFlag.High;
