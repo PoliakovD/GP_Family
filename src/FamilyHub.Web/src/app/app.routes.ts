@@ -257,6 +257,16 @@ export const routes: Routes = [
           ),
       },
       {
+        // Батч-загрузка (кнопка «+ Несколько» рядом с «+ Добавить», см. medical-records-panel) —
+        // ДО 'records/:id' по той же причине, что и 'records/new' выше (литеральный сегмент
+        // должен победить :id).
+        path: 'records/batch',
+        loadComponent: () =>
+          import('./components/record-batch-add-page/record-batch-add-page.component').then(
+            (m) => m.RecordBatchAddPageComponent,
+          ),
+      },
+      {
         // Мобильный экран открытой записи (редизайн v3, PR6) — деслктоп продолжает раскрывать
         // запись инлайн в списке, см. record-detail-page.component.ts.
         path: 'records/:id',
@@ -277,6 +287,14 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/doctor-visit-add/doctor-visit-add.component').then(
             (m) => m.DoctorVisitAddComponent,
+          ),
+      },
+      {
+        // Батч-загрузка для «Врачи» — та же причина порядка, что records/batch выше.
+        path: 'visits/batch',
+        loadComponent: () =>
+          import('./components/doctor-visit-batch-add/doctor-visit-batch-add.component').then(
+            (m) => m.DoctorVisitBatchAddComponent,
           ),
       },
       {

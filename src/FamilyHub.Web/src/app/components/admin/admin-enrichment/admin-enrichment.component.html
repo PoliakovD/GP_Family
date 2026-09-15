@@ -9,6 +9,9 @@
     <button type="button" class="seg-opt" [class.active]="tab() === 'rebuild'" (click)="selectTab('rebuild')">
       Пересборка анализов
     </button>
+    <button type="button" class="seg-opt" [class.active]="tab() === 'calls'" (click)="selectTab('calls')">
+      Вызовы поиска
+    </button>
   </div>
 
   <div class="seg">
@@ -184,4 +187,136 @@
       }
     </div>
   </div>
+}
+
+@if (tab() === 'calls') {
+  @let stats = callStats();
+  <div class="card mb-3">
+    <div class="card-title">Платный поиск за 30 дней</div>
+    <div class="card-body">
+      @if (callStatsLoading() && !stats) {
+        <p class="text-muted">Загрузка…</p>
+      } @else if (stats) {
+        <table class="table mb-3">
+          <tbody>
+            <tr><td>Всего вызовов</td><td>{{ stats.totalCalls }}</td></tr>
+            <tr><td>Платных</td><td>{{ stats.paidCalls }}</td></tr>
+            <tr><td>Кэш-хитов</td><td>{{ stats.cacheHits }} ({{ (stats.cacheHitShare * 100) | number: '1.0-0' }}%)</td></tr>
+            <tr>
+              <td>Расход в этом месяце</td>
+              <td>{{ stats.usedThisMonth }}{{ stats.monthlyQuota !== null ? ' / ' + stats.monthlyQuota : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+          <div>
+            <strong>По провайдеру:</strong>
+            @for (row of stats.byProvider; track row.key) { <div>{{ row.key }}: {{ row.count }}</div> }
+          </div>
+          <div>
+            <strong>По исходу:</strong>
+            @for (row of stats.byOutcome; track row.key) { <div>{{ row.key }}: {{ row.count }}</div> }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-title">Вызовы поиска</div>
+    <div class="card-body">
+      <p class="text-muted mb-2">
+        Полный аудит обращений к платному внешнему поиску (Yandex/Brave) — включая кэш-хиты (не
+        платные, но видны здесь же — так можно проверить, что кэш реально работает).
+      </p>
+
+      <form class="d-flex gap-2 mb-3" style="flex-wrap: wrap;" (ngSubmit)="loadCalls(1)">
+        <input class="input" placeholder="поиск по названию…"
+               [ngModel]="callQuery()" (ngModelChange)="callQuery.set($event)" name="callQuery" />
+        <select class="input" [ngModel]="callOutcomeFilter()" (ngModelChange)="setCallOutcomeFilter($event)" name="callOutcome">
+          <option [ngValue]="null">Любой исход</option>
+          <option [ngValue]="WebSearchCallOutcome.Ok">Ok</option>
+          <option [ngValue]="WebSearchCallOutcome.Empty">Empty</option>
+          <option [ngValue]="WebSearchCallOutcome.Rejected">Rejected</option>
+          <option [ngValue]="WebSearchCallOutcome.NoUsedSources">NoUsedSources</option>
+          <option [ngValue]="WebSearchCallOutcome.HttpError">HttpError</option>
+          <option [ngValue]="WebSearchCallOutcome.Timeout">Timeout</option>
+          <option [ngValue]="WebSearchCallOutcome.CacheHit">CacheHit</option>
+        </select>
+        <button type="submit" class="btn btn-secondary btn-sm" [disabled]="callsLoading()">Найти</button>
+      </form>
+
+      @if (callsLoading() && callRows().length === 0) {
+        <p class="text-muted">Загрузка…</p>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Время</th><th>Название</th><th>Провайдер</th><th>Исход</th>
+              <th>HTTP</th><th>мс</th><th>Сниппетов</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of callRows(); track row.id) {
+              <tr [class.text-muted]="row.outcome === WebSearchCallOutcome.CacheHit">
+                <td>{{ row.occurredAt | date: 'dd.MM.yyyy HH:mm:ss' }}</td>
+                <td>{{ row.normalizedName }}{{ row.specimenDisplayName ? ' (' + row.specimenDisplayName + ')' : '' }}</td>
+                <td>{{ row.provider }}</td>
+                <td>{{ row.outcome === WebSearchCallOutcome.CacheHit ? 'CacheHit' : row.outcome === WebSearchCallOutcome.Ok ? 'Ok' :
+                       row.outcome === WebSearchCallOutcome.Empty ? 'Empty' : row.outcome === WebSearchCallOutcome.Rejected ? 'Rejected' :
+                       row.outcome === WebSearchCallOutcome.NoUsedSources ? 'NoUsedSources' :
+                       row.outcome === WebSearchCallOutcome.HttpError ? 'HttpError' : 'Timeout' }}</td>
+                <td>{{ row.httpStatus ?? '—' }}</td>
+                <td>{{ row.durationMs }}</td>
+                <td>{{ row.snippetCount }}</td>
+                <td><button type="button" class="btn btn-secondary btn-sm" (click)="openCallDetail(row.id)">Открыть</button></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="8" class="text-muted">Ничего не найдено.</td></tr>
+            }
+          </tbody>
+        </table>
+
+        @if (callsTotalPages() > 1) {
+          <div class="d-flex gap-2" style="align-items: center;">
+            <button type="button" class="btn btn-secondary btn-sm" [disabled]="callsLoading() || callsPage() <= 1"
+                    (click)="loadCalls(callsPage() - 1)">← Назад</button>
+            <span class="text-muted">{{ callsPage() }} / {{ callsTotalPages() }} ({{ callsTotal() }})</span>
+            <button type="button" class="btn btn-secondary btn-sm" [disabled]="callsLoading() || callsPage() >= callsTotalPages()"
+                    (click)="loadCalls(callsPage() + 1)">Вперёд →</button>
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <app-side-panel [open]="!!openCallId()" title="Вызов поиска" width="min(760px, 100vw)" (closed)="closeCallDetail()">
+    @let detail = callDetail();
+    @if (callDetailLoading()) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (detail) {
+      <table class="table">
+        <tbody>
+          <tr><td>Время</td><td>{{ detail.occurredAt | date: 'dd.MM.yyyy HH:mm:ss' }}</td></tr>
+          <tr><td>Провайдер</td><td>{{ detail.provider }}</td></tr>
+          <tr><td>Название</td><td>{{ detail.normalizedName }}</td></tr>
+          @if (detail.specimenDisplayName) { <tr><td>Биоматериал</td><td>{{ detail.specimenDisplayName }}</td></tr> }
+          <tr><td>Endpoint</td><td>{{ detail.endpoint ?? '—' }}</td></tr>
+          <tr><td>HTTP-статус</td><td>{{ detail.httpStatus ?? '—' }}</td></tr>
+          <tr><td>Длительность</td><td>{{ detail.durationMs }} мс</td></tr>
+          <tr><td>Сниппетов</td><td>{{ detail.snippetCount }}</td></tr>
+          @if (detail.error) { <tr><td>Ошибка</td><td class="text-danger">{{ detail.error }}</td></tr> }
+          @if (detail.jobKind && detail.jobId) { <tr><td>Задача</td><td>{{ detail.jobKind }} / {{ detail.jobId }}</td></tr> }
+        </tbody>
+      </table>
+      <div class="card-title">Текст запроса</div>
+      <pre style="white-space: pre-wrap; word-break: break-word;">{{ detail.queryText || '—' }}</pre>
+      @if (detail.resultUrls.length > 0) {
+        <div class="card-title">Использованные источники</div>
+        <ul>
+          @for (url of detail.resultUrls; track url) { <li><a [href]="url" target="_blank" rel="noopener">{{ url }}</a></li> }
+        </ul>
+      }
+    }
+  </app-side-panel>
 }

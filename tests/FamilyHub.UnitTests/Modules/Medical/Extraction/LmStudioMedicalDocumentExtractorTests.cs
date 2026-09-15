@@ -41,10 +41,14 @@ public class LmStudioMedicalDocumentExtractorTests
             _client, new RussianTextSearcher(), TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
         var titleGenerator = new AnalysisTitleGenerator(
             _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
+        // DocumentKindClassifier — все тесты этого файла передают явный kind (не batch-загрузка),
+        // классификатор не вызывается вовсе; реальный экземпляр нужен только для конструктора.
+        var kindClassifier = new DocumentKindClassifier(
+            _client, TestPromptProvider.ReturningFallback(), NullLogger<DocumentKindClassifier>.Instance);
         _sut = new LmStudioMedicalDocumentExtractor(
             _textExtractor, _client, specimenResolver, subjectResolver, titleGenerator, TestLegitimacyGuard.ReturningLegitimate(),
-            TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
-            NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
+            kindClassifier, TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(),
+            Options.Create(new ExtractionOptions()), NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
     }
 
     private void SetUpTextChunk(string text) =>
@@ -191,10 +195,12 @@ public class LmStudioMedicalDocumentExtractorTests
             _client, new RussianTextSearcher(), TestPromptProvider.ReturningFallback(), NullLogger<AnalyteSubjectResolver>.Instance);
         var titleGenerator = new AnalysisTitleGenerator(
             _client, TestPromptProvider.ReturningFallback(), NullLogger<AnalysisTitleGenerator>.Instance);
+        var kindClassifier = new DocumentKindClassifier(
+            _client, TestPromptProvider.ReturningFallback(), NullLogger<DocumentKindClassifier>.Instance);
         var sut = new LmStudioMedicalDocumentExtractor(
             _textExtractor, _client, specimenResolver, subjectResolver, titleGenerator, rejectingGuard,
-            TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(), Options.Create(new ExtractionOptions()),
-            NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
+            kindClassifier, TestPromptProvider.ReturningFallback(), TestPipelineConfigService.ReturningEnabled(),
+            Options.Create(new ExtractionOptions()), NullLogger<LmStudioMedicalDocumentExtractor>.Instance);
 
         var result = await sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
 

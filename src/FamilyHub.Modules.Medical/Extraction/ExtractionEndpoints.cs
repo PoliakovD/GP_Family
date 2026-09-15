@@ -35,9 +35,22 @@ public static class ExtractionEndpoints
                     code = "llm_unavailable",
                     message = "Локальный сервер распознавания пока недоступен, зайдите позже.",
                 }),
+                ExtractionRequestResult.TooManyActiveJobs => Results.Json(
+                    new { code = "too_many_active_jobs", message = "Слишком много запущенных распознаваний одновременно — дождитесь, пока часть завершится." },
+                    statusCode: StatusCodes.Status429TooManyRequests),
+                ExtractionRequestResult.DailyQuotaExceeded => Results.Json(
+                    new { code = "daily_quota_exceeded", message = "Дневной лимит распознаваний исчерпан — попробуйте завтра." },
+                    statusCode: StatusCodes.Status429TooManyRequests),
                 _ => Results.Accepted(),
             };
-        });
+        }).RequireRateLimiting("llm");
+
+        // Снимок лимитов конвейера + текущий расход (ExtractionLimitsOptions) — читается формами
+        // ДО запуска (обычная форма создания и батч-загрузка), тот же приём, что
+        // GET /api/attachments/limits.
+        records.MapGet("/extraction-limits", async (
+            ExtractionRequestService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.GetLimitsAsync(currentUser.UserId, ct)));
 
         records.MapGet("/{recordId:guid}/extraction", async (
             Guid recordId, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
@@ -80,7 +93,7 @@ public static class ExtractionEndpoints
                     statusCode: StatusCodes.Status502BadGateway),
                 _ => Results.Ok(item),
             };
-        });
+        }).RequireRateLimiting("llm");
 
         records.MapGet("/{recordId:guid}/conclusion", async (
             Guid recordId, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>

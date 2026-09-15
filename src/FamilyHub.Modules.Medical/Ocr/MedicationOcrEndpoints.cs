@@ -16,6 +16,6 @@ public static class MedicationOcrEndpoints
         {
             var response = await service.ExtractAsync(files, ct);
             return Results.Ok(response);
-        }).DisableAntiforgery();
+        }).DisableAntiforgery().RequireRateLimiting("llm");
     }
 }

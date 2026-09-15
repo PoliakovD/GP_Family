@@ -227,6 +227,10 @@ export interface MedicalRecord {
      * но не смогла уточнить, откуда именно (заметка 2) — non-null означает "спросите у пользователя,
      * это ЕЩЁ НЕ сохранённый источник" (specimenKbId в этом случае остаётся сентинелом). */
     specimenHint: string | null;
+    /** Батч-загрузка (record-batch-add) — вид записи выше провизорный (по вкладке, откуда
+     * загружали), пока пайплайн не определит его документом (DocumentKindClassifier) и не снимет
+     * флаг. Обычная форма создания («+ Добавить») никогда не выставляет этот флаг. */
+    kindIsAutoDetected: boolean;
 }
 
 /** Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для поиска. */
@@ -273,6 +277,10 @@ export interface MedicalRecordInput {
     hideFromFamilyIds: string[] | null;
     familyDependentId: string | null;
     targetUserId: string | null;
+    /** Батч-загрузка (record-batch-add) — kind выше провизорный, пайплайн определит вид документом
+     * (см. MedicalRecord.KindIsAutoDetected). Опционально: обычная форма создания не передаёт его
+     * вовсе, дефолт на бэкенде — false. */
+    autoDetectKind?: boolean;
 }
 
 /** Зеркало FamilyHub.Domain.Enums.AttachmentPreviewStatus — числовые значения, не строки
@@ -751,6 +759,19 @@ export interface IndicatorArticleResponse {
 export interface AttachmentLimits {
     maxFileSizeBytes: number;
     maxFilesPerRecord: number;
+}
+
+/** Лимиты конвейера распознавания на пользователя (GET /api/medical-records/extraction-limits) —
+ * см. ExtractionLimitsOptions. usedToday/activeNow — снимок на момент запроса, реальный расход
+ * может обогнать его между чтением формой и постановкой в очередь (мягкий лимит, см. class doc
+ * ExtractionRequestService на бэкенде). resetsAt — начало следующих суток UTC. */
+export interface ExtractionLimits {
+    maxBatchDocuments: number;
+    maxActiveJobs: number;
+    activeNow: number;
+    dailyQuota: number;
+    usedToday: number;
+    resetsAt: string;
 }
 
 // Редизайн v2 — агрегат Главной (GET /api/home/summary), см. FamilyHub.Api.Features.Home.

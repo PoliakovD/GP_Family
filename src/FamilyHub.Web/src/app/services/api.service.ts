@@ -11,6 +11,7 @@ import {
   BirthdayInput, CurrentMember,
   CreateIndicatorRequest,
   EnrichmentRefreshOutcome,
+  ExtractionLimits,
   ExtractionRequestResponse,
   ExtractionStatusResponse,
   FamilyDependent,
@@ -357,6 +358,10 @@ export class ApiService {
 
   getExtractionStatus = (recordId: string) =>
     this.get<ExtractionStatusResponse>(`/api/medical-records/${recordId}/extraction`);
+
+  /** Лимиты конвейера + текущий расход (ExtractionLimitsOptions) — читается формами ДО запуска
+   * (обычная форма создания и батч-загрузка), тот же приём, что getAttachmentLimits выше. */
+  getExtractionLimits = () => this.get<ExtractionLimits>('/api/medical-records/extraction-limits');
 
   getRecordIndicators = (recordId: string) =>
     this.get<IndicatorDto[]>(`/api/medical-records/${recordId}/indicators`);

@@ -52,7 +52,7 @@ public class YandexSearchProviderTests
         var promptProvider = TestPromptProvider.ReturningFallback();
         return (new YandexSearchProvider(
             httpClient, Options.Create(opts), NullLogger<YandexSearchProvider>.Instance,
-            new AnalyteSearchQueryBuilder(promptProvider), promptProvider), handler);
+            new AnalyteSearchQueryBuilder(promptProvider), promptProvider, TestWebSearchCallLogger.NoOp()), handler);
     }
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
@@ -143,7 +143,7 @@ public class YandexSearchProviderTests
             httpClient,
             Options.Create(new EnrichmentOptions { ApiKey = "k", FolderId = "f" }),
             NullLogger<YandexSearchProvider>.Instance,
-            new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
+            new AnalyteSearchQueryBuilder(promptProvider), promptProvider, TestWebSearchCallLogger.NoOp());
 
         var snippets = await sut.SearchAsync("парацетамол");
 
@@ -175,7 +175,8 @@ public class YandexSearchProviderTests
             .Returns(Task.FromResult("custom-admin-template about {name}"));
         var sut = new YandexSearchProvider(
             httpClient, Options.Create(new EnrichmentOptions { ApiKey = "test-key", FolderId = "b1gtest0000000000000" }),
-            NullLogger<YandexSearchProvider>.Instance, new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
+            NullLogger<YandexSearchProvider>.Instance, new AnalyteSearchQueryBuilder(promptProvider), promptProvider,
+            TestWebSearchCallLogger.NoOp());
 
         await sut.SearchAsync("парацетамол", WebSearchTopic.Medication);
 

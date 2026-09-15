@@ -60,6 +60,30 @@
 | Обработка без согласия | `ConsentRequiredFilter` на модулях Medical/Birthdays (серверная гарантия) |
 | Уход медданных к внешним LLM | локальный Qwen + сетевой egress-запрет (ADR-0001) |
 
+## Конвейер распознавания (пайплайн извлечения/обогащения, батч-загрузка)
+
+До батч-загрузки (несколько документов одним действием, `record-batch-add.component.ts`) ни один
+пайплайн-эндпоинт не был ограничен вовсе — ни на пользователя, ни по частоте. Один человек мог
+держать сколько угодно параллельных задач `extraction` (дедуп — только по `MedicalRecordId`, не
+по пользователю) и надолго занять единственный воркер LM Studio за WireGuard
+(`LmStudioConcurrencyGate` — `SemaphoreSlim(1,1)` на процесс), блокируя распознавание для всех.
+
+| Угроза | Контрмера |
+|--------|-----------|
+| Один пользователь монополизирует единственный воркер LM Studio (батч из сотен файлов) | `ExtractionLimitsOptions.MaxActiveJobsPerUser` — мягкий лимит одновременных `Pending`/`Running`-задач на пользователя (`ExtractionRequestService.RequestAsync`); мягкий (гонка параллельных постановок возможна), настоящий барьер частоты — rate limiting ниже |
+| Перебор запросов на распознавание/OCR сверх разумного | `ExtractionLimitsOptions.DailyJobsPerUser` — суточная квота в Postgres (переживает рестарт, ADR-0001); rate limiting: политика `"llm"` (`POST .../extract`, `.../summary/regenerate`, `POST /api/medications/ocr`) |
+| Перебор создания записей/загрузки вложений | rate limiting: политика `"medical-write"` (`POST /api/medical-records`, `POST .../attachments`) |
+| Слепая трата платного веб-поиска (Yandex/Brave) сверх бюджета | `WebSearchQuotaService` — месячная квота (`Enrichment:MonthlyQuota`, 0 = без лимита) по факту записанных строк `WebSearchCallLog`, общая на все три enrich-конвейера |
+| Непрослеживаемость платных вызовов (сколько заплачено и за что) | `WebSearchCallLog` — аудит каждого вызова (включая кэш-хиты), админка `/admin/enrichment` → «Вызовы поиска» |
+
+Обе новые rate-limiting-политики (`"llm"`/`"medical-write"`, `Program.cs`) партиционированы по
+`UserId` (`ClaimsPrincipalExtensions.GetUserId()`, с фолбэком на IP), не только по IP клиента —
+`UseRateLimiter()` стоит после `UseAuthentication`/`UseAuthorization`, поэтому claims уже доступны.
+Это уже чинит для НИХ слабость, описанную ниже для `auth`/`auth-code`/`invite-redeem` (партиция
+только по IP) — но те три политики так и остаются партиционированными по IP (не тронуты этой
+задачей: `/api/auth/*` работает и до, и без аутентификации, partition-по-пользователю там
+физически невозможна для части эндпоинтов).
+
 ## Вне модели (осознанно)
 
 - Компрометация хоста/root-доступ — уровень инфраструктуры, не приложения.

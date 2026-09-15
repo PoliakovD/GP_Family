@@ -87,6 +87,34 @@ export interface UpdateSearchCacheRequest {
   topic: WebSearchTopicValue; provider?: string | null; snippets: SearchCacheSnippetInput[];
 }
 
+/** WebSearchCallOutcome (см. FamilyHub.Domain.Enums) — тот же приём числового enum'а, что
+ * WebSearchTopic выше. CacheHit — единственное НЕ платное значение (см. class doc на бэкенде). */
+export const WebSearchCallOutcome = {
+  Ok: 0, Empty: 1, Rejected: 2, NoUsedSources: 3, HttpError: 4, Timeout: 5, CacheHit: 6,
+} as const;
+export type WebSearchCallOutcomeValue = (typeof WebSearchCallOutcome)[keyof typeof WebSearchCallOutcome];
+
+/** Аудит-лог платных вызовов внешнего веб-поиска (см. AdminSearchCallsEndpoints) — вкладка
+ * «Вызовы поиска» внутри /admin/enrichment. */
+export interface SearchCallRow {
+  id: string; occurredAt: string; provider: string; topic: WebSearchTopicValue; normalizedName: string;
+  specimenDisplayName: string | null; httpStatus: number | null; durationMs: number;
+  outcome: WebSearchCallOutcomeValue; snippetCount: number; jobKind: string | null; jobId: string | null;
+}
+export interface SearchCallListResponse { rows: SearchCallRow[]; total: number; page: number; pageSize: number; }
+
+export interface SearchCallDetail extends SearchCallRow {
+  queryText: string; endpoint: string | null; resultUrls: string[]; error: string | null;
+}
+
+export interface SearchCallCountByKey { key: string; count: number; }
+export interface SearchCallDailyCount { day: string; paidCalls: number; cacheHits: number; }
+export interface SearchCallStats {
+  totalCalls: number; paidCalls: number; cacheHits: number; cacheHitShare: number;
+  byProvider: SearchCallCountByKey[]; byOutcome: SearchCallCountByKey[]; byDay: SearchCallDailyCount[];
+  usedThisMonth: number; monthlyQuota: number | null;
+}
+
 /** Прогон пересборки справочника показателей (пересборка enrich-пайплайна, §4.2 плана) — зеркало
  * RotationStatus на LabAnalyteKbRebuildJob. status: "Running" | "Completed" | "Failed" | null. */
 export interface KbRebuildStatus {
@@ -329,6 +357,35 @@ export class AdminApiService {
    * enrich-пайплайна анализов (жёсткий гейт больше не даёт таким строкам появляться заново). */
   purgeUnresolvedSpecimenSearchCache = () =>
     this.post<{ deletedCount: number }>('/api/admin/enrichment/search-cache/lab-analytes/purge-unresolved-specimen');
+
+  // Аудит платных вызовов внешнего веб-поиска (см. AdminSearchCallsEndpoints) — «сколько заплачено
+  // и за что», полный текст запроса каждого вызова, для дебага работы кэша/квоты.
+  getSearchCalls = (
+    filters: {
+      provider?: string; topic?: WebSearchTopicValue; outcome?: WebSearchCallOutcomeValue;
+      query?: string; from?: string; to?: string;
+    },
+    page: number, pageSize: number,
+  ) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (filters.provider) params.set('provider', filters.provider);
+    if (filters.topic !== undefined) params.set('topic', String(filters.topic));
+    if (filters.outcome !== undefined) params.set('outcome', String(filters.outcome));
+    if (filters.query) params.set('query', filters.query);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    return this.get<SearchCallListResponse>(`/api/admin/search-calls?${params.toString()}`);
+  };
+
+  getSearchCallDetail = (id: string) => this.get<SearchCallDetail>(`/api/admin/search-calls/${id}`);
+
+  getSearchCallStats = (from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const qs = params.toString();
+    return this.get<SearchCallStats>(`/api/admin/search-calls/stats${qs ? `?${qs}` : ''}`);
+  };
 
   // Полная пересборка справочника показателей (§4.2 плана) — разовое ручное действие после
   // деплоя исправлений очистки имён/резолвинга источника, отдельно от reenrich (который реагирует

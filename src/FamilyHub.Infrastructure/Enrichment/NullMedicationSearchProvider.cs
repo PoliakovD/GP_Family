@@ -15,7 +15,8 @@ public class NullMedicationSearchProvider(ILogger<NullMedicationSearchProvider> 
 
     public Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        string? specimenDisplayName = null, CancellationToken ct = default)
+        string? specimenDisplayName = null, CancellationToken ct = default,
+        WebSearchCallContext? callContext = null)
     {
         logger.LogWarning(
             "Enrichment:Provider не настроен — внешний поиск по «{NormalizedName}» пропущен, справочник не обогащается.",

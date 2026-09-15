@@ -26,6 +26,14 @@ public class EnrichmentOptions
     public int MaxSnippets { get; set; } = 5;
 
     public int TimeoutSeconds { get; set; } = 20;
+
+    /// <summary>Месячная квота на платные вызовы (WebSearchCallLog, Outcome != CacheHit), общая на
+    /// оба конвейера обогащения (лекарства + лабораторные показатели, они делят одного провайдера)
+    /// — см. WebSearchQuotaService. 0 = без лимита. Возврат обещания ADR-0005 §9, потерянного при
+    /// прежнем рефакторинге (EnrichmentQuotaService/EnrichmentJobStatus.QuotaExceeded остались без
+    /// реализации) — теперь считается по факту записанных строк лога, не по отдельному счётчику.
+    /// Env: <c>Enrichment__MonthlyQuota</c>.</summary>
+    public int MonthlyQuota { get; set; }
 }
 
 public enum MedicationSearchProviderKind { Null, Brave, Yandex }

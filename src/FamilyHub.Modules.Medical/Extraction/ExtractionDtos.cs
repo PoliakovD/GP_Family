@@ -1,3 +1,5 @@
+using FamilyHub.Domain.Enums;
+
 namespace FamilyHub.Modules.Medical.Extraction;
 
 /// <summary>Один показатель, как его вернула модель — сырой выход LLM ДО нормализации/привязки к
@@ -68,6 +70,12 @@ public record VisitConclusion(
 /// техническая (LM Studio недоступен), а не смысловая (формат не поддержан, легитимность
 /// отклонила по содержимому) — MedicalDocumentExtractionProcessor пробрасывает исключение вместо
 /// того, чтобы штамповать файл распознанным (см. план, часть 1).
+///
+/// <see cref="Kind"/> — вид, которым фактически разобран документ (какой системный промпт
+/// применён: analysis.extract или visit.extract). Заполняется ВСЕГДА, даже когда вызывающая
+/// сторона передала конкретный kind (тогда просто эхо входного параметра) — так процессору не
+/// нужно помнить, что он передал, только читать это поле. При kind=null на входе (батч-загрузка)
+/// это фактический вывод DocumentKindClassifier.</summary>
 public record ExtractionResult(
     bool Supported,
     IReadOnlyList<ExtractedLabIndicator>? LabIndicators,
@@ -78,4 +86,5 @@ public record ExtractionResult(
     string? Doctor = null,
     SpecimenDocumentResolution? SpecimenResolution = null,
     bool IsTransientFailure = false,
-    AnalyteSubjectResolution? SubjectResolution = null);
+    AnalyteSubjectResolution? SubjectResolution = null,
+    MedicalRecordKind Kind = MedicalRecordKind.Analysis);

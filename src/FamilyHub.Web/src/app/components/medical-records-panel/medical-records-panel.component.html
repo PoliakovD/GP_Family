@@ -102,6 +102,13 @@
                  чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
                  подписью, а не чипом. -->
             <div class="record-chips">
+              @if (item.kindIsAutoDetected) {
+                <!-- Батч-загрузка — вид ещё не определён пайплайном (см. class doc
+                     RecordBatchAddComponent); снимается автоматически после распознавания. -->
+                <span class="tag tag-neutral" title="Вид записи будет уточнён после распознавания">
+                  <i class="ph ph-magic-wand" aria-hidden="true"></i>Вид определяется автоматически
+                </span>
+              }
               @if (item.attachmentCount > 0) {
                 <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
               }

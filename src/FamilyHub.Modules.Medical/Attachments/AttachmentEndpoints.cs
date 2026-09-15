@@ -41,7 +41,7 @@ public static class AttachmentEndpoints
                     statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Created($"/api/attachments/{item!.Id}", item),
             };
-        }).DisableAntiforgery();
+        }).DisableAntiforgery().RequireRateLimiting("medical-write");
 
         // Лимиты — до попытки загрузки, чтобы фронт мог дизейблить кнопку/показать
         // «осталось N из 8» вместо того, чтобы узнавать о лимите только по факту отказа.

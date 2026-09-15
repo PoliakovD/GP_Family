@@ -476,6 +476,7 @@ public class MedicalRecordService(
             Id = Guid.NewGuid(),
             OwnerUserId = ownerUserId,
             Kind = request.Kind,
+            KindIsAutoDetected = request.AutoDetectKind,
             RecordDate = request.RecordDate,
             Doctor = request.Doctor,
             Description = request.Description,
@@ -754,7 +755,8 @@ public class MedicalRecordService(
         new(r.Id, r.OwnerUserId, r.Kind, personName, r.RecordDate, r.Doctor, r.Title, r.Description,
             r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId,
             attachmentCount, unrecognizedAttachmentCount, indicatorCount,
-            abnormalIndicatorCount, normalIndicatorCount, r.SpecimenKbId, specimenDisplayName, r.SpecimenHint);
+            abnormalIndicatorCount, normalIndicatorCount, r.SpecimenKbId, specimenDisplayName, r.SpecimenHint,
+            r.KindIsAutoDetected);
 
     /// <summary>Батч-резолв DisplayName источников на набор SpecimenKbId — тот же приём, что
     /// ExtractionQueryService.ResolveSpecimenNamesAsync (один запрос вместо N+1).</summary>

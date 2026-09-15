@@ -91,6 +91,9 @@ public static class MedicalModule
         // Короткое название анализа отдельным LLM-проходом (заметка 4) — та же роль в конвейере,
         // что у SpecimenResolver, только для названия, не источника.
         services.AddScoped<AnalysisTitleGenerator>();
+        // Определение вида документа (анализ/посещение врача) для батч-загрузки, где пользователь
+        // не выбирает вид — та же роль в конвейере, что у SpecimenResolver, только для Kind.
+        services.AddScoped<DocumentKindClassifier>();
         services.AddScoped<UserSpecimenService>();
         // IRussianTextSearcher регистрируется в Program.cs (Infrastructure) — общий для этого
         // модуля и Modules.Birthdays, которые сознательно не ссылаются друг на друга.

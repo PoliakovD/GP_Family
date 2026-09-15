@@ -40,6 +40,14 @@ public static class PipelineCatalog
         .. AllPipelineKeys.Select(key => new PipelineStepDeclaration(
             key, LegitimacyCheckStep, "Проверка легитимности и защиты от prompt injection", true, "guard.legitimacy-check")),
 
+        // Батч-загрузка (несколько документов одного пациента без выбора вида пользователем,
+        // MedicalRecord.KindIsAutoDetected) — определяет analysis/visit ДО выбора системного
+        // промпта structuring ниже, поэтому логически стоит перед extract. Числится только под
+        // AnalysisExtraction (не под VisitExtraction тоже) — вызов один на документ независимо от
+        // исхода, дублировать переключатель под двумя ключами было бы двумя тумблерами на одно и
+        // то же решение; выключен из админки — LmStudioMedicalDocumentExtractor остаётся на
+        // MedicalRecordKind.Analysis (тот же fallback, что и при низкой уверенности модели).
+        new(AnalysisExtraction, "kind-classify", "Определение вида документа (анализ/посещение врача) для батч-загрузки", false, "document.kind-classify"),
         new(AnalysisExtraction, "extract", "Структурирование показателей из текста/фото бланка", true, "analysis.extract"),
         new(AnalysisExtraction, "specimen-resolve", "Резолвинг источника показателя (биоматериал/исследование)", false, "analysis.specimen-resolve"),
         new(AnalysisExtraction, "subject-resolve", "Уточнение родового названия показателя по разделу «Оказанные услуги» (посев на конкретный микроорганизм, аллерген и т.п.)", false, "analysis.subject-resolve"),

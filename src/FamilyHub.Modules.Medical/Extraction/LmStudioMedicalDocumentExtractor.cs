@@ -35,6 +35,7 @@ public class LmStudioMedicalDocumentExtractor(
     AnalyteSubjectResolver subjectResolver,
     AnalysisTitleGenerator titleGenerator,
     ILegitimacyGuardService legitimacyGuard,
+    DocumentKindClassifier kindClassifier,
     IPromptProvider promptProvider,
     IPipelineConfigService pipelineConfig,
     IOptions<ExtractionOptions> options,
@@ -136,7 +137,7 @@ public class LmStudioMedicalDocumentExtractor(
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
-    public async Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind kind, CancellationToken ct = default)
+    public async Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind? kind, CancellationToken ct = default)
     {
         var content = await documentTextExtractor.ExtractAsync(source.Content, source.ContentType, ct);
         if (content.Kind == DocumentSourceKind.Unsupported)
@@ -162,9 +163,27 @@ public class LmStudioMedicalDocumentExtractor(
             return new ExtractionResult(false, null, null, guardResult.Reason, IsTransientFailure: guardResult.IsTransientFailure);
         }
 
-        return kind == MedicalRecordKind.Analysis
+        // kind=null — батч-загрузка (MedicalRecord.KindIsAutoDetected): вид ещё не выбран
+        // пользователем, определяем его отдельным узким проходом ДО выбора системного промпта
+        // ниже (см. DocumentKindClassifier). Технический сбой пробрасывается как исключение —
+        // тем же приёмом, что и LmStudioUnavailableException в MedicalDocumentExtractionProcessor,
+        // чтобы Hangfire реально повторил задачу, а не молча "угадал" вид для временно
+        // недоступного сервера. Модель не уверена/ответ мусорный — остаёмся на Analysis (дефолт
+        // MedicalRecordKind, см. class doc енама) — редкий случай, поправимый пользователем вручную.
+        var resolvedKind = kind;
+        if (resolvedKind is null && await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "kind-classify", ct))
+        {
+            var classification = await kindClassifier.ClassifyAsync(content, ct);
+            if (classification.IsTransientFailure)
+                throw new LmStudioUnavailableException(classification.Reason ?? "Локальный сервер распознавания недоступен.");
+            resolvedKind = classification.Kind;
+        }
+        resolvedKind ??= MedicalRecordKind.Analysis;
+
+        var result = resolvedKind == MedicalRecordKind.Analysis
             ? await ExtractAnalysisAsync(content, ct)
             : await ExtractVisitAsync(content, ct);
+        return result with { Kind = resolvedKind.Value };
     }
 
     private async Task<ExtractionResult> ExtractAnalysisAsync(DocumentContent content, CancellationToken ct)

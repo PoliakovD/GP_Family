@@ -79,6 +79,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>Прогоны перешифровки при ротации ключа (ADR-0009) — см. EncryptionRotationJob.</summary>
     public DbSet<EncryptionRotationRun> EncryptionRotationRuns => Set<EncryptionRotationRun>();
 
+    /// <summary>Аудит платных вызовов внешнего веб-поиска (см. WebSearchCallLogger,
+    /// /admin/enrichment → «Вызовы поиска») — одна строка на каждый SearchAsync, включая
+    /// кэш-хиты.</summary>
+    public DbSet<WebSearchCallLog> WebSearchCallLogs => Set<WebSearchCallLog>();
+
     /// <summary>Требуется интерфейсом IDataProtectionKeyContext — имя DbSet фиксировано пакетом,
     /// не наша конвенция именования.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();

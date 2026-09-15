@@ -109,6 +109,14 @@
           <app-search />
         }
         <app-background-jobs-dropdown />
+        @if (pageAction.secondaryAction(); as secondary) {
+          <button type="button" class="btn btn-secondary text-nowrap" (click)="secondary.handler()">
+            @if (secondary.icon) {
+              <i [class]="secondary.icon" aria-hidden="true"></i>
+            }
+            {{ secondary.label }}
+          </button>
+        }
         @if (pageAction.action(); as action) {
           <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
             @if (action.icon) {

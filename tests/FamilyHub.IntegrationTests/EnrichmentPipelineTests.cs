@@ -31,7 +31,8 @@ file sealed class FakeMedicationSearchProvider : IMedicationSearchProvider
 
     public Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        string? specimenDisplayName = null, CancellationToken ct = default) =>
+        string? specimenDisplayName = null, CancellationToken ct = default,
+        WebSearchCallContext? callContext = null) =>
         Task.FromResult<IReadOnlyList<WebSnippet>>(
         [
             new WebSnippet(
@@ -209,7 +210,8 @@ file sealed class FakeUntrustedDomainSearchProvider : IMedicationSearchProvider
 
     public Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        string? specimenDisplayName = null, CancellationToken ct = default) =>
+        string? specimenDisplayName = null, CancellationToken ct = default,
+        WebSearchCallContext? callContext = null) =>
         Task.FromResult<IReadOnlyList<WebSnippet>>(
         [
             new WebSnippet(

@@ -1026,6 +1026,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("KindIsAutoDetected")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uuid");
 
@@ -1779,6 +1782,78 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("VisitMedicationEnrichmentJobs", "medical");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.WebSearchCallLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Endpoint")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("JobKind")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("QueryText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("ResultUrlsJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SnippetCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SpecimenDisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Topic")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("Provider", "OccurredAt");
+
+                    b.ToTable("WebSearchCallLogs", (string)null);
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>

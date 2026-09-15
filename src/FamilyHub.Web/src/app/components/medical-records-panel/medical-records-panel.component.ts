@@ -337,6 +337,14 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         icon: 'ph-bold ph-plus',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
       });
+      // Батч-загрузка (несколько документов одного пациента, каждый — своя запись/свой прогон
+      // пайплайна) — рядом с «+ Добавить», не заменяет его: тот сценарий (страницы одного бланка)
+      // остаётся отдельным. См. class doc RecordBatchAddComponent.
+      this.pageAction.setSecondaryAction({
+        label: 'Несколько',
+        icon: 'ph-bold ph-stack',
+        handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
+      });
       // Редизайн v2.1 — своё поле поиска отдаётся топбару целиком (было — рисовалось инлайн под
       // заголовком экрана, общий поиск шапки просто подавлялся), см. PageActionService.pageSearch.
       this.pageAction.setPageSearch({
@@ -361,6 +369,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         label: this.labels.addButtonLabel,
         icon: 'ph-bold ph-plus',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
+      });
+      this.pageAction.setSecondaryAction({
+        label: 'Несколько',
+        icon: 'ph-bold ph-stack',
+        handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
       this.pageAction.setPageSearch({
         placeholder: this.labels.searchPlaceholder,

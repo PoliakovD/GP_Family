@@ -5,6 +5,7 @@ using FamilyHub.Infrastructure.Persistence;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
@@ -13,8 +14,14 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// ExtractionRequestService) — отличается от <see cref="AlreadyQueued"/> (задача уже реально
 /// исполняется/ждёт) тем, что новая задача здесь СОЗНАТЕЛЬНО не создаётся: она немедленно упала
 /// бы тем же образом, а исходную задачу уже вернёт в очередь LmStudioRecoverySweepJob, как только
-/// сервер оживёт.</summary>
-public enum ExtractionRequestResult { Success, NotFound, Forbidden, AlreadyQueued, NothingToDo, ServiceUnavailable }
+/// сервер оживёт.
+/// <see cref="TooManyActiveJobs"/>/<see cref="DailyQuotaExceeded"/> — лимиты на пользователя
+/// (ExtractionLimitsOptions), см. class doc ниже.</summary>
+public enum ExtractionRequestResult
+{
+    Success, NotFound, Forbidden, AlreadyQueued, NothingToDo, ServiceUnavailable,
+    TooManyActiveJobs, DailyQuotaExceeded,
+}
 
 /// <summary>
 /// Постановка ЗАПИСИ в очередь распознавания (ветка medicalrecords, редизайн v2 — раньше был
@@ -29,6 +36,7 @@ public class ExtractionRequestService(
     AppDbContext db,
     IBackgroundJobClient backgroundJobs,
     ILmStudioAvailabilityProbe probe,
+    IOptions<ExtractionLimitsOptions> limits,
     ILogger<ExtractionRequestService> logger)
 {
     public async Task<ExtractionRequestResult> RequestAsync(
@@ -48,6 +56,22 @@ public class ExtractionRequestService(
             .AnyAsync(j => j.MedicalRecordId == recordId &&
                 (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running), ct);
         if (hasLiveJob) return ExtractionRequestResult.AlreadyQueued;
+
+        // Лимиты на пользователя (ExtractionLimitsOptions, батч-загрузка) — МЯГКИЕ (две
+        // параллельные постановки могут обе пройти эту проверку до вставки своей Pending-строки):
+        // точный барьер потребовал бы блокировки, которой проект принципиально избегает (см.
+        // patterns/backend.md, «Merge / race-условия» — уникальные индексы + перечитывание, не
+        // явные локи). Частоту повторных попыток ограничивает rate limiting отдельно (Program.cs,
+        // политика "llm"), этих двух вместе достаточно.
+        var activeJobsCount = await db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .CountAsync(j => j.RequestedByUserId == requestedByUserId &&
+                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running), ct);
+        if (activeJobsCount >= limits.Value.MaxActiveJobsPerUser) return ExtractionRequestResult.TooManyActiveJobs;
+
+        var todayStartUtc = DateTime.UtcNow.Date;
+        var jobsToday = await db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .CountAsync(j => j.RequestedByUserId == requestedByUserId && j.CreatedAt >= todayStartUtc, ct);
+        if (jobsToday >= limits.Value.DailyJobsPerUser) return ExtractionRequestResult.DailyQuotaExceeded;
 
         var hasPendingAttachments = await db.FileAttachments.AsNoTracking()
             .AnyAsync(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId && a.ExtractedAt == null, ct);
@@ -109,4 +133,30 @@ public class ExtractionRequestService(
         logger.LogInformation("Распознавание мед-записи {RecordId} поставлено в очередь.", recordId);
         return ExtractionRequestResult.Success;
     }
+
+    /// <summary>Снимок лимитов + текущего расхода для формы (батч-загрузка и обычная форма
+    /// создания читают это перед стартом, тот же приём, что GET /api/attachments/limits — форма
+    /// предвалидирует и подписывает «осталось N из M», не ловит 429 вслепую). Числа читаются теми
+    /// же двумя запросами, что и в RequestAsync — гонка между чтением здесь и вставкой там
+    /// возможна (как и у любого мягкого лимита, см. class doc RequestAsync), это осознанно.</summary>
+    public async Task<ExtractionLimitsDto> GetLimitsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var activeJobsCount = await db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .CountAsync(j => j.RequestedByUserId == userId &&
+                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running), ct);
+
+        var todayStartUtc = DateTime.UtcNow.Date;
+        var jobsToday = await db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .CountAsync(j => j.RequestedByUserId == userId && j.CreatedAt >= todayStartUtc, ct);
+
+        return new ExtractionLimitsDto(
+            limits.Value.MaxBatchDocuments, limits.Value.MaxActiveJobsPerUser, activeJobsCount,
+            limits.Value.DailyJobsPerUser, jobsToday, todayStartUtc.AddDays(1));
+    }
 }
+
+/// <summary>ResetsAt — начало следующих суток UTC, когда DailyQuota обнуляется (считается по
+/// MedicalDocumentExtractionJob.CreatedAt, не хранится отдельным счётчиком — см. class doc
+/// ExtractionRequestService.GetLimitsAsync).</summary>
+public record ExtractionLimitsDto(
+    int MaxBatchDocuments, int MaxActiveJobs, int ActiveNow, int DailyQuota, int UsedToday, DateTime ResetsAt);

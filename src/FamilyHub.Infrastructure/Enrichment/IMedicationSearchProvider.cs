@@ -9,6 +9,14 @@ namespace FamilyHub.Infrastructure.Enrichment;
 /// БД-списку доверенных доменов (EnrichmentTrustedDomain), управляемому через админку.</summary>
 public record WebSnippet(string Title, string Url, string Text);
 
+/// <summary>Откуда пришёл вызов SearchAsync — только для WebSearchCallLog.JobKind/JobId (переход
+/// из строки аудит-лога в карточку задачи в /admin/pipeline), никак не влияет на сам поиск.
+/// JobKind — строка, зеркалящая FamilyHub.Infrastructure.LmStudio.LlmJobKind ("Extraction" здесь
+/// не используется — SearchAsync вызывается только тремя enrichment-процессорами, не
+/// extraction), не сам enum (WebSearchCallLog — Domain-сущность, Domain не зависит от
+/// Infrastructure).</summary>
+public record WebSearchCallContext(string JobKind, Guid JobId);
+
 /// <summary>
 /// Абстракция внешнего поиска для обогащения справочников (этап 4 — препараты, ветка
 /// medicalrecords — лабораторные показатели, ADR-0005). Реализация подключается конфигом
@@ -27,8 +35,10 @@ public interface IMedicationSearchProvider
     /// просто "натрий") — см. AnalyteSearchQueryBuilder. Никакой классификации на стороне
     /// провайдера — источник уже пришёл готовой строкой из справочника, код здесь её не
     /// интерпретирует. Null у медикаментов и у анализов без определённого источника — прежний,
-    /// общий запрос.</summary>
+    /// общий запрос. callContext — см. WebSearchCallContext, null допустим везде (тесты, будущие
+    /// вызовы без известной задачи) — тогда лог пишется без ссылки на задачу.</summary>
     Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        string? specimenDisplayName = null, CancellationToken ct = default);
+        string? specimenDisplayName = null, CancellationToken ct = default,
+        WebSearchCallContext? callContext = null);
 }

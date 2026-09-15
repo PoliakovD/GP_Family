@@ -11,6 +11,8 @@ public static class PromptCatalog
 {
     public static readonly IReadOnlyList<PromptDeclaration> Prompts =
     [
+        new("document.kind-classify", "Определение вида документа (анализ/посещение врача) для батч-загрузки, " +
+            "где пользователь не выбирает вид явно (см. DocumentKindClassifier)."),
         new("analysis.extract", "Структурирование показателей анализа из текста/фото бланка"),
         new("analysis.specimen-resolve", "Резолвинг источника показателя по документу (биоматериал/исследование)"),
         new("analysis.subject-resolve", "Уточнение родового названия показателя по документу (посев на конкретный " +

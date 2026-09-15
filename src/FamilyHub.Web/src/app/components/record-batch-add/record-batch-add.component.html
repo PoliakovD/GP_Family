@@ -1,0 +1,143 @@
+<ng-template #formContent>
+  <div class="record-add-header">
+    <div>
+      <div class="record-add-kicker">Несколько документов</div>
+      <h3 class="mb-0">Загрузить несколько документов</h3>
+    </div>
+    <button type="button" class="btn-icon" aria-label="Закрыть" (click)="cancel()">
+      <i class="ph ph-x" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div class="record-add-body">
+    @if (!running() && !done()) {
+      <p class="muted mb-3">
+        Каждый файл станет отдельной записью — анализ или посещение врача определится автоматически
+        по содержимому документа, для каждого свой прогон распознавания.
+      </p>
+
+      <div class="mb-3">
+        <div class="form-label">Чей это документы</div>
+        <div class="d-flex flex-wrap gap-2">
+          @for (opt of patientOptions; track opt.key) {
+            @if (opt.shortLabel) {
+              <button type="button" class="person-chip-btn" (click)="selectedPatientKey = opt.key">
+                <app-person-chip
+                  [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
+                  [shortLabel]="opt.shortLabel"
+                  [fullLabel]="opt.label"
+                  [selected]="selectedPatientKey === opt.key"
+                />
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="tag"
+                [class.tag-accent]="selectedPatientKey === opt.key"
+                style="cursor:pointer;border:none;font:inherit"
+                (click)="selectedPatientKey = opt.key"
+              >
+                {{ opt.label }}
+              </button>
+            }
+          }
+        </div>
+      </div>
+    }
+
+    <div class="mb-3">
+      <div class="form-label">Документы</div>
+      <div class="file-chip-grid">
+        @for (item of items(); track item.file.name + item.file.size; let i = $index) {
+          <div
+            class="file-chip"
+            [class.file-chip-failed]="item.status === 'failed'"
+            [class.file-chip-skipped]="item.status === 'skipped'"
+            style="cursor:pointer"
+            role="button"
+            tabindex="0"
+            [attr.title]="item.file.name"
+            (click)="openPreview(i)"
+            (keydown.enter)="openPreview(i)"
+          >
+            @if (item.previewUrl) {
+              <img [src]="item.previewUrl" alt="" />
+            } @else {
+              <i class="ph ph-file-text" aria-hidden="true"></i>
+              <span class="file-chip-name">{{ item.file.name }}</span>
+            }
+
+            @switch (item.status) {
+              @case ('pending') {
+                @if (!running() && !done()) {
+                  <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="$event.stopPropagation(); removeItem(i)">
+                    <i class="ph-bold ph-x" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+              @case ('creating') { <span class="file-chip-badge file-chip-badge-spin"><i class="ph ph-circle-notch" aria-hidden="true"></i></span> }
+              @case ('uploading') { <span class="file-chip-badge file-chip-badge-spin"><i class="ph ph-circle-notch" aria-hidden="true"></i></span> }
+              @case ('queued') { <span class="file-chip-badge file-chip-badge-ok"><i class="ph-bold ph-check" aria-hidden="true"></i></span> }
+              @case ('failed') { <span class="file-chip-badge file-chip-badge-error" [attr.title]="item.error"><i class="ph-bold ph-warning" aria-hidden="true"></i></span> }
+              @case ('skipped') { <span class="file-chip-badge" [attr.title]="item.error"><i class="ph-bold ph-minus-circle" aria-hidden="true"></i></span> }
+            }
+          </div>
+        }
+        @if (!running() && !done() && remainingSlots > 0) {
+          <label class="file-chip file-chip-add" [attr.for]="fileInputId">
+            <i class="ph ph-upload-simple" aria-hidden="true"></i>
+            <span>Файлы</span>
+          </label>
+        }
+      </div>
+      <input
+        [id]="fileInputId"
+        class="visually-hidden-input"
+        type="file"
+        multiple
+        [accept]="acceptedFileTypes"
+        (change)="onFilesSelected($event)"
+      />
+      @if (extractionLimits; as limits) {
+        <div class="muted mb-2" style="font-size:0.7059rem">
+          До {{ limits.maxBatchDocuments }} документов за раз, до {{ limits.dailyQuota - limits.usedToday }} осталось сегодня из {{ limits.dailyQuota }}.
+        </div>
+      }
+      @if (stoppedByLimit) {
+        <div class="alert-danger mb-2">{{ stoppedByLimit }}</div>
+      }
+    </div>
+
+    @if (done()) {
+      <div [class]="failedCount > 0 ? 'alert-danger mb-2' : 'alert-info mb-2'">
+        Загружено и поставлено в очередь: {{ succeededCount }} из {{ items().length }}.
+        @if (failedCount > 0) { Не удалось: {{ failedCount }}. }
+      </div>
+    }
+  </div>
+
+  <div class="record-add-footer">
+    @if (!done()) {
+      <button class="btn btn-primary flex-fill" [disabled]="running() || items().length === 0" (click)="submit()">
+        {{ running() ? 'Загружаем…' : 'Загрузить (' + items().length + ')' }}
+      </button>
+      <button type="button" class="btn btn-ghost" [disabled]="running()" (click)="cancel()">Отмена</button>
+    } @else {
+      <button class="btn btn-primary flex-fill" (click)="finish()">Готово</button>
+    }
+  </div>
+</ng-template>
+
+@if (isWide) {
+  <div class="overlay-backdrop record-add-backdrop" (click)="!running() && cancel()">
+    <aside class="record-add-panel" (click)="$event.stopPropagation()">
+      <ng-container *ngTemplateOutlet="formContent" />
+    </aside>
+  </div>
+} @else {
+  <div class="record-add-fullscreen">
+    <ng-container *ngTemplateOutlet="formContent" />
+  </div>
+}
+
+<app-file-viewer [open]="viewerIndex !== null" [localFile]="viewerFile" (closed)="closePreview()" />
