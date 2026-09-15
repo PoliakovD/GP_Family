@@ -30,11 +30,13 @@ public class LabAnalyteEnrichmentProcessor(
     LabAnalyteKbLookupService kbLookup,
     LabAnalyteSearchCacheService searchCache,
     IMedicationSearchProvider provider,
+    WebSearchCallLogger callLogger,
     LabAnalyteKbSummarizer summarizer,
     LabAnalyteKbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
     ILegitimacyGuardService legitimacyGuard,
     IAnalytePlausibilityGuardService plausibilityGuard,
+    WebSearchQuotaService searchQuota,
     IOptions<EnrichmentOptions> options,
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
@@ -135,6 +137,9 @@ public class LabAnalyteEnrichmentProcessor(
 
             IReadOnlyList<WebSnippet> rawSnippets;
             IReadOnlyDictionary<string, bool>? overrides = null;
+            var specimenDisplayNameForLog = await db.GlobalSpecimensKb.AsNoTracking()
+                .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+
             if (cached is not null && cached.IsFresh)
             {
                 rawSnippets = cached.Snippets;
@@ -144,15 +149,34 @@ public class LabAnalyteEnrichmentProcessor(
                     "LabAnalyteEnrichmentJob {JobId}: «{Name}» — использованы закэшированные результаты поиска " +
                     "от {LastUpdatedAt:dd.MM.yyyy}, платный запрос не потребовался.",
                     job.Id, job.NormalizedName, cached.LastUpdatedAt);
+                // Кэш-хит — не платный вызов, но всё равно строка в аудит-логе (см. class doc
+                // WebSearchCallOutcome.CacheHit): без неё нельзя ответить на вопрос "работает ли
+                // кэш" по одной этой таблице.
+                await callLogger.LogAsync(new WebSearchCallLogEntry(
+                    cached.Provider, WebSearchTopic.LabAnalyte, job.NormalizedName, specimenDisplayNameForLog,
+                    string.Empty, null, null, 0, WebSearchCallOutcome.CacheHit, cached.Snippets.Count, null, null,
+                    nameof(LlmJobKind.LabAnalyteEnrichment), job.Id), ct);
             }
             else
             {
+                // Месячная квота (ADR-0005 §9, возврат) — проверяется ТОЛЬКО на ветке реального
+                // платного вызова, не на кэш-хите выше: кэш ничего не стоит независимо от квоты.
+                if (await searchQuota.MonthlyQuotaExceededAsync(ct))
+                {
+                    job.Status = EnrichmentJobStatus.Skipped;
+                    job.Error = "Месячная квота платного поиска исчерпана.";
+                    job.CompletedAt = DateTime.UtcNow;
+                    await db.SaveChangesAsync(ct);
+                    logger.LogWarning("LabAnalyteEnrichmentJob {JobId}: месячная квота платного поиска исчерпана.", job.Id);
+                    return;
+                }
+
                 // Отображаемое имя источника для текста поискового запроса (AnalyteSearchQueryBuilder) —
                 // читается по факту непосредственно перед платным вызовом, не заранее: на кэш-хите
                 // выше этот запрос вообще не нужен.
-                var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
-                    .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
-                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.LabAnalyte, specimenDisplayName, ct);
+                var callContext = new WebSearchCallContext(nameof(LlmJobKind.LabAnalyteEnrichment), job.Id);
+                rawSnippets = await provider.SearchAsync(
+                    job.NormalizedName, WebSearchTopic.LabAnalyte, specimenDisplayNameForLog, ct, callContext);
                 if (provider.Name != "Null")
                 {
                     job.ExternalSearchAt = DateTime.UtcNow;

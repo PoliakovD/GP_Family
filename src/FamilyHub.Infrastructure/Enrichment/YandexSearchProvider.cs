@@ -32,7 +32,7 @@ namespace FamilyHub.Infrastructure.Enrichment;
 /// </summary>
 public class YandexSearchProvider(
     HttpClient httpClient, IOptions<EnrichmentOptions> options, ILogger<YandexSearchProvider> logger,
-    AnalyteSearchQueryBuilder analyteQueryBuilder, IPromptProvider promptProvider)
+    AnalyteSearchQueryBuilder analyteQueryBuilder, IPromptProvider promptProvider, WebSearchCallLogger callLogger)
     : IMedicationSearchProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -44,7 +44,8 @@ public class YandexSearchProvider(
 
     public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        string? specimenDisplayName = null, CancellationToken ct = default)
+        string? specimenDisplayName = null, CancellationToken ct = default,
+        WebSearchCallContext? callContext = null)
     {
         var opts = options.Value;
         var messageText = topic == WebSearchTopic.LabAnalyte
@@ -57,16 +58,20 @@ public class YandexSearchProvider(
             FixMisspell: true,
             SearchType: "SEARCH_TYPE_RU");
 
+        const string endpoint = "v2/gen/search";
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        int? httpStatus = null;
         GenSearchResponse? parsed;
         try
         {
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "v2/gen/search")
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint)
             {
                 Content = JsonContent.Create(request, options: JsonOptions),
             };
             httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Api-Key", opts.ApiKey);
 
             using var response = await httpClient.SendAsync(httpRequest, ct);
+            httpStatus = (int)response.StatusCode;
             response.EnsureSuccessStatusCode();
 
             // Ответ — JSON-массив (обычно из одного элемента вне режима getPartialResults) —
@@ -77,6 +82,10 @@ public class YandexSearchProvider(
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(ex, "Yandex Search API недоступен или запрос по «{NormalizedName}» превысил таймаут", normalizedName);
+            await LogCallAsync(
+                normalizedName, topic, specimenDisplayName, messageText, endpoint, httpStatus, stopwatch.ElapsedMilliseconds,
+                ex is TaskCanceledException ? WebSearchCallOutcome.Timeout : WebSearchCallOutcome.HttpError,
+                [], ex.Message, callContext, ct);
             return [];
         }
 
@@ -85,6 +94,9 @@ public class YandexSearchProvider(
         {
             logger.LogInformation(
                 "Yandex Search по «{NormalizedName}»: ответ отклонён, помечен как проблемный или пуст.", normalizedName);
+            await LogCallAsync(
+                normalizedName, topic, specimenDisplayName, messageText, endpoint, httpStatus, stopwatch.ElapsedMilliseconds,
+                WebSearchCallOutcome.Rejected, [], null, callContext, ct);
             return [];
         }
 
@@ -95,6 +107,9 @@ public class YandexSearchProvider(
         if (usedSources.Count == 0)
         {
             logger.LogInformation("Yandex Search по «{NormalizedName}»: ни один источник не использован в ответе.", normalizedName);
+            await LogCallAsync(
+                normalizedName, topic, specimenDisplayName, messageText, endpoint, httpStatus, stopwatch.ElapsedMilliseconds,
+                WebSearchCallOutcome.NoUsedSources, [], null, callContext, ct);
             return [];
         }
 
@@ -102,10 +117,24 @@ public class YandexSearchProvider(
         // MedicationSummarizer нумерует переданные сниппеты и требует сослаться на индекс
         // (антигаллюцинационный гейт), поэтому один и тот же текст ответа дублируется на каждый
         // использованный источник, чтобы у модели был явный [N] на что сослаться.
-        return usedSources
+        var snippets = usedSources
             .Select(s => new WebSnippet(s.Title ?? string.Empty, s.Url!, parsed.Message.Content))
             .ToList();
+
+        await LogCallAsync(
+            normalizedName, topic, specimenDisplayName, messageText, endpoint, httpStatus, stopwatch.ElapsedMilliseconds,
+            WebSearchCallOutcome.Ok, usedSources.Select(s => s.Url!).ToList(), null, callContext, ct);
+
+        return snippets;
     }
+
+    private Task LogCallAsync(
+        string normalizedName, WebSearchTopic topic, string? specimenDisplayName, string queryText, string endpoint,
+        int? httpStatus, long durationMs, WebSearchCallOutcome outcome, IReadOnlyList<string> resultUrls, string? error,
+        WebSearchCallContext? callContext, CancellationToken ct) =>
+        callLogger.LogAsync(new WebSearchCallLogEntry(
+            Name, topic, normalizedName, specimenDisplayName, queryText, endpoint, httpStatus, (int)durationMs,
+            outcome, resultUrls.Count, resultUrls, error, callContext?.JobKind, callContext?.JobId), ct);
 
     // --- DTO запроса/ответа Yandex Web Search API (GenSearch.Search, только нужные поля) ---
 

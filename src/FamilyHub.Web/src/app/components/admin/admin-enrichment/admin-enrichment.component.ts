@@ -1,12 +1,17 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   AdminApiService,
   KbRebuildStatus,
   SearchCacheRow,
+  SearchCallDetail,
+  SearchCallRow,
+  SearchCallStats,
   TrustedDomain,
+  WebSearchCallOutcome,
+  WebSearchCallOutcomeValue,
   WebSearchTopic,
   WebSearchTopicValue,
 } from '../../../services/admin-api.service';
@@ -30,7 +35,7 @@ const REBUILD_POLL_INTERVAL_MS = 2000;
 @Component({
   selector: 'app-admin-enrichment',
   standalone: true,
-  imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent],
+  imports: [FormsModule, DatePipe, DecimalPipe, SidePanelComponent, AdminCachePanelComponent],
   templateUrl: './admin-enrichment.component.html',
 })
 export class AdminEnrichmentComponent implements OnInit, OnDestroy {
@@ -41,8 +46,9 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
 
   readonly WebSearchTopic = WebSearchTopic;
+  readonly WebSearchCallOutcome = WebSearchCallOutcome;
 
-  readonly tab = signal<'domains' | 'cache' | 'rebuild'>('domains');
+  readonly tab = signal<'domains' | 'cache' | 'rebuild' | 'calls'>('domains');
   readonly topic = signal<WebSearchTopicValue>(WebSearchTopic.Medication);
 
   readonly domains = signal<TrustedDomain[]>([]);
@@ -63,19 +69,40 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   readonly rebuildBusy = signal(false);
   private rebuildPollTimer?: ReturnType<typeof setTimeout>;
 
+  // --- Вкладка «Вызовы поиска» (аудит платных вызовов, часть 2 плана) ---
+  readonly callRows = signal<SearchCallRow[]>([]);
+  readonly callsTotal = signal(0);
+  readonly callsPage = signal(1);
+  readonly callsPageSize = 25;
+  readonly callsLoading = signal(false);
+  readonly callOutcomeFilter = signal<WebSearchCallOutcomeValue | null>(null);
+  readonly callQuery = signal('');
+  readonly openCallId = signal<string | null>(null);
+  readonly callDetail = signal<SearchCallDetail | null>(null);
+  readonly callDetailLoading = signal(false);
+  readonly callStats = signal<SearchCallStats | null>(null);
+  readonly callStatsLoading = signal(false);
+
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
-    const tab = params.get('tab') as 'domains' | 'cache' | 'rebuild' | null;
+    const tab = params.get('tab') as 'domains' | 'cache' | 'rebuild' | 'calls' | null;
     const topicParam = params.get('topic');
     const row = params.get('row');
+    const call = params.get('call');
 
     if (topicParam === '0' || topicParam === '1') this.topic.set(Number(topicParam) as WebSearchTopicValue);
     if (tab) this.tab.set(tab);
     if (row) this.openRowId.set(row);
+    if (call) this.openCallId.set(call);
 
     void this.loadDomains();
     if (this.tab() === 'cache' || row) void this.loadCache();
     if (this.tab() === 'rebuild') void this.loadRebuildStatus();
+    if (this.tab() === 'calls' || call) {
+      void this.loadCalls();
+      void this.loadCallStats();
+      if (call) void this.openCallDetail(call);
+    }
   }
 
   ngOnDestroy(): void {
@@ -91,18 +118,26 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
     });
   }
 
-  selectTab(tab: 'domains' | 'cache' | 'rebuild'): void {
+  selectTab(tab: 'domains' | 'cache' | 'rebuild' | 'calls'): void {
     this.tab.set(tab);
     this.updateQueryParams({});
     if (tab === 'cache' && this.cacheRows().length === 0) void this.loadCache();
     if (tab === 'rebuild' && this.rebuild() === null) void this.loadRebuildStatus();
+    if (tab === 'calls' && this.callRows().length === 0) {
+      void this.loadCalls();
+      void this.loadCallStats();
+    }
   }
 
   async selectTopic(topic: WebSearchTopicValue): Promise<void> {
     this.topic.set(topic);
     this.openRowId.set(null);
     this.updateQueryParams({ row: null });
-    await Promise.all([this.loadDomains(), this.tab() === 'cache' ? this.loadCache() : Promise.resolve()]);
+    await Promise.all([
+      this.loadDomains(),
+      this.tab() === 'cache' ? this.loadCache() : Promise.resolve(),
+      this.tab() === 'calls' ? this.loadCalls(1) : Promise.resolve(),
+    ]);
   }
 
   async loadDomains(): Promise<void> {
@@ -268,6 +303,65 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
       }
       this.scheduleRebuildPollIfRunning();
     }, REBUILD_POLL_INTERVAL_MS);
+  }
+
+  // --- Вкладка «Вызовы поиска» (аудит платных вызовов, часть 2 плана) ---
+
+  async loadCalls(page = this.callsPage()): Promise<void> {
+    this.callsPage.set(page);
+    this.callsLoading.set(true);
+    try {
+      const outcome = this.callOutcomeFilter();
+      const response = await this.api.getSearchCalls(
+        { topic: this.topic(), outcome: outcome ?? undefined, query: this.callQuery() || undefined },
+        page, this.callsPageSize,
+      );
+      this.callRows.set(response.rows);
+      this.callsTotal.set(response.total);
+    } catch {
+      this.toast.error('Не удалось загрузить вызовы поиска.');
+    } finally {
+      this.callsLoading.set(false);
+    }
+  }
+
+  async loadCallStats(): Promise<void> {
+    this.callStatsLoading.set(true);
+    try {
+      this.callStats.set(await this.api.getSearchCallStats());
+    } catch {
+      this.toast.error('Не удалось загрузить статистику вызовов поиска.');
+    } finally {
+      this.callStatsLoading.set(false);
+    }
+  }
+
+  setCallOutcomeFilter(outcome: WebSearchCallOutcomeValue | null): void {
+    this.callOutcomeFilter.set(outcome);
+    void this.loadCalls(1);
+  }
+
+  async openCallDetail(id: string): Promise<void> {
+    this.openCallId.set(id);
+    this.updateQueryParams({ call: id });
+    this.callDetailLoading.set(true);
+    try {
+      this.callDetail.set(await this.api.getSearchCallDetail(id));
+    } catch {
+      this.toast.error('Не удалось загрузить карточку вызова.');
+    } finally {
+      this.callDetailLoading.set(false);
+    }
+  }
+
+  closeCallDetail(): void {
+    this.openCallId.set(null);
+    this.callDetail.set(null);
+    this.updateQueryParams({ call: null });
+  }
+
+  callsTotalPages(): number {
+    return Math.max(1, Math.ceil(this.callsTotal() / this.callsPageSize));
   }
 
   async startRebuild(): Promise<void> {

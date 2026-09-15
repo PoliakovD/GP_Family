@@ -36,7 +36,12 @@ public record MedicalRecordDto(
     // остался Unresolved — UI просит пользователя уточнить именно этим словом.
     Guid SpecimenKbId = default,
     string? SpecimenDisplayName = null,
-    string? SpecimenHint = null);
+    string? SpecimenHint = null,
+    // Батч-загрузка (запись создана без выбора вида пользователем, см. CreateMedicalRecordRequest
+    // .AutoDetectKind) — Kind выше провизорный, пока флаг не снят пайплайном
+    // (DocumentKindClassifier, MedicalDocumentExtractionProcessor). Фронт показывает бейдж «вид
+    // определён автоматически», пока true.
+    bool KindIsAutoDetected = false);
 
 /// <summary>Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для
 /// глобального поиска. TotalPages вычисляется на сервере, а не на фронте, чтобы не дублировать
@@ -69,6 +74,10 @@ public record MedicalRecordFilter(
 // (тесты, ранее написанный код) остаются исходно совместимыми и создают личный анализ, как раньше.
 // PersonName убран (v2) — идентичность пациента выражается целиком через
 // FamilyDependentId/TargetUserId/владельца, отдельного текстового поля больше нет.
+// AutoDetectKind (батч-загрузка, record-batch-add.component.ts) — последним и с дефолтом false:
+// обычная форма создания («+ Добавить») не передаёт его вовсе, Kind выбран пользователю явно
+// вкладкой. true означает "Kind выше — провизорный (по вкладке, откуда загружали), определи вид
+// пайплайном" — см. MedicalRecord.KindIsAutoDetected, DocumentKindClassifier.
 public record CreateMedicalRecordRequest(
     DateOnly RecordDate,
     string? Doctor,
@@ -76,7 +85,8 @@ public record CreateMedicalRecordRequest(
     List<Guid>? HideFromFamilyIds,
     MedicalRecordKind Kind = MedicalRecordKind.Analysis,
     Guid? FamilyDependentId = null,
-    Guid? TargetUserId = null);
+    Guid? TargetUserId = null,
+    bool AutoDetectKind = false);
 
 /// <summary>Правка даты/врача/описания/названия существующей записи (UX-редизайн, Title —
 /// редизайн v3, PR7) — пациент и вид записи не редактируются, см.

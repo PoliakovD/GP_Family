@@ -24,6 +24,10 @@ export interface PageSearch {
 @Injectable({providedIn: 'root'})
 export class PageActionService {
     readonly action = signal<PageAction | null>(null);
+    /** Второе, менее заметное действие рядом с основной кнопкой топбара (батч-загрузка документов
+     * рядом с «+ Добавить», см. medical-records-panel.component.ts) — null у всех остальных
+     * страниц, ни на что не влияет, пока страница явно не выставит его сама. */
+    readonly secondaryAction = signal<PageAction | null>(null);
     readonly pageSearch = signal<PageSearch | null>(null);
 
     /** Редизайн v2.2 — «открытая запись»/деталь-страница (аптечка, анализ, показатель на мобиле)
@@ -36,6 +40,10 @@ export class PageActionService {
 
     set(action: PageAction): void {
         this.action.set(action);
+    }
+
+    setSecondaryAction(action: PageAction | null): void {
+        this.secondaryAction.set(action);
     }
 
     setPageSearch(search: PageSearch | null): void {
@@ -51,6 +59,7 @@ export class PageActionService {
      * существует эта симметрия у action). */
     clear(): void {
         this.action.set(null);
+        this.secondaryAction.set(null);
         this.pageSearch.set(null);
         this.immersive.set(false);
     }

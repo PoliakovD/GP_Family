@@ -22,7 +22,7 @@ namespace FamilyHub.Infrastructure.Enrichment;
 /// </summary>
 public class BraveSearchProvider(
     HttpClient httpClient, IOptions<EnrichmentOptions> options, ILogger<BraveSearchProvider> logger,
-    AnalyteSearchQueryBuilder analyteQueryBuilder, IPromptProvider promptProvider)
+    AnalyteSearchQueryBuilder analyteQueryBuilder, IPromptProvider promptProvider, WebSearchCallLogger callLogger)
     : IMedicationSearchProvider
 {
     public const string MedicationFallbackTemplate = "{name} инструкция по применению";
@@ -31,16 +31,20 @@ public class BraveSearchProvider(
 
     public async Task<IReadOnlyList<WebSnippet>> SearchAsync(
         string normalizedName, WebSearchTopic topic = WebSearchTopic.Medication,
-        string? specimenDisplayName = null, CancellationToken ct = default)
+        string? specimenDisplayName = null, CancellationToken ct = default,
+        WebSearchCallContext? callContext = null)
     {
         var queryText = topic == WebSearchTopic.LabAnalyte
             ? await analyteQueryBuilder.BuildAsync(normalizedName, specimenDisplayName, ct)
             : (await promptProvider.GetAsync("medication.search-query.brave", MedicationFallbackTemplate, ct))
                 .Replace("{name}", normalizedName);
         var query = Uri.EscapeDataString(queryText);
-        var url = $"res/v1/web/search?q={query}&country=ru&search_lang=ru&ui_lang=ru&count=10";
+        const string endpoint = "res/v1/web/search";
+        var url = $"{endpoint}?q={query}&country=ru&search_lang=ru&ui_lang=ru&count=10";
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         BraveSearchResponse? parsed;
+        int? httpStatus = null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -48,12 +52,17 @@ public class BraveSearchProvider(
             request.Headers.Add("Accept", "application/json");
 
             using var response = await httpClient.SendAsync(request, ct);
+            httpStatus = (int)response.StatusCode;
             response.EnsureSuccessStatusCode();
             parsed = await response.Content.ReadFromJsonAsync<BraveSearchResponse>(cancellationToken: ct);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(ex, "Brave Search недоступен или запрос по «{NormalizedName}» превысил таймаут", normalizedName);
+            await LogCallAsync(
+                normalizedName, topic, specimenDisplayName, queryText, endpoint, httpStatus, stopwatch.ElapsedMilliseconds,
+                ex is TaskCanceledException ? WebSearchCallOutcome.Timeout : WebSearchCallOutcome.HttpError,
+                [], ex.Message, callContext, ct);
             return [];
         }
 
@@ -69,8 +78,21 @@ public class BraveSearchProvider(
             logger.LogInformation("Brave Search по «{NormalizedName}»: пустая выдача", normalizedName);
         }
 
+        await LogCallAsync(
+            normalizedName, topic, specimenDisplayName, queryText, endpoint, httpStatus, stopwatch.ElapsedMilliseconds,
+            snippets.Count > 0 ? WebSearchCallOutcome.Ok : WebSearchCallOutcome.Empty,
+            snippets.Select(s => s.Url).ToList(), null, callContext, ct);
+
         return snippets;
     }
+
+    private Task LogCallAsync(
+        string normalizedName, WebSearchTopic topic, string? specimenDisplayName, string queryText, string endpoint,
+        int? httpStatus, long durationMs, WebSearchCallOutcome outcome, IReadOnlyList<string> resultUrls, string? error,
+        WebSearchCallContext? callContext, CancellationToken ct) =>
+        callLogger.LogAsync(new WebSearchCallLogEntry(
+            Name, topic, normalizedName, specimenDisplayName, queryText, endpoint, httpStatus, (int)durationMs,
+            outcome, resultUrls.Count, resultUrls, error, callContext?.JobKind, callContext?.JobId), ct);
 
     // --- DTO ответа Brave Search API (только нужные поля) ---
 

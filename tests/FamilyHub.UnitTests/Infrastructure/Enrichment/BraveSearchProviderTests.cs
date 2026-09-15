@@ -41,7 +41,7 @@ public class BraveSearchProviderTests
         var promptProvider = TestPromptProvider.ReturningFallback();
         return new BraveSearchProvider(
             httpClient, Options.Create(opts), NullLogger<BraveSearchProvider>.Instance,
-            new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
+            new AnalyteSearchQueryBuilder(promptProvider), promptProvider, TestWebSearchCallLogger.NoOp());
     }
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
@@ -136,7 +136,8 @@ public class BraveSearchProviderTests
             .Returns(Task.FromResult("{name} — купить в аптеке РФ"));
         var sut = new BraveSearchProvider(
             httpClient, Options.Create(new EnrichmentOptions { ApiKey = "test-key" }),
-            NullLogger<BraveSearchProvider>.Instance, new AnalyteSearchQueryBuilder(promptProvider), promptProvider);
+            NullLogger<BraveSearchProvider>.Instance, new AnalyteSearchQueryBuilder(promptProvider), promptProvider,
+            TestWebSearchCallLogger.NoOp());
 
         await sut.SearchAsync("парацетамол", WebSearchTopic.Medication);
 

@@ -107,6 +107,7 @@ builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection
 builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
 builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(EnrichmentOptions.SectionName));
 builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection(ExtractionOptions.SectionName));
+builder.Services.Configure<ExtractionLimitsOptions>(builder.Configuration.GetSection(ExtractionLimitsOptions.SectionName));
 builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
 builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
 builder.Services.Configure<AttachmentUploadOptions>(builder.Configuration.GetSection(AttachmentUploadOptions.SectionName));
@@ -400,6 +401,9 @@ authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions 
 // --- Rate limiting PWA-auth (брутфорс-защита, этап 2 п.2.4). Лимиты конфигурируемы —
 // --- интеграционные тесты поднимают их, чтобы не ловить 429 на обычных сценариях.
 var authRateLimits = builder.Configuration.GetSection(AuthRateLimitOptions.SectionName).Get<AuthRateLimitOptions>() ?? new AuthRateLimitOptions();
+// --- Лимиты пайплайна распознавания (батч-загрузка, см. ExtractionLimitsOptions) — политики
+// --- "llm"/"medical-write" ниже используют то же значение секции.
+var extractionRateLimits = builder.Configuration.GetSection(ExtractionLimitsOptions.SectionName).Get<ExtractionLimitsOptions>() ?? new ExtractionLimitsOptions();
 builder.Services.AddRateLimiter(limiterOptions =>
 {
     limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -433,6 +437,37 @@ builder.Services.AddRateLimiter(limiterOptions =>
         {
             PermitLimit = authRateLimits.RedeemPermitLimit,
             Window = TimeSpan.FromSeconds(authRateLimits.RedeemWindowSeconds),
+            QueueLimit = 0,
+        }));
+
+    // Партиция — по UserId (не по IP, как политики выше): все три политики стоят на
+    // аутентифицированных эндпоинтах, а IP-партиция у NAT/офисной сети смешала бы разных
+    // пользователей в один лимит (см. threat-model.md — уже задокументированная слабость
+    // IP-партиции, здесь её не повторяем). UseRateLimiter() стоит ПОСЛЕ UseAuthentication/
+    // UseAuthorization (см. ниже), поэтому claims уже доступны на момент партиционирования.
+    // Фолбэк на IP — только на случай, если лимитер почему-то сработал раньше аутентификации.
+    string UserOrIpPartitionKey(HttpContext httpContext) =>
+        httpContext.User.GetUserId()?.ToString() ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    // Распознавание/OCR — один физический воркер LM Studio на всех пользователей
+    // (LmStudioConcurrencyGate); без лимита на пользователя батч-загрузка одного человека могла бы
+    // занять его на неопределённое время (см. class doc ExtractionLimitsOptions).
+    limiterOptions.AddPolicy("llm", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        UserOrIpPartitionKey(httpContext),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = extractionRateLimits.LlmPermitLimit,
+            Window = TimeSpan.FromSeconds(extractionRateLimits.LlmWindowSeconds),
+            QueueLimit = 0,
+        }));
+
+    // Создание мед-записи/загрузка вложения — дешевле LLM-вызова, но тоже неограничено сегодня.
+    limiterOptions.AddPolicy("medical-write", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        UserOrIpPartitionKey(httpContext),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = extractionRateLimits.MedicalWritePermitLimit,
+            Window = TimeSpan.FromSeconds(extractionRateLimits.MedicalWriteWindowSeconds),
             QueueLimit = 0,
         }));
 });
@@ -690,6 +725,10 @@ else
 // Переключатель Enrichment:Provider = Null|Brave|Yandex (тот же паттерн конфиг-переключателя,
 // что раньше был у FileStorage:Provider, пока хранилище не свели к единственной реализации).
 // Без явного конфига — Null: наружу не уходит ни одного запроса (см. NullMedicationSearchProvider).
+// Аудит платных вызовов (часть 2 плана) — свой DI-скоуп (IServiceScopeFactory), регистрация не
+// зависит от выбранного провайдера: NullMedicationSearchProvider просто не вызывает LogAsync.
+builder.Services.AddSingleton<WebSearchCallLogger>();
+builder.Services.AddScoped<WebSearchQuotaService>();
 var enrichmentOptions = builder.Configuration.GetSection(EnrichmentOptions.SectionName).Get<EnrichmentOptions>()
     ?? new EnrichmentOptions();
 if (enrichmentOptions.Provider != MedicationSearchProviderKind.Null && string.IsNullOrWhiteSpace(enrichmentOptions.ApiKey))
@@ -996,6 +1035,7 @@ if (adminOptions.Enabled)
     app.MapAdminSessionEndpoints();
     app.MapAdminEndpoints();
     app.MapAdminEnrichmentEndpoints();
+    app.MapAdminSearchCallsEndpoints();
     app.MapAdminPipelineEndpoints();
     app.MapAdminCatalogEndpoints();
     app.MapAdminLmStudioEndpoints();

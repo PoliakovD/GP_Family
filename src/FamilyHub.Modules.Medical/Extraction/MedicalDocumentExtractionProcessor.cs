@@ -152,7 +152,11 @@ public class MedicalDocumentExtractionProcessor(
                 await db.SaveChangesAsync(ct);
 
                 var source = new DocumentSource(bytes, download.Value.ContentType, download.Value.FileName);
-                var result = await extractor.ExtractAsync(source, record.Kind, ct);
+                // KindIsAutoDetected (батч-загрузка) — передаём null, экстрактор сам определит вид
+                // документа (DocumentKindClassifier) и вернёт его в result.Kind; итоговый Kind
+                // записи считается большинством голосов ПОСЛЕ цикла (см. ниже). Обычная форма
+                // создания уже знает вид — передаём его прямо, классификатор не вызывается.
+                var result = await extractor.ExtractAsync(source, record.KindIsAutoDetected ? null : record.Kind, ct);
 
                 // Технический сбой (LM Studio недоступен) — НЕ проставляем ExtractedAt на
                 // непрочитанном файле (readAttachmentIds ниже не пополняется) и пробрасываем
@@ -173,6 +177,25 @@ public class MedicalDocumentExtractionProcessor(
                 readAttachmentIds.Add(attachment.Id);
                 job.ProcessedFiles++;
                 await db.SaveChangesAsync(ct);
+            }
+
+            // Батч-загрузка (KindIsAutoDetected) — итоговый вид записи считается большинством
+            // голосов по results[].Kind (каждый УСПЕШНО прочитанный файл проголосовал за вид,
+            // которым его фактически разобрал DocumentKindClassifier внутри extractor.ExtractAsync
+            // выше). Ничья/пусто (все файлы не читаются) → Analysis, тот же дефолт-по-умолчанию,
+            // что и в самом классификаторе. В батче файл всегда один — голосование здесь чисто
+            // страховка для записи с несколькими вложениями. Флаг снимается сразу: повторный клик
+            // «Распознать» на этой же записи (новый файл добавлен позже) больше не переопределяет
+            // уже определённый вид — та же логика "не затирать то, что уже решено", что у
+            // Title/Doctor/SpecimenKbId ниже по конвейеру.
+            if (record.KindIsAutoDetected && results.Count > 0)
+            {
+                record.Kind = results
+                    .GroupBy(r => r.Kind)
+                    .OrderByDescending(g => g.Count())
+                    .ThenBy(g => g.Key == MedicalRecordKind.Analysis ? 0 : 1)
+                    .First().Key;
+                record.KindIsAutoDetected = false;
             }
 
             job.Stage = ExtractionStage.Structuring;

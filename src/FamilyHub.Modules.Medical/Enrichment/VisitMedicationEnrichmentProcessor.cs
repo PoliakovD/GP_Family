@@ -26,6 +26,8 @@ public class VisitMedicationEnrichmentProcessor(
     KbLookupService kbLookup,
     MedicationSearchCacheService searchCache,
     IMedicationSearchProvider provider,
+    WebSearchCallLogger callLogger,
+    WebSearchQuotaService searchQuota,
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
@@ -80,10 +82,28 @@ public class VisitMedicationEnrichmentProcessor(
                 rawSnippets = cached.Snippets;
                 overrides = cached.Overrides;
                 job.Provider = cached.Provider;
+                // Кэш-хит — не платный вызов, но строка в аудит-логе всё равно нужна (см. class doc
+                // WebSearchCallOutcome.CacheHit) — иначе нельзя проверить, что кэш реально работает.
+                await callLogger.LogAsync(new WebSearchCallLogEntry(
+                    cached.Provider, WebSearchTopic.Medication, job.NormalizedName, null, string.Empty, null, null, 0,
+                    WebSearchCallOutcome.CacheHit, cached.Snippets.Count, null, null,
+                    nameof(LlmJobKind.VisitMedicationEnrichment), job.Id), ct);
             }
             else
             {
-                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct: ct);
+                // Месячная квота (ADR-0005 §9, возврат) — только на ветке реального платного вызова.
+                if (await searchQuota.MonthlyQuotaExceededAsync(ct))
+                {
+                    job.Status = EnrichmentJobStatus.Skipped;
+                    job.Error = "Месячная квота платного поиска исчерпана.";
+                    job.CompletedAt = DateTime.UtcNow;
+                    await db.SaveChangesAsync(ct);
+                    logger.LogWarning("VisitMedicationEnrichmentJob {JobId}: месячная квота платного поиска исчерпана.", job.Id);
+                    return;
+                }
+
+                var callContext = new WebSearchCallContext(nameof(LlmJobKind.VisitMedicationEnrichment), job.Id);
+                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct: ct, callContext: callContext);
                 if (provider.Name != "Null")
                 {
                     job.ExternalSearchAt = DateTime.UtcNow;

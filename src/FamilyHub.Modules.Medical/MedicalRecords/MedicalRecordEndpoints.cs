@@ -45,7 +45,7 @@ public static class MedicalRecordEndpoints
                 MedicalRecordAccessResult.InvalidTarget => Results.BadRequest(new { code = "invalid_target" }),
                 _ => Results.Created($"/api/medical-records/{created!.Id}", created),
             };
-        });
+        }).RequireRateLimiting("medical-write");
 
         // Одна запись по id (редизайн v3) — мобильный экран открытой записи, deep link/refresh
         // без предзагрузки всего списка. Видимость, не владение — см. GetByIdAsync.

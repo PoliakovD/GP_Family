@@ -10,9 +10,9 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// </summary>
 public class NullMedicalDocumentExtractor(ILogger<NullMedicalDocumentExtractor> logger) : IMedicalDocumentExtractor
 {
-    public Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind kind, CancellationToken ct = default)
+    public Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind? kind, CancellationToken ct = default)
     {
         logger.LogDebug("Распознавание документа ({Kind}) запрошено, но конвейер ещё не реализован — пропуск.", kind);
-        return Task.FromResult(new ExtractionResult(Supported: false, LabIndicators: null, Conclusion: null));
+        return Task.FromResult(new ExtractionResult(Supported: false, LabIndicators: null, Conclusion: null, Kind: kind ?? MedicalRecordKind.Analysis));
     }
 }

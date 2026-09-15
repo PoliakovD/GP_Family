@@ -20,6 +20,15 @@ public class MedicalRecord
     /// <summary>Анализ или посещение врача. Не шифруется — по нему фильтруются списки и поиск в SQL.</summary>
     public MedicalRecordKind Kind { get; set; }
 
+    /// <summary>Батч-загрузка (несколько документов одного пациента за одну операцию) не спрашивает
+    /// вид у пользователя — Kind выше выставлен провизорно (по вкладке, откуда загружали), а этот
+    /// флаг просит MedicalDocumentExtractionProcessor определить вид документом (см.
+    /// DocumentKindClassifier) и снять флаг, переставив Kind при необходимости. Обычная форма
+    /// создания (кнопка «+ Добавить») этот флаг не выставляет — там пользователь уже выбрал вид
+    /// явно вкладкой. Пока флаг не снят — карточка записи показывает бейдж «вид определён
+    /// автоматически» (см. MedicalRecordDto.KindIsAutoDetected).</summary>
+    public bool KindIsAutoDetected { get; set; }
+
     public DateOnly RecordDate { get; set; }
 
     [Encrypted]

@@ -13,6 +13,13 @@ public class AuditRetentionJob(AppDbContext db, ILogger<AuditRetentionJob> logge
 {
     public static readonly TimeSpan Retention = TimeSpan.FromDays(365);
 
+    /// <summary>Аудит платных вызовов веб-поиска (WebSearchCallLog, часть 2 плана
+    /// ethereal-hugging-chipmunk) — окно короче основного аудита доступа: это диагностика "куда
+    /// уходят деньги", не история доступа к персональным данным (152-ФЗ здесь не применяется, см.
+    /// class doc WebSearchCallLog — не персональные данные), 180 дней достаточно для разбора
+    /// расхождений в счетах провайдера.</summary>
+    public static readonly TimeSpan WebSearchCallLogRetention = TimeSpan.FromDays(180);
+
     public async Task RunAsync(CancellationToken ct = default)
     {
         var cutoff = DateTime.UtcNow - Retention;
@@ -21,5 +28,14 @@ public class AuditRetentionJob(AppDbContext db, ILogger<AuditRetentionJob> logge
             .ExecuteDeleteAsync(ct);
 
         logger.LogInformation("AuditRetentionJob: удалено {Count} строк аудита старше {Cutoff}", removed, cutoff);
+
+        var searchCallCutoff = DateTime.UtcNow - WebSearchCallLogRetention;
+        var removedSearchCalls = await db.WebSearchCallLogs
+            .Where(l => l.OccurredAt < searchCallCutoff)
+            .ExecuteDeleteAsync(ct);
+
+        logger.LogInformation(
+            "AuditRetentionJob: удалено {Count} строк аудита платного поиска старше {Cutoff}",
+            removedSearchCalls, searchCallCutoff);
     }
 }

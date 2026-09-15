@@ -15,5 +15,10 @@ public record DocumentSource(byte[] Content, string ContentType, string FileName
 /// </summary>
 public interface IMedicalDocumentExtractor
 {
-    Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind kind, CancellationToken ct = default);
+    /// <summary>kind — null означает «определи сам» (батч-загрузка, MedicalRecord.KindIsAutoDetected):
+    /// реализация запускает DocumentKindClassifier ДО выбора системного промпта
+    /// (analysis.extract/visit.extract) и возвращает фактически применённый вид в
+    /// ExtractionResult.Kind. Заданный kind — обычная форма создания, где пользователь уже выбрал
+    /// вид вкладкой; классификатор не вызывается.</summary>
+    Task<ExtractionResult> ExtractAsync(DocumentSource source, MedicalRecordKind? kind, CancellationToken ct = default);
 }

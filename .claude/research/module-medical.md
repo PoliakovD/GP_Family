@@ -135,8 +135,25 @@ plaintext — по ним поиск/тренд/группировка, знач
 доверенных доменов — `EnrichmentOptions.AnalyteTrustedDomains`: helix.ru/invitro.ru/gemotest.ru/
 kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антигаллюцинационный гейт; v2 —
 промпт также просит `sex` на каждый диапазон и `calculationInstructions`) → `LabAnalyteKbWriter`
-(upsert, `KbIsolationGuard`). Месячная квота — общая на оба конвейера (`EnrichmentQuotaService`).
-См. дополнение к [ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md).
+(upsert, `KbIsolationGuard`). Месячная квота — общая на оба конвейера обогащения (медикаменты +
+показатели), считается `WebSearchQuotaService` прямо по `WebSearchCallLog` (см. ниже), не
+отдельным счётчиком — `EnrichmentOptions.MonthlyQuota` (0 = без лимита). См. дополнение к
+[ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md).
+
+**Аудит платных вызовов веб-поиска (`WebSearchCallLog`, схема `public`).** До этого одна строка
+на КАЖДЫЙ вызов `IMedicationSearchProvider.SearchAsync` (оба провайдера, все три enrich-процесса —
+`LabAnalyteEnrichmentProcessor`/`MedicationEnrichmentProcessor`/`VisitMedicationEnrichmentProcessor`,
+включая кэш-хиты, `WebSearchCallOutcome.CacheHit`) восстановить "сколько заплачено и за что" было
+нельзя — только `job.ExternalSearchAt`/`Provider` и перезаписываемая строка кэша. Пишет
+`WebSearchCallLogger` (`FamilyHub.Infrastructure.Enrichment`) — из **собственного** `IServiceScopeFactory`-
+скоупа, не из скоупного `AppDbContext` вызывающего процессора (там уже лежат незакоммиченные
+изменения задачи, ранний `SaveChangesAsync` закоммитил бы их раньше времени); ошибка записи лога
+только логируется, не роняет сам поиск. Хранит `QueryText` целиком (не ПДн — тот же нормализованный
+запрос, что уходит наружу, ADR-0005 §1) и URL реально использованных источников. Ретеншн — 180 дней,
+в уже существующем `AuditRetentionJob` (не отдельная джоба). Админка — вкладка «Вызовы поиска»
+внутри `/admin/enrichment` (`AdminSearchCallsEndpoints`, `/api/admin/search-calls*`): список с
+фильтрами, полная карточка вызова, `/stats` — доля кэш-хитов, разбивка по провайдеру/исходу, расход
+текущего месяца против квоты.
 
 **`MedicalRecord` — структура (v2).** `PersonName` убран целиком — идентичность пациента
 выражается только через `FamilyDependentId`/`TargetUserId`/владельца, отображаемое имя резолвится
@@ -149,6 +166,43 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 `Doctor` — теперь с автоподсказкой (`GET /api/medical-records/doctors`, in-memory `Distinct()`
 по СВОИМ записям пользователя после расшифровки — `Doctor` `[Encrypted]`, SQL DISTINCT по
 шифротексту бессмыслен, ADR-0002).
+
+**Батч-загрузка и автоопределение вида (`KindIsAutoDetected`).** Кнопка «Несколько» (топбар,
+рядом с «+ Добавить», `PageActionService.secondaryAction`) открывает `record-batch-add.component.ts`
+(`/health/records/batch`, `/health/visits/batch`) — за одну операцию N документов ОДНОГО пациента,
+каждый становится СВОЕЙ записью со своим прогоном пайплайна (не мержится в один набор, в отличие
+от многостраничного бланка через «+ Добавить»). Фронт просто шлёт N раз существующую тройку
+`POST /api/medical-records` (с `AutoDetectKind: true`) → `POST .../attachments` → `POST .../extract`
+последовательно — новых batch-эндпоинтов нет. Вид записи не спрашивается: `MedicalRecord.Kind`
+создаётся провизорным (по вкладке, откуда загружали) с флагом `KindIsAutoDetected=true`;
+`DocumentKindClassifier` (`Extraction/`, один LLM-вызов на документ, тем же приёмом, что
+`SpecimenResolver`/`AnalyteSubjectResolver`) определяет фактический вид ДО выбора системного
+промпта `analysis.extract`/`visit.extract` внутри `LmStudioMedicalDocumentExtractor.ExtractAsync`
+(параметр `kind` стал `MedicalRecordKind?` — `null` значит «определи сам»); `ExtractionResult.Kind`
+несёт фактически применённый вид. `MedicalDocumentExtractionProcessor.RunAsync` после цикла по
+файлам считает итог большинством голосов по `results[].Kind` (ничья/не уверен → `Analysis`),
+переставляет `record.Kind` и снимает флаг — повторный клик «Распознать» больше не переопределяет
+уже решённый вид. Необязательный шаг пайплайна `kind-classify` (`AnalysisExtraction`, промпт
+`document.kind-classify`) — выключен из админки означает "остаться на Analysis". Известная
+UX-складка: запись, распознанная не тем видом, чем провизорный, переезжает в другую вкладку после
+`Completed` — бэйдж «Вид определяется автоматически» на карточке (`item.kindIsAutoDetected`) плюс
+существующий push смягчают, отдельного "переноса на лету" нет.
+
+**Лимиты пайплайна на пользователя (`ExtractionLimitsOptions`, секция `ExtractionLimits`, не
+`Extraction` — та занята `Infrastructure.Documents.ExtractionOptions`).** До этого один пользователь
+мог держать сколько угодно параллельных задач `extraction` (дедуп — только по `MedicalRecordId`) и
+надолго занять единственный воркер LM Studio за WireGuard (`LmStudioConcurrencyGate`). Три
+независимых барьера: `MaxBatchDocuments` (мягкий, фронт не даёт застейджить больше — реальная защита
+ниже), `MaxActiveJobsPerUser` (`ExtractionRequestService.RequestAsync` считает
+`Pending`/`Running`-задачи по `RequestedByUserId` — мягкий лимит, гонка возможна, это осознанно) и
+`DailyJobsPerUser` (считает `MedicalDocumentExtractionJobs.CreatedAt` за текущие сутки UTC — в
+Postgres, переживает рестарт). Оба новых исхода `ExtractionRequestResult` (`TooManyActiveJobs`/
+`DailyQuotaExceeded`) отдаются как `429` с `{code, message}`. `GET /api/medical-records/extraction-limits`
+(`ExtractionRequestService.GetLimitsAsync`) — снимок лимитов + текущего расхода, тот же приём, что
+`GET /api/attachments/limits`. Rate limiting (`Program.cs`, `AddRateLimiter`) получил две новые
+политики, партиция по `UserId` (не по IP, в отличие от `auth`/`auth-code`/`invite-redeem`) —
+`"llm"` (`POST .../extract`, `.../summary/regenerate`, `POST /api/medications/ocr`) и
+`"medical-write"` (`POST /api/medical-records`, `POST .../attachments`).
 
 Фронт (`FamilyHub.Web`): одна кнопка «Распознать» на записи (не на вложении) —
 `medical-records-panel.component.ts` показывает живой прогресс (`shared/pipeline-progress` —
