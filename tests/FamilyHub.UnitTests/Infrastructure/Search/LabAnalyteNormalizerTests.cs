@@ -84,4 +84,63 @@ public class LabAnalyteNormalizerTests
     {
         LabAnalyteNormalizer.Normalize(raw).Should().Be(expected);
     }
+
+    /// <summary>
+    /// Миграция AnalyteKey (план "миграция AnalyteKey", продолжение "кросс-алфавитного
+    /// сопоставления показателей") — NormalizeAnalyteKey() ДОЛЖЕН давать РАВНЫЙ ключ для латинского
+    /// и кириллического написания одного понятия, а не просто высокую схожесть (как транзитный
+    /// Fold в вето). Именно эта пара в проде расходилась по разным AnalyteKey/NormalizedName до
+    /// миграции: оба варианта — одна и та же (несклоняемая) форма "аденовирус" на обоих языках.
+    /// </summary>
+    [Fact]
+    public void NormalizeAnalyteKey_ProductionLogPair_NominativeForm_ProducesIdenticalKey()
+    {
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Антиген Adenovirus (B,C,E)")
+            .Should().Be(LabAnalyteNormalizer.NormalizeAnalyteKey("Антиген аденовирус (B, C, E)"));
+    }
+
+    /// <summary>
+    /// Честная граница миграции: точное равенство ключей достижимо только там, где словарный
+    /// перевод и естественная русская формулировка совпадают по ГРАММАТИЧЕСКОЙ ФОРМЕ. Словарь даёт
+    /// именительный падеж пословно ("hepatitis"→"гепатит", "virus"→"вирус"), а естественная русская
+    /// фраза склоняет их в родительном ("антиген ВИРУСА ГЕПАТИТА B" — "поверхностный антиген"
+    /// буквально), поэтому ключи остаются РАЗНЫМИ строками даже после свёртки. Не пытаемся
+    /// это закрывать стеммингом — у RussianStemmer как раз для этого слова известный баг (см. doc
+    /// MedicalTextTransliterator.IsTranslationOf: "гепатит"→"гепат", "гепатита"→"гепатит", РАЗНЫЕ
+    /// основы) — стемминг сделал бы только хуже. Эта пара по-прежнему выигрывает от свёртки: обе
+    /// формы остаются похожими (см. MedicalTextTransliteratorTests) и одинаково находят статью
+    /// kb.global_lab_analytes_kb через нечёткий Postgres-поиск (LabAnalyteKbLookupService,
+    /// AutoLinkConfidence 0.55) — просто НЕ делят один <c>AnalyteKey</c>/график тренда.
+    /// </summary>
+    [Fact]
+    public void NormalizeAnalyteKey_ProductionLogPair_GrammaticalCaseMismatch_KeysStayDifferent()
+    {
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Антиген Hepatitis B virus surface")
+            .Should().NotBe(LabAnalyteNormalizer.NormalizeAnalyteKey("Антиген гепатита В вируса поверхность"));
+    }
+
+    [Fact]
+    public void NormalizeAnalyteKey_DifferentConcepts_ProducesDifferentKeys()
+    {
+        // Регрессия для самой свёртки — не должна размывать реально разные показатели/препараты
+        // в один ключ только потому, что оба прогнаны через Fold.
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Ибупрофен").Should().NotBe(LabAnalyteNormalizer.NormalizeAnalyteKey("Парацетамол"));
+    }
+
+    [Fact]
+    public void NormalizeAnalyteKey_VocabularyOutsideDictionary_DoesNotMerge()
+    {
+        // Честная граница: побуквенная транслитерация "Glucose" даёт "глукосе", а не "глюкоза" —
+        // NormalizeAnalyteKey не универсальный решатель, а точечное расширение словаря по мере
+        // появления новых расхождений в логах (см. class doc MedicalTextTransliterator). Тест
+        // фиксирует границу явно, чтобы будущий читатель не считал её забытым багом.
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Glucose").Should().NotBe(LabAnalyteNormalizer.NormalizeAnalyteKey("Глюкоза"));
+    }
+
+    [Fact]
+    public void NormalizeAnalyteKey_PureCyrillicInput_SameAsNormalize()
+    {
+        // Никакой латиницы — свёртка не должна ничего менять сверх обычного Normalize.
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Гемоглобин (HGB), г/л").Should().Be("гемоглобин");
+    }
 }

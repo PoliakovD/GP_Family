@@ -56,4 +56,20 @@ public static partial class LabAnalyteNormalizer
         var noPunctuation = PunctuationRegex().Replace(withoutUnits, " ");
         return WhitespaceRegex().Replace(noPunctuation, " ").Trim();
     }
+
+    /// <summary>
+    /// Ключ дедупликации ПОКАЗАТЕЛЯ (<c>LabIndicator.AnalyteKey</c> / <c>GlobalLabAnalyteKb.NormalizedName</c>
+    /// / <c>LabAnalyteSearchCache.NormalizedName</c>) — <see cref="Normalize"/> + кросс-алфавитная
+    /// свёртка (<see cref="MedicalTextTransliterator.Fold"/>) финальным шагом, чтобы "Adenovirus" и
+    /// "аденовирус" не расходились в разные строки справочника/тренда (живое прод-наблюдение: одна и
+    /// та же лаборатория печатает показатель то латиницей, то кириллицей на разных бланках — без
+    /// свёртки это два разных <c>AnalyteKey</c> и разорванный тренд, см. план "миграция AnalyteKey").
+    ///
+    /// НЕ используется для specimen-объектов (<c>GlobalSpecimenKb</c>, см.
+    /// <c>UserSpecimenService</c>/<c>SpecimenResolver</c>/<c>GlobalSpecimenKbService</c> — те
+    /// остаются на обычном <see cref="Normalize"/>) — специмины почти всегда однословные русские
+    /// термины, а бэкофилла для их справочника (аналога <c>LabAnalyteKbRebuildJob</c>) не
+    /// существует; свернуть их ключ значило бы открыть миграцию без механизма её закрыть.
+    /// </summary>
+    public static string NormalizeAnalyteKey(string? raw) => MedicalTextTransliterator.Fold(Normalize(raw));
 }

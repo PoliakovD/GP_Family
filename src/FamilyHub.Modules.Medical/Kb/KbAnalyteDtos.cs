@@ -89,4 +89,5 @@ internal sealed class KbRelatedMatchRow
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string NormalizedName { get; set; } = string.Empty;
+    public Guid SpecimenKbId { get; set; }
 }

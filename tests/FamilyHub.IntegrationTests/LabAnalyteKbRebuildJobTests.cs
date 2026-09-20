@@ -167,6 +167,87 @@ public class LabAnalyteKbRebuildJobTests(AdminWebFactory factory)
             .Should().BeFalse("жёсткое требование — обогащение никогда не ставится в очередь для нерезолвленного источника");
     }
 
+    /// <summary>
+    /// Цель миграции AnalyteKey (план "миграция AnalyteKey") — не внутризаписное слияние дублей
+    /// (это уже покрыто тестом выше), а слияние ТРЕНДА: один и тот же показатель, напечатанный на
+    /// РАЗНЫХ бланках/визитах то латиницей, то кириллицей (реальное прод-наблюдение — одна
+    /// лаборатория печатает "Antigen Adenovirus" на одном бланке и "Антиген аденовирус" на другом),
+    /// сохранён до фикса в ДВУХ разных MedicalRecord под ДВУМЯ разными AnalyteKey. После пересборки
+    /// оба должны получить ОДИНАКОВЫЙ AnalyteKey (LabAnalyteNormalizer.NormalizeAnalyteKey) — иначе
+    /// GET /api/indicators/{analyteKey} (группировка по AnalyteKey между записями пациента) видит
+    /// два отдельных графика вместо одного тренда.
+    /// </summary>
+    [Fact]
+    public async Task Rebuild_TwoRecordsWithSameAnalyteInDifferentAlphabets_ConvergeOnSameAnalyteKey()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var bloodId = await SeedSpecimenAsync(db, "Кровь");
+
+        const string latinForm = "Антиген Adenovirus (B,C,E)";
+        const string cyrillicForm = "Антиген аденовирус (B, C, E)";
+        var expectedKey = LabAnalyteNormalizer.NormalizeAnalyteKey(latinForm);
+        expectedKey.Should().Be(LabAnalyteNormalizer.NormalizeAnalyteKey(cyrillicForm), "иначе сам тест ничего не проверяет");
+
+        var latinRecordId = Guid.NewGuid();
+        var cyrillicRecordId = Guid.NewGuid();
+        db.MedicalRecords.AddRange(
+            new MedicalRecord
+            {
+                Id = latinRecordId, OwnerUserId = OwnerUserId, Kind = MedicalRecordKind.Analysis,
+                RecordDate = new DateOnly(2026, 1, 1), ExtractionStatus = ExtractionStatus.Ready, CreatedAt = DateTime.UtcNow,
+            },
+            new MedicalRecord
+            {
+                Id = cyrillicRecordId, OwnerUserId = OwnerUserId, Kind = MedicalRecordKind.Analysis,
+                RecordDate = new DateOnly(2026, 6, 1), ExtractionStatus = ExtractionStatus.Ready, CreatedAt = DateTime.UtcNow,
+            });
+
+        // Без RawDisplayName — имитирует показатели, распознанные ДО этой пересборки (тот же приём,
+        // что в тесте выше): единственный доступный источник для пересчёта — сам DisplayName.
+        var latinIndicatorId = Guid.NewGuid();
+        var cyrillicIndicatorId = Guid.NewGuid();
+        db.LabIndicators.AddRange(
+            new LabIndicator
+            {
+                Id = latinIndicatorId, MedicalRecordId = latinRecordId, RecordDate = new DateOnly(2026, 1, 1), OwnerUserId = OwnerUserId,
+                AnalyteKey = "antigen adenovirus", DisplayName = latinForm, SpecimenKbId = bloodId, Position = 0,
+                ValueRaw = "не обнаружено", Flag = IndicatorFlag.Normal, CreatedAt = DateTime.UtcNow,
+            },
+            new LabIndicator
+            {
+                Id = cyrillicIndicatorId, MedicalRecordId = cyrillicRecordId, RecordDate = new DateOnly(2026, 6, 1), OwnerUserId = OwnerUserId,
+                AnalyteKey = "антиген аденовирус", DisplayName = cyrillicForm, SpecimenKbId = bloodId, Position = 0,
+                ValueRaw = "не обнаружено", Flag = IndicatorFlag.Normal, CreatedAt = DateTime.UtcNow,
+            });
+        await db.SaveChangesAsync();
+
+        var admin = await AdminClientAsync();
+        var startResponse = await admin.PostAsync("/api/admin/kb/lab-analytes/rebuild", null);
+        startResponse.EnsureSuccessStatusCode();
+
+        await WaitForAsync(async () =>
+        {
+            var status = await admin.GetFromJsonAsync<RebuildStatusDto>("/api/admin/kb/lab-analytes/rebuild/status");
+            return status!.Status is "Completed" or "Failed";
+        }, "пересборка должна завершиться (Hangfire, очередь enrichment)");
+
+        var finalStatus = await admin.GetFromJsonAsync<RebuildStatusDto>("/api/admin/kb/lab-analytes/rebuild/status");
+        finalStatus!.Status.Should().Be("Completed", finalStatus.LastError);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // Обе строки ПЕРЕЖИЛИ пересборку (разные записи — не дубли друг друга) и получили ОДИН и
+        // тот же AnalyteKey — вот он, объединённый тренд.
+        var latinIndicator = await verifyDb.LabIndicators.AsNoTracking().SingleAsync(i => i.Id == latinIndicatorId);
+        var cyrillicIndicator = await verifyDb.LabIndicators.AsNoTracking().SingleAsync(i => i.Id == cyrillicIndicatorId);
+
+        latinIndicator.AnalyteKey.Should().Be(expectedKey);
+        cyrillicIndicator.AnalyteKey.Should().Be(expectedKey);
+        latinIndicator.AnalyteKey.Should().Be(cyrillicIndicator.AnalyteKey, "цель миграции — один тренд для показателя независимо от алфавита бланка");
+    }
+
     /// <summary>Регресс-тест на баг, найденный при разборе конвейера (§4 плана «удобное
     /// администрирование»): ClearCatalogAsync раньше делал безусловный DELETE, уничтожая ручные
     /// правки администратора вместе со всем остальным. Залоченная строка должна пережить пересборку

@@ -20,8 +20,14 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// Тот же приём "модель предлагает, детерминированный код ветирует", что и UserSpecimenService/
 /// MedicationEnrichmentProcessor.ResolveCorrectedName: TrigramSimilarity ниже порога значит модель
 /// подменила понятие целиком, а не поправила написание — коррекция отклоняется, остаётся исходное
-/// имя. LM Studio недоступен ⇒ тоже исходные имена (в отличие от валидации биоматериала, тихий
-/// пропуск здесь безопасен — хуже, чем без коррекции, не станет).
+/// имя. Вето считается in-process (Жаккар по символьным триграммам, см. TrigramSimilarity — НЕ
+/// pg_trgm-функция Postgres, хоть и та же модель схожести) над LabAnalyteNormalizer.NormalizeAnalyteKey
+/// (Normalize + кросс-алфавитная свёртка MedicalTextTransliterator.Fold финальным шагом — та же
+/// функция, что теперь и сам AnalyteKey/NormalizedName, см. план "миграция AnalyteKey"): без свёртки
+/// схожесть латинского "Adenovirus" и кириллического "аденовирус" (одно и то же понятие, разные code
+/// points) даёт 0.27 — ниже порога, живое продовое наблюдение. LM Studio недоступен ⇒ тоже исходные
+/// имена (в отличие от валидации биоматериала, тихий пропуск здесь безопасен — хуже, чем без
+/// коррекции, не станет).
 /// </summary>
 public class OcrNameCorrector(ILmStudioJsonClient client, IPromptProvider promptProvider, ILogger<OcrNameCorrector> logger)
 {
@@ -108,20 +114,42 @@ public class OcrNameCorrector(ILmStudioJsonClient client, IPromptProvider prompt
             var original = names[index.Value];
             if (candidate == original) continue;
 
-            // LabAnalyteNormalizer.Normalize (не просто ToLowerInvariant) — она уже чинит смешение
-            // кириллицы/латиницы посимвольно (FixMixedScriptHomoglyphs), поэтому "СYMАТPИПTАН" и
-            // "Суматриптан" здесь совпадают почти полностью, а не расходятся из-за разных code
-            // points у визуально одинаковых букв. Строгое ToLowerInvariant без этого шага сравнивал
-            // бы "сyмaтpиптaн" (латиница внутри) с "суматриптан" (кириллица) — низкая схожесть на
-            // ровно том случае, который эта коррекция должна пропускать.
-            var similarity = TrigramSimilarity.Similarity(
-                LabAnalyteNormalizer.Normalize(original), LabAnalyteNormalizer.Normalize(candidate));
+            // LabAnalyteNormalizer.NormalizeAnalyteKey (не просто ToLowerInvariant) — она уже чинит
+            // смешение кириллицы/латиницы посимвольно (FixMixedScriptHomoglyphs) И сворачивает
+            // алфавит целиком (MedicalTextTransliterator.Fold — её финальный шаг, см. план "миграция
+            // AnalyteKey"), поэтому "СYMАТPИПTАН" и "Суматриптан", а также "Antigen Adenovirus" и
+            // "Антиген аденовирус" здесь совпадают почти полностью, а не расходятся из-за разных code
+            // points у визуально одинаковых/фонетически эквивалентных букв. Отдельный Fold() поверх
+            // не нужен — NormalizeAnalyteKey уже свёрнута, дополнительная свёртка была бы idempotent-
+            // no-op'ом.
+            var normalizedOriginal = LabAnalyteNormalizer.NormalizeAnalyteKey(original);
+            var normalizedCandidate = LabAnalyteNormalizer.NormalizeAnalyteKey(candidate);
+
+            var similarity = TrigramSimilarity.Similarity(normalizedOriginal, normalizedCandidate);
             if (similarity < MinCorrectionSimilarity)
             {
                 logger.LogWarning(
                     "Коррекция OCR-имени: модель предложила «{Corrected}» вместо «{Original}», но схожесть " +
                     "{Similarity:F2} слишком низкая — похоже на другое понятие, отклонено.",
                     candidate, original, similarity);
+                continue;
+            }
+
+            // Схожесть прошла, но кандидат может оказаться ПЕРЕВОДОМ оригинала, а не правкой
+            // написания (промпт это запрещает, модель иногда нарушает) — ругаться не на что, но и
+            // применять не стоит. ВАЖНО: на СЫРЫХ original/candidate, не на normalizedOriginal/
+            // normalizedCandidate — те уже свёрнуты в кириллицу (NormalizeAnalyteKey), поэтому
+            // HasLatin(...) внутри IsTranslationOf был бы всегда false и гейт молчал бы навсегда.
+            // Смысл гейта после свёртки ключа изменился: раньше он защищал сам AnalyteKey (перевод
+            // недетерминирован — один и тот же бланк дал бы то латинский, то кириллический ключ);
+            // теперь ключ УЖЕ стабилен благодаря свёртке независимо от исхода этой проверки — гейт
+            // защищает только DisplayName/RawDisplayName от косметического "мигания" языка между
+            // повторными распознаваниями одного бланка.
+            if (MedicalTextTransliterator.IsTranslationOf(original, candidate))
+            {
+                logger.LogInformation(
+                    "Коррекция OCR-имени: «{Corrected}» — перевод «{Original}» на другой алфавит, а не " +
+                    "правка написания; оставлено исходное имя.", candidate, original);
                 continue;
             }
 

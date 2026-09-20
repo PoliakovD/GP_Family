@@ -80,7 +80,7 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
             .ToList();
 
         var relatedNames = LabAnalyteKbPayload.ParseRelatedNames(row.PayloadJson);
-        var related = await ResolveRelatedAsync(relatedNames, ct);
+        var related = await ResolveRelatedAsync(relatedNames, row.SpecimenKbId, ct);
 
         return new KbAnalyteCard(
             row.Id, row.DisplayName, row.SpecimenKbId, row.SpecimenDisplayName, payload.LoincCode, payload.DefaultUnit,
@@ -88,23 +88,38 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
             row.Source, row.UpdatedAt);
     }
 
-    private async Task<List<KbRelatedAnalyte>> ResolveRelatedAsync(List<string> displayNames, CancellationToken ct)
+    /// <summary>
+    /// <c>NormalizedName</c> уникально только В ПАРЕ с <c>SpecimenKbId</c> (см.
+    /// GlobalLabAnalyteKbConfiguration) — один и тот же нормализованный ключ ("лейкоциты")
+    /// легитимно существует под НЕСКОЛЬКИМИ специминами (кровь/моча — разные статьи). Прод-баг:
+    /// наивный <c>matches.ToDictionary(m =&gt; m.NormalizedName, ...)</c> падал с "An item with the
+    /// same key has already been added" ровно на этом — запрос без учёта специмина возвращал обе
+    /// строки. Предпочитаем статью ТОГО ЖЕ специмина, что у самой карточки (<paramref
+    /// name="specimenKbId"/> — related-показатель обычно смотрят в том же биоматериале), иначе —
+    /// первую попавшуюся, а не отказываемся резолвить вовсе.
+    /// </summary>
+    private async Task<List<KbRelatedAnalyte>> ResolveRelatedAsync(List<string> displayNames, Guid specimenKbId, CancellationToken ct)
     {
         if (displayNames.Count == 0) return [];
 
-        var normalized = displayNames.Select(LabAnalyteNormalizer.Normalize).Where(n => n.Length > 0).Distinct().ToArray();
+        var normalized = displayNames.Select(LabAnalyteNormalizer.NormalizeAnalyteKey).Where(n => n.Length > 0).Distinct().ToArray();
         if (normalized.Length == 0) return [];
 
         var matches = await db.Database.SqlQuery<KbRelatedMatchRow>($"""
-            SELECT "Id", "DisplayName", "NormalizedName"
+            SELECT "Id", "DisplayName", "NormalizedName", "SpecimenKbId"
             FROM kb.global_lab_analytes_kb
             WHERE "NormalizedName" = ANY({normalized})
             """).ToListAsync(ct);
-        var byNormalized = matches.ToDictionary(m => m.NormalizedName, m => m);
+        var byNormalized = matches
+            .GroupBy(m => m.NormalizedName, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.FirstOrDefault(m => m.SpecimenKbId == specimenKbId) ?? g.First(),
+                StringComparer.Ordinal);
 
         return displayNames.Select(name =>
         {
-            var key = LabAnalyteNormalizer.Normalize(name);
+            var key = LabAnalyteNormalizer.NormalizeAnalyteKey(name);
             return byNormalized.TryGetValue(key, out var match)
                 ? new KbRelatedAnalyte(match.Id, match.DisplayName)
                 : new KbRelatedAnalyte(null, name);
