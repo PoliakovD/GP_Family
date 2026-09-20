@@ -147,7 +147,15 @@ public class AdminCatalogService(AppDbContext db)
     /// публичного read-сервиса. Используется редактором формы, чтобы: (1) при открытии показателя
     /// подсветить, какие из уже сохранённых related-имён реально резолвятся в существующую статью
     /// (а какие — оборванная ссылка/опечатка), и (2) сразу дать кликабельный переход на неё.
-    /// Ненайденное имя — Id=null, не ошибка (см. тот же комментарий в публичном резолвере).</summary>
+    /// Ненайденное имя — Id=null, не ошибка (см. тот же комментарий в публичном резолвере).
+    ///
+    /// NormalizedName уникально только В ПАРЕ с SpecimenKbId (см. GlobalLabAnalyteKbConfiguration) —
+    /// один и тот же ключ ("лейкоциты") легитимно существует под несколькими специминами (кровь/
+    /// моча — разные статьи). Прод-баг: наивный ToDictionary(NormalizedName) падал с "An item with
+    /// the same key has already been added" ровно на этом. У этого метода (в отличие от публичного
+    /// ResolveRelatedAsync) нет "своей" карточки/специмина, относительно которого выбирать —
+    /// эндпоинт принимает произвольный список имён без контекста статьи, поэтому при коллизии просто
+    /// детерминированно берём первую найденную строку, а не падаем.</summary>
     public async Task<List<AdminRelatedAnalyteMatch>> ResolveRelatedNamesAsync(
         IReadOnlyList<string> names, CancellationToken ct = default)
     {
@@ -166,7 +174,9 @@ public class AdminCatalogService(AppDbContext db)
             LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
             WHERE a."NormalizedName" = ANY({normalizedKeys})
             """).ToListAsync(ct);
-        var byNormalized = matches.ToDictionary(m => m.NormalizedName, m => m);
+        var byNormalized = matches
+            .GroupBy(m => m.NormalizedName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
         return normalizedToOriginal.Select(p => byNormalized.TryGetValue(p.Normalized, out var m)
             ? new AdminRelatedAnalyteMatch(p.Name, m.Id, m.DisplayName, m.SpecimenDisplayName)

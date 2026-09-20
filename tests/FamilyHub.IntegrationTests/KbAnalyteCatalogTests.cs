@@ -17,7 +17,7 @@ namespace FamilyHub.IntegrationTests;
 public class KbAnalyteCatalogTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
     private async Task<Guid> SeedAsync(
-        string normalizedName, string displayName, object payload, string[]? aliases = null)
+        string normalizedName, string displayName, object payload, string[]? aliases = null, Guid specimenKbId = default)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -27,6 +27,7 @@ public class KbAnalyteCatalogTests(FamilyHubWebFactory factory) : IntegrationTes
         {
             Id = id,
             NormalizedName = normalizedName,
+            SpecimenKbId = specimenKbId,
             DisplayName = displayName,
             PayloadJson = System.Text.Json.JsonSerializer.Serialize(payload),
             Source = "тест",
@@ -136,5 +137,38 @@ public class KbAnalyteCatalogTests(FamilyHubWebFactory factory) : IntegrationTes
         card!.PlainExplanation.Should().BeNull();
         card.RefRanges.Should().BeEmpty();
         card.Related.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Прод-баг: NormalizedName уникально только В ПАРЕ с SpecimenKbId (см.
+    /// GlobalLabAnalyteKbConfiguration) — один и тот же ключ ("лейкоциты") легитимно существует под
+    /// несколькими специминами (кровь/моча — разные статьи). Наивный
+    /// matches.ToDictionary(m =&gt; m.NormalizedName, ...) в ResolveRelatedAsync падал с
+    /// "System.ArgumentException: An item with the same key has already been added" ровно на этом —
+    /// запрос без учёта специмина возвращал обе строки. Регрессия: два "Лейкоциты" под РАЗНЫМИ
+    /// специминами, карточка третьего показателя ссылается на "Лейкоциты" в relatedNames — запрос не
+    /// должен падать и обязан предпочесть статью ТОГО ЖЕ специмина, что у самой карточки.
+    /// </summary>
+    [Fact]
+    public async Task GetById_RelatedNameAmbiguousAcrossSpecimens_ResolvesToSameSpecimenArticle_DoesNotThrow()
+    {
+        var bloodSpecimenId = Guid.NewGuid();
+        var urineSpecimenId = Guid.NewGuid();
+
+        await SeedAsync("лейкоциты", "Лейкоциты", new { schemaVersion = 3, plainExplanation = "В крови." }, specimenKbId: bloodSpecimenId);
+        await SeedAsync("лейкоциты", "Лейкоциты", new { schemaVersion = 3, plainExplanation = "В моче." }, specimenKbId: urineSpecimenId);
+        var id = await SeedAsync("нитриты", "Нитриты", new
+        {
+            schemaVersion = 3,
+            relatedNames = new[] { "Лейкоциты" },
+        }, specimenKbId: urineSpecimenId);
+
+        var client = ClientAs(FreshTelegramId());
+        var response = await client.GetAsync($"/api/kb/analytes/{id}");
+
+        response.EnsureSuccessStatusCode();
+        var card = await response.Content.ReadFromJsonAsync<KbAnalyteCard>(JsonOpts);
+        var related = card!.Related.Should().ContainSingle(r => r.DisplayName == "Лейкоциты" && r.Id != null).Which;
+        related.Id.Should().NotBeNull("наличие коллизии по специмину не должно превращать резолв в 'не найдено'");
     }
 }
