@@ -75,7 +75,9 @@ public class MedicationKbStatusService(
 
         var status = job?.Status switch
         {
-            EnrichmentJobStatus.Pending => MedicationKbStatus.Pending,
+            // Deferred — задача жива, просто ждёт открытия вентиля (см. EnrichmentJobStatus) —
+            // с точки зрения пользователя это неотличимо от обычного "ещё обрабатывается".
+            EnrichmentJobStatus.Pending or EnrichmentJobStatus.Deferred => MedicationKbStatus.Pending,
             EnrichmentJobStatus.Running => MedicationKbStatus.Running,
             EnrichmentJobStatus.Failed or EnrichmentJobStatus.Skipped => MedicationKbStatus.Failed,
             _ => MedicationKbStatus.None,

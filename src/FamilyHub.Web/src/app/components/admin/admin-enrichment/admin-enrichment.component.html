@@ -194,6 +194,28 @@
 
 @if (tab() === 'calls') {
   @let stats = callStats();
+  @let valve = webSearchValve();
+  <div class="card mb-3">
+    <div class="card-title d-flex justify-content-between" style="align-items: center;">
+      <span>Вентиль платного поиска</span>
+      @if (valve) {
+        <button type="button" class="btn btn-sm" [class.btn-danger]="!valve.isPaused" [class.btn-primary]="valve.isPaused"
+                [disabled]="webSearchValveBusy()" (click)="toggleWebSearchValve()">
+          {{ valve.isPaused ? 'Включить' : 'Остановить' }}
+        </button>
+      }
+    </div>
+    <div class="card-body">
+      @if (valve) {
+        <p class="text-muted mb-0">
+          {{ valve.isPaused
+            ? 'На паузе' + (valve.pausedAt ? ' с ' + (valve.pausedAt | date: 'dd.MM.yyyy HH:mm') : '') + ' — новые платные вызовы откладываются (см. «Требует внимания»).'
+            : 'Открыт — обогащение и прогрев могут делать платные вызовы как обычно.' }}
+        </p>
+      }
+    </div>
+  </div>
+
   <div class="card mb-3">
     <div class="card-title">Платный поиск за 30 дней</div>
     <div class="card-body">
@@ -207,7 +229,7 @@
             <tr><td>Кэш-хитов</td><td>{{ stats.cacheHits }} ({{ (stats.cacheHitShare * 100) | number: '1.0-0' }}%)</td></tr>
             <tr>
               <td>Расход в этом месяце</td>
-              <td>{{ stats.usedThisMonth }}{{ stats.monthlyQuota !== null ? ' / ' + stats.monthlyQuota : '' }}</td>
+              <td>{{ stats.usedThisMonth }}{{ stats.estimatedMonthlySpend !== null ? ' (≈' + (stats.estimatedMonthlySpend | number: '1.0-0') + ' ₽)' : '' }}</td>
             </tr>
           </tbody>
         </table>
@@ -325,6 +347,21 @@
 }
 
 @if (tab() === 'warmup') {
+  @let valve = webSearchValve();
+  @if (valve?.isPaused) {
+    <div class="card mb-3">
+      <div class="card-body d-flex justify-content-between" style="align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span class="text-muted">
+          Вентиль платного поиска закрыт{{ valve!.pausedAt ? ' с ' + (valve!.pausedAt | date: 'dd.MM.yyyy HH:mm') : '' }} —
+          прогон (если идёт) приостановлен и возобновится сам после включения.
+        </span>
+        <button type="button" class="btn btn-primary btn-sm" [disabled]="webSearchValveBusy()" (click)="toggleWebSearchValve()">
+          Включить
+        </button>
+      </div>
+    </div>
+  }
+
   <div class="card mb-3">
     <div class="card-title">Прогрев кэша поиска</div>
     <div class="card-body">

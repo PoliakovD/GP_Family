@@ -109,11 +109,17 @@ export interface SearchCallDetail extends SearchCallRow {
 
 export interface SearchCallCountByKey { key: string; count: number; }
 export interface SearchCallDailyCount { day: string; paidCalls: number; cacheHits: number; }
+/** Квоты больше нет (ADR-0005 §9, замена вентилем) — webSearchPaused/pausedAt отражают текущее
+ * состояние IWebSearchValveService, estimatedMonthlySpend = usedThisMonth * PricePerPaidCall
+ * (null, если цена вызова не задана в конфиге). */
 export interface SearchCallStats {
   totalCalls: number; paidCalls: number; cacheHits: number; cacheHitShare: number;
   byProvider: SearchCallCountByKey[]; byOutcome: SearchCallCountByKey[]; byDay: SearchCallDailyCount[];
-  usedThisMonth: number; monthlyQuota: number | null;
+  usedThisMonth: number; webSearchPaused: boolean; pausedAt: string | null; estimatedMonthlySpend: number | null;
 }
+
+/** Вентиль платного поиска (ADR-0005 §9) — GET/PUT /api/admin/enrichment/web-search. */
+export interface WebSearchValve { isPaused: boolean; pausedAt: string | null; note: string | null; }
 
 /** Прогон пересборки справочника показателей (пересборка enrich-пайплайна, §4.2 плана) — зеркало
  * RotationStatus на LabAnalyteKbRebuildJob. status: "Running" | "Completed" | "Failed" | null. */
@@ -413,6 +419,10 @@ export class AdminApiService {
   startWarmup = (request: StartWarmupRequest) => this.post<WarmupStatus>('/api/admin/enrichment/warmup', request);
   cancelWarmup = () => this.post<void>('/api/admin/enrichment/warmup/cancel');
   getWarmupStatus = () => this.get<WarmupStatus>('/api/admin/enrichment/warmup/status');
+
+  getWebSearchValve = () => this.get<WebSearchValve>('/api/admin/enrichment/web-search');
+  setWebSearchValve = (isPaused: boolean, note: string | null) =>
+    this.put<void>('/api/admin/enrichment/web-search', { isPaused, note });
 
   // Управление enrich-пайплайном из админки (§2 плана) — вкл/выкл необязательных шагов,
   // версионирование промптов, dry-run без записи, листинг задач всех четырёх конвейеров.

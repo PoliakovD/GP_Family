@@ -31,7 +31,25 @@ public class AdminAttentionService(
     {
         var reasons = await BuildReasonsAsync(ct);
         var dropped = await BuildDroppedDomainsAsync(ct);
-        return new AdminAttentionDto(reasons, dropped);
+        var webSearchPaused = await BuildWebSearchPausedAsync(ct);
+        return new AdminAttentionDto(reasons, dropped, webSearchPaused);
+    }
+
+    /// <summary>Deferred-задачи (вентиль закрыт, ADR-0005 §9) — та же природа, что AttentionReasonDto,
+    /// но не отказ, поэтому отдельный блок, не строка среди причин падения.</summary>
+    private async Task<WebSearchPausedDto> BuildWebSearchPausedAsync(CancellationToken ct)
+    {
+        var valveRow = await db.WebSearchConfigs.AsNoTracking().FirstOrDefaultAsync(ct);
+
+        var byType = new Dictionary<string, int>
+        {
+            ["lab-analyte"] = await db.LabAnalyteEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.Deferred, ct),
+            ["medication"] = await db.MedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.Deferred, ct),
+            ["visit-medication"] = await db.VisitMedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.Deferred, ct),
+        };
+
+        return new WebSearchPausedDto(
+            valveRow?.IsPaused ?? false, valveRow?.PausedAt, valveRow?.Note, byType.Values.Sum(), byType);
     }
 
     private async Task<List<AttentionReasonDto>> BuildReasonsAsync(CancellationToken ct)

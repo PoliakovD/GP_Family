@@ -32,7 +32,7 @@ public class MedicationEnrichmentProcessor(
     MedicationSearchCacheService searchCache,
     IMedicationSearchProvider provider,
     WebSearchCallLogger callLogger,
-    WebSearchQuotaService searchQuota,
+    IWebSearchValveService searchValve,
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
@@ -137,14 +137,14 @@ public class MedicationEnrichmentProcessor(
             }
             else
             {
-                // Месячная квота (ADR-0005 §9, возврат) — только на ветке реального платного вызова.
-                if (await searchQuota.MonthlyQuotaExceededAsync(ct))
+                // Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — только на ветке
+                // реального платного вызова. Null-провайдер не гейтим — он никуда не ходит.
+                if (provider.Name != "Null" && await searchValve.IsPausedAsync(ct))
                 {
-                    job.Status = EnrichmentJobStatus.Skipped;
-                    job.Error = "Месячная квота платного поиска исчерпана.";
-                    job.CompletedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync(ct);
-                    logger.LogWarning("MedicationEnrichmentJob {JobId}: месячная квота платного поиска исчерпана.", job.Id);
+                    job.Status = EnrichmentJobStatus.Deferred;
+                    job.Error = "Платный веб-поиск на паузе — задача отложена до его включения.";
+                    await db.SaveChangesAsync(ct); // НЕ CompletedAt: задача не завершена, а отложена
+                    logger.LogInformation("MedicationEnrichmentJob {JobId}: отложена — вентиль платного поиска закрыт.", job.Id);
                     return;
                 }
 
@@ -153,7 +153,7 @@ public class MedicationEnrichmentProcessor(
                 if (provider.Name != "Null")
                 {
                     // Считаем реальным внешним запросом только настоящих провайдеров — Null ничего
-                    // никуда не отправляет, засчитывать его в месячную квоту/кулдаун незачем.
+                    // никуда не отправляет, засчитывать его в кулдаун незачем.
                     job.ExternalSearchAt = DateTime.UtcNow;
                     job.Provider = provider.Name;
                     await db.SaveChangesAsync(ct);

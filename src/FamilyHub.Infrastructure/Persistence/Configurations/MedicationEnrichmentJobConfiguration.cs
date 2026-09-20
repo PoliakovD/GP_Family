@@ -21,11 +21,12 @@ public class MedicationEnrichmentJobConfiguration : IEntityTypeConfiguration<Med
 
         // Дедуп внешних запросов: один и тот же препарат, сохранённый одновременно в разных
         // семьях, не должен породить два похода в интернет. Частичный индекс — только пока
-        // задача жива (Pending=0/Running=1); завершённые (Completed/Failed/Skipped) не мешают
-        // повторной попытке обогащения того же названия в будущем.
+        // задача жива (Pending=0/Running=1/Deferred=5 — вентиль платного поиска закрыт, ADR-0005 §9,
+        // задача жива, просто ждёт); завершённые (Completed/Failed/Skipped) не мешают повторной
+        // попытке обогащения того же названия в будущем.
         builder.HasIndex(j => j.NormalizedName)
             .IsUnique()
-            .HasFilter("\"Status\" IN (0, 1)");
+            .HasFilter("\"Status\" IN (0, 1, 5)");
 
         // Выборка очереди/статусов и карточки конкретного медикамента.
         builder.HasIndex(j => new { j.Status, j.CreatedAt });

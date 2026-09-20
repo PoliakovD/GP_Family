@@ -10,7 +10,13 @@ public record AttentionReasonDto(string Reason, string Label, int Count, Diction
 /// сниппетов кэша и ещё не проходит EnrichmentSnippetFilter.IsEnabled.</summary>
 public record DroppedDomainDto(string Domain, string Topic, int JobCount, string SampleUrl);
 
-public record AdminAttentionDto(List<AttentionReasonDto> Reasons, List<DroppedDomainDto> DroppedDomains);
+/// <summary>Закрытый вентиль платного поиска (ADR-0005 §9) откладывает задачи молча
+/// (EnrichmentJobStatus.Deferred) — без этого блока закрытый вентиль выглядел бы в инбоксе как
+/// зависший конвейер: ни одной ошибки, просто ничего не движется. ByType — как у AttentionReasonDto,
+/// разбивка отложенных по конвейеру ("lab-analyte"/"medication"/"visit-medication").</summary>
+public record WebSearchPausedDto(bool IsPaused, DateTime? PausedAt, string? Note, int DeferredTotal, Dictionary<string, int> ByType);
+
+public record AdminAttentionDto(List<AttentionReasonDto> Reasons, List<DroppedDomainDto> DroppedDomains, WebSearchPausedDto WebSearchPaused);
 
 /// <summary>Topic — числом (см. WebSearchTopic, конвенция запросов админки). Добавляет все домены
 /// в доверенные для этой темы и перезапускает все Failed-задачи с NoTrustedSnippets этой темы.</summary>

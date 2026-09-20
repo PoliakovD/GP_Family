@@ -32,6 +32,12 @@ public record ActiveJobsSummaryResponse(
 /// одному из четырёх конвейеров. Живёт в хосте (FamilyHub.Api), не в модуле, по той же причине,
 /// что HomeSummaryService — RequestedByUserId есть на всех четырёх таблицах задач Medical, но
 /// сама Medical не должна знать об этом пользовательском агрегате.
+///
+/// Deferred (вентиль платного поиска закрыт, ADR-0005 §9) намеренно НЕ входит в "активные" здесь
+/// (в отличие от большинства других Pending/Running-предикатов конвейера) — QueueAhead ниже
+/// приходит из LlmQueuePositionService, которая считает очередь именно к LOCAL LLM; отложенная
+/// вентилем задача в этой очереди не стоит вовсе (до неё дело дойдёт только после платного
+/// поиска, который сейчас на паузе), показывать ей "N задач впереди" было бы бессмысленно.
 /// </summary>
 public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePositionService)
 {

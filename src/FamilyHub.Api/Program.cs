@@ -729,7 +729,7 @@ else
 // Аудит платных вызовов (часть 2 плана) — свой DI-скоуп (IServiceScopeFactory), регистрация не
 // зависит от выбранного провайдера: NullMedicationSearchProvider просто не вызывает LogAsync.
 builder.Services.AddSingleton<WebSearchCallLogger>();
-builder.Services.AddScoped<WebSearchQuotaService>();
+builder.Services.AddScoped<IWebSearchValveService, WebSearchValveService>();
 var enrichmentOptions = builder.Configuration.GetSection(EnrichmentOptions.SectionName).Get<EnrichmentOptions>()
     ?? new EnrichmentOptions();
 if (enrichmentOptions.Provider != MedicationSearchProviderKind.Null && string.IsNullOrWhiteSpace(enrichmentOptions.ApiKey))
@@ -972,13 +972,29 @@ app.UseRateLimiter();
 // --- ниже). CSRF по своей природе защищает только УЖЕ аутентифицированное действие — у
 // --- анонимного запроса нет сессии, которую можно было бы "прокатить" межсайтовой подделкой,
 // --- поэтому гейт применяется, только если текущий запрос сам уже аутентифицирован.
+// ---
+// --- Отладка (прогрев кэша поиска, деплой): гейт ложно ронял МУТИРУЮЩИЕ запросы /api/admin/*
+// --- (401→400 "csrf_token_invalid") у админа, который в том же браузере ещё и залогинен в PWA
+// --- своим обычным аккаунтом — оттуда живёт cookie CsrfCookieNames.PublicToken. Раньше условие
+// --- смотрело только на "аутентифицирован ли текущий запрос ХОТЬ КАК-ТО" — для группы
+// --- /api/admin/* политика "PlatformAdmin" явно перечисляет AuthSchemes.Admin, поэтому
+// --- PolicyEvaluator ПОЛНОСТЬЮ подменяет context.User на принципала одной этой схемы (см.
+// --- AuthorizationMiddleware/PolicyEvaluator.AuthenticateAsync — PWA-принципал по умолчанию
+// --- отбрасывается, не мёржится); IsAuthenticated при этом всё равно true (админ аутентифицирован
+// --- как админ), и валидация антифорджери-токена, привязанного к PWA-пользователю, детерминированно
+// --- проваливается на чужом принципале ("meant for a different claims-based user" — тот же код
+// --- ошибки, что уже описан выше для другого сценария). CSRF-cookie/токен этого механизма выдаётся
+// --- ТОЛЬКО PwaSessionCookieWriter.IssueCsrfCookie при PWA-сессии — гейт должен защищать именно её,
+// --- поэтому условие сужено до "текущий принципал реально несёт identity схемы PwaCookie", а не
+// --- "аутентифицирован хоть какой-нибудь схемой". Admin/TelegramMiniApp/Dev — не эта схема,
+// --- пропускаются, даже если в браузере болтается чужая PWA CSRF-cookie.
 app.Use(async (context, next) =>
 {
     var method = context.Request.Method;
     var isMutating = HttpMethods.IsPost(method) || HttpMethods.IsPut(method)
         || HttpMethods.IsPatch(method) || HttpMethods.IsDelete(method);
     if (isMutating && context.Request.Path.StartsWithSegments("/api")
-        && context.User.Identity?.IsAuthenticated == true
+        && context.User.Identities.Any(i => i.IsAuthenticated && i.AuthenticationType == AuthSchemes.PwaCookie)
         && context.Request.Cookies.ContainsKey(CsrfCookieNames.PublicToken))
     {
         var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();

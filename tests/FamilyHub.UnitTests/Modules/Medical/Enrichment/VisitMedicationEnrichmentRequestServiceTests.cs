@@ -69,6 +69,30 @@ public class VisitMedicationEnrichmentRequestServiceTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task RequestAsync_SameNameDeferredInFamilyMedicationPipeline_DoesNotCreateDuplicateJob()
+    {
+        // Deferred (вентиль платного поиска закрыт, ADR-0005 §9) — та же "живая" задача, что
+        // Pending/Running: ждёт открытия вентиля, а не упала. Отдельной задачи здесь заводить
+        // не нужно по той же причине, что и для Pending выше.
+        Db.MedicationEnrichmentJobs.Add(new MedicationEnrichmentJob
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = "парацетамол",
+            SourceDisplayName = "Парацетамол",
+            RequestedByUserId = Guid.NewGuid(),
+            FamilyId = Guid.NewGuid(),
+            Status = EnrichmentJobStatus.Deferred,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        await _sut.RequestAsync("парацетамол", "Парацетамол", Guid.NewGuid(), Guid.NewGuid());
+
+        Db.VisitMedicationEnrichmentJobs.Should().BeEmpty();
+        _backgroundJobs.DidNotReceiveWithAnyArgs().Create(default!, default!);
+    }
+
+    [Fact]
     public async Task RequestAsync_SameNameCompletedInFamilyMedicationPipeline_StillCreatesJob()
     {
         // Задача аптечки уже ЗАВЕРШЕНА (не Pending/Running) — значит либо справочник уже пополнен

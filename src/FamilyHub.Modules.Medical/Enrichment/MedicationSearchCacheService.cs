@@ -115,8 +115,8 @@ public class MedicationSearchCacheService(
         overridesJson is null ? null : JsonSerializer.Deserialize<Dictionary<string, bool>>(overridesJson, JsonOptions);
 
     /// <summary>Фиксирует факт обращения к платному API вместе с самими результатами — вызывать
-    /// сразу после реального запроса (успешного или нет: платная квота уже потрачена в любом
-    /// случае, а пустой список тоже стоит кэшировать — не имеет смысла платно спрашивать снова
+    /// сразу после реального запроса (успешного или нет: деньги уже потрачены в любом случае,
+    /// а пустой список тоже стоит кэшировать — не имеет смысла платно спрашивать снова
     /// раньше срока то же название, если в прошлый раз ничего не нашлось).</summary>
     public async Task RecordSearchAsync(
         string normalizedName, string provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)

@@ -22,12 +22,15 @@ public record SearchCallDetailDto(
     string? JobKind, Guid? JobId);
 
 /// <summary>Разбивка за период (`GET /api/admin/search-calls/stats`) — «работает ли кэш» одним
-/// числом (CacheHitShare) плюс расход текущего месяца против EnrichmentOptions.MonthlyQuota
-/// (0 = без лимита, MonthlyQuota тогда null в ответе).</summary>
+/// числом (CacheHitShare) плюс расход текущего месяца. Квоты больше нет (ADR-0005 §9, замена
+/// вентилем) — вместо неё состояние вентиля (WebSearchPaused/PausedAt) и денежная оценка
+/// (EstimatedMonthlySpend = UsedThisMonth * EnrichmentOptions.PricePerPaidCall, null если цена
+/// не задана).</summary>
 public record SearchCallStatsDto(
     int TotalCalls, int PaidCalls, int CacheHits, double CacheHitShare,
     List<SearchCallCountByKeyDto> ByProvider, List<SearchCallCountByKeyDto> ByOutcome,
-    List<SearchCallDailyCountDto> ByDay, int UsedThisMonth, int? MonthlyQuota);
+    List<SearchCallDailyCountDto> ByDay, int UsedThisMonth,
+    bool WebSearchPaused, DateTime? PausedAt, decimal? EstimatedMonthlySpend);
 
 public record SearchCallCountByKeyDto(string Key, int Count);
 

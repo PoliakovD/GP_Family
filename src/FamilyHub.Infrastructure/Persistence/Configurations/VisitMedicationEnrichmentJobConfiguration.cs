@@ -17,9 +17,10 @@ public class VisitMedicationEnrichmentJobConfiguration : IEntityTypeConfiguratio
         builder.Property(j => j.Error).HasMaxLength(2000);
         builder.Property(j => j.Provider).HasMaxLength(50);
 
+        // Deferred=5 — вентиль платного поиска закрыт (ADR-0005 §9), задача жива, просто отложена.
         builder.HasIndex(j => j.NormalizedName)
             .IsUnique()
-            .HasFilter("\"Status\" IN (0, 1)");
+            .HasFilter("\"Status\" IN (0, 1, 5)");
 
         builder.HasIndex(j => new { j.Status, j.CreatedAt });
         builder.HasIndex(j => j.MedicalRecordId);

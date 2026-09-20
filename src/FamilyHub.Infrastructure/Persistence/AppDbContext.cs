@@ -59,6 +59,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>Прогоны прогрева кэша веб-поиска из админки — см. SearchCacheWarmupJob.</summary>
     public DbSet<SearchWarmupRun> SearchWarmupRuns => Set<SearchWarmupRun>();
 
+    /// <summary>Вентиль платного веб-поиска (замена месячной квоты, ADR-0005 §9) — см.
+    /// IWebSearchValveService/WebSearchValveService.</summary>
+    public DbSet<WebSearchConfig> WebSearchConfigs => Set<WebSearchConfig>();
+
     /// <summary>Управление enrich-пайплайном из админки (§2) — слоты промптов, их версии
     /// и вкл/выкл шагов. См. PromptProvider, PipelineConfigService.</summary>
     public DbSet<PipelinePrompt> PipelinePrompts => Set<PipelinePrompt>();

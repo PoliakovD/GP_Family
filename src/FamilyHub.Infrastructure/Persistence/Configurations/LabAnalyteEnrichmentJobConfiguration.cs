@@ -19,10 +19,11 @@ public class LabAnalyteEnrichmentJobConfiguration : IEntityTypeConfiguration<Lab
         builder.Property(j => j.Provider).HasMaxLength(50);
 
         // Дедуп-индекс — пара (показатель, источник), не одно имя (пересборка enrich-пайплайна):
-        // "белок" в крови и в моче не должны конкурировать за одну Pending/Running-задачу.
+        // "белок" в крови и в моче не должны конкурировать за одну Pending/Running/Deferred-задачу.
+        // Deferred=5 — вентиль платного поиска закрыт (ADR-0005 §9), задача жива, просто отложена.
         builder.HasIndex(j => new { j.NormalizedName, j.SpecimenKbId })
             .IsUnique()
-            .HasFilter("\"Status\" IN (0, 1)");
+            .HasFilter("\"Status\" IN (0, 1, 5)");
 
         builder.HasIndex(j => new { j.Status, j.CreatedAt });
         builder.HasIndex(j => j.LabIndicatorId);

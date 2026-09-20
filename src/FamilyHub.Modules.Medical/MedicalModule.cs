@@ -123,6 +123,8 @@ public static class MedicalModule
         // Прогрев кэша веб-поиска из админки (грантовый лимит облака) — только поиск + запись
         // в кэш, без LLM, см. class doc.
         services.AddScoped<SearchCacheWarmupJob>();
+        // Возобновление отложенных вентилем задач (ADR-0005 §9) — см. class doc.
+        services.AddScoped<DeferredEnrichmentReleaseJob>();
         return services;
     }
 

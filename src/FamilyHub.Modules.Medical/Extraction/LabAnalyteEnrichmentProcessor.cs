@@ -36,7 +36,7 @@ public class LabAnalyteEnrichmentProcessor(
     EnrichmentTrustedDomainService trustedDomains,
     ILegitimacyGuardService legitimacyGuard,
     IAnalytePlausibilityGuardService plausibilityGuard,
-    WebSearchQuotaService searchQuota,
+    IWebSearchValveService searchValve,
     IOptions<EnrichmentOptions> options,
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
@@ -159,15 +159,16 @@ public class LabAnalyteEnrichmentProcessor(
             }
             else
             {
-                // Месячная квота (ADR-0005 §9, возврат) — проверяется ТОЛЬКО на ветке реального
-                // платного вызова, не на кэш-хите выше: кэш ничего не стоит независимо от квоты.
-                if (await searchQuota.MonthlyQuotaExceededAsync(ct))
+                // Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — проверяется ТОЛЬКО
+                // на ветке реального платного вызова, не на кэш-хите выше: кэш ничего не стоит
+                // независимо от вентиля. Null-провайдер не гейтим вовсе — он никуда не ходит, иначе
+                // в dev/тестах задачи парковались бы навсегда без реального провайдера.
+                if (provider.Name != "Null" && await searchValve.IsPausedAsync(ct))
                 {
-                    job.Status = EnrichmentJobStatus.Skipped;
-                    job.Error = "Месячная квота платного поиска исчерпана.";
-                    job.CompletedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync(ct);
-                    logger.LogWarning("LabAnalyteEnrichmentJob {JobId}: месячная квота платного поиска исчерпана.", job.Id);
+                    job.Status = EnrichmentJobStatus.Deferred;
+                    job.Error = "Платный веб-поиск на паузе — задача отложена до его включения.";
+                    await db.SaveChangesAsync(ct); // НЕ CompletedAt: задача не завершена, а отложена
+                    logger.LogInformation("LabAnalyteEnrichmentJob {JobId}: отложена — вентиль платного поиска закрыт.", job.Id);
                     return;
                 }
 

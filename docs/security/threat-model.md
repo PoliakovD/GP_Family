@@ -73,7 +73,7 @@
 | Один пользователь монополизирует единственный воркер LM Studio (батч из сотен файлов) | `ExtractionLimitsOptions.MaxActiveJobsPerUser` — мягкий лимит одновременных `Pending`/`Running`-задач на пользователя (`ExtractionRequestService.RequestAsync`); мягкий (гонка параллельных постановок возможна), настоящий барьер частоты — rate limiting ниже |
 | Перебор запросов на распознавание/OCR сверх разумного | `ExtractionLimitsOptions.DailyJobsPerUser` — суточная квота в Postgres (переживает рестарт, ADR-0001); rate limiting: политика `"llm"` (`POST .../extract`, `.../summary/regenerate`, `POST /api/medications/ocr`) |
 | Перебор создания записей/загрузки вложений | rate limiting: политика `"medical-write"` (`POST /api/medical-records`, `POST .../attachments`) |
-| Слепая трата платного веб-поиска (Yandex/Brave) сверх бюджета | `WebSearchQuotaService` — месячная квота (`Enrichment:MonthlyQuota`, 0 = без лимита) по факту записанных строк `WebSearchCallLog`, общая на все три enrich-конвейера |
+| Слепая трата платного веб-поиска (Yandex/Brave) сверх бюджета | `IWebSearchValveService` — ручной вентиль (закрыт → задачи уходят в `EnrichmentJobStatus.Deferred`, не отменяются, возобновляются `DeferredEnrichmentReleaseJob` при открытии), общий на все три enrich-конвейера, плюс явный бюджет платных вызовов на прогон прогрева (`SearchWarmupRun.MaxPaidCalls`, админка-only, `PlatformAdmin`) |
 | Непрослеживаемость платных вызовов (сколько заплачено и за что) | `WebSearchCallLog` — аудит каждого вызова (включая кэш-хиты), админка `/admin/enrichment` → «Вызовы поиска» |
 
 Обе новые rate-limiting-политики (`"llm"`/`"medical-write"`, `Program.cs`) партиционированы по

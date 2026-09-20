@@ -8,11 +8,10 @@ using Microsoft.Extensions.Options;
 namespace FamilyHub.Api.Features.Admin;
 
 /// <summary>
-/// Аудит платных вызовов внешнего веб-поиска (WebSearchCallLog, см. .claude/plans/
-/// ethereal-hugging-chipmunk.md, часть 2) — для дебага "куда уходят деньги": полный текст
-/// запроса, исход, длительность, доля кэш-хитов. Соседствует с /api/admin/enrichment
-/// (домены/кэш) — тот же провайдер, та же квота, тот же аудит одного и того же внешнего вызова с
-/// разных сторон (кэш — "что лежит", этот эндпоинт — "что реально произошло").
+/// Аудит платных вызовов внешнего веб-поиска (WebSearchCallLog) — для дебага "куда уходят деньги":
+/// полный текст запроса, исход, длительность, доля кэш-хитов. Соседствует с /api/admin/enrichment
+/// (домены/кэш/вентиль/прогрев) — тот же провайдер, тот же аудит одного и того же внешнего вызова
+/// с разных сторон (кэш — "что лежит", этот эндпоинт — "что реально произошло").
 /// </summary>
 public static class AdminSearchCallsEndpoints
 {
@@ -106,11 +105,18 @@ public static class AdminSearchCallsEndpoints
             var monthStartUtc = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
             var usedThisMonth = await db.WebSearchCallLogs.AsNoTracking()
                 .CountAsync(l => l.OccurredAt >= monthStartUtc && l.Outcome != WebSearchCallOutcome.CacheHit, ct);
-            var monthlyQuota = enrichmentOptions.Value.MonthlyQuota;
+
+            // Состояние вентиля читается напрямую из строки конфига (не через
+            // IWebSearchValveService.IsPausedAsync — этому эндпоинту нужен ещё и PausedAt для
+            // отображения, а не только bool перед платным вызовом).
+            var valveRow = await db.WebSearchConfigs.AsNoTracking().FirstOrDefaultAsync(ct);
+            var pricePerCall = enrichmentOptions.Value.PricePerPaidCall;
 
             return Results.Ok(new SearchCallStatsDto(
                 totalCalls, paidCalls, cacheHits, totalCalls == 0 ? 0 : (double)cacheHits / totalCalls,
-                byProvider, byOutcome, byDay, usedThisMonth, monthlyQuota > 0 ? monthlyQuota : null));
+                byProvider, byOutcome, byDay, usedThisMonth,
+                valveRow?.IsPaused ?? false, valveRow?.PausedAt,
+                pricePerCall > 0 ? usedThisMonth * pricePerCall : null));
         });
     }
 }

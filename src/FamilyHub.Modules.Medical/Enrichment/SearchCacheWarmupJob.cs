@@ -35,6 +35,7 @@ public class SearchCacheWarmupJob(
     LabAnalyteSearchCacheService analyteCache,
     KbLookupService medicationKbLookup,
     LabAnalyteKbLookupService analyteKbLookup,
+    IWebSearchValveService searchValve,
     IBackgroundJobClient backgroundJobs,
     ILogger<SearchCacheWarmupJob> logger)
 {
@@ -84,6 +85,18 @@ public class SearchCacheWarmupJob(
                     await db.SaveChangesAsync(ct);
                     logger.LogInformation("SearchWarmupRun {RunId}: бюджет {Budget} платных вызовов исчерпан, прогон завершён.",
                         run.Id, budget);
+                    return;
+                }
+
+                // Вентиль платного поиска (ADR-0005 §9) — прогон не отменяется, а паркуется:
+                // курсор/счётчики остаются как есть, DeferredEnrichmentReleaseJob (при открытии
+                // вентиля) сам возобновит его энкью на SearchCacheWarmupJob.RunAsync(run.Id).
+                if (provider.Name != "Null" && await searchValve.IsPausedAsync(ct))
+                {
+                    run.Status = SearchWarmupStatus.Paused;
+                    await db.SaveChangesAsync(ct);
+                    logger.LogInformation("SearchWarmupRun {RunId}: приостановлен на {Cursor}/{Total} — вентиль платного поиска закрыт.",
+                        run.Id, run.Cursor, run.TotalNames);
                     return;
                 }
 

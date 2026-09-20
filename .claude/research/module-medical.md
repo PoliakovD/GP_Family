@@ -179,9 +179,11 @@ plaintext — по ним поиск/тренд/группировка, знач
 доверенных доменов — `EnrichmentOptions.AnalyteTrustedDomains`: helix.ru/invitro.ru/gemotest.ru/
 kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антигаллюцинационный гейт; v2 —
 промпт также просит `sex` на каждый диапазон и `calculationInstructions`) → `LabAnalyteKbWriter`
-(upsert, `KbIsolationGuard`). Месячная квота — общая на оба конвейера обогащения (медикаменты +
-показатели), считается `WebSearchQuotaService` прямо по `WebSearchCallLog` (см. ниже), не
-отдельным счётчиком — `EnrichmentOptions.MonthlyQuota` (0 = без лимита). См. дополнение к
+(upsert, `KbIsolationGuard`). Месячной квоты больше нет (ADR-0005 §9, третья редакция) — вместо
+неё ручной вентиль `IWebSearchValveService` (одна строка `WebSearchConfig`, БЕЗ кеша — закрытие
+должно останавливать платные вызовы немедленно), общий на все три enrich-конвейера. Закрытие не
+отменяет задачу, а переводит в `EnrichmentJobStatus.Deferred`; `DeferredEnrichmentReleaseJob`
+возобновляет все такие задачи при открытии. См. дополнение к
 [ADR-0005](../../docs/adr/0005-medication-enrichment-egress.md).
 
 **Аудит платных вызовов веб-поиска (`WebSearchCallLog`, схема `public`).** До этого одна строка
@@ -197,7 +199,8 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 в уже существующем `AuditRetentionJob` (не отдельная джоба). Админка — вкладка «Вызовы поиска»
 внутри `/admin/enrichment` (`AdminSearchCallsEndpoints`, `/api/admin/search-calls*`): список с
 фильтрами, полная карточка вызова, `/stats` — доля кэш-хитов, разбивка по провайдеру/исходу, расход
-текущего месяца против квоты.
+текущего месяца (плюс денежная оценка, если задана `Enrichment:PricePerPaidCall`), состояние
+вентиля.
 
 **Прогрев кэша веб-поиска из админки (`SearchWarmupRun`, схема `public`).** Проактивно наполняет
 `kb.medication_search_cache`/`kb.lab_analyte_search_cache` по вставленному в textarea списку
@@ -212,8 +215,13 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 `SearchCacheWarmupJob` — батч 10 + самопродолжение (тот же приём, что `LabAnalyteKbReenrichJob`),
 резюмируемый курсор в строке прогона (зеркало `KbRebuildRun`); имена, уже попавшие в справочник или
 свежий кэш, пропускаются молча. Бюджет платных вызовов на прогон — `SearchWarmupRun.MaxPaidCalls`
-(null = без ограничения). Админка — вкладка «Прогрев» внутри `/admin/enrichment`
-(`AdminWarmupEndpoints`, `/api/admin/enrichment/warmup*`).
+(null = без ограничения). Вентиль (см. выше) прогон не отменяет, а паркует —
+`SearchWarmupStatus.Paused`, курсор остаётся, `DeferredEnrichmentReleaseJob` возобновляет
+энкью на `SearchCacheWarmupJob.RunAsync` при открытии. Немедленная безусловная остановка из
+админки (`AdminSearchWarmupService.CancelAsync`) пишет терминальный статус напрямую в БД, не
+дожидаясь, пока фоновая джоба сама заметит флаг — иначе падение процесса сервера посреди прогона
+оставляло бы строку в `Running` навсегда, блокируя новый прогон уникальным индексом. Админка —
+вкладка «Прогрев» внутри `/admin/enrichment` (`AdminWarmupEndpoints`, `/api/admin/enrichment/warmup*`).
 
 **`MedicalRecord` — структура (v2).** `PersonName` убран целиком — идентичность пациента
 выражается только через `FamilyDependentId`/`TargetUserId`/владельца, отображаемое имя резолвится
@@ -400,12 +408,12 @@ payload подписи включает scope, поэтому ссылка на 
   вызывается из `MedicationService.CreateAsync`/`UpdateAsync` сразу после сохранения. `RequestAsync`
   прерывается на уверенном `Hit`; `RequestRefreshAsync` (ручное «Уточнить в справочнике») — нет.
   Дедуп на уровне БД — частичный уникальный индекс `MedicationEnrichmentJobs.NormalizedName` среди
-  `Pending`/`Running` задач.
+  `Pending`/`Running`/`Deferred` задач (последний — вентиль закрыт, ADR-0005 §9, задача жива).
 - **`MedicationEnrichmentProcessor`** — Hangfire-джоба в выделенной очереди `enrichment`
   (`[Queue("enrichment")]`, один воркер — см. `Program.cs`, естественно укладывается в лимит
   Brave free-tier 1 req/s), `[AutomaticRetry(Attempts = 3)]` только на настоящие сбои; ожидаемые
-  исходы (нет доверенных источников, квота исчерпана) переводят статус задачи в `Failed`/`Skipped`
-  обычным `return`, без ретрая.
+  исходы (нет доверенных источников) переводят статус задачи в `Failed` обычным `return`, без
+  ретрая; закрытый вентиль — в `Deferred` (не терминально, возобновляется автоматически).
 - **`IMedicationSearchProvider`** (`FamilyHub.Infrastructure.Enrichment`) — `NullMedicationSearchProvider`
   по умолчанию (наружу не уходит ничего); активный провайдер — `YandexSearchProvider`
   (`Enrichment:Provider=Yandex`, Web Search API `v2/gen/search`/GenSearch, egress через

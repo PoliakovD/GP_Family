@@ -27,7 +27,9 @@ namespace FamilyHub.Api.Features.Admin;
 /// </summary>
 public static class AdminPipelineEndpoints
 {
-    private const string AttentionCacheKey = "admin:pipeline:attention";
+    // internal, не private — AdminWarmupEndpoints тоже должен сбрасывать этот кэш при переключении
+    // вентиля платного поиска (иначе баннер «на паузе»/список отложенных задач протухнет до 60с).
+    internal const string AttentionCacheKey = "admin:pipeline:attention";
     private static readonly TimeSpan AttentionCacheTtl = TimeSpan.FromSeconds(60);
 
     public static void MapAdminPipelineEndpoints(this IEndpointRouteBuilder app)

@@ -44,7 +44,8 @@ public class MedicationEnrichmentJob
     /// <summary>Провайдер внешнего поиска, фактически использованный (например, "Brave").</summary>
     public string? Provider { get; set; }
 
-    /// <summary>Момент фактического внешнего запроса — база для подсчёта месячной квоты (Postgres, не in-memory).</summary>
+    /// <summary>Момент фактического внешнего запроса — справочно для дебага расходов (см.
+    /// WebSearchCallLog — фактический источник истины для аудита платных вызовов).</summary>
     public DateTime? ExternalSearchAt { get; set; }
 
     /// <summary>Строка справочника, которой завершилась задача (справочно, не FK — kb не ссылается наружу и внутрь).</summary>

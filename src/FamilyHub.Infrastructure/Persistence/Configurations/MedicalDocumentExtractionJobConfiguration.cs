@@ -18,7 +18,9 @@ public class MedicalDocumentExtractionJobConfiguration : IEntityTypeConfiguratio
 
         // Дедуп повторного клика «Распознать» на одной ЗАПИСИ (v2 — задача больше не про одно
         // вложение), пока задача жива — тот же приём, что частичный индекс по NormalizedName
-        // у MedicationEnrichmentJob.
+        // у MedicationEnrichmentJob. Без Status=5 (Deferred) намеренно, не пропуск: экстракция
+        // никогда не ходит в веб-поиск и вентилем (ADR-0005 §9) не гейтится — Deferred для неё
+        // недостижим.
         builder.HasIndex(j => j.MedicalRecordId)
             .IsUnique()
             .HasFilter("\"Status\" IN (0, 1)");

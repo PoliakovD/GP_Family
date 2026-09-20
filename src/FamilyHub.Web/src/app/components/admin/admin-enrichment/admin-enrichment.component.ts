@@ -16,6 +16,7 @@ import {
   WebSearchCallOutcomeValue,
   WebSearchTopic,
   WebSearchTopicValue,
+  WebSearchValve,
 } from '../../../services/admin-api.service';
 import { ApiError } from '../../../services/api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
@@ -98,6 +99,11 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   readonly warmupLoading = signal(false);
   private warmupPollTimer?: ReturnType<typeof setTimeout>;
 
+  // --- Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — общий для вкладок
+  // «Прогрев» и «Вызовы поиска», обе про один и тот же платный вызов. ---
+  readonly webSearchValve = signal<WebSearchValve | null>(null);
+  readonly webSearchValveBusy = signal(false);
+
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
     const tab = params.get('tab') as 'domains' | 'cache' | 'rebuild' | 'calls' | 'warmup' | null;
@@ -111,6 +117,7 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
     if (call) this.openCallId.set(call);
 
     void this.loadDomains();
+    void this.loadWebSearchValve();
     if (this.tab() === 'cache' || row) void this.loadCache();
     if (this.tab() === 'rebuild') void this.loadRebuildStatus();
     if (this.tab() === 'calls' || call) {
@@ -410,6 +417,45 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
       this.toast.error('Не удалось запустить пересборку.');
     } finally {
       this.rebuildBusy.set(false);
+    }
+  }
+
+  // --- Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — закрытие не отменяет
+  // задачи обогащения, а откладывает их (EnrichmentJobStatus.Deferred); открытие возобновляет их
+  // автоматически (DeferredEnrichmentReleaseJob на бэкенде). ---
+
+  async loadWebSearchValve(): Promise<void> {
+    try {
+      this.webSearchValve.set(await this.api.getWebSearchValve());
+    } catch {
+      this.toast.error('Не удалось загрузить состояние вентиля поиска.');
+    }
+  }
+
+  async toggleWebSearchValve(): Promise<void> {
+    const current = this.webSearchValve();
+    const nextPaused = !(current?.isPaused ?? false);
+
+    const ok = await this.confirm.confirm({
+      title: nextPaused ? 'Остановить платный поиск?' : 'Включить платный поиск?',
+      message: nextPaused
+        ? 'Новые платные вызовы (обогащение справочника, прогрев) будут откладываться до включения — уже накопленное не потеряется.'
+        : 'Отложенные задачи обогащения и приостановленный прогрев возобновятся автоматически.',
+      confirmText: nextPaused ? 'Остановить' : 'Включить',
+      danger: nextPaused,
+    });
+    if (!ok) return;
+
+    this.webSearchValveBusy.set(true);
+    try {
+      await this.api.setWebSearchValve(nextPaused, current?.note ?? null);
+      await this.loadWebSearchValve();
+      if (!nextPaused) await this.loadWarmupStatus();
+      this.toast.success(nextPaused ? 'Платный поиск остановлен.' : 'Платный поиск включён.');
+    } catch {
+      this.toast.error('Не удалось переключить вентиль поиска.');
+    } finally {
+      this.webSearchValveBusy.set(false);
     }
   }
 

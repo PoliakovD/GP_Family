@@ -41,6 +41,14 @@
     "!/api/birthdays/**",
     "!/api/notifications/**",
     "!/api/search/**",
-    "!/api/push/**"
+    "!/api/push/**",
+    "!/api/admin/**",
+
+    "!/hangfire",
+    "!/hangfire/**",
+    "!/swagger",
+    "!/swagger/**",
+    "!/dev",
+    "!/dev/**"
   ]
 }

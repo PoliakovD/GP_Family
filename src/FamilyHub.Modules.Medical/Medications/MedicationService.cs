@@ -81,8 +81,12 @@ public class MedicationService(
             .ToList();
         if (normalizedNames.Count == 0) return [];
 
+        // Deferred (вентиль платного поиска закрыт, ADR-0005 §9) — с точки зрения карточки
+        // аптечки это ещё живая задача, не "нет данных": иначе UI предложил бы «Уточнить в
+        // справочнике», а тот молча упёрся бы в дедуп-индекс, вернув Requested() — ложь пользователю.
         var pending = await db.MedicationEnrichmentJobs.AsNoTracking()
-            .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+            .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
+                    || j.Status == EnrichmentJobStatus.Deferred)
                 && normalizedNames.Contains(j.NormalizedName))
             .Select(j => new { j.NormalizedName, j.CurrentThought, j.CreatedAt })
             .ToListAsync(ct);

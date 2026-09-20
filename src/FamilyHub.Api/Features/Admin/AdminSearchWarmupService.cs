@@ -88,6 +88,20 @@ public class AdminSearchWarmupService(AppDbContext db, IBackgroundJobClient back
         return (StartWarmupResult.Started, await GetStatusAsync(ct));
     }
 
+    /// <summary>
+    /// Немедленно и безусловно переводит активный прогон в терминальный статус — не полагается
+    /// на то, что фоновая джоба ещё жива и заметит флаг. Найдено на проде: если процесс сервера
+    /// падает прямо во время прогона, строка SearchWarmupRun остаётся в Running навсегда —
+    /// Hangfire-воркер, которому она принадлежала, исчез, никто больше не перечитывает
+    /// CancelRequested (джоба это делает только между именами/батчами), и уникальный индекс
+    /// (Status=0/1) блокирует любой новый прогон, хотя старый фактически мёртв. CancelRequested
+    /// всё равно проставляется (кооперативный путь для ЖИВОЙ джобы — остановится ещё быстрее, на
+    /// ближайшей проверке внутри батча), но именно прямая запись Status=Cancelled разблокирует
+    /// StartAsync прямо сейчас, независимо от состояния воркера. Если старая джоба всё-таки жива
+    /// и ещё дописывает текущий батч — её SaveChangesAsync не трогает Status (EF шлёт UPDATE
+    /// только по реально изменённым в НЕЙ полям, Cursor/PaidCalls/…), а следующий самоэнкью
+    /// увидит Status=Cancelled на свежем чтении и выйдет немедленно (см. RunAsync, ранний return).
+    /// </summary>
     public async Task<bool> CancelAsync(CancellationToken ct = default)
     {
         var run = await db.SearchWarmupRuns
@@ -95,6 +109,8 @@ public class AdminSearchWarmupService(AppDbContext db, IBackgroundJobClient back
         if (run is null) return false;
 
         run.CancelRequested = true;
+        run.Status = SearchWarmupStatus.Cancelled;
+        run.FinishedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
     }

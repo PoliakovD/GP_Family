@@ -25,8 +25,11 @@ public class VisitMedicationEnrichmentRequestService(
         // (например, кто-то добавил тот же препарат в аптечку прямо сейчас). Дедуп внутри своей
         // таблицы (уникальный индекс ниже) полностью не заменяет — если гонка всё же произойдёт,
         // это лишний, но не некорректный внешний запрос (KbWriter upsert идемпотентен).
+        // Deferred (вентиль платного поиска закрыт, ADR-0005 §9) — тоже "уже идёт": та же строка
+        // под тем же дедуп-индексом, просто ждёт открытия вентиля.
         var alreadyRunning = await db.MedicationEnrichmentJobs.AnyAsync(
-            j => j.NormalizedName == normalizedName && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running), ct);
+            j => j.NormalizedName == normalizedName && (j.Status == EnrichmentJobStatus.Pending
+                || j.Status == EnrichmentJobStatus.Running || j.Status == EnrichmentJobStatus.Deferred), ct);
         if (alreadyRunning)
         {
             logger.LogDebug(
