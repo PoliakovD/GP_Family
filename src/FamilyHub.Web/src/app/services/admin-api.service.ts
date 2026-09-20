@@ -124,6 +124,20 @@ export interface KbRebuildStatus {
   catalogDeleted: number; reseedRequested: number;
 }
 
+/** Прогон прогрева кэша веб-поиска из админки (грантовый лимит облака) — зеркало KbRebuildStatus
+ * на SearchCacheWarmupJob. status: "Running" | "Paused" | "Completed" | "Failed" | "Cancelled" | null
+ * (ни разу не запускался). specimenDisplayName — только для topic=LabAnalyte. */
+export interface WarmupStatus {
+  runId: string | null; status: string | null; topic: WebSearchTopicValue | null;
+  specimenDisplayName: string | null; totalNames: number; cursor: number; paidCalls: number;
+  skippedKbHit: number; skippedFreshCache: number; failures: number; maxPaidCalls: number | null;
+  startedAt: string | null; finishedAt: string | null; lastError: string | null;
+}
+
+export interface StartWarmupRequest {
+  topic: WebSearchTopicValue; specimenKbId?: string | null; names: string; maxPaidCalls?: number | null;
+}
+
 /** Один шаг одного enrich-пайплайна (управление пайплайном из админки, §2 плана) — реальный
  * порядок вызовов зашит в коде (жёсткие зависимости между шагами одного прогона), из админки
  * доступно только вкл/выкл необязательных шагов, не реордер. */
@@ -392,6 +406,13 @@ export class AdminApiService {
   // на дрейф PayloadVersion построчно и запускается автоматически).
   startKbRebuild = () => this.post<void>('/api/admin/kb/lab-analytes/rebuild');
   getKbRebuildStatus = () => this.get<KbRebuildStatus>('/api/admin/kb/lab-analytes/rebuild/status');
+
+  // Прогрев кэша веб-поиска из админки (грантовый лимит облака) — см. AdminWarmupEndpoints.
+  // Ошибки 400/409 приходят с ApiError.message = code ("specimen_required" | "nothing_to_do" |
+  // "already_running") — см. toApiError выше.
+  startWarmup = (request: StartWarmupRequest) => this.post<WarmupStatus>('/api/admin/enrichment/warmup', request);
+  cancelWarmup = () => this.post<void>('/api/admin/enrichment/warmup/cancel');
+  getWarmupStatus = () => this.get<WarmupStatus>('/api/admin/enrichment/warmup/status');
 
   // Управление enrich-пайплайном из админки (§2 плана) — вкл/выкл необязательных шагов,
   // версионирование промптов, dry-run без записи, листинг задач всех четырёх конвейеров.

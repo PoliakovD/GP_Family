@@ -199,6 +199,22 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 фильтрами, полная карточка вызова, `/stats` — доля кэш-хитов, разбивка по провайдеру/исходу, расход
 текущего месяца против квоты.
 
+**Прогрев кэша веб-поиска из админки (`SearchWarmupRun`, схема `public`).** Проактивно наполняет
+`kb.medication_search_cache`/`kb.lab_analyte_search_cache` по вставленному в textarea списку
+названий — на каждое имя делает ТОЛЬКО `provider.SearchAsync` → `*SearchCacheService.RecordSearchAsync`,
+БЕЗ единого обращения к локальной LLM (ни `LegitimacyGuardService`, ни суммаризация, ни запись в
+`kb.global_*_kb`) — придумано ради грантового лимита облачного провайдера поиска, который сгорает
+по времени, а обычная задача обогащения тратит LLM дважды на единственном воркере очереди
+`enrichment` и не успела бы потратить лимит до его истечения. Справочник наполняется позже
+бесплатно — обычный конвейер обогащения найдёт уже свежую строку кэша на живом пользовательском
+спросе. `WarmupNameParser.Parse` — та же нормализация, что и сам конвейер (`MedicationNameNormalizer.Normalize`/
+`LabAnalyteNormalizer.NormalizeAnalyteKey`), дедуп по нормализованному ключу до вызова провайдера.
+`SearchCacheWarmupJob` — батч 10 + самопродолжение (тот же приём, что `LabAnalyteKbReenrichJob`),
+резюмируемый курсор в строке прогона (зеркало `KbRebuildRun`); имена, уже попавшие в справочник или
+свежий кэш, пропускаются молча. Бюджет платных вызовов на прогон — `SearchWarmupRun.MaxPaidCalls`
+(null = без ограничения). Админка — вкладка «Прогрев» внутри `/admin/enrichment`
+(`AdminWarmupEndpoints`, `/api/admin/enrichment/warmup*`).
+
 **`MedicalRecord` — структура (v2).** `PersonName` убран целиком — идентичность пациента
 выражается только через `FamilyDependentId`/`TargetUserId`/владельца, отображаемое имя резолвится
 на чтение (`MedicalRecordService.ResolvePersonNamesAsync`, батч на список — не N+1), не хранится

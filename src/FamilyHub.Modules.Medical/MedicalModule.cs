@@ -120,6 +120,9 @@ public static class MedicalModule
         // конвейер задач (не FamilyId-скоуп, см. VisitMedicationEnrichmentJob), тот же справочник.
         services.AddScoped<VisitMedicationEnrichmentRequestService>();
         services.AddScoped<VisitMedicationEnrichmentProcessor>();
+        // Прогрев кэша веб-поиска из админки (грантовый лимит облака) — только поиск + запись
+        // в кэш, без LLM, см. class doc.
+        services.AddScoped<SearchCacheWarmupJob>();
         return services;
     }
 

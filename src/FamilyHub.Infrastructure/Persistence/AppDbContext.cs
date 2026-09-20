@@ -56,6 +56,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// см. LabAnalyteKbRebuildJob.</summary>
     public DbSet<KbRebuildRun> KbRebuildRuns => Set<KbRebuildRun>();
 
+    /// <summary>Прогоны прогрева кэша веб-поиска из админки — см. SearchCacheWarmupJob.</summary>
+    public DbSet<SearchWarmupRun> SearchWarmupRuns => Set<SearchWarmupRun>();
+
     /// <summary>Управление enrich-пайплайном из админки (§2) — слоты промптов, их версии
     /// и вкл/выкл шагов. См. PromptProvider, PipelineConfigService.</summary>
     public DbSet<PipelinePrompt> PipelinePrompts => Set<PipelinePrompt>();

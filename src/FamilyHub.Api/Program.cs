@@ -384,6 +384,7 @@ builder.Services.AddScoped<AdminStatsService>();
 builder.Services.AddScoped<AdminKeysService>();
 builder.Services.AddScoped<AdminKbRebuildService>();
 builder.Services.AddScoped<AdminAttentionService>();
+builder.Services.AddScoped<AdminSearchWarmupService>();
 
 authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions =>
 {
@@ -1035,6 +1036,7 @@ if (adminOptions.Enabled)
     app.MapAdminSessionEndpoints();
     app.MapAdminEndpoints();
     app.MapAdminEnrichmentEndpoints();
+    app.MapAdminWarmupEndpoints();
     app.MapAdminSearchCallsEndpoints();
     app.MapAdminPipelineEndpoints();
     app.MapAdminCatalogEndpoints();

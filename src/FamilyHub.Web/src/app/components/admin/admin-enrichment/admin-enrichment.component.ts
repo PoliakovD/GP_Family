@@ -4,17 +4,20 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   AdminApiService,
+  GlobalSpecimen,
   KbRebuildStatus,
   SearchCacheRow,
   SearchCallDetail,
   SearchCallRow,
   SearchCallStats,
   TrustedDomain,
+  WarmupStatus,
   WebSearchCallOutcome,
   WebSearchCallOutcomeValue,
   WebSearchTopic,
   WebSearchTopicValue,
 } from '../../../services/admin-api.service';
+import { ApiError } from '../../../services/api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { SidePanelComponent } from '../../../shared/side-panel/side-panel.component';
@@ -22,6 +25,7 @@ import { AdminCachePanelComponent } from '../admin-cache-panel/admin-cache-panel
 
 const PAGE_SIZE = 25;
 const REBUILD_POLL_INTERVAL_MS = 2000;
+const WARMUP_POLL_INTERVAL_MS = 2000;
 
 /**
  * Пересборка enrich-пайплайна — управление доверенными доменами и кэшем сырых результатов поиска
@@ -48,7 +52,7 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   readonly WebSearchTopic = WebSearchTopic;
   readonly WebSearchCallOutcome = WebSearchCallOutcome;
 
-  readonly tab = signal<'domains' | 'cache' | 'rebuild' | 'calls'>('domains');
+  readonly tab = signal<'domains' | 'cache' | 'rebuild' | 'calls' | 'warmup'>('domains');
   readonly topic = signal<WebSearchTopicValue>(WebSearchTopic.Medication);
 
   readonly domains = signal<TrustedDomain[]>([]);
@@ -83,9 +87,20 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
   readonly callStats = signal<SearchCallStats | null>(null);
   readonly callStatsLoading = signal(false);
 
+  // --- Вкладка «Прогрев» (грантовый лимит облака — насытить кэш до живого спроса) ---
+  readonly warmupNames = signal('');
+  readonly warmupSpecimens = signal<GlobalSpecimen[]>([]);
+  readonly warmupSpecimensLoading = signal(false);
+  readonly warmupSpecimenId = signal<string | null>(null);
+  readonly warmupMaxPaidCalls = signal<number | null>(null);
+  readonly warmupBusy = signal(false);
+  readonly warmupStatus = signal<WarmupStatus | null>(null);
+  readonly warmupLoading = signal(false);
+  private warmupPollTimer?: ReturnType<typeof setTimeout>;
+
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
-    const tab = params.get('tab') as 'domains' | 'cache' | 'rebuild' | 'calls' | null;
+    const tab = params.get('tab') as 'domains' | 'cache' | 'rebuild' | 'calls' | 'warmup' | null;
     const topicParam = params.get('topic');
     const row = params.get('row');
     const call = params.get('call');
@@ -103,10 +118,15 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
       void this.loadCallStats();
       if (call) void this.openCallDetail(call);
     }
+    if (this.tab() === 'warmup') {
+      void this.loadWarmupStatus();
+      if (this.topic() === WebSearchTopic.LabAnalyte) void this.loadWarmupSpecimens();
+    }
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.rebuildPollTimer);
+    clearTimeout(this.warmupPollTimer);
   }
 
   private updateQueryParams(extra: Record<string, string | null>): void {
@@ -118,7 +138,7 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
     });
   }
 
-  selectTab(tab: 'domains' | 'cache' | 'rebuild' | 'calls'): void {
+  selectTab(tab: 'domains' | 'cache' | 'rebuild' | 'calls' | 'warmup'): void {
     this.tab.set(tab);
     this.updateQueryParams({});
     if (tab === 'cache' && this.cacheRows().length === 0) void this.loadCache();
@@ -126,6 +146,10 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
     if (tab === 'calls' && this.callRows().length === 0) {
       void this.loadCalls();
       void this.loadCallStats();
+    }
+    if (tab === 'warmup') {
+      if (this.warmupStatus() === null) void this.loadWarmupStatus();
+      if (this.topic() === WebSearchTopic.LabAnalyte && this.warmupSpecimens().length === 0) void this.loadWarmupSpecimens();
     }
   }
 
@@ -137,6 +161,7 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
       this.loadDomains(),
       this.tab() === 'cache' ? this.loadCache() : Promise.resolve(),
       this.tab() === 'calls' ? this.loadCalls(1) : Promise.resolve(),
+      this.tab() === 'warmup' && topic === WebSearchTopic.LabAnalyte ? this.loadWarmupSpecimens() : Promise.resolve(),
     ]);
   }
 
@@ -385,6 +410,120 @@ export class AdminEnrichmentComponent implements OnInit, OnDestroy {
       this.toast.error('Не удалось запустить пересборку.');
     } finally {
       this.rebuildBusy.set(false);
+    }
+  }
+
+  // --- Вкладка «Прогрев» — насытить кэш веб-поиска, пока действует грантовый лимит облака.
+  // Делает ТОЛЬКО платный поиск + запись в кэш, без LLM (см. class doc SearchCacheWarmupJob на
+  // бэкенде) — справочник наполнится позже бесплатно из уже прогретого кэша. ---
+
+  async loadWarmupSpecimens(): Promise<void> {
+    this.warmupSpecimensLoading.set(true);
+    try {
+      this.warmupSpecimens.set(await this.api.searchSpecimens('', 50));
+    } catch {
+      this.toast.error('Не удалось загрузить список биоматериалов.');
+    } finally {
+      this.warmupSpecimensLoading.set(false);
+    }
+  }
+
+  async loadWarmupStatus(): Promise<void> {
+    this.warmupLoading.set(true);
+    try {
+      this.warmupStatus.set(await this.api.getWarmupStatus());
+      this.scheduleWarmupPollIfRunning();
+    } catch {
+      this.toast.error('Не удалось загрузить статус прогрева.');
+    } finally {
+      this.warmupLoading.set(false);
+    }
+  }
+
+  private scheduleWarmupPollIfRunning(): void {
+    clearTimeout(this.warmupPollTimer);
+    const status = this.warmupStatus()?.status;
+    if (status !== 'Running' && status !== 'Paused') return;
+
+    this.warmupPollTimer = setTimeout(async () => {
+      try {
+        const next = await this.api.getWarmupStatus();
+        const wasActive = this.warmupStatus()?.status === 'Running' || this.warmupStatus()?.status === 'Paused';
+        this.warmupStatus.set(next);
+        if (wasActive && next.status !== 'Running' && next.status !== 'Paused') {
+          this.toast[next.status === 'Completed' ? 'success' : 'error'](
+            next.status === 'Completed'
+              ? `Прогрев завершён: ${next.paidCalls} платных вызовов.`
+              : next.status === 'Cancelled'
+                ? 'Прогрев остановлен.'
+                : `Прогрев упал: ${next.lastError ?? 'см. логи'}`,
+          );
+        }
+      } catch {
+        // Транзиентная ошибка поллинга — не считаем прогон завершённым, просто попробуем снова.
+      }
+      this.scheduleWarmupPollIfRunning();
+    }, WARMUP_POLL_INTERVAL_MS);
+  }
+
+  async startWarmup(): Promise<void> {
+    const names = this.warmupNames().trim();
+    if (!names) return;
+
+    if (this.topic() === WebSearchTopic.LabAnalyte && !this.warmupSpecimenId()) {
+      this.toast.error('Выберите биоматериал — без него ключ кэша показателей не определён.');
+      return;
+    }
+
+    const ok = await this.confirm.confirm({
+      title: 'Запустить прогрев кэша поиска?',
+      message: 'Каждое ещё не закэшированное и отсутствующее в справочнике название — один платный ' +
+        'вызов внешнего поиска. Обогащение справочника (ИИ) этим не запускается — только поиск и запись в кэш.',
+      confirmText: 'Запустить',
+    });
+    if (!ok) return;
+
+    this.warmupBusy.set(true);
+    try {
+      this.warmupStatus.set(await this.api.startWarmup({
+        topic: this.topic(),
+        specimenKbId: this.topic() === WebSearchTopic.LabAnalyte ? this.warmupSpecimenId() : null,
+        names,
+        maxPaidCalls: this.warmupMaxPaidCalls(),
+      }));
+      this.warmupNames.set('');
+      this.toast.success('Прогрев запущен.');
+      this.scheduleWarmupPollIfRunning();
+    } catch (e) {
+      const code = e instanceof ApiError ? e.message : null;
+      if (code === 'specimen_required') this.toast.error('Для темы «Показатели» нужно выбрать биоматериал.');
+      else if (code === 'nothing_to_do') this.toast.error('После разбора список пуст — нечего прогревать.');
+      else if (code === 'already_running') {
+        this.toast.error('Прогрев уже идёт.');
+        await this.loadWarmupStatus();
+      } else this.toast.error('Не удалось запустить прогрев.');
+    } finally {
+      this.warmupBusy.set(false);
+    }
+  }
+
+  async cancelWarmup(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Остановить прогрев?',
+      message: 'Уже потраченные платные вызовы и записанный ими кэш останутся — остановка просто прекращает дальнейшую трату.',
+      confirmText: 'Остановить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.warmupBusy.set(true);
+    try {
+      await this.api.cancelWarmup();
+      await this.loadWarmupStatus();
+    } catch {
+      this.toast.error('Не удалось остановить прогрев.');
+    } finally {
+      this.warmupBusy.set(false);
     }
   }
 }
