@@ -92,7 +92,7 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
     {
         if (displayNames.Count == 0) return [];
 
-        var normalized = displayNames.Select(LabAnalyteNormalizer.Normalize).Where(n => n.Length > 0).Distinct().ToArray();
+        var normalized = displayNames.Select(LabAnalyteNormalizer.NormalizeAnalyteKey).Where(n => n.Length > 0).Distinct().ToArray();
         if (normalized.Length == 0) return [];
 
         var matches = await db.Database.SqlQuery<KbRelatedMatchRow>($"""
@@ -104,7 +104,7 @@ public class KbAnalyteCatalogService(AppDbContext db, ILogger<KbAnalyteCatalogSe
 
         return displayNames.Select(name =>
         {
-            var key = LabAnalyteNormalizer.Normalize(name);
+            var key = LabAnalyteNormalizer.NormalizeAnalyteKey(name);
             return byNormalized.TryGetValue(key, out var match)
                 ? new KbRelatedAnalyte(match.Id, match.DisplayName)
                 : new KbRelatedAnalyte(null, name);

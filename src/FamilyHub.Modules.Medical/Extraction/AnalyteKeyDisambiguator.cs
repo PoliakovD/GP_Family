@@ -23,7 +23,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// Возвращает суффикс ТОЛЬКО для storage-ключа/отображения — вызывающий код обязан искать в
 /// справочнике (kb.global_lab_analytes_kb) и ставить обогащение по БАЗОВОМУ ключу (без суффикса),
 /// иначе туда попадёт мусор вида "бактериальные микроорганизмы файл 2". Суффикс дописывается в
-/// САМ КЛЮЧ, не в скобках — <see cref="LabAnalyteNormalizer.Normalize"/> вырезает всё в скобках
+/// САМ КЛЮЧ, не в скобках — <see cref="LabAnalyteNormalizer.NormalizeAnalyteKey"/> вырезает всё в скобках
 /// целиком (там живут коды/аббревиатуры вида "(HGB)"), поэтому суффикс в скобках пропал бы из ключа
 /// и коллизия осталась бы.
 ///
@@ -35,7 +35,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 public static class AnalyteKeyDisambiguator
 {
     /// <summary>Один показатель на входе разведения. <see cref="BaseAnalyteKey"/> — уже
-    /// нормализованный ключ (LabAnalyteNormalizer.Normalize), ДО применения суффикса — коллизия
+    /// нормализованный ключ (LabAnalyteNormalizer.NormalizeAnalyteKey), ДО применения суффикса — коллизия
     /// определяется по нему, не по сырому имени с бланка (которое могло отличаться регистром/
     /// пунктуацией при том же смысле). <see cref="FileGroupId"/> — кандидаты с одинаковым
     /// значением считаются повтором одной и той же строки бланка (это уже разрешил
@@ -100,5 +100,5 @@ public static class AnalyteKeyDisambiguator
     }
 
     private static string KeyForOrdinal(string baseKey, int ordinal) =>
-        ordinal == 1 ? baseKey : LabAnalyteNormalizer.Normalize(baseKey + $" — файл {ordinal}");
+        ordinal == 1 ? baseKey : LabAnalyteNormalizer.NormalizeAnalyteKey(baseKey + $" — файл {ordinal}");
 }

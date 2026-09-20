@@ -58,7 +58,7 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
         }
 
         var aliases = summary.Aliases
-            .Select(LabAnalyteNormalizer.Normalize)
+            .Select(LabAnalyteNormalizer.NormalizeAnalyteKey)
             .Where(a => a.Length > 0 && a != normalizedName)
             .Distinct()
             .ToArray();

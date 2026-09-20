@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FamilyHub.Infrastructure.LmStudio;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.UnitTests.TestSupport;
 using FluentAssertions;
@@ -95,6 +96,41 @@ public class OcrNameCorrectorTests
         var result = await _sut.CorrectAsync("СYMАТPИПTАН");
 
         result.Should().Be("Суматриптан");
+    }
+
+    [Theory]
+    // Прод: обе пары давали 0.27/0.12 схожести до кросс-алфавитной свёртки и отклонялись как
+    // "другое понятие" — после свёртки (NormalizeAnalyteKey) AnalyteKey у обеих форм и так стал бы
+    // одинаковым, но кандидат — ПЕРЕВОД, а не правка написания (MedicalTextTransliterator.
+    // IsTranslationOf), поэтому DisplayName/RawDisplayName оставляем как в оригинале — иначе один и
+    // тот же бланк при повторном распознавании "мигал" бы языком отображаемого имени. РЕГРЕССИЯ:
+    // IsTranslationOf вызывается на СЫРЫХ original/candidate — если бы её вызвали на уже свёрнутых
+    // (NormalizeAnalyteKey) строках, HasLatin была бы всегда false и этот тест бы упал (кандидат
+    // применился бы вместо того, чтобы остаться оригиналом).
+    [InlineData("Антиген Adenovirus (B,C,E)", "Антиген аденовирус (B, C, E)")]
+    [InlineData("Антиген Hepatitis B virus surface", "Антиген гепатита В вируса поверхность")]
+    public async Task CorrectAsync_ModelTranslatedLatinNameToCyrillic_KeepsOriginal(string original, string translatedCandidate)
+    {
+        SetUpModelResponse((0, translatedCandidate));
+
+        var result = await _sut.CorrectAsync(original);
+
+        result.Should().Be(original);
+    }
+
+    [Fact]
+    public void NormalizeAnalyteKey_OfOriginalAndTranslatedCandidate_IsIdentical_NominativeFormPair()
+    {
+        // Цель миграции AnalyteKey (план "миграция AnalyteKey"): независимо от того, что вернул
+        // этот корректор (оригинал остаётся, см. тест выше), итоговый AnalyteKey ОБЕИХ форм — один и
+        // тот же, потому что его теперь считает NormalizeAnalyteKey. Раньше (до миграции) это было
+        // НЕ так — латинский и кириллический варианты расходились на два разных ключа/тренда.
+        // Только для формы без склонения (несклоняемое "аденовирус" на обоих языках) — пара
+        // "Hepatitis B virus surface" НЕ достигает точного равенства ключа из-за падежного
+        // расхождения словарного перевода и естественной русской фразы, см.
+        // LabAnalyteNormalizerTests.NormalizeAnalyteKey_ProductionLogPair_GrammaticalCaseMismatch_KeysStayDifferent.
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Антиген Adenovirus (B,C,E)")
+            .Should().Be(LabAnalyteNormalizer.NormalizeAnalyteKey("Антиген аденовирус (B, C, E)"));
     }
 
     [Fact]

@@ -56,7 +56,7 @@ public class AdminCatalogService(AppDbContext db)
         var payloadJson = request.PayloadJson ?? existing.PayloadJson;
         var aliases = request.Aliases is null
             ? existing.Aliases
-            : request.Aliases.Select(LabAnalyteNormalizer.Normalize).Where(a => a.Length > 0).Distinct().ToArray();
+            : request.Aliases.Select(LabAnalyteNormalizer.NormalizeAnalyteKey).Where(a => a.Length > 0).Distinct().ToArray();
 
         var lockedFields = existing.LockedFields.ToHashSet();
         if (request.DisplayName is not null) lockedFields.Add("displayName");
@@ -154,7 +154,7 @@ public class AdminCatalogService(AppDbContext db)
         if (names.Count == 0) return [];
 
         var normalizedToOriginal = names
-            .Select(name => (Name: name, Normalized: LabAnalyteNormalizer.Normalize(name)))
+            .Select(name => (Name: name, Normalized: LabAnalyteNormalizer.NormalizeAnalyteKey(name)))
             .Where(p => p.Normalized.Length > 0)
             .ToList();
         if (normalizedToOriginal.Count == 0) return [];

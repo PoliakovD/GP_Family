@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
@@ -43,11 +44,43 @@ public record AnalyteSubjectResolution(string? Subject, string? RawLabel, string
 /// переживает обычную русскую морфологию (бланк пишет «рода сальмонелла», модель называет субъект
 /// «Сальмонеллы» — разные окончания, но то же слово) — оба случая ловились этим гейтом как
 /// «модель придумала», хотя ответ был верным (см. живой пример, план "5 файлов посева").
+///
+/// Третий случай той же природы, продовое наблюдение: subject и rawLabel/текст документа написаны
+/// РАЗНЫМИ АЛФАВИТАМИ ("Аденовирусы" против "Antigen Adenovirus") — Score стеммингом кириллицу с
+/// латиницей не сравнивает вовсе (разные code points), релевантность 0.00 при очевидном для
+/// человека совпадении. Обе стороны обоих вето сворачиваются через
+/// <see cref="MedicalTextTransliterator.Fold"/> ПЕРЕД вызовом Score — см. ResolveAsync.
 /// </summary>
-public class AnalyteSubjectResolver(
+public partial class AnalyteSubjectResolver(
     ILmStudioJsonClient client, IRussianTextSearcher searcher, IPromptProvider promptProvider,
     ILogger<AnalyteSubjectResolver> logger)
 {
+    /// <summary>Таксономический "хвост"-квалификатор с коротким обозначением группы/типа за ним:
+    /// "gr.A", "тип 41", "serotype 2" — модель предлагает subject С хвостом ("Rotavirus gr.A"),
+    /// а в тексте документа встречается только базовое название ("Rotavirus") без него. Это не
+    /// алфавитный барьер (см. class doc MedicalTextTransliterator) — AND-семантика
+    /// IRussianTextSearcher.Score рубит совпадение на токенах "gr"/"a", которых в rawLabel/тексте
+    /// попросту нет. Ведущий \s+ обязателен — без него "Группа крови" (квалификатор в НАЧАЛЕ
+    /// строки, не хвост) обрезалась бы неверно. "Гепатит B"/"Гепатит C" не задевает — там после
+    /// буквы нет слова-квалификатора, обозначение вирусного гепатита значимо само по себе.</summary>
+    [GeneratedRegex(
+        @"\s+\b(?:gr|grp|group|гр|группа|spp|sp|subsp|var|тип|type|serotype|серотип)\b\.?\s*[a-zа-я0-9]{1,3}\b",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex TaxonomicQualifierWithDesignatorRegex();
+
+    /// <summary>Тот же хвост, но без короткого обозначения после него ("Salmonella spp.",
+    /// "Rotavirus var.") — квалификатор сам по себе ничего не уточняет, снимается целиком.</summary>
+    [GeneratedRegex(@"\s+\b(?:spp|sp|subsp|var)\b\.?(?=\s|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex BareTaxonomicQualifierRegex();
+
+    /// <summary>Снимает таксономический хвост с subject ПЕРЕД сравнением (см. доки регулярок выше) —
+    /// не применяется к rawLabel/тексту документа, там хвост, если он есть, — часть цитаты бланка.</summary>
+    private static string StripTaxonomicQualifiers(string subject)
+    {
+        var withoutDesignated = TaxonomicQualifierWithDesignatorRegex().Replace(subject, string.Empty);
+        return BareTaxonomicQualifierRegex().Replace(withoutDesignated, string.Empty);
+    }
+
     /// <summary>Тот же порог, что SpecimenResolver.MinConfidence — ниже него субъект считается
     /// нерезолвленным.</summary>
     public const double MinConfidence = 0.7;
@@ -135,6 +168,16 @@ public class AnalyteSubjectResolver(
 
         if (string.IsNullOrWhiteSpace(subject) || confidence < MinConfidence) return AnalyteSubjectResolution.Empty;
 
+        // Обе стороны обоих вето ниже сравниваются в СВЁРНУТОЙ форме — не в исходной. Живое продовое
+        // наблюдение: subject "Аденовирусы" для rawLabel "Антиген Adenovirus (B,C,E)" давал
+        // релевантность 0.00 — не потому что модель ошиблась, а потому что "adenovirus"/"аденовирус"
+        // разными code points не пересекаются по стеммингу/триграммам вовсе (алфавитный барьер, см.
+        // MedicalTextTransliterator). StripTaxonomicQualifiers снимает отдельную, не алфавитную
+        // причину того же провала: subject "Rotavirus gr.A" рубится AND-семантикой Score на
+        // токенах "gr"/"a", которых в rawLabel просто нет — словарём терминов это не лечится, там
+        // нечего переводить, "группы" в исходной строке нет вовсе.
+        var comparableSubject = MedicalTextTransliterator.Fold(StripTaxonomicQualifiers(subject));
+
         // Детерминированное вето — та же форма, что SpecimenResolver.ResolveKbIdAsync/
         // OcrNameCorrector.RequestCorrectionsAsync: предложенное название не должно оказаться
         // другим понятием, чем то, что реально написано в документе. IRussianTextSearcher.Score —
@@ -144,7 +187,7 @@ public class AnalyteSubjectResolver(
         // длине, даже когда субъект в ней дословно есть.
         if (!string.IsNullOrWhiteSpace(rawLabel))
         {
-            var relevance = searcher.Score(rawLabel, subject);
+            var relevance = searcher.Score(MedicalTextTransliterator.Fold(rawLabel), comparableSubject);
             if (relevance < MinRelevance)
             {
                 logger.LogWarning(
@@ -162,7 +205,7 @@ public class AnalyteSubjectResolver(
         // недоступна по построению, тот же компромисс, что у LmStudioMedicalDocumentExtractor.
         if (content.Kind == DocumentSourceKind.Text && !string.IsNullOrEmpty(content.Text))
         {
-            var relevance = searcher.Score(content.Text, subject);
+            var relevance = searcher.Score(MedicalTextTransliterator.Fold(content.Text), comparableSubject);
             if (relevance < MinRelevance)
             {
                 logger.LogWarning(

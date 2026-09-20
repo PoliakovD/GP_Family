@@ -126,6 +126,39 @@ public class AnalyteSubjectResolverTests
     }
 
     [Fact]
+    public async Task ResolveAsync_SubjectInRussianRawLabelInLatin_CrossAlphabetMatch_ResolvesSubject()
+    {
+        // Прод: subject "Аденовирусы" для rawLabel "Antigen Adenovirus (B,C,E)" давал релевантность
+        // 0.00 — стемминг/триграммы кириллицу с латиницей не сравнивают вовсе, хотя это одно и то
+        // же понятие (см. class doc, MedicalTextTransliterator).
+        SetUpModelResponse(
+            "Аденовирусы", "Antigen Adenovirus (B,C,E)", "Antigen Adenovirus (B,C,E)", 0.9);
+
+        var result = await _sut.ResolveAsync(
+            TextContent("Оказанные услуги: Antigen Adenovirus (B,C,E)\nАнтиген - не обнаружено"),
+            ["Антиген"]);
+
+        result.Subject.Should().Be("Аденовирусы");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_SubjectWithTaxonomicDesignatorTail_StripsTailBeforeMatching()
+    {
+        // Прод: subject "Rotavirus gr.A" для rawLabel "Антиген Rotavirus, обнаружение в кале..."
+        // давал релевантность 0.00 — не алфавитный барьер (оба латиницей), а AND-семантика
+        // IRussianTextSearcher.Score: токенов "gr"/"a" в rawLabel попросту нет. Не лечится словарём
+        // терминов (там нечего переводить) — только срезанием таксономического хвоста у subject.
+        const string rawLabel = "Антиген Rotavirus, обнаружение в кале методом иммуноферментного анализа";
+        SetUpModelResponse("Rotavirus gr.A", rawLabel, rawLabel, 0.9);
+
+        var result = await _sut.ResolveAsync(
+            TextContent($"Оказанные услуги: {rawLabel}\nАнтиген - не обнаружено"),
+            ["Антиген"]);
+
+        result.Subject.Should().Be("Rotavirus gr.A");
+    }
+
+    [Fact]
     public async Task ResolveAsync_ModelUnavailable_ReturnsEmpty_DoesNotThrow()
     {
         _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())

@@ -10,7 +10,9 @@ namespace FamilyHub.Modules.Medical.Extraction;
 
 /// <summary>
 /// Пересборка справочника лабораторных показателей поверх исправленного кода очистки имён
-/// (LabAnalyteNameCleaner/LabAnalyteNormalizer) и резолвинга источника (SpecimenResolver) —
+/// (LabAnalyteNameCleaner/LabAnalyteNormalizer.NormalizeAnalyteKey — в т.ч. кросс-алфавитная
+/// свёртка "Adenovirus"/"аденовирус" в один ключ, см. план "миграция AnalyteKey") и резолвинга
+/// источника (SpecimenResolver) —
 /// применяет их к уже накопленным "грязным" данным задним числом (нумерация пункта бланка в
 /// AnalyteKey, КАПС в DisplayName и т.п.), не только к новым распознаваниям. Запускается вручную
 /// из админки (AdminKbRebuildService), не автоматически — в отличие от LabAnalyteKbReenrichJob
@@ -129,7 +131,7 @@ public class LabAnalyteKbRebuildJob(
         // ключ, остальные (более старые дубликаты) удаляются, не наоборот.
         foreach (var row in rows.OrderByDescending(r => r.LastUpdatedAt))
         {
-            var renormalized = LabAnalyteNormalizer.Normalize(row.NormalizedName);
+            var renormalized = LabAnalyteNormalizer.NormalizeAnalyteKey(row.NormalizedName);
             if (renormalized.Length == 0) renormalized = row.NormalizedName; // защитно — не должно случаться
 
             var key = (renormalized, row.SpecimenKbId);
@@ -168,7 +170,7 @@ public class LabAnalyteKbRebuildJob(
             // к бланку — сам DisplayName (мог быть каноническим из KB, но это не хуже прежнего
             // состояния, а после нового прохода Clean он всё равно только чище).
             var rawSource = indicator.RawDisplayName ?? indicator.DisplayName;
-            var newAnalyteKey = LabAnalyteNormalizer.Normalize(rawSource);
+            var newAnalyteKey = LabAnalyteNormalizer.NormalizeAnalyteKey(rawSource);
             if (newAnalyteKey.Length == 0) newAnalyteKey = indicator.AnalyteKey; // защитно
 
             var newDisplayName = LabAnalyteNameCleaner.Clean(rawSource);

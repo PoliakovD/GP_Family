@@ -395,7 +395,7 @@ public class ExtractionQueryService(
         var displayName = request.DisplayName.Trim();
         if (displayName.Length == 0) return UpdateIndicatorResult.NotFound;
 
-        var analyteKey = LabAnalyteNormalizer.Normalize(displayName);
+        var analyteKey = LabAnalyteNormalizer.NormalizeAnalyteKey(displayName);
         if (analyteKey.Length == 0) analyteKey = indicator.AnalyteKey;
 
         // Уникальный индекс (MedicalRecordId, AnalyteKey, SpecimenKbId) — правка могла увести
@@ -550,7 +550,7 @@ public class ExtractionQueryService(
         var displayName = request.DisplayName.Trim();
         if (displayName.Length == 0) return (CreateIndicatorResult.NotFound, null);
 
-        var analyteKey = LabAnalyteNormalizer.Normalize(displayName);
+        var analyteKey = LabAnalyteNormalizer.NormalizeAnalyteKey(displayName);
         if (analyteKey.Length == 0) return (CreateIndicatorResult.NotFound, null);
 
         // Источник — атрибут ВСЕЙ записи, не этого запроса (заметка 1): наследуется от record,

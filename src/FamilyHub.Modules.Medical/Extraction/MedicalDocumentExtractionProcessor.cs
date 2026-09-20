@@ -374,8 +374,8 @@ public class MedicalDocumentExtractionProcessor(
                     if (!subjectByFileGroup.TryGetValue(x.FileGroupId, out var subject)) return x;
                     if (countByFileGroup[x.FileGroupId] > MaxIndicatorsForSubjectRewrite) return x;
 
-                    var normalizedSubject = LabAnalyteNormalizer.Normalize(subject.Subject);
-                    if (LabAnalyteNormalizer.Normalize(x.Dto.Name) == normalizedSubject) return x; // уточнять нечего
+                    var normalizedSubject = LabAnalyteNormalizer.NormalizeAnalyteKey(subject.Subject);
+                    if (LabAnalyteNormalizer.NormalizeAnalyteKey(x.Dto.Name) == normalizedSubject) return x; // уточнять нечего
 
                     return (x.Dto with { Name = $"{subject.Subject} ({x.Dto.Name})" }, x.FileGroupId);
                 })
@@ -386,7 +386,7 @@ public class MedicalDocumentExtractionProcessor(
         // очередь обогащения ниже (§4 плана: суффикс — техническая деталь ХРАНЕНИЯ, KB не должен
         // получить в качестве имени "бактериальные микроорганизмы файл 2").
         var withBaseKey = rawIndicators
-            .Select(x => (x.Dto, x.FileGroupId, BaseAnalyteKey: LabAnalyteNormalizer.Normalize(x.Dto.Name)))
+            .Select(x => (x.Dto, x.FileGroupId, BaseAnalyteKey: LabAnalyteNormalizer.NormalizeAnalyteKey(x.Dto.Name)))
             .Where(x => x.BaseAnalyteKey.Length > 0)
             .ToList();
 
