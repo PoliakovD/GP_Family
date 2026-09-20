@@ -357,5 +357,6 @@ export const routes: Routes = [
         (m) => m.NotificationsTabComponent,
       ),
   },
+  { path: 'hangfire' },
   { path: '**', redirectTo: 'home' },
 ];
