@@ -21,8 +21,12 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// неделю, скорее всего пользователь уже сам разобрался или запись неактуальна; не захламляем
 /// очередь бесконечно растущим хвостом.
 ///
-/// VisitMedicationEnrichmentJob сознательно не участвует в этом свипе — у неё нет колонки
-/// IsTransientFailure (структурное отличие, см. class doc), а не пропуск.
+/// Все четыре конвейера участвуют в свипе (VisitMedicationEnrichmentJob получила колонку
+/// IsTransientFailure при cleanup-рефакторинге — раньше её не было, это был структурный пробел,
+/// не сознательный пропуск). Дедуп-проверка "нет ли уже живой задачи" у каждого конвейера свой
+/// ключ (MedicalRecordId у extraction, NormalizedName+SpecimenKbId у lab-analyte, NormalizedName
+/// у medication/visit-medication) — не унифицирована в общий метод намеренно, ResetForRetry
+/// (то, что реально совпадает у всех четырёх) вынесен в один generic-метод через IPipelineJob.
 ///
 /// [Queue("extraction")] — сама задача не зовёт LM Studio напрямую (только probe.IsAvailableAsync
 /// + чтение/запись БД + постановка ДРУГИХ задач в очередь), поэтому не обязана жить на "default";
@@ -49,13 +53,15 @@ public class LmStudioRecoverySweepJob(
         var extraction = await RequeueExtractionJobsAsync(cutoff, ct);
         var labAnalyte = await RequeueLabAnalyteJobsAsync(cutoff, ct);
         var medication = await RequeueMedicationJobsAsync(cutoff, ct);
+        var visitMedication = await RequeueVisitMedicationJobsAsync(cutoff, ct);
 
-        if (extraction + labAnalyte + medication > 0)
+        if (extraction + labAnalyte + medication + visitMedication > 0)
         {
             logger.LogInformation(
                 "LmStudioRecoverySweepJob: сервер снова доступен, возвращено в очередь — " +
-                "{Extraction} распознаваний, {LabAnalyte} обогащений показателей, {Medication} обогащений препаратов.",
-                extraction, labAnalyte, medication);
+                "{Extraction} распознаваний, {LabAnalyte} обогащений показателей, {Medication} обогащений " +
+                "препаратов, {VisitMedication} обогащений из заключений врача.",
+                extraction, labAnalyte, medication, visitMedication);
         }
     }
 
@@ -138,18 +144,37 @@ public class LmStudioRecoverySweepJob(
         return requeued;
     }
 
-    private static void ResetForRetry(MedicalDocumentExtractionJob job)
+    private async Task<int> RequeueVisitMedicationJobsAsync(DateTime cutoff, CancellationToken ct)
     {
-        job.Attempts = 0;
-        job.Status = EnrichmentJobStatus.Pending;
-        job.Stage = ExtractionStage.Queued;
-        job.Error = null;
-        job.IsTransientFailure = false;
-        job.StartedAt = null;
-        job.CompletedAt = null;
+        var candidates = await db.VisitMedicationEnrichmentJobs
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.IsTransientFailure && j.CreatedAt > cutoff)
+            .ToListAsync(ct);
+
+        var requeued = 0;
+        foreach (var job in candidates)
+        {
+            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5)),
+            // просто ждёт открытия вентиля платного поиска (ADR-0005 §9).
+            var hasLiveJob = await db.VisitMedicationEnrichmentJobs.AnyAsync(j =>
+                j.Id != job.Id && j.NormalizedName == job.NormalizedName &&
+                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
+                    || j.Status == EnrichmentJobStatus.Deferred), ct);
+            if (hasLiveJob) continue;
+
+            ResetForRetry(job);
+            await db.SaveChangesAsync(ct);
+            backgroundJobs.Enqueue<VisitMedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+            requeued++;
+        }
+        return requeued;
     }
 
-    private static void ResetForRetry(LabAnalyteEnrichmentJob job)
+    /// <summary>Общее для всех четырёх конвейеров через IPipelineJob — раньше было три
+    /// почти идентичные перегрузки (по одной на каждый тип, без VisitMedication — у неё до
+    /// cleanup-рефакторинга не было даже поля IsTransientFailure).
+    /// MedicalDocumentExtractionJob.Stage — единственное специфичное для extraction поле вне
+    /// общего интерфейса, сбрасывается отдельным условием ниже, а не отдельным методом.</summary>
+    private static void ResetForRetry(IPipelineJob job)
     {
         job.Attempts = 0;
         job.Status = EnrichmentJobStatus.Pending;
@@ -157,15 +182,7 @@ public class LmStudioRecoverySweepJob(
         job.IsTransientFailure = false;
         job.StartedAt = null;
         job.CompletedAt = null;
-    }
-
-    private static void ResetForRetry(MedicationEnrichmentJob job)
-    {
-        job.Attempts = 0;
-        job.Status = EnrichmentJobStatus.Pending;
-        job.Error = null;
-        job.IsTransientFailure = false;
-        job.StartedAt = null;
-        job.CompletedAt = null;
+        if (job is MedicalDocumentExtractionJob extraction)
+            extraction.Stage = ExtractionStage.Queued;
     }
 }

@@ -10,7 +10,7 @@ namespace FamilyHub.Domain.Entities;
 /// Дедуп на уровне БД: частичный уникальный индекс по NormalizedName среди Pending/Running —
 /// один и тот же препарат, сохранённый одновременно в разных семьях, порождает один внешний запрос.
 /// </summary>
-public class MedicationEnrichmentJob
+public class MedicationEnrichmentJob : IPipelineJob
 {
     public Guid Id { get; set; }
 

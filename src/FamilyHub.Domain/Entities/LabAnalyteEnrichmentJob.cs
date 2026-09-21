@@ -12,7 +12,7 @@ namespace FamilyHub.Domain.Entities;
 /// выше порога уверенности (см. LabAnalyteEnrichmentRequestService) — SpecimenKbId никогда не
 /// равен SpecimenContextIds.Unresolved.
 /// </summary>
-public class LabAnalyteEnrichmentJob
+public class LabAnalyteEnrichmentJob : IPipelineJob
 {
     public Guid Id { get; set; }
 
