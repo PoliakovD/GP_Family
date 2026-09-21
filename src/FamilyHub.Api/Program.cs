@@ -1,4 +1,3 @@
-using System.Threading.RateLimiting;
 using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Features.Admin;
 using FamilyHub.Api.Features.Auth;
@@ -6,1217 +5,145 @@ using FamilyHub.Api.Features.Account;
 using FamilyHub.Api.Features.Bot;
 using FamilyHub.Api.Features.Consents;
 using FamilyHub.Api.Features.Dependents;
+using FamilyHub.Api.Features.Dev;
 using FamilyHub.Api.Features.Families;
 using FamilyHub.Api.Features.Home;
 using FamilyHub.Api.Features.Invites;
 using FamilyHub.Api.Features.Jobs;
 using FamilyHub.Api.Features.Members;
-using FamilyHub.Api.Health;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
-using FamilyHub.Api.Security;
-using FamilyHub.Domain.Enums;
-using FamilyHub.Infrastructure.Audit;
-using FamilyHub.Infrastructure.Auth;
-using FamilyHub.Infrastructure.Auth.Jwt;
-using FamilyHub.Infrastructure.Authorization;
-using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Api.Features.Notifications;
 using FamilyHub.Api.Features.Push;
-using FamilyHub.Infrastructure.CurrentUser;
-using Amazon.SimpleEmailV2;
-using FamilyHub.Infrastructure.Email;
-using FamilyHub.Infrastructure.Email.Templates;
-using FamilyHub.Infrastructure.Documents;
-using FamilyHub.Infrastructure.Enrichment;
-using FamilyHub.Infrastructure.LmStudio;
-using FamilyHub.Contracts.Events;
-using FamilyHub.Infrastructure.Messaging;
-using FamilyHub.Infrastructure.Notifications;
-using FamilyHub.Infrastructure.Notifications.Consumers;
-using FamilyHub.Infrastructure.Persistence;
-using FamilyHub.Infrastructure.Previews;
-using FamilyHub.Infrastructure.Prompts;
-using FamilyHub.Infrastructure.Search;
-using FamilyHub.Infrastructure.Security;
-using FamilyHub.Infrastructure.Security.Rotation;
-using FamilyHub.Infrastructure.Storage;
-using FamilyHub.Infrastructure.Telegram;
+using FamilyHub.Api.Startup;
+using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Birthdays;
 using FamilyHub.Modules.Medical;
-using FamilyHub.Modules.Medical.Attachments;
-using FamilyHub.Modules.Medical.Consumers;
-using FamilyHub.Modules.Medical.Enrichment;
-using FamilyHub.Modules.Medical.Extraction;
-using Hangfire;
-using Hangfire.PostgreSql;
-using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
-using Minio;
 using Serilog;
-using Serilog.Events;
-using Serilog.Exceptions;
-using System.Net;
 
 // Bootstrap-логгер ловит ошибки, которые случаются до того, как builder.Build()
 // поднимет настоящий Serilog-логгер из конфигурации (например, сбой при чтении appsettings).
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
-    .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .CreateBootstrapLogger();
+BootstrapLogging.ConfigureBootstrapLogger();
 
 try
 {
     Log.Information("Запуск FamilyHub.Api...");
 
-var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((context, services, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services)
-    .Enrich.FromLogContext()
-    .Enrich.WithExceptionDetails()
-    .Enrich.WithEnvironmentName()
-    .Enrich.WithMachineName());
+    // --- Регистрация (композиция DI-графа) ---
+    // Каждый вызов — секция, извлечённая из некогда 1229-строчного Program.cs в
+    // src/FamilyHub.Api/Startup/ (по образцу единственного существовавшего в проекте аналога —
+    // Infrastructure/Messaging/MassTransitRegistration.AddFamilyHubMessaging). Порядок вызовов
+    // сохранён ровно тем же, каким он был в исходном файле — внутри DI-регистрации порядок между
+    // РАЗНЫМИ типами сервисов не влияет на поведение, но сохранён для честности диффа и на случай
+    // будущих находок, где порядок всё же важен (см. предупреждения ниже).
+    builder.AddFamilyHubLogging();
+    builder.AddFamilyHubOptions();
+    var (devToolsOptions, adminOptions) = builder.AddDevToolsAndAdminGuards();
+    builder.AddFamilyHubEncryption(devToolsOptions);
+    builder.AddFamilyHubPersistence();
+    builder.AddFamilyHubEventBus();
+    builder.AddFamilyHubCurrentUser();
+    builder.AddFamilyHubFileStorage();
+    builder.AddFamilyHubCoreFeatures();
+    builder.AddFamilyHubAuthentication(devToolsOptions, adminOptions);
+    builder.AddFamilyHubAdminServices();
+    builder.AddFamilyHubRateLimiting();
+    builder.AddFamilyHubEmail();
+    builder.AddFamilyHubAccountFeatures();
+    builder.AddFamilyHubBackgroundJobs();
+    var (telegramBotConfigured, internalBotApiConfigured) = builder.AddFamilyHubNotificationChannels();
+    builder.AddFamilyHubLmStudio();
+    builder.AddFamilyHubAttachmentPipeline();
+    builder.AddFamilyHubEnrichment();
+    // Medical-модуль. ВАЖНО: AddFamilyHubMedicalAndBirthdays() регистрирует Null-реализацию
+    // IMedicalDocumentExtractor по умолчанию (AddMedicalModule) и — если Extraction:Enabled — тут
+    // же перекрывает её реальной; порядок ВНУТРИ этого вызова важен (ASP.NET Core DI резолвит
+    // последнюю регистрацию для одиночного сервиса) и сохранён внутри самого метода.
+    builder.AddFamilyHubMedicalAndBirthdays();
+    builder.AddFamilyHubSwagger();
+    builder.AddFamilyHubHealthChecks();
+    builder.AddFamilyHubKestrelLimits();
 
-// --- Отладка (частые "masstransit-bus: Not ready: not started" в Seq): дефолтный
-// --- HostOptions.ShutdownTimeout — 5 секунд, а MassTransit на graceful stop обязан ДОЖДАТЬСЯ
-// --- корректного LeaveGroup для КАЖДОЙ из 7 consumer group Kafka Rider'а (см.
-// --- MassTransitRegistration) плюс остановку EF outbox delivery service. 5с на это часто не
-// --- хватает — при редеплое/рестарте контейнера хост принудительно убивает процесс раньше, чем
-// --- клиент успевает попрощаться с группой; брокер тогда держит место за "мёртвым" консьюмером
-// --- до истечения session.timeout.ms, и КАЖДЫЙ следующий старт висит в "not started" дольше
-// --- обычного — вплоть до момента, пока Kafka не отдаст партиции новому инстансу. Значение
-// --- согласовано с stop_grace_period в deploy/docker-compose.prod.yml (должен быть больше).
-builder.Host.ConfigureHostOptions(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
+    var app = builder.Build();
 
-// --- Конфигурация ---
-builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
-builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
-builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
-builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
-builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(EnrichmentOptions.SectionName));
-builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection(ExtractionOptions.SectionName));
-builder.Services.Configure<ExtractionLimitsOptions>(builder.Configuration.GetSection(ExtractionLimitsOptions.SectionName));
-builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
-builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
-builder.Services.Configure<AttachmentUploadOptions>(builder.Configuration.GetSection(AttachmentUploadOptions.SectionName));
-builder.Services.Configure<PreviewOptions>(builder.Configuration.GetSection(PreviewOptions.SectionName));
-builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
-builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
-builder.Services.Configure<InternalOptions>(builder.Configuration.GetSection(InternalOptions.SectionName));
-// AuthRateLimitOptions читается ниже напрямую через GetSection().Get<>() (нужно синхронно, до
-// AddRateLimiter) — Configure<> здесь дополнительно, чтобы IOptions<AuthRateLimitOptions> был
-// резолвим через DI где угодно ещё (раньше не был зарегистрирован вовсе).
-builder.Services.Configure<AuthRateLimitOptions>(builder.Configuration.GetSection(AuthRateLimitOptions.SectionName));
+    // DevTools перерезолвлен из DI (не переиспользован pre-build devToolsOptions) — так было в
+    // исходном коде: конфигурация не меняется между Build() и этой точкой, поведение то же.
+    var devTools = app.Services.GetRequiredService<IOptions<DevToolsOptions>>().Value;
 
-// --- DevTools (Hangfire/Swagger/DevAuth/`/dev/*`): раньше все четыре жёстко гейтились на
-// --- IsDevelopment(). Дев-контур на VPS работает под ASPNETCORE_ENVIRONMENT=Production (иначе
-// --- включается DeveloperExceptionPage, отдающий стектрейс наружу) — поэтому вынесены на флаги,
-// --- читаемые сразу (не только через DI Configure<>), т.к. используются ниже, до builder.Build().
-builder.Services.Configure<DevToolsOptions>(builder.Configuration.GetSection(DevToolsOptions.SectionName));
-var devToolsOptions = builder.Configuration.GetSection(DevToolsOptions.SectionName).Get<DevToolsOptions>()
-    ?? new DevToolsOptions();
-if (devToolsOptions.AdminUiEnabled
-    && (string.IsNullOrWhiteSpace(devToolsOptions.AdminUser) || string.IsNullOrWhiteSpace(devToolsOptions.AdminPassword)))
-    throw new InvalidOperationException(
-        "DevTools:AdminUiEnabled=true, но DevTools:AdminUser/AdminPassword (env DevTools__AdminUser/" +
-        "DevTools__AdminPassword) не заданы — Hangfire-дашборд и Swagger были бы доступны без пароля.");
+    // --- Pipeline (порядок критичен, сохранён ровно тем же, каким он был в исходном Program.cs) ---
+    app.UseFamilyHubProxyHeaders();
+    app.UseFamilyHubRequestLogging();
+    app.MapFamilyHubHealthChecks();
+    app.UseFamilyHubSwagger(devTools);
 
-// --- Админ-панель (ADR-0009): статистика + ротация ключей на отдельном домене за периметром ---
-// --- WireGuard/Caddy (admin.{PUBLIC_DOMAIN}:4059). Отдельная секция от DevTools:AdminUser/  ---
-// --- Password — см. AdminOptions.                                                            ---
-builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
-var adminOptions = builder.Configuration.GetSection(AdminOptions.SectionName).Get<AdminOptions>()
-    ?? new AdminOptions();
-if (adminOptions.Enabled
-    && (string.IsNullOrWhiteSpace(adminOptions.User) || string.IsNullOrWhiteSpace(adminOptions.Password)))
-    throw new InvalidOperationException(
-        "Admin:Enabled=true, но Admin:User/Password (env Admin__User/Admin__Password) не заданы — " +
-        "форма входа админ-панели была бы недостижима (сравнение всегда отклонит любой ввод).");
+    // --- Раздача Telegram Mini App (React-сборка в wwwroot, этап 4 п.12) ---
+    // До UseAuthorization: статика отдаётся без аутентификации, сам Mini App
+    // аутентифицируется на уровне API-запросов через initData.
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
 
-// --- At-rest шифрование (этап 2, 152-ФЗ; ротация ключей — ADR-0009): связка ключей вне БД, ---
-// --- fail-fast при отсутствии/битой конфигурации. Синглтоны обязательны: EF кэширует модель ---
-// --- с конвертером, захватившим первый cipher. ---
-var encryptionOptions = builder.Configuration.GetSection(EncryptionOptions.SectionName).Get<EncryptionOptions>()
-    ?? new EncryptionOptions();
-if (string.IsNullOrWhiteSpace(encryptionOptions.MasterKey))
-    throw new InvalidOperationException(
-        "Encryption:MasterKey не задан (env Encryption__MasterKey) — at-rest шифрование обязательно.");
-// appsettings.Development.json и docker-compose.yml больше НЕ содержат дефолт этого ключа —
-// секреты везде тянутся из окружения, даже в Development (см. .env.example). Единственное
-// оставшееся легитимное место с этим значением — DesignTimeDbContextFactory.DevMasterKey
-// (design-time `dotnet ef`/тестовые фабрики, реальных данных не касается). Но строка всё
-// равно навсегда осталась в истории git — этот guard блокирует её случайное копирование в
-// реальное окружение. Условие теперь завязано на DevTools:DevAuthEnabled, а не на
-// ASPNETCORE_ENVIRONMENT — контур на VPS дев по защите, но Production по среде (см. выше).
-// Проверяется и активный ключ, и каждый отставной (Encryption:PreviousKeys, ADR-0009) — иначе
-// утёкший dev-ключ можно было бы протащить в связку как "отставной" в обход guard'а.
-var leakedDevKeyIds = new List<string>();
-if (encryptionOptions.MasterKey == DesignTimeDbContextFactory.DevMasterKey)
-    leakedDevKeyIds.Add(encryptionOptions.ActiveKeyId);
-leakedDevKeyIds.AddRange(encryptionOptions.PreviousKeys
-    .Where(k => k.Material == DesignTimeDbContextFactory.DevMasterKey)
-    .Select(k => k.Id));
-if (!devToolsOptions.DevAuthEnabled && leakedDevKeyIds.Count > 0)
-    throw new InvalidOperationException(
-        $"Ключ(и) шифрования с keyId {string.Join(", ", leakedDevKeyIds)} равны design-time/тестовому " +
-        "dev-ключу из истории репозитория — при выключенном DevTools:DevAuthEnabled это недопустимо. " +
-        "Сгенерировать реальный ключ: `openssl rand -base64 32`.");
-// Связка строится здесь (не лениво в DI) — битая конфигурация (дубли keyId, некорректный
-// base64/длина ключа) валит старт хоста сразу, а не первый запрос, коснувшийся [Encrypted]-поля.
-var encryptionKeyRing = new EncryptionKeyRing(encryptionOptions);
-builder.Services.AddSingleton<IEncryptionKeyRing>(encryptionKeyRing);
-builder.Services.AddSingleton<IFieldCipher, AesGcmFieldCipher>();
-builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
-builder.Services.AddSingleton<DownloadTokenService>();
+    app.UseFamilyHubSecurityHeaders();
 
-// Fail-fast для ключа подписи ссылок на скачивание вложений — без него DownloadTokenService.Sign
-// бросал бы лениво, только при первой попытке выдать ссылку (см. находку 09.2 аудита безопасности).
-if (string.IsNullOrWhiteSpace(builder.Configuration["Attachments:DownloadSigningKey"]))
-    throw new InvalidOperationException(
-        "Attachments:DownloadSigningKey не задан (env Attachments__DownloadSigningKey) — " +
-        "выдача ссылок на вложения невозможна.");
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseRateLimiter();
 
-// Стеммер/триграммы — чистые функции без состояния (этап 3, ADR-0003): singleton безопасен.
-// Общий для Modules.Medical (медкарты) и Modules.Birthdays (дни рождения) — оба зависят только
-// от Domain/Infrastructure и не ссылаются друг на друга, поэтому регистрация — здесь, не в модуле.
-builder.Services.AddSingleton<IRussianTextSearcher, RussianTextSearcher>();
+    app.UseFamilyHubCsrfGate();
+    app.UseNoStoreForApi();
 
-// --- Persistence ---
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")
-        ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.")));
-
-// --- Data Protection (отладка 2026-08-20): без этого ключи живут в эфемерной ФС контейнера ---
-// (~/.aspnet/DataProtection-Keys) — каждый перезапуск/редеплой api сбрасывает их, инвалидируя
-// CSRF-токены (IAntiforgery, единственный потребитель Data Protection в этом приложении — JWT
-// подписывается отдельным Jwt:SigningKey, не затронут) у всех активных сессий.
-// PersistKeysToDbContext — та же Postgres, что и остальное состояние, автоматически попадает
-// под уже настроенный ночной pg_dump (см. deploy/backup).
-builder.Services.AddDataProtection()
-    .SetApplicationName("FamilyHub")
-    .PersistKeysToDbContext<AppDbContext>();
-
-// --- Событийная шина: MassTransit + EF Core Outbox + Kafka Rider (ADR-0006/ADR-0007) ---
-// Messaging:Kafka:Enabled=true (docker-compose/прод, дефолт для полного стека) — бизнес-потребители
-// подписаны на Kafka Rider (явный список ниже, composition root — единственное место, которому
-// позволено знать конкретные типы потребителей ИЗ ВСЕХ модулей сразу); false (dev-lite/юнит-тесты,
-// без Docker) — потребители сканом сборок на InMemory, как раньше. В обоих случаях сбой одного
-// потребителя не касается соседа — топология шины (свой receive endpoint/consumer group), не наш
-// код, как раньше у IsolatingLoggingPublisher.
-var kafkaConsumers = new KafkaConsumerRegistration[]
-{
-    new(typeof(MedicalRecordSharedEvent), typeof(MedicalRecordSharedNotificationConsumer), "notifications-medical-record-shared"),
-    new(typeof(UserLeftFamilyEvent), typeof(UserLeftFamilyNotificationConsumer), "notifications-user-left-family"),
-    new(typeof(UserLeftFamilyEvent), typeof(UserLeftFamilyMedicalCleanupConsumer), "medical-user-left-family"),
-    new(typeof(MemberApprovedEvent), typeof(MemberApprovedNotificationConsumer), "notifications-member-approved"),
-    new(typeof(MedicationExpiringEvent), typeof(MedicationExpiringNotificationConsumer), "notifications-medication-expiring"),
-    new(typeof(BirthdayApproachingEvent), typeof(BirthdayApproachingNotificationConsumer), "notifications-birthday-approaching"),
-    new(typeof(MedicationEnrichedEvent), typeof(MedicationEnrichedNotificationConsumer), "notifications-medication-enriched"),
-    new(typeof(MedicalDocumentExtractedEvent), typeof(MedicalDocumentExtractedNotificationConsumer), "notifications-medical-document-extracted"),
-    new(typeof(MedicalDocumentExtractionFailedEvent), typeof(MedicalDocumentExtractionFailedNotificationConsumer), "notifications-medical-document-extraction-failed"),
-    new(typeof(MedicationEnrichmentFailedEvent), typeof(MedicationEnrichmentFailedNotificationConsumer), "notifications-medication-enrichment-failed"),
-};
-builder.Services.AddFamilyHubMessaging(builder.Configuration, kafkaConsumers,
-    typeof(DomainEventPublisher).Assembly,
-    typeof(MedicalModule).Assembly,
-    typeof(BirthdayModule).Assembly);
-
-// --- Текущий пользователь / провижининг ---
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
-builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
-
-// --- Telegram auth ---
-builder.Services.AddScoped<ITelegramInitDataValidator, TelegramInitDataValidator>();
-
-// --- Хранилище файлов: MinIO — единственная реализация IFileStorage, в т.ч. в Development ---
-// Раньше был переключатель FileStorage:Provider = Local|Minio: запуск из IDE тихо писал
-// медицинские сканы на диск мимо объектного хранилища, и этот путь никогда не проверялся.
-// Fail-fast на пустые креды — без него ошибка всплыла бы только при первой загрузке файла.
-if (string.IsNullOrWhiteSpace(builder.Configuration["Minio:Endpoint"])
-    || string.IsNullOrWhiteSpace(builder.Configuration["Minio:AccessKey"])
-    || string.IsNullOrWhiteSpace(builder.Configuration["Minio:SecretKey"]))
-    throw new InvalidOperationException(
-        "Minio:Endpoint/AccessKey/SecretKey не заданы (env Minio__Endpoint/Minio__AccessKey/" +
-        "Minio__SecretKey) — хранилище вложений обязательно, в т.ч. в Development (см. docker-compose.yml).");
-
-builder.Services.AddSingleton<IMinioClient>(sp =>
-{
-    var minioOptions = sp.GetRequiredService<IOptions<MinioOptions>>().Value;
-    return (IMinioClient)new MinioClient()
-        .WithEndpoint(minioOptions.Endpoint)
-        .WithCredentials(minioOptions.AccessKey, minioOptions.SecretKey)
-        .WithSSL(minioOptions.UseSsl)
-        .Build();
-});
-builder.Services.AddSingleton<IFileStorage, MinioFileStorage>();
-
-// --- Core-фичи: семьи, приглашения, участники, подопечные ---
-builder.Services.AddScoped<FamilyService>();
-builder.Services.AddScoped<InviteService>();
-builder.Services.AddScoped<MembershipService>();
-builder.Services.AddScoped<FamilyDependentService>();
-
-// --- Авторизация по ролям в семье --- Единственный реальный путь — ручные вызовы
-// IFamilyAccessService.HasRoleAsync внутри сервисов (см. каждый *Service.cs в Api/Features и
-// Modules.Medical/Modules.Birthdays). Раньше здесь же регистрировался FamilyRoleHandler —
-// resource-based IAuthorizationHandler<FamilyRoleRequirement, IFamilyOwned> — но ни один
-// эндпоинт/политика нигде не ссылались на FamilyRoleRequirement (аудит, находка High #5):
-// зарегистрированный, но нигде не вызываемый handler создавал ложное впечатление, что часть
-// защиты идёт декларативно через ASP.NET Core policy-инфраструктуру, и мог заставить будущего
-// автора нового эндпоинта пропустить ручную проверку HasRoleAsync, понадеявшись на несуществующую
-// декларативную защиту. Удалён вместе с FamilyRoleRequirement — реальная защита не изменилась,
-// она и раньше была только в HasRoleAsync.
-builder.Services.AddScoped<IFamilyAccessService, FamilyAccessService>();
-builder.Services.AddAuthorization(options =>
-{
-    // Защита по умолчанию: любой эндпоинт без явной политики всё равно требует аутентификации.
-    options.FallbackPolicy = options.DefaultPolicy;
-
-    // Админ-панель (ADR-0009): единственная политика, допускающая схему AuthSchemes.Admin — она
-    // никогда не участвует в FallbackPolicy/Smart-селекторе выше, поэтому обычные PWA/Telegram-
-    // запросы её не видят вовсе, а /api/admin/* без этой политики не открылся бы ни одной схемой.
-    options.AddPolicy("PlatformAdmin", policy => policy
-        .AddAuthenticationSchemes(AuthSchemes.Admin)
-        .RequireAuthenticatedUser());
-});
-
-// --- JWT PWA-сессия: access-токен в httpOnly cookie + refresh-токен в БД (ротация,      ---
-// --- reuse-detection, revoke-all). Fail-fast: ключ подписи обязателен во всех средах.   ---
-// --- Ротация ключа подписи — ADR-0009: активный подписывает НОВЫЕ токены, отставные     ---
-// --- (Jwt:PreviousSigningKeys) принимаются только на ВАЛИДАЦИЮ уже выданных.            ---
-var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-// Связка строится здесь (не лениво в DI/JwtBearer options factory) — битая конфигурация
-// (дубли keyId, некорректный base64) валит старт хоста сразу, см. JwtSigningKeyRing.
-var jwtSigningKeys = JwtSigningKeyRing.Build(jwtOptions);
-builder.Services.AddScoped<ITokenService, TokenService>();
-
-// --- CSRF: double-submit антифорджери-токен поверх SameSite=Lax для PWA-cookie сессии (аудит
-// --- module-review-2026-08-02/01-auth-identity.md, находка 4). Только PWA — Telegram Mini App
-// --- аутентифицируется явным initData в заголовке, ambient-cookie CSRF к нему неприменим.
-// --- Cookie.Name — приватная (httpOnly) половина токена; публичную, которую читает Angular
-// --- (withXsrfConfiguration), выставляет PwaSessionCookieWriter.IssueCsrfCookie отдельно.
-builder.Services.AddAntiforgery(options =>
-{
-    options.Cookie.Name = "familyhub.csrf";
-    options.Cookie.HttpOnly = true;
-    options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    // Path обязателен явно: без него браузер/CookieContainer скоупит cookie по RFC 6265
-    // default-path (директория ПЕРВОГО запроса, который её выставил — например
-    // "/api/auth/register", если сессия открыта регистрацией) и она не долетает до
-    // остальных /api-путей на следующих мутирующих запросах.
-    options.Cookie.Path = "/";
-    options.HeaderName = "X-XSRF-TOKEN";
-});
-
-// --- Аутентификация: два окружения (этап 2 п.2.4) — Telegram Mini App и PWA-JWT,      ---
-// --- плюс Dev-заглушка (DevTools:DevAuthEnabled, НЕ привязана к ASPNETCORE_ENVIRONMENT —---
-// --- см. DevToolsOptions). Селектор "Smart" во всех средах:                           ---
-// --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.             ---
-var authBuilder = builder.Services.AddAuthentication(options =>
-{
-    options.DefaultScheme = AuthSchemes.Smart;
-    options.DefaultAuthenticateScheme = AuthSchemes.Smart;
-    options.DefaultChallengeScheme = AuthSchemes.Smart;
-});
-
-authBuilder.AddScheme<AuthenticationSchemeOptions, TelegramMiniAppAuthenticationHandler>(AuthSchemes.TelegramMiniApp, null);
-
-authBuilder.AddJwtBearer(AuthSchemes.PwaCookie, jwtBearerOptions =>
-{
-    jwtBearerOptions.TokenValidationParameters = new TokenValidationParameters
+    app.MapAuthEndpoints();
+    app.MapTelegramBindingEndpoints();
+    app.MapConsentEndpoints();
+    app.MapAccountEndpoints();
+    app.MapFamilyEndpoints();
+    app.MapInviteEndpoints();
+    app.MapMemberEndpoints();
+    // Подопечные хранят ПДн (имя + дата рождения) — та же консент-гарантия, что у Medical/Birthdays
+    // (см. BirthdayModule.MapBirthdayModule).
+    app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapFamilyDependentEndpoints();
+    app.MapMedicalModule();
+    app.MapBirthdayModule();
+    // Агрегат Главной содержит медданные (статус анализов) — та же консент-гарантия (редизайн v2).
+    app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapHomeEndpoints();
+    // Глобальный индикатор фоновых процессов содержит медданные (названия записей/показателей/
+    // препаратов) — та же консент-гарантия, что у Главной/Medical выше.
+    app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapUserJobsEndpoints();
+    app.MapNotificationEndpoints();
+    app.MapPushEndpoints();
+    if (internalBotApiConfigured)
     {
-        ValidateIssuer = true,
-        ValidIssuer = jwtOptions.Issuer,
-        ValidateAudience = true,
-        ValidAudience = jwtOptions.Audience,
-        ValidateIssuerSigningKey = true,
-        // Множественное число (ADR-0009): валидация пробует каждый ключ связки, а не только
-        // активный — уже выданный токен, подписанный отставным ключом, остаётся валиден до
-        // истечения AccessTokenLifetime, даже если Jwt:SigningKey уже сменился.
-        IssuerSigningKeys = jwtSigningKeys,
-        ValidateLifetime = true,
-        ClockSkew = jwtOptions.ClockSkew,
-    };
-    jwtBearerOptions.Events = new JwtBearerEvents
+        app.MapInternalBotEndpoints();
+    }
+    if (adminOptions.Enabled)
     {
-        // Access-токен ездит в httpOnly cookie, а не в заголовке Authorization —
-        // PWA-запросы идут через withCredentials, не bearer-заголовок.
-        OnMessageReceived = ctx =>
-        {
-            if (ctx.Request.Cookies.TryGetValue(PwaCookieNames.AccessToken, out var accessToken))
-                ctx.Token = accessToken;
-            return Task.CompletedTask;
-        },
-        // SPA-API: вместо WWW-Authenticate-челленджа отдаём голый 401, как и раньше у cookie-схемы.
-        OnChallenge = ctx =>
-        {
-            ctx.HandleResponse();
-            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        },
-    };
-});
-
-if (devToolsOptions.DevAuthEnabled)
-{
-    authBuilder.AddScheme<AuthenticationSchemeOptions, DevAuthenticationHandler>(AuthSchemes.Dev, null);
-}
-
-// Регистрируется только если панель включена — та же осторожность, что у DevAuthenticationHandler
-// выше: без Admin:Enabled эндпоинты /api/admin/* вообще не примапятся (см. ниже после
-// app.Build()), поэтому без регистрации схемы не остаётся вообще никакого пути её вызвать.
-if (adminOptions.Enabled)
-{
-    authBuilder.AddScheme<AuthenticationSchemeOptions, AdminAuthenticationHandler>(AuthSchemes.Admin, null);
-}
-builder.Services.AddScoped<AdminStatsService>();
-builder.Services.AddScoped<AdminKeysService>();
-builder.Services.AddScoped<AdminKbRebuildService>();
-builder.Services.AddScoped<AdminAttentionService>();
-builder.Services.AddScoped<AdminSearchWarmupService>();
-
-authBuilder.AddPolicyScheme(AuthSchemes.Smart, AuthSchemes.Smart, policyOptions =>
-{
-    policyOptions.ForwardDefaultSelector = httpContext =>
-    {
-        var request = httpContext.Request;
-        var hasInitData = request.Headers.Authorization.ToString().StartsWith("tma ", StringComparison.Ordinal)
-            || request.Headers.ContainsKey("X-Telegram-Init-Data");
-        if (hasInitData) return AuthSchemes.TelegramMiniApp;
-        if (devToolsOptions.DevAuthEnabled && request.Headers.ContainsKey("X-Dev-TelegramId")) return AuthSchemes.Dev;
-        return AuthSchemes.PwaCookie;
-    };
-});
-
-// --- Rate limiting PWA-auth (брутфорс-защита, этап 2 п.2.4). Лимиты конфигурируемы —
-// --- интеграционные тесты поднимают их, чтобы не ловить 429 на обычных сценариях.
-var authRateLimits = builder.Configuration.GetSection(AuthRateLimitOptions.SectionName).Get<AuthRateLimitOptions>() ?? new AuthRateLimitOptions();
-// --- Лимиты пайплайна распознавания (батч-загрузка, см. ExtractionLimitsOptions) — политики
-// --- "llm"/"medical-write" ниже используют то же значение секции.
-var extractionRateLimits = builder.Configuration.GetSection(ExtractionLimitsOptions.SectionName).Get<ExtractionLimitsOptions>() ?? new ExtractionLimitsOptions();
-builder.Services.AddRateLimiter(limiterOptions =>
-{
-    limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    // Партиция — по IP клиента: лимит общий для всех auth-эндпоинтов с этой политикой.
-    limiterOptions.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = authRateLimits.AuthPermitLimit,
-            Window = TimeSpan.FromSeconds(authRateLimits.AuthWindowSeconds),
-            QueueLimit = 0,
-        }));
-
-    // Жёстче для выдачи email-кодов: каждая выдача — реальное письмо.
-    limiterOptions.AddPolicy("auth-code", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = authRateLimits.CodePermitLimit,
-            Window = TimeSpan.FromSeconds(authRateLimits.CodeWindowSeconds),
-            QueueLimit = 0,
-        }));
-
-    // Погашение инвайт-кода — вне группы /api/auth, поэтому политика "auth" сюда не
-    // распространяется; отдельная политика ради единообразия модели защиты (см. аудит,
-    // находка 02.2), а не из-за реальной практичности перебора 128-битного кода.
-    limiterOptions.AddPolicy("invite-redeem", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = authRateLimits.RedeemPermitLimit,
-            Window = TimeSpan.FromSeconds(authRateLimits.RedeemWindowSeconds),
-            QueueLimit = 0,
-        }));
-
-    // Партиция — по UserId (не по IP, как политики выше): все три политики стоят на
-    // аутентифицированных эндпоинтах, а IP-партиция у NAT/офисной сети смешала бы разных
-    // пользователей в один лимит (см. threat-model.md — уже задокументированная слабость
-    // IP-партиции, здесь её не повторяем). UseRateLimiter() стоит ПОСЛЕ UseAuthentication/
-    // UseAuthorization (см. ниже), поэтому claims уже доступны на момент партиционирования.
-    // Фолбэк на IP — только на случай, если лимитер почему-то сработал раньше аутентификации.
-    string UserOrIpPartitionKey(HttpContext httpContext) =>
-        httpContext.User.GetUserId()?.ToString() ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-
-    // Распознавание/OCR — один физический воркер LM Studio на всех пользователей
-    // (LmStudioConcurrencyGate); без лимита на пользователя батч-загрузка одного человека могла бы
-    // занять его на неопределённое время (см. class doc ExtractionLimitsOptions).
-    limiterOptions.AddPolicy("llm", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-        UserOrIpPartitionKey(httpContext),
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = extractionRateLimits.LlmPermitLimit,
-            Window = TimeSpan.FromSeconds(extractionRateLimits.LlmWindowSeconds),
-            QueueLimit = 0,
-        }));
-
-    // Создание мед-записи/загрузка вложения — дешевле LLM-вызова, но тоже неограничено сегодня.
-    limiterOptions.AddPolicy("medical-write", httpContext => RateLimitPartition.GetFixedWindowLimiter(
-        UserOrIpPartitionKey(httpContext),
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = extractionRateLimits.MedicalWritePermitLimit,
-            Window = TimeSpan.FromSeconds(extractionRateLimits.MedicalWriteWindowSeconds),
-            QueueLimit = 0,
-        }));
-});
-
-// --- PWA-auth сервисы + email-отправка (задача 2.5, расширено 2026-08-19) ---
-// Email:PostboxApi (HTTPS, порт 443) и/или Email:Providers (SMTP, failover, задача 2.5) —
-// оба канала опциональны и независимы; если задан хотя бы один — CompositeEmailSender пробует
-// их по порядку (Postbox API первым: SMTP-порты 587/465 оказались заблокированы у части
-// провайдеров связи, см. отладку 2026-08-19). Ни один не задан — LoggingEmailSender (dev).
-builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
-builder.Services.AddScoped<EmailOtpService>();
-builder.Services.AddScoped<PwaAuthService>();
-builder.Services.AddScoped<TelegramBindingService>();
-// HTML-вёрстка писем (see docs plan): рендерер не зависит от того, какой IEmailSender выбран
-// ниже — регистрируем его безусловно, чтобы dev/тесты тоже видели настоящий рендер (опечатка
-// в плейсхолдере шаблона должна ронять сборку/тесты, а не только молчать в проде).
-builder.Services.AddSingleton<EmailTemplateRenderer>();
-var emailProvidersConfigured = builder.Configuration.GetSection($"{EmailOptions.SectionName}:Providers").GetChildren().Any();
-var postboxApiSection = builder.Configuration.GetSection($"{EmailOptions.SectionName}:PostboxApi");
-var postboxApiConfigured = postboxApiSection.GetChildren().Any();
-if (postboxApiConfigured)
-{
-    var postboxApiOptions = postboxApiSection.Get<YandexPostboxApiOptions>() ?? new YandexPostboxApiOptions();
-    if (string.IsNullOrWhiteSpace(postboxApiOptions.AccessKeyId) || string.IsNullOrWhiteSpace(postboxApiOptions.SecretAccessKey)
-        || string.IsNullOrWhiteSpace(postboxApiOptions.From))
-    {
-        throw new InvalidOperationException(
-            "Email:PostboxApi задан, но AccessKeyId/SecretAccessKey/From (env Email__PostboxApi__*) пусты — " +
-            "это отдельный статический access-key Yandex Cloud, не логин/пароль SMTP.");
+        app.MapAdminSessionEndpoints();
+        app.MapAdminEndpoints();
+        app.MapAdminEnrichmentEndpoints();
+        app.MapAdminWarmupEndpoints();
+        app.MapAdminSearchCallsEndpoints();
+        app.MapAdminPipelineEndpoints();
+        app.MapAdminCatalogEndpoints();
+        app.MapAdminLmStudioEndpoints();
     }
 
-    builder.Services.AddSingleton<IAmazonSimpleEmailServiceV2>(_ => new AmazonSimpleEmailServiceV2Client(
-        postboxApiOptions.AccessKeyId, postboxApiOptions.SecretAccessKey,
-        new AmazonSimpleEmailServiceV2Config { ServiceURL = postboxApiOptions.ServiceUrl, AuthenticationRegion = postboxApiOptions.Region }));
-    builder.Services.AddSingleton<YandexPostboxApiEmailSender>();
-}
-if (emailProvidersConfigured)
-{
-    builder.Services.AddSingleton<ISmtpTransport, MailKitSmtpTransport>();
-    builder.Services.AddSingleton<MailKitSmtpEmailSender>();
-}
-if (postboxApiConfigured || emailProvidersConfigured)
-{
-    // Хотя бы один канал задан ⇒ письма уходят наружу ⇒ ссылка в кнопке «Открыть FamilyHub»
-    // обязана быть настоящей. Проверка схемы заодно закрывает подстановку javascript:-URL в
-    // href шаблона.
-    var publicSiteUrl = builder.Configuration[$"{EmailOptions.SectionName}:PublicSiteUrl"];
-    if (!Uri.TryCreate(publicSiteUrl, UriKind.Absolute, out var siteUri)
-        || (siteUri.Scheme != Uri.UriSchemeHttps && siteUri.Scheme != Uri.UriSchemeHttp))
-    {
-        throw new InvalidOperationException(
-            "Email:PublicSiteUrl должен быть абсолютным http(s)-URL — он подставляется в кнопку «Открыть FamilyHub» в письмах.");
-    }
+    // SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html
+    // AllowAnonymous обязателен — иначе FallbackPolicy потребует аутентификацию и до R
+    // дело не дойдёт даже для статических маршрутов приложения.
+    app.MapFallbackToFile("index.html").AllowAnonymous();
 
-    // Порядок важен: Postbox API — первым (подтверждённо работает через 443), SMTP — резервным.
-    builder.Services.AddSingleton<IEmailSender>(sp =>
-    {
-        var channels = new List<IEmailSender>();
-        if (postboxApiConfigured) channels.Add(sp.GetRequiredService<YandexPostboxApiEmailSender>());
-        if (emailProvidersConfigured) channels.Add(sp.GetRequiredService<MailKitSmtpEmailSender>());
-        return new CompositeEmailSender(channels, sp.GetRequiredService<ILogger<CompositeEmailSender>>());
-    });
-}
-else
-{
-    builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
-}
+    app.MapFamilyHubHangfireDashboard(devTools);
+    app.MapDevEndpoints(devTools);
 
-// --- Согласия ПДн (задача 2.3): версия + принятие + кэш для ConsentRequiredFilter ---
-builder.Services.AddMemoryCache();
-builder.Services.AddScoped<ConsentService>();
+    app.UseFamilyHubRecurringJobs();
 
-// --- Права субъекта ПДн (задача 2.3): удаление аккаунта + экспорт ---
-builder.Services.AddScoped<AccountService>();
+    // Применение миграций с retry для transient-ошибок при старте (race-condition нескольких реплик)
+    await app.MigrateDatabaseWithRetryAsync();
 
-// --- Профиль (identity rework): ФИО/ДР/пол после создания User ---
-builder.Services.AddScoped<ProfileService>();
+    app.EnqueueStartupMaintenanceJobs();
 
-// --- Привязка Telegram к веб-аккаунту с подтверждением от бота + слияние аккаунтов ---
-builder.Services.AddScoped<AccountMergeService>();
-builder.Services.AddScoped<TelegramLinkService>();
-
-// --- Аудит доступа к медданным (задача 2.7): синхронная запись + ретеншн-джоба ---
-builder.Services.AddScoped<IMedicalAuditWriter, MedicalAuditWriter>();
-builder.Services.AddScoped<AuditRetentionJob>();
-
-// --- Оповещения: Hangfire recurring job по срокам годности лекарств и дням рождения (этап 3 п.10) ---
-var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
-    ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.");
-builder.Services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(opt => opt.UseNpgsqlConnection(postgresConnectionString)));
-builder.Services.AddHangfireServer(o => o.Queues = ["default"]);
-// Второй сервер, выделенная очередь "enrichment" (этап 4) с ОДНИМ воркером: обогащение
-// справочника не должно отъедать пропускную способность у ReminderScanJob/AuditRetentionJob,
-// а один воркер естественно укладывается в лимит внешнего поиска (Brave free-tier — 1 req/s),
-// без отдельного rate-limiter в коде (см. MedicationEnrichmentProcessor).
-builder.Services.AddHangfireServer(o =>
-{
-    o.Queues = ["enrichment"];
-    o.WorkerCount = 1;
-    o.ServerName = "enrichment-server";
-});
-// Четвёртый сервер, выделенная очередь "extraction" (ветка medicalrecords) с ОДНИМ воркером —
-// та же причина, что у enrichment-server: LM Studio — один ноутбук за WireGuard, параллельных
-// запросов к нему быть не может физически, отдельная очередь просто не даёт распознаванию
-// анализов конкурировать за воркеров с ReminderScanJob/AuditRetentionJob/обогащением справочника.
-builder.Services.AddHangfireServer(o =>
-{
-    o.Queues = ["extraction"];
-    o.WorkerCount = 1;
-    o.ServerName = "extraction-server";
-});
-// Третий сервер, выделенная очередь "rotation" (ADR-0009) с ОДНИМ воркером — та же причина, что
-// у enrichment-server: перешифровка данных при ротации ключа не должна отъедать пропускную
-// способность у остальных джоб. WorkerCount=1 попутно гарантирует, что одновременно исполняется
-// НЕ БОЛЕЕ ОДНОЙ EncryptionRotationJob — ручной клик "Перешифровать" из админки и тик ночного
-// добивателя просто встают в очередь друг за другом, конкурентной записи в
-// EncryptionRotationRun не возникает (см. EncryptionRotationJob, doc-комментарий).
-builder.Services.AddHangfireServer(o =>
-{
-    o.Queues = ["rotation"];
-    o.WorkerCount = 1;
-    o.ServerName = "rotation-server";
-});
-// Пятый сервер, выделенная очередь "previews" (см. AttachmentPreviewProcessor) — WorkerCount=2,
-// не 1: в отличие от enrichment/extraction/rotation, генерация превью не упирается во внешний
-// ресурс с жёстким лимитом (Gotenberg — локальный сайдкар, не LM Studio за WireGuard и не
-// rate-limited поиск) — чистая CPU-задача (рендер PDF/картинок), два воркера дают параллелизм,
-// не конкурируя за упомянутые очереди.
-builder.Services.AddHangfireServer(o =>
-{
-    o.Queues = ["previews"];
-    o.WorkerCount = 2;
-    o.ServerName = "previews-server";
-});
-builder.Services.AddScoped<EncryptionRotationJob>();
-builder.Services.AddScoped<ReminderScanJob>();
-builder.Services.AddScoped<NotificationService>();
-builder.Services.AddScoped<NotificationSendingService>();
-builder.Services.AddScoped<PushSubscriptionService>();
-
-// --- Telegram: доставка оповещений через шину (этап 4 п.12; бот сам живёт в отдельном ---
-// --- процессе FamilyHub.TelegramBot, см. ADR-0008) ---
-// BotToken по-прежнему обязателен здесь: TelegramInitDataValidator выводит из него HMAC-ключ
-// для проверки initData Mini App — это забота Api, а не бота. Сам бот (вебхук, SendMessage)
-// не живёт в этом процессе больше; TelegramOutboundPublisher публикует готовое сообщение в
-// Kafka (topic telegram-outbound), которое потребляет FamilyHub.TelegramBot.
-var telegramBotToken = builder.Configuration["Telegram:BotToken"];
-var telegramBotConfigured = !string.IsNullOrWhiteSpace(telegramBotToken);
-if (telegramBotConfigured)
-{
-    builder.Services.AddScoped<INotificationSender, TelegramOutboundPublisher>();
-}
-
-// --- Внутренний API для FamilyHub.TelegramBot (/internal/bot/*, см. InternalBotEndpoints) ---
-// Отдельный флаг от telegramBotConfigured: этот секрет защищает контур обмена с ботом-процессом,
-// а не с Telegram напрямую, и может быть сконфигурирован независимо (напр. в проде — всегда,
-// в локальной разработке без контейнера бота — не обязателен).
-var internalBotApiToken = builder.Configuration["Internal:BotApiToken"];
-var internalBotApiConfigured = !string.IsNullOrWhiteSpace(internalBotApiToken);
-if (internalBotApiConfigured && internalBotApiToken!.Length < 32)
-    throw new InvalidOperationException(
-        "Internal:BotApiToken (env Internal__BotApiToken) короче 32 символов — секрет обмена с " +
-        "FamilyHub.TelegramBot слишком слабый. Сгенерировать: `openssl rand -hex 32`.");
-
-// --- Web Push: реальная доставка PWA-пользователям (редизайн навигации, ADR-0004) — покрывает
-// пользователей без Telegram, которых TelegramNotificationSender не видит вовсе. Независимо от
-// Telegram-канала: оба могут быть настроены одновременно (NotificationSendingService.TrySendAsync
-// фан-аутит на ВСЕ зарегистрированные INotificationSender, см. IEnumerable<INotificationSender>).
-var webPushOptions = builder.Configuration.GetSection(WebPushOptions.SectionName).Get<WebPushOptions>();
-var webPushConfigured = webPushOptions?.IsConfigured == true;
-if (webPushConfigured)
-{
-    builder.Services.AddSingleton<WebPush.IWebPushClient>(sp =>
-    {
-        var options = sp.GetRequiredService<IOptions<WebPushOptions>>().Value;
-        var client = new WebPush.WebPushClient();
-        client.SetVapidDetails(options.Subject, options.VapidPublicKey, options.VapidPrivateKey);
-        return client;
-    });
-    builder.Services.AddScoped<INotificationSender, WebPushNotificationSender>();
-}
-
-// Ни один реальный канал не настроен (типично — локальный dev) — доставка остаётся в логах.
-if (!telegramBotConfigured && !webPushConfigured)
-{
-    builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
-}
-
-// --- LM Studio: локальная LLM (текст + vision) — оцифровка медикаментов по фото (не хранит
-// --- фото) и суммаризация веб-сниппетов для справочника (этап 4) ---
-// Singleton-гейт (аудит, находка High #2): единственная точка сериализации всех вызовов LM
-// Studio (LmStudioJsonClient) — физически один ноутбук за WireGuard, второй одновременный запрос
-// прежде мог прийти в обход дисциплины WorkerCount=1 фоновых Hangfire-очередей через синхронный
-// OCR-эндпоинт (POST /api/medications/ocr).
-builder.Services.AddSingleton<LmStudioConcurrencyGate>();
-// Живой поток "мыслей" модели (план) — throttled-запись CurrentThought на нужную из четырёх
-// таблиц задач, см. class doc. Scoped (берёт AppDbContext) — безопасно как зависимость типизированного
-// HttpClient ниже (тот резолвится внутри того же DI-скоупа, что и вызывающий Hangfire-job/HTTP-запрос).
-builder.Services.AddScoped<LlmThinkingReportService>();
-// Реальная позиция в ОБЩЕЙ очереди к единственному локальному LLM (не только своей таблицы задач)
-// — "extraction" и "enrichment" — разные Hangfire-серверы, задача может дойти до Running в обеих
-// одновременно, и только LmStudioConcurrencyGate решает, кто говорит с моделью прямо сейчас.
-builder.Services.AddScoped<LlmQueuePositionService>();
-builder.Services.AddHttpClient<ILmStudioJsonClient, LmStudioJsonClient>((sp, client) =>
-{
-    var lmStudioOptions = sp.GetRequiredService<IOptions<LmStudioOptions>>().Value;
-    client.BaseAddress = new Uri(lmStudioOptions.BaseUrl);
-    client.Timeout = TimeSpan.FromSeconds(lmStudioOptions.TimeoutSeconds);
-});
-
-// Управление enrich-пайплайном из админки (§2) — резолвинг активного текста промпта/шаблона по
-// ключу, версионируется в БД (PipelinePromptVersion). Infrastructure-уровня (не Modules.Medical):
-// используется и LLM-промптами Modules.Medical.Extraction/Enrichment, и шаблонами поисковых
-// запросов во внешний поиск здесь же в Infrastructure.Enrichment (AnalyteSearchQueryBuilder,
-// BraveSearchProvider/YandexSearchProvider) — см. class doc IPromptProvider.
-builder.Services.AddScoped<PromptProvider>();
-builder.Services.AddScoped<IPromptProvider>(sp => sp.GetRequiredService<PromptProvider>());
-builder.Services.AddScoped<AnalyteSearchQueryBuilder>();
-
-// Выбор активной модели LM Studio из админки — тот же приём, что PromptProvider выше.
-builder.Services.AddScoped<LmStudioModelProvider>();
-builder.Services.AddScoped<ILmStudioModelProvider>(sp => sp.GetRequiredService<LmStudioModelProvider>());
-
-// Доступность LM Studio (GET /v1/models) — общая реализация для /health/llm и
-// LmStudioRecoverySweepJob (см. класс-doc ILmStudioAvailabilityProbe).
-builder.Services.AddScoped<ILmStudioAvailabilityProbe, LmStudioAvailabilityProbe>();
-
-// --- Документы: декодирование вложений под конвейер извлечения (ветка medicalrecords) ---
-builder.Services.AddScoped<PdfDocumentReader>();
-builder.Services.AddScoped<OfficeDocumentReader>();
-builder.Services.AddScoped<IDocumentTextExtractor, DocumentTextExtractor>();
-
-// --- Превью вложений (Анализы/Врачи): растровый путь переиспользует конвейер OCR выше
-// --- (PdfPageRasterizer/ImageDownscaler), Office идёт через сайдкар Gotenberg (LibreOffice) —
-// --- у NPOI (OfficeDocumentReader) нет движка вёрстки, только извлечение текста. Пусто
-// --- Previews:GotenbergBaseUrl — Null-реализация (fail-soft: Office-документы деградируют в
-// --- карточку «Скачать», как и любой Failed/Unsupported предпросмотр, см. AttachmentPreviewRenderer).
-builder.Services.AddScoped<AttachmentPreviewRenderer>();
-var previewsOptions = builder.Configuration.GetSection(PreviewOptions.SectionName).Get<PreviewOptions>() ?? new PreviewOptions();
-if (previewsOptions.Enabled && !string.IsNullOrWhiteSpace(previewsOptions.GotenbergBaseUrl))
-{
-    builder.Services.AddHttpClient<IGotenbergConverter, GotenbergConverter>((sp, client) =>
-    {
-        var previews = sp.GetRequiredService<IOptions<PreviewOptions>>().Value;
-        client.BaseAddress = new Uri(previews.GotenbergBaseUrl);
-        client.Timeout = TimeSpan.FromSeconds(previews.GotenbergTimeoutSeconds);
-    });
-}
-else
-{
-    builder.Services.AddSingleton<IGotenbergConverter, NullGotenbergConverter>();
-}
-
-// --- Enrichment: внешний веб-поиск для обогащения справочника препаратов (этап 4, ADR-0005) ---
-// Переключатель Enrichment:Provider = Null|Brave|Yandex (тот же паттерн конфиг-переключателя,
-// что раньше был у FileStorage:Provider, пока хранилище не свели к единственной реализации).
-// Без явного конфига — Null: наружу не уходит ни одного запроса (см. NullMedicationSearchProvider).
-// Аудит платных вызовов (часть 2 плана) — свой DI-скоуп (IServiceScopeFactory), регистрация не
-// зависит от выбранного провайдера: NullMedicationSearchProvider просто не вызывает LogAsync.
-builder.Services.AddSingleton<WebSearchCallLogger>();
-builder.Services.AddScoped<IWebSearchValveService, WebSearchValveService>();
-var enrichmentOptions = builder.Configuration.GetSection(EnrichmentOptions.SectionName).Get<EnrichmentOptions>()
-    ?? new EnrichmentOptions();
-if (enrichmentOptions.Provider != MedicationSearchProviderKind.Null && string.IsNullOrWhiteSpace(enrichmentOptions.ApiKey))
-{
-    throw new InvalidOperationException(
-        $"Enrichment:Provider={enrichmentOptions.Provider} задан, но Enrichment:ApiKey (env Enrichment__ApiKey) пуст.");
-}
-if (enrichmentOptions.Provider == MedicationSearchProviderKind.Yandex && string.IsNullOrWhiteSpace(enrichmentOptions.FolderId))
-{
-    throw new InvalidOperationException(
-        "Enrichment:Provider=Yandex задан, но Enrichment:FolderId (env Enrichment__FolderId) пуст — " +
-        "обязателен для Yandex Web Search API v2/gen/search.");
-}
-switch (enrichmentOptions.Provider)
-{
-    case MedicationSearchProviderKind.Brave:
-        builder.Services.AddHttpClient<IMedicationSearchProvider, BraveSearchProvider>((sp, client) =>
-        {
-            var options = sp.GetRequiredService<IOptions<EnrichmentOptions>>().Value;
-            client.BaseAddress = new Uri("https://api.search.brave.com/");
-            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-        });
-        break;
-    case MedicationSearchProviderKind.Yandex:
-        builder.Services.AddHttpClient<IMedicationSearchProvider, YandexSearchProvider>((sp, client) =>
-        {
-            var options = sp.GetRequiredService<IOptions<EnrichmentOptions>>().Value;
-            client.BaseAddress = new Uri("https://searchapi.api.cloud.yandex.net/");
-            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-        });
-        break;
-    default:
-        builder.Services.AddScoped<IMedicationSearchProvider, NullMedicationSearchProvider>();
-        break;
-}
-
-// --- Medical-модуль ---
-builder.Services.AddMedicalModule();
-
-// --- Extraction: включение реального конвейера (ветка medicalrecords) — тот же паттерн
-// --- переключателя, что Enrichment:Provider выше. ПОСЛЕ AddMedicalModule(): ASP.NET Core DI
-// --- резолвит последнюю регистрацию для одиночного сервиса, эта строка обязана перекрыть
-// --- Null-регистрацию по умолчанию из MedicalModule, не наоборот. Без явного конфига — Null
-// --- (Extraction:Enabled по умолчанию true, но отсутствие LmStudio:Model/BaseUrl просто даст
-// --- Failed на каждой задаче, а не тишину — см. LmStudioHealthCheck).
-var extractionOptions = builder.Configuration.GetSection(ExtractionOptions.SectionName).Get<ExtractionOptions>()
-    ?? new ExtractionOptions();
-if (extractionOptions.Enabled)
-{
-    builder.Services.AddScoped<IMedicalDocumentExtractor, LmStudioMedicalDocumentExtractor>();
-}
-
-// --- Birthdays-модуль (этап 4 п.11) ---
-builder.Services.AddBirthdayModule();
-
-// --- Агрегат Главной (редизайн v2) — в хосте, не в модуле: собирает Medical+Birthdays,
-// --- которые не могут зависеть друг от друга напрямую (см. HomeSummaryService). ---
-builder.Services.AddScoped<HomeSummaryService>();
-
-// --- Глобальный индикатор фоновых процессов (§4 плана «живой конвейер») — та же причина, что у
-// --- HomeSummaryService: агрегирует все четыре таблицы задач Medical по текущему пользователю. ---
-builder.Services.AddScoped<UserJobsService>();
-
-// --- Swagger (ручное тестирование) ---
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// --- Health checks: нужны и для депло-пайплайна (ждать /health/ready перед переключением
-// --- трафика), и для docker-compose depends_on: service_healthy. Раньше в проекте не было ни
-// --- одного. "llm" — отдельный тег: LM Studio на ноутбуке пользователя за WireGuard, его
-// --- недоступность (сон/выключен) ожидаема и не должна валить общую готовность (тег "ready").
-builder.Services.AddHealthChecks()
-    .AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"])
-    .AddCheck<MinioHealthCheck>("minio", tags: ["ready"])
-    .AddCheck<KafkaHealthCheck>("kafka", tags: ["ready"])
-    .AddCheck<LmStudioHealthCheck>("llm", tags: ["llm"]);
-
-// Явный запас над Attachments:MaxFileSizeBytes: без этого implicit-дефолт Kestrel (~28.6 МиБ,
-// 30_000_000 байт) обрубал бы запрос СВОЕЙ, менее информативной ошибкой раньше, чем срабатывала
-// бы наша проверка с понятным телом ответа ({code, maxSizeBytes}) — см. аудит
-// module-review-2026-08-02/03-medical-records-attachments.md, находка 2. builder.Configuration
-// уже наполнена на этом этапе (до app.Build()), поэтому читаем секцию напрямую, а не через
-// IOptions — сервис-провайдер ещё не построен.
-var attachmentUploadOptions = builder.Configuration.GetSection(AttachmentUploadOptions.SectionName).Get<AttachmentUploadOptions>()
-    ?? new AttachmentUploadOptions();
-builder.WebHost.ConfigureKestrel(kestrel =>
-    kestrel.Limits.MaxRequestBodySize = attachmentUploadOptions.MaxFileSizeBytes + 5 * 1024 * 1024);
-
-var app = builder.Build();
-
-var devTools = app.Services.GetRequiredService<IOptions<DevToolsOptions>>().Value;
-
-// --- Заголовки от Caddy (реверс-прокси, деплой-план): без этого Request.Scheme всегда "http" —
-// --- secure-куки (JWT access-cookie, CSRF) выставлялись бы без Secure, а RemoteIpAddress у ВСЕХ
-// --- запросов стал бы адресом Caddy (ломает партиционирование rate limiter по IP выше и
-// --- RemoteIp в логах Seq). KnownNetworks — весь диапазон docker-мостов по умолчанию (172.16/12),
-// --- не "доверяю всем" (X-Forwarded-* игнорируются от источников вне этой сети).
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-    KnownIPNetworks = { new System.Net.IPNetwork(IPAddress.Parse("172.16.0.0"), 12) },
-});
-
-// --- Структурированное логирование HTTP-запросов (метод, путь, статус, время, пользователь) в Seq ---
-// Уровень поднимается на 4xx/5xx и падает на Debug для успешных запросов к статике/Hangfire/health —
-// иначе Seq захлёстывает шумом от каждого ассета SPA и от healthcheck-поллинга раз в несколько секунд.
-app.UseSerilogRequestLogging(options =>
-{
-    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} -> {StatusCode} за {Elapsed:0.0}мс";
-
-    options.GetLevel = (httpContext, elapsed, ex) => ex is not null
-        ? LogEventLevel.Error
-        : httpContext.Response.StatusCode >= 500 ? LogEventLevel.Error
-        : httpContext.Response.StatusCode >= 400 ? LogEventLevel.Warning
-        : httpContext.Request.Path.StartsWithSegments("/hangfire")
-            || httpContext.Request.Path.StartsWithSegments("/health") ? LogEventLevel.Debug
-        : LogEventLevel.Information;
-
-    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
-    {
-        diagnosticContext.Set("RemoteIp", httpContext.Connection.RemoteIpAddress?.ToString());
-        diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
-        diagnosticContext.Set("QueryString", httpContext.Request.QueryString.Value);
-
-        var userId = httpContext.User.FindFirst(FamilyHubClaimTypes.UserId)?.Value;
-        if (userId is not null)
-            diagnosticContext.Set("UserId", userId);
-    };
-});
-
-// --- Health checks: /health/live — процесс жив (без проверок, для liveness-проб); /health/ready —
-// --- зависимости на месте (Postgres/MinIO/Kafka, тег "ready"); /health/llm — отдельно, т.к. LM
-// --- Studio на ноутбуке за WireGuard и его недоступность не должна валить readiness всего контура.
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-app.MapHealthChecks("/health/ready", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready"),
-}).AllowAnonymous();
-app.MapHealthChecks("/health/llm", new HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("llm"),
-}).AllowAnonymous();
-
-// --- Swagger (ручное тестирование) — раньше только Development, теперь DevTools:AdminUiEnabled
-// --- (см. DevToolsOptions): на VPS доступен за тем же BasicAuth, что и Hangfire-дашборд ниже,
-// --- поверх периметра (Caddy пускает /swagger только на WireGuard-адресе).
-if (devTools.AdminUiEnabled)
-{
-    app.UseWhen(
-        context => context.Request.Path.StartsWithSegments("/swagger"),
-        branch => branch.Use(async (context, next) =>
-        {
-            if (!AdminBasicAuth.IsAuthorized(context, devTools))
-            {
-                AdminBasicAuth.Challenge(context);
-                return;
-            }
-            await next();
-        }));
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// --- Раздача Telegram Mini App (React-сборка в wwwroot, этап 4 п.12) ---
-// До UseAuthorization: статика отдаётся без аутентификации, сам Mini App
-// аутентифицируется на уровне API-запросов через initData.
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
-// --- Заголовки безопасности (аудит module-review-2026-08-02/08-web-frontend-angular.md,
-// --- находка 2 / 09-config-deployment-devops.md, находка 3): раньше не выставлялись нигде —
-// --- ни на уровне бэкенда (сам раздаёт SPA-сборку через UseStaticFiles/MapFallbackToFile выше,
-// --- отдельного реверс-прокси в репозитории нет), ни в index.html. CSP — базовый, под реальные
-// --- нужды текущего фронтенда (без внешних CDN — шрифты/иконки забандлены, единственный внешний
-// --- script-src — телеграмовский SDK, подгружаемый условно, см. index.html): style-src требует
-// --- 'unsafe-inline' — Angular без CSP-nonce вставляет component-стили инлайново, это стандартное
-// --- и ожидаемое ограничение, не наша недоработка.
-app.Use(async (context, next) =>
-{
-    // /hangfire (дашборд), /swagger и /dev/* — служебные инструменты за DevTools-флагами (см.
-    // DevToolsOptions), у Hangfire.Dashboard и Swagger UI есть собственные инлайн-скрипты без
-    // CSP-нонсов — не наш фронтенд, не часть этой находки, не блокируем.
-    if (context.Request.Path.StartsWithSegments("/hangfire")
-        || context.Request.Path.StartsWithSegments("/swagger")
-        || context.Request.Path.StartsWithSegments("/dev"))
-    {
-        await next();
-        return;
-    }
-
-    var headers = context.Response.Headers;
-    headers["Content-Security-Policy"] =
-        "default-src 'self'; " +
-        "script-src 'self' https://telegram.org; " +
-        "style-src 'self' 'unsafe-inline'; " +
-        // data:/blob: — pdf.js рисует страницы через blob:-URL и грузит свой воркер тем же
-        // способом (просмотрщик вложений, Анализы/Врачи); worker-src отдельно от script-src,
-        // потому что часть браузеров не считает воркеры покрытыми script-src без явного worker-src.
-        "img-src 'self' data: blob:; " +
-        "worker-src 'self' blob:; " +
-        "font-src 'self'; " +
-        "connect-src 'self'; " +
-        "object-src 'none'; " +
-        "frame-ancestors 'none'; " +
-        "base-uri 'self'; " +
-        "form-action 'self'";
-    headers["X-Content-Type-Options"] = "nosniff";
-    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    // X-Frame-Options — тот же запрет, что frame-ancestors выше, для браузеров без поддержки CSP3.
-    headers["X-Frame-Options"] = "DENY";
-    // HSTS (аудит 09-config-deployment-devops.md, находка 6 — была отложена до решения по
-    // реверс-прокси; решение принято, это Caddy с автоматическим TLS). IsHttps здесь уже
-    // учитывает X-Forwarded-Proto благодаря UseForwardedHeaders выше — без него это условие
-    // никогда не срабатывало бы за прокси, т.к. Kestrel всегда видит голый HTTP от Caddy.
-    if (context.Request.IsHttps)
-        headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
-    await next();
-});
-
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseRateLimiter();
-
-// --- CSRF-гейт (аудит module-review-2026-08-02/01-auth-identity.md, находка 4): мутирующий
-// --- /api-запрос, несущий публичную cookie CsrfCookieNames.PublicToken (выставляется ТОЛЬКО
-// --- вместе с PWA-сессией, см. PwaSessionCookieWriter.IssueCsrfCookie), обязан нести валидный
-// --- заголовок X-XSRF-TOKEN. Telegram/Dev-запросы эту cookie никогда не получают — пропускаются
-// --- естественно, без отдельной проверки auth-схемы. IsRequestValidAsync при наличии заголовка
-// --- читает токен ИЗ заголовка, не трогая тело запроса — безопасно и для multipart-загрузок.
-// ---
-// --- Отладка 2026-08-20 (после включения персистентных ключей Data Protection): гейт
-// --- срабатывал и на АНОНИМНЫХ запросах (/api/auth/login и т.п.), если в браузере оставалась
-// --- СТАРАЯ cookie CsrfCookieNames.PublicToken от предыдущей сессии — IAntiforgery.
-// --- GetAndStoreTokens привязывает токен к HttpContext.User НА МОМЕНТ ВЫДАЧИ (см.
-// --- PwaSessionCookieWriter), поэтому валидация такого токена на анонимном запросе (User
-// --- ещё не аутентифицирован — самого логина не произошло) детерминированно проваливается с
-// --- "meant for a different claims-based user", а не с ошибкой протухшего/непонятного ключа
-// --- (которую раньше маскировала ротация эфемерных ключей Data Protection при каждом
-// --- редеплое — токен предыдущей сессии и без того не расшифровывался, тем же кодом ошибки
-// --- ниже). CSRF по своей природе защищает только УЖЕ аутентифицированное действие — у
-// --- анонимного запроса нет сессии, которую можно было бы "прокатить" межсайтовой подделкой,
-// --- поэтому гейт применяется, только если текущий запрос сам уже аутентифицирован.
-// ---
-// --- Отладка (прогрев кэша поиска, деплой): гейт ложно ронял МУТИРУЮЩИЕ запросы /api/admin/*
-// --- (401→400 "csrf_token_invalid") у админа, который в том же браузере ещё и залогинен в PWA
-// --- своим обычным аккаунтом — оттуда живёт cookie CsrfCookieNames.PublicToken. Раньше условие
-// --- смотрело только на "аутентифицирован ли текущий запрос ХОТЬ КАК-ТО" — для группы
-// --- /api/admin/* политика "PlatformAdmin" явно перечисляет AuthSchemes.Admin, поэтому
-// --- PolicyEvaluator ПОЛНОСТЬЮ подменяет context.User на принципала одной этой схемы (см.
-// --- AuthorizationMiddleware/PolicyEvaluator.AuthenticateAsync — PWA-принципал по умолчанию
-// --- отбрасывается, не мёржится); IsAuthenticated при этом всё равно true (админ аутентифицирован
-// --- как админ), и валидация антифорджери-токена, привязанного к PWA-пользователю, детерминированно
-// --- проваливается на чужом принципале ("meant for a different claims-based user" — тот же код
-// --- ошибки, что уже описан выше для другого сценария). CSRF-cookie/токен этого механизма выдаётся
-// --- ТОЛЬКО PwaSessionCookieWriter.IssueCsrfCookie при PWA-сессии — гейт должен защищать именно её,
-// --- поэтому условие сужено до "текущий принципал реально несёт identity схемы PwaCookie", а не
-// --- "аутентифицирован хоть какой-нибудь схемой". Admin/TelegramMiniApp/Dev — не эта схема,
-// --- пропускаются, даже если в браузере болтается чужая PWA CSRF-cookie.
-app.Use(async (context, next) =>
-{
-    var method = context.Request.Method;
-    var isMutating = HttpMethods.IsPost(method) || HttpMethods.IsPut(method)
-        || HttpMethods.IsPatch(method) || HttpMethods.IsDelete(method);
-    if (isMutating && context.Request.Path.StartsWithSegments("/api")
-        && context.User.Identities.Any(i => i.IsAuthenticated && i.AuthenticationType == AuthSchemes.PwaCookie)
-        && context.Request.Cookies.ContainsKey(CsrfCookieNames.PublicToken))
-    {
-        var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
-        if (!await antiforgery.IsRequestValidAsync(context))
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsJsonAsync(new { code = "csrf_token_invalid" });
-            return;
-        }
-    }
-    await next();
-});
-
-// Явный запрет кэширования для всех /api-ответов. Обнаружен случай (Telegram Mini App
-// WebView), когда GET /api/auth/me иногда получал закэшированный где-то на клиенте
-// index.html вместо актуального JSON, хотя прямые HTTP-проверки того же бэкенда/прокси
-// всегда отвечали корректно — сам ответ API не запрещал явно своё кэширование. Response
-// Cache-Control — авторитетный сигнал для любого кэша (клиентского, прокси), надёжнее
-// одних только запросных заголовков.
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/internal"))
-    {
-        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
-        context.Response.Headers.Pragma = "no-cache";
-    }
-    await next();
-});
-
-app.MapAuthEndpoints();
-app.MapTelegramBindingEndpoints();
-app.MapConsentEndpoints();
-app.MapAccountEndpoints();
-app.MapFamilyEndpoints();
-app.MapInviteEndpoints();
-app.MapMemberEndpoints();
-// Подопечные хранят ПДн (имя + дата рождения) — та же консент-гарантия, что у Medical/Birthdays
-// (см. BirthdayModule.MapBirthdayModule).
-app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapFamilyDependentEndpoints();
-app.MapMedicalModule();
-app.MapBirthdayModule();
-// Агрегат Главной содержит медданные (статус анализов) — та же консент-гарантия (редизайн v2).
-app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapHomeEndpoints();
-// Глобальный индикатор фоновых процессов содержит медданные (названия записей/показателей/
-// препаратов) — та же консент-гарантия, что у Главной/Medical выше.
-app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapUserJobsEndpoints();
-app.MapNotificationEndpoints();
-app.MapPushEndpoints();
-if (internalBotApiConfigured)
-{
-    app.MapInternalBotEndpoints();
-}
-if (adminOptions.Enabled)
-{
-    app.MapAdminSessionEndpoints();
-    app.MapAdminEndpoints();
-    app.MapAdminEnrichmentEndpoints();
-    app.MapAdminWarmupEndpoints();
-    app.MapAdminSearchCallsEndpoints();
-    app.MapAdminPipelineEndpoints();
-    app.MapAdminCatalogEndpoints();
-    app.MapAdminLmStudioEndpoints();
-}
-
-// SPA-fallback для Mini App: любой нераспознанный путь отдаёт index.html (React-роутинг).
-// AllowAnonymous обязателен — иначе FallbackPolicy потребует аутентификацию и до React
-// дело не дойдёт даже для статических маршрутов приложения.
-app.MapFallbackToFile("index.html").AllowAnonymous();
-
-// --- Дашборд Hangfire — DevTools:AdminUiEnabled (см. DevToolsOptions). Раньше был только
-// --- Development с пустым Authorization (см. историю), что означало анонимный доступ в тот же
-// --- момент, когда контур становится Production по среде (дев-контур на VPS, см. деплой-план) —
-// --- поэтому здесь собственный BasicAuth-фильтр, а не голое AllowAnonymous.
-if (devTools.AdminUiEnabled)
-{
-    // AllowAnonymous обязателен: FallbackPolicy выше требует аутентификации для всех
-    // эндпоинтов без явного исключения, а у браузера при заходе на /hangfire нет ни
-    // Telegram initData, ни dev-заголовка X-Dev-TelegramId — реальная проверка личности здесь
-    // теперь HangfireBasicAuthFilter, не ASP.NET Core-аутентификация.
-    app.MapHangfireDashboard("/hangfire", new DashboardOptions
-    {
-        Authorization = [new HangfireBasicAuthFilter(app.Services.GetRequiredService<IOptions<DevToolsOptions>>())],
-    }).AllowAnonymous();
-}
-
-// --- /dev/* — служебные эндпоинты без аутентификации по построению (ручной прогон Hangfire-джоб,
-// --- просмотр вёрстки писем). DevTools:DevEndpointsEnabled, независимо от AdminUiEnabled —
-// --- на VPS всегда false (см. деплой-план), локально включается вместе с DevAuthEnabled.
-if (devTools.DevEndpointsEnabled)
-{
-    // Ручной запуск джобы оповещений без ожидания cron/UI дашборда — для локальной проверки.
-    // .DisableAntiforgery() — документирует явно (аудит, находка Medium #9), а не как случайный
-    // побочный эффект того, что путь лежит вне /api: глобальный CSRF-гейт в Program.cs проверяет
-    // мутирующие запросы только под /api, поэтому /dev/* и без атрибута фактически не защищён им
-    // (app.UseAntiforgery() в этом приложении не подключён вовсе — см. AttachmentEndpoints/
-    // MedicationOcrEndpoints, тот же паттерн). Риск невысок: DevEndpointsEnabled на VPS всегда
-    // false (см. DevToolsOptions), но исключение должно быть видимым, а не случайным.
-    app.MapPost("/dev/trigger-reminder-scan", async (ReminderScanJob job, CancellationToken ct) =>
-    {
-        await job.RunAsync(ct);
-        return Results.Ok();
-    }).DisableAntiforgery();
-
-    // /dev/trigger-outbox-dispatch удалён (ADR-0006): у MassTransit нет поддерживаемого API
-    // "прогнать доставку сейчас" — UseBusOutbox будит delivery service сразу после SaveChanges,
-    // иначе полинг по Messaging:Outbox:QueryDelay. Тесты/дев — на QueryDelay + WaitForAsync-полинг.
-
-    // Синхронный прогон конкретной задачи обогащения справочника (этап 4) — минуя очередь
-    // Hangfire, для локальной проверки конвейера без ожидания воркера enrichment-server.
-    // .DisableAntiforgery() — та же причина, что у /dev/trigger-reminder-scan выше.
-    app.MapPost("/dev/trigger-enrichment/{jobId:guid}", async (
-        Guid jobId, MedicationEnrichmentProcessor processor, CancellationToken ct) =>
-    {
-        await processor.RunAsync(jobId, ct);
-        return Results.Ok();
-    }).DisableAntiforgery();
-
-    // Просмотр вёрстки email-писем в браузере: LoggingEmailSender печатает в лог только
-    // текстовую часть, а SMTP в dev обычно не настроен, поэтому иначе HTML не увидеть без
-    // EmailPreviewWriter (юнит-тест, пишущий файлы). Правка шаблона .html требует пересборки
-    // API — они embedded-ресурсы (см. EmailTemplateRenderer). AllowAnonymous обязателен:
-    // FallbackPolicy выше требует аутентификации, а у браузера при заходе сюда напрямую нет
-    // ни Telegram initData, ни dev-заголовка (тот же случай, что и /hangfire выше).
-    app.MapGet("/dev/email-preview/{name}", (string name, EmailTemplateRenderer renderer) =>
-    {
-        const string demoEmail = "demo@example.com";
-        string? html = name switch
-        {
-            "temporary-password" => renderer.RenderTemporaryPassword(
-                TelegramBindingService.TemporaryPasswordCopy(demoEmail), demoEmail, "Kd7mQx4Ttb2z"),
-            _ when Enum.TryParse<EmailCodePurpose>(name, ignoreCase: true, out var purpose) =>
-                renderer.RenderCode(EmailOtpService.CopyFor(purpose).Copy, "482915", 10),
-            _ => null,
-        };
-        return html is null
-            ? Results.NotFound("Доступные имена: register | linkemail | resetpassword | telegrambind | temporary-password")
-            : Results.Content(html, "text/html; charset=utf-8");
-    }).AllowAnonymous();
-}
-
-// --- Регистрация ежедневной джобы оповещений (этап 3 п.10) ---
-// Через DI (IRecurringJobManager), а не статический RecurringJob.AddOrUpdate: последний
-// читает JobStorage.Current, который AddHangfire больше не выставляет автоматически.
-var notificationOptions = app.Services.GetRequiredService<IOptions<NotificationOptions>>().Value;
-app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<ReminderScanJob>(
-    "reminder-scan",
-    job => job.RunAsync(CancellationToken.None),
-    notificationOptions.Cron);
-
-// Ретеншн аудита (задача 2.7): ежемесячно, 1-го числа в 03:00 — строки старше 12 месяцев.
-app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<AuditRetentionJob>(
-    "audit-retention",
-    job => job.RunAsync(CancellationToken.None),
-    "0 3 1 * *");
-
-// Ночной добиватель ротации ключа (ADR-0009), ежедневно в 04:00: EncryptionRotationJob.RunAsync
-// сам по себе no-op, если нет строки EncryptionRotationRun в статусе Running — этот тик НИКОГДА
-// не запускает новый прогон (это делает только AdminKeysService по клику администратора), а лишь
-// резюмирует уже идущий, если предыдущее исполнение оборвалось (рестарт контейнера/редеплой,
-// транзиентный сбой сети до MinIO/Postgres) до того, как Hangfire исчерпал собственные ретраи
-// ([AutomaticRetry] на самом классе джобы).
-app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<EncryptionRotationJob>(
-    "encryption-rotation-catchup",
-    job => job.RunAsync(CancellationToken.None),
-    "0 4 * * *");
-
-// Досып задач, упавших технически из-за недоступного LM Studio (ноутбук выключен/спит) — каждые
-// 5 минут проверяет доступность и возвращает такие задачи в очередь, как только сервер снова
-// отвечает (см. класс-doc LmStudioRecoverySweepJob, план часть 1.4).
-app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<LmStudioRecoverySweepJob>(
-    "lmstudio-recovery-sweep",
-    job => job.RunAsync(CancellationToken.None),
-    "*/5 * * * *");
-
-// Применение миграций с retry для transient-ошибок при старте (race-condition нескольких реплик)
-    using (var scope = app.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-        const int maxAttempts = 5;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                await db.Database.MigrateAsync();
-                break;
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                logger.LogWarning(ex,
-                    "Применение миграций не удалось (попытка {Attempt}/{Max}), повтор через {Delay}s",
-                    attempt, maxAttempts, delay.TotalSeconds);
-                await Task.Delay(delay);
-            }
-        }
-    }
-
-// Пересборка enrich-пайплайна анализов: один батч принудительного переобогащения справочника
-// показателей на каждый старт API (LabAnalyteKbReenrichJob) — идемпотентно (no-op, если строк со
-// старой схемой не осталось) и самовосстановимо: если предыдущий батч не успел закрыть весь
-// справочник, следующий деплой продолжит его сам, без ручного клика в админке. Ручной повторный
-// запуск всё равно доступен через POST /api/admin/kb/lab-analytes/reenrich (см. AdminEndpoints).
-// Постановка — best-effort: недоступность Hangfire-стораж на старте не должна ронять хост целиком
-// (тот же принцип, что EnrichmentRequestService/LabAnalyteEnrichmentRequestService — см. их доки).
-try
-{
-    app.Services.GetRequiredService<IBackgroundJobClient>().Enqueue<LabAnalyteKbReenrichJob>(
-        j => j.RunAsync(CancellationToken.None));
-}
-catch (Exception ex)
-{
-    app.Services.GetRequiredService<ILogger<Program>>().LogWarning(
-        ex, "Не удалось поставить LabAnalyteKbReenrichJob в очередь при старте — попробуется на следующем деплое.");
-}
-
-await app.RunAsync();
+    await app.RunAsync();
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {
