@@ -116,6 +116,10 @@ builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(Cons
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<InternalOptions>(builder.Configuration.GetSection(InternalOptions.SectionName));
+// AuthRateLimitOptions читается ниже напрямую через GetSection().Get<>() (нужно синхронно, до
+// AddRateLimiter) — Configure<> здесь дополнительно, чтобы IOptions<AuthRateLimitOptions> был
+// резолвим через DI где угодно ещё (раньше не был зарегистрирован вовсе).
+builder.Services.Configure<AuthRateLimitOptions>(builder.Configuration.GetSection(AuthRateLimitOptions.SectionName));
 
 // --- DevTools (Hangfire/Swagger/DevAuth/`/dev/*`): раньше все четыре жёстко гейтились на
 // --- IsDevelopment(). Дев-контур на VPS работает под ASPNETCORE_ENVIRONMENT=Production (иначе

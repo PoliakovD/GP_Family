@@ -19,6 +19,15 @@ namespace FamilyHub.Modules.Medical.MedicalRecords;
 /// прямых канала без L1-шаринга: подопечный семьи (FamilyDependentId) и назначение конкретному
 /// участнику (TargetUserId) — см. VisibleRecordsQuery. OwnerUserId в обоих случаях остаётся за
 /// тем, кто физически загрузил запись — только он безусловно удаляет (см. DeleteAsync).
+///
+/// TargetUserId — ОСОЗНАННОЕ исключение из общего правила "видимость завязана на активное
+/// членство": это постоянный личный грант (аналог "отправил копию человеку"), не отзывается
+/// автоматически, когда получатель выходит/исключается из семьи, где у него с владельцем была
+/// общая семья на момент назначения (в отличие от FamilyMedicalShare — см.
+/// UserLeftFamilyMedicalCleanupConsumer, который чистит только её). Решение принято явно при
+/// рефакторинге cleanup — НЕ считать это дырой в модели доступа. Если понадобится завязать и
+/// этот канал на активное членство, придётся тоже чистить его в UserLeftFamilyMedicalCleanupConsumer,
+/// аналогично FamilyMedicalShare.
 /// </summary>
 public class MedicalRecordService(
     AppDbContext db,

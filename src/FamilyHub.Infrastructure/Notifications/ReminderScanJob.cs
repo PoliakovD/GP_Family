@@ -3,6 +3,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -20,7 +21,13 @@ namespace FamilyHub.Infrastructure.Notifications;
 /// события с разным BirthdaySubjectKind: ручные записи Birthday (Manual), активные члены семьи
 /// с заполненным User.BirthDate (Member), подопечные с заполненным FamilyDependent.BirthDate
 /// (Dependent). Общая логика окна/дедупа/переноса 29 февраля вынесена в TryPublishBirthdayAsync.
+///
+/// AutomaticRetry — явно, тем же паттерном, что EncryptionRotationJob: идемпотентна (публикация
+/// событий дедуплицируется на приёме по DedupKey), поэтому безопасный повтор при транзиентном
+/// сбое (обрыв соединения с БД) не создаёт дублей — раньше жила на дефолте Hangfire (10 попыток),
+/// не задокументированном явно, в отличие от остальных джоб проекта.
 /// </summary>
+[AutomaticRetry(Attempts = 3, DelaysInSeconds = [60, 600, 3600])]
 public class ReminderScanJob(
     AppDbContext db,
     IDomainEventPublisher publisher,

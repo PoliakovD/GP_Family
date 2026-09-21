@@ -20,7 +20,15 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// Окно в 7 дней (CreatedAt) — не резюмируем сколь угодно старые сбои: если ноутбук не включали
 /// неделю, скорее всего пользователь уже сам разобрался или запись неактуальна; не захламляем
 /// очередь бесконечно растущим хвостом.
+///
+/// VisitMedicationEnrichmentJob сознательно не участвует в этом свипе — у неё нет колонки
+/// IsTransientFailure (структурное отличие, см. class doc), а не пропуск.
+///
+/// [Queue("extraction")] — сама задача не зовёт LM Studio напрямую (только probe.IsAvailableAsync
+/// + чтение/запись БД + постановка ДРУГИХ задач в очередь), поэтому не обязана жить на "default";
+/// логически принадлежит конвейеру распознавания, которым и управляет в первую очередь.
 /// </summary>
+[Queue("extraction")]
 public class LmStudioRecoverySweepJob(
     AppDbContext db,
     ILmStudioAvailabilityProbe probe,

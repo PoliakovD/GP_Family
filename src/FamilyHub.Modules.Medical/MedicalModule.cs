@@ -71,6 +71,13 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteKbReenrichJob>();
         services.AddScoped<LabAnalyteKbRebuildJob>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
+        // Одноразовый ручной перепрогон (см. class doc) — раньше жил без явной регистрации,
+        // работал только на фоллбэке Hangfire (ActivatorUtilities.GetServiceOrCreateInstance
+        // конструирует незарегистрированный конкретный тип через DI-резолв параметров
+        // конструктора) — единственная джоба в проекте, полагавшаяся на этот неявный путь.
+        // Явная регистрация — для единообразия с остальными джобами и чтобы DI сразу упал при
+        // старте, если у конструктора появится параметр, который контейнер не может resolve.
+        services.AddScoped<RecomputeIndicatorFlagsBackfillJob>();
         // Ночной добиватель транзиентных сбоев LM Studio (см. план часть 1.4) — резюмирует
         // задачи, упавшие технически после исчерпания [AutomaticRetry], когда сервер снова стал
         // доступен. Регистрация рекуррентного расписания — в Program.cs (тот же приём, что

@@ -363,6 +363,33 @@ public class MedicalRecordServiceTests : SqliteTestBase
         (await GetRecordsAsync(target.Id)).Should().ContainSingle(r => r.Id == dto.Id);
     }
 
+    /// <summary>Закрепляет ОСОЗНАННОЕ поведение (см. class-doc VisibleRecordsQuery /
+    /// FamilyHub_project_brief.md §4.2): TargetUserId — постоянный личный грант, единственный из
+    /// трёх каналов видимости, НЕ завязанный на активное членство. В отличие от FamilyMedicalShare
+    /// (см. GetVisibleRecordsAsync_PendingApprovalMember_DoesNotSeeSharedRecord — тот канал
+    /// требует Status == Active), выход/исключение получателя из общей с владельцем семьи НЕ
+    /// отзывает уже сделанное прямое назначение. Если это поведение когда-нибудь изменится
+    /// намеренно, этот тест должен быть обновлён вместе с class-doc, а не просто починен вслепую.</summary>
+    [Fact]
+    public async Task CreateAsync_ForTargetUserInSameFamily_StaysVisibleAfterTargetLeavesFamily()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var target = Db.AddMember(family.Id);
+        await Db.SaveChangesAsync();
+
+        var (_, dto) = await _sut.CreateAsync(owner.Id, new CreateMedicalRecordRequest(
+            new DateOnly(2024, 1, 1), null, null, null, TargetUserId: target.Id));
+
+        // Симулирует то, что реально делает MembershipService.RemoveMemberAsync/LeaveFamilyAsync
+        // с самим членством (FamilyMedicalShare чистится отдельно UserLeftFamilyMedicalCleanupConsumer
+        // — TargetUserId он сознательно не трогает, см. class-doc VisibleRecordsQuery).
+        var membership = await Db.FamilyMembers.SingleAsync(m => m.FamilyId == family.Id && m.UserId == target.Id);
+        Db.FamilyMembers.Remove(membership);
+        await Db.SaveChangesAsync();
+
+        (await GetRecordsAsync(target.Id)).Should().ContainSingle(r => r.Id == dto!.Id);
+    }
+
     [Fact]
     public async Task DeleteAsync_Owner_Succeeds_AndRemovesRecord()
     {

@@ -25,8 +25,6 @@ public record AdminKbEditRequest(
 
 public enum AdminKbEditResult { Ok, NotFound, InvalidPayloadJson, IsolationViolation }
 
-public enum AdminKbDeleteResult { Ok, NotFound }
-
 /// <summary>Мердж двух строк справочника (§ ручной мердж дублей из админки) — SameId, если
 /// прислали одну и ту же строку и победителем, и проигравшим.</summary>
 public enum AdminKbMergeResult { Ok, NotFound, SameId }
