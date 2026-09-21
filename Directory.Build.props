@@ -1,0 +1,16 @@
+<Project>
+
+  <!-- Общие настройки для ВСЕХ проектов решения (src/ и tests/, последний слоем добавляет
+       тестовые пакеты поверх этого файла — см. tests/Directory.Build.props). Раньше
+       TargetFramework/Nullable/ImplicitUsings были продублированы построчно в каждом из 7 csproj
+       под src/ (сами тестовые csproj уже наследовали их из tests/Directory.Build.props) — при
+       переходе на следующий TFM пришлось бы править все 7 файлов по отдельности, не заметив
+       расхождения до первой сборки, упавшей на несовпадении версий транзитивных зависимостей. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,101 @@
+<Project>
+
+  <!-- Central Package Management: единственное место, где фиксируются версии пакетов на всё
+       решение (src/ + tests/). Раньше версии были продублированы построчно по csproj — один и
+       тот же пакет (например Microsoft.EntityFrameworkCore, MassTransit, Serilog.AspNetCore,
+       Confluent.Kafka) фиксировался в 2-4 разных файлах вручную, и ничего не ловило расхождение,
+       кроме дисциплины копирования (см. был явный комментарий об этом риске в
+       FamilyHub.TelegramBot.csproj). Здесь — Version, в csproj — просто <PackageReference Include="X" />.
+       Version НЕ указывается в csproj вообще, кроме случая явного override через VersionOverride
+       (сейчас такого нет ни у одного пакета). -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="EF Core / Postgres">
+    <!-- Явная версия, совпадающая с Design/Npgsql, чтобы при транзитивном разрешении в
+         зависимых проектах не подтягивалась более старая версия (у Npgsql.EntityFrameworkCore.
+         PostgreSQL только нижняя граница диапазона). -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+    <!-- Нужен и в startup-проекте (design-time сборка dotnet-ef), и в Infrastructure. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup Label="Событийная шина">
+    <!-- 8.5.1 — последняя версия под Apache-2.0 (v9, апрель 2025, ушла на коммерческую лицензию —
+         та же история, что и с MediatR). MassTransit.EntityFrameworkCore собран против EF Core
+         9.0.1, но резолвится с нашим пиннингом 10.0.9 без конфликтов (см. ADR-0006). -->
+    <PackageVersion Include="MassTransit" Version="8.5.1" />
+    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.1" />
+    <PackageVersion Include="MassTransit.Kafka" Version="8.5.1" />
+    <!-- Явная версия (не только транзитивная через MassTransit.Kafka) — Confluent.Kafka.Admin
+         используется напрямую для явного создания топиков при старте (ADR-0007), и в
+         IntegrationTests для raw-проб-консьюмера (KafkaBridgeFlowTests). -->
+    <PackageVersion Include="Confluent.Kafka" Version="2.11.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Фоновые задачи (Hangfire)">
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.23" />
+    <PackageVersion Include="Hangfire.Core" Version="1.8.23" />
+    <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Логирование">
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageVersion Include="Serilog.Exceptions" Version="8.4.0" />
+    <PackageVersion Include="Serilog.Sinks.Seq" Version="9.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Почта / Push / Хранилище / Telegram">
+    <PackageVersion Include="MailKit" Version="4.17.0" />
+    <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.0.102.3" />
+    <PackageVersion Include="WebPush" Version="1.0.13" />
+    <PackageVersion Include="Minio" Version="7.0.0" />
+    <PackageVersion Include="Telegram.Bot" Version="22.10.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup Label="Документы / изображения (конвейер распознавания)">
+    <!-- SkiaSharp НЕ пиннится на последнюю 3.x намеренно: PDFtoImage 4.1.1 скомпилирован против
+         SkiaSharp 2.88.8 (см. его .nuspec) — 3.x менял сигнатуры SKBitmap.Resize/SKImageInfo, и
+         принудительная унификация на 3.x рисковала бы MissingMethodException в рантайме внутри
+         чужой уже скомпилированной сборки. Явный пиннинг фиксирует то, что и так резолвится
+         транзитивно от PDFtoImage — чтобы версия не расползлась незаметно при будущем добавлении
+         другого пакета с более широким диапазоном. -->
+    <PackageVersion Include="PdfPig" Version="0.1.11" />
+    <PackageVersion Include="PDFtoImage" Version="4.1.1" />
+    <PackageVersion Include="SkiaSharp" Version="2.88.8" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
+    <PackageVersion Include="NPOI" Version="2.7.4" />
+    <!-- Явный пиннинг: NPOI 2.7.4 транзитивно тянет SixLabors.ImageSharp 2.1.10, у которого
+         известная DoS-уязвимость (NU1902, GHSA-rxmq-m78w-7wmc) — версия поднята до патченной. -->
+    <PackageVersion Include="SixLabors.ImageSharp" Version="2.1.13" />
+    <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Swagger">
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Тесты">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="FluentAssertions" Version="6.12.1" />
+    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <!-- 3.10.0, не 4.x — совместимость между Testcontainers.PostgreSql/Minio/Kafka. -->
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="3.10.0" />
+    <PackageVersion Include="Testcontainers.Minio" Version="3.10.0" />
+    <PackageVersion Include="Testcontainers.Kafka" Version="3.10.0" />
+  </ItemGroup>
+
+</Project>

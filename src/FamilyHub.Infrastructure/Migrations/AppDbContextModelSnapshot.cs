@@ -1806,6 +1806,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<int?>("FailureReason")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsTransientFailure")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("KbId")
                         .HasColumnType("uuid");
 

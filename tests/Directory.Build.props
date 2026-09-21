@@ -1,26 +1,27 @@
 <Project>
 
-  <!-- Общие настройки для всех тестовых проектов под /tests/. Версии пакетов здесь, чтобы не
-       дублировать в каждом csproj и не разойтись между Unit/Integration/TestUtils. -->
+  <!-- Общие настройки для всех тестовых проектов под /tests/, поверх корневого
+       Directory.Build.props (TargetFramework/Nullable/ImplicitUsings — MSBuild по умолчанию
+       импортирует только БЛИЖАЙШИЙ Directory.Build.props вверх по дереву, не цепочку, поэтому
+       импорт корневого ниже явный). Версии пакетов теперь в корневом Directory.Packages.props
+       (Central Package Management) — здесь остаются только сами PackageReference, без Version. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="FluentAssertions" Version="6.12.1" />
-    <PackageReference Include="NSubstitute" Version="5.3.0" />
-    <PackageReference Include="coverlet.collector" Version="6.0.2">
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="coverlet.collector">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

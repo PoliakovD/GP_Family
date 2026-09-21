@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using FamilyHub.Api.Features.Account;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.ValueObjects;
@@ -37,7 +36,7 @@ public class TelegramLinkService(AppDbContext db, AccountMergeService merge, ILo
         await db.TelegramLinkCodes.Where(c => c.UserId == userId && c.ConsumedAt == null)
             .ExecuteDeleteAsync(ct);
 
-        var rawCode = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)); // 32 hex-символа
+        var rawCode = RandomCode.Generate(); // 32 hex-символа
         var expiresAt = DateTime.UtcNow.AddMinutes(CodeTtlMinutes);
         db.TelegramLinkCodes.Add(new TelegramLinkCode
         {

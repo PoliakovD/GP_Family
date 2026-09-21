@@ -14,7 +14,7 @@ namespace FamilyHub.Domain.Entities;
 /// ТАБЛИЦЫ ЗАДАЧ, поэтому дедуп по NormalizedName проверяется в сервисе против обеих сразу).
 /// Наружу конвейер отправляет только нормализованное имя — см. VisitMedicationEnrichmentProcessor.
 /// </summary>
-public class VisitMedicationEnrichmentJob
+public class VisitMedicationEnrichmentJob : IPipelineJob
 {
     public Guid Id { get; set; }
 
@@ -35,6 +35,13 @@ public class VisitMedicationEnrichmentJob
 
     /// <summary>См. LabAnalyteEnrichmentJob.FailureReason — та же машиночитаемая классификация.</summary>
     public EnrichmentFailureReason? FailureReason { get; set; }
+
+    /// <summary>См. MedicalDocumentExtractionJob.IsTransientFailure — тот же смысл, тот же
+    /// потребитель (LmStudioRecoverySweepJob). Добавлено при cleanup-рефакторинге — этот
+    /// конвейер раньше был единственным из четырёх без этого поля (структурный пробел, не
+    /// умышленное решение), из-за чего LmStudioRecoverySweepJob не мог резюмировать его
+    /// технические сбои так же, как у остальных трёх.</summary>
+    public bool IsTransientFailure { get; set; }
 
     public string? Provider { get; set; }
 

@@ -34,30 +34,37 @@ public class LlmQueuePositionService(AppDbContext db)
         return CountAhead(timestamps, createdAt);
     }
 
+    /// <summary>Один запрос на каждую из четырёх таблиц (EF Core должен видеть конкретный
+    /// DbSet&lt;T&gt;, чтобы транслировать Where/Select в SQL — общего запроса по IPipelineJob не
+    /// существует), но сам перебор — один раз, не 4 скопированных блока. Статусы сравниваются
+    /// inline в Where — приватный метод-предикат EF Core не может транслировать в SQL, только в
+    /// клиентское вычисление.</summary>
+    private static readonly Func<AppDbContext, CancellationToken, Task<List<DateTime>>>[] ActiveTimestampQueries =
+    [
+        (db, ct) => db.MedicalDocumentExtractionJobs.AsNoTracking()
+            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+            .Select(j => j.CreatedAt).ToListAsync(ct),
+        (db, ct) => db.LabAnalyteEnrichmentJobs.AsNoTracking()
+            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+            .Select(j => j.CreatedAt).ToListAsync(ct),
+        (db, ct) => db.MedicationEnrichmentJobs.AsNoTracking()
+            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+            .Select(j => j.CreatedAt).ToListAsync(ct),
+        (db, ct) => db.VisitMedicationEnrichmentJobs.AsNoTracking()
+            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+            .Select(j => j.CreatedAt).ToListAsync(ct),
+    ];
+
     /// <summary>Время создания ВСЕХ активных (Pending/Running) задач по всем четырём таблицам —
     /// один поход в БД (4 лёгких запроса без данных, только CreatedAt), дальше позиция для любого
     /// количества задач считается в памяти (CountAhead), без дополнительных SQL-запросов на
-    /// каждую строку страницы. Статусы сравниваются inline в каждом Where — приватный метод-предикат
-    /// (как было раньше) EF Core не может транслировать в SQL, только в клиентское вычисление.</summary>
+    /// каждую строку страницы.</summary>
     public async Task<List<DateTime>> GetActiveJobTimestampsAsync(CancellationToken ct = default)
     {
-        var extraction = await db.MedicalDocumentExtractionJobs.AsNoTracking()
-            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
-            .Select(j => j.CreatedAt).ToListAsync(ct);
-        var labAnalyte = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
-            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
-            .Select(j => j.CreatedAt).ToListAsync(ct);
-        var medication = await db.MedicationEnrichmentJobs.AsNoTracking()
-            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
-            .Select(j => j.CreatedAt).ToListAsync(ct);
-        var visitMedication = await db.VisitMedicationEnrichmentJobs.AsNoTracking()
-            .Where(j => j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
-            .Select(j => j.CreatedAt).ToListAsync(ct);
-
-        extraction.AddRange(labAnalyte);
-        extraction.AddRange(medication);
-        extraction.AddRange(visitMedication);
-        return extraction;
+        var result = new List<DateTime>();
+        foreach (var query in ActiveTimestampQueries)
+            result.AddRange(await query(db, ct));
+        return result;
     }
 
     /// <summary>Сколько временных меток строго раньше createdAt — та же задача сама себя не

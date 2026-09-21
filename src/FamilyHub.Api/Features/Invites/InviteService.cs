@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
 using FamilyHub.Contracts.Events;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Messaging;
 using FamilyHub.Infrastructure.Persistence;
@@ -294,5 +294,5 @@ public class InviteService(AppDbContext db, IFamilyAccessService access, IDomain
         return ApproveRejectResult.Success;
     }
 
-    private static string GenerateCode() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+    private static string GenerateCode() => RandomCode.Generate();
 }

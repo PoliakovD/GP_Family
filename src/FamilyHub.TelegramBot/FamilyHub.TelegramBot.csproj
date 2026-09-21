@@ -8,25 +8,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Версии — те же, что уже используются в FamilyHub.Api.csproj/FamilyHub.Infrastructure.csproj
-         (Directory.Packages.props в решении нет, дрейф версий ничем не ловится, кроме
-         дисциплины копирования). -->
-    <PackageReference Include="Telegram.Bot" Version="22.10.1" />
-    <PackageReference Include="MassTransit" Version="8.5.1" />
-    <PackageReference Include="MassTransit.Kafka" Version="8.5.1" />
+    <!-- Версии — Directory.Packages.props (Central Package Management), общий для всего решения:
+         тот же пакет здесь и в FamilyHub.Api/FamilyHub.Infrastructure гарантированно одной
+         версии, дрейф больше не зависит от дисциплины копирования. -->
+    <PackageReference Include="Telegram.Bot" />
+    <PackageReference Include="MassTransit" />
+    <PackageReference Include="MassTransit.Kafka" />
     <!-- Явная ссылка (не только транзитивная через MassTransit.Kafka) — бот создаёт свой топик
          (telegram-outbound) идемпотентно при старте тем же приёмом, что и Api (ADR-0007). -->
-    <PackageReference Include="Confluent.Kafka" Version="2.11.0" />
-    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
-    <PackageReference Include="Serilog.Exceptions" Version="8.4.0" />
-    <PackageReference Include="Serilog.Sinks.Seq" Version="9.1.0" />
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Enrichers.Environment" />
+    <PackageReference Include="Serilog.Exceptions" />
+    <PackageReference Include="Serilog.Sinks.Seq" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
 
 </Project>

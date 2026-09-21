@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
@@ -24,6 +25,13 @@ namespace FamilyHub.Api.Features.Admin;
 /// прогона: OCR-коррекция обязана случиться ДО поиска в справочнике, справочник — ДО расчёта
 /// персонального референса), безопасный реордер потребовал бы переписать процессоры в
 /// полноценный step-runner — вне объёма этой итерации (см. class doc PipelineCatalog).
+///
+/// Ручной retry здесь, LmStudioRecoverySweepJob (технические сбои) и DeferredEnrichmentReleaseJob
+/// (снятие вентиля платного поиска) — сознательно ТРИ раздельных механизма, не один: у каждого
+/// свой триггер и свои кандидаты (клик админа / "сервер снова доступен" / "вентиль открыт").
+/// Общее между ними — только сам примитив "сбросить поля задачи в Pending и поставить в очередь
+/// тем же процессором" (см. ResetAndEnqueueAsync ниже, унифицирован через IPipelineJob при
+/// cleanup-рефакторинге — раньше был скопирован в четырёх ветках switch).
 /// </summary>
 public static class AdminPipelineEndpoints
 {
@@ -383,14 +391,11 @@ public static class AdminPipelineEndpoints
                             cached?.Snippets ?? [], cached?.Overrides, activeDomains);
                     }
 
-                    // VisitMedicationEnrichmentJob не несёт IsTransientFailure (см. class doc —
-                    // зеркало MedicationEnrichmentJob без семейного контура) — терминальный технический
-                    // сбой здесь неотличим от смыслового кроме как по FailureReason.
                     return Results.Ok(new PipelineJobDetailDto(
                         job.Id, "visit-medication", job.SourceDisplayName, job.Status.ToString(), job.Attempts, job.Error,
                         job.FailureReason?.ToString(), job.CreatedAt, job.StartedAt, job.CompletedAt,
                         job.NormalizedName, null, null, null, false,
-                        job.Provider, job.ExternalSearchAt, false, job.KbId,
+                        job.Provider, job.ExternalSearchAt, job.IsTransientFailure, job.KbId,
                         searchCache, allDomains.Select(d => new TrustedDomainDto(d.Id, d.Domain, d.Rank, d.IsEnabled)).ToList()));
                 }
                 case "extraction":
@@ -652,61 +657,43 @@ public static class AdminPipelineEndpoints
             .Select(r => r.Id)
             .ToList();
 
+    /// <summary>Постановка ЗАДАЧИ конкретного типа в очередь — единственное место, которому
+    /// позволено знать, какой Enqueue&lt;TProcessor&gt; соответствует какому "type" (тот же generic
+    /// generic-параметр Hangfire видит в выражении, что и раньше в каждой из четырёх копий switch —
+    /// это НЕ меняет то, как Hangfire сериализует/резолвит задачу, только убирает копипасту диспетчеризации).</summary>
+    private static readonly Dictionary<string, Action<IBackgroundJobClient, Guid>> EnqueueByType = new()
+    {
+        ["lab-analyte"] = (bg, id) => bg.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(id, CancellationToken.None)),
+        ["medication"] = (bg, id) => bg.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(id, CancellationToken.None)),
+        ["visit-medication"] = (bg, id) => bg.Enqueue<VisitMedicationEnrichmentProcessor>(p => p.RunAsync(id, CancellationToken.None)),
+        ["extraction"] = (bg, id) => bg.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(id, CancellationToken.None)),
+    };
+
     /// <summary>Сброс задачи в Pending (снимает Error/FailureReason — задача перезапускается
     /// начисто) + постановка в очередь тем же процессором. Общий хвост для одиночного retry,
-    /// resolve-and-retry и bulk-retry — раньше было четыре независимые копии этого switch.</summary>
+    /// resolve-and-retry и bulk-retry. Поиск строки по (type, id) всё ещё switch — EF должен видеть
+    /// конкретный DbSet&lt;T&gt; для запроса, общего DbSet по IPipelineJob не существует — но
+    /// собственно СБРОС полей (то, что реально было продублировано 4 раза) идёт через общий
+    /// интерфейс IPipelineJob один раз.</summary>
     private static async Task<bool> ResetAndEnqueueAsync(
         string type, Guid id, AppDbContext db, IBackgroundJobClient backgroundJobs, CancellationToken ct)
     {
-        switch (type)
+        IPipelineJob? job = type switch
         {
-            case "lab-analyte":
-            {
-                var job = await db.LabAnalyteEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
-                if (job is null) return false;
-                job.Status = EnrichmentJobStatus.Pending;
-                job.Error = null;
-                job.FailureReason = null;
-                await db.SaveChangesAsync(ct);
-                backgroundJobs.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                return true;
-            }
-            case "medication":
-            {
-                var job = await db.MedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
-                if (job is null) return false;
-                job.Status = EnrichmentJobStatus.Pending;
-                job.Error = null;
-                job.FailureReason = null;
-                await db.SaveChangesAsync(ct);
-                backgroundJobs.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                return true;
-            }
-            case "visit-medication":
-            {
-                var job = await db.VisitMedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
-                if (job is null) return false;
-                job.Status = EnrichmentJobStatus.Pending;
-                job.Error = null;
-                job.FailureReason = null;
-                await db.SaveChangesAsync(ct);
-                backgroundJobs.Enqueue<VisitMedicationEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                return true;
-            }
-            case "extraction":
-            {
-                var job = await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == id, ct);
-                if (job is null) return false;
-                job.Status = EnrichmentJobStatus.Pending;
-                job.Error = null;
-                job.FailureReason = null;
-                await db.SaveChangesAsync(ct);
-                backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
-                return true;
-            }
-            default:
-                return false;
-        }
+            "lab-analyte" => await db.LabAnalyteEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct),
+            "medication" => await db.MedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct),
+            "visit-medication" => await db.VisitMedicationEnrichmentJobs.FirstOrDefaultAsync(j => j.Id == id, ct),
+            "extraction" => await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == id, ct),
+            _ => null,
+        };
+        if (job is null) return false;
+
+        job.Status = EnrichmentJobStatus.Pending;
+        job.Error = null;
+        job.FailureReason = null;
+        await db.SaveChangesAsync(ct);
+        EnqueueByType[type](backgroundJobs, id);
+        return true;
     }
 
     /// <summary>Удаляет одну задачу по (type, id) — общий хвост для одиночного и массового

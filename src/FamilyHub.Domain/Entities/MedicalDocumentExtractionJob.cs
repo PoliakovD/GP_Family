@@ -13,7 +13,7 @@ namespace FamilyHub.Domain.Entities;
 /// уникальный индекс по MedicalRecordId среди Pending/Running (см.
 /// MedicalDocumentExtractionJobConfiguration) — дедуп повторного клика «Распознать» на одной записи.
 /// </summary>
-public class MedicalDocumentExtractionJob
+public class MedicalDocumentExtractionJob : IPipelineJob
 {
     public Guid Id { get; set; }
 

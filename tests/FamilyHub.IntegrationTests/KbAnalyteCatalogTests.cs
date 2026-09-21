@@ -152,15 +152,19 @@ public class KbAnalyteCatalogTests(FamilyHubWebFactory factory) : IntegrationTes
     [Fact]
     public async Task GetById_RelatedNameAmbiguousAcrossSpecimens_ResolvesToSameSpecimenArticle_DoesNotThrow()
     {
+        // "Эритроциты" (не "лейкоциты" — то слово занято Search_ByPlainText_FindsSeededAnalyte выше:
+        // все тесты файла делят один Postgres-контейнер, см. class doc, "своё уникальное слово на
+        // каждый тест" — коллизия ломала оба теста: Search находил 3 совпадения вместо 1, а этот
+        // тест не мог однозначно резолвить специмин среди трёх строк вместо двух).
         var bloodSpecimenId = Guid.NewGuid();
         var urineSpecimenId = Guid.NewGuid();
 
-        await SeedAsync("лейкоциты", "Лейкоциты", new { schemaVersion = 3, plainExplanation = "В крови." }, specimenKbId: bloodSpecimenId);
-        await SeedAsync("лейкоциты", "Лейкоциты", new { schemaVersion = 3, plainExplanation = "В моче." }, specimenKbId: urineSpecimenId);
+        await SeedAsync("эритроциты", "Эритроциты", new { schemaVersion = 3, plainExplanation = "В крови." }, specimenKbId: bloodSpecimenId);
+        await SeedAsync("эритроциты", "Эритроциты", new { schemaVersion = 3, plainExplanation = "В моче." }, specimenKbId: urineSpecimenId);
         var id = await SeedAsync("нитриты", "Нитриты", new
         {
             schemaVersion = 3,
-            relatedNames = new[] { "Лейкоциты" },
+            relatedNames = new[] { "Эритроциты" },
         }, specimenKbId: urineSpecimenId);
 
         var client = ClientAs(FreshTelegramId());
@@ -168,7 +172,7 @@ public class KbAnalyteCatalogTests(FamilyHubWebFactory factory) : IntegrationTes
 
         response.EnsureSuccessStatusCode();
         var card = await response.Content.ReadFromJsonAsync<KbAnalyteCard>(JsonOpts);
-        var related = card!.Related.Should().ContainSingle(r => r.DisplayName == "Лейкоциты" && r.Id != null).Which;
+        var related = card!.Related.Should().ContainSingle(r => r.DisplayName == "Эритроциты" && r.Id != null).Which;
         related.Id.Should().NotBeNull("наличие коллизии по специмину не должно превращать резолв в 'не найдено'");
     }
 }

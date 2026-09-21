@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Не тестовый проект сам по себе (нет тест-раннера), но наследует TargetFramework/Nullable
-       от ../Directory.Build.props; IsTestProject/IsPackable там же выставлены — переопределяем,
-       чтобы dotnet test не пытался запускать его как тестовый контейнер. -->
+       от ../Directory.Build.props (который сам слоем импортирует корневой); IsTestProject/
+       IsPackable там же выставлены — переопределяем, чтобы dotnet test не пытался запускать
+       его как тестовый контейнер. -->
   <PropertyGroup>
     <IsTestProject>false</IsTestProject>
   </PropertyGroup>
@@ -13,8 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>
