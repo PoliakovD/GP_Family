@@ -180,7 +180,14 @@ public class AdminSearchWarmupApiTests(WarmupWebFactory factory)
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var alreadyKnown = "тестпрепаратужевсправочнике" + Guid.NewGuid().ToString("N")[..6];
+        // Пробел ПЕРЕД hex-суффиксом обязателен (тот же приём, что в RecalculateIndicatorFlagsJobTests):
+        // MedicationNameNormalizer.Normalize (как и WarmupNameParser.Parse, реально нормализующий
+        // имена запроса) вызывает LabTextCleanupHelpers.FixMixedScriptHomoglyphs, которая разбирает
+        // строку по пробелу и подменяет латинские гомоглифы (a/c/e/…) ТОЛЬКО внутри слова, где уже
+        // есть кириллица. Без пробела случайные hex-буквы GUID иногда (не всегда — отсюда и была
+        // нестабильность теста, ~1 из 3 прогонов) подменялись бы кириллицей, и сырая строка,
+        // посеянная здесь напрямую в БД, расходилась бы с тем, что реально вычислит парсер запроса.
+        var alreadyKnown = "тестпрепаратужевсправочнике " + Guid.NewGuid().ToString("N")[..6];
         db.GlobalMedicationsKb.Add(new GlobalMedicationKb
         {
             Id = Guid.NewGuid(), NormalizedName = alreadyKnown, DisplayName = alreadyKnown,
@@ -188,7 +195,7 @@ public class AdminSearchWarmupApiTests(WarmupWebFactory factory)
         });
         await db.SaveChangesAsync();
 
-        var newName = "тестпрепаратновый" + Guid.NewGuid().ToString("N")[..6];
+        var newName = "тестпрепаратновый " + Guid.NewGuid().ToString("N")[..6];
         var callsBefore = factory.Provider.CallCount;
 
         var start = await client.PostAsJsonAsync(

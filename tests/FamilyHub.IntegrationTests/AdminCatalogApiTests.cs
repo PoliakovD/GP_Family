@@ -55,9 +55,16 @@ public class AdminCatalogApiTests(AdminWebFactory factory)
     public async Task ResolveRelatedAnalytes_ExactMatch_ReturnsId_UnknownName_ReturnsNullId()
     {
         var client = await AuthenticatedClientAsync();
-        var normalizedName = $"related{Guid.NewGuid():N}";
+        // Эндпоинт нормализует входные имена (LabAnalyteNormalizer.NormalizeAnalyteKey) ПЕРЕД
+        // сравнением с NormalizedName в справочнике — тот же приём, что и реальный писатель
+        // (LabAnalyteKbWriter). Сеять в БД сырую нетронутую строку неверно: "related..." — латинское
+        // слово, Fold (кросс-алфавитная свёртка, финальный шаг NormalizeAnalyteKey) транслитерирует
+        // его в кириллицу, и сырая строка в БД никогда не совпадёт с тем, что резолвер реально ищет.
+        // Уникальный суффикс (GUID) для изоляции между тестами общего Postgres-контейнера сохраняется —
+        // нормализуется вместе со словом, коллизий не создаёт.
+        var normalizedName = LabAnalyteNormalizer.NormalizeAnalyteKey($"related{Guid.NewGuid():N}");
         var id = await SeedLabAnalyteAsync(normalizedName, "Связанный показатель", "{}");
-        var unknownName = $"нетвсправочнике{Guid.NewGuid():N}";
+        var unknownName = LabAnalyteNormalizer.NormalizeAnalyteKey($"нетвсправочнике{Guid.NewGuid():N}");
 
         var response = await client.PostAsJsonAsync(
             "/api/admin/kb/lab-analytes/resolve-related", new[] { normalizedName, unknownName });

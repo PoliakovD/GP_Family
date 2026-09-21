@@ -86,10 +86,15 @@ public class RecalculateIndicatorFlagsJobTests(FamilyHubWebFactory factory) : In
         // Пробел ПЕРЕД суффиксом обязателен — LabAnalyteNormalizer.FixMixedScriptHomoglyphs
         // разбирает слова по пробелу и подменяет латинские гомоглифы ТОЛЬКО внутри слова, где уже
         // есть кириллица; без пробела "Гемоглобин3fa85f64" стало бы одним словом со смешанным
-        // алфавитом, и некоторые латинские hex-символы (a/c/e/…) молча подменились бы кириллицей —
-        // вычисленный здесь normalizedName разошёлся бы с тем, что реально сохранит API.
+        // алфавитом, и некоторые латинские hex-символы (a/c/e/…) молча подменились бы кириллицей.
+        // NormalizeAnalyteKey (не голый Normalize) — реальный путь создания показателя
+        // (ExtractionQueryService.CreateIndicatorAsync) вычисляет ключ именно через неё; она
+        // добавляет Fold (кросс-алфавитная свёртка) финальным шагом ПОВЕРХ Normalize — Fold сам по
+        // себе транслитерирует латинские буквенные последовательности независимо от пробелов
+        // (работает на уровне отдельных "словá" по \p{L}+, digit-разрывы её не останавливают), и
+        // без него ключ теста расходился с тем, что реально сохранит API, даже несмотря на пробел.
         var rawName = $"Гемоглобин {Guid.NewGuid():N}";
-        var normalizedName = LabAnalyteNormalizer.Normalize(rawName);
+        var normalizedName = LabAnalyteNormalizer.NormalizeAnalyteKey(rawName);
 
         var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
         // refLow/refHigh заданы напрямую — тот же путь, что бланк, печатающий свой референс:
@@ -128,7 +133,8 @@ public class RecalculateIndicatorFlagsJobTests(FamilyHubWebFactory factory) : In
         var owner = ClientAs(FreshTelegramId());
         var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
         var rawName = $"Гемоглобин {Guid.NewGuid():N}";
-        var normalizedName = LabAnalyteNormalizer.Normalize(rawName);
+        // NormalizeAnalyteKey — см. комментарий в предыдущем тесте, тот же приём.
+        var normalizedName = LabAnalyteNormalizer.NormalizeAnalyteKey(rawName);
 
         var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
         // Без refLow/refHigh/refText — RefSource.None, ждёт справочник (прежнее, уже рабочее поведение).

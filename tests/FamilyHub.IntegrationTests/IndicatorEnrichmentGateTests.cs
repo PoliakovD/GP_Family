@@ -102,7 +102,11 @@ public class IndicatorEnrichmentGateTests(GuardPassingWebFactory factory) : Inte
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
+        // NormalizeAnalyteKey (со свёрткой Fold), не голый Normalize — реальный путь создания
+        // показателя (ExtractionQueryService.CreateIndicatorAsync) вычисляет ключ через
+        // NormalizeAnalyteKey; голый Normalize не транслитерирует латинские буквы GUID-суффикса
+        // uniqueName в кириллицу, из-за чего ожидаемый ключ теста расходился с реально сохранённым.
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.NormalizeAnalyteKey(uniqueName);
 
         (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey)).Should().BeTrue(
             "ручное добавление показателя ставит обогащение справочника в очередь при промахе KB, " +
@@ -124,7 +128,8 @@ public class IndicatorEnrichmentGateTests(GuardPassingWebFactory factory) : Inte
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
+        // NormalizeAnalyteKey — см. комментарий в CreateIndicator_KbMiss выше, тот же приём.
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.NormalizeAnalyteKey(uniqueName);
 
         var job = await db.LabAnalyteEnrichmentJobs.SingleOrDefaultAsync(j => j.NormalizedName == analyteKey);
         job.Should().NotBeNull("правка показателя тоже ставит обогащение справочника в очередь при промахе KB, как и добавление");
@@ -214,7 +219,8 @@ public class IndicatorEnrichmentGateTests(GuardPassingWebFactory factory) : Inte
 
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.Normalize(uniqueName);
+        // NormalizeAnalyteKey — см. комментарий в CreateIndicator_KbMiss выше, тот же приём.
+        var analyteKey = FamilyHub.Infrastructure.Search.LabAnalyteNormalizer.NormalizeAnalyteKey(uniqueName);
         (await db.LabAnalyteEnrichmentJobs.AnyAsync(j => j.NormalizedName == analyteKey && j.SpecimenKbId == bloodId))
             .Should().BeTrue("промах справочника по (показатель, новый источник) после смены должен ставить обогащение в очередь");
     }

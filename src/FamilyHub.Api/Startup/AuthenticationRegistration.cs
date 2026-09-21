@@ -95,6 +95,16 @@ public static class AuthenticationRegistration
                 IssuerSigningKeys = jwtSigningKeys,
                 ValidateLifetime = true,
                 ClockSkew = jwtOptions.ClockSkew,
+                // БЕЗ этого JsonWebTokenHandler молча ставит AuthenticationType результирующей
+                // ClaimsIdentity в захардкоженное библиотечное "AuthenticationTypes.Federation",
+                // а не в имя схемы ("PwaCookie") — из-за этого CsrfGateMiddleware (условие
+                // i.AuthenticationType == AuthSchemes.PwaCookie) НИКОГДА не находило PWA-идентичность
+                // и молча пропускал все мутирующие запросы без проверки CSRF-токена ни разу с
+                // момента перехода PWA-сессии с cookie-схемы на JWT (найдено при cleanup-рефакторинге
+                // регрессионным тестом PwaAuthFlowTests.MutatingPwaRequest_WithoutCsrfHeader_Returns400,
+                // который сам был "зелёным" только потому, что никогда реально не проверял 400 —
+                // тест предшествует этому фиксу и есть в истории на master).
+                AuthenticationType = AuthSchemes.PwaCookie,
             };
             jwtBearerOptions.Events = new JwtBearerEvents
             {
