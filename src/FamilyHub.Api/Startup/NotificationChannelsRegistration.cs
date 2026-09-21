@@ -31,13 +31,11 @@ public static class NotificationChannelsRegistration
         // --- Внутренний API для FamilyHub.TelegramBot (/internal/bot/*, см. InternalBotEndpoints) ---
         // Отдельный флаг от telegramBotConfigured: этот секрет защищает контур обмена с ботом-процессом,
         // а не с Telegram напрямую, и может быть сконфигурирован независимо (напр. в проде — всегда,
-        // в локальной разработке без контейнера бота — не обязателен).
-        var internalBotApiToken = builder.Configuration["Internal:BotApiToken"];
-        var internalBotApiConfigured = !string.IsNullOrWhiteSpace(internalBotApiToken);
-        if (internalBotApiConfigured && internalBotApiToken!.Length < 32)
-            throw new InvalidOperationException(
-                "Internal:BotApiToken (env Internal__BotApiToken) короче 32 символов — секрет обмена с " +
-                "FamilyHub.TelegramBot слишком слабый. Сгенерировать: `openssl rand -hex 32`.");
+        // в локальной разработке без контейнера бота — не обязателен). Минимальная длина токена —
+        // InternalOptionsValidator (AddOptions<InternalOptions>().ValidateOnStart() в AddFamilyHubOptions),
+        // не ручной guard здесь; булев флаг ниже нужен ТОЛЬКО для условного маппинга эндпоинтов
+        // после app.Build() (см. Program.cs), поэтому сам факт задания токена читается напрямую.
+        var internalBotApiConfigured = !string.IsNullOrWhiteSpace(builder.Configuration["Internal:BotApiToken"]);
 
         // --- Web Push: реальная доставка PWA-пользователям (редизайн навигации, ADR-0004) — покрывает
         // пользователей без Telegram, которых TelegramNotificationSender не видит вовсе. Независимо от

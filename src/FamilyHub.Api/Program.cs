@@ -42,7 +42,7 @@ try
     builder.AddFamilyHubOptions();
     var (devToolsOptions, adminOptions) = builder.AddDevToolsAndAdminGuards();
     builder.AddFamilyHubEncryption(devToolsOptions);
-    builder.AddFamilyHubPersistence();
+    var (_, postgresConnectionString) = builder.AddFamilyHubPersistence();
     builder.AddFamilyHubEventBus();
     builder.AddFamilyHubCurrentUser();
     builder.AddFamilyHubFileStorage();
@@ -52,7 +52,7 @@ try
     builder.AddFamilyHubRateLimiting();
     builder.AddFamilyHubEmail();
     builder.AddFamilyHubAccountFeatures();
-    builder.AddFamilyHubBackgroundJobs();
+    builder.AddFamilyHubBackgroundJobs(postgresConnectionString);
     var (telegramBotConfigured, internalBotApiConfigured) = builder.AddFamilyHubNotificationChannels();
     builder.AddFamilyHubLmStudio();
     builder.AddFamilyHubAttachmentPipeline();

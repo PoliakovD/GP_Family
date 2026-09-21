@@ -28,6 +28,24 @@ public class AttachmentDownloadOptions
 }
 
 /// <summary>
+/// Fail-fast при старте хоста (cleanup-рефакторинг — заменяет прежнюю ручную проверку сырой
+/// строки конфига в AddFamilyHubEncryption) — без него DownloadTokenService.RequireKey (ниже)
+/// бросал бы лениво, только при первой попытке выдать ссылку (см. находку 09.2 аудита
+/// безопасности). RequireKey остаётся как есть — дешёвая защита на случай, если
+/// AttachmentDownloadOptions когда-нибудь будет сконструирован в обход обычной DI-валидации
+/// (например, напрямую в тесте).
+/// </summary>
+public class AttachmentDownloadOptionsValidator : IValidateOptions<AttachmentDownloadOptions>
+{
+    public ValidateOptionsResult Validate(string? name, AttachmentDownloadOptions options) =>
+        string.IsNullOrWhiteSpace(options.DownloadSigningKey)
+            ? ValidateOptionsResult.Fail(
+                "Attachments:DownloadSigningKey не задан (env Attachments__DownloadSigningKey) — " +
+                "выдача ссылок на вложения невозможна.")
+            : ValidateOptionsResult.Success;
+}
+
+/// <summary>
 /// Что именно ссылка разрешает получить — примешивается в подписываемый payload, чтобы ссылка,
 /// выданная на миниатюру, не могла быть подставлена в эндпоинт оригинала (и наоборот). До
 /// добавления превью (см. AttachmentPreview) существовал только один эндпоинт /file, поэтому

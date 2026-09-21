@@ -32,14 +32,9 @@ public static class CurrentUserAndStorageRegistration
         // --- Хранилище файлов: MinIO — единственная реализация IFileStorage, в т.ч. в Development ---
         // Раньше был переключатель FileStorage:Provider = Local|Minio: запуск из IDE тихо писал
         // медицинские сканы на диск мимо объектного хранилища, и этот путь никогда не проверялся.
-        // Fail-fast на пустые креды — без него ошибка всплыла бы только при первой загрузке файла.
-        if (string.IsNullOrWhiteSpace(builder.Configuration["Minio:Endpoint"])
-            || string.IsNullOrWhiteSpace(builder.Configuration["Minio:AccessKey"])
-            || string.IsNullOrWhiteSpace(builder.Configuration["Minio:SecretKey"]))
-            throw new InvalidOperationException(
-                "Minio:Endpoint/AccessKey/SecretKey не заданы (env Minio__Endpoint/Minio__AccessKey/" +
-                "Minio__SecretKey) — хранилище вложений обязательно, в т.ч. в Development (см. docker-compose.yml).");
-
+        // Fail-fast на пустые креды — MinioOptionsValidator (AddOptions<MinioOptions>().ValidateOnStart()
+        // в AddFamilyHubOptions), не ручной guard здесь — без него ошибка всплыла бы только при
+        // первой загрузке файла.
         builder.Services.AddSingleton<IMinioClient>(sp =>
         {
             var minioOptions = sp.GetRequiredService<IOptions<MinioOptions>>().Value;

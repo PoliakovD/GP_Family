@@ -51,12 +51,10 @@ public static class EncryptionRegistration
         builder.Services.AddSingleton<IFileCipher, AesGcmFileCipher>();
         builder.Services.AddSingleton<DownloadTokenService>();
 
-        // Fail-fast для ключа подписи ссылок на скачивание вложений — без него DownloadTokenService.Sign
-        // бросал бы лениво, только при первой попытке выдать ссылку (см. находку 09.2 аудита безопасности).
-        if (string.IsNullOrWhiteSpace(builder.Configuration["Attachments:DownloadSigningKey"]))
-            throw new InvalidOperationException(
-                "Attachments:DownloadSigningKey не задан (env Attachments__DownloadSigningKey) — " +
-                "выдача ссылок на вложения невозможна.");
+        // Fail-fast для ключа подписи ссылок на скачивание вложений — AttachmentDownloadOptionsValidator
+        // (AddOptions<AttachmentDownloadOptions>().ValidateOnStart() в AddFamilyHubOptions), не ручной
+        // guard здесь — без него DownloadTokenService.Sign бросал бы лениво, только при первой попытке
+        // выдать ссылку (см. находку 09.2 аудита безопасности).
 
         return builder;
     }

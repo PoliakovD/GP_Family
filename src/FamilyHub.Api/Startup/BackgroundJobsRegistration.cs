@@ -13,11 +13,11 @@ namespace FamilyHub.Api.Startup;
 /// </summary>
 public static class BackgroundJobsRegistration
 {
-    public static WebApplicationBuilder AddFamilyHubBackgroundJobs(this WebApplicationBuilder builder)
+    /// <param name="postgresConnectionString">Из AddFamilyHubPersistence — тот же guard раньше
+    /// дублировался здесь отдельным чтением ConnectionStrings:Postgres.</param>
+    public static WebApplicationBuilder AddFamilyHubBackgroundJobs(this WebApplicationBuilder builder, string postgresConnectionString)
     {
         // --- Оповещения: Hangfire recurring job по срокам годности лекарств и дням рождения (этап 3 п.10) ---
-        var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
-            ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Postgres.");
         builder.Services.AddHangfire(cfg => cfg.UsePostgreSqlStorage(opt => opt.UseNpgsqlConnection(postgresConnectionString)));
         builder.Services.AddHangfireServer(o => o.Queues = ["default"]);
         // Второй сервер, выделенная очередь "enrichment" (этап 4) с ОДНИМ воркером: обогащение

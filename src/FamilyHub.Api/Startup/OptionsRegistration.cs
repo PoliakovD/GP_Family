@@ -13,6 +13,7 @@ using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Infrastructure.Telegram;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.Extraction;
+using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Api.Startup;
 
@@ -21,26 +22,39 @@ namespace FamilyHub.Api.Startup;
 /// без изменения поведения/порядка. Часть секций (DevTools/Admin) читается синхронно ЗДЕСЬ ЖЕ,
 /// т.к. от их значений зависит, какие сервисы вообще регистрировать ниже по Program.cs, до
 /// builder.Build() — тот же паттерн, что был в исходном файле.
+///
+/// Три секции (Minio/AttachmentDownload/Internal) переведены на AddOptions&lt;T&gt;().ValidateOnStart()
+/// вместо ручных if/throw-guard'ов, раньше разбросанных по местам их ИСПОЛЬЗОВАНИЯ (cleanup-рефакторинг,
+/// фаза "валидация Options"): их значения нужны ТОЛЬКО через обычный DI-резолв IOptions&lt;T&gt;
+/// (не для веток регистрации ДРУГИХ сервисов до builder.Build(), в отличие от DevTools/Admin/
+/// Enrichment/Email ниже) — типизированный валидатор рядом с самим классом Options убирает
+/// дублирование правила и остаётся единственным источником истины для него. Единственная
+/// поведенческая разница: ошибка всплывает чуть позже — не в момент этого вызова, а при
+/// app.RunAsync() (встроенный ASP.NET Core IStartupValidator, срабатывает ДО начала приёма
+/// трафика) — тот же итоговый fail-fast, просто другая точка в старте хоста.
 /// </summary>
 public static class OptionsRegistration
 {
     public static WebApplicationBuilder AddFamilyHubOptions(this WebApplicationBuilder builder)
     {
         builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
-        builder.Services.Configure<MinioOptions>(builder.Configuration.GetSection(MinioOptions.SectionName));
+        builder.Services.AddOptions<MinioOptions>().Bind(builder.Configuration.GetSection(MinioOptions.SectionName)).ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<MinioOptions>, MinioOptionsValidator>();
         builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
         builder.Services.Configure<LmStudioOptions>(builder.Configuration.GetSection(LmStudioOptions.SectionName));
         builder.Services.Configure<EnrichmentOptions>(builder.Configuration.GetSection(EnrichmentOptions.SectionName));
         builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection(ExtractionOptions.SectionName));
         builder.Services.Configure<ExtractionLimitsOptions>(builder.Configuration.GetSection(ExtractionLimitsOptions.SectionName));
         builder.Services.Configure<EncryptionOptions>(builder.Configuration.GetSection(EncryptionOptions.SectionName));
-        builder.Services.Configure<AttachmentDownloadOptions>(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName));
+        builder.Services.AddOptions<AttachmentDownloadOptions>().Bind(builder.Configuration.GetSection(AttachmentDownloadOptions.SectionName)).ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<AttachmentDownloadOptions>, AttachmentDownloadOptionsValidator>();
         builder.Services.Configure<AttachmentUploadOptions>(builder.Configuration.GetSection(AttachmentUploadOptions.SectionName));
         builder.Services.Configure<PreviewOptions>(builder.Configuration.GetSection(PreviewOptions.SectionName));
         builder.Services.Configure<ConsentOptions>(builder.Configuration.GetSection(ConsentOptions.SectionName));
         builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
         builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
-        builder.Services.Configure<InternalOptions>(builder.Configuration.GetSection(InternalOptions.SectionName));
+        builder.Services.AddOptions<InternalOptions>().Bind(builder.Configuration.GetSection(InternalOptions.SectionName)).ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<InternalOptions>, InternalOptionsValidator>();
         // AuthRateLimitOptions читается ниже напрямую через GetSection().Get<>() (нужно синхронно, до
         // AddRateLimiter) — Configure<> здесь дополнительно, чтобы IOptions<AuthRateLimitOptions> был
         // резолвим через DI где угодно ещё (раньше не был зарегистрирован вовсе).
