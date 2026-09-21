@@ -37,6 +37,23 @@ public class VisitMedicationEnrichmentRequestService(
             return;
         }
 
+        // Уже пытались и не вышло — ЛИБО тем же конвейером (заключения врача), ЛИБО семейным
+        // (аптечка) — оба пишут в один и тот же общий справочник, Failed в любой из двух таблиц
+        // означает "то же название с тем же исходом". Без этой проверки повторное извлечение
+        // того же/похожего документа заводило бы новую Failed-задачу на каждый прогон.
+        var alreadyFailed = await db.VisitMedicationEnrichmentJobs.AnyAsync(j =>
+            j.NormalizedName == normalizedName &&
+            (j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped), ct)
+            || await db.MedicationEnrichmentJobs.AnyAsync(j =>
+            j.NormalizedName == normalizedName &&
+            (j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped), ct);
+        if (alreadyFailed)
+        {
+            logger.LogDebug(
+                "Обогащение «{NormalizedName}» уже проваливалось ранее, новая задача не создаётся", normalizedName);
+            return;
+        }
+
         var job = new VisitMedicationEnrichmentJob
         {
             Id = Guid.NewGuid(),

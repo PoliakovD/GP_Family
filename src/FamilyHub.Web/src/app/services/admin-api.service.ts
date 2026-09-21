@@ -241,13 +241,31 @@ export interface PurgeUnclassifiedResponse {
   extractionDeleted: number; totalDeleted: number;
 }
 
-/** Один пункт инбокса «Требует внимания» — агрегат причин отказа по всем четырём конвейерам. */
+/** Итог dedupe-failed — extraction не участвует, у неё нет понятия "то же название" (ключ
+ * дедупа — MedicalRecordId, уникален по построению). */
+export interface DedupeFailedResponse {
+  labAnalyteDeleted: number; medicationDeleted: number; visitMedicationDeleted: number; totalDeleted: number;
+}
+
+/** Один пункт инбокса «Требует внимания» — агрегат причин отказа по всем четырём конвейерам.
+ * count — сырое число Failed-строк (может включать дубли одного названия); distinctCount —
+ * сколько РАЗНЫХ названий(+биоматериалов) за этим стоит. count &gt; distinctCount значит в
+ * списке есть повторы — см. dedupeFailedJobs. */
 export interface AttentionReason {
-  reason: EnrichmentFailureReasonValue | 'Unclassified'; label: string; count: number;
+  reason: EnrichmentFailureReasonValue | 'Unclassified'; label: string; count: number; distinctCount: number;
   byType: Record<string, number>;
 }
 export interface DroppedDomain { domain: string; topic: string; jobCount: number; sampleUrl: string; }
-export interface AdminAttention { reasons: AttentionReason[]; droppedDomains: DroppedDomain[]; }
+
+/** Закрытый вентиль платного поиска (ADR-0005 §9) откладывает задачи молча (Deferred) — без
+ * этого блока «Требует внимания» показал бы закрытый вентиль как зависший конвейер: ни одной
+ * ошибки, просто ничего не движется. */
+export interface WebSearchPausedBlock {
+  isPaused: boolean; pausedAt: string | null; note: string | null; deferredTotal: number; byType: Record<string, number>;
+}
+export interface AdminAttention {
+  reasons: AttentionReason[]; droppedDomains: DroppedDomain[]; webSearchPaused: WebSearchPausedBlock;
+}
 export interface TrustAndRetryResponse { retriedCount: number; }
 
 /** activeModel=null означает, что в БД ничего не выбрано и клиент шлёт fallbackModel
@@ -484,6 +502,12 @@ export class AdminApiService {
   /** Чистка задач, упавших до появления структурной причины отказа (FailureReason=null,
    * «Unclassified» в «Требует внимания») — их незачем разбирать по одной, причины у них нет. */
   purgeUnclassifiedJobs = () => this.post<PurgeUnclassifiedResponse>('/api/admin/pipeline/jobs/purge-unclassified');
+
+  /** Чистка УЖЕ накопленных дублей Failed/Skipped-строк за одно и то же название — новые дубли
+   * больше не создаются (см. class doc *RequestService на бэкенде), но это не чистит задним
+   * числом то, что уже есть. В каждой группе (NormalizedName[, биоматериал]) остаётся только
+   * самая свежая строка. */
+  dedupeFailedJobs = () => this.post<DedupeFailedResponse>('/api/admin/pipeline/jobs/dedupe-failed');
 
   reenrichLabAnalyte = (id: string) => this.post<void>(`/api/admin/pipeline/kb/lab-analytes/${id}/reenrich`);
 

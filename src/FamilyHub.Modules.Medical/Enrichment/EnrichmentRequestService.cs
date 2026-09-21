@@ -20,6 +20,10 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// MedicationEnrichmentProcessor (у него есть настоящий кэш сниппетов: если по названию уже
 /// есть закэшированный поиск, задача выполнится мгновенно и бесплатно, повторно ходить к
 /// платному API незачем). Проверка здесь заранее только дублировала бы эту логику.
+///
+/// Уже проваленная попытка (Failed/Skipped) по тому же NormalizedName блокирует новую задачу —
+/// частичный уникальный индекс дедупит только ПОКА задача жива, Failed из-под него выпадает
+/// (см. RequestAsync).
 /// </summary>
 public class EnrichmentRequestService(
     AppDbContext db,
@@ -37,6 +41,20 @@ public class EnrichmentRequestService(
         // поэтому конвейер всё равно запускается. Только Hit останавливает конвейер.
         var lookup = await kbLookup.LookupAsync(normalizedName, ct);
         if (lookup.Kind == KbLookupKind.Hit) return;
+
+        // Уже пытались и не вышло — Failed никогда не пишет в KB (Hit выше так и не появится),
+        // поэтому без этой проверки КАЖДОЕ сохранение медикамента с тем же названием (в т.ч.
+        // правка ExpiryDate без изменения имени — UpdateAsync зовёт RequestAsync безусловно)
+        // заводило бы новую Failed-задачу с той же причиной. Ручной путь не страдает —
+        // RequestRefreshAsync («Уточнить в справочнике») эту проверку намеренно не делает.
+        var alreadyFailed = await db.MedicationEnrichmentJobs.AnyAsync(j =>
+            j.NormalizedName == normalizedName &&
+            (j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped), ct);
+        if (alreadyFailed)
+        {
+            logger.LogDebug("Обогащение «{NormalizedName}» уже проваливалось ранее, новая задача не создаётся", normalizedName);
+            return;
+        }
 
         await EnqueueAsync(medication, normalizedName, userId, ct);
     }

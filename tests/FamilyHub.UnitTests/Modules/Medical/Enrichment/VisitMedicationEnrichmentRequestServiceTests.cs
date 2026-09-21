@@ -12,9 +12,11 @@ namespace FamilyHub.UnitTests.Modules.Medical.Enrichment;
 
 /// <summary>UX-редизайн: обогащение справочника медикаментов для препарата, упомянутого в
 /// заключении врача — у визита нет FamilyId (в отличие от аптечки), поэтому отдельная таблица
-/// задач (см. class doc VisitMedicationEnrichmentJob). Проверяем именно новую логику: мягкий
-/// дедуп против уже идущей задачи семейного конвейера (EnrichmentRequestService) для того же
-/// препарата — постановка второй задачи была бы лишним платным внешним запросом.</summary>
+/// задач (см. class doc VisitMedicationEnrichmentJob). Проверяем: мягкий дедуп против уже идущей
+/// ЖИВОЙ задачи семейного конвейера (EnrichmentRequestService) для того же препарата — постановка
+/// второй задачи была бы лишним платным внешним запросом; и отдельно — гейт "уже проваливалось"
+/// (Failed/Skipped, в своей таблице И в семейном конвейере) — без него повторное извлечение того
+/// же/похожего документа заводило новую Failed-задачу на каждый прогон.</summary>
 public class VisitMedicationEnrichmentRequestServiceTests : SqliteTestBase
 {
     private readonly IBackgroundJobClient _backgroundJobs = Substitute.For<IBackgroundJobClient>();
@@ -93,11 +95,11 @@ public class VisitMedicationEnrichmentRequestServiceTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task RequestAsync_SameNameCompletedInFamilyMedicationPipeline_StillCreatesJob()
+    public async Task RequestAsync_SameNameFailedInFamilyMedicationPipeline_DoesNotCreateDuplicateJob()
     {
-        // Задача аптечки уже ЗАВЕРШЕНА (не Pending/Running) — значит либо справочник уже пополнен
-        // (и наш собственный KbLookupService поймает это раньше вызова RequestAsync), либо попытка
-        // не удалась и имеет смысл попробовать снова, а не молчать вечно.
+        // Задача аптечки уже провалилась — оба конвейера пишут в один и тот же общий справочник,
+        // повторная автоматическая попытка здесь дала бы тот же исход. Раньше (до фикса) Failed
+        // выпадал из-под проверки и новая задача создавалась на каждый прогон извлечения.
         Db.MedicationEnrichmentJobs.Add(new MedicationEnrichmentJob
         {
             Id = Guid.NewGuid(),
@@ -106,6 +108,50 @@ public class VisitMedicationEnrichmentRequestServiceTests : SqliteTestBase
             RequestedByUserId = Guid.NewGuid(),
             FamilyId = Guid.NewGuid(),
             Status = EnrichmentJobStatus.Failed,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        await _sut.RequestAsync("парацетамол", "Парацетамол", Guid.NewGuid(), Guid.NewGuid());
+
+        Db.VisitMedicationEnrichmentJobs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RequestAsync_SameNameFailedInOwnTable_DoesNotCreateDuplicateJob()
+    {
+        Db.VisitMedicationEnrichmentJobs.Add(new VisitMedicationEnrichmentJob
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = "парацетамол",
+            SourceDisplayName = "Парацетамол",
+            RequestedByUserId = Guid.NewGuid(),
+            Status = EnrichmentJobStatus.Failed,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        await _sut.RequestAsync("парацетамол", "Парацетамол", Guid.NewGuid(), Guid.NewGuid());
+
+        Db.VisitMedicationEnrichmentJobs.Should().ContainSingle("не должна была создаться вторая, дедуп сработал");
+        _backgroundJobs.DidNotReceiveWithAnyArgs().Create(default!, default!);
+    }
+
+    [Fact]
+    public async Task RequestAsync_SameNameCompletedInFamilyMedicationPipeline_StillCreatesJob()
+    {
+        // Задача аптечки завершилась УСПЕШНО — справочник должен быть пополнен, и в норме
+        // KbLookupService поймает это раньше вызова RequestAsync (вызывающая сторона проверяет
+        // Hit сама). Completed сам по себе — не повод блокировать: гейт реагирует только на
+        // ИЗВЕСТНО неудачный исход (Failed/Skipped), не на успешный.
+        Db.MedicationEnrichmentJobs.Add(new MedicationEnrichmentJob
+        {
+            Id = Guid.NewGuid(),
+            NormalizedName = "парацетамол",
+            SourceDisplayName = "Парацетамол",
+            RequestedByUserId = Guid.NewGuid(),
+            FamilyId = Guid.NewGuid(),
+            Status = EnrichmentJobStatus.Completed,
             CreatedAt = DateTime.UtcNow,
         });
         await Db.SaveChangesAsync();

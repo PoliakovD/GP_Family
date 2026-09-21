@@ -2,8 +2,11 @@ namespace FamilyHub.Api.Features.Admin;
 
 /// <summary>Одна причина отказа, агрегированная по всем четырём конвейерам — карточка в
 /// «Требует внимания». Reason — строка EnrichmentFailureReason (null у задач, упавших до этой
-/// правки, представлен как "Unclassified" — см. AdminAttentionService).</summary>
-public record AttentionReasonDto(string Reason, string Label, int Count, Dictionary<string, int> ByType);
+/// правки, представлен как "Unclassified" — см. AdminAttentionService). Count — сырое число
+/// Failed-строк (может включать дубли одного названия — см. class doc *RequestService и
+/// /jobs/dedupe-failed); DistinctCount — сколько РАЗНЫХ названий(+биоматериалов) за этим стоит,
+/// Count &gt; DistinctCount значит в списке есть повторы одного и того же названия.</summary>
+public record AttentionReasonDto(string Reason, string Label, int Count, int DistinctCount, Dictionary<string, int> ByType);
 
 /// <summary>Домен, чаще всего отбрасываемый фильтром — «эти N доменов разблокируют M задач».
 /// JobCount — число РАЗНЫХ Failed-задач (NoTrustedSnippets), у которых этот домен встретился среди

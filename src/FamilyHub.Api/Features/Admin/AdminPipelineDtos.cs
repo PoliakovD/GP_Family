@@ -77,3 +77,8 @@ public record BulkDeleteResponse(int DeletedCount, List<Guid> NotFoundIds);
 /// откуда именно были удалены строки.</summary>
 public record PurgeUnclassifiedResponse(
     int LabAnalyteDeleted, int MedicationDeleted, int VisitMedicationDeleted, int ExtractionDeleted, int TotalDeleted);
+
+/// <summary>Итог dedupe-failed — чистка УЖЕ накопленных дублей Failed/Skipped-строк (см.
+/// class doc AdminPipelineEndpoints.MapPost("/jobs/dedupe-failed")). Extraction сюда не входит —
+/// у неё нет понятия "то же название" (ключ дедупа — MedicalRecordId, всегда уникален по построению).</summary>
+public record DedupeFailedResponse(int LabAnalyteDeleted, int MedicationDeleted, int VisitMedicationDeleted, int TotalDeleted);

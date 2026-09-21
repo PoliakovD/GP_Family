@@ -37,6 +37,8 @@ export class AdminAttentionComponent implements OnInit {
   readonly loading = signal(true);
   readonly busyDomain = signal<string | null>(null);
   readonly purgeBusy = signal(false);
+  readonly dedupeBusy = signal(false);
+  readonly valveBusy = signal(false);
 
   ngOnInit(): void {
     void this.load();
@@ -61,13 +63,23 @@ export class AdminAttentionComponent implements OnInit {
     return Object.entries(byType).sort((a, b) => b[1] - a[1]);
   }
 
-  /** "9 задач · показатели: 9" — предвычислено в TS, а не в шаблоне: выражения Angular-шаблонов
-   * не поддерживают деструктуризацию параметров стрелочной функции ([t, n]) => …. */
+  /** "9 задач (3 разных названия) · показатели: 9" — предвычислено в TS, а не в шаблоне:
+   * выражения Angular-шаблонов не поддерживают деструктуризацию параметров стрелочной функции
+   * ([t, n]) => …. Разница count/distinctCount — не бесплатная опечатка: если она есть, значит
+   * одно и то же название падало по этой причине несколько раз подряд (см. dedupeFailed()). */
   reasonSubtitle(r: AdminAttention['reasons'][number]): string {
     const breakdown = this.byTypeEntries(r.byType)
       .map((entry) => `${this.typeLabel(entry[0])}: ${entry[1]}`)
       .join(', ');
-    return `${r.count} задач · ${breakdown}`;
+    const distinct = r.count > r.distinctCount ? ` (${r.distinctCount} разных названий)` : '';
+    return `${r.count} задач${distinct} · ${breakdown}`;
+  }
+
+  /** Есть хотя бы одна причина, где число задач больше числа разных названий — значит, в
+   * системе накопились дубли Failed-строк (до фикса *RequestService их создавалось по одной на
+   * каждый повторный прогон), кнопка «Схлопнуть дубли» имеет смысл показать. */
+  hasDuplicates(): boolean {
+    return (this.attention()?.reasons ?? []).some((r) => r.count > r.distinctCount);
   }
 
   /** Открывает список задач, отфильтрованный по самому частому типу этой причины — большинство
@@ -100,6 +112,54 @@ export class AdminAttentionComponent implements OnInit {
       this.toast.error('Не удалось удалить задачи.');
     } finally {
       this.purgeBusy.set(false);
+    }
+  }
+
+  /** Схлопывает УЖЕ накопленные дубли Failed/Skipped-строк — в каждой группе (название[,
+   * биоматериал]) остаётся только самая свежая, остальные удаляются насовсем. Новых дублей
+   * больше не создаётся (см. class doc *RequestService на бэкенде) — это чистка задним числом. */
+  async dedupeFailed(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Схлопнуть дубли Failed-задач?',
+      message: 'Для каждого названия, упавшего несколько раз, останется только самая свежая задача — остальные будут удалены насовсем. Причина отказа последней попытки видна в её карточке.',
+      confirmText: 'Схлопнуть',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.dedupeBusy.set(true);
+    try {
+      const result = await this.api.dedupeFailedJobs();
+      this.toast.success(`Удалено дублей: ${result.totalDeleted}.`);
+      await this.load();
+    } catch {
+      this.toast.error('Не удалось схлопнуть дубли.');
+    } finally {
+      this.dedupeBusy.set(false);
+    }
+  }
+
+  /** «Включить» на баннере закрытого вентиля — тот же переключатель, что на /admin/enrichment,
+   * продублирован здесь, потому что закрытый вентиль (ADR-0005 §9) выглядел бы иначе как
+   * зависший конвейер без единой ошибки, и это единственное место, где админ видит его сразу. */
+  async openValve(): Promise<void> {
+    const note = this.attention()?.webSearchPaused.note ?? null;
+    const ok = await this.confirm.confirm({
+      title: 'Включить платный поиск?',
+      message: 'Отложенные задачи обогащения и приостановленный прогон возобновятся автоматически.',
+      confirmText: 'Включить',
+    });
+    if (!ok) return;
+
+    this.valveBusy.set(true);
+    try {
+      await this.api.setWebSearchValve(false, note);
+      this.toast.success('Платный поиск включён.');
+      await this.load();
+    } catch {
+      this.toast.error('Не удалось включить платный поиск.');
+    } finally {
+      this.valveBusy.set(false);
     }
   }
 

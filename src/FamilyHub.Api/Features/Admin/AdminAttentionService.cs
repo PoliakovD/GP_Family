@@ -52,42 +52,55 @@ public class AdminAttentionService(
             valveRow?.IsPaused ?? false, valveRow?.PausedAt, valveRow?.Note, byType.Values.Sum(), byType);
     }
 
+    /// <summary>Проекция, минимально нужная для подсчёта причин — NormalizedName+SpecimenKbId
+    /// только затем, чтобы отличить "15 разных препаратов упали по одной причине" от "1 препарат
+    /// упал 15 раз" (см. DistinctCount на AttentionReasonDto — Count теперь может расходиться с
+    /// числом реально РАЗНЫХ названий, особенно на старых базах, где дубли ещё не подчищены
+    /// /jobs/dedupe-failed). SpecimenKbId null у медикаментов/extraction — не часть ключа дедупа.</summary>
+    private record FailedJobKey(EnrichmentFailureReason? FailureReason, string NormalizedName, Guid? SpecimenKbId);
+
     private async Task<List<AttentionReasonDto>> BuildReasonsAsync(CancellationToken ct)
     {
         var byReason = new Dictionary<string, Dictionary<string, int>>();
+        var distinctByReason = new Dictionary<string, HashSet<(string Type, string NormalizedName, Guid? SpecimenKbId)>>();
 
-        async Task AddAsync(string type, IQueryable<EnrichmentFailureReason?> failedReasons)
+        async Task AddAsync(string type, IQueryable<FailedJobKey> failedJobs)
         {
-            var groups = await failedReasons
-                .GroupBy(r => r)
-                .Select(g => new { Reason = g.Key, Count = g.Count() })
-                .ToListAsync(ct);
-
-            foreach (var g in groups)
+            var rows = await failedJobs.ToListAsync(ct);
+            foreach (var group in rows.GroupBy(r => r.FailureReason))
             {
                 // Задачи, упавшие до этой правки, никогда не получат FailureReason — не теряем их
                 // молча, показываем отдельной строкой с понятной подписью (см. LabelFor).
-                var key = g.Reason?.ToString() ?? "Unclassified";
+                var key = group.Key?.ToString() ?? "Unclassified";
                 if (!byReason.TryGetValue(key, out var byType))
                 {
                     byType = [];
                     byReason[key] = byType;
+                    distinctByReason[key] = [];
                 }
-                byType[type] = byType.GetValueOrDefault(type) + g.Count;
+                byType[type] = byType.GetValueOrDefault(type) + group.Count();
+                foreach (var row in group)
+                    distinctByReason[key].Add((type, row.NormalizedName, row.SpecimenKbId));
             }
         }
 
         await AddAsync("lab-analyte", db.LabAnalyteEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed).Select(j => j.FailureReason));
+            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, j.SpecimenKbId)));
         await AddAsync("medication", db.MedicationEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed).Select(j => j.FailureReason));
+            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, null)));
         await AddAsync("visit-medication", db.VisitMedicationEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed).Select(j => j.FailureReason));
+            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, null)));
         await AddAsync("extraction", db.MedicalDocumentExtractionJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed).Select(j => j.FailureReason));
+            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            // MedicalRecordId — не название, но по построению уникален на запись, поэтому
+            // DistinctCount у extraction всегда равен Count (не бывает "дублей" в этом смысле).
+            .Select(j => new FailedJobKey(j.FailureReason, j.MedicalRecordId.ToString(), null)));
 
         return byReason
-            .Select(kv => new AttentionReasonDto(kv.Key, LabelFor(kv.Key), kv.Value.Values.Sum(), kv.Value))
+            .Select(kv => new AttentionReasonDto(kv.Key, LabelFor(kv.Key), kv.Value.Values.Sum(), distinctByReason[kv.Key].Count, kv.Value))
             .OrderByDescending(r => r.Count)
             .ToList();
     }

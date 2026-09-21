@@ -20,6 +20,12 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// SpecimenContextIds.Unresolved), никогда не ставится в очередь внешнего поиска. Это гарантирует
 /// требование "не создавать справочник по неопределённому источнику" на уровне одной проверки, а
 /// не на каждом вызывающем месте по отдельности.
+///
+/// Второй гейт — уже проваленная попытка по той же паре (см. RequestAsync ниже): частичный
+/// уникальный индекс дедупит только ПОКА задача жива (Pending/Running/Deferred), а Failed-строка
+/// из-под него выпадает — без этой проверки повторное извлечение того же документа (или новый
+/// документ с тем же показателем) заводило бы новую Failed-задачу с той же причиной на каждый
+/// прогон (найдено на проде — "Требует внимания" заполнялся десятками одинаковых карточек).
 /// </summary>
 public class LabAnalyteEnrichmentRequestService(
     AppDbContext db, IBackgroundJobClient backgroundJobs, ILogger<LabAnalyteEnrichmentRequestService> logger)
@@ -51,6 +57,24 @@ public class LabAnalyteEnrichmentRequestService(
                 "Обогащение показателя «{Name}» ({NormalizedName}) пропущено — источник не определён.",
                 sourceDisplayName, normalizedName);
             return;
+        }
+
+        // Уже пытались и не вышло — без изменений извне (новый доверенный домен, правка промпта)
+        // повторная автоматическая попытка даст тот же результат. force=true (переобогащение/
+        // reseed) намеренно проходит мимо этой проверки — там цель ИМЕННО повторить попытку.
+        // Ручной путь всё равно остаётся: админ видит причину в «Требует внимания» и жмёт
+        // «Перезапустить» — тот эндпоинт работает с уже существующей строкой, не создаёт новую.
+        if (!force)
+        {
+            var alreadyFailed = await db.LabAnalyteEnrichmentJobs.AnyAsync(j =>
+                j.NormalizedName == normalizedName && j.SpecimenKbId == specimenKbId &&
+                (j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped), ct);
+            if (alreadyFailed)
+            {
+                logger.LogDebug(
+                    "Обогащение показателя «{NormalizedName}» уже проваливалось ранее, новая задача не создаётся", normalizedName);
+                return;
+            }
         }
 
         var job = new LabAnalyteEnrichmentJob

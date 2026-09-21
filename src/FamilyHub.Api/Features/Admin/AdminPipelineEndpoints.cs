@@ -556,6 +556,43 @@ public static class AdminPipelineEndpoints
             return Results.Ok(new BulkDeleteResponse(deleted, notFound));
         });
 
+        // Чистка УЖЕ накопленных дублей Failed/Skipped-задач за одно и то же название (см.
+        // class doc *RequestService — новые дубли теперь не создаются, но задним числом это не
+        // чистит то, что уже накопилось до этой правки). Группировка по (NormalizedName[,
+        // SpecimenKbId]) среди Failed/Skipped, в каждой группе остаётся только самая свежая
+        // строка (её причина отказа самая актуальная — домены/промпты могли поменяться между
+        // попытками), остальные удаляются насовсем. Extraction не участвует — её ключ дедупа
+        // (MedicalRecordId) уникален по построению, "дублей" там не бывает.
+        group.MapPost("/jobs/dedupe-failed", async (AppDbContext db, IMemoryCache cache, CancellationToken ct) =>
+        {
+            var labRows = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
+                .Where(j => j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped)
+                .Select(j => new { j.Id, j.NormalizedName, SpecimenKbId = (Guid?)j.SpecimenKbId, j.CreatedAt })
+                .ToListAsync(ct);
+            var labIds = DedupeIds(labRows.Select(r => (r.Id, r.NormalizedName, r.SpecimenKbId, r.CreatedAt)));
+            var labDeleted = labIds.Count == 0 ? 0
+                : await db.LabAnalyteEnrichmentJobs.Where(j => labIds.Contains(j.Id)).ExecuteDeleteAsync(ct);
+
+            var medRows = await db.MedicationEnrichmentJobs.AsNoTracking()
+                .Where(j => j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped)
+                .Select(j => new { j.Id, j.NormalizedName, j.CreatedAt })
+                .ToListAsync(ct);
+            var medIds = DedupeIds(medRows.Select(r => (r.Id, r.NormalizedName, (Guid?)null, r.CreatedAt)));
+            var medDeleted = medIds.Count == 0 ? 0
+                : await db.MedicationEnrichmentJobs.Where(j => medIds.Contains(j.Id)).ExecuteDeleteAsync(ct);
+
+            var visitRows = await db.VisitMedicationEnrichmentJobs.AsNoTracking()
+                .Where(j => j.Status == EnrichmentJobStatus.Failed || j.Status == EnrichmentJobStatus.Skipped)
+                .Select(j => new { j.Id, j.NormalizedName, j.CreatedAt })
+                .ToListAsync(ct);
+            var visitIds = DedupeIds(visitRows.Select(r => (r.Id, r.NormalizedName, (Guid?)null, r.CreatedAt)));
+            var visitDeleted = visitIds.Count == 0 ? 0
+                : await db.VisitMedicationEnrichmentJobs.Where(j => visitIds.Contains(j.Id)).ExecuteDeleteAsync(ct);
+
+            if (labDeleted + medDeleted + visitDeleted > 0) cache.Remove(AttentionCacheKey);
+            return Results.Ok(new DedupeFailedResponse(labDeleted, medDeleted, visitDeleted, labDeleted + medDeleted + visitDeleted));
+        });
+
         // Чистка задач, упавших ДО этой правки (FailureReason ещё не проставлялся — см.
         // EnrichmentFailureReason) — «Требует внимания» показывает их отдельным пунктом
         // "Unclassified", разбирать их по одной незачем: причины у них по определению нет,
@@ -581,26 +618,18 @@ public static class AdminPipelineEndpoints
 
         // Точечное принудительное переобогащение одной уже существующей строки справочника
         // показателей (см. LabAnalyteEnrichmentJob.Force) — не батч, как /api/admin/kb/lab-analytes/reenrich.
+        // Через RequestAsync(force: true), не хендролленную вставку — та раньше падала
+        // необработанным DbUpdateException, если для этой пары уже была живая Pending/Running/
+        // Deferred-задача (единственная точка входа и её транзакция/catch — ровно за этим).
         group.MapPost("/kb/lab-analytes/{id:guid}/reenrich", async (
-            Guid id, AppDbContext db, IBackgroundJobClient backgroundJobs, CancellationToken ct) =>
+            Guid id, AppDbContext db, LabAnalyteEnrichmentRequestService enrichmentRequest, CancellationToken ct) =>
         {
             var kb = await db.GlobalLabAnalytesKb.AsNoTracking().FirstOrDefaultAsync(k => k.Id == id, ct);
             if (kb is null) return Results.NotFound();
 
-            var job = new Domain.Entities.LabAnalyteEnrichmentJob
-            {
-                Id = Guid.NewGuid(),
-                NormalizedName = kb.NormalizedName,
-                SpecimenKbId = kb.SpecimenKbId,
-                SourceDisplayName = kb.DisplayName,
-                Force = true,
-                RequestedByUserId = Guid.Empty,
-                Status = EnrichmentJobStatus.Pending,
-                CreatedAt = DateTime.UtcNow,
-            };
-            db.LabAnalyteEnrichmentJobs.Add(job);
-            await db.SaveChangesAsync(ct);
-            backgroundJobs.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+            await enrichmentRequest.RequestAsync(
+                kb.NormalizedName, kb.SpecimenKbId, kb.DisplayName, labIndicatorId: null, requestedByUserId: Guid.Empty,
+                force: true, origin: EnrichmentRequestOrigin.SystemMaintenance, ct: ct);
             return Results.Accepted();
         });
 
@@ -613,6 +642,15 @@ public static class AdminPipelineEndpoints
             return Results.Accepted();
         });
     }
+
+    /// <summary>Группирует по (NormalizedName, SpecimenKbId) — null у медикаментов, где ключ
+    /// дедупа однокомпонентный — и возвращает Id всех строк группы КРОМЕ самой свежей
+    /// (CreatedAt). Используется /jobs/dedupe-failed на все три enrich-конвейера.</summary>
+    private static List<Guid> DedupeIds(IEnumerable<(Guid Id, string NormalizedName, Guid? SpecimenKbId, DateTime CreatedAt)> rows) =>
+        rows.GroupBy(r => (r.NormalizedName, r.SpecimenKbId))
+            .SelectMany(g => g.OrderByDescending(r => r.CreatedAt).Skip(1))
+            .Select(r => r.Id)
+            .ToList();
 
     /// <summary>Сброс задачи в Pending (снимает Error/FailureReason — задача перезапускается
     /// начисто) + постановка в очередь тем же процессором. Общий хвост для одиночного retry,
