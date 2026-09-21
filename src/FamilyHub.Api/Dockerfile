@@ -25,6 +25,13 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 WORKDIR /src
 
+# Central Package Management (Directory.Packages.props) + общие TargetFramework/Nullable
+# (Directory.Build.props) живут в корне репозитория, ОДНИМ уровнем выше src/<Проект>/*.csproj —
+# та же относительная глубина здесь (/src/Directory.*.props рядом с /src/<Проект>/*.csproj).
+# Без этого COPY `dotnet restore` ниже не найдёт версии пакетов (PackageReference без Version
+# требует ManagePackageVersionsCentrally, а его некому включить).
+COPY Directory.Build.props Directory.Packages.props ./
+
 COPY src/FamilyHub.Api/FamilyHub.Api.csproj                              FamilyHub.Api/
 COPY src/FamilyHub.Domain/FamilyHub.Domain.csproj                        FamilyHub.Domain/
 COPY src/FamilyHub.Contracts/FamilyHub.Contracts.csproj                  FamilyHub.Contracts/

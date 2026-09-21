@@ -5,10 +5,4 @@
        message URN, см. ADR-0006). Contracts остаётся максимально лёгкой сборкой, на которую
        могут ссылаться все модули, не тянув за собой шину целиком. -->
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
 </Project>

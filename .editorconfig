@@ -1,0 +1,23 @@
+root = true
+
+# Формат-конвенции, уже фактически используемые в проекте (4-пробельный отступ C#, CRLF —
+# core.autocrlf=true в этом чекауте). Только форматирование, без включения/повышения
+# серьёзности анализаторов — это отдельная задача, требующая прогона по всей базе и разбора
+# результатов, не входит в cleanup-рефакторинг.
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+
+[*.{json,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

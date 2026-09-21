@@ -9,6 +9,10 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 WORKDIR /src
 
+# Central Package Management + общие TargetFramework/Nullable — см. комментарий в
+# src/FamilyHub.Api/Dockerfile (тот же приём, та же относительная глубина).
+COPY Directory.Build.props Directory.Packages.props ./
+
 COPY src/FamilyHub.TelegramBot/FamilyHub.TelegramBot.csproj  FamilyHub.TelegramBot/
 COPY src/FamilyHub.Contracts/FamilyHub.Contracts.csproj      FamilyHub.Contracts/
 
