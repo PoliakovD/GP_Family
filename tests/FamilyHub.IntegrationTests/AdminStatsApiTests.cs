@@ -75,5 +75,20 @@ public class AdminStatsApiTests(AdminWebFactory factory)
         status.Status.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Keys_ReportsRealNumberOfPreviousDownloadKeys()
+    {
+        // AdminWebFactory задаёт ровно один отставной ключ ссылок (Attachments:PreviousSigningKeys:0).
+        // Раньше AdminStatsService.GetKeyRings() возвращал захардкоженный 0, и строка «Attachments»
+        // в «Безопасность → Ключи и ротация» всегда показывала «—».
+        var client = await AuthenticatedClientAsync();
+
+        var rings = await client.GetFromJsonAsync<KeyRingsResponse>("/api/admin/keys");
+
+        rings!.Attachments.PreviousKeyCount.Should().Be(1);
+    }
+
     private record RotationStatusResponse(Guid? RunId, string? TargetKeyId, string? Status);
+    private record KeyRingsResponse(AttachmentsRing Attachments);
+    private record AttachmentsRing(int PreviousKeyCount);
 }

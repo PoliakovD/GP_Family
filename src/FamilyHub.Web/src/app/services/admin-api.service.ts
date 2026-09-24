@@ -46,6 +46,16 @@ export interface AdminKeyRings {
   attachments: { previousKeyCount: number };
 }
 
+/** Откуда взято значение настройки: env / appsettings / cli / other, либо default — нигде не задано,
+ * действует значение по умолчанию из кода. */
+export type ConfigSource = 'env' | 'appsettings' | 'cli' | 'other' | 'default';
+
+/** Одна настройка «Настройки → Конфиг env». Секрет (isSecret) значения не несёт вообще — value всегда
+ * null, есть только isSet («задан / не задан»); так устроен и бэкенд (AdminConfigService). */
+export interface ConfigItem { key: string; value: string | null; isSecret: boolean; isSet: boolean; source: ConfigSource; }
+export interface ConfigSection { name: string; title: string; items: ConfigItem[]; }
+export interface AdminConfig { sections: ConfigSection[]; }
+
 export interface RotationStatus {
   runId: string | null; targetKeyId: string | null; status: string | null;
   startedAt: string | null; finishedAt: string | null; lastError: string | null;
@@ -353,6 +363,10 @@ export class AdminApiService {
   getSecurityStats = () => this.get<AdminSecurityStats>('/api/admin/stats/security');
 
   getKeyRings = () => this.get<AdminKeyRings>('/api/admin/keys');
+
+  /** Эффективная конфигурация (read-only): несекретные настройки по белому списку + «задан / не задан»
+   * для секретов. */
+  getConfig = () => this.get<AdminConfig>('/api/admin/config');
   startRotation = () => this.post<void>('/api/admin/keys/encryption/rotate');
   cancelRotation = () => this.post<void>('/api/admin/keys/encryption/rotate/cancel');
   getRotationStatus = () => this.get<RotationStatus>('/api/admin/keys/encryption/rotate/status');

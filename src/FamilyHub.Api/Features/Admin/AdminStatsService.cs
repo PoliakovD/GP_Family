@@ -23,6 +23,7 @@ public class AdminStatsService(
     IEncryptionKeyRing encryptionKeyRing,
     IOptions<JwtOptions> jwtOptions,
     IOptions<ConsentOptions> consentOptions,
+    IOptions<AttachmentDownloadOptions> attachmentOptions,
     HealthCheckService healthChecks)
 {
     public async Task<AdminOverviewDto> GetOverviewAsync(CancellationToken ct = default)
@@ -182,7 +183,7 @@ public class AdminStatsService(
         return new AdminKeyRingsDto(
             new EncryptionKeyRingDto(encryptionKeyRing.ActiveKeyId, encryptionKeyRing.PreviousKeyIds),
             new JwtKeyRingDto(jwt.ActiveKeyId, jwt.PreviousSigningKeys.Select(k => k.Id).ToList()),
-            new DownloadKeyRingDto(0));
+            new DownloadKeyRingDto(attachmentOptions.Value.PreviousSigningKeys.Count));
     }
 
     private record OutboxBacklogRow(int UndeliveredBatches, DateTime? OldestUndeliveredAt);

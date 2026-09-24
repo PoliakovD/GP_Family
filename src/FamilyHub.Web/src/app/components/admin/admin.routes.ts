@@ -53,6 +53,7 @@ const SETTINGS_TABS: AdminTab[] = [
   { path: 'pipeline-steps', label: 'Шаги пайплайна' },
   { path: 'prompts', label: 'Промпты' },
   { path: 'web-search', label: 'Веб-поиск' },
+  { path: 'env', label: 'Конфиг env' },
 ];
 
 const OPERATIONS_TABS: AdminTab[] = [
@@ -130,6 +131,10 @@ export const ADMIN_ROUTES: Routes = [
       path: 'web-search',
       loadComponent: () =>
         import('./admin-web-search/admin-web-search.component').then((m) => m.AdminWebSearchComponent),
+    },
+    {
+      path: 'env',
+      loadComponent: () => import('./admin-config-env/admin-config-env.component').then((m) => m.AdminConfigEnvComponent),
     },
   ]),
 

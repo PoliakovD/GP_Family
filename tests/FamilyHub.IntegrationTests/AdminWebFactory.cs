@@ -14,6 +14,14 @@ public class AdminWebFactory : FamilyHubWebFactory
     public const string TestUser = "admin-test-user";
     public const string TestPassword = "admin-test-password";
 
+    /// <summary>Заведомо узнаваемое значение секрета Enrichment:ApiKey — AdminConfigApiTests
+    /// проверяет, что оно ни при каких условиях не появляется в ответе /api/admin/config.</summary>
+    public const string EnrichmentApiKeySentinel = "sentinel-enrichment-api-key-DO-NOT-LEAK";
+
+    /// <summary>Один отставной ключ ссылок на скачивание — AdminStatsApiTests проверяет, что
+    /// «Ключи» показывают их реальное число (раньше счётчик был захардкожен нулём).</summary>
+    public const string PreviousDownloadKey = "test-previous-download-signing-key";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
@@ -29,5 +37,8 @@ public class AdminWebFactory : FamilyHubWebFactory
         // тест истечения). Понадобится тест именно истечения — заводить для него отдельную фабрику
         // с ещё более коротким TTL, не трогая этот дефолт.
         builder.UseSetting("Admin:SessionLifetime", "00:02:00");
+
+        builder.UseSetting("Enrichment:ApiKey", EnrichmentApiKeySentinel);
+        builder.UseSetting("Attachments:PreviousSigningKeys:0", PreviousDownloadKey);
     }
 }
