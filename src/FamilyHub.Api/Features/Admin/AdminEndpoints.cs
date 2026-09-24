@@ -38,6 +38,8 @@ public static class AdminEndpoints
 
         group.MapGet("/keys", (AdminStatsService stats) => Results.Ok(stats.GetKeyRings()));
 
+        group.MapCredentialEndpoints();
+
         // Read-only вид эффективной конфигурации (Настройки → Конфиг env) — только несекретные
         // настройки по явному белому списку, секреты как «задан / не задан» (см. AdminConfigService).
         group.MapGet("/config", (AdminConfigService config) => Results.Ok(config.Get()));

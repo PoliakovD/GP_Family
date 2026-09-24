@@ -18,6 +18,11 @@ const STATUS_LABELS: Record<string, string> = {
   // Прогоны (перешифровка, пересборка, прогрев)
   Paused: 'На паузе',
   Cancelled: 'Остановлен',
+  // Ротация учёток приложения (CredentialRotationStatus)
+  AwaitingDeploy: 'Ждёт деплоя',
+  Activated: 'Применена, старая действует',
+  Revoked: 'Завершена, старая отозвана',
+  Superseded: 'Заменена новой',
 };
 
 export function statusLabel(status: string | null | undefined): string {

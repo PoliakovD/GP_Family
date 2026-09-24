@@ -86,6 +86,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>Прогоны перешифровки при ротации ключа (ADR-0009) — см. EncryptionRotationJob.</summary>
     public DbSet<EncryptionRotationRun> EncryptionRotationRuns => Set<EncryptionRotationRun>();
 
+    /// <summary>История ротаций учёток приложения к Postgres/MinIO (ADR-0011) — только метаданные, без секретов.</summary>
+    public DbSet<CredentialRotation> CredentialRotations => Set<CredentialRotation>();
+
     /// <summary>Аудит платных вызовов внешнего веб-поиска (см. WebSearchCallLogger,
     /// /admin/enrichment → «Вызовы поиска») — одна строка на каждый SearchAsync, включая
     /// кэш-хиты.</summary>
