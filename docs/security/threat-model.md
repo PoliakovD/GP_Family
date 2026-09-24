@@ -74,7 +74,7 @@
 | Перебор запросов на распознавание/OCR сверх разумного | `ExtractionLimitsOptions.DailyJobsPerUser` — суточная квота в Postgres (переживает рестарт, ADR-0001); rate limiting: политика `"llm"` (`POST .../extract`, `.../summary/regenerate`, `POST /api/medications/ocr`) |
 | Перебор создания записей/загрузки вложений | rate limiting: политика `"medical-write"` (`POST /api/medical-records`, `POST .../attachments`) |
 | Слепая трата платного веб-поиска (Yandex/Brave) сверх бюджета | `IWebSearchValveService` — ручной вентиль (закрыт → задачи уходят в `EnrichmentJobStatus.Deferred`, не отменяются, возобновляются `DeferredEnrichmentReleaseJob` при открытии), общий на все три enrich-конвейера, плюс явный бюджет платных вызовов на прогон прогрева (`SearchWarmupRun.MaxPaidCalls`, админка-only, `PlatformAdmin`) |
-| Непрослеживаемость платных вызовов (сколько заплачено и за что) | `WebSearchCallLog` — аудит каждого вызова (включая кэш-хиты), админка `/admin/enrichment` → «Вызовы поиска» |
+| Непрослеживаемость платных вызовов (сколько заплачено и за что) | `WebSearchCallLog` — аудит каждого вызова (включая кэш-хиты), админка «Операции → Журнал вызовов» (`/admin/operations/search-calls`) |
 
 Обе новые rate-limiting-политики (`"llm"`/`"medical-write"`, `Program.cs`) партиционированы по
 `UserId` (`ClaimsPrincipalExtensions.GetUserId()`, с фолбэком на IP), не только по IP клиента —

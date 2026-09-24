@@ -18,70 +18,9 @@ export const routes: Routes = [
     canActivate: [adminGuard],
     loadComponent: () =>
       import('./components/admin/admin-hub/admin-hub.component').then((m) => m.AdminHubComponent),
-    children: [
-      { path: '', redirectTo: 'attention', pathMatch: 'full' },
-      {
-        // Инбокс «Требует внимания» (§3/§7 плана) — точка входа: что сломано в конвейере
-        // обогащения и почему, сгруппировано, вместо ручного разбора списка задач построчно.
-        path: 'attention',
-        loadComponent: () =>
-          import('./components/admin/admin-attention/admin-attention.component').then(
-            (m) => m.AdminAttentionComponent,
-          ),
-      },
-      {
-        path: 'overview',
-        loadComponent: () =>
-          import('./components/admin/admin-overview/admin-overview.component').then(
-            (m) => m.AdminOverviewComponent,
-          ),
-      },
-      {
-        path: 'storage',
-        loadComponent: () =>
-          import('./components/admin/admin-storage/admin-storage.component').then(
-            (m) => m.AdminStorageComponent,
-          ),
-      },
-      {
-        path: 'system',
-        loadComponent: () =>
-          import('./components/admin/admin-system/admin-system.component').then(
-            (m) => m.AdminSystemComponent,
-          ),
-      },
-      {
-        path: 'keys',
-        loadComponent: () =>
-          import('./components/admin/admin-keys/admin-keys.component').then(
-            (m) => m.AdminKeysComponent,
-          ),
-      },
-      {
-        // Пересборка enrich-пайплайна: доверенные домены + кэш сырых результатов поиска.
-        path: 'enrichment',
-        loadComponent: () =>
-          import('./components/admin/admin-enrichment/admin-enrichment.component').then(
-            (m) => m.AdminEnrichmentComponent,
-          ),
-      },
-      {
-        // Управление enrich-пайплайном (§2 плана): шаги, промпты, задачи.
-        path: 'pipeline',
-        loadComponent: () =>
-          import('./components/admin/admin-pipeline/admin-pipeline.component').then(
-            (m) => m.AdminPipelineComponent,
-          ),
-      },
-      {
-        // Ручная правка справочников после ИИ (§3 плана): показатели, медикаменты, источники.
-        path: 'catalog',
-        loadComponent: () =>
-          import('./components/admin/admin-catalog/admin-catalog.component').then(
-            (m) => m.AdminCatalogComponent,
-          ),
-      },
-    ],
+    // Дочерние роуты (шесть разделов, вложенные страницы, редиректы со старых адресов) — в
+    // отдельном файле: их много, а грузятся они только при заходе в админку.
+    loadChildren: () => import('./components/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
   },
 
   // Публичные / служебные маршруты (без гардов).

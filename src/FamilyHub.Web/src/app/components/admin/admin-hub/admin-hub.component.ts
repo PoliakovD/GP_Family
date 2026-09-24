@@ -3,9 +3,17 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { AdminApiService } from '../../../services/admin-api.service';
 
 /**
- * Хаб админ-панели (ADR-0009): вкладки Обзор/Хранилище/Система/Ключи — тот же паттерн
- * вложенных роутов, что SettingsComponent/HealthHubComponent (patterns/frontend_web.md,
- * «Хаб-паттерн — второе применение подтвердило, что это правило»).
+ * Хаб админ-панели (ADR-0009): шесть разделов верхнего уровня, внутри каждого (кроме «Требует
+ * внимания») — вложенные страницы, см. admin.routes.ts. Тот же паттерн вложенных роутов, что
+ * SettingsComponent/HealthHubComponent (patterns/frontend_web.md, «Хаб-паттерн»).
+ *
+ * Разделы сгруппированы по тому, ЧТО админ делает, а не по тому, из какой подсистемы пришли:
+ *  - Требует внимания — что сломано прямо сейчас;
+ *  - Мониторинг — как чувствует себя система (только чтение);
+ *  - Безопасность — ключи, ротация, статистика доступа;
+ *  - Настройки — то, что можно менять без передеплоя;
+ *  - Операции — разовые и рабочие действия (задачи, прогрев, пересборки);
+ *  - Справочник — ручная правка справочников после ИИ.
  */
 @Component({
   selector: 'app-admin-hub',
@@ -20,12 +28,10 @@ export class AdminHubComponent {
 
   readonly sections: { path: string; label: string }[] = [
     { path: 'attention', label: 'Требует внимания' },
-    { path: 'overview', label: 'Обзор' },
-    { path: 'storage', label: 'Хранилище' },
-    { path: 'system', label: 'Система' },
-    { path: 'keys', label: 'Ключи' },
-    { path: 'enrichment', label: 'Обогащение' },
-    { path: 'pipeline', label: 'Пайплайн' },
+    { path: 'monitoring', label: 'Мониторинг' },
+    { path: 'security', label: 'Безопасность' },
+    { path: 'settings', label: 'Настройки' },
+    { path: 'operations', label: 'Операции' },
     { path: 'catalog', label: 'Справочник' },
   ];
 

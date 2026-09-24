@@ -1,0 +1,137 @@
+<app-web-search-banner />
+
+<div class="d-flex mb-3" style="justify-content: flex-end;">
+  <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
+</div>
+
+<div class="card mb-3">
+  <div class="card-title">Платный поиск за 30 дней</div>
+  <div class="card-body">
+    @if (statsLoading() && !stats()) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (statsError()) {
+      <div class="alert-danger">{{ statsError() }}</div>
+    } @else {
+      @let s = stats();
+      @if (s) {
+        <table class="table mb-3">
+          <tbody>
+            <tr><td>Всего вызовов</td><td>{{ s.totalCalls }}</td></tr>
+            <tr><td>Платных</td><td>{{ s.paidCalls }}</td></tr>
+            <tr><td>Кэш-хитов</td><td>{{ s.cacheHits }} ({{ (s.cacheHitShare * 100) | number: '1.0-0' }}%)</td></tr>
+            <tr>
+              <td>Расход в этом месяце</td>
+              <td>{{ s.usedThisMonth }}{{ s.estimatedMonthlySpend !== null ? ' (≈' + (s.estimatedMonthlySpend | number: '1.0-0') + ' ₽)' : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+          <div>
+            <strong>По провайдеру:</strong>
+            @for (row of s.byProvider; track row.key) { <div>{{ row.key }}: {{ row.count }}</div> }
+          </div>
+          <div>
+            <strong>По исходу:</strong>
+            @for (row of s.byOutcome; track row.key) { <div>{{ outcomeKeyLabel(row.key) }}: {{ row.count }}</div> }
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-title">Вызовы поиска</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Полный аудит обращений к платному внешнему поиску (Yandex/Brave) — включая кэш-хиты (не
+      платные, но видны здесь же — так можно проверить, что кэш реально работает).
+    </p>
+
+    <form class="d-flex gap-2 mb-3" style="flex-wrap: wrap;" (ngSubmit)="load(1)">
+      <input class="input" placeholder="поиск по названию…"
+             [ngModel]="query()" (ngModelChange)="query.set($event)" name="callQuery" />
+      <select class="input" [ngModel]="outcomeFilter()" (ngModelChange)="setOutcomeFilter($event)" name="callOutcome">
+        <option [ngValue]="null">Любой исход</option>
+        @for (o of outcomeOptions; track o.value) {
+          <option [ngValue]="o.value">{{ o.label }}</option>
+        }
+      </select>
+      <button type="submit" class="btn btn-secondary btn-sm" [disabled]="loading()">Найти</button>
+    </form>
+
+    @if (loading() && rows().length === 0) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (error()) {
+      <div class="alert-danger">{{ error() }}</div>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Время</th><th>Название</th><th>Провайдер</th><th>Исход</th>
+            <th>HTTP</th><th>мс</th><th>Сниппетов</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr [class.text-muted]="row.outcome === WebSearchCallOutcome.CacheHit">
+              <td>{{ row.occurredAt | date: 'dd.MM.yyyy HH:mm:ss' }}</td>
+              <td>{{ row.normalizedName }}{{ row.specimenDisplayName ? ' (' + row.specimenDisplayName + ')' : '' }}</td>
+              <td>{{ row.provider }}</td>
+              <td>{{ outcomeLabel(row.outcome) }}</td>
+              <td>{{ row.httpStatus ?? '—' }}</td>
+              <td>{{ row.durationMs }}</td>
+              <td>{{ row.snippetCount }}</td>
+              <td><button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(row.id)">Открыть</button></td>
+            </tr>
+          } @empty {
+            <tr><td colspan="8" class="text-muted">Ничего не найдено.</td></tr>
+          }
+        </tbody>
+      </table>
+
+      @if (totalPages() > 1) {
+        <div class="d-flex gap-2" style="align-items: center;">
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading() || page() <= 1"
+                  (click)="load(page() - 1)">← Назад</button>
+          <span class="text-muted">{{ page() }} / {{ totalPages() }} ({{ total() }})</span>
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading() || page() >= totalPages()"
+                  (click)="load(page() + 1)">Вперёд →</button>
+        </div>
+      }
+    }
+  </div>
+</div>
+
+<app-side-panel [open]="!!openCallId()" title="Вызов поиска" width="min(760px, 100vw)" (closed)="closeDetail()">
+  @if (detailLoading()) {
+    <p class="text-muted">Загрузка…</p>
+  } @else {
+    @let d = detail();
+    @if (d) {
+      <table class="table">
+        <tbody>
+          <tr><td>Время</td><td>{{ d.occurredAt | date: 'dd.MM.yyyy HH:mm:ss' }}</td></tr>
+          <tr><td>Исход</td><td>{{ outcomeLabel(d.outcome) }}</td></tr>
+          <tr><td>Провайдер</td><td>{{ d.provider }}</td></tr>
+          <tr><td>Название</td><td>{{ d.normalizedName }}</td></tr>
+          @if (d.specimenDisplayName) { <tr><td>Биоматериал</td><td>{{ d.specimenDisplayName }}</td></tr> }
+          <tr><td>Адрес запроса</td><td>{{ d.endpoint ?? '—' }}</td></tr>
+          <tr><td>HTTP-статус</td><td>{{ d.httpStatus ?? '—' }}</td></tr>
+          <tr><td>Длительность</td><td>{{ d.durationMs }} мс</td></tr>
+          <tr><td>Сниппетов</td><td>{{ d.snippetCount }}</td></tr>
+          @if (d.error) { <tr><td>Ошибка</td><td class="text-danger">{{ d.error }}</td></tr> }
+          @if (d.jobKind && d.jobId) { <tr><td>Задача</td><td>{{ d.jobKind }} / {{ d.jobId }}</td></tr> }
+        </tbody>
+      </table>
+      <div class="card-title">Текст запроса</div>
+      <pre style="white-space: pre-wrap; word-break: break-word;">{{ d.queryText || '—' }}</pre>
+      @if (d.resultUrls.length > 0) {
+        <div class="card-title">Использованные источники</div>
+        <ul>
+          @for (url of d.resultUrls; track url) { <li><a [href]="url" target="_blank" rel="noopener">{{ url }}</a></li> }
+        </ul>
+      }
+    }
+  }
+</app-side-panel>

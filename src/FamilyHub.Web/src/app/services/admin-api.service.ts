@@ -94,8 +94,8 @@ export const WebSearchCallOutcome = {
 } as const;
 export type WebSearchCallOutcomeValue = (typeof WebSearchCallOutcome)[keyof typeof WebSearchCallOutcome];
 
-/** Аудит-лог платных вызовов внешнего веб-поиска (см. AdminSearchCallsEndpoints) — вкладка
- * «Вызовы поиска» внутри /admin/enrichment. */
+/** Аудит-лог платных вызовов внешнего веб-поиска (см. AdminSearchCallsEndpoints) — страница
+ * «Операции → Журнал вызовов». */
 export interface SearchCallRow {
   id: string; occurredAt: string; provider: string; topic: WebSearchTopicValue; normalizedName: string;
   specimenDisplayName: string | null; httpStatus: number | null; durationMs: number;
@@ -429,6 +429,11 @@ export class AdminApiService {
   // деплоя исправлений очистки имён/резолвинга источника, отдельно от reenrich (который реагирует
   // на дрейф PayloadVersion построчно и запускается автоматически).
   startKbRebuild = () => this.post<void>('/api/admin/kb/lab-analytes/rebuild');
+
+  /** Принудительное переобогащение показателей со старой схемой payload батчами
+   * (LabAnalyteKbReenrichJob) — фоновая задача, эндпоинт сразу отвечает 202. Не путать с
+   * reenrichLabAnalyte ниже (один показатель по id) и с полной пересборкой выше. */
+  reenrichLabAnalytesBatch = () => this.post<void>('/api/admin/kb/lab-analytes/reenrich');
   getKbRebuildStatus = () => this.get<KbRebuildStatus>('/api/admin/kb/lab-analytes/rebuild/status');
 
   // Прогрев кэша веб-поиска из админки (грантовый лимит облака) — см. AdminWarmupEndpoints.

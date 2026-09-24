@@ -10,6 +10,7 @@ import {
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { AdminStatusPipe } from '../shared/admin-status.pipe';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -27,21 +28,21 @@ const REASON_LABELS: Record<EnrichmentFailureReasonValue, string> = {
 
 /**
  * Тело карточки задачи (§7 плана) — монтируется в `app-side-panel` из ДВУХ мест: списка задач
- * (`admin-pipeline`, вкладка «Задачи») и инбокса «Требует внимания» (`admin-attention`), поэтому
+ * (`admin-jobs`, «Операции → Задачи») и инбокса «Требует внимания» (`admin-attention`), поэтому
  * вынесено отдельным компонентом, а не дублируется. Главный сценарий, ради которого всё это
  * заведено (см. план, Context): «упала задача из-за промаха по доверенным сниппетам» — здесь видно
  * причину, сниппеты кэша с их доменами и можно доверить домен/override конкретного URL и
- * перезапустить ОДНИМ действием, не уходя на вкладку «Обогащение» и обратно.
+ * перезапустить ОДНИМ действием, не уходя на другую страницу и обратно.
  *
  * Черновик правок (overrideDraft/trustDraft) копится локально и уходит одним запросом
  * (resolve-and-retry) только по клику «Применить и перезапустить» — один клик = один запрос,
- * а не по запросу на каждый чекбокс (см. cycleSnippetOverride в admin-enrichment для контраста
+ * а не по запросу на каждый чекбокс (см. cycleSnippetOverride в admin-cache-panel для контраста
  * со старым способом, где такого черновика не было).
  */
 @Component({
   selector: 'app-admin-job-panel',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, AdminStatusPipe],
   templateUrl: './admin-job-panel.component.html',
 })
 export class AdminJobPanelComponent implements OnChanges, OnDestroy {
@@ -125,7 +126,7 @@ export class AdminJobPanelComponent implements OnChanges, OnDestroy {
     return s.enabled;
   }
 
-  /** Тройной клик, как в admin-enrichment: не тронуто → включить → выключить → не тронуто. */
+  /** Тройной клик, как в admin-cache-panel: не тронуто → включить → выключить → не тронуто. */
   cycleOverride(s: SearchCacheSnippet): void {
     const current = this.overrideDraft()[s.url];
     const next = current === undefined ? true : current === true ? false : undefined;

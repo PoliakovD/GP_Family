@@ -1,0 +1,88 @@
+<app-web-search-banner />
+
+<div class="card">
+  <div class="card-title">Задачи конвейеров</div>
+  <div class="card-body">
+    <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+      <div class="seg">
+        @for (t of jobTypes; track t.value) {
+          <button type="button" class="seg-opt" [class.active]="jobType() === t.value" (click)="selectJobType(t.value)">
+            {{ t.label }}
+          </button>
+        }
+      </div>
+      <select class="input" [ngModel]="jobStatus()" (ngModelChange)="selectJobStatus($event)">
+        <option value="">Любой статус</option>
+        @for (o of statusOptions; track o.value) {
+          <option [value]="o.value">{{ o.label }}</option>
+        }
+      </select>
+      @if (jobReason()) {
+        <span class="tag tag-accent-2">
+          причина: {{ jobReason() }}
+          <button type="button" class="btn-icon" style="padding: 0 4px;" aria-label="Снять фильтр по причине" (click)="clearJobReason()">
+            <i class="ph ph-x" aria-hidden="true"></i>
+          </button>
+        </span>
+      }
+      @if (selectedJobIds().size > 0) {
+        <button type="button" class="btn btn-primary btn-sm" [disabled]="jobsBusy()" (click)="bulkRetrySelected()">
+          Перезапустить выбранные ({{ selectedJobIds().size }})
+        </button>
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="jobsBusy()" (click)="bulkDeleteSelected()">
+          Удалить выбранные ({{ selectedJobIds().size }})
+        </button>
+      }
+    </div>
+
+    @if (jobsLoading() && jobs().length === 0) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (jobsError()) {
+      <div class="alert-danger">{{ jobsError() }}</div>
+    } @else {
+      <table class="table">
+        <thead><tr><th></th><th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th></tr></thead>
+        <tbody>
+          @for (j of jobs(); track j.id) {
+            <tr>
+              <td>
+                @if (j.status === 'Failed') {
+                  <input type="checkbox" [checked]="selectedJobIds().has(j.id)" (click)="$event.stopPropagation(); toggleJobSelection(j.id)" />
+                }
+              </td>
+              <td class="card-clickable" (click)="openJob(j)">{{ j.displayName }}</td>
+              <td>{{ j.status | adminStatus }}</td>
+              <td>{{ j.attempts }}</td>
+              <td class="text-muted">{{ j.error }}</td>
+              <td>{{ j.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+              <td class="d-flex gap-1">
+                @if (j.status === 'Failed') {
+                  <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsBusy()" (click)="retryJob(j)">
+                    Повторить
+                  </button>
+                  <button type="button" class="btn-icon" aria-label="Удалить задачу" [disabled]="jobsBusy()" (click)="deleteJob(j)">
+                    <i class="ph ph-trash" aria-hidden="true"></i>
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" class="text-muted">Задач нет.</td></tr>
+          }
+        </tbody>
+      </table>
+      <p class="text-muted">Всего: {{ jobsTotal() }}</p>
+    }
+  </div>
+</div>
+
+<app-side-panel [open]="!!openJobId()" title="Задача" (closed)="closeJobPanel()">
+  @if (openJobId()) {
+    <app-admin-job-panel
+      [jobId]="openJobId()!"
+      [jobType]="jobType()"
+      (changed)="loadJobs()"
+      (deleted)="closeJobPanel(); loadJobs()"
+    />
+  }
+</app-side-panel>

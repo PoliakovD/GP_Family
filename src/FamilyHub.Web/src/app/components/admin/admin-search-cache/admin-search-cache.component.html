@@ -1,0 +1,76 @@
+<div class="d-flex mb-3" style="justify-content: flex-end;">
+  <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
+</div>
+
+<div class="card mb-3">
+  <div class="card-title">Кэш сырых результатов поиска</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Хранит ВСЕ сниппеты, которые вернул платный поиск, не только доверенные — можно поменять
+      список доменов или точечно включить/выключить отдельный URL без нового платного запроса.
+    </p>
+
+    <form class="d-flex gap-2 mb-3" style="flex-wrap: wrap;" (ngSubmit)="load(true)">
+      <input class="input" placeholder="поиск по названию…"
+             [ngModel]="query()" (ngModelChange)="query.set($event)" name="cacheQuery" />
+      <button type="submit" class="btn btn-secondary btn-sm" [disabled]="loading()">Найти</button>
+      @if (topicState.topic() === WebSearchTopic.LabAnalyte) {
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="loading() || purgeBusy()" (click)="purgeUnresolvedSpecimen()">
+          Удалить строки с неопределённым источником
+        </button>
+      }
+    </form>
+
+    @if (loading() && rows().length === 0) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (error()) {
+      <div class="alert-danger">{{ error() }}</div>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Название</th>
+            @if (topicState.topic() === WebSearchTopic.LabAnalyte) { <th>Биоматериал</th> }
+            <th>Провайдер</th>
+            <th>Обновлён</th>
+            <th>Сниппетов</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>{{ row.normalizedName }}</td>
+              @if (topicState.topic() === WebSearchTopic.LabAnalyte) { <td>{{ row.specimen }}</td> }
+              <td>{{ row.provider }}</td>
+              <td>{{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+              <td>{{ row.snippetCount }}</td>
+              <td>
+                <button type="button" class="btn btn-secondary btn-sm" (click)="openRow(row)">Открыть</button>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td [attr.colspan]="topicState.topic() === WebSearchTopic.LabAnalyte ? 6 : 5" class="text-muted">Ничего не найдено.</td></tr>
+          }
+        </tbody>
+      </table>
+
+      @if (rows().length < total()) {
+        <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load(false)">
+          Показать ещё ({{ rows().length }} / {{ total() }})
+        </button>
+      }
+    }
+  </div>
+</div>
+
+<app-side-panel [open]="!!openRowId()" title="Кэш поиска" width="min(760px, 100vw)" (closed)="closeDetail()">
+  @if (openRowId()) {
+    <app-admin-cache-panel
+      [cacheId]="openRowId()!"
+      [topic]="topicState.topic()"
+      (changed)="load(true)"
+      (deleted)="closeDetail(); load(true)"
+    />
+  }
+</app-side-panel>

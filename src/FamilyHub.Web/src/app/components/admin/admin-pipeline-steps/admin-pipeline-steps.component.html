@@ -1,0 +1,41 @@
+<div class="card">
+  <div class="card-title">Шаги конвейеров</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Порядок вызовов зашит в коде (жёсткие зависимости между шагами одного прогона — например,
+      коррекция OCR обязана случиться до поиска в справочнике) — здесь только вкл/выкл
+      необязательных шагов. Обязательные шаги выключить нельзя.
+    </p>
+
+    @if (loading() && steps().length === 0) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (error()) {
+      <div class="alert-danger">{{ error() }}</div>
+    } @else {
+      <table class="table">
+        <thead><tr><th>Пайплайн</th><th>Шаг</th><th>Описание</th><th>Промпт</th><th>Включён</th></tr></thead>
+        <tbody>
+          @for (s of steps(); track s.pipelineKey + s.stepKey) {
+            <tr [class.text-muted]="!s.isEnabled">
+              <td>{{ s.pipelineKey }}</td>
+              <td>{{ s.stepKey }}</td>
+              <td>{{ s.description }}</td>
+              <td>{{ s.promptKey ?? '—' }}</td>
+              <td>
+                @if (s.isMandatory) {
+                  <span class="tag tag-neutral">обязателен</span>
+                } @else {
+                  <label class="switch">
+                    <input type="checkbox" [checked]="s.isEnabled" [disabled]="busy()"
+                           [attr.aria-label]="'Шаг ' + s.stepKey" (change)="toggle(s, $event)" />
+                    <span class="switch-knob"></span>
+                  </label>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

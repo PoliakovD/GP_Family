@@ -4,6 +4,7 @@ import { AdminApiService, AdminAttention, PipelineJobType, WebSearchTopic } from
 import { AttentionCardComponent } from '../../../shared/attention-card/attention-card.component';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
 
 /** byType-ключи (см. AdminAttentionService.BuildReasonsAsync на бэкенде) — тот же дискриминатор,
  * что PipelineJobType. */
@@ -18,13 +19,16 @@ const TYPE_LABELS: Record<string, string> = {
  * Инбокс «Требует внимания» (§3/§7 плана) — точка входа админки в разбор падений конвейера
  * обогащения: причины отказа сгруппированы по всем четырём конвейерам, плюс частотные отброшенные
  * домены с действием в один клик («Доверить и перезапустить»). Раньше упавшую задачу приходилось
- * искать вручную на вкладке «Пайплайн» → «Задачи», не зная заранее, что вообще сломано (см. план,
- * Context).
+ * искать вручную в списке задач («Операции → Задачи»), не зная заранее, что вообще сломано (см.
+ * план, Context).
+ *
+ * Закрытый вентиль платного поиска (ADR-0005 §9) выглядел бы иначе как зависший конвейер без единой
+ * ошибки, поэтому о нём напоминает баннер; переключается вентиль только в «Настройки → Веб-поиск».
  */
 @Component({
   selector: 'app-admin-attention',
   standalone: true,
-  imports: [AttentionCardComponent],
+  imports: [AttentionCardComponent, WebSearchBannerComponent],
   templateUrl: './admin-attention.component.html',
 })
 export class AdminAttentionComponent implements OnInit {
@@ -35,10 +39,10 @@ export class AdminAttentionComponent implements OnInit {
 
   readonly attention = signal<AdminAttention | null>(null);
   readonly loading = signal(true);
+  readonly error = signal<string | null>(null);
   readonly busyDomain = signal<string | null>(null);
   readonly purgeBusy = signal(false);
   readonly dedupeBusy = signal(false);
-  readonly valveBusy = signal(false);
 
   ngOnInit(): void {
     void this.load();
@@ -46,10 +50,11 @@ export class AdminAttentionComponent implements OnInit {
 
   async load(): Promise<void> {
     this.loading.set(true);
+    this.error.set(null);
     try {
       this.attention.set(await this.api.getAttention());
     } catch {
-      this.toast.error('Не удалось загрузить сводку.');
+      this.error.set('Не удалось загрузить сводку.');
     } finally {
       this.loading.set(false);
     }
@@ -86,8 +91,8 @@ export class AdminAttentionComponent implements OnInit {
    * причин в этом справочнике на практике встречаются у одного типа конвейера за раз. */
   openJobs(reason: string, byType: Record<string, number>): void {
     const [topType] = this.byTypeEntries(byType)[0] ?? ['lab-analyte'];
-    void this.router.navigate(['/admin/pipeline'], {
-      queryParams: { tab: 'jobs', type: topType as PipelineJobType, status: 'Failed', reason },
+    void this.router.navigate(['/admin/operations/jobs'], {
+      queryParams: { type: topType as PipelineJobType, status: 'Failed', reason },
     });
   }
 
@@ -139,35 +144,17 @@ export class AdminAttentionComponent implements OnInit {
     }
   }
 
-  /** «Включить» на баннере закрытого вентиля — тот же переключатель, что на /admin/enrichment,
-   * продублирован здесь, потому что закрытый вентиль (ADR-0005 §9) выглядел бы иначе как
-   * зависший конвейер без единой ошибки, и это единственное место, где админ видит его сразу. */
-  async openValve(): Promise<void> {
-    const note = this.attention()?.webSearchPaused.note ?? null;
-    const ok = await this.confirm.confirm({
-      title: 'Включить платный поиск?',
-      message: 'Отложенные задачи обогащения и приостановленный прогон возобновятся автоматически.',
-      confirmText: 'Включить',
-    });
-    if (!ok) return;
-
-    this.valveBusy.set(true);
-    try {
-      await this.api.setWebSearchValve(false, note);
-      this.toast.success('Платный поиск включён.');
-      await this.load();
-    } catch {
-      this.toast.error('Не удалось включить платный поиск.');
-    } finally {
-      this.valveBusy.set(false);
-    }
+  /** Тема из инбокса приходит именем enum'а (`LabAnalyte`) — показываем ту же подпись, что на
+   * переключателе темы («Анализы» / «Медикаменты»). */
+  topicLabel(topic: string): string {
+    return topic === 'LabAnalyte' ? 'Анализы' : 'Медикаменты';
   }
 
   async trustAndRetry(domain: string, topic: string): Promise<void> {
     const topicValue = topic === 'LabAnalyte' ? WebSearchTopic.LabAnalyte : WebSearchTopic.Medication;
     const ok = await this.confirm.confirm({
       title: 'Доверить домен и перезапустить?',
-      message: `«${domain}» станет доверенным для темы «${topic}», все Failed-задачи этой темы с причиной «нет доверенных сниппетов» будут перезапущены.`,
+      message: `«${domain}» станет доверенным для темы «${this.topicLabel(topic)}», все упавшие задачи этой темы с причиной «нет доверенных сниппетов» будут перезапущены.`,
       confirmText: 'Доверить и перезапустить',
     });
     if (!ok) return;

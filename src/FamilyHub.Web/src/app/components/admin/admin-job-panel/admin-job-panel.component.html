@@ -5,7 +5,7 @@
   <div class="mb-3">
     <div class="d-flex gap-2 mb-1" style="align-items: center; flex-wrap: wrap;">
       <span class="tag" [class.tag-accent-2]="d.status === 'Failed'" [class.tag-accent]="d.status === 'Completed'">
-        {{ d.status }}
+        {{ d.status | adminStatus }}
       </span>
       <strong>{{ d.displayName }}</strong>
     </div>

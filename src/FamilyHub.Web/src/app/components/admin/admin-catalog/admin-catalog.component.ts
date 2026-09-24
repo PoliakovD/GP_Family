@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import {
   AdminApiService,
   AdminKbEditRequest,
@@ -15,6 +16,8 @@ import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
 
 const PAGE_SIZE = 20;
+
+type CatalogTab = 'analytes' | 'medications' | 'specimens';
 
 /**
  * Ручная правка справочников после ИИ из админки (§3/§10 плана) — показатели, медикаменты,
@@ -35,7 +38,11 @@ export class AdminCatalogComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
-  readonly tab = signal<'analytes' | 'medications' | 'specimens'>('analytes');
+  private readonly route = inject(ActivatedRoute);
+
+  /** Какая из трёх страниц справочника открыта — задаётся роутом (`data.tab`, см. admin.routes.ts),
+   * переключатель между ними — второй уровень навигации раздела (AdminSectionComponent). */
+  readonly tab = signal<CatalogTab>(this.route.snapshot.data['tab'] ?? 'analytes');
 
   // --- Показатели ---
   readonly analyteQuery = signal('');
@@ -70,14 +77,10 @@ export class AdminCatalogComponent implements OnInit {
   readonly specimenMergeSourceId = signal<string | null>(null);
 
   ngOnInit(): void {
-    void this.searchAnalytes();
-  }
-
-  selectTab(tab: 'analytes' | 'medications' | 'specimens'): void {
-    this.tab.set(tab);
-    if (tab === 'analytes' && this.analytes().length === 0) void this.searchAnalytes();
-    if (tab === 'medications' && this.medications().length === 0) void this.searchMedications();
-    if (tab === 'specimens' && this.specimens().length === 0) void this.searchSpecimens();
+    const tab = this.tab();
+    if (tab === 'analytes') void this.searchAnalytes();
+    else if (tab === 'medications') void this.searchMedications();
+    else void this.searchSpecimens();
   }
 
   // --- Показатели ---
@@ -104,7 +107,6 @@ export class AdminCatalogComponent implements OnInit {
   async openAnalyteById(id: string): Promise<void> {
     try {
       const detail = await this.api.getLabAnalyte(id);
-      this.tab.set('analytes');
       this.analyteDetail.set(detail);
       this.analyteEditorDisplayName.set(detail.displayName);
       this.analyteEditorAliases.set(detail.aliases.join(', '));
