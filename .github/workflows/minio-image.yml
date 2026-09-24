@@ -16,10 +16,11 @@ name: MinIO image
 # читается, работают mc-команды, на которые опираются deploy/scripts/* и healthcheck compose. Если
 # что-то не так — в реестр ничего не уходит.
 #
-# ⚠️ После ПЕРВОЙ публикации сделайте пакет публичным (GitHub → профиль → Packages →
-# gp_family-minio → Package settings → Change visibility → Public): GITHUB_TOKEN этого не умеет, а
-# публичный пакет тянется без docker login — на VPS, в CI и на машинах разработчиков. Секретов в
-# образе нет (это сборка открытого upstream-кода). См. deploy/README.md, «Образ MinIO».
+# Видимость пакета: пакет из публичного репозитория опубликовался публичным (проверено анонимным
+# `docker pull`) — на VPS, в CI и на машинах разработчиков он тянется без docker login. Если у вас
+# он окажется приватным: GitHub → профиль → Packages → gp_family-minio → Package settings → Change
+# visibility → Public (GITHUB_TOKEN этого не умеет). Секретов в образе нет (сборка открытого
+# upstream-кода). См. deploy/README.md, «Образ MinIO».
 on:
   workflow_dispatch:
     inputs:
@@ -177,5 +178,5 @@ jobs:
             echo '```'
             echo
             echo "- MinIO: \`${{ steps.meta.outputs.minio_ref }}\`, mc: \`${{ steps.meta.outputs.mc_ref }}\`"
-            echo "- После первой публикации сделайте пакет **публичным**: профиль → Packages → gp_family-minio → Package settings → Change visibility."
+            echo "- Пакет должен быть **публичным** (профиль → Packages → gp_family-minio → Package settings → Change visibility), иначе его не потянуть без docker login."
           } >> "$GITHUB_STEP_SUMMARY"

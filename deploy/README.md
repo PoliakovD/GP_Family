@@ -259,9 +259,10 @@ Docker публикует конкретно на `10.8.0.1` (host-IP-scoped por
 - **Собрать/обновить:** Actions → **MinIO image** → Run workflow (версии — в inputs; пусто = значения из
   `deploy/minio/Dockerfile`). Перед публикацией образ проходит смоук-тест. Workflow также запускается сам
   при изменении `deploy/minio/**`.
-- **После первой публикации сделайте пакет публичным** (GitHub → профиль → Packages → `gp_family-minio` →
-  Package settings → Change visibility → Public). Иначе VPS и dev-машины не смогут его тянуть без
-  `docker login ghcr.io`. Секретов в образе нет.
+- **Видимость пакета.** Пакет из публичного репозитория опубликовался публичным (проверено анонимным
+  `docker pull`), VPS и dev-машины тянут его без `docker login`. Если у вас он окажется приватным —
+  GitHub → профиль → Packages → `gp_family-minio` → Package settings → Change visibility → Public.
+  Секретов в образе нет.
 - **Обновление версии:** правка `ARG MINIO_REF`/`MC_REF` → запуск workflow → тот же тег в
   `docker-compose.yml`, `deploy/docker-compose.prod.yml`, `deploy/backup/Dockerfile`,
   `tests/FamilyHub.IntegrationTests/TestImages.cs`.
