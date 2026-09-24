@@ -38,6 +38,10 @@ public static class AdminEndpoints
 
         group.MapGet("/keys", (AdminStatsService stats) => Results.Ok(stats.GetKeyRings()));
 
+        // Read-only вид эффективной конфигурации (Настройки → Конфиг env) — только несекретные
+        // настройки по явному белому списку, секреты как «задан / не задан» (см. AdminConfigService).
+        group.MapGet("/config", (AdminConfigService config) => Results.Ok(config.Get()));
+
         group.MapPost("/keys/encryption/rotate", async (AdminKeysService keys, CancellationToken ct) =>
         {
             var result = await keys.StartOrResumeRotationAsync(ct);
