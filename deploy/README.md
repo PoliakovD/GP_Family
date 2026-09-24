@@ -15,6 +15,7 @@
 | `docker-compose.prod.yml` | Прод-стек: api (образ из GHCR), postgres, minio, kafka, seq, caddy, backup |
 | `Caddyfile` | Реверс-прокси: публичный сайт + WG-only админ-сайты (Seq/MinIO Console/Hangfire/Swagger) |
 | `backup/` | Ночной pg_dump + зеркало MinIO с ротацией |
+| `minio/Dockerfile` | MinIO + mc, собранные из исходников (ADR-0012); публикует workflow `../.github/workflows/minio-image.yml` в наш GHCR |
 | `scripts/` | Операторские скрипты (ADR-0011): первичная настройка учёток приложения, смена пароля суперпользователя Postgres и root MinIO |
 | `../.github/workflows/deploy.yml` | GitHub Actions: сборка образа → GHCR → SSH-деплой (только вручную) |
 | `../.github/workflows/ci.yml`, `integration.yml` | Гейты перед деплоем (build+unit на каждый push, integration на master) |
@@ -248,6 +249,24 @@ Docker публикует конкретно на `10.8.0.1` (host-IP-scoped por
    резюмируется сам при рестарте контейнера. Сколько данных осталось на каждом `keyId` — на
    странице «Безопасность → Статистика». Когда счётчики дойдут до нуля на старом `keyId` — убрать
    `Encryption__PreviousKeys__0__*` из конфигурации и передеплоить.
+
+### Образ MinIO (ADR-0012)
+
+Проект `minio/minio` больше не публикует образы, поэтому MinIO и `mc` собираются **из исходников** в
+наш GHCR — `ghcr.io/<owner>/gp_family-minio:<тег релиза MinIO>`. На него ссылаются оба compose, образ
+бэкапа и интеграционные тесты; версия закреплена (не `:latest`).
+
+- **Собрать/обновить:** Actions → **MinIO image** → Run workflow (версии — в inputs; пусто = значения из
+  `deploy/minio/Dockerfile`). Перед публикацией образ проходит смоук-тест. Workflow также запускается сам
+  при изменении `deploy/minio/**`.
+- **После первой публикации сделайте пакет публичным** (GitHub → профиль → Packages → `gp_family-minio` →
+  Package settings → Change visibility → Public). Иначе VPS и dev-машины не смогут его тянуть без
+  `docker login ghcr.io`. Секретов в образе нет.
+- **Обновление версии:** правка `ARG MINIO_REF`/`MC_REF` → запуск workflow → тот же тег в
+  `docker-compose.yml`, `deploy/docker-compose.prod.yml`, `deploy/backup/Dockerfile`,
+  `tests/FamilyHub.IntegrationTests/TestImages.cs`.
+- Образ должен быть в GHCR **до** деплоя, который на него ссылается (иначе `docker compose pull` падает).
+- Upstream больше не выпускает исправления безопасности — см. риски в ADR-0012.
 
 ### Учётки приложения (ADR-0011)
 

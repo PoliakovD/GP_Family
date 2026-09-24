@@ -45,6 +45,7 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
     // MinIO — теперь единственная реализация IFileStorage (LocalFileStorage упразднён), поэтому
     // вложения гоняются через реальный объектный стор и здесь, а не через временный каталог на диске.
     private readonly MinioContainer _minio = new MinioBuilder()
+        .WithImage(TestImages.Minio)
         .WithUsername("minioadmin")
         .WithPassword("minioadmin")
         .Build();

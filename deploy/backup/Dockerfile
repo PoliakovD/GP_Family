@@ -1,7 +1,9 @@
 # postgres:17-alpine — та же мажорная версия, что сам prod-Postgres (см. ../docker-compose.prod.yml):
 # pg_dump строго не новее сервера, который дампит (обратная совместимость с более старым сервером
-# не гарантируется). mc — просто скопированный бинарник из официального образа, без лишних слоёв.
-FROM minio/mc:latest AS mc
+# не гарантируется). mc — просто скопированный бинарник, без лишних слоёв.
+# mc берём из нашего образа MinIO (ADR-0012), а не из minio/mc — тот больше не публикуется. Бинарник
+# статический (CGO_ENABLED=0), поэтому спокойно переезжает в postgres:alpine. Тег — как в compose.
+FROM ghcr.io/poliakovd/gp_family-minio:RELEASE.2025-10-15T17-29-55Z AS mc
 
 FROM postgres:17-alpine
 

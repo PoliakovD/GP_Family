@@ -17,8 +17,19 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      # Образ MinIO для Testcontainers — наша сборка в GHCR (ADR-0012, TestImages.Minio).
+      packages: read
     steps:
       - uses: actions/checkout@v4
+
+      # Нужен, пока пакет gp_family-minio приватный; для публичного — безвреден.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-dotnet@v4
         with:

@@ -139,6 +139,7 @@ public class ApiForBotTestsFactory : WebApplicationFactory<Program>, IAsyncLifet
         .Build();
 
     private readonly MinioContainer _minio = new MinioBuilder()
+        .WithImage(TestImages.Minio)
         .WithUsername("minioadmin")
         .WithPassword("minioadmin")
         .Build();

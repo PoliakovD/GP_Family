@@ -1,0 +1,181 @@
+name: MinIO image
+
+# Собирает MinIO + mc ИЗ ИСХОДНИКОВ (deploy/minio/Dockerfile, ADR-0012) и публикует в НАШ GHCR:
+#   ghcr.io/<owner>/gp_family-minio:<тег релиза MinIO>   (и :latest)
+# Проект minio/minio больше не выпускает образы, поэтому прод/dev/тесты берут образ отсюда, а не из
+# чужого реестра. Отдельно от build.yml намеренно: сборка MinIO на Go занимает минуты, а сам образ
+# меняется только при смене версии — гонять его на каждый push в master незачем.
+#
+# Когда запускается:
+#   - вручную (Actions → MinIO image → Run workflow) — для обновления версии или пересборки;
+#     версии можно передать в inputs, иначе берутся значения по умолчанию из Dockerfile;
+#   - при изменении deploy/minio/** или этого файла (в том числе в ветке до merge — так образ
+#     появляется в GHCR ещё до того, как на него начнут ссылаться compose/тесты).
+#
+# Перед публикацией образ проходит смоук-тест: сервер стартует, создаётся бакет, объект пишется и
+# читается, работают mc-команды, на которые опираются deploy/scripts/* и healthcheck compose. Если
+# что-то не так — в реестр ничего не уходит.
+#
+# ⚠️ После ПЕРВОЙ публикации сделайте пакет публичным (GitHub → профиль → Packages →
+# gp_family-minio → Package settings → Change visibility → Public): GITHUB_TOKEN этого не умеет, а
+# публичный пакет тянется без docker login — на VPS, в CI и на машинах разработчиков. Секретов в
+# образе нет (это сборка открытого upstream-кода). См. deploy/README.md, «Образ MinIO».
+on:
+  workflow_dispatch:
+    inputs:
+      minio_ref:
+        description: 'Тег MinIO в github.com/minio/minio (пусто — значение по умолчанию из Dockerfile)'
+        required: false
+        default: ''
+      mc_ref:
+        description: 'Тег mc в github.com/minio/mc (пусто — значение по умолчанию из Dockerfile)'
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'deploy/minio/**'
+      - '.github/workflows/minio-image.yml'
+
+concurrency:
+  group: minio-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve версии и имя образа
+        id: meta
+        env:
+          INPUT_MINIO_REF: ${{ inputs.minio_ref }}
+          INPUT_MC_REF: ${{ inputs.mc_ref }}
+        run: |
+          # Значения по умолчанию — из самого Dockerfile (единственный источник правды: смена версии
+          # = правка одной строки ARG, а не двух мест).
+          default_minio=$(grep -m1 -oP '^ARG MINIO_REF=\K\S+' deploy/minio/Dockerfile)
+          default_mc=$(grep -m1 -oP '^ARG MC_REF=\K\S+' deploy/minio/Dockerfile)
+          minio_ref="${INPUT_MINIO_REF:-$default_minio}"
+          mc_ref="${INPUT_MC_REF:-$default_mc}"
+
+          # Тег — то, что уйдёт в docker tag: строго RELEASE.<дата>, без пробелов/слэшей. Ввод из
+          # workflow_dispatch не доверенный — проверяем, а не подставляем в команды как есть.
+          for ref in "$minio_ref" "$mc_ref"; do
+            if ! [[ "$ref" =~ ^RELEASE\.[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$ ]]; then
+              echo "::error::Недопустимый тег '$ref' (ожидается RELEASE.YYYY-MM-DDTHH-MM-SSZ)"
+              exit 1
+            fi
+          done
+
+          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          {
+            echo "minio_ref=${minio_ref}"
+            echo "mc_ref=${mc_ref}"
+            echo "image=ghcr.io/${owner}/gp_family-minio"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Сначала сборка в локальный docker (load) — для смоук-теста; push — отдельным шагом ниже, он
+      # берёт слои из кэша и занимает секунды.
+      - name: Собрать образ (для проверки)
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/minio
+          file: deploy/minio/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: minio-candidate:test
+          build-args: |
+            MINIO_REF=${{ steps.meta.outputs.minio_ref }}
+            MC_REF=${{ steps.meta.outputs.mc_ref }}
+          cache-from: type=gha,scope=minio
+          cache-to: type=gha,scope=minio,mode=max
+
+      - name: Смоук-тест образа
+        env:
+          MINIO_REF: ${{ steps.meta.outputs.minio_ref }}
+          MC_REF: ${{ steps.meta.outputs.mc_ref }}
+        run: |
+          set -euo pipefail
+
+          echo "== версии =="
+          minio_version=$(docker run --rm minio-candidate:test minio --version)
+          # entrypoint образа (как у upstream) дописывает `minio` перед любым первым аргументом, поэтому
+          # `docker run … mc` запустил бы `minio mc`; для mc — --entrypoint (а `docker exec` ниже
+          # entrypoint не затрагивает).
+          mc_version=$(docker run --rm --entrypoint mc minio-candidate:test --version)
+          echo "$minio_version"; echo "$mc_version"
+          grep -qF "$MINIO_REF" <<<"$minio_version" || { echo "::error::minio --version не содержит $MINIO_REF"; exit 1; }
+          grep -qF "$MC_REF" <<<"$mc_version" || { echo "::error::mc --version не содержит $MC_REF"; exit 1; }
+
+          echo "== сервер: старт, healthcheck, бакет, запись/чтение, admin-команды =="
+          docker run -d --name minio-smoke \
+            -e MINIO_ROOT_USER=smoke-root -e MINIO_ROOT_PASSWORD=smoke-root-password-123 \
+            minio-candidate:test server /data --console-address ":9001"
+          trap 'docker logs minio-smoke 2>&1 | tail -30; docker rm -f minio-smoke >/dev/null 2>&1 || true' EXIT
+
+          # Тот же healthcheck, что в docker-compose (`mc ready local`).
+          for i in $(seq 1 30); do
+            if docker exec minio-smoke mc ready local >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          [ "${ready:-0}" = "1" ] || { echo "::error::сервер не стал готов (mc ready local)"; exit 1; }
+
+          docker exec -i minio-smoke sh -s <<'SMOKE'
+          set -eu
+          mc alias set t http://localhost:9000 smoke-root smoke-root-password-123 >/dev/null
+          mc mb t/smoke >/dev/null
+          echo "hello-minio" | mc pipe t/smoke/object >/dev/null
+          test "$(mc cat t/smoke/object)" = "hello-minio"
+          mc admin info t >/dev/null
+          # Команды, на которых держатся deploy/scripts/bootstrap-app-credentials.sh и rotate-*:
+          mc admin user add t smoke-app smoke-app-password-123 >/dev/null
+          mc admin user svcacct add t smoke-app --access-key SMOKEKEY0000000001 \
+            --secret-key smokesecretsmokesecretsmokesecret0001 --name smoke >/dev/null
+          echo "OK: сервер, mc, admin user/svcacct"
+          SMOKE
+
+      - name: Опубликовать в GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/minio
+          file: deploy/minio/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.minio_ref }}
+            ${{ steps.meta.outputs.image }}:latest
+          build-args: |
+            MINIO_REF=${{ steps.meta.outputs.minio_ref }}
+            MC_REF=${{ steps.meta.outputs.mc_ref }}
+          # source — НАШ репозиторий: так GHCR связывает пакет с ним и наследует права доступа.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=minio
+
+      - name: Итог
+        run: |
+          {
+            echo "### Образ MinIO опубликован"
+            echo
+            echo '```'
+            echo "docker pull ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.minio_ref }}"
+            echo '```'
+            echo
+            echo "- MinIO: \`${{ steps.meta.outputs.minio_ref }}\`, mc: \`${{ steps.meta.outputs.mc_ref }}\`"
+            echo "- После первой публикации сделайте пакет **публичным**: профиль → Packages → gp_family-minio → Package settings → Change visibility."
+          } >> "$GITHUB_STEP_SUMMARY"

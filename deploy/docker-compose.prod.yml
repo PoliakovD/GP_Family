@@ -57,7 +57,10 @@ services:
           memory: 2G
 
   minio:
-    image: quay.io/minio/minio:latest
+    # Собственная сборка MinIO из исходников (ADR-0012), тег закреплён — а не :latest, чтобы деплой
+    # не мог молча сменить версию хранилища. Обновление версии = правка ARG в deploy/minio/Dockerfile,
+    # запуск workflow "MinIO image" и правка этого тега (+ docker-compose.yml, TestImages.cs, backup/Dockerfile).
+    image: ghcr.io/poliakovd/gp_family-minio:RELEASE.2025-10-15T17-29-55Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
