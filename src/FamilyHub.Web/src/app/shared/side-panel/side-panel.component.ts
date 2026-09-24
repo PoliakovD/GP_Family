@@ -16,7 +16,7 @@ import { OverlayA11y } from '../util/overlay-a11y';
  * (в отличие от `file-viewer`/`bottom-sheet`) — тот трюк (push/pop фиктивной записи истории)
  * предполагает, что открытие/закрытие оверлея НИКАК не отражено в URL. Консьюмеры этой панели в
  * админке (карточка задачи/справочника) уже сами синхронизируют open/closed с query-параметром
- * (`?job=<id>` и т.п., см. AdminPipelineComponent.openJob/closeJobPanel) через собственный
+ * (`?job=<id>` и т.п., см. AdminJobsComponent.openJob/closeJobPanel) через собственный
  * `router.navigate(..., {replaceUrl: true})`. Если бы обе синхронизации (query-параметр И
  * push/pop истории) работали одновременно, `replaceUrl` от закрытия панели затирает state
  * фиктивной записи, `history.back()` из HistoryDismissController уводит на предыдущую запись,

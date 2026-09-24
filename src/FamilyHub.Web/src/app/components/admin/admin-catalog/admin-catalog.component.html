@@ -1,9 +1,3 @@
-<div class="seg mb-3">
-  <button type="button" class="seg-opt" [class.active]="tab() === 'analytes'" (click)="selectTab('analytes')">Показатели</button>
-  <button type="button" class="seg-opt" [class.active]="tab() === 'medications'" (click)="selectTab('medications')">Медикаменты</button>
-  <button type="button" class="seg-opt" [class.active]="tab() === 'specimens'" (click)="selectTab('specimens')">Источники</button>
-</div>
-
 @if (tab() === 'analytes') {
   <div class="card mb-3">
     <div class="card-title">Показатели</div>
@@ -24,7 +18,7 @@
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th>Источник</th><th></th><th></th></tr></thead>
+          <thead><tr><th>Название</th><th>Биоматериал</th><th></th><th></th></tr></thead>
           <tbody>
             @for (a of analytes(); track a.id) {
               <tr [class.text-muted]="analyteMergeSourceId() === a.id">
@@ -224,7 +218,7 @@
 
 @if (tab() === 'specimens') {
   <div class="card">
-    <div class="card-title">Источники показателей</div>
+    <div class="card-title">Биоматериалы</div>
     <div class="card-body">
       <p class="text-muted mb-2">
         Биоматериал (кровь, моча…) и инструментальные исследования (ЭКГ, УЗИ…) — один общий справочник.

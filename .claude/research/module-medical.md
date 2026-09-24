@@ -196,8 +196,8 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 изменения задачи, ранний `SaveChangesAsync` закоммитил бы их раньше времени); ошибка записи лога
 только логируется, не роняет сам поиск. Хранит `QueryText` целиком (не ПДн — тот же нормализованный
 запрос, что уходит наружу, ADR-0005 §1) и URL реально использованных источников. Ретеншн — 180 дней,
-в уже существующем `AuditRetentionJob` (не отдельная джоба). Админка — вкладка «Вызовы поиска»
-внутри `/admin/enrichment` (`AdminSearchCallsEndpoints`, `/api/admin/search-calls*`): список с
+в уже существующем `AuditRetentionJob` (не отдельная джоба). Админка — страница «Операции → Журнал вызовов»
+(`/admin/operations/search-calls`; `AdminSearchCallsEndpoints`, `/api/admin/search-calls*`): список с
 фильтрами, полная карточка вызова, `/stats` — доля кэш-хитов, разбивка по провайдеру/исходу, расход
 текущего месяца (плюс денежная оценка, если задана `Enrichment:PricePerPaidCall`), состояние
 вентиля.
@@ -221,7 +221,7 @@ kdlmed.ru/cmd-online.ru) → `LabAnalyteKbSummarizer` (тот же антига�
 админки (`AdminSearchWarmupService.CancelAsync`) пишет терминальный статус напрямую в БД, не
 дожидаясь, пока фоновая джоба сама заметит флаг — иначе падение процесса сервера посреди прогона
 оставляло бы строку в `Running` навсегда, блокируя новый прогон уникальным индексом. Админка —
-вкладка «Прогрев» внутри `/admin/enrichment` (`AdminWarmupEndpoints`, `/api/admin/enrichment/warmup*`).
+страница «Операции → Прогрев» (`/admin/operations/warmup`; `AdminWarmupEndpoints`, `/api/admin/enrichment/warmup*`).
 
 **`MedicalRecord` — структура (v2).** `PersonName` убран целиком — идентичность пациента
 выражается только через `FamilyDependentId`/`TargetUserId`/владельца, отображаемое имя резолвится

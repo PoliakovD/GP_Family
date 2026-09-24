@@ -1,0 +1,71 @@
+<div class="card mb-3">
+  <div class="card-title">Пересборка справочника показателей</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Пересчитывает ключи уже распознанных показателей новым нормализатором (снимает нумерацию
+      пункта бланка, КАПС), очищает справочник анализов и наполняет его заново поверх уже
+      оплаченного кэша поиска — новых внешних запросов не потребуется. Разовое действие после
+      деплоя исправлений очистки имён/резолвинга источника, не автоматическое.
+    </p>
+
+    @if (rebuildLoading() && !rebuild()) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (rebuildError()) {
+      <div class="alert-danger mb-3">{{ rebuildError() }}</div>
+    } @else {
+      @let r = rebuild();
+      @if (r && r.status) {
+        <table class="table mb-3">
+          <tbody>
+            <tr><td>Статус</td><td>{{ r.status | adminStatus }}</td></tr>
+            <tr><td>Запущена</td><td>{{ r.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr>
+            @if (r.finishedAt) { <tr><td>Завершена</td><td>{{ r.finishedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr> }
+            <tr><td>Этап</td><td>{{ r.stageIndex }} / 4</td></tr>
+            <tr><td>Слито строк кэша</td><td>{{ r.cacheMerged }}</td></tr>
+            <tr><td>Показателей обновлено</td><td>{{ r.indicatorsUpdated }} (слито {{ r.indicatorsMerged }})</td></tr>
+            <tr><td>Справочник очищен</td><td>{{ r.catalogDeleted }} строк</td></tr>
+            <tr><td>Пересеяно задач</td><td>{{ r.reseedRequested }}</td></tr>
+            @if (r.lastError) { <tr><td>Ошибка</td><td class="text-danger">{{ r.lastError }}</td></tr> }
+          </tbody>
+        </table>
+      } @else {
+        <p class="text-muted mb-3">Пересборка ещё ни разу не запускалась.</p>
+      }
+
+      <button type="button" class="btn btn-danger btn-sm" [disabled]="rebuildBusy() || r?.status === 'Running'" (click)="startRebuild()">
+        {{ r?.status === 'Running' ? 'Пересборка идёт…' : 'Пересобрать справочник' }}
+      </button>
+    }
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-title">Перепрогон норм показателей</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Показатели, распознанные ДО фикса расчёта нормы (односторонний референс "&lt;47"/"&gt;47" в
+      тексте бланка, качественный результат вида "не обнаружено" без сравнения по смыслу) застряли
+      на "нет данных" навсегда — обычная дозапись справочника их не подхватывает. Перепрогон
+      пересчитывает такие показатели заново по уже сохранённым данным, без повторного
+      распознавания документа.
+    </p>
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="recomputeBusy()" (click)="recomputeIndicatorFlags()">
+      Перепрогнать нормы показателей
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Переобогащение показателей со старой схемой</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Когда схема карточки показателя обновляется, уже сохранённые строки остаются со старой.
+      Переобогащение обновляет их батчами по 25 штук. Первый батч запускается сам после миграции
+      схемы — повторяйте отсюда, пока строк со старой схемой не останется. Если таких строк нет,
+      задача завершается сразу.
+    </p>
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="reenrichBusy()" (click)="reenrichLabAnalytes()">
+      Переобогатить показатели
+    </button>
+  </div>
+</div>

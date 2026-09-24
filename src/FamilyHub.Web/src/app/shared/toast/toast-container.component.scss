@@ -53,6 +53,22 @@
   word-break: break-word;
 }
 
+.toast-action {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

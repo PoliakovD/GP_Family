@@ -1,0 +1,99 @@
+<div class="card mb-3">
+  <div class="card-title">Модель LM Studio</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Модель, которую конвейер шлёт в поле "model" каждого запроса к LM Studio (OCR,
+      суммаризация, коррекция OCR, резолвинг источника и т.д.) — общая для всех задач. Смена
+      применяется сразу, без передеплоя.
+    </p>
+
+    @if (modelLoading()) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (modelError()) {
+      <div class="alert-danger">{{ modelError() }}</div>
+    } @else {
+      <p class="mb-2">
+        Сейчас активна: <strong>{{ modelEffective() }}</strong>
+        @if (!modelActive()) {
+          <span class="tag tag-neutral">по умолчанию (env)</span>
+        }
+      </p>
+
+      @if (modelAvailable(); as available) {
+        @if (!available.lmStudioReachable) {
+          <p class="text-danger mb-2">
+            LM Studio недоступен — список моделей не загружен. Можно ввести id модели вручную ниже.
+          </p>
+        } @else if (available.models.length === 0) {
+          <p class="text-muted mb-2">LM Studio не сообщил ни одной загруженной модели.</p>
+        }
+      }
+
+      <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+        @if (modelAvailable()?.models?.length) {
+          <select class="input" [ngModel]="modelSelected()" (ngModelChange)="modelSelected.set($event)">
+            @for (m of modelAvailable()!.models; track m) {
+              <option [value]="m">{{ m }}</option>
+            }
+          </select>
+        } @else {
+          <input class="input" style="min-width: 320px;" placeholder="id модели (например, prism-ml/bonsai-27b)…"
+                 [ngModel]="modelSelected()" (ngModelChange)="modelSelected.set($event)" />
+        }
+        <button type="button" class="btn btn-primary btn-sm"
+                [disabled]="modelBusy() || !modelDirty() || !modelSelected().trim()" (click)="saveModel()">
+          Сохранить
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" [disabled]="modelBusy() || !modelActive()" (click)="resetModel()">
+          Сбросить к env
+        </button>
+        @if (modelDirty()) {
+          <span class="text-muted">Есть несохранённые изменения</span>
+        }
+      </div>
+    }
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Уровень рассуждений LM Studio</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Насколько подробно модель "думает" перед ответом (директива в системном промпте — ни один
+      API-параметр LM Studio не даёт предсказуемого контроля глубины, см. LmStudioReasoning).
+      Выше уровень — обычно медленнее ответ, но не всегда: зависит от конкретной модели/квантизации.
+      Смена применяется сразу, без передеплоя.
+    </p>
+
+    @if (reasoningLoading()) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (reasoningError()) {
+      <div class="alert-danger">{{ reasoningError() }}</div>
+    } @else {
+      <p class="mb-2">
+        Сейчас активен: <strong>{{ reasoningLabel(reasoningEffective()) }}</strong>
+        @if (reasoningActive() === null) {
+          <span class="tag tag-neutral">по умолчанию (env)</span>
+        }
+      </p>
+
+      <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+        <select class="input" [ngModel]="reasoningSelected()" (ngModelChange)="reasoningSelected.set($event)">
+          @for (o of reasoningOptions; track o.value) {
+            <option [ngValue]="o.value">{{ o.label }}</option>
+          }
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" [disabled]="reasoningBusy() || !reasoningDirty()" (click)="saveReasoning()">
+          Сохранить
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" [disabled]="reasoningBusy() || reasoningActive() === null"
+                (click)="resetReasoning()">
+          Сбросить к env
+        </button>
+        @if (reasoningDirty()) {
+          <span class="text-muted">Есть несохранённые изменения</span>
+        }
+      </div>
+    }
+  </div>
+</div>

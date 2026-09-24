@@ -1,21 +1,25 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
-import { AdminApiService, AdminKeyRings, AdminSecurityStats, RotationStatus } from '../../../services/admin-api.service';
+import { AdminApiService, AdminKeyRings, RotationStatus } from '../../../services/admin-api.service';
+import { ApiError } from '../../../services/api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { AdminStatusPipe } from '../shared/admin-status.pipe';
 
 const POLL_INTERVAL_MS = 2000;
 
 /**
- * Вкладка «Ключи» (ADR-0009): связки Encryption/Jwt/Attachments + управление ротацией мастер-
- * ключа шифрования. Поллинг статуса, пока прогон Running — тот же приём, что live-обновления
- * в других частях приложения (без WebSocket/SSE, дешёвый интервал на редко посещаемой странице).
+ * «Безопасность → Ключи и ротация» (ADR-0009): связки Encryption/Jwt/Attachments + управление
+ * перешифровкой данных на активный ключ шифрования. Распределение данных по ключам и сводка
+ * безопасности вынесены на соседнюю страницу «Статистика» (AdminSecurityStatsComponent).
+ *
+ * Поллинг статуса, пока прогон Running — тот же приём, что live-обновления в других частях
+ * приложения (без WebSocket/SSE, дешёвый интервал на редко посещаемой странице).
  */
 @Component({
   selector: 'app-admin-keys',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, AdminStatusPipe],
   templateUrl: './admin-keys.component.html',
 })
 export class AdminKeysComponent implements OnInit, OnDestroy {
@@ -24,7 +28,6 @@ export class AdminKeysComponent implements OnInit, OnDestroy {
   private readonly confirm = inject(ConfirmService);
 
   readonly rings = signal<AdminKeyRings | null>(null);
-  readonly security = signal<AdminSecurityStats | null>(null);
   readonly rotation = signal<RotationStatus | null>(null);
   readonly loading = signal(true);
   readonly busy = signal(false);
@@ -44,11 +47,8 @@ export class AdminKeysComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const [rings, security, rotation] = await Promise.all([
-        this.api.getKeyRings(), this.api.getSecurityStats(), this.api.getRotationStatus(),
-      ]);
+      const [rings, rotation] = await Promise.all([this.api.getKeyRings(), this.api.getRotationStatus()]);
       this.rings.set(rings);
-      this.security.set(security);
       this.rotation.set(rotation);
       this.schedulePollIfRunning();
     } catch {
@@ -69,9 +69,7 @@ export class AdminKeysComponent implements OnInit, OnDestroy {
         this.rotation.set(status);
         if (wasRunning && status.status !== 'Running') {
           this.toast.success('Перешифровка завершена.');
-          // Распределение по ключам изменилось — освежаем его вместе со связками.
           this.rings.set(await this.api.getKeyRings());
-          this.security.set(await this.api.getSecurityStats());
         }
       } catch {
         // Транзиентная ошибка поллинга — не считаем прогон завершённым, просто попробуем снова.
@@ -98,7 +96,8 @@ export class AdminKeysComponent implements OnInit, OnDestroy {
       this.schedulePollIfRunning();
     } catch (e) {
       this.toast.error(
-        e instanceof HttpErrorResponse && e.status === 409
+        // AdminApiService уже превращает HttpErrorResponse в ApiError — проверять надо его.
+        e instanceof ApiError && e.status === 409
           ? 'Нечего перешифровывать — активный ключ единственный в связке.'
           : 'Не удалось запустить перешифровку.',
       );

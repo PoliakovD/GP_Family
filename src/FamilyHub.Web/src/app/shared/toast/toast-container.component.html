@@ -3,6 +3,11 @@
     <div class="toast-item" [class]="'toast-' + t.type" (click)="toastService.dismiss(t.id)">
       <span class="toast-icon">{{ iconFor(t.type) }}</span>
       <span class="toast-text">{{ t.text }}</span>
+      @if (t.action; as action) {
+        <button type="button" class="toast-action" (click)="$event.stopPropagation(); toastService.runAction(t)">
+          {{ action.label }}
+        </button>
+      }
     </div>
   }
 </div>

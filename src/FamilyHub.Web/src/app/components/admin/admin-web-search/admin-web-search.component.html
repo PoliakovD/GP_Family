@@ -1,0 +1,85 @@
+@let valve = valveStore.valve();
+
+<div class="card mb-3">
+  <div class="card-title d-flex justify-content-between" style="align-items: center;">
+    <span>Вентиль платного поиска</span>
+    @if (valve) {
+      <button type="button" class="btn btn-sm" [class.btn-danger]="!valve.isPaused" [class.btn-primary]="valve.isPaused"
+              [disabled]="valveStore.busy()" (click)="valveStore.toggle()">
+        {{ valve.isPaused ? 'Включить' : 'Остановить' }}
+      </button>
+    }
+  </div>
+  <div class="card-body">
+    @if (valve) {
+      <p class="text-muted mb-0">
+        {{ valve.isPaused
+          ? 'На паузе' + (valve.pausedAt ? ' с ' + (valve.pausedAt | date: 'dd.MM.yyyy HH:mm') : '') + ' — новые платные вызовы откладываются, задачи обогащения ждут включения.'
+          : 'Открыт — обогащение и прогрев могут делать платные вызовы как обычно.' }}
+        @if (valve.note) { <br />Заметка: {{ valve.note }} }
+      </p>
+    } @else if (valveStore.loadFailed()) {
+      <div class="alert-danger">Не удалось загрузить состояние вентиля поиска.</div>
+    } @else {
+      <p class="text-muted mb-0">Загрузка…</p>
+    }
+  </div>
+</div>
+
+<div class="d-flex mb-3" style="justify-content: flex-end;">
+  <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
+</div>
+
+<div class="card">
+  <div class="card-title">Доверенные домены</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Только сниппеты с доверенных доменов уходят в суммаризатор по умолчанию. Порядок значим только
+      для анализов (приоритет источника при конфликте норм между лабораториями). Изменения
+      применяются сразу.
+    </p>
+
+    @if (domainsLoading() && domains().length === 0) {
+      <p class="text-muted">Загрузка…</p>
+    } @else if (domainsError()) {
+      <div class="alert-danger mb-3">{{ domainsError() }}</div>
+    } @else {
+      <table class="table mb-3">
+        <thead><tr><th>Домен</th><th>Порядок</th><th>Включён</th><th></th></tr></thead>
+        <tbody>
+          @for (d of domains(); track d.id; let i = $index) {
+            <tr [class.text-muted]="!d.isEnabled">
+              <td>{{ d.domain }}</td>
+              <td>
+                <button type="button" class="btn-link" [disabled]="i === 0 || domainsBusy()" (click)="moveDomain(i, -1)">↑</button>
+                <button type="button" class="btn-link" [disabled]="i === domains().length - 1 || domainsBusy()" (click)="moveDomain(i, 1)">↓</button>
+              </td>
+              <td>
+                <label class="switch">
+                  <input type="checkbox" [checked]="d.isEnabled" [disabled]="domainsBusy()"
+                         [attr.aria-label]="'Домен ' + d.domain" (change)="toggleDomain(d, $event)" />
+                  <span class="switch-knob"></span>
+                </label>
+              </td>
+              <td>
+                <button type="button" class="btn btn-secondary btn-sm" [disabled]="domainsBusy()" (click)="deleteDomain(d)">
+                  Удалить
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="4" class="text-muted">Список пуст.</td></tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <form class="d-flex gap-2" (ngSubmit)="addDomain()">
+      <input class="input" placeholder="например, invitro.ru или https://www.invitro.ru/..."
+             [ngModel]="newDomain()" (ngModelChange)="newDomain.set($event)" name="newDomain" />
+      <button type="submit" class="btn btn-primary btn-sm" [disabled]="domainsBusy() || !newDomain().trim()">
+        Добавить
+      </button>
+    </form>
+  </div>
+</div>
