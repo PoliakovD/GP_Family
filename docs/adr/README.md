@@ -15,3 +15,4 @@
 | [0007](0007-kafka-as-primary-event-transport.md) | Kafka Rider — реальный транспорт для бизнес-потребителей событий, не только внешний мост |
 | [0009](0009-admin-panel-and-key-rotation.md) | Админ-панель (статистика + ротация ключей) и связки ключей Encryption/Jwt/Attachments |
 | [0010](0010-attachment-previews-and-gotenberg.md) | Встроенный просмотрщик вложений: серверная конвертация превью и сайдкар Gotenberg |
+| [0011](0011-least-privilege-db-minio-credentials.md) | Отдельные учётки приложения для Postgres и MinIO (вместо суперпользователя/root) и ротация их паролей |

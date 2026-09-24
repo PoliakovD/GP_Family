@@ -1,0 +1,5 @@
+# Скрипты, которые выполняются на Linux (VPS, контейнеры), должны быть с LF ВСЕГДА — иначе при
+# копировании с Windows-копии репозитория (core.autocrlf=true даёт CRLF в рабочем каталоге)
+# bash падает на `set: pipefail\r: invalid option name`, а psql ломает мета-команды (\if ...\r).
+*.sh  text eol=lf
+*.sql text eol=lf
