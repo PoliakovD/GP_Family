@@ -114,6 +114,10 @@ jobs:
           scp -P "$SSH_PORT" deploy/docker-compose.prod.yml "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/docker-compose.yml"
           scp -P "$SSH_PORT" deploy/Caddyfile "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/Caddyfile"
           scp -P "$SSH_PORT" -r deploy/backup "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/backup"
+          # Операторские скрипты (ADR-0011: первичная настройка учёток приложения, ротация
+          # суперпользователя/root) — на сервере они запускаются вручную из /opt/familyhub/scripts.
+          # Каталог-источник копируется В родительский каталог, поэтому вложенности scripts/scripts нет.
+          scp -P "$SSH_PORT" -r deploy/scripts "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/"
           scp -P "$SSH_PORT" wg/awg0.conf "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/familyhub/wg/awg0.conf"
 
       - name: docker compose pull && up -d + дождаться /health/ready

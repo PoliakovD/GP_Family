@@ -172,10 +172,22 @@ services:
       # НЕ за ASPNETCORE_ENVIRONMENT (см. DevToolsOptions в FamilyHub.Api/Configuration).
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # Отдельные учётки приложения (ADR-0011), НЕ суперпользователь Postgres и не root MinIO:
+      # приложение ходит в БД под familyhub_app_a/b (владелец схем — роль familyhub_owner), в MinIO —
+      # под service account пользователя с доступом только к своему бакету. Создаются ОДИН раз
+      # deploy/scripts/bootstrap-app-credentials.sh; значения — в PROD_ENV. Без них деплой
+      # намеренно падает (${VAR:?}) — иначе приложение молча осталось бы без доступа к данным.
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${DB_APP_USER:?не задан в .env — сначала выполните deploy/scripts/bootstrap-app-credentials.sh, см. deploy/README.md};Password=${DB_APP_PASSWORD:?не задан в .env — см. deploy/scripts/bootstrap-app-credentials.sh}"
       Minio__Endpoint: "minio:9000"
-      Minio__AccessKey: "${MINIO_ROOT_USER}"
-      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Minio__AccessKey: "${MINIO_APP_ACCESS_KEY:?не задан в .env — см. deploy/scripts/bootstrap-app-credentials.sh}"
+      Minio__SecretKey: "${MINIO_APP_SECRET_KEY:?не задан в .env — см. deploy/scripts/bootstrap-app-credentials.sh}"
+      # env_file: .env выше несёт ВСЕ секреты стека, в том числе суперпользователя Postgres и root
+      # MinIO — процессу приложения они не нужны, а утёкший из него дамп окружения отдал бы полный
+      # доступ к данным. Пустое значение в environment перекрывает env_file.
+      POSTGRES_USER: ""
+      POSTGRES_PASSWORD: ""
+      MINIO_ROOT_USER: ""
+      MINIO_ROOT_PASSWORD: ""
       Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:?не задан в .env — сгенерируйте: openssl rand -base64 32}"
       Serilog__WriteTo__1__Args__serverUrl: "http://seq:80"
       Messaging__Kafka__Enabled: "true"

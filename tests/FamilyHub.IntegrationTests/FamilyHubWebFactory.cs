@@ -18,12 +18,29 @@ namespace FamilyHub.IntegrationTests;
 /// </summary>
 public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
-        .WithDatabase("familyhub_test")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private readonly PostgreSqlContainer _postgres;
+
+    public FamilyHubWebFactory()
+    {
+        // PostgresImage вызывается из конструктора базового класса — переопределения обязаны
+        // возвращать константу (без состояния производного класса, оно ещё не инициализировано).
+        _postgres = new PostgreSqlBuilder()
+            .WithImage(PostgresImage)
+            .WithDatabase("familyhub_test")
+            .WithUsername("postgres")
+            .WithPassword("postgres")
+            .Build();
+    }
+
+    /// <summary>Образ Postgres. LeastPrivilegeWebFactory берёт 17 — как в проде.</summary>
+    protected virtual string PostgresImage => "postgres:16-alpine";
+
+    /// <summary>Строка подключения, с которой стартует ХОСТ (по умолчанию — суперпользователь
+    /// контейнера). LeastPrivilegeWebFactory подменяет её на отдельную роль приложения.</summary>
+    protected virtual string HostPostgresConnectionString => _postgres.GetConnectionString();
+
+    /// <summary>Вызывается после прогона миграций (под суперпользователем), до старта хоста.</summary>
+    protected virtual Task AfterMigrationsAsync(PostgreSqlContainer postgres) => Task.CompletedTask;
 
     // MinIO — теперь единственная реализация IFileStorage (LocalFileStorage упразднён), поэтому
     // вложения гоняются через реальный объектный стор и здесь, а не через временный каталог на диске.
@@ -41,6 +58,8 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_postgres.GetConnectionString());
         await using var db = new AppDbContext(optionsBuilder.Options, DesignTimeDbContextFactory.CreateDevCipher());
         await db.Database.MigrateAsync();
+
+        await AfterMigrationsAsync(_postgres);
     }
 
     // virtual (не только new) — KafkaWebFactory должна попасть в вызов через override, иначе
@@ -73,7 +92,7 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // builder.Configuration, который Program.cs читает синхронно при старте (Hangfire конкретно
         // подключался к дефолтному localhost:5432 из appsettings, а не к Testcontainers-порту).
         // UseSetting пишет напрямую в тот же конфиг, который видит WebApplicationBuilder.
-        builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
+        builder.UseSetting("ConnectionStrings:Postgres", HostPostgresConnectionString);
         // GetConnectionString() отдаёт полный URL ("http://127.0.0.1:PORT/") — Minio:Endpoint
         // ждёт голый host:port (см. MinioFileStorage: .WithEndpoint(...).WithSSL(...) раздельно).
         builder.UseSetting("Minio:Endpoint", new Uri(_minio.GetConnectionString()).Authority);

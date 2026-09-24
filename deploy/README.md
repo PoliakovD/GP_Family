@@ -15,6 +15,7 @@
 | `docker-compose.prod.yml` | Прод-стек: api (образ из GHCR), postgres, minio, kafka, seq, caddy, backup |
 | `Caddyfile` | Реверс-прокси: публичный сайт + WG-only админ-сайты (Seq/MinIO Console/Hangfire/Swagger) |
 | `backup/` | Ночной pg_dump + зеркало MinIO с ротацией |
+| `scripts/` | Операторские скрипты (ADR-0011): первичная настройка учёток приложения, смена пароля суперпользователя Postgres и root MinIO |
 | `../.github/workflows/deploy.yml` | GitHub Actions: сборка образа → GHCR → SSH-деплой (только вручную) |
 | `../.github/workflows/ci.yml`, `integration.yml` | Гейты перед деплоем (build+unit на каждый push, integration на master) |
 | `../src/FamilyHub.Api/Dockerfile` | Продовый образ (Angular + .NET в одном контейнере) |
@@ -131,7 +132,11 @@ Settings → Secrets and variables → Actions → New repository secret:
    значения из локального `.env`/`prod.env`:
    - `ENCRYPTION_MASTER_KEY`, `Jwt__SigningKey`, `Attachments__DownloadSigningKey` —
      `openssl rand -base64 32` каждый;
-   - `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` — аналогично;
+   - `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` — аналогично (это учётки для бэкапа и ручного
+     администрирования; приложение под ними не работает);
+   - `DB_APP_USER`, `DB_APP_PASSWORD`, `MINIO_APP_ACCESS_KEY`, `MINIO_APP_SECRET_KEY` — **не
+     генерируйте руками**: их выпускает `scripts/bootstrap-app-credentials.sh` (см. ниже,
+     «Учётки приложения»);
    - `SEQ_ADMIN_PASSWORD_HASH` — `docker run --rm datalust/seq config hash <пароль>`;
    - `DevTools__AdminUser`/`DevTools__AdminPassword` — учётка для Hangfire/Swagger.
 2. Выставите docker-сетевые адреса (внутри compose, не localhost):
@@ -244,6 +249,67 @@ Docker публикует конкретно на `10.8.0.1` (host-IP-scoped por
    странице «Безопасность → Статистика». Когда счётчики дойдут до нуля на старом `keyId` — убрать
    `Encryption__PreviousKeys__0__*` из конфигурации и передеплоить.
 
+### Учётки приложения (ADR-0011)
+
+Приложение ходит в Postgres под `familyhub_app_a` (владелец схем — роль `familyhub_owner`), в MinIO —
+под service account пользователя с доступом только к бакету `familyhub`. Суперпользователь Postgres и
+root MinIO остаются для бэкапа и ручной работы — контейнер `api` их пароли **не получает**.
+
+**Первичная настройка на действующем проде — ОДИН раз, строго ДО деплоя версии с этими переменными.**
+Прод-compose требует `DB_APP_*`/`MINIO_APP_*` и без них не запустит `api`; пока вы этого не сделали,
+работающий стек не затронут (деплой упадёт на интерполяции до какого-либо пересоздания контейнеров).
+
+1. С машины, где лежит репозиторий (ветка/коммит с этими скриптами), скопируйте скрипты на сервер:
+   ```bash
+   scp -r deploy/scripts deploy@<IP>:/opt/familyhub/
+   ```
+2. На сервере, в малонагруженное время (передача владения таблицами берёт короткие блокировки):
+   ```bash
+   ssh deploy@<IP>
+   cd /opt/familyhub
+   bash scripts/bootstrap-app-credentials.sh
+   ```
+   Скрипт создаёт роли и функции в Postgres, передаёт владение существующими объектами, заводит в MinIO
+   пользователя/политику/service account и **один раз** печатает четыре строки:
+   `DB_APP_USER`, `DB_APP_PASSWORD`, `MINIO_APP_ACCESS_KEY`, `MINIO_APP_SECRET_KEY`. Нигде, кроме
+   вашего терминала, они не сохраняются. Работающий `api` продолжает работать под старыми кредами.
+3. Добавьте эти четыре строки в секрет `PROD_ENV` (GitHub → Settings → Secrets).
+4. Задеплойте (§6). `api` пересоздастся уже под новыми учётками.
+5. Проверьте: `/health/ready` зелёный; сессии приложения видны под новой ролью —
+   `docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select usename, count(*) from pg_stat_activity group by 1"`
+   (должна быть `familyhub_app_a`, а не суперпользователь).
+
+Откат: задеплойте предыдущую версию репозитория (её compose снова использует `POSTGRES_*`/`MINIO_ROOT_*`) —
+суперпользователь и root по-прежнему рабочие, обратная передача владения не нужна.
+
+Повторный запуск того же скрипта без `--force` откажется (учётки уже заданы). С `--force` выпустит новый
+пароль БД и новый ключ MinIO; старый ключ MinIO остаётся действующим, пока его не удалят
+(`mc admin user svcacct rm`).
+
+**Известное ограничение:** контейнер `caddy` по-прежнему получает весь `.env` (нужны лишь переменные
+`Caddyfile`) — в том числе пароли суперпользователя/root. Сужение — отдельная задача (ADR-0011).
+
+### Смена пароля суперпользователя Postgres и root MinIO
+
+Приложение под ними не работает — смена **не требует простоя приложения**. Нужны они контейнеру
+`backup` и вам (DBeaver/консоль MinIO).
+
+```bash
+# Postgres. Скрипт меняет пароль в БД и печатает POSTGRES_PASSWORD=...; --write-env заодно правит
+# /opt/familyhub/.env, чтобы backup подхватил его до следующего деплоя.
+bash scripts/rotate-postgres-superuser.sh --write-env
+# → обновить POSTGRES_PASSWORD в PROD_ENV (иначе следующий деплой вернёт СТАРЫЙ пароль в .env и сломает
+#   бэкап), задеплоить, обновить пароль в DBeaver.
+
+# MinIO. Пароль root берётся сервером из env при старте, поэтому смена = новое значение в PROD_ENV + деплой.
+bash scripts/rotate-minio-root.sh prepare    # печатает MINIO_ROOT_PASSWORD=... (ничего не меняет)
+# → обновить MINIO_ROOT_PASSWORD в PROD_ENV, задеплоить (minio и backup пересоздадутся)
+bash scripts/rotate-minio-root.sh verify     # root входит с новым паролем, ключ приложения работает
+```
+
+Ротация самих учёток приложения (пароль `familyhub_app_a/b`, ключ MinIO) — отдельная процедура
+двухфазного переключения; из админ-панели она появится следующим этапом (ADR-0011).
+
 ## 9. Бэкапы
 
 Автоматически в 03:30 (после Hangfire `audit-retention` в 03:00). Ручной запуск и проверка:
@@ -255,6 +321,13 @@ docker compose run --rm backup /app/backup.sh
 ls -la backups/db/daily/
 docker compose exec postgres pg_restore --list /backups/db/daily/<последний файл>.dump
 ```
+
+Бэкап работает под суперпользователем Postgres и root MinIO (не под учётками приложения) — так
+он видит всё и не зависит от ротации ключей приложения. Дамп содержит `OWNER TO familyhub_owner`:
+при восстановлении в **действующий** кластер (роли уже есть) ничего дополнительного не нужно; в
+**новый** кластер сначала создайте роли — `psql -U <суперпользователь> -d <БД> -f
+scripts/sql/bootstrap-roles.sql` (без пароля; пароль потом задаст `bootstrap-app-credentials.sh`) —
+либо восстанавливайте с `pg_restore --no-owner --role=familyhub_owner`.
 
 Ротация: 7 ежедневных + 4 еженедельных (воскресные) дампа Postgres; MinIO — актуальное зеркало
 бакета (`mc mirror --overwrite --remove`), не версии. **Офлайн-копия вне сервера сознательно не

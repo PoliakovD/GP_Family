@@ -117,10 +117,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "5276"
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # Учётки приложения (ADR-0011): если DB_APP_*/MINIO_APP_* заданы (после
+      # deploy/scripts/bootstrap-app-credentials.sh --dev) — приложение ходит под ними, как в проде;
+      # если нет — как раньше, под суперпользователем/root, чтобы dev-стек работал без настройки.
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${DB_APP_USER:-${POSTGRES_USER}};Password=${DB_APP_PASSWORD:-${POSTGRES_PASSWORD}}"
       Minio__Endpoint: "minio:9000"
-      Minio__AccessKey: "${MINIO_ROOT_USER}"
-      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Minio__AccessKey: "${MINIO_APP_ACCESS_KEY:-${MINIO_ROOT_USER}}"
+      Minio__SecretKey: "${MINIO_APP_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}"
       # Ключ шифрования ПДн. Без дефолта намеренно: значение в git = шифрование известным ключом.
       # Сгенерировать: openssl rand -base64 32
       Encryption__MasterKey: "${ENCRYPTION_MASTER_KEY:?не задан в .env — сгенерируйте: openssl rand -base64 32}"

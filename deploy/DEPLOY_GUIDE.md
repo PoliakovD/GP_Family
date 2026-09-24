@@ -88,6 +88,7 @@ GitHub Environment `production` с этими же секретами (`deploy.y
 | `Attachments__DownloadSigningKey` | всегда, ≥32 символов | `openssl rand -base64 32` |
 | `POSTGRES_PASSWORD` | всегда | `openssl rand -base64 24` |
 | `MINIO_ROOT_PASSWORD` | всегда | `openssl rand -base64 24` |
+| `DB_APP_USER`, `DB_APP_PASSWORD`, `MINIO_APP_ACCESS_KEY`, `MINIO_APP_SECRET_KEY` | всегда — деплой без них падает | **не вручную**: `bash scripts/bootstrap-app-credentials.sh` на сервере (README, «Учётки приложения», ADR-0011) |
 | `SEQ_ADMIN_PASSWORD_HASH` | всегда (на VPS `SEQ_FIRSTRUN_NOAUTHENTICATION=false`) | `docker run --rm datalust/seq config hash <пароль>` |
 | `DevTools__AdminUser` / `DevTools__AdminPassword` | т.к. на VPS `DevTools__AdminUiEnabled=true` | пароль: `openssl rand -base64 24` |
 | `Telegram__BotToken`, `Telegram__WebhookSecret` | если нужен бот | @BotFather / любая случайная строка |
@@ -239,6 +240,8 @@ cd /opt/familyhub
 docker compose stop api
 
 # 2. Восстановить дамп: --clean --if-exists — безопасно поверх существующей (пустой или нет) базы.
+#    Объекты в дампе принадлежат роли familyhub_owner (ADR-0011): в действующем кластере она уже есть;
+#    в НОВЫЙ кластер сначала создайте роли — см. README §9.
 docker compose run --rm backup bash -c \
   'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
    --clean --if-exists /backups/db/daily/<файл>.dump'
