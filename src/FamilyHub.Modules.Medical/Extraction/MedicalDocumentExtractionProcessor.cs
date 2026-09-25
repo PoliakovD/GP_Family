@@ -206,6 +206,25 @@ public class MedicalDocumentExtractionProcessor(
             else
                 await ProcessVisitAsync(job, record, results, fileErrors, readAttachmentIds, ct);
         }
+        catch (LmStudioUnavailableException ex)
+        {
+            // ИИ недоступен (ноутбук выключен/спит, туннель упал) — это не отказ задачи, а ожидание.
+            // Раньше исключение уходило в [AutomaticRetry] (60с/10мин/1ч), после чего задача становилась
+            // красным Failed, и пользователь видел «не удалось распознать». Теперь задача остаётся
+            // Pending с флагом WaitingForAi, попытка не тратится, запись по-прежнему «в процессе», а
+            // LmStudioRecoverySweepJob запускает её, как только сервер снова отвечает. Ничего не
+            // пробрасываем — Hangfire-повтор здесь только сжёг бы попытки впустую.
+            job.Status = EnrichmentJobStatus.Pending;
+            job.Stage = ExtractionStage.Queued;
+            job.WaitingForAi = true;
+            job.Attempts = Math.Max(0, job.Attempts - 1);
+            job.ProcessedFiles = 0;
+            job.Error = null;
+            job.CurrentThought = null;
+            await db.SaveChangesAsync(ct);
+            logger.LogWarning(ex, "MedicalDocumentExtractionJob {JobId}: ИИ недоступен — задача ждёт его в очереди.", job.Id);
+            return;
+        }
         catch (Exception ex)
         {
             job.Error = ex.Message;

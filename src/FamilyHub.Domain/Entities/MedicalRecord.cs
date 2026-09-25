@@ -86,6 +86,13 @@ public class MedicalRecord
     /// Null — резюме актуально. Фронт по этому признаку показывает «Обновляем резюме…».</summary>
     public DateTime? SummaryDirtyAt { get; set; }
 
+    /// <summary>Биоматериал, введённый вручную, пока ИИ был недоступен: проверка названия моделью
+    /// (POST /api/specimens) отложена. LmStudioRecoverySweepJob проверит его, когда сервер вернётся, и
+    /// либо применит к записи, либо (при отказе) превратит в SpecimenHint — «уточните источник».
+    /// Null — ничего не ждёт проверки.</summary>
+    [Encrypted]
+    public string? PendingSpecimenText { get; set; }
+
     /// <summary>Подопечный (ребёнок/питомец/пожилой родственник без своего User), для которого
     /// загружена эта запись. Видна всей активной семье подопечного автоматически — см.
     /// MedicalRecordService.VisibleRecordsQuery. Взаимоисключимо с TargetUserId (проверяется в

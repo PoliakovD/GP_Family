@@ -138,6 +138,7 @@ public class VisitMedicationEnrichmentProcessor(
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = summarized.Error;
                 job.FailureReason = summarized.Reason;
+                job.IsTransientFailure = summarized.Reason == EnrichmentFailureReason.LmStudioUnavailable;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 return;
@@ -180,6 +181,7 @@ public class VisitMedicationEnrichmentProcessor(
             {
                 job.Status = EnrichmentJobStatus.Failed;
                 job.CompletedAt = DateTime.UtcNow;
+                job.IsTransientFailure = ex is LmStudioUnavailableException;
                 job.FailureReason = ex is LmStudioUnavailableException
                     ? EnrichmentFailureReason.LmStudioUnavailable
                     : EnrichmentFailureReason.Unknown;

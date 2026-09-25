@@ -24,7 +24,7 @@ public enum ExtractionQueryResult { Success, NotFound, Forbidden, Failed }
 /// </summary>
 public class ExtractionQueryService(
     AppDbContext db, MedicalRecordService medicalRecords, Kb.KbLookupService medicationKbLookup,
-    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer,
+    Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit,
     LabAnalyteKbLookupService analyteKbLookup, LabAnalyteEnrichmentRequestService enrichmentRequest,
     ILegitimacyGuardService legitimacyGuard, IAnalytePlausibilityGuardService plausibilityGuard,
     LlmQueuePositionService queuePositionService, IBackgroundJobClient backgroundJobs)
@@ -36,10 +36,16 @@ public class ExtractionQueryService(
     /// сохранение самого показателя/источника — только обогащение общего справочника.</summary>
     private async Task<string?> CheckManualEntryGatesAsync(string analyteName, string? specimenDisplayName, CancellationToken ct)
     {
+        // Недоступный ИИ (IsTransientFailure) — не отказ гейта: раньше обогащение в этом случае молча
+        // терялось (а при смене источника пользователю писали «сочетание выглядит недостоверным»).
+        // Теперь пропускаем — сам процессор обогащения повторит те же гейты и, если ИИ всё ещё
+        // недоступен, оставит задачу в очереди на досып (LmStudioRecoverySweepJob).
         var legitimacy = await legitimacyGuard.CheckAsync(analyteName, ct);
+        if (legitimacy.IsTransientFailure) return null;
         if (!legitimacy.IsLegitimate) return legitimacy.Reason;
 
         var plausibility = await plausibilityGuard.CheckAsync(analyteName, specimenDisplayName, ct);
+        if (plausibility.IsTransientFailure) return null;
         if (!plausibility.IsPlausible) return plausibility.Reason;
 
         return null;
@@ -64,13 +70,14 @@ public class ExtractionQueryService(
         // ожидание при большом потоке задач обогащения справочника (баг, найденный на живом
         // отчёте: кнопка «Распознать» блокирована верно, а бейдж стадии создавал впечатление
         // активной работы, хотя задача просто стояла в общей очереди у семафора).
-        var queueAhead = job.Status is EnrichmentJobStatus.Pending or EnrichmentJobStatus.Running
+        var waitingForAi = job.WaitingForAi && job.Status == EnrichmentJobStatus.Pending;
+        var queueAhead = !waitingForAi && job.Status is EnrichmentJobStatus.Pending or EnrichmentJobStatus.Running
             ? await queuePositionService.GetQueueAheadAsync(job.CreatedAt, ct)
             : 0;
 
         return (ExtractionQueryResult.Success, new ExtractionStatusResponse(
             job.Status, job.Stage, job.IndicatorCount, job.Error, job.TotalFiles, job.ProcessedFiles,
-            job.CreatedAt, job.CompletedAt, queueAhead, job.CurrentThought));
+            job.CreatedAt, job.CompletedAt, queueAhead, job.CurrentThought, waitingForAi));
     }
 
     public async Task<(ExtractionQueryResult Result, List<IndicatorDto> Items)> GetIndicatorsAsync(
@@ -95,9 +102,9 @@ public class ExtractionQueryService(
         return (ExtractionQueryResult.Success, items
             .Select(i =>
             {
-                var (pending, liveText, createdAt) = FindPendingEnrichment(i, pendingKeys);
-                var queueAhead = pending ? LlmQueuePositionService.CountAhead(activeTimestamps, createdAt) : 0;
-                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, liveText, queueAhead);
+                var (pending, liveText, createdAt, waitingForAi) = FindPendingEnrichment(i, pendingKeys);
+                var queueAhead = pending && !waitingForAi ? LlmQueuePositionService.CountAhead(activeTimestamps, createdAt) : 0;
+                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, liveText, queueAhead, waitingForAi);
             })
             .ToList());
     }
@@ -108,19 +115,24 @@ public class ExtractionQueryService(
     /// строке из всех активных задач всей системы одновременно, см. class doc ActiveJobItem.
     /// CreatedAt — для позиции в ОБЩЕЙ очереди к LLM (см. LlmQueuePositionService), не только
     /// среди показателей этой записи.</summary>
-    private async Task<List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt)>> GetPendingEnrichmentKeysAsync(
+    private async Task<List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt, bool WaitingForAi)>> GetPendingEnrichmentKeysAsync(
         List<DomainLabIndicator> items, CancellationToken ct)
     {
         var specimenIds = items.Select(i => i.SpecimenKbId).Distinct().ToList();
         if (specimenIds.Count == 0) return [];
 
+        // Транзитно упавшие (ИИ был недоступен) тоже считаются «в процессе» — их подхватит
+        // LmStudioRecoverySweepJob; без этого чип «уточняем норму» молча исчезал бы, и показатель
+        // выглядел «справочник не нашёл» навсегда. Окно — те же 7 суток, что у самого досыпа.
+        var waitingSince = DateTime.UtcNow.AddDays(-7);
         var rows = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
-            .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
-                && specimenIds.Contains(j.SpecimenKbId))
-            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought, j.CreatedAt })
+            .Where(j => specimenIds.Contains(j.SpecimenKbId)
+                && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
+                    || (j.Status == EnrichmentJobStatus.Failed && j.IsTransientFailure && j.CreatedAt > waitingSince)))
+            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought, j.CreatedAt, Waiting = j.Status == EnrichmentJobStatus.Failed })
             .ToListAsync(ct);
 
-        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CurrentThought, r.CreatedAt)).ToList();
+        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CurrentThought, r.CreatedAt, r.Waiting)).ToList();
     }
 
     /// <summary>Матчинг НЕ точным равенством — LabIndicator.AnalyteKey иногда несёт суффикс
@@ -129,12 +141,12 @@ public class ExtractionQueryService(
     /// ключу (lookupKey), не по разведённому analyteKey") — поэтому StartsWith, не ==. Ложных
     /// совпадений на практике не бывает: коллизия имени ПОСЛЕ нормализации в пределах одного
     /// источника — редкий случай, который и разводит AnalyteKeyDisambiguator.</summary>
-    private static (bool Pending, string? LiveText, DateTime CreatedAt) FindPendingEnrichment(
-        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt)> pendingKeys)
+    private static (bool Pending, string? LiveText, DateTime CreatedAt, bool WaitingForAi) FindPendingEnrichment(
+        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt, bool WaitingForAi)> pendingKeys)
     {
         var match = pendingKeys.FirstOrDefault(k => k.SpecimenKbId == indicator.SpecimenKbId
             && indicator.AnalyteKey.StartsWith(k.NormalizedName, StringComparison.Ordinal));
-        return match.NormalizedName is null ? (false, null, default) : (true, match.CurrentThought, match.CreatedAt);
+        return match.NormalizedName is null ? (false, null, default, false) : (true, match.CurrentThought, match.CreatedAt, match.WaitingForAi);
     }
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
@@ -222,23 +234,8 @@ public class ExtractionQueryService(
     /// меняющей входные данные резюме: показатель добавлен/изменён/удалён, сменён источник записи.
     /// Сбой постановки в Hangfire не должен ронять саму правку — тогда пометка снимается, и резюме
     /// остаётся как есть (фронт при следующем открытии всё равно может запросить пересчёт).</summary>
-    private async Task MarkSummaryDirtyAsync(Guid recordId, CancellationToken ct)
-    {
-        var token = RecordSummaryRegenerationJob.NewDirtyToken();
-        await db.MedicalRecords.Where(r => r.Id == recordId)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.SummaryDirtyAt, token), ct);
-        try
-        {
-            var ticks = token.Ticks;
-            backgroundJobs.Schedule<RecordSummaryRegenerationJob>(
-                j => j.RunAsync(recordId, ticks, CancellationToken.None), RecordSummaryRegenerationJob.Delay);
-        }
-        catch
-        {
-            await db.MedicalRecords.Where(r => r.Id == recordId)
-                .ExecuteUpdateAsync(s => s.SetProperty(r => r.SummaryDirtyAt, (DateTime?)null), ct);
-        }
-    }
+    private Task MarkSummaryDirtyAsync(Guid recordId, CancellationToken ct) =>
+        RecordSummaryRegenerationJob.RescheduleAsync(db, backgroundJobs, recordId, RecordSummaryRegenerationJob.Delay, ct);
 
     /// <summary>Пересчитывает "Резюме"/"Вопросы врачу" по ТЕКУЩИМ показателям записи — независимо
     /// от исходной автоматической суммаризации при распознавании. Нужен, когда OCR неверно
@@ -246,7 +243,7 @@ public class ExtractionQueryService(
     /// резюме построено на неверных цифрах: пользователь правит показатель вручную
     /// (UpdateIndicatorAsync), а резюме само не пересчитывается — этот метод даёт явную кнопку
     /// вместо того, чтобы заставлять пересканировать документ заново (который вернул бы ту же
-    /// ошибку OCR). Синхронный вызов LLM из HTTP-запроса — тот же приём, что MedicationOcrService.</summary>
+    /// ошибку OCR). Теперь только ставит фоновый пересчёт (202 + pending), сам LLM не зовёт.</summary>
     public async Task<(ExtractionQueryResult Result, RecordSummaryResponse? Item)> RegenerateSummaryAsync(
         Guid recordId, Guid userId, CancellationToken ct = default)
     {
@@ -254,20 +251,17 @@ public class ExtractionQueryService(
         if (record is null) return (ExtractionQueryResult.NotFound, null);
         if (record.OwnerUserId != userId) return (ExtractionQueryResult.Forbidden, null);
 
-        var indicators = await db.LabIndicators.Where(i => i.MedicalRecordId == recordId).ToListAsync(ct);
-        if (indicators.Count == 0) return (ExtractionQueryResult.NotFound, null);
+        if (!await db.LabIndicators.AnyAsync(i => i.MedicalRecordId == recordId, ct))
+            return (ExtractionQueryResult.NotFound, null);
 
-        var summarized = await summarizer.SummarizeAsync(indicators, ct);
-        if (!summarized.Success || summarized.Summary is null) return (ExtractionQueryResult.Failed, null);
-
-        record.SummaryJson = JsonSerializer.Serialize(summarized.Summary);
-        // Синхронный пересчёт актуален по определению — снимаем пометку, запланированная джоба
-        // (если есть) увидит null-токен и выйдет.
-        record.SummaryDirtyAt = null;
-        await db.SaveChangesAsync(ct);
+        // Пересчёт идёт в фоне (без задержки-дебаунса): если ИИ недоступен, задача не теряется —
+        // пометка SummaryDirtyAt остаётся, LmStudioRecoverySweepJob запустит её, когда сервер вернётся.
+        // Раньше здесь был синхронный вызов LLM из HTTP-запроса с ответом 502 при недоступном сервере.
+        await RecordSummaryRegenerationJob.RescheduleAsync(db, backgroundJobs, recordId, TimeSpan.Zero, ct);
 
         return (ExtractionQueryResult.Success, new RecordSummaryResponse(
-            summarized.Summary.PlainSummary, summarized.Summary.Deviations, summarized.Summary.QuestionsForDoctor, summarized.Summary.Disclaimer));
+            record.SummaryJson is null ? null : JsonSerializer.Deserialize<LabSummary>(record.SummaryJson)?.PlainSummary,
+            [], [], string.Empty, Pending: true));
     }
 
     /// <summary>Последнее значение по каждому (показатель, источник, ПАЦИЕНТ) среди СВОИХ записей
@@ -561,6 +555,25 @@ public class ExtractionQueryService(
         return (SetRecordSpecimenResult.Success, warning);
     }
 
+    /// <summary>Ручной биоматериал, пока ИИ недоступен: проверка названия моделью (POST /api/specimens)
+    /// невозможна, поэтому сохраняем введённое как «ожидает проверки» — LmStudioRecoverySweepJob
+    /// проверит и применит его к записи, когда сервер вернётся (или превратит в подсказку «уточните
+    /// источник», если модель отклонит). Только владелец записи — как и у остальных мутаций.</summary>
+    public async Task<SetPendingSpecimenResult> SetPendingSpecimenAsync(
+        Guid recordId, Guid userId, string? name, CancellationToken ct = default)
+    {
+        var record = await db.MedicalRecords.FirstOrDefaultAsync(r => r.Id == recordId, ct);
+        if (record is null) return SetPendingSpecimenResult.NotFound;
+        if (record.OwnerUserId != userId) return SetPendingSpecimenResult.Forbidden;
+
+        var trimmed = name?.Trim() ?? string.Empty;
+        if (trimmed.Length is < 2 or > 60) return SetPendingSpecimenResult.InvalidInput;
+
+        record.PendingSpecimenText = trimmed;
+        await db.SaveChangesAsync(ct);
+        return SetPendingSpecimenResult.Success;
+    }
+
     /// <summary>Ручное добавление показателя (UX-редизайн) — тот же путь расчёта флага, что и
     /// правка: RefSource.Blank, KB-каскад заново не гоняется для САМОГО этого показателя
     /// (пользователь вводит конкретные цифры руками, не просит распознать заново). Position — в
@@ -683,10 +696,11 @@ public class ExtractionQueryService(
 
     private static IndicatorDto ToDto(
         DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false, string? enrichmentLiveText = null,
-        int enrichmentQueueAhead = 0) => new(
+        int enrichmentQueueAhead = 0, bool enrichmentWaitingForAi = false) => new(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
         i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
-        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentLiveText, enrichmentQueueAhead);
+        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentLiveText, enrichmentQueueAhead,
+        enrichmentWaitingForAi);
 
     private static double? ParseNumeric(string? value)
     {

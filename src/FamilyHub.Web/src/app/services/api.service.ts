@@ -353,6 +353,14 @@ export class ApiService {
   // Конвейер извлечения показателей (ветка medicalrecords, редизайн v2) — одна кнопка
   // «Распознать» на ЗАПИСИ (обрабатывает все ещё не распознанные вложения последовательно),
   // статус/показатели/резюме записи, «мои показатели» + история для спарклайна.
+  /** Доступен ли сейчас локальный ИИ (LM Studio) — для плашки «ждём ИИ». */
+  getAiStatus = () => this.get<{ available: boolean }>('/api/ai/status');
+
+  /** Биоматериал введён при недоступном ИИ (POST /api/specimens ответил 503): проверка названия
+   * откладывается, бэкенд применит его к записи, когда сервер вернётся. */
+  setPendingSpecimen = (recordId: string, name: string) =>
+    this.put<void>(`/api/medical-records/${recordId}/specimen-pending`, { name });
+
   requestExtraction = (recordId: string) =>
     this.post<ExtractionRequestResponse | null>(`/api/medical-records/${recordId}/extract`);
 
@@ -369,9 +377,9 @@ export class ApiService {
   getRecordSummary = (recordId: string) =>
     this.get<RecordSummaryResponse>(`/api/medical-records/${recordId}/summary`);
 
-  /** Пересчёт "Резюме"/"Вопросы врачу" по текущим (в т.ч. вручную поправленным) показателям —
-   * без повторного распознавания документа. Нужен, когда OCR неверно прочитал значение/референс
-   * с бланка: резюме само не пересчитывается после ручной правки показателя. */
+  /** Ставит пересчёт "Резюме"/"Вопросов врачу" в фон (202 + pending): выполнится сам, а если ИИ
+   * недоступен — дождётся его. Нужен, только когда готового резюме ещё нет: после ручных правок бэк
+   * пересчитывает резюме автоматически. */
   regenerateRecordSummary = (recordId: string) =>
     this.post<RecordSummaryResponse>(`/api/medical-records/${recordId}/summary/regenerate`);
 

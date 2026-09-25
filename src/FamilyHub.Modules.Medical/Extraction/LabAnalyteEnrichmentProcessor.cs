@@ -223,6 +223,7 @@ public class LabAnalyteEnrichmentProcessor(
                 job.Status = EnrichmentJobStatus.Failed;
                 job.Error = summarized.Error;
                 job.FailureReason = summarized.Reason;
+                job.IsTransientFailure = summarized.Reason == EnrichmentFailureReason.LmStudioUnavailable;
                 job.CompletedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
                 return;

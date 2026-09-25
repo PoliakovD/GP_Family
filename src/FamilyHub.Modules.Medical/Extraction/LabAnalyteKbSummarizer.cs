@@ -111,7 +111,9 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация показателя «{DisplayName}» не удалась: {Error}", displayName, result.Error);
-            return LabAnalyteSummarizeResult.Failure(result.Error ?? "Модель не вернула структурированный ответ.");
+            return LabAnalyteSummarizeResult.Failure(
+                result.Error ?? "Модель не вернула структурированный ответ.",
+                result.IsTransient ? EnrichmentFailureReason.LmStudioUnavailable : EnrichmentFailureReason.SummarizerFailed);
         }
 
         var usedIndexes = ReadIndexArray(result.Payload, "usedSourceIndexes")

@@ -765,7 +765,7 @@ public class MedicalRecordService(
             r.ExtractionStatus, r.CreatedAt, hiddenFamilyIds, r.FamilyDependentId, r.TargetUserId,
             attachmentCount, unrecognizedAttachmentCount, indicatorCount,
             abnormalIndicatorCount, normalIndicatorCount, r.SpecimenKbId, specimenDisplayName, r.SpecimenHint,
-            r.KindIsAutoDetected);
+            r.KindIsAutoDetected, r.PendingSpecimenText);
 
     /// <summary>Батч-резолв DisplayName источников на набор SpecimenKbId — тот же приём, что
     /// ExtractionQueryService.ResolveSpecimenNamesAsync (один запрос вместо N+1).</summary>

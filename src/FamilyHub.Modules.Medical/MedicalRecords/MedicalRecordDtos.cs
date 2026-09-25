@@ -41,7 +41,10 @@ public record MedicalRecordDto(
     // .AutoDetectKind) — Kind выше провизорный, пока флаг не снят пайплайном
     // (DocumentKindClassifier, MedicalDocumentExtractionProcessor). Фронт показывает бейдж «вид
     // определён автоматически», пока true.
-    bool KindIsAutoDetected = false);
+    bool KindIsAutoDetected = false,
+    // Ручной биоматериал, чья проверка моделью отложена из-за недоступного ИИ (см.
+    // MedicalRecord.PendingSpecimenText) — UI показывает «проверим, когда ИИ вернётся».
+    string? PendingSpecimenText = null);
 
 /// <summary>Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для
 /// глобального поиска. TotalPages вычисляется на сервере, а не на фронте, чтобы не дублировать

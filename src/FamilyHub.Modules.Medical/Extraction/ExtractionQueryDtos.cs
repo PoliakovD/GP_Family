@@ -9,13 +9,15 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// говорит ли модель прямо сейчас с ней или с задачей другого конвейера). Считается, пока задача
 /// Pending ИЛИ Running; 0, когда задача уже завершилась — тогда позиция бессмысленна, фронт её не
 /// показывает. См. ExtractionQueryService.GetStatusAsync.</summary>
-/// <summary>CurrentThought — живой обрывок "мысли" модели (план "живой поток мыслей"), пока
+/// <summary>WaitingForAi — задача Pending, но ИИ (LM Studio) сейчас недоступен: она не потеряна и
+/// стартует сама, когда сервер вернётся; фронт показывает «ждём ИИ» вместо позиции в очереди.
+/// CurrentThought — живой обрывок "мысли" модели (план "живой поток мыслей"), пока
 /// задача реально думает — null между вызовами/на security-гейтах/когда задача не Running, см.
 /// class doc MedicalDocumentExtractionJob.CurrentThought.</summary>
 public record ExtractionStatusResponse(
     EnrichmentJobStatus Status, ExtractionStage Stage, int IndicatorCount, string? Error,
     int TotalFiles, int ProcessedFiles, DateTime CreatedAt, DateTime? CompletedAt, int QueuePosition = 0,
-    string? CurrentThought = null);
+    string? CurrentThought = null, bool WaitingForAi = false);
 
 /// <summary>ValueNumericText/KbAnalyteId — редизайн v2 (шкала-референс + панель справки).
 /// RefLowText/RefHighText — либо `double.ToString(InvariantCulture)`, либо null; нечисловой
@@ -23,7 +25,9 @@ public record ExtractionStatusResponse(
 /// ExtractionQueryService, RecalculateIndicatorFlagsJob — все пишут через один и тот же
 /// IndicatorFlagCalculator.Calculate/effLow-effHigh). Фронт вправе делать parseFloat без
 /// нормализации запятых. Инвариант проверен тестом RefTextFieldsAreAlwaysParseable.</summary>
-/// <summary>EnrichmentPending — §5 плана «живой конвейер»: показатель промахнулся по справочнику
+/// <summary>EnrichmentWaitingForAi — обогащение остановилось из-за недоступного ИИ и продолжится само,
+/// когда он вернётся (LmStudioRecoverySweepJob) — чип «ждём ИИ» вместо «в очереди».
+/// EnrichmentPending — §5 плана «живой конвейер»: показатель промахнулся по справочнику
 /// при распознавании, и обогащение (LabAnalyteEnrichmentJob) ещё не завершилось — UI показывает
 /// чип «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда неотличимо от
 /// случая "справочник не смог найти" (см. ExtractionQueryService.GetIndicatorsAsync).</summary>
@@ -33,7 +37,8 @@ public record IndicatorDto(
     string ValueRaw, string? Unit, string? RefLowText, string? RefHighText, string? RefText,
     DateOnly RecordDate, Guid MedicalRecordId,
     string? ValueNumericText = null, Guid? KbAnalyteId = null, string? RawDisplayName = null,
-    bool EnrichmentPending = false, string? EnrichmentLiveText = null, int EnrichmentQueueAhead = 0);
+    bool EnrichmentPending = false, string? EnrichmentLiveText = null, int EnrichmentQueueAhead = 0,
+    bool EnrichmentWaitingForAi = false);
 
 public record IndicatorHistoryPoint(DateOnly RecordDate, string ValueRaw, string? ValueNumericText, IndicatorFlag Flag, Guid MedicalRecordId);
 
@@ -111,6 +116,12 @@ public enum DeleteIndicatorResult { Success, NotFound, Forbidden }
 /// которая может изменить MedicalRecord.SpecimenKbId после распознавания; каскадится на все
 /// LabIndicators записи (см. ExtractionQueryService.SetRecordSpecimenAsync).</summary>
 public record SetRecordSpecimenRequest(Guid SpecimenKbId);
+
+/// <summary>Ручной биоматериал, введённый при недоступном ИИ — проверка отложена (см.
+/// ExtractionQueryService.SetPendingSpecimenAsync).</summary>
+public record SetPendingSpecimenRequest(string Name);
+
+public enum SetPendingSpecimenResult { Success, NotFound, Forbidden, InvalidInput }
 
 /// <summary>Conflict — после каскада на показатели столкнулись бы две строки с одинаковым
 /// (AnalyteKey, новый SpecimenKbId) в пределах записи (редкий унаследованный случай: запись,

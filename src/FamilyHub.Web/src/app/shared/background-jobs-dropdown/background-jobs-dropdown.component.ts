@@ -67,6 +67,7 @@ export class BackgroundJobsDropdownComponent {
    * задача "висит" Running без объяснений, пока справочник насыщается или идёт большой поток
    * анализов); null — вообще ничего показывать не нужно (задача Pending и никого нет впереди).*/
   itemStatusText(item: ActiveJobItem): string | null {
+    if (item.waitingForAi) return 'ждём ИИ — начнём автоматически, как только он вернётся';
     if (item.liveText) return item.liveText;
     if (item.queueAhead > 0) {
       return `в очереди — ещё ${item.queueAhead} ${pluralizeRu(item.queueAhead, 'задача', 'задачи', 'задач')} впереди`;

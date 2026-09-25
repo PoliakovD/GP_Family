@@ -10,6 +10,13 @@ using Microsoft.Extensions.Logging;
 namespace FamilyHub.Modules.Medical.Extraction;
 
 /// <summary>
+/// ДОПОЛНЕНИЕ (UX «ждём ИИ»): пока LM Studio недоступен, задачи не пропадают, а ЖДУТ его — сама задача
+/// остаётся Pending с WaitingForAi (распознавание), SummaryDirtyAt (резюме), PendingSpecimenText
+/// (ручной биоматериал). Эта джоба раз в минуту проверяет доступность и, как только сервер отвечает,
+/// запускает всё ждущее (<see cref="ReleaseWaitingExtractionJobsAsync"/>,
+/// <see cref="RescheduleStaleSummariesAsync"/>, <see cref="ResolvePendingSpecimensAsync"/>). Прежний
+/// досып терминально упавших задач (ниже) остаётся для старых строк и для обогащения.
+///
 /// Рекуррентный досып задач, упавших ТЕХНИЧЕСКИ (LM Studio был недоступен — ноутбук выключен/спит,
 /// см. IsTransientFailure на трёх job-таблицах) — без этой задачи такой сбой остаётся терминальным
 /// Failed навсегда после исчерпания [AutomaticRetry] (расписание [60, 600, 3600] — около часа), а
@@ -37,6 +44,8 @@ public class LmStudioRecoverySweepJob(
     AppDbContext db,
     ILmStudioAvailabilityProbe probe,
     IBackgroundJobClient backgroundJobs,
+    UserSpecimenService userSpecimens,
+    ExtractionQueryService extractionQuery,
     ILogger<LmStudioRecoverySweepJob> logger)
 {
     private static readonly TimeSpan MaxAge = TimeSpan.FromDays(7);
@@ -47,6 +56,17 @@ public class LmStudioRecoverySweepJob(
         {
             logger.LogDebug("LmStudioRecoverySweepJob: сервер всё ещё недоступен, досып пропущен.");
             return;
+        }
+
+        // Сначала — то, что пользователь ЖДЁТ прямо сейчас (задачи, поставленные при выключенном ИИ).
+        var waiting = await ReleaseWaitingExtractionJobsAsync(ct);
+        var summaries = await RescheduleStaleSummariesAsync(ct);
+        var specimens = await ResolvePendingSpecimensAsync(ct);
+        if (waiting + summaries + specimens > 0)
+        {
+            logger.LogInformation(
+                "LmStudioRecoverySweepJob: ИИ снова доступен — запущено ждавших: {Waiting} распознаваний, {Summaries} резюме, {Specimens} биоматериалов.",
+                waiting, summaries, specimens);
         }
 
         var cutoff = DateTime.UtcNow - MaxAge;
@@ -63,6 +83,84 @@ public class LmStudioRecoverySweepJob(
                 "препаратов, {VisitMedication} обогащений из заключений врача.",
                 extraction, labAnalyte, medication, visitMedication);
         }
+    }
+
+    /// <summary>Распознавания, поставленные (или остановленные посреди прогона) при недоступном ИИ:
+    /// Pending + WaitingForAi. Сбрасываем флаг и отдаём в Hangfire; если ИИ снова отвалится, процессор
+    /// вернёт задачу в ожидание.</summary>
+    private async Task<int> ReleaseWaitingExtractionJobsAsync(CancellationToken ct)
+    {
+        var jobs = await db.MedicalDocumentExtractionJobs
+            .Where(j => j.Status == EnrichmentJobStatus.Pending && j.WaitingForAi)
+            .OrderBy(j => j.CreatedAt)
+            .Take(100)
+            .ToListAsync(ct);
+
+        foreach (var job in jobs)
+        {
+            job.WaitingForAi = false;
+            await db.SaveChangesAsync(ct);
+            backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+        }
+        return jobs.Count;
+    }
+
+    /// <summary>Резюме, помеченные устаревшими (SummaryDirtyAt), но не пересчитанные: джоба пересчёта
+    /// при недоступном ИИ оставляет пометку. «Старше 2 минут» — чтобы не перепланировать только что
+    /// поставленную (ещё в дебаунсе/очереди) джобу; лишний дубль всё равно безвреден — старый токен
+    /// отбрасывается (см. RecordSummaryRegenerationJob).</summary>
+    private async Task<int> RescheduleStaleSummariesAsync(CancellationToken ct)
+    {
+        var staleBefore = DateTime.UtcNow.AddMinutes(-2);
+        var ids = await db.MedicalRecords.AsNoTracking()
+            .Where(r => r.SummaryDirtyAt != null && r.SummaryDirtyAt < staleBefore)
+            .OrderBy(r => r.SummaryDirtyAt)
+            .Select(r => r.Id)
+            .Take(50)
+            .ToListAsync(ct);
+
+        foreach (var id in ids)
+            await RecordSummaryRegenerationJob.RescheduleAsync(db, backgroundJobs, id, TimeSpan.Zero, ct);
+        return ids.Count;
+    }
+
+    /// <summary>Ручной биоматериал, введённый при недоступном ИИ (MedicalRecord.PendingSpecimenText):
+    /// теперь проверяем моделью. Валиден — применяем к записи (тот же путь, что ручная смена), отказ —
+    /// превращаем в подсказку «уточните источник» (SpecimenHint), недоступность — оставляем на
+    /// следующий проход.</summary>
+    private async Task<int> ResolvePendingSpecimensAsync(CancellationToken ct)
+    {
+        var records = await db.MedicalRecords
+            .Where(r => r.PendingSpecimenText != null)
+            .OrderBy(r => r.CreatedAt)
+            .Take(20)
+            .ToListAsync(ct);
+
+        var resolved = 0;
+        foreach (var record in records)
+        {
+            var text = record.PendingSpecimenText!;
+            var (result, item, _) = await userSpecimens.CreateAsync(record.OwnerUserId, text, ct);
+
+            switch (result)
+            {
+                case CreateSpecimenResult.Unavailable:
+                    return resolved; // ИИ снова отвалился — остальные подождут следующего прохода
+
+                case CreateSpecimenResult.Success or CreateSpecimenResult.AlreadyExists when item is not null:
+                    await extractionQuery.SetRecordSpecimenAsync(record.Id, record.OwnerUserId, item.SpecimenKbId, ct);
+                    break;
+
+                default: // отклонено моделью / некорректное название — пусть пользователь уточнит сам
+                    record.SpecimenHint = text;
+                    break;
+            }
+
+            record.PendingSpecimenText = null;
+            await db.SaveChangesAsync(ct);
+            resolved++;
+        }
+        return resolved;
     }
 
     private async Task<int> RequeueExtractionJobsAsync(DateTime cutoff, CancellationToken ct)

@@ -9,17 +9,15 @@ using Microsoft.Extensions.Options;
 
 namespace FamilyHub.Modules.Medical.Extraction;
 
-/// <summary><see cref="ServiceUnavailable"/> — последняя задача записи упала технически (LM
-/// Studio был недоступен) и сервер всё ещё недоступен прямо сейчас (см. класс-doc
-/// ExtractionRequestService) — отличается от <see cref="AlreadyQueued"/> (задача уже реально
-/// исполняется/ждёт) тем, что новая задача здесь СОЗНАТЕЛЬНО не создаётся: она немедленно упала
-/// бы тем же образом, а исходную задачу уже вернёт в очередь LmStudioRecoverySweepJob, как только
-/// сервер оживёт.
+/// <summary><see cref="QueuedWaitingForAi"/> — задача СОЗДАНА, но ИИ (LM Studio) недоступен прямо сейчас:
+/// она встаёт в очередь с флагом WaitingForAi и не уходит в Hangfire, пока LmStudioRecoverySweepJob
+/// не увидит, что сервер снова отвечает. Пользователь ничего не теряет и не должен нажимать
+/// «Распознать» повторно — фронт показывает «ждём ИИ».
 /// <see cref="TooManyActiveJobs"/>/<see cref="DailyQuotaExceeded"/> — лимиты на пользователя
 /// (ExtractionLimitsOptions), см. class doc ниже.</summary>
 public enum ExtractionRequestResult
 {
-    Success, NotFound, Forbidden, AlreadyQueued, NothingToDo, ServiceUnavailable,
+    Success, NotFound, Forbidden, AlreadyQueued, NothingToDo, QueuedWaitingForAi,
     TooManyActiveJobs, DailyQuotaExceeded,
 }
 
@@ -77,16 +75,10 @@ public class ExtractionRequestService(
             .AnyAsync(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId && a.ExtractedAt == null, ct);
         if (!hasPendingAttachments) return ExtractionRequestResult.NothingToDo;
 
-        // Последняя задача этой записи упала технически, и сервер всё ещё недоступен прямо сейчас —
-        // новая задача упала бы тем же образом немедленно; сообщаем понятно вместо того, чтобы
-        // тратить попытку впустую. LmStudioRecoverySweepJob сам вернёт исходную задачу в очередь,
-        // как только сервер снова ответит (см. план, часть 1).
-        var lastJob = await db.MedicalDocumentExtractionJobs.AsNoTracking()
-            .Where(j => j.MedicalRecordId == recordId)
-            .OrderByDescending(j => j.CreatedAt)
-            .FirstOrDefaultAsync(ct);
-        if (lastJob is { Status: EnrichmentJobStatus.Failed, IsTransientFailure: true } && !await probe.IsAvailableAsync(ct))
-            return ExtractionRequestResult.ServiceUnavailable;
+        // ИИ недоступен прямо сейчас — задачу всё равно создаём (пользователь ничего не должен
+        // терять и перенажимать), но в Hangfire не отдаём: она ждёт с WaitingForAi, а
+        // LmStudioRecoverySweepJob запустит её, когда сервер снова ответит.
+        var aiAvailable = await probe.IsAvailableAsync(ct);
 
         var job = new MedicalDocumentExtractionJob
         {
@@ -96,6 +88,7 @@ public class ExtractionRequestService(
             Status = EnrichmentJobStatus.Pending,
             Stage = ExtractionStage.Queued,
             CreatedAt = DateTime.UtcNow,
+            WaitingForAi = !aiAvailable,
         };
         db.MedicalDocumentExtractionJobs.Add(job);
 
@@ -112,7 +105,8 @@ public class ExtractionRequestService(
             await db.MedicalRecords.Where(r => r.Id == recordId)
                 .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExtractionStatus, ExtractionStatus.Pending), ct);
             await db.SaveChangesAsync(ct);
-            backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
+            if (aiAvailable)
+                backgroundJobs.Enqueue<MedicalDocumentExtractionProcessor>(p => p.RunAsync(job.Id, CancellationToken.None));
             await tx.CommitAsync(ct);
         }
         catch (DbUpdateException ex)
@@ -130,8 +124,8 @@ public class ExtractionRequestService(
             throw;
         }
 
-        logger.LogInformation("Распознавание мед-записи {RecordId} поставлено в очередь.", recordId);
-        return ExtractionRequestResult.Success;
+        logger.LogInformation("Распознавание мед-записи {RecordId} поставлено в очередь{Waiting}.", recordId, aiAvailable ? "" : " (ждёт ИИ)");
+        return aiAvailable ? ExtractionRequestResult.Success : ExtractionRequestResult.QueuedWaitingForAi;
     }
 
     /// <summary>Снимок лимитов + текущего расхода для формы (батч-загрузка и обычная форма

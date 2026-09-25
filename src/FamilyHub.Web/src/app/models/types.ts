@@ -231,6 +231,9 @@ export interface MedicalRecord {
      * загружали), пока пайплайн не определит его документом (DocumentKindClassifier) и не снимет
      * флаг. Обычная форма создания («+ Добавить») никогда не выставляет этот флаг. */
     kindIsAutoDetected: boolean;
+    /** Биоматериал введён вручную, пока ИИ был недоступен — проверка названия отложена, бэкенд
+     * применит его к записи, когда сервер вернётся (см. MedicalRecord.PendingSpecimenText). */
+    pendingSpecimenText: string | null;
 }
 
 /** Постраничный ответ (UX-редизайн) — используется и для списка мед-записей, и для поиска. */
@@ -471,6 +474,8 @@ export interface ActiveJobItem {
      * строки из всех активных задач всей системы одновременно (LmStudioConcurrencyGate
      * сериализует все вызовы LM Studio) — у остальных Pending это просто null, они ждут очередь. */
     liveText: string | null;
+    /** Распознавание ждёт, пока вернётся ИИ (LM Studio недоступен) — позиции в очереди у него нет. */
+    waitingForAi: boolean;
     /** Сколько задач из ЛЮБОГО из четырёх конвейеров реально стоят раньше этой в общей очереди к
      * LLM (не только своего конвейера — "extraction"/"enrichment" делят одну модель) — 0 у той
      * самой строки, что реально держит гейт прямо сейчас (см. liveText выше). */
@@ -536,12 +541,16 @@ export interface ExtractionStatusResponse {
     /** Живой обрывок "мысли" модели (план "живой поток мыслей") — null между вызовами/на
      * security-гейтах/когда задача не Running. */
     currentThought: string | null;
+    /** Задача Pending, но ИИ (LM Studio) сейчас недоступен: она не потеряна и стартует сама, когда
+     * сервер вернётся — UI показывает «ждём ИИ» вместо позиции в очереди. */
+    waitingForAi: boolean;
 }
 
 /** Тело ответа POST /extract на "мягких" исходах (см. ExtractionRequestResult на бэкенде) — на
  * успехе (202 Accepted) тело пустое, эти поля отсутствуют. */
 export interface ExtractionRequestResponse {
-    code?: 'already_queued' | 'llm_unavailable';
+    /** waiting_for_ai (202) — задача создана, но ИИ недоступен: ждёт в очереди и запустится сама. */
+    code?: 'already_queued' | 'waiting_for_ai';
     message?: string;
 }
 
@@ -582,6 +591,8 @@ export interface IndicatorDto {
     enrichmentLiveText: string | null;
     /** См. ActiveJobItem.queueAhead — позиция в общей очереди к LLM, не только конвейера обогащения показателей. */
     enrichmentQueueAhead: number;
+    /** Обогащение остановилось из-за недоступного ИИ и продолжится само, когда он вернётся. */
+    enrichmentWaitingForAi: boolean;
 }
 
 /** Ручная правка показателя (ошибка OCR), PUT /api/indicators/{id} — все поля целиком, не патч.
