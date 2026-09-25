@@ -30,8 +30,6 @@ import type {
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
-import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
-import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
@@ -119,8 +117,8 @@ let nextInstanceId = 0;
     selector: 'app-medical-records-panel',
     imports: [
         NgTemplateOutlet,
-        FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
-        ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
+        FormsModule, LoadingSpinnerComponent, BottomSheetComponent,
+        PipelineProgressComponent, KbCardComponent, StatusChipComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
         ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
         AttachmentListComponent,

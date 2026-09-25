@@ -1,5 +1,5 @@
 import { Component, HostListener, inject } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { SearchResultItem, SearchResultType } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
@@ -52,7 +52,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
  */
 @Component({
     selector: 'app-search',
-    imports: [RouterLink, LoadingSpinnerComponent, SearchFieldComponent],
+    imports: [LoadingSpinnerComponent, SearchFieldComponent],
     templateUrl: './app-search.component.html',
     styleUrl: './app-search.component.scss'
 })
