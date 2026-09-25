@@ -90,9 +90,14 @@ try
     });
 
     app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+    // Встроенная проверка шины MassTransit ("masstransit-bus") входит в "ready" по умолчанию, но шина
+    // стартует позже Kestrel (Kafka Rider вступает в consumer group) — первые 2 минуты её не требуем,
+    // иначе каждый старт даёт 503 "Not ready: not started" (см. HealthChecksRegistration в Api).
+    var processStartedUtc = DateTime.UtcNow;
     app.MapHealthChecks("/health/ready", new HealthCheckOptions
     {
-        Predicate = check => check.Tags.Contains("ready"),
+        Predicate = check => check.Tags.Contains("ready")
+            && !(check.Name == "masstransit-bus" && DateTime.UtcNow - processStartedUtc < TimeSpan.FromMinutes(2)),
     }).AllowAnonymous();
     app.MapHealthChecks("/health/telegram", new HealthCheckOptions
     {
