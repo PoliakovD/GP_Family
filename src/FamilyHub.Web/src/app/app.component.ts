@@ -278,6 +278,7 @@ export class AppComponent implements OnInit {
       this.state.refresh();
       void this.notifications.refresh();
       void this.backgroundJobs.refresh();
+      this.ai.start();
       return;
     }
 
