@@ -35,10 +35,9 @@ const JOB_TYPES: { value: PipelineJobType; label: string }[] = [
  * пишет параметры обратно (см. updateQueryParams).
  */
 @Component({
-  selector: 'app-admin-jobs',
-  standalone: true,
-  imports: [FormsModule, DatePipe, SidePanelComponent, AdminJobPanelComponent, AdminStatusPipe, WebSearchBannerComponent],
-  templateUrl: './admin-jobs.component.html',
+    selector: 'app-admin-jobs',
+    imports: [FormsModule, DatePipe, SidePanelComponent, AdminJobPanelComponent, AdminStatusPipe, WebSearchBannerComponent],
+    templateUrl: './admin-jobs.component.html'
 })
 export class AdminJobsComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);

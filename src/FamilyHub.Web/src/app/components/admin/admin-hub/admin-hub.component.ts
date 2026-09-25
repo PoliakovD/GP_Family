@@ -16,11 +16,10 @@ import { AdminApiService } from '../../../services/admin-api.service';
  *  - Справочник — ручная правка справочников после ИИ.
  */
 @Component({
-  selector: 'app-admin-hub',
-  standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
-  templateUrl: './admin-hub.component.html',
-  styleUrl: './admin-hub.component.scss',
+    selector: 'app-admin-hub',
+    imports: [RouterLink, RouterLinkActive, RouterOutlet],
+    templateUrl: './admin-hub.component.html',
+    styleUrl: './admin-hub.component.scss'
 })
 export class AdminHubComponent {
   private readonly api = inject(AdminApiService);

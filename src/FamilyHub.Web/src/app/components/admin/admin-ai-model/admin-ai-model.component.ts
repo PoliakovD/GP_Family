@@ -26,10 +26,9 @@ const REASONING_OPTIONS: { value: LmStudioReasoning; label: string }[] = [
  * appsettings — поэтому и подпись «по умолчанию (env)».
  */
 @Component({
-  selector: 'app-admin-ai-model',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './admin-ai-model.component.html',
+    selector: 'app-admin-ai-model',
+    imports: [FormsModule],
+    templateUrl: './admin-ai-model.component.html'
 })
 export class AdminAiModelComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);

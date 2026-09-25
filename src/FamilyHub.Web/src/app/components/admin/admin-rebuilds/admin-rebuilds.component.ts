@@ -18,10 +18,9 @@ const REBUILD_POLL_INTERVAL_MS = 2000;
  *  3. Переобогащение показателей со старой схемой — фоновая задача без статуса.
  */
 @Component({
-  selector: 'app-admin-rebuilds',
-  standalone: true,
-  imports: [DatePipe, AdminStatusPipe],
-  templateUrl: './admin-rebuilds.component.html',
+    selector: 'app-admin-rebuilds',
+    imports: [DatePipe, AdminStatusPipe],
+    templateUrl: './admin-rebuilds.component.html'
 })
 export class AdminRebuildsComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);

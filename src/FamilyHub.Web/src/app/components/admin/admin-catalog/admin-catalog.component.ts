@@ -28,10 +28,9 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
  * единственным, теперь ветка на случай схемы/полей вне формы).
  */
 @Component({
-  selector: 'app-admin-catalog',
-  standalone: true,
-  imports: [FormsModule, DatePipe, AdminPayloadEditorComponent],
-  templateUrl: './admin-catalog.component.html',
+    selector: 'app-admin-catalog',
+    imports: [FormsModule, DatePipe, AdminPayloadEditorComponent],
+    templateUrl: './admin-catalog.component.html'
 })
 export class AdminCatalogComponent implements OnInit {
   private readonly api = inject(AdminApiService);

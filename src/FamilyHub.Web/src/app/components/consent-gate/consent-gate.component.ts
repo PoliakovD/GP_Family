@@ -9,10 +9,9 @@ import { AuthService } from '../../services/auth.service';
  * доступ к медданным закрыт и на сервере (ConsentRequiredFilter).
  */
 @Component({
-  selector: 'app-consent-gate',
-  standalone: true,
-  imports: [FormsModule, RouterLink],
-  templateUrl: './consent-gate.component.html',
+    selector: 'app-consent-gate',
+    imports: [FormsModule, RouterLink],
+    templateUrl: './consent-gate.component.html'
 })
 export class ConsentGateComponent implements OnInit {
   private readonly auth = inject(AuthService);

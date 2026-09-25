@@ -23,11 +23,10 @@ let workerConfigured = false;
  * логического размера страницы.
  */
 @Component({
-  selector: 'app-pdf-preview',
-  standalone: true,
-  imports: [LoadingSpinnerComponent],
-  templateUrl: './pdf-preview.component.html',
-  styleUrl: './pdf-preview.component.scss',
+    selector: 'app-pdf-preview',
+    imports: [LoadingSpinnerComponent],
+    templateUrl: './pdf-preview.component.html',
+    styleUrl: './pdf-preview.component.scss'
 })
 export class PdfPreviewComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input({ required: true }) url!: string;

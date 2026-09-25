@@ -40,10 +40,9 @@ const REASON_LABELS: Record<EnrichmentFailureReasonValue, string> = {
  * со старым способом, где такого черновика не было).
  */
 @Component({
-  selector: 'app-admin-job-panel',
-  standalone: true,
-  imports: [DatePipe, AdminStatusPipe],
-  templateUrl: './admin-job-panel.component.html',
+    selector: 'app-admin-job-panel',
+    imports: [DatePipe, AdminStatusPipe],
+    templateUrl: './admin-job-panel.component.html'
 })
 export class AdminJobPanelComponent implements OnChanges, OnDestroy {
   @Input({ required: true }) jobId!: string;

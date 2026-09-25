@@ -23,10 +23,9 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
  * заставляя пользователя искать её заново в списке.
  */
 @Component({
-  selector: 'app-kb-analyte-tab',
-  standalone: true,
-  imports: [SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
-  templateUrl: './kb-analyte-tab.component.html',
+    selector: 'app-kb-analyte-tab',
+    imports: [SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
+    templateUrl: './kb-analyte-tab.component.html'
 })
 export class KbAnalyteTabComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);

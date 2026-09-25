@@ -14,11 +14,10 @@ import { formatPersonName } from '../../../shared/util/person-name';
  * (мобильный корень), а не таб-строку `.seg`, которую заменил этот редизайн.
  */
 @Component({
-  selector: 'app-settings-menu',
-  standalone: true,
-  imports: [RouterLink, AvatarComponent],
-  templateUrl: './settings-menu.component.html',
-  styleUrl: './settings-menu.component.scss',
+    selector: 'app-settings-menu',
+    imports: [RouterLink, AvatarComponent],
+    templateUrl: './settings-menu.component.html',
+    styleUrl: './settings-menu.component.scss'
 })
 export class SettingsMenuComponent implements OnInit {
   readonly auth = inject(AuthService);

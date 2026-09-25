@@ -8,11 +8,10 @@ type TextKind = 'plain' | 'csv' | 'xml';
  * незачем растрировать то, что и так текст) — этот компонент сам тянет содержимое по contentUrl
  * (signed-ссылка или blob: для локального файла, см. ViewerItem) и решает, как его показать. */
 @Component({
-  selector: 'app-text-preview',
-  standalone: true,
-  imports: [CommonModule, LoadingSpinnerComponent],
-  templateUrl: './text-preview.component.html',
-  styleUrl: './text-preview.component.scss',
+    selector: 'app-text-preview',
+    imports: [CommonModule, LoadingSpinnerComponent],
+    templateUrl: './text-preview.component.html',
+    styleUrl: './text-preview.component.scss'
 })
 export class TextPreviewComponent implements OnChanges {
   @Input({ required: true }) url!: string;

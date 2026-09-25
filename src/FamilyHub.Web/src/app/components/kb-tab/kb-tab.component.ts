@@ -15,10 +15,9 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
  * см. SearchService).
  */
 @Component({
-  selector: 'app-kb-tab',
-  standalone: true,
-  imports: [SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
-  templateUrl: './kb-tab.component.html',
+    selector: 'app-kb-tab',
+    imports: [SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
+    templateUrl: './kb-tab.component.html'
 })
 export class KbTabComponent implements OnInit {
   private readonly api = inject(ApiService);

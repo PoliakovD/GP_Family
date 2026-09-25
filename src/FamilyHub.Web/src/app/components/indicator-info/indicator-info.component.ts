@@ -31,11 +31,10 @@ export interface IndicatorInfoReading {
  * 3) каталог /health/kb/indicators — то же, что (2).
  */
 @Component({
-  selector: 'app-indicator-info',
-  standalone: true,
-  imports: [FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
-  templateUrl: './indicator-info.component.html',
-  styleUrl: './indicator-info.component.scss',
+    selector: 'app-indicator-info',
+    imports: [FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
+    templateUrl: './indicator-info.component.html',
+    styleUrl: './indicator-info.component.scss'
 })
 export class IndicatorInfoComponent {
   readonly article = input<KbAnalyteCard | null>(null);

@@ -1,0 +1,16 @@
+{
+  "name": "familyhub-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Сквозные (Playwright) сценарии FamilyHub: реальный API + Postgres + MinIO + dev-сборка Angular",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^22.0.0",
+    "typescript": "~5.6.0"
+  }
+}

@@ -420,22 +420,7 @@
             }
           </div>
           @if (creatingIndicatorRecordId === item.id) {
-            <div class="d-flex flex-column gap-1 mb-2">
-              <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
-              <div class="d-flex gap-1">
-                <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
-              </div>
-              <div class="d-flex gap-1">
-                <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
-              </div>
-              <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
-              <div class="d-flex gap-2">
-                <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
-                <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
-              </div>
-            </div>
+            <ng-container *ngTemplateOutlet="newIndicatorFormTpl" />
           } @else {
             <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
               <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
@@ -443,9 +428,15 @@
           }
         }
         } @else {
-          <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
-            <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
-          </button>
+          <!-- Записи без единого показателя: раньше здесь была только кнопка, а форма не
+               рендерилась вовсе — клик по «Добавить показатель» ничего не открывал. -->
+          @if (creatingIndicatorRecordId === item.id) {
+            <ng-container *ngTemplateOutlet="newIndicatorFormTpl" />
+          } @else {
+            <button type="button" class="btn btn-secondary btn-sm" (click)="startCreateIndicator(item.id)">
+              <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+            </button>
+          }
         }
         }
 
@@ -854,6 +845,26 @@
   <!-- Общий список подсказок для полей источника показателя (правка + создание) — подсказки
        поиска по справочнику (пересборка enrich-пайплайна) + недавно использованные этим
        пользователем. -->
+  <!-- Форма ручного добавления показателя (узкая раскладка и запись без показателей). -->
+  <ng-template #newIndicatorFormTpl>
+            <div class="d-flex flex-column gap-1 mb-2">
+              <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+              <div class="d-flex gap-1">
+                <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+              </div>
+              <div class="d-flex gap-1">
+                <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+              </div>
+              <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
+                <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
+              </div>
+            </div>
+  </ng-template>
+
   <datalist id="specimen-suggestions">
     @for (s of specimenSuggestions; track s.id) {
       <option [value]="s.displayName"></option>

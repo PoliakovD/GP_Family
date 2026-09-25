@@ -25,13 +25,12 @@ type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
 
 @Component({
     selector: 'app-family-details',
-    standalone: true,
     imports: [
         RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent,
         DatePipe, InviteModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent,
     ],
     templateUrl: './family-details.component.html',
-    styleUrl: './family-details.component.scss',
+    styleUrl: './family-details.component.scss'
 })
 export class FamilyDetailsComponent implements OnInit, OnDestroy {
     @Input() id!: string;

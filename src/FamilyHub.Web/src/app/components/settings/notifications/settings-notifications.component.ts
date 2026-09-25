@@ -18,11 +18,10 @@ const ALL_TYPES = Object.values(NotificationType);
  * канал доставки, см. FamilyHub.Domain.Entities.UserNotificationPreference.
  */
 @Component({
-  selector: 'app-settings-notifications',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './settings-notifications.component.html',
-  styleUrl: './settings-notifications.component.scss',
+    selector: 'app-settings-notifications',
+    imports: [FormsModule],
+    templateUrl: './settings-notifications.component.html',
+    styleUrl: './settings-notifications.component.scss'
 })
 export class SettingsNotificationsComponent implements OnInit {
   readonly auth = inject(AuthService);

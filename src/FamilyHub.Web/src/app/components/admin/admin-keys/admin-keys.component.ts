@@ -17,10 +17,9 @@ const POLL_INTERVAL_MS = 2000;
  * приложения (без WebSocket/SSE, дешёвый интервал на редко посещаемой странице).
  */
 @Component({
-  selector: 'app-admin-keys',
-  standalone: true,
-  imports: [DatePipe, AdminStatusPipe],
-  templateUrl: './admin-keys.component.html',
+    selector: 'app-admin-keys',
+    imports: [DatePipe, AdminStatusPipe],
+    templateUrl: './admin-keys.component.html'
 })
 export class AdminKeysComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);

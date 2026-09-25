@@ -13,10 +13,9 @@ import { copyToClipboard } from '../util/clipboard';
  * должен вызывающий.
  */
 @Component({
-  selector: 'app-invite-modal',
-  standalone: true,
-  imports: [ModalComponent],
-  template: `
+    selector: 'app-invite-modal',
+    imports: [ModalComponent],
+    template: `
     <app-modal title="Пригласить в семью" [open]="open()" (closed)="closed.emit()">
       @if (created(); as invite) {
         <p class="muted mb-2">
@@ -66,7 +65,7 @@ import { copyToClipboard } from '../util/clipboard';
       }
     </app-modal>
   `,
-  styles: `
+    styles: `
     // Саму ссылку показываем текстом: на десктопе с navigator.share пользователь иначе никогда
     // не получил бы её для копирования вручную.
     .invite-link {
@@ -79,7 +78,7 @@ import { copyToClipboard } from '../util/clipboard';
       word-break: break-all;
       user-select: all;
     }
-  `,
+  `
 })
 export class InviteModalComponent {
   private readonly api = inject(ApiService);

@@ -8,10 +8,9 @@ import type { KbMedicationCard } from '../../models/types';
  * (kb-tab), и в «Аптечке» (действие «Справка» у конкретного медикамента).
  */
 @Component({
-  selector: 'app-kb-card',
-  standalone: true,
-  imports: [DatePipe],
-  templateUrl: './kb-card.component.html',
+    selector: 'app-kb-card',
+    imports: [DatePipe],
+    templateUrl: './kb-card.component.html'
 })
 export class KbCardComponent {
   readonly card = input.required<KbMedicationCard>();

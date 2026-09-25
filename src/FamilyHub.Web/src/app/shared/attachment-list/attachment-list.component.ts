@@ -18,11 +18,10 @@ import { FileViewerComponent } from '../file-viewer/file-viewer.component';
  * Pending в списке незачем (это уже делает открытый app-file-viewer для активного файла).
  */
 @Component({
-  selector: 'app-attachment-list',
-  standalone: true,
-  imports: [LoadingSpinnerComponent, FileViewerComponent],
-  templateUrl: './attachment-list.component.html',
-  styleUrl: './attachment-list.component.scss',
+    selector: 'app-attachment-list',
+    imports: [LoadingSpinnerComponent, FileViewerComponent],
+    templateUrl: './attachment-list.component.html',
+    styleUrl: './attachment-list.component.scss'
 })
 export class AttachmentListComponent implements OnChanges {
   @Input({ required: true }) recordId!: string;

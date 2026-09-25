@@ -12,11 +12,10 @@ import { PASSWORD_PATTERN, describeSettingsError, runBusy } from '../settings-ta
  * (текущего устройства и со всех сразу). Привязка email/Telegram — на вкладке «Профиль».
  */
 @Component({
-  selector: 'app-settings-security',
-  standalone: true,
-  imports: [FormsModule, DatePipe, RouterLink],
-  templateUrl: './settings-security.component.html',
-  styleUrl: './settings-security.component.scss',
+    selector: 'app-settings-security',
+    imports: [FormsModule, DatePipe, RouterLink],
+    templateUrl: './settings-security.component.html',
+    styleUrl: './settings-security.component.scss'
 })
 export class SettingsSecurityComponent implements OnInit {
   readonly auth = inject(AuthService);

@@ -3,10 +3,9 @@ import { DatePipe } from '@angular/common';
 import { AdminApiService, AdminSystemStats } from '../../../services/admin-api.service';
 
 @Component({
-  selector: 'app-admin-system',
-  standalone: true,
-  imports: [DatePipe],
-  templateUrl: './admin-system.component.html',
+    selector: 'app-admin-system',
+    imports: [DatePipe],
+    templateUrl: './admin-system.component.html'
 })
 export class AdminSystemComponent implements OnInit {
   private readonly api = inject(AdminApiService);
