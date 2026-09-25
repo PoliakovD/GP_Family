@@ -1,0 +1,77 @@
+name: E2E (Playwright)
+
+# Сквозные сценарии против реального стека (Postgres + MinIO в docker, настоящий API, dev-сборка
+# Angular) — см. e2e/README.md. Минуты, поэтому по образцу integration.yml: push в master и по
+# требованию, а не на каждый PR. Страхует крупные правки фронта (миграции Angular и т.п.), у
+# которого нет юнит-тестов.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read # образ MinIO — наша сборка в GHCR (ADR-0012)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            src/FamilyHub.Web/package-lock.json
+            e2e/package-lock.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: src/FamilyHub.Web
+
+      - name: Install e2e dependencies
+        run: npm ci
+        working-directory: e2e
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: E2E tests
+        run: npm test
+        working-directory: e2e
+
+      - name: Upload report and API log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            e2e/.artifacts/api.log
+          retention-days: 7
