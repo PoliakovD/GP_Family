@@ -39,6 +39,15 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
     /// контейнера). LeastPrivilegeWebFactory подменяет её на отдельную роль приложения.</summary>
     protected virtual string HostPostgresConnectionString => _postgres.GetConnectionString();
 
+    /// <summary>Контейнер MinIO — для подклассов, которым нужно настроить его до старта хоста
+    /// (например, завести service account, как это делает bootstrap-app-credentials.sh).</summary>
+    protected MinioContainer MinioContainer => _minio;
+
+    /// <summary>Учётка MinIO, с которой стартует хост (по умолчанию — root контейнера).</summary>
+    protected virtual string HostMinioAccessKey => _minio.GetAccessKey();
+
+    protected virtual string HostMinioSecretKey => _minio.GetSecretKey();
+
     /// <summary>Вызывается после прогона миграций (под суперпользователем), до старта хоста.</summary>
     protected virtual Task AfterMigrationsAsync(PostgreSqlContainer postgres) => Task.CompletedTask;
 
@@ -97,8 +106,8 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
         // GetConnectionString() отдаёт полный URL ("http://127.0.0.1:PORT/") — Minio:Endpoint
         // ждёт голый host:port (см. MinioFileStorage: .WithEndpoint(...).WithSSL(...) раздельно).
         builder.UseSetting("Minio:Endpoint", new Uri(_minio.GetConnectionString()).Authority);
-        builder.UseSetting("Minio:AccessKey", _minio.GetAccessKey());
-        builder.UseSetting("Minio:SecretKey", _minio.GetSecretKey());
+        builder.UseSetting("Minio:AccessKey", HostMinioAccessKey);
+        builder.UseSetting("Minio:SecretKey", HostMinioSecretKey);
         builder.UseSetting("Minio:UseSsl", "false");
         // Секреты не хардкодятся в appsettings.Development.json (даже для dev — см. Program.cs
         // fail-fast) — тестовый хост задаёт свои фиксированные значения явно, тем же путём, что и

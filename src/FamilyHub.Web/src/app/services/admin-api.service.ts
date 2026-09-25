@@ -56,6 +56,39 @@ export interface ConfigItem { key: string; value: string | null; isSecret: boole
 export interface ConfigSection { name: string; title: string; items: ConfigItem[]; }
 export interface AdminConfig { sections: ConfigSection[]; }
 
+// --- Ротация учёток приложения к Postgres/MinIO (ADR-0011) ---
+
+export type CredentialKind = 'Postgres' | 'Minio';
+export type CredentialRotationStatus = 'AwaitingDeploy' | 'Activated' | 'Revoked' | 'Superseded';
+
+export interface CredentialSlot { role: string; canLogin: boolean; hasPassword: boolean; activeSessions: number; }
+
+/** Запись истории ротации — только метаданные, секретов нет. У MinIO from/to — ключи в маске. */
+export interface CredentialRotation {
+  id: string; kind: CredentialKind; from: string; to: string; status: CredentialRotationStatus;
+  generatedAt: string; generatedBy: string; activatedAt: string | null; revokedAt: string | null;
+  terminatedSessions: number | null;
+}
+
+/** mode: LeastPrivilege — ротация доступна; Superuser — приложение под суперпользователем (dev либо
+ * не выполнена первичная настройка); Unavailable — Postgres не ответил. */
+export interface PostgresCredentialStatus {
+  mode: 'LeastPrivilege' | 'Superuser' | 'Unavailable'; sessionUser: string | null; slots: CredentialSlot[];
+  currentSince: string | null; pending: CredentialRotation | null; revocableOld: string | null;
+}
+
+/** mode: ServiceAccount — ротация доступна; NotServiceAccount — под root/пользователем; Unknown — MinIO не ответил. */
+export interface MinioCredentialStatus {
+  mode: 'ServiceAccount' | 'NotServiceAccount' | 'Unknown'; accessKeyMasked: string; currentSince: string | null;
+  pending: CredentialRotation | null; revocableOldMasked: string | null;
+}
+
+export interface CredentialsStatus { postgres: PostgresCredentialStatus; minio: MinioCredentialStatus; history: CredentialRotation[]; }
+
+/** Ответ «Сгенерировать»: строки для PROD_ENV, показываются ОДИН раз и нигде не сохраняются. */
+export interface GeneratedCredential { rotationId: string; envLines: string[]; }
+export interface RevokedCredential { terminatedSessions: number | null; }
+
 export interface RotationStatus {
   runId: string | null; targetKeyId: string | null; status: string | null;
   startedAt: string | null; finishedAt: string | null; lastError: string | null;
@@ -367,6 +400,15 @@ export class AdminApiService {
   /** Эффективная конфигурация (read-only): несекретные настройки по белому списку + «задан / не задан»
    * для секретов. */
   getConfig = () => this.get<AdminConfig>('/api/admin/config');
+
+  // Ротация учёток приложения (ADR-0011). Ошибки бизнес-правил приходят как ApiError.message = code
+  // (not_least_privilege | not_service_account | old_not_revoked | in_use | nothing_to_revoke |
+  // pending_rotation | storage_unavailable | storage_rejected).
+  getCredentials = () => this.get<CredentialsStatus>('/api/admin/credentials');
+  generateCredentials = (kind: CredentialKind) =>
+    this.post<GeneratedCredential>(`/api/admin/credentials/${kind === 'Postgres' ? 'postgres' : 'minio'}/generate`);
+  revokeOldCredentials = (kind: CredentialKind) =>
+    this.post<RevokedCredential>(`/api/admin/credentials/${kind === 'Postgres' ? 'postgres' : 'minio'}/revoke-old`);
   startRotation = () => this.post<void>('/api/admin/keys/encryption/rotate');
   cancelRotation = () => this.post<void>('/api/admin/keys/encryption/rotate/cancel');
   getRotationStatus = () => this.get<RotationStatus>('/api/admin/keys/encryption/rotate/status');

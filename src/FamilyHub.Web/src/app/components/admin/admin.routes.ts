@@ -13,7 +13,7 @@ import {
  *
  * Шесть разделов верхнего уровня; у каждого, кроме «Требует внимания», — вторая ступень вкладок
  * (`AdminSectionComponent` рисует её из `data.tabs`). Страницы со сохраняемыми формами
- * (ИИ-модель, Промпты) закрыты `unsavedChangesGuard`.
+ * (ИИ-модель, Промпты, Учётки БД/MinIO — показанный один раз секрет) закрыты `unsavedChangesGuard`.
  *
  * Старые адреса (`/admin/keys`, `/admin/pipeline?tab=…` и т.д.) сохранены как редиректы — см.
  * admin-legacy-redirects.ts.
@@ -45,6 +45,7 @@ const MONITORING_TABS: AdminTab[] = [
 
 const SECURITY_TABS: AdminTab[] = [
   { path: 'keys', label: 'Ключи и ротация' },
+  { path: 'credentials', label: 'Учётки БД/MinIO' },
   { path: 'stats', label: 'Статистика' },
 ];
 
@@ -103,6 +104,13 @@ export const ADMIN_ROUTES: Routes = [
     {
       path: 'keys',
       loadComponent: () => import('./admin-keys/admin-keys.component').then((m) => m.AdminKeysComponent),
+    },
+    {
+      // Одноразовый секрет, показанный после «Сгенерировать», нельзя потерять случайным уходом со страницы.
+      path: 'credentials',
+      canDeactivate: [unsavedChangesGuard],
+      loadComponent: () =>
+        import('./admin-credentials/admin-credentials.component').then((m) => m.AdminCredentialsComponent),
     },
     {
       path: 'stats',
