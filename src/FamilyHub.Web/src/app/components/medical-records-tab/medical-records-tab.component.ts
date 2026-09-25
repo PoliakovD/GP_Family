@@ -9,10 +9,9 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
  * экрана тоже печатает панель (редизайн v2.1, вместе со сводкой под ним), не Page-обёртка.
  */
 @Component({
-  selector: 'app-medical-records-tab',
-  standalone: true,
-  imports: [MedicalRecordsPanelComponent],
-  template: `<app-medical-records-panel [kind]="Kind.Analysis" />`,
+    selector: 'app-medical-records-tab',
+    imports: [MedicalRecordsPanelComponent],
+    template: `<app-medical-records-panel [kind]="Kind.Analysis" />`
 })
 export class MedicalRecordsTabComponent {
   readonly Kind = MedicalRecordKind;

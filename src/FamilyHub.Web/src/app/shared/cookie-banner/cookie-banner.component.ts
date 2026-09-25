@@ -10,10 +10,9 @@ import { CookieConsentService } from './cookie-consent.service';
  * сессия входа (familyhub.auth), трекинга/аналитики нет.
  */
 @Component({
-  selector: 'app-cookie-banner',
-  standalone: true,
-  imports: [RouterLink],
-  templateUrl: './cookie-banner.component.html',
+    selector: 'app-cookie-banner',
+    imports: [RouterLink],
+    templateUrl: './cookie-banner.component.html'
 })
 export class CookieBannerComponent {
   private readonly auth = inject(AuthService);

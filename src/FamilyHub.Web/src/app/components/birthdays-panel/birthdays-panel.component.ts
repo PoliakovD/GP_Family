@@ -13,10 +13,9 @@ import {
 } from '../../shared/util/birthday-date';
 
 @Component({
-  selector: 'app-birthdays-panel',
-  standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
-  templateUrl: './birthdays-panel.component.html',
+    selector: 'app-birthdays-panel',
+    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
+    templateUrl: './birthdays-panel.component.html'
 })
 export class BirthdaysPanelComponent implements OnInit {
   readonly familyId = input.required<string>();

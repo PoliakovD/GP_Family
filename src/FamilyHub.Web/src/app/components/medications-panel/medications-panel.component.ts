@@ -31,11 +31,10 @@ const RECOGNIZE_STEP_ORDER: RecognizeStep[] = ['compressing', 'uploading', 'reco
 let nextInstanceId = 0;
 
 @Component({
-  selector: 'app-medications-panel',
-  standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
-  templateUrl: './medications-panel.component.html',
-  styleUrl: './medications-panel.component.scss',
+    selector: 'app-medications-panel',
+    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
+    templateUrl: './medications-panel.component.html',
+    styleUrl: './medications-panel.component.scss'
 })
 export class MedicationsPanelComponent implements OnInit, OnDestroy {
   readonly medkitId = input.required<string>();

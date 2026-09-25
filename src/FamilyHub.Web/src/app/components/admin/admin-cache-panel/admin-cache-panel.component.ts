@@ -31,10 +31,9 @@ interface CacheSnippetRow {
  * заголовков/добавленные строки в остальной таблице.
  */
 @Component({
-  selector: 'app-admin-cache-panel',
-  standalone: true,
-  imports: [FormsModule, DatePipe],
-  templateUrl: './admin-cache-panel.component.html',
+    selector: 'app-admin-cache-panel',
+    imports: [FormsModule, DatePipe],
+    templateUrl: './admin-cache-panel.component.html'
 })
 export class AdminCachePanelComponent implements OnChanges {
   @Input({ required: true }) cacheId!: string;

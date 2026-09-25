@@ -28,10 +28,9 @@ const WARMUP_POLL_INTERVAL_MS = 2000;
  * «Сохранить» и защиты от ухода; запуск переспрашивается (тратит деньги).
  */
 @Component({
-  selector: 'app-admin-warmup',
-  standalone: true,
-  imports: [FormsModule, DatePipe, AdminStatusPipe, TopicSwitchComponent, WebSearchBannerComponent],
-  templateUrl: './admin-warmup.component.html',
+    selector: 'app-admin-warmup',
+    imports: [FormsModule, DatePipe, AdminStatusPipe, TopicSwitchComponent, WebSearchBannerComponent],
+    templateUrl: './admin-warmup.component.html'
 })
 export class AdminWarmupComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);

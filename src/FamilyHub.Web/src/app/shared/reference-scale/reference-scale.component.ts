@@ -44,10 +44,9 @@ function formatNumber(n: number): string {
  * решить, что показать вместо шкалы (refText или прочерк) — компонент не пытается угадать.
  */
 @Component({
-  selector: 'app-reference-scale',
-  standalone: true,
-  imports: [NgTemplateOutlet],
-  template: `
+    selector: 'app-reference-scale',
+    imports: [NgTemplateOutlet],
+    template: `
     @if (geometry(); as g) {
       @if (labels()) {
         <!-- Подписи — HTML-оверлей с left в % поверх SVG: текст внутри SVG не масштабируется
@@ -82,7 +81,7 @@ function formatNumber(n: number): string {
       </svg>
     </ng-template>
   `,
-  styles: [`
+    styles: [`
     .rs-track { fill: var(--color-neutral-200); }
     .rs-norm { fill: color-mix(in srgb, var(--color-status-ok) 32%, var(--color-neutral-200)); }
     .rs-stick-ok { fill: var(--color-status-ok-text); }
@@ -102,7 +101,7 @@ function formatNumber(n: number): string {
     .rs-value-bad { color: var(--color-status-danger-text); }
     .rs-bounds { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; }
     .rs-bounds span { color: var(--color-neutral-600); }
-  `],
+  `]
 })
 export class ReferenceScaleComponent {
   readonly value = input.required<number | null>();

@@ -15,11 +15,10 @@ const LINK_POLL_INTERVAL_MS = 4000;
  * Отвязка Telegram и выход — на вкладке «Безопасность» (settings-security.component.ts).
  */
 @Component({
-  selector: 'app-settings-profile',
-  standalone: true,
-  imports: [FormsModule, DatePipe, PersonNameComponent, AvatarComponent],
-  templateUrl: './settings-profile.component.html',
-  styleUrl: './settings-profile.component.scss',
+    selector: 'app-settings-profile',
+    imports: [FormsModule, DatePipe, PersonNameComponent, AvatarComponent],
+    templateUrl: './settings-profile.component.html',
+    styleUrl: './settings-profile.component.scss'
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);

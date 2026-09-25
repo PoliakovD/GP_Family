@@ -15,10 +15,9 @@ import { PersonNameComponent } from '../../shared/person-name/person-name.compon
  * Delete — только Admin (сервер перепроверит роль, здесь только прячем кнопку).
  */
 @Component({
-  selector: 'app-dependents-panel',
-  standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent],
-  templateUrl: './dependents-panel.component.html',
+    selector: 'app-dependents-panel',
+    imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent],
+    templateUrl: './dependents-panel.component.html'
 })
 export class DependentsPanelComponent implements OnInit {
   readonly familyId = input.required<string>();

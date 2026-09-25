@@ -7,10 +7,9 @@ import { AdminApiService } from '../../../services/admin-api.service';
 /** Форма входа в админ-панель (ADR-0009) — отдельный логин/пароль из Admin:User/Password (.env),
  * не связан с обычным PWA-аккаунтом. Живёт на admin.{PUBLIC_DOMAIN} за периметром WireGuard. */
 @Component({
-  selector: 'app-admin-login',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './admin-login.component.html',
+    selector: 'app-admin-login',
+    imports: [FormsModule],
+    templateUrl: './admin-login.component.html'
 })
 export class AdminLoginComponent {
   private readonly api = inject(AdminApiService);

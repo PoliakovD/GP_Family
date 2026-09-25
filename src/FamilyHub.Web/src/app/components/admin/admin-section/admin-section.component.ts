@@ -13,10 +13,9 @@ export interface AdminTab {
  * с «назад»), тот же хаб-паттерн, что SettingsComponent/HealthHubComponent (patterns/frontend_web.md).
  */
 @Component({
-  selector: 'app-admin-section',
-  standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
-  template: `
+    selector: 'app-admin-section',
+    imports: [RouterLink, RouterLinkActive, RouterOutlet],
+    template: `
     <div class="seg mb-3">
       @for (t of tabs; track t.path) {
         <a class="seg-opt" [routerLink]="[t.path]" routerLinkActive="active">{{ t.label }}</a>
@@ -24,7 +23,7 @@ export interface AdminTab {
     </div>
 
     <router-outlet></router-outlet>
-  `,
+  `
 })
 export class AdminSectionComponent {
   readonly tabs: AdminTab[] = inject(ActivatedRoute).snapshot.data['tabs'] ?? [];

@@ -16,10 +16,9 @@ import { ToastService } from '../../../shared/toast/toast.service';
  * промпта переспрашиваются, чтобы не потерять правки.
  */
 @Component({
-  selector: 'app-admin-prompts',
-  standalone: true,
-  imports: [FormsModule, DatePipe, JsonPipe],
-  templateUrl: './admin-prompts.component.html',
+    selector: 'app-admin-prompts',
+    imports: [FormsModule, DatePipe, JsonPipe],
+    templateUrl: './admin-prompts.component.html'
 })
 export class AdminPromptsComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);

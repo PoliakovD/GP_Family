@@ -1,5 +1,5 @@
 import { Component, HostListener, inject } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { SearchResultItem, SearchResultType } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
@@ -51,11 +51,10 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
  * (Escape тоже очищает) или переходом по результату.
  */
 @Component({
-  selector: 'app-search',
-  standalone: true,
-  imports: [RouterLink, LoadingSpinnerComponent, SearchFieldComponent],
-  templateUrl: './app-search.component.html',
-  styleUrl: './app-search.component.scss',
+    selector: 'app-search',
+    imports: [LoadingSpinnerComponent, SearchFieldComponent],
+    templateUrl: './app-search.component.html',
+    styleUrl: './app-search.component.scss'
 })
 export class AppSearchComponent {
   private readonly api = inject(ApiService);
