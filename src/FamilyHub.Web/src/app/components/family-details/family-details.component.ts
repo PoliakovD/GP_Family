@@ -1,4 +1,4 @@
-import {Component, Input, OnDestroy, OnInit, effect, inject, signal, WritableSignal} from '@angular/core';
+import {Component, Input, OnDestroy, OnInit, effect, inject} from '@angular/core';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {ApiService, ApiError} from '../../services/api.service';
@@ -8,7 +8,6 @@ import {
     FamilyRole,
     MemberStatus,
     type FamilySummary,
-    type InviteCreated,
     type PendingMember, RemoveMemberResult,
 } from '../../models/types';
 import {MedkitsPanelComponent} from '../medkits-panel/medkits-panel.component';
@@ -17,12 +16,10 @@ import {DependentsPanelComponent} from '../dependents-panel/dependents-panel.com
 import {DatePipe} from "@angular/common";
 import {ToastService} from '../../shared/toast/toast.service';
 import {ConfirmService} from '../../shared/confirm/confirm.service';
-import {ModalComponent} from '../../shared/modal/modal.component';
-import {TelegramService} from '../../services/telegram.service';
+import {InviteModalComponent} from '../../shared/invite-modal/invite-modal.component';
 import {PersonNameComponent} from '../../shared/person-name/person-name.component';
 import {AvatarComponent} from '../../shared/avatar/avatar.component';
 import {ActionMenuComponent, type ActionMenuItem} from '../../shared/action-menu/action-menu.component';
-import {copyToClipboard} from '../../shared/util/clipboard';
 
 type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
 
@@ -31,7 +28,7 @@ type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
     standalone: true,
     imports: [
         RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent,
-        DatePipe, ModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent,
+        DatePipe, InviteModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent,
     ],
     templateUrl: './family-details.component.html',
     styleUrl: './family-details.component.scss',
@@ -46,13 +43,10 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
     private readonly confirm = inject(ConfirmService);
     private readonly router = inject(Router);
     private readonly route = inject(ActivatedRoute);
-    private readonly tg = inject(TelegramService);
 
     pendingMembers: PendingMember[] | undefined = undefined;
-    createdInvite: WritableSignal<InviteCreated> | null = null;
     activeSubTab: FamilySubTab = 'members';
     showInviteModal = false;
-    creatingInvite = false;
     /** Семьи, которым Я (владелец записей) открыл(а) все свои анализы — редизайн v2, карточка
      * "это вы" в списке участников. Не путать с доступом ДРУГИХ участников — это видит только
      * сам владелец (тот же принцип, что и в medical-records-panel). */
@@ -194,65 +188,6 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
 
     closeInviteModal(): void {
         this.showInviteModal = false;
-    }
-
-    async handleCreateInvite(): Promise<void> {
-        this.creatingInvite = true;
-        try {
-            const invite = await this.api.createInvite(this.id);
-            if (this.createdInvite) {
-                this.createdInvite.set(invite);
-            } else {
-                this.createdInvite = signal(invite);
-            }
-            this.toast.success('Инвайт создан.');
-        } catch (err) {
-            this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать инвайт.');
-        } finally {
-            this.creatingInvite = false;
-        }
-    }
-
-    /** Кнопка-самолётик — открывает бот-диплинк инвайта напрямую, в отличие от shareInvite() ниже
-     * (который открывает системный шаринг ссылки, а не саму Telegram-ссылку). */
-    openTelegramInvite(telegramLink: string): void {
-        this.tg.openTelegramLink(telegramLink);
-    }
-
-    async shareInvite(link: string): Promise<void> {
-        // Внутри Telegram — открываем нативный шаринг (пользователь сам выбирает контакт/чат
-        // из списка Telegram; мы не запрашиваем и не храним чужие Telegram ID).
-        if (this.tg.isInsideTelegram()) {
-            const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Присоединяйтесь к нашей семье в FamilyHub')}`;
-            this.tg.openTelegramLink(shareUrl);
-            return;
-        }
-
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: 'Приглашение в семью FamilyHub',
-                    text: 'Присоединяйтесь к нашей семье в FamilyHub',
-                    url: link,
-                });
-            } catch {
-                // пользователь отменил диалог — игнорируем
-            }
-        } else {
-            await this.copyInvite(link);
-        }
-    }
-
-    /** Кнопка «Скопировать» рядом с «Поделиться ссылкой» — нужна отдельно от shareInvite(),
-     * потому что на десктопе с navigator.share (Chrome/Edge) пользователь всегда получает
-     * системный шер-лист и никогда не попадает в clipboard-ветку выше. */
-    async copyInvite(link: string): Promise<void> {
-        const ok = await copyToClipboard(link);
-        if (ok) {
-            this.toast.success('Ссылка скопирована в буфер обмена.');
-        } else {
-            this.toast.error('Не удалось скопировать — выделите ссылку вручную.');
-        }
     }
 
     async removeMember(memberId: string): Promise<void> {

@@ -124,6 +124,44 @@ public class HomeSummaryTests(FamilyHubWebFactory factory) : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Birthdays_FilteredByThreeNearestDates_AllPeopleOnSharedDateReturned()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+
+        async Task AddAsync(string name, int daysAhead) =>
+            (await admin.PostAsJsonAsync($"/api/families/{familyId}/birthdays",
+                new { PersonName = name, Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(daysAhead)) }))
+                .StatusCode.Should().Be(HttpStatusCode.Created);
+
+        // Четверо на одну дату + ещё три отдельные даты: показываются 3 ближайшие даты целиком.
+        foreach (var name in new[] { "А", "Б", "В", "Г" }) await AddAsync(name, 3);
+        await AddAsync("Д", 10);
+        await AddAsync("Е", 20);
+        await AddAsync("Ж", 40);
+
+        var summary = await (await admin.GetAsync("/api/home/summary")).Content.ReadFromJsonAsync<HomeSummaryDto>(JsonOpts);
+
+        summary!.Birthdays.Select(b => b.PersonName).Should().Equal("А", "Б", "В", "Г", "Д", "Е");
+    }
+
+    [Fact]
+    public async Task Birthday_BeyondAttentionWindow_ListedButNotCountedAsAttention()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var familyId = await CreateFamilyAsync(admin);
+        (await admin.PostAsJsonAsync($"/api/families/{familyId}/birthdays",
+                new { PersonName = "Далеко", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(90)) }))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var summary = await (await admin.GetAsync("/api/home/summary")).Content.ReadFromJsonAsync<HomeSummaryDto>(JsonOpts);
+
+        summary!.Birthdays.Should().ContainSingle(b => b.PersonName == "Далеко");
+        summary.AttentionTotal.Should().Be(0);
+        summary.PrimaryFamilyId.Should().BeNull();
+    }
+
+    [Fact]
     public async Task UnreadNotifications_MatchesDedicatedUnreadCountEndpoint()
     {
         var admin = ClientAs(FreshTelegramId());
