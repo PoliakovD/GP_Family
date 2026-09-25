@@ -33,7 +33,11 @@
 	# ниже, за WireGuard; с публичного домена своя аутентификация (AuthSchemes.Admin) всё равно
 	# отклонила бы запрос без cookie, но блокировка на периметре — тот же принцип защиты в
 	# глубину, что и у /hangfire*/swagger* здесь.
-	@blocked path /dev/* /hangfire* /swagger* /health/* /internal/* /admin* /api/admin/*
+	# ВАЖНО: /health/* целиком блокировать НЕЛЬЗЯ — это ещё и маршруты SPA раздела «Здоровье»
+	# (/health/records, /health/medications, /health/visits, /health/kb, /health/indicators): на
+	# обновлении страницы браузер идёт на сервер за этим путём, и блокировка отдавала бы 404 вместо
+	# index.html. Закрываем только сами health-check эндпоинты API (см. HealthChecksRegistration).
+	@blocked path /dev/* /hangfire* /swagger* /health/live /health/ready /health/llm /internal/* /admin* /api/admin/*
 	handle @blocked {
 		respond 404
 	}
