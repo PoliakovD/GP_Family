@@ -4,9 +4,11 @@ import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../shared/toast/toast.service';
-import type { HomeBirthdayItem, HomeJoinRequest, HomeMedicationAlert, HomeSummaryResponse } from '../../models/types';
+import { FamilyRole, MemberStatus } from '../../models/types';
+import type { HomeJoinRequest, HomeMedicationAlert, HomeSummaryResponse } from '../../models/types';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { formatDayMonthYear } from '../../shared/util/date-format';
+import { formatDayMonth, formatDayMonthYear } from '../../shared/util/date-format';
+import { InviteModalComponent } from '../../shared/invite-modal/invite-modal.component';
 import { AttentionCardComponent } from '../../shared/attention-card/attention-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { PersonNameComponent } from '../../shared/person-name/person-name.component';
@@ -16,6 +18,9 @@ const MONTHS_GEN = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
+/** ДР попадает в карточку «Требует внимания» только в этом окне; блок «Ближайшие дни рождения»
+ * справа показывает ближайшие даты вне зависимости от расстояния (см. HomeSummaryService). */
+const BIRTHDAY_ATTENTION_WINDOW_DAYS = 30;
 const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 
@@ -44,7 +49,7 @@ interface BirthdayAttentionSummary {
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [RouterLink, AttentionCardComponent, AvatarComponent, PersonNameComponent, LoadingSpinnerComponent],
+  imports: [RouterLink, AttentionCardComponent, AvatarComponent, PersonNameComponent, LoadingSpinnerComponent, InviteModalComponent],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
 })
@@ -59,8 +64,23 @@ export class HomeComponent implements OnInit {
   loading = true;
   error: string | null = null;
 
+  showInviteModal = false;
+
   readonly pluralizeRu = pluralizeRu;
   readonly formatDayMonthYear = formatDayMonthYear;
+  readonly birthdayAttentionWindowDays = BIRTHDAY_ATTENTION_WINDOW_DAYS;
+
+  /** Инвайт создаёт только админ семьи (InviteService.CreateInviteAsync) — остальным кнопки нет. */
+  get canInvite(): boolean {
+    const fam = this.state.selectedFamily();
+    return !!fam && fam.myRole === FamilyRole.Admin && fam.myStatus === MemberStatus.Active;
+  }
+
+  /** Заявка «отправлена {дата}» — requestedAt приходит как ISO date-time, берём только дату. */
+  requestSubtitle(req: HomeJoinRequest): string {
+    const sent = `Заявка отправлена ${formatDayMonthYear(req.requestedAt.slice(0, 10))}`;
+    return req.username ? `${sent} · @${req.username}` : sent;
+  }
 
   ngOnInit(): void {
     void this.refresh();
@@ -118,26 +138,46 @@ export class HomeComponent implements OnInit {
       title = `Истека${expiring.length === 1 ? 'ет' : 'ют'} ${expiring.length} ${pluralizeRu(expiring.length, 'лекарство', 'лекарства', 'лекарств')}`;
     }
 
-    const subtitle = `Аптечка «${first.medkitName}» · ${first.name} ${first.severity === 'expired' ? 'просрочен' : 'истекает'}`;
+    const dateText = formatDayMonthYear(first.expiryDate);
+    const subtitle = `Аптечка «${first.medkitName}» · ${first.name} ${first.severity === 'expired' ? `просрочен с ${dateText}` : `истекает ${dateText}`}`;
 
     return { title, subtitle, severity: expired.length > 0 ? 'expired' : 'expiring', first };
   }
 
   get birthdaySummary(): BirthdayAttentionSummary | null {
-    const items = this.summary?.birthdays ?? [];
+    // Бэк отдаёт три ближайшие даты вне зависимости от расстояния — в карточку внимания идут
+    // только те, что попали в окно.
+    const items = (this.summary?.birthdays ?? []).filter((b) => b.daysUntil <= BIRTHDAY_ATTENTION_WINDOW_DAYS);
     if (items.length === 0) return null;
 
     // Имя — именительный падеж (как формат ФИО с бэка и отдаёт), поэтому фраза построена так,
     // чтобы не требовать склонения ("Валерии", "Артёма" и т.п.) — общее решение недостижимо без
     // морфологического анализатора, которого в проекте нет и не планируется ради одной фразы.
-    const [nearest, next] = items;
-    const daysWord = pluralizeRu(nearest.daysUntil, 'день', 'дня', 'дней');
-    const title = nearest.daysUntil === 0
-      ? `Сегодня день рождения — ${nearest.personName}, ${nearest.turningAge} лет`
-      : `${nearest.personName} — день рождения через ${nearest.daysUntil} ${daysWord}, исполнится ${nearest.turningAge}`;
-    const subtitle = next
-      ? `Дальше — ${next.personName}, через ${next.daysUntil} ${pluralizeRu(next.daysUntil, 'день', 'дня', 'дней')}`
+    // На ближайшую дату может выпасть несколько человек — перечисляем всех.
+    const nearestDays = items[0].daysUntil;
+    const nearest = items.filter((b) => b.daysUntil === nearestDays);
+    const next = items.find((b) => b.daysUntil > nearestDays);
+    const names = nearest.map((b) => b.personName).join(', ');
+    const daysWord = pluralizeRu(nearestDays, 'день', 'дня', 'дней');
+
+    let title: string;
+    if (nearest.length === 1) {
+      const turningAge = nearest[0].turningAge;
+      title = nearestDays === 0
+        ? `Сегодня день рождения — ${names}, ${turningAge} лет`
+        : `${names} — день рождения через ${nearestDays} ${daysWord}, исполнится ${turningAge}`;
+    } else {
+      title = nearestDays === 0
+        ? `Сегодня дни рождения — ${names}`
+        : `Дни рождения через ${nearestDays} ${daysWord} — ${names}`;
+    }
+
+    const nextNames = next
+      ? items.filter((b) => b.daysUntil === next.daysUntil).map((b) => b.personName).join(', ')
       : '';
+    const subtitle = next
+      ? `${formatDayMonth(nearest[0].date)}. Дальше — ${nextNames}, ${formatDayMonth(next.date)}`
+      : formatDayMonth(nearest[0].date);
 
     return { title, subtitle };
   }

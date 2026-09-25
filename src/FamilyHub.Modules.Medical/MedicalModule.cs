@@ -60,6 +60,7 @@ public static class MedicalModule
         services.AddScoped<ExtractionRequestService>();
         services.AddScoped<ExtractionQueryService>();
         services.AddScoped<MedicalDocumentExtractionProcessor>();
+        services.AddScoped<RecordSummaryRegenerationJob>();
         // Обогащение справочника показателей (kb.global_lab_analytes_kb) — зеркало конвейера
         // медикаментов ниже, тот же IMedicationSearchProvider (Program.cs), другой topic
         // (WebSearchTopic.LabAnalyte).

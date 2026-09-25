@@ -13,12 +13,21 @@
   box-shadow: var(--shadow-lg);
 }
 
-// Редизайн v2.2 — видимые кнопки действий открытой записи (Файлы/Резюме/Редактировать/Доступ/
-// Удалить), заменили «…» на десктопе.
+// Верхняя строка открытой записи: «‹ Анализы» слева, действия (Файлы/Резюме/Редактировать/Доступ/
+// Удалить) справа — раньше кнопки жили отдельной строкой под заголовком.
+.record-detail-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .record-detail-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -28,19 +37,67 @@
   color: var(--color-accent);
 }
 
-// Мета-строка открытой записи (человек/дата/источник/доступ) — раньше не существовала вообще.
+.record-action-danger {
+  color: var(--color-status-danger-text);
+}
+
+// На узком экране кнопки сжимаются до иконок (подпись остаётся в title/aria-label) — иначе пять
+// кнопок с текстом не помещаются рядом с «‹ Анализы» и уезжают на вторую строку.
+@media (max-width: 599px) {
+  .record-action-label {
+    display: none;
+  }
+
+  .record-detail-actions .btn {
+    min-width: 40px;
+    justify-content: center;
+  }
+}
+
+// Крупный заголовок записи под верхней строкой (в макете 30px).
+.record-detail-title {
+  margin: 0 0 8px;
+  font-size: 1.7647rem;
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+// Мета-строка открытой записи: человек (мини-аватар + имя без рамки) · врач · дата · источник ·
+// доступ. Разделитель «·» — псевдоэлемент между соседними пунктами.
 .record-detail-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  font-size: var(--font-size-meta);
+  column-gap: 10px;
+  row-gap: 6px;
+  font-size: var(--font-size-body);
   color: var(--color-neutral-700);
 }
 
-// Три плитки статуса (вне нормы/в норме/без нормы) — те же данные, что чип списка, но крупнее и
-// все три сразу; 22% color-mix — уже установленный в этом файле контраст для чипов (не проценты
-// референса).
+.record-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-meta-item + .record-meta-item::before {
+  content: '·';
+  margin-right: 2px;
+  color: var(--color-neutral-400);
+}
+
+.record-meta-access {
+  color: var(--color-accent-800);
+
+  i {
+    color: var(--color-accent);
+  }
+}
+
+// Три плитки статуса (вне нормы/в норме/без нормы) — рамка мелкая, тон тем же color-mix, что
+// у чипов; значение и подпись — двумя оттенками одного цвета статуса, как в макете.
 .record-status-tiles {
   display: flex;
   gap: 10px;
@@ -49,33 +106,59 @@
 .record-status-tile {
   flex: 1 1 0;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
 }
 
 .record-status-tile-value {
-  font-size: 1.1176rem;
-  font-weight: 700;
-  line-height: 1.2;
+  margin-bottom: 4px;
+  font-family: var(--font-heading);
+  font-size: 1.5294rem;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .record-status-tile-label {
-  font-size: 0.7059rem;
+  font-size: var(--font-size-meta);
 }
 
 .record-status-tile-bad {
-  background: color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));
-  color: var(--color-status-danger-text);
+  background: color-mix(in srgb, var(--color-status-danger) 9%, var(--color-paper));
+  border-color: color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));
+
+  .record-status-tile-value {
+    color: var(--color-status-danger-text);
+  }
+
+  .record-status-tile-label {
+    color: color-mix(in srgb, var(--color-status-danger-text) 80%, var(--color-neutral-700));
+  }
 }
 
 .record-status-tile-ok {
-  background: color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));
-  color: var(--color-status-ok-text);
+  background: color-mix(in srgb, var(--color-status-ok) 9%, var(--color-paper));
+  border-color: color-mix(in srgb, var(--color-status-ok) 20%, var(--color-paper));
+
+  .record-status-tile-value {
+    color: var(--color-status-ok-text);
+  }
+
+  .record-status-tile-label {
+    color: color-mix(in srgb, var(--color-status-ok-text) 80%, var(--color-neutral-700));
+  }
 }
 
 .record-status-tile-none {
-  background: var(--color-neutral-200);
-  color: var(--color-neutral-700);
+  background: var(--color-surface);
+
+  .record-status-tile-value {
+    color: var(--color-neutral-600);
+  }
+
+  .record-status-tile-label {
+    color: var(--color-neutral-600);
+  }
 }
 
 // Редизайн v2 — группа = человек (аватар + имя + счётчик, шапка) и таймлайн записей внутри.

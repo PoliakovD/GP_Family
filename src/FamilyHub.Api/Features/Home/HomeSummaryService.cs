@@ -29,8 +29,12 @@ public class HomeSummaryService(
 {
     private const int MaxMedicationAlerts = 20;
     private const int MaxJoinRequests = 20;
-    private const int MaxBirthdays = 5;
-    private const int BirthdayWindowDays = 30;
+    /// <summary>Блок «Ближайшие дни рождения» — три ближайшие ДАТЫ (не людей): если на одну дату
+    /// пришлось больше трёх человек, показываются все.</summary>
+    private const int BirthdayDistinctDates = 3;
+    /// <summary>Карточка «Требует внимания» и счётчик «дел» — только ДР в ближайшие N дней; в
+    /// блоке «Ближайшие дни рождения» окна нет.</summary>
+    private const int BirthdayAttentionWindowDays = 30;
 
     public async Task<HomeSummaryResponse> BuildAsync(Guid userId, CancellationToken ct = default)
     {
@@ -49,8 +53,9 @@ public class HomeSummaryService(
 
         // Приоритет карточек (просрочки → заявки → ДР) — на фронте, чистое отображение уже
         // отсортированных списков. Здесь только суммарный счётчик и "главная" семья дел.
-        var attentionTotal = medications.Count + joinRequests.Count + birthdayItems.Count;
-        var (primaryFamilyId, primaryFamilyName) = PickPrimaryFamily(medications, joinRequests, birthdayItems);
+        var attentionBirthdays = birthdayItems.Where(b => b.DaysUntil <= BirthdayAttentionWindowDays).ToList();
+        var attentionTotal = medications.Count + joinRequests.Count + attentionBirthdays.Count;
+        var (primaryFamilyId, primaryFamilyName) = PickPrimaryFamily(medications, joinRequests, attentionBirthdays);
 
         return new HomeSummaryResponse(
             greetingName, today, attentionTotal, primaryFamilyId, primaryFamilyName,
@@ -128,14 +133,18 @@ public class HomeSummaryService(
             foreach (var b in items)
             {
                 var daysUntil = BirthdayOccurrence.DaysUntil(b.Date, today);
-                if (daysUntil > BirthdayWindowDays) continue;
-
                 var turningAge = BirthdayOccurrence.TurningAge(b.Date, today);
                 all.Add(new HomeBirthdayItem(familyId, familyName, b.PersonName, b.Date, daysUntil, turningAge, b.Source));
             }
         }
 
-        return all.OrderBy(b => b.DaysUntil).Take(MaxBirthdays).ToList();
+        // Фильтр по ДАТАМ, а не по числу записей: берём три наименьших различных DaysUntil и
+        // отдаём всех, кто на них попал.
+        var nearestDates = all.Select(b => b.DaysUntil).Distinct().Order().Take(BirthdayDistinctDates).ToHashSet();
+        return all
+            .Where(b => nearestDates.Contains(b.DaysUntil))
+            .OrderBy(b => b.DaysUntil).ThenBy(b => b.PersonName)
+            .ToList();
     }
 
     private async Task<HomeOkChips> BuildOkChipsAsync(Guid userId, List<Guid> activeFamilyIds, CancellationToken ct)

@@ -44,7 +44,7 @@ import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
+import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { specimenLabel } from '../../shared/util/specimen';
@@ -70,6 +70,9 @@ const PIPELINE_CLEAR_DELAY_MS = 2500;
  * enrichmentPending (обогащение справочника ещё не завершилось); реже, чем EXTRACTION_POLL_
  * INTERVAL_MS выше — это фоновый процесс, который может идти минутами, не секундами. */
 const ENRICHMENT_POLL_INTERVAL_MS = 5000;
+/** Опрос резюме после ручной правки: бэк ждёт 15 с дебаунса, потом идёт LLM — 4 с × 45 ≈ 3 мин. */
+const SUMMARY_POLL_INTERVAL_MS = 4000;
+const SUMMARY_POLL_MAX_ATTEMPTS = 45;
 
 // Информативнее прежних коротких подписей ("Распознаём"/"Извлекаем данные") — пользователь просил
 // видеть, что именно сейчас происходит на каждом шаге, а не общие слова.
@@ -159,6 +162,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       ind.enrichmentLiveText, ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
   }
   readonly shortenDisplayName = shortenDisplayName;
+  readonly shortenDoctorName = shortenDoctorName;
   readonly formatDayMonth = formatDayMonth;
   readonly formatDayMonthYear = formatDayMonthYear;
   readonly formatYear = formatYear;
@@ -245,6 +249,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * экстракцией (короче, до "Готово"), этот — за обогащением ОТДЕЛЬНЫХ показателей после неё
    * (может идти и после того, как экстракция давно завершилась). См. syncEnrichmentPolling. */
   private readonly enrichmentPollHandles = new Map<string, ReturnType<typeof setInterval>>();
+  /** Поллинг резюме, пока оно помечено pending (после ручной правки бэк пересчитывает его в фоне —
+   * RecordSummaryRegenerationJob, дебаунс 15 с). Останавливается сам, когда pending уходит. */
+  private readonly summaryPollHandles = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly summaryPollAttempts = new Map<string, number>();
+  /** Записи, для которых при открытии «Резюме» уже пробовали составить его автоматически —
+   * одна попытка на запись за сессию, чтобы недоступный LLM не дёргался на каждый клик. */
+  private readonly summaryAutoTried = new Set<string>();
 
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
   readonly RefSource = RefSource;
@@ -261,10 +272,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // показатели записи). resolveSpecimenQuery находит-или-заводит строку справочника при потере
   // фокуса (тот же find-or-register, что раньше был только у «своего» биоматериала — теперь
   // единственный путь на все случаи).
-  editingSpecimenRecordId: string | null = null;
+  // Редактируется в форме «Редактировать запись» (bottom-sheet), не инлайн в карточке.
   recordSpecimenQuery = '';
   recordSpecimenForm: { specimenKbId: string } = { specimenKbId: '' };
-  savingRecordSpecimen = false;
   specimenSuggestions: GlobalSpecimenDto[] = [];
   customSpecimens: UserSpecimen[] = [];
   customSpecimenError: string | null = null;
@@ -400,6 +410,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.pollFailureCounts.clear();
     for (const handle of this.enrichmentPollHandles.values()) clearInterval(handle);
     this.enrichmentPollHandles.clear();
+    for (const handle of this.summaryPollHandles.values()) clearInterval(handle);
+    this.summaryPollHandles.clear();
     for (const handle of this.pipelineClearHandles.values()) clearTimeout(handle);
     this.pipelineClearHandles.clear();
     if (this.searchDebounceHandle) clearTimeout(this.searchDebounceHandle);
@@ -545,6 +557,20 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   toggleSummary(): void {
     this.summaryOpen = !this.summaryOpen;
+    const only = this.items[0];
+    if (this.summaryOpen && only) void this.ensureSummary(only);
+  }
+
+  /** Резюме составляется автоматически (кнопки «Пересчитать» больше нет): при первом открытии
+   * секции без готового текста просим бэк составить его сразу. Только владельцу — эндпоинт
+   * пересчёта owner-only, а у расшаренной записи чужого человека резюме появится, когда его
+   * составит владелец. Если пересчёт уже идёт в фоне (pending) — резюме в summaryByRecord уже
+   * есть (пусть и без текста), и его дожидается поллинг. */
+  private async ensureSummary(record: MedicalRecord): Promise<void> {
+    if (!this.canDelete(record) || this.summaryByRecord[record.id] || this.summaryAutoTried.has(record.id)) return;
+    if (this.summaryRegeneratingRecordId === record.id) return;
+    this.summaryAutoTried.add(record.id);
+    await this.regenerateSummary(record.id);
   }
 
   /** Есть ли что сворачивать/разворачивать кнопкой «Резюме» — тот же гейт, что раньше стоял
@@ -1021,6 +1047,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         ]);
         this.indicatorsByRecord = { ...this.indicatorsByRecord, [record.id]: indicators };
         this.summaryByRecord = { ...this.summaryByRecord, [record.id]: summary };
+        if (summary?.pending) this.pollSummary(record.id);
         this.syncEnrichmentPolling(record.id);
       } else {
         const conclusion = await this.api.getRecordConclusion(record.id).catch(() => null);
@@ -1067,21 +1094,65 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.enrichmentPollHandles.set(recordId, setInterval(() => void tick(), ENRICHMENT_POLL_INTERVAL_MS));
   }
 
-  /** Пересчитывает "Резюме"/"Вопросы врачу" по текущим (в т.ч. вручную поправленным) показателям
-   * записи — см. class doc ExtractionQueryService.RegenerateSummaryAsync на бэкенде: исходное
-   * резюме строится один раз при распознавании и не пересчитывается само после ручной правки
-   * показателя, поэтому нужна явная кнопка, а не полное повторное распознавание документа. */
-  async regenerateSummary(recordId: string): Promise<void> {
+  /** Синхронно составляет резюме по текущим показателям записи (POST .../summary/regenerate) —
+   * нужно только когда готового резюме ещё нет (см. ensureSummary). После ручных правок бэк
+   * пересчитывает резюме сам, в фоне — см. pollSummary. */
+  private async regenerateSummary(recordId: string): Promise<void> {
     this.summaryRegeneratingRecordId = recordId;
     this.error = null;
     try {
       const summary = await this.api.regenerateRecordSummary(recordId);
       this.summaryByRecord = { ...this.summaryByRecord, [recordId]: summary };
+      this.stopSummaryPoll(recordId);
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось пересчитать резюме.';
+      this.error = err instanceof ApiError ? err.message : 'Не удалось составить резюме.';
     } finally {
       this.summaryRegeneratingRecordId = null;
     }
+  }
+
+  /** После ручной правки показателя/источника: перечитывает запись (счётчики плиток «вне нормы/в
+   * норме» иначе остаются старыми) и резюме, которое бэк уже пометил устаревшим и пересчитывает в
+   * фоне. Без спиннера на всю карточку — в отличие от refresh(). */
+  private async afterRecordDataChanged(recordId: string): Promise<void> {
+    try {
+      const record = await this.api.getMedicalRecord(recordId);
+      this.items = this.items.map((i) => (i.id === recordId ? record : i));
+    } catch {
+      // Счётчики обновятся при следующей загрузке — правка сама уже сохранена.
+    }
+    await this.loadSummary(recordId);
+  }
+
+  private async loadSummary(recordId: string): Promise<void> {
+    const summary = await this.api.getRecordSummary(recordId).catch(() => null);
+    this.summaryByRecord = { ...this.summaryByRecord, [recordId]: summary };
+    if (summary?.pending) this.pollSummary(recordId);
+    else this.stopSummaryPoll(recordId);
+  }
+
+  /** Опрашивает резюме, пока оно pending; само останавливается, когда пересчёт завершился (с
+   * текстом или без него — при сбое LLM резюме сбрасывается). Потолок попыток — чтобы недоступный
+   * бэк не опрашивался вечно. */
+  private pollSummary(recordId: string): void {
+    if (this.summaryPollHandles.has(recordId)) return;
+    this.summaryPollAttempts.set(recordId, 0);
+    this.summaryPollHandles.set(recordId, setInterval(() => {
+      const attempts = (this.summaryPollAttempts.get(recordId) ?? 0) + 1;
+      this.summaryPollAttempts.set(recordId, attempts);
+      if (attempts > SUMMARY_POLL_MAX_ATTEMPTS) {
+        this.stopSummaryPoll(recordId);
+        return;
+      }
+      void this.loadSummary(recordId);
+    }, SUMMARY_POLL_INTERVAL_MS));
+  }
+
+  private stopSummaryPoll(recordId: string): void {
+    const handle = this.summaryPollHandles.get(recordId);
+    if (handle) clearInterval(handle);
+    this.summaryPollHandles.delete(recordId);
+    this.summaryPollAttempts.delete(recordId);
   }
 
   // --- Редизайн v2.2 — сортировка строк таблицы показателей (скрытие пустых строк убрано по
@@ -1231,6 +1302,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // сразу показать новое значение/статус/шкалу, а не то, что было до правки.
       const updated = indicators.find((i) => i.id === savedId);
       if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated, false);
+      void this.afterRecordDataChanged(recordId);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
     } finally {
@@ -1253,6 +1325,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.syncEnrichmentPolling(recordId);
       if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
+      void this.afterRecordDataChanged(recordId);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить показатель.';
     }
@@ -1339,39 +1412,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Источник ВСЕЙ записи (заметка 1) — карточка показывает текущий источник и позволяет его
-  // сменить/уточнить; та же UI-механика поиска/find-or-register, что раньше была у показателя. ---
-
-  /** hint — предзаполняет поле поиска подсказкой модели ("мазок" без локализации, заметка 2),
-   * когда открывается из баннера "уточните источник", а не из обычной ссылки "изменить". */
-  startEditRecordSpecimen(record: MedicalRecord, hint?: string): void {
-    this.editingSpecimenRecordId = record.id;
-    this.recordSpecimenQuery = hint ?? record.specimenDisplayName ?? '';
-    this.recordSpecimenForm = { specimenKbId: record.specimenKbId };
-    this.customSpecimenError = null;
-  }
-
-  cancelEditRecordSpecimen(): void {
-    this.editingSpecimenRecordId = null;
-    this.recordSpecimenQuery = '';
-    this.customSpecimenError = null;
-  }
-
-  async saveRecordSpecimen(recordId: string): Promise<void> {
-    if (!this.recordSpecimenForm.specimenKbId || this.savingRecordSpecimen) return;
-    this.savingRecordSpecimen = true;
-    try {
-      await this.api.setRecordSpecimen(recordId, this.recordSpecimenForm.specimenKbId);
-      this.cancelEditRecordSpecimen();
-      this.error = null;
-      await this.refresh();
-    } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить источник.';
-    } finally {
-      this.savingRecordSpecimen = false;
-    }
-  }
-
   // Открытие/скачивание вложения теперь целиком внутри app-file-viewer/attachment-list.
 
   // --- Доступ (bottom-sheet «Доступ») ---
@@ -1386,8 +1426,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // --- Правка записи (bottom-sheet «Редактировать») ---
 
-  openEditSheet(record: MedicalRecord): void {
+  /** hint — предзаполняет поле «Биоматериал» подсказкой модели ("мазок" без локализации,
+   * заметка 2), когда форма открывается из баннера «уточните источник» в карточке. */
+  openEditSheet(record: MedicalRecord, specimenHint?: string): void {
     this.editRecord = record;
+    this.recordSpecimenQuery = specimenHint ?? record.specimenDisplayName ?? '';
+    this.recordSpecimenForm = { specimenKbId: record.specimenKbId };
+    this.customSpecimenError = null;
     this.editRecordForm = {
       recordDate: record.recordDate,
       doctor: record.doctor ?? '',
@@ -1401,15 +1446,32 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async saveEditRecord(): Promise<void> {
-    if (!this.editRecord || !this.editRecordForm.recordDate || this.savingRecord) return;
+    if (!this.editRecord || !this.editRecordForm.recordDate || this.savingRecord || this.savingCustomSpecimen) return;
+    const record = this.editRecord;
     this.savingRecord = true;
     try {
-      await this.api.updateMedicalRecord(this.editRecord.id, {
+      // Биоматериал — только у анализов и только если его реально сменили: новый текст ещё мог не
+      // пройти find-or-register (уход фокуса с поля не дождался), добираем здесь.
+      const query = this.recordSpecimenQuery.trim();
+      const specimenChanged = record.kind === MedicalRecordKind.Analysis
+        && query !== '' && query !== (record.specimenDisplayName ?? '');
+      if (specimenChanged && this.recordSpecimenForm.specimenKbId === record.specimenKbId) {
+        await this.resolveSpecimenQuery(query, this.recordSpecimenForm);
+      }
+      if (this.customSpecimenError) return;
+
+      await this.api.updateMedicalRecord(record.id, {
         recordDate: this.editRecordForm.recordDate,
         doctor: this.editRecordForm.doctor?.trim() || null,
         description: this.editRecordForm.description?.trim() || null,
         title: this.editRecordForm.title?.trim() || null,
       });
+      // Смена источника каскадится на все показатели записи и на бэке помечает резюме устаревшим
+      // (пересчёт — в фоне), отдельной кнопки «Пересчитать резюме» больше нет.
+      const newSpecimenId = this.recordSpecimenForm.specimenKbId;
+      if (specimenChanged && newSpecimenId && newSpecimenId !== record.specimenKbId) {
+        await this.api.setRecordSpecimen(record.id, newSpecimenId);
+      }
       this.closeEditSheet();
       await this.refresh();
       this.error = null;

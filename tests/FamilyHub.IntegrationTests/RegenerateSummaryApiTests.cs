@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -99,5 +102,63 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
 
         response.StatusCode.Should().Be(HttpStatusCode.BadGateway,
             "LM Studio недоступен в тестовом хосте (см. class doc) — эндпоинт обязан отдать аккуратный 502, не 5xx-исключение");
+    }
+
+    private async Task<DateTime?> GetDirtyAtAsync(Guid recordId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.MedicalRecords.AsNoTracking().Where(r => r.Id == recordId).Select(r => r.SummaryDirtyAt).SingleAsync();
+    }
+
+    private async Task RunJobAsync(Guid recordId, long ticks)
+    {
+        using var scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<RecordSummaryRegenerationJob>().RunAsync(recordId, ticks);
+    }
+
+    /// <summary>Ручная правка показателей автоматически планирует пересчёт резюме — кнопки
+    /// «Пересчитать» больше нет. Пока пересчёт не выполнен (15 с дебаунса), GET /summary отдаёт
+    /// 200 с pending=true, а не 404.</summary>
+    [Fact]
+    public async Task IndicatorEdits_MarkSummaryDirty_AndGetSummaryReportsPending()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
+
+        (await GetDirtyAtAsync(recordId)).Should().BeNull();
+        var indicatorId = await CreateIndicatorAsync(owner, recordId);
+        var afterCreate = await GetDirtyAtAsync(recordId);
+        afterCreate.Should().NotBeNull("добавление показателя устаревляет резюме");
+
+        var response = await owner.GetAsync($"/api/medical-records/{recordId}/summary");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<RecordSummaryResponse>(JsonOpts))!.Pending.Should().BeTrue();
+
+        // Правка и удаление — тоже (токен обновляется, дебаунс идёт от последней правки).
+        await Task.Delay(20);
+        (await owner.PutAsJsonAsync($"/api/indicators/{indicatorId}",
+            new UpdateIndicatorRequest("Гемоглобин", "150", "г/л", "130", "160", null))).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await GetDirtyAtAsync(recordId)).Should().BeAfter(afterCreate!.Value);
+    }
+
+    [Fact]
+    public async Task SummaryJob_WithStaleToken_IsNoOp_WithCurrentToken_ClearsDirtyFlag()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
+        var recordId = await CreateAnalysisAsync(owner, new DateOnly(2026, 1, 1), specimenId);
+        await CreateIndicatorAsync(owner, recordId);
+        var token = (await GetDirtyAtAsync(recordId))!.Value;
+
+        await RunJobAsync(recordId, token.Ticks - 10);
+        (await GetDirtyAtAsync(recordId)).Should().Be(token, "джоба со старым токеном — устаревшая, свежая уже в пути");
+
+        // LM Studio в тестовом хосте недоступен: пересчёт не удаётся, резюме сбрасывается, но
+        // пометка снимается — фронт не должен вечно показывать «Обновляем резюме…».
+        await RunJobAsync(recordId, token.Ticks);
+        (await GetDirtyAtAsync(recordId)).Should().BeNull();
+        (await owner.GetAsync($"/api/medical-records/{recordId}/summary")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

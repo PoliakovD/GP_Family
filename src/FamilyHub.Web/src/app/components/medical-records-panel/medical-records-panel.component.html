@@ -185,47 +185,19 @@
            теперь всегда переходит на отдельную страницу записи (см. onRecordCardClick), детали
            видны только там, где singleMode=true. -->
       @if (singleMode) {
-        @if (item.doctor) {
-          <p class="muted mb-1">Врач: {{ item.doctor }}</p>
-        }
         @if (item.description) {
           <p class="mb-1">{{ item.description }}</p>
         }
 
-        <!-- Источник анализа (заметка 1) — атрибут ВСЕЙ записи, не отдельного показателя: один
-             источник на карточке, меняется здесь и каскадится на все показатели записи. -->
-        @if (item.kind === Kind.Analysis) {
-          @if (editingSpecimenRecordId === item.id) {
-            <div class="d-flex flex-column gap-1 mb-2">
-              <label class="form-label">Источник анализа</label>
-              <input class="input" list="specimen-suggestions" placeholder="Источник (кровь, моча, ЭКГ…)"
-                [(ngModel)]="recordSpecimenQuery"
-                (ngModelChange)="onSpecimenQueryInput($event)"
-                (blur)="resolveSpecimenQuery(recordSpecimenQuery, recordSpecimenForm)" />
-              @if (savingCustomSpecimen) {
-                <div class="muted" style="font-size:0.7059rem">Проверяем источник…</div>
-              } @else if (!recordSpecimenForm.specimenKbId && recordSpecimenQuery) {
-                <div class="muted" style="font-size:0.7059rem">Источник ещё не подтверждён — уберите фокус с поля.</div>
-              }
-              @if (customSpecimenError) {
-                <div class="alert-danger mb-0" style="font-size:0.7059rem">{{ customSpecimenError }}</div>
-              }
-              <div class="d-flex gap-2">
-                <button class="btn btn-primary btn-sm" [disabled]="savingRecordSpecimen" (click)="saveRecordSpecimen(item.id)">Сохранить</button>
-                <button class="btn btn-ghost btn-sm" [disabled]="savingRecordSpecimen" (click)="cancelEditRecordSpecimen()">Отмена</button>
-              </div>
-            </div>
-          } @else if (item.specimenHint) {
-            <div class="alert-info mb-2" style="font-size:0.7647rem">
-              Уточните источник: «{{ item.specimenHint }}» — откуда именно?
-              <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item, item.specimenHint)">Уточнить</button>
-            </div>
-          } @else {
-            <p class="muted mb-1" style="font-size:0.7647rem">
-              Источник: {{ specimenLabelFor(item) }}
-              <button type="button" class="btn-link" (click)="startEditRecordSpecimen(item)">Изменить</button>
-            </p>
-          }
+        <!-- Источник анализа (заметка 1) — атрибут ВСЕЙ записи, не отдельного показателя. Сам
+             источник показан в мета-строке шапки, а меняется в форме «Редактировать» (поле
+             «Биоматериал», каскадится на все показатели записи); здесь остаётся только баннер
+             «уточните источник», когда модель не смогла определить локализацию. -->
+        @if (item.kind === Kind.Analysis && item.specimenHint && canDelete(item)) {
+          <div class="alert-info mb-2" style="font-size:0.7647rem">
+            Уточните источник: «{{ item.specimenHint }}» — откуда именно?
+            <button type="button" class="btn-link" (click)="openEditSheet(item, item.specimenHint)">Уточнить</button>
+          </div>
         }
 
         <!-- Секция «Файлы» — редизайн v2.2: сворачивается по умолчанию, разворачивается кнопкой
@@ -239,47 +211,42 @@
              читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). Редизайн
              v2.2 — сама секция сворачивается по умолчанию (кнопка «Резюме» в шапке), заголовок с
              «Составить/Пересчитать» остаётся якорем, тело — только когда summaryOpen. -->
-        @if (hasSummarySection(item)) {
-          <div class="d-flex justify-content-between mt-2" style="align-items:center;">
-            <div class="card-kicker mb-0">Резюме</div>
-            <button type="button" class="btn-link" style="font-size:0.7059rem"
-                    [disabled]="summaryRegeneratingRecordId === item.id"
-                    (click)="regenerateSummary(item.id)">
-              {{ summaryRegeneratingRecordId === item.id ? 'Пересчитываем…' : (summaryByRecord[item.id] ? 'Пересчитать резюме' : 'Составить резюме') }}
-            </button>
-          </div>
-          @if (summaryOpen) {
-            @if (summaryByRecord[item.id]; as summary) {
-              @if (summary.plainSummary) {
-                <p class="mb-1">{{ summary.plainSummary }}</p>
-              }
-              @if (summary.deviations.length > 0) {
-                <ul class="mb-1" style="font-size:0.7647rem">
-                  @for (d of summary.deviations; track d.name) {
-                    <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                  }
-                </ul>
-              }
-              @if (summary.questionsForDoctor.length > 0) {
-                <div class="card-kicker mt-2">Вопросы врачу</div>
-                <ul class="mb-1" style="font-size:0.7647rem">
-                  @for (q of summary.questionsForDoctor; track q) {
-                    <li>{{ q }}</li>
-                  }
-                </ul>
-              }
-              <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
-            } @else {
-              <p class="muted mb-1" style="font-size:0.7647rem">Резюме ещё не составлено.</p>
+        @if (hasSummarySection(item) && summaryOpen) {
+          <!-- Метка «Резюме» появляется только после нажатия кнопки «Резюме» в шапке. Кнопки
+               «Пересчитать» нет: после ручной правки показателей/источника бэк пересчитывает
+               резюме сам (RecordSummaryRegenerationJob), а пока идёт пересчёт — «Обновляем…». -->
+          <div class="card-kicker mt-2">Резюме</div>
+          @if (summaryByRecord[item.id]; as summary) {
+            @if (summary.pending) {
+              <p class="muted mb-1" style="font-size:0.7647rem">
+                <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновляем резюме по вашим правкам…
+              </p>
             }
-            <!-- Дисклеймер о рассинхронизации с ручной правкой (не пугать пользователя ошибкой,
-                 а объяснить, что делать) — резюме строится по показателям на момент последнего
-                 распознавания/пересчёта и само не обновляется после ручной правки значения. -->
-            <p class="muted mb-0" style="font-size:0.6471rem">
-              Резюме и вопросы врачу построены по значениям на момент последнего распознавания или
-              пересчёта. Если OCR ошибся при считывании с бланка и вы поправили показатель вручную —
-              нажмите «Пересчитать резюме», чтобы оно отражало исправленные данные.
-            </p>
+            @if (summary.plainSummary) {
+              <p class="mb-1" [style.opacity]="summary.pending ? 0.55 : 1">{{ summary.plainSummary }}</p>
+            }
+            @if (summary.deviations.length > 0) {
+              <ul class="mb-1" style="font-size:0.7647rem" [style.opacity]="summary.pending ? 0.55 : 1">
+                @for (d of summary.deviations; track d.name) {
+                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+                }
+              </ul>
+            }
+            @if (summary.questionsForDoctor.length > 0) {
+              <div class="card-kicker mt-2">Вопросы врачу</div>
+              <ul class="mb-1" style="font-size:0.7647rem" [style.opacity]="summary.pending ? 0.55 : 1">
+                @for (q of summary.questionsForDoctor; track q) {
+                  <li>{{ q }}</li>
+                }
+              </ul>
+            }
+            @if (summary.disclaimer) {
+              <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
+            }
+          } @else if (summaryRegeneratingRecordId === item.id) {
+            <p class="muted mb-1" style="font-size:0.7647rem">Составляем резюме…</p>
+          } @else {
+            <p class="muted mb-1" style="font-size:0.7647rem">Резюме пока не составлено.</p>
           }
         }
 
@@ -347,7 +314,7 @@
                     @if (scaleBounds(ind); as b) {
                       <app-reference-scale
                         [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-                        [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                        [unit]="ind.unit" [flag]="ind.flag" variant="mini" [labels]="true"
                       />
                       @if (deviationFor(ind, b); as d) {
                         <div class="muted" style="font-size:0.6471rem">{{ d }}</div>
@@ -422,7 +389,7 @@
                 @if (scaleBounds(ind); as b) {
                   <app-reference-scale
                     [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-                    [unit]="ind.unit" [flag]="ind.flag" variant="mini"
+                    [unit]="ind.unit" [flag]="ind.flag" variant="mini" [labels]="true"
                   />
                   @if (deviationFor(ind, b); as d) {
                     <div class="muted" style="font-size:0.6471rem">{{ d }}</div>
@@ -512,62 +479,69 @@
          только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
          списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». Редизайн v2.2 —
          «Назад» стилизована как ссылка (синяя стрелочка + название раздела), не голая иконка. -->
-    <div class="mb-3">
+    <!-- Верхняя строка: «‹ Анализы» слева, действия справа (на узком экране — только иконки).
+         Файлы/Резюме — переключатели, сворачивают/разворачивают свои секции ниже. -->
+    <div class="record-detail-topbar mb-3">
       <app-back-link [label]="labels.title" (activated)="goToList()" />
+      @if (items[0]; as only) {
+        <div class="record-detail-actions">
+          <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" title="Файлы" aria-label="Файлы" (click)="toggleFiles()">
+            <i class="ph ph-paperclip" aria-hidden="true"></i>
+            <span class="record-action-label">Файлы ({{ only.attachmentCount }})</span>
+          </button>
+          @if (hasSummarySection(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" title="Резюме" aria-label="Резюме" (click)="toggleSummary()">
+              <i class="ph ph-file-text" aria-hidden="true"></i>
+              <span class="record-action-label">Резюме</span>
+            </button>
+          }
+          @if (canDelete(only)) {
+            <button type="button" class="btn btn-secondary btn-sm" title="Редактировать" aria-label="Редактировать" (click)="openEditSheet(only)">
+              <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+              <span class="record-action-label">Редактировать</span>
+            </button>
+          }
+          <button type="button" class="btn btn-secondary btn-sm" title="Доступ" aria-label="Доступ" (click)="openAccessSheet(only)">
+            <i class="ph ph-share-network" aria-hidden="true"></i>
+            <span class="record-action-label">Доступ</span>
+          </button>
+          @if (canDelete(only)) {
+            <button type="button" class="btn btn-secondary btn-sm record-action-danger" title="Удалить" aria-label="Удалить" (click)="handleDelete(only)">
+              <i class="ph ph-trash" aria-hidden="true"></i>
+              <span class="record-action-label">Удалить</span>
+            </button>
+          }
+        </div>
+      }
     </div>
+
     @if (items[0]; as only) {
-      <div class="card-title mb-2" style="font-size:1.1176rem">{{ shortName(only) }}</div>
+      <h2 class="record-detail-title">{{ shortName(only) }}</h2>
 
-      <!-- Редизайн v2.2 — Редактировать/Доступ/Удалить видимыми кнопками (были только за «…»),
-           Файлы/Резюме тоже кнопками, сворачивают/разворачивают свои секции ниже. Раньше на
-           мобиле тот же набор прятался за одним «…» (app-action-menu) — по отзыву кнопки должны
-           быть видны сразу, как на десктопе; .record-detail-actions уже flex-wrap, переносится
-           на следующую строку на узкой ширине без горизонтального скролла. -->
-      <div class="record-detail-actions mb-3">
-        <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" (click)="toggleFiles()">
-          <i class="ph ph-paperclip" aria-hidden="true"></i> Файлы ({{ only.attachmentCount }})
-        </button>
-        @if (hasSummarySection(only)) {
-          <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" (click)="toggleSummary()">
-            <i class="ph ph-file-text" aria-hidden="true"></i> Резюме
-          </button>
-        }
-        @if (canDelete(only)) {
-          <button type="button" class="btn btn-secondary btn-sm" (click)="openEditSheet(only)">
-            <i class="ph ph-pencil-simple" aria-hidden="true"></i> Редактировать
-          </button>
-        }
-        <button type="button" class="btn btn-secondary btn-sm" (click)="openAccessSheet(only)">
-          <i class="ph ph-share-network" aria-hidden="true"></i> Доступ
-        </button>
-        @if (canDelete(only)) {
-          <button type="button" class="btn btn-secondary btn-sm" style="color:var(--color-status-danger-text)" (click)="handleDelete(only)">
-            <i class="ph ph-trash" aria-hidden="true"></i> Удалить
-          </button>
-        }
-      </div>
-
-      <!-- Редизайн v2.2 — мета-строка записи (человек/дата/источник/доступ) не существовала
-           вообще, заголовок был единственной информацией на экране открытой записи. -->
+      <!-- Мета-строка: человек (мини-аватар + имя, без рамки) · врач · дата · источник · доступ. -->
       <div class="record-detail-meta mb-3">
-        <app-person-chip
-          [avatarPerson]="{key: personKey(only), firstName: personAvatarParts(only.personName).firstName, lastName: personAvatarParts(only.personName).lastName}"
-          [shortLabel]="shortenDisplayName(only.personName)"
-          [fullLabel]="only.personName"
-        />
-        <span>{{ formatDayMonthYear(only.recordDate) }}</span>
-        @if (only.kind === Kind.Analysis) {
-          <span>{{ specimenLabelFor(only) }}</span>
+        <span class="record-meta-item">
+          <app-avatar size="sm" [person]="{key: personKey(only), firstName: personAvatarParts(only.personName).firstName, lastName: personAvatarParts(only.personName).lastName}" />
+          <span [title]="only.personName">{{ shortenDisplayName(only.personName) }}</span>
+        </span>
+        @if (only.doctor) {
+          <span class="record-meta-item">
+            <i class="ph ph-stethoscope" aria-hidden="true"></i>
+            {{ shortenDoctorName(only.doctor) }}
+          </span>
         }
-        <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
-          <i class="ph-duotone ph-eye" aria-hidden="true"></i>
+        <span class="record-meta-item">{{ formatDayMonthYear(only.recordDate) }}</span>
+        @if (only.kind === Kind.Analysis) {
+          <span class="record-meta-item">{{ specimenLabelFor(only) }}</span>
+        }
+        <span class="record-meta-item record-meta-access">
+          <i class="ph-fill ph-eye" aria-hidden="true"></i>
           {{ groupAccessLabel({key: personKey(only), personName: only.personName, records: [only]}) }}
         </span>
       </div>
 
-      <!-- Плитки статуса — N вне нормы / N в норме / N без нормы в бланке; те же счётчики, что
-           уже показывает чип списка (item.abnormalIndicatorCount и т.д.), просто крупнее и все
-           три сразу — раньше на открытой записи их не было вообще. -->
+      <!-- Плитки статуса — N вне нормы / N в норме / N без нормы в бланке (счётчики те же, что у
+           чипа в списке). -->
       @if (only.kind === Kind.Analysis && only.indicatorCount > 0) {
         <div class="record-status-tiles mb-3">
           <div class="record-status-tile record-status-tile-bad">
@@ -780,11 +754,28 @@
       <label class="form-label">Врач</label>
       <input class="input mb-2" [attr.list]="doctorsDatalistId" [(ngModel)]="editRecordForm.doctor" [placeholder]="labels.doctorPlaceholder" />
 
+      @if (record.kind === Kind.Analysis) {
+        <!-- Источник ВСЕЙ записи (заметка 1): смена каскадится на все показатели и запускает
+             автоматический пересчёт резюме. Поле резолвится по уходу фокуса (find-or-register). -->
+        <label class="form-label">Биоматериал</label>
+        <input class="input mb-1" list="specimen-suggestions" placeholder="Кровь, моча, ЭКГ…"
+          [(ngModel)]="recordSpecimenQuery"
+          (ngModelChange)="onSpecimenQueryInput($event)"
+          (blur)="resolveSpecimenQuery(recordSpecimenQuery, recordSpecimenForm)" />
+        @if (savingCustomSpecimen) {
+          <div class="muted mb-2" style="font-size:0.7647rem">Проверяем источник…</div>
+        } @else if (customSpecimenError) {
+          <div class="alert-danger mb-2" style="font-size:0.7647rem">{{ customSpecimenError }}</div>
+        } @else {
+          <div class="mb-2"></div>
+        }
+      }
+
       <label class="form-label">Описание</label>
       <textarea class="input mb-2" [(ngModel)]="editRecordForm.description" [placeholder]="labels.descriptionPlaceholder" rows="2"></textarea>
 
       <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm" [disabled]="savingRecord || !editRecordForm.recordDate" (click)="saveEditRecord()">
+        <button class="btn btn-primary btn-sm" [disabled]="savingRecord || savingCustomSpecimen || !editRecordForm.recordDate" (click)="saveEditRecord()">
           {{ savingRecord ? 'Сохраняем…' : 'Сохранить' }}
         </button>
         <button class="btn btn-ghost btn-sm" [disabled]="savingRecord" (click)="closeEditSheet()">Отмена</button>

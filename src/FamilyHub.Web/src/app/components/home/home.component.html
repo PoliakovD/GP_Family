@@ -17,7 +17,6 @@
           <div class="home-section-kicker">
             <span>Требует внимания</span>
             <span class="home-section-line"></span>
-            <span class="muted" style="font-size:0.7647rem">{{ visibleCardCount }}</span>
           </div>
 
           @if (medicationSummary; as m) {
@@ -38,7 +37,7 @@
               icon="ph-duotone ph-user-plus"
               color="var(--color-accent)"
               [title]="req.firstName ? req.firstName + ' просит вступить в семью «' + req.familyName + '»' : 'Заявка на вступление в семью «' + req.familyName + '»'"
-              [subtitle]="req.username ? '@' + req.username : null"
+              [subtitle]="requestSubtitle(req)"
             >
               <div actions>
                 <button class="btn btn-primary" (click)="approve(req)">Принять</button>
@@ -105,7 +104,7 @@
           <div class="card">
             <div class="d-flex align-items-baseline justify-content-between mb-2">
               <div class="home-section-kicker" style="margin:0"><span>Кто в семье</span></div>
-              <a [routerLink]="['/families', fam.id]" style="font-size:0.7647rem">Открыть семью</a>
+              <a [routerLink]="['/families', fam.id]" style="font-size:0.8235rem">Открыть семью</a>
             </div>
             @for (m of fam.currentMembers ?? []; track m.id) {
               <div class="d-flex align-items-center gap-2 mb-2">
@@ -121,6 +120,13 @@
                   }
                 </div>
               </div>
+            }
+            @if (canInvite) {
+              <button type="button" class="home-invite-link" (click)="showInviteModal = true">
+                <i class="ph ph-link-simple" aria-hidden="true"></i>
+                <span>Пригласить по ссылке</span>
+              </button>
+              <app-invite-modal [familyId]="fam.id" [open]="showInviteModal" (closed)="showInviteModal = false" />
             }
           </div>
         }
@@ -139,8 +145,10 @@
                   <div class="muted" style="font-size:0.7647rem">
                     @if (b.daysUntil === 0) {
                       сегодня · {{ b.turningAge }} лет
-                    } @else {
+                    } @else if (b.daysUntil <= birthdayAttentionWindowDays) {
                       через {{ b.daysUntil }} {{ pluralizeRu(b.daysUntil, 'день', 'дня', 'дней') }} · {{ b.turningAge }} лет
+                    } @else {
+                      {{ b.turningAge }} лет
                     }
                   </div>
                 </div>

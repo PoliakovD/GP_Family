@@ -1,29 +1,29 @@
-<div>
-  <h4 class="mb-1">
-    {{ title() }}
-    @if (specimenLabel(); as sl) {
-      <span class="muted" style="font-size:0.8235rem;font-weight:400">&nbsp;· {{ sl }}</span>
-    }
-  </h4>
+<div class="kb-article">
+  <!-- Название показателя показывает контейнер (шапка боковой панели / bottom-sheet / back-link
+       на мобильном) — здесь оно больше не дублируется, только источник мелкой строкой. -->
+  @if (specimenLabel(); as sl) {
+    <div class="kb-specimen">Источник: {{ sl }}</div>
+  }
 
   @if (reading(); as r) {
-    <!-- Редизайн v2.2 — крупнее (было --font-size-record-title, 1.1176rem): текущее показание —
-         главное, на что смотрят, открыв справку. -->
-    <div class="mb-2">
-      <div class="d-flex align-items-center gap-2 mb-1">
-        <span style="font-size:1.4118rem;font-weight:600">
-          {{ r.valueRaw }}{{ r.unit ? ' ' + r.unit : '' }}
-        </span>
-        <app-status-chip [flag]="r.flag" />
+    <!-- Отдельная рамка: крупное значение + статус, шкала с границами нормы, отклонение. -->
+    <div class="kb-value-frame">
+      <div class="kb-value-row">
+        <span class="kb-value" [class.kb-value-bad]="r.flag !== IndicatorFlag.Normal">{{ r.valueRaw }}</span>
+        @if (r.unit) {
+          <span class="kb-value-unit">{{ r.unit }}</span>
+        }
+        <span class="kb-value-chip"><app-status-chip [flag]="r.flag" /></span>
       </div>
       @if (scaleLow() !== null && scaleHigh() !== null) {
-        <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" />
+        <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" [labels]="true" />
+        <div class="kb-value-norm">норма {{ normText() }}</div>
         @if (deviationLabel(); as d) {
-          <p class="muted mb-0" style="font-size:0.7647rem">{{ d }}</p>
+          <div class="kb-value-deviation">{{ d }}</div>
         }
       }
       @if (patientContextLabel(); as pl) {
-        <p class="muted mb-0" style="font-size:0.7059rem">{{ pl }}</p>
+        <div class="kb-value-context">{{ pl }}</div>
       }
     </div>
   }
@@ -33,7 +33,7 @@
        записи (canEdit) — у безличной статьи справочника (чип "что смотрят вместе", каталог)
        редактировать нечего. -->
   @if (canEdit() && !editing()) {
-    <div class="d-flex gap-1 mb-2">
+    <div class="d-flex gap-1">
       <button type="button" class="btn btn-ghost btn-sm" title="Исправить" (click)="startEdit.emit()">
         <i class="ph ph-pencil-simple" aria-hidden="true"></i> Исправить
       </button>
@@ -43,7 +43,7 @@
     </div>
   }
   @if (editing() && editForm(); as f) {
-    <div class="d-flex flex-column gap-1 mb-2">
+    <div class="d-flex flex-column gap-1">
       <input class="input" [(ngModel)]="f.displayName" placeholder="Название показателя" />
       <div class="d-flex gap-1">
         <input class="input" [ngModel]="f.valueRaw" (ngModelChange)="f.valueRaw = $event" placeholder="Значение" style="flex:1" />
@@ -63,100 +63,115 @@
 
   @if (article(); as a) {
     @if (a.plainExplanation) {
-      <div class="card-kicker mt-2">Что это</div>
-      <p class="mb-1">{{ a.plainExplanation }}</p>
+      <section class="kb-section">
+        <h6 class="kb-section-title">Что это</h6>
+        <p class="kb-text">{{ a.plainExplanation }}</p>
+      </section>
     }
 
     @if (a.refRanges.length > 0) {
-      <div class="card-kicker mt-2">Нормы</div>
-      @if (matchedRange(); as mr) {
-        <p class="mb-1" style="font-weight:600">{{ rangeLabel(mr) }}</p>
-        <div class="d-flex flex-wrap gap-1 mb-1">
-          @if (populationBadge(mr); as pb) {
-            <span class="tag tag-accent-2">{{ pb }}</span>
-          }
+      <section class="kb-section">
+        <h6 class="kb-section-title">Нормы</h6>
+        @if (matchedRange(); as mr) {
+          <!-- Строка, подходящая полу и возрасту пациента, подсвечена; остальные — под раскрытием. -->
+          <div class="kb-norm-row kb-norm-row-match">
+            <i [class]="normGroupIcon(mr)" aria-hidden="true"></i>
+            <span class="kb-norm-label">{{ normGroupLabel(mr) }}</span>
+            <strong class="kb-norm-value">{{ normValueLabel(mr) }}</strong>
+          </div>
           @if (sourceLabel(mr); as sd) {
-            <span class="tag tag-neutral">{{ sd }}</span>
+            <div class="kb-norm-source">Источник норм: {{ sd }}</div>
           }
-        </div>
-        @if (otherRanges().length > 0) {
-          <app-expandable title="Другие диапазоны" [count]="otherRanges().length">
-            @for (r of otherRanges(); track $index) {
-              <p class="muted mb-1">
-                {{ rangeLabel(r) }}
-                @if (populationBadge(r); as pb) {
-                  <span class="tag tag-accent-2">{{ pb }}</span>
-                }
-              </p>
-            }
-          </app-expandable>
+          @if (otherRanges().length > 0) {
+            <app-expandable title="Нормы для других возрастов" [count]="otherRanges().length">
+              @for (r of otherRanges(); track $index) {
+                <div class="kb-norm-row">
+                  <i [class]="normGroupIcon(r)" aria-hidden="true"></i>
+                  <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
+                  <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
+                </div>
+              }
+            </app-expandable>
+          }
+        } @else {
+          @for (r of a.refRanges; track $index) {
+            <div class="kb-norm-row">
+              <i [class]="normGroupIcon(r)" aria-hidden="true"></i>
+              <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
+              <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
+            </div>
+          }
         }
-      } @else {
-        @for (r of a.refRanges; track $index) {
-          <p class="mb-1">
-            {{ rangeLabel(r) }}
-            @if (populationBadge(r); as pb) {
-              <span class="tag tag-accent-2">{{ pb }}</span>
-            }
-          </p>
-        }
-      }
+      </section>
     }
 
-    @if (a.whyMeasured) {
-      <div class="card-kicker mt-2">На что влияет</div>
-      <p class="mb-1">{{ a.whyMeasured }}</p>
-    }
-    @if (a.highMeans) {
-      <p class="mb-1"><strong>Выше нормы:</strong> {{ a.highMeans }}</p>
-    }
-    @if (a.lowMeans) {
-      <p class="mb-1"><strong>Ниже нормы:</strong> {{ a.lowMeans }}</p>
+    @if (a.whyMeasured || a.lowMeans || a.highMeans) {
+      <section class="kb-section">
+        <h6 class="kb-section-title">На что влияет</h6>
+        @if (a.whyMeasured) {
+          <p class="kb-text">{{ a.whyMeasured }}</p>
+        }
+        <!-- Ниже/выше нормы — отдельными абзацами со стрелкой, а не одной строкой через двоеточие. -->
+        @if (a.lowMeans) {
+          <p class="kb-effect">
+            <i class="ph-fill ph-arrow-down" aria-hidden="true"></i>
+            <span><strong>Ниже нормы</strong> — {{ a.lowMeans }}</span>
+          </p>
+        }
+        @if (a.highMeans) {
+          <p class="kb-effect">
+            <i class="ph-fill ph-arrow-up" aria-hidden="true"></i>
+            <span><strong>Выше нормы</strong> — {{ a.highMeans }}</span>
+          </p>
+        }
+      </section>
     }
 
     @if (a.related.length > 0) {
-      <div class="card-kicker mt-2">Что смотрят вместе</div>
-      <div class="d-flex flex-wrap gap-1 mb-2">
-        @for (rel of a.related; track rel.displayName) {
-          @if (rel.id) {
-            <button type="button" class="tag tag-neutral" style="cursor:pointer;border:none" (click)="openRelated.emit(rel.id)">
-              {{ rel.displayName }}
-            </button>
-          } @else {
-            <span class="tag tag-neutral" style="opacity:0.6">{{ rel.displayName }}</span>
+      <section class="kb-related">
+        <h6 class="kb-related-title">Что смотрят вместе</h6>
+        <div class="kb-related-chips">
+          @for (rel of a.related; track rel.displayName) {
+            @if (rel.id) {
+              <button type="button" class="kb-related-chip kb-related-chip-link" (click)="openRelated.emit(rel.id)">
+                {{ rel.displayName }}
+              </button>
+            } @else {
+              <span class="kb-related-chip" style="opacity:0.6">{{ rel.displayName }}</span>
+            }
           }
-        }
-      </div>
+        </div>
+      </section>
     }
   } @else {
-    <p class="muted mb-2">Справка по этому показателю пока не заполнена.</p>
+    <p class="muted kb-section">Справка по этому показателю пока не заполнена.</p>
   }
 
   @if (hasEnoughHistory() || (reading() && article())) {
-    <div class="mt-2">
-      <!-- Редизайн v2.2 — «Динамика» сворачивается по умолчанию, разворачивается этой кнопкой
-           (было — sparkline всегда виден, если хватало точек). История уже строго по этому же
-           пациенту (см. докстринг dynamicsOpen выше) — кнопка только показывает/прячет её. -->
+    <div class="kb-actions">
+      <!-- «Динамика» сворачивается по умолчанию (sparkline раскрывается под кнопками); история
+           уже строго по этому же пациенту, кнопка только показывает/прячет её. Кнопки — на всю
+           ширину компонента. -->
       @if (hasEnoughHistory()) {
-        <button type="button" class="btn btn-secondary btn-sm" [class.active]="dynamicsOpen()" (click)="dynamicsOpen.set(!dynamicsOpen())">
-          <i class="ph ph-chart-line" aria-hidden="true"></i> Динамика
+        <button type="button" class="btn btn-primary w-100" [class.active]="dynamicsOpen()" (click)="dynamicsOpen.set(!dynamicsOpen())">
+          <i class="ph ph-chart-line" aria-hidden="true"></i> Динамика по времени
         </button>
         @if (dynamicsOpen()) {
-          <div class="mt-2">
+          <div class="kb-dynamics">
             <app-sparkline [points]="sparklinePoints()" />
           </div>
         }
       }
       @if (reading() && article()) {
-        <button type="button" class="btn-link mt-1" (click)="openInCatalog.emit()">Открыть в справочнике</button>
+        <button type="button" class="btn btn-secondary w-100" (click)="openInCatalog.emit()">Открыть в справочнике</button>
       }
     </div>
   }
 
   @if (article(); as a) {
-    <div class="alert-info mt-2 mb-0">
-      Информация из общего справочника, не является медицинской консультацией и не заменяет
-      осмотр врача. Обновлено {{ a.updatedAt | date: 'dd.MM.yyyy' }}.
-    </div>
+    <p class="kb-disclaimer">
+      Статья из общего справочника FamilyHub, обновлена {{ updatedText(a.updatedAt) }}.
+      Не диагноз — трактовку даёт врач.
+    </p>
   }
 </div>
