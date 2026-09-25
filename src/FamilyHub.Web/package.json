@@ -29,7 +29,7 @@
     "@angular-devkit/build-angular": "^20.3.37",
     "@angular/cli": "^20.3.37",
     "@angular/compiler-cli": "^20.3.32",
-    "@types/node": "^18.18.0",
+    "@types/node": "^22.12.0",
     "typescript": "~5.8.3"
   },
   "allowScripts": {
