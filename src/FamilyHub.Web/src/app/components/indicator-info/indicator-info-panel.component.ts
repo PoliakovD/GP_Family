@@ -15,7 +15,10 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
     <div class="overlay-backdrop indicator-info-backdrop" (click)="closed.emit()">
       <aside class="indicator-info-panel" (click)="$event.stopPropagation()">
         <div class="indicator-info-panel-header">
-          <h4 class="mb-0">{{ title }}</h4>
+          <div class="indicator-info-panel-heading">
+            <div class="indicator-info-panel-kicker">Справочник FamilyHub</div>
+            <h4 class="mb-0">{{ title }}</h4>
+          </div>
           <button type="button" class="btn-icon" aria-label="Закрыть" (click)="closed.emit()">
             <i class="ph ph-x" aria-hidden="true"></i>
           </button>

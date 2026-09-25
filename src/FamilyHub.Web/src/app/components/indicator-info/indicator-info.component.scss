@@ -1,0 +1,228 @@
+// Статья справочника по показателю — оформление по макету «Показатели анализа и справка».
+// Контейнер (боковая панель / bottom-sheet / полноэкранный мобильный вид) даёт название; сама
+// статья — вертикальный стек блоков с равным ритмом.
+
+.kb-article {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.kb-specimen {
+  margin: -8px 0 -6px;
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-meta);
+}
+
+// --- Текущее значение: отдельная рамка со шкалой ---
+
+.kb-value-frame {
+  padding: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+}
+
+.kb-value-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.kb-value {
+  font-family: var(--font-heading);
+  font-size: 1.8824rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-status-ok-text);
+}
+
+.kb-value-bad {
+  color: var(--color-status-danger-text);
+}
+
+.kb-value-unit {
+  color: var(--color-neutral-700);
+  font-size: 1rem;
+}
+
+.kb-value-chip {
+  margin-left: auto;
+}
+
+.kb-value-norm,
+.kb-value-deviation,
+.kb-value-context {
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-meta);
+}
+
+.kb-value-norm {
+  margin-top: 2px;
+}
+
+.kb-value-deviation {
+  color: var(--color-status-danger-text);
+}
+
+.kb-value-context {
+  margin-top: 6px;
+  font-size: 0.8235rem;
+}
+
+// --- Секции ---
+
+.kb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// Заголовок секции («Что это», «Нормы», «На что влияет») — раньше 0.5882rem (≈10px) в общем
+// .card-kicker, на глаз не читалось.
+.kb-section-title {
+  margin: 0;
+  color: var(--color-neutral-700);
+  font-family: var(--font-heading);
+  font-size: 0.8824rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kb-text {
+  margin: 0;
+  font-size: 0.9706rem;
+  line-height: 1.55;
+  color: var(--color-neutral-900);
+  text-wrap: pretty;
+}
+
+// --- Нормы: иконка группы + подпись + диапазон ---
+
+.kb-norm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+
+  i {
+    flex: none;
+    width: 20px;
+    text-align: center;
+    font-size: 1.1765rem;
+    color: var(--color-neutral-600);
+  }
+}
+
+.kb-norm-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9412rem;
+}
+
+.kb-norm-value {
+  flex: none;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.9412rem;
+  white-space: nowrap;
+}
+
+// Строка, подходящая полу и возрасту пациента.
+.kb-norm-row-match {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+
+  i {
+    color: var(--color-accent);
+  }
+}
+
+.kb-norm-source {
+  color: var(--color-neutral-600);
+  font-size: 0.8235rem;
+}
+
+// --- «На что влияет»: абзацы «ниже/выше нормы» со стрелкой ---
+
+.kb-effect {
+  display: flex;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding-left: 4px;
+  font-size: 0.9706rem;
+  line-height: 1.5;
+
+  i {
+    flex: none;
+    margin-top: 4px;
+    font-size: 1rem;
+    color: var(--color-status-danger-text);
+  }
+
+  strong {
+    font-weight: 600;
+  }
+}
+
+// --- «Что смотрят вместе»: выделенная плашка с полоской ---
+
+.kb-related {
+  padding: 14px 16px;
+  background: var(--color-accent-100);
+  border-left: 3px solid var(--color-accent);
+}
+
+.kb-related-title {
+  margin: 0 0 8px;
+  color: var(--color-accent-800);
+  font-family: var(--font-heading);
+  font-size: 0.9412rem;
+  font-weight: 600;
+}
+
+.kb-related-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.kb-related-chip {
+  padding: 5px 11px;
+  border: 0;
+  background: var(--color-paper);
+  color: var(--color-accent-800);
+  font-family: inherit;
+  font-size: 0.8824rem;
+}
+
+.kb-related-chip-link {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-accent-200);
+  }
+}
+
+// --- Кнопки внизу: на всю ширину компонента ---
+
+.kb-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.kb-dynamics {
+  padding-top: 4px;
+}
+
+.kb-disclaimer {
+  margin: 0;
+  color: var(--color-neutral-600);
+  font-size: 0.8235rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}

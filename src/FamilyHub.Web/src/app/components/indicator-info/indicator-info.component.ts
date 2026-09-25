@@ -1,15 +1,15 @@
 import { Component, computed, input, output, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type {
   IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto, PatientContextDto, UpdateIndicatorRequest,
 } from '../../models/types';
-import { Gender } from '../../models/types';
+import { Gender, IndicatorFlag } from '../../models/types';
 import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
-import { labPopulationLabel, shouldShowPopulationBadge } from '../../shared/util/lab-norm';
+import { normGroupIcon, normGroupLabel, normValueLabel } from '../../shared/util/lab-norm';
+import { formatDayMonthYear } from '../../shared/util/date-format';
 import { pluralizeRu } from '../../shared/util/pluralize';
 
 /** Текущее значение показателя в контексте конкретной записи — есть только у первой из трёх
@@ -33,8 +33,9 @@ export interface IndicatorInfoReading {
 @Component({
   selector: 'app-indicator-info',
   standalone: true,
-  imports: [DatePipe, FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
+  imports: [FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
   templateUrl: './indicator-info.component.html',
+  styleUrl: './indicator-info.component.scss',
 })
 export class IndicatorInfoComponent {
   readonly article = input<KbAnalyteCard | null>(null);
@@ -71,8 +72,6 @@ export class IndicatorInfoComponent {
   /** Футер "Открыть в справочнике" — только когда есть персональный reading (иначе мы уже в
    * справочнике/на статье по чипу). */
   readonly openInCatalog = output<void>();
-
-  readonly title = computed(() => this.article()?.displayName ?? this.displayName());
 
   /** Источник показан только когда он известен (ключ справочника — (показатель, источник), см.
    * GlobalLabAnalyteKb.SpecimenKbId) — сервер уже отдаёт готовую подпись, ссылку локально не
@@ -127,24 +126,20 @@ export class IndicatorInfoComponent {
       .map((p) => ({ value: parseFloat(p.valueNumericText!), flag: p.flag })),
   );
 
-  rangeLabel(r: KbRefRangeDto): string {
-    const sex = r.sex === Gender.Male ? 'Мужчины' : r.sex === Gender.Female ? 'Женщины' : 'Все';
-    const age =
-      r.ageFrom !== null && r.ageTo !== null
-        ? `, ${r.ageFrom}–${r.ageTo} лет`
-        : r.ageFrom !== null
-          ? `, от ${r.ageFrom} лет`
-          : r.ageTo !== null
-            ? `, до ${r.ageTo} лет`
-            : '';
-    const value = r.low !== null && r.high !== null ? `${formatNum(r.low)}–${formatNum(r.high)}` : '—';
-    return `${sex}${age}: ${value}${r.unit ? ' ' + r.unit : ''}`;
-  }
+  readonly IndicatorFlag = IndicatorFlag;
+  readonly normGroupIcon = normGroupIcon;
+  readonly normGroupLabel = normGroupLabel;
+  readonly normValueLabel = normValueLabel;
 
-  /** Бейдж категории популяции — только для особых случаев (беременность/дети/фаза цикла),
-   * General не показывается (подразумевается по умолчанию). */
-  populationBadge(r: KbRefRangeDto): string | null {
-    return shouldShowPopulationBadge(r.population) ? labPopulationLabel(r.population, r.populationDetail) : null;
+  /** «120–140 г/л» для строки под шкалой — по подобранному диапазону пациента. */
+  readonly normText = computed(() => {
+    const r = this.matchedRange();
+    return r ? normValueLabel(r) : '';
+  });
+
+  /** ISO-дата обновления статьи -> «12 июня 2026» (локаль ru в приложении не подключена). */
+  updatedText(iso: string): string {
+    return formatDayMonthYear(iso.slice(0, 10));
   }
 
   /** Домен-источник, выигравший при merge по приоритету (см. ReferenceRangeMerger) — null для
@@ -152,8 +147,4 @@ export class IndicatorInfoComponent {
   sourceLabel(r: KbRefRangeDto): string | null {
     return r.sourceDomain;
   }
-}
-
-function formatNum(n: number): string {
-  return (Math.round(n * 100) / 100).toString().replace('.', ',');
 }
