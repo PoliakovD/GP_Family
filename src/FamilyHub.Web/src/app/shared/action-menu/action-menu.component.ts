@@ -20,11 +20,10 @@ export interface ActionMenuItem {
  * наборе действий, что и `indicator-info`/`indicator-info-panel`.
  */
 @Component({
-  selector: 'app-action-menu',
-  standalone: true,
-  imports: [BottomSheetComponent],
-  templateUrl: './action-menu.component.html',
-  styleUrl: './action-menu.component.scss',
+    selector: 'app-action-menu',
+    imports: [BottomSheetComponent],
+    templateUrl: './action-menu.component.html',
+    styleUrl: './action-menu.component.scss'
 })
 export class ActionMenuComponent {
   private readonly breakpoints = inject(BreakpointService);

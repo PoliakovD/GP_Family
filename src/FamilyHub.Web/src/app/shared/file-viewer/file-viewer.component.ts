@@ -46,11 +46,10 @@ const PREVIEW_POLL_INTERVAL_MS = 1500;
  * момент печатать значение показателя в форме позади плавающего окна.
  */
 @Component({
-  selector: 'app-file-viewer',
-  standalone: true,
-  imports: [NgTemplateOutlet, ImagePreviewComponent, PdfPreviewComponent, TextPreviewComponent, UnsupportedPreviewComponent],
-  templateUrl: './file-viewer.component.html',
-  styleUrl: './file-viewer.component.scss',
+    selector: 'app-file-viewer',
+    imports: [NgTemplateOutlet, ImagePreviewComponent, PdfPreviewComponent, TextPreviewComponent, UnsupportedPreviewComponent],
+    templateUrl: './file-viewer.component.html',
+    styleUrl: './file-viewer.component.scss'
 })
 export class FileViewerComponent implements OnChanges, OnDestroy {
   @Input() open = false;

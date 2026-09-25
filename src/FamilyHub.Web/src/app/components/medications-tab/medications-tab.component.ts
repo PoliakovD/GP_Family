@@ -11,10 +11,9 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component';
 
 @Component({
-  selector: 'app-medications-tab',
-  standalone: true,
-  imports: [MedkitsPanelComponent, LoadingSpinnerComponent],
-  templateUrl: './medications-tab.component.html',
+    selector: 'app-medications-tab',
+    imports: [MedkitsPanelComponent, LoadingSpinnerComponent],
+    templateUrl: './medications-tab.component.html'
 })
 export class MedicationsTabComponent implements OnInit, OnDestroy {
   readonly state = inject(FamilyStateService);

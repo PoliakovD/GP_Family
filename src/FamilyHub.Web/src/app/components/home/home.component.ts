@@ -47,11 +47,10 @@ interface BirthdayAttentionSummary {
  * заявкам/ДР/пушу здесь на клиенте.
  */
 @Component({
-  selector: 'app-home',
-  standalone: true,
-  imports: [RouterLink, AttentionCardComponent, AvatarComponent, PersonNameComponent, LoadingSpinnerComponent, InviteModalComponent],
-  templateUrl: './home.component.html',
-  styleUrl: './home.component.scss',
+    selector: 'app-home',
+    imports: [RouterLink, AttentionCardComponent, AvatarComponent, PersonNameComponent, LoadingSpinnerComponent, InviteModalComponent],
+    templateUrl: './home.component.html',
+    styleUrl: './home.component.scss'
 })
 export class HomeComponent implements OnInit {
   private readonly api = inject(ApiService);

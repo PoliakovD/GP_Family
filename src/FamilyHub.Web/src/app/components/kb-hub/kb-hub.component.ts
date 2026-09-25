@@ -8,10 +8,9 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
  * содержимого; indicators — новый справочник показателей (kb-analyte-tab).
  */
 @Component({
-  selector: 'app-kb-hub',
-  standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
-  templateUrl: './kb-hub.component.html',
+    selector: 'app-kb-hub',
+    imports: [RouterLink, RouterLinkActive, RouterOutlet],
+    templateUrl: './kb-hub.component.html'
 })
 export class KbHubComponent {
   readonly sections: { path: string; label: string }[] = [

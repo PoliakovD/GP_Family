@@ -20,10 +20,9 @@ type Step = 'email' | 'code';
  * выдаётся — у Telegram нет сессии вообще.
  */
 @Component({
-  selector: 'app-telegram-bind',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './telegram-bind.component.html',
+    selector: 'app-telegram-bind',
+    imports: [FormsModule],
+    templateUrl: './telegram-bind.component.html'
 })
 export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
   private readonly auth = inject(AuthService);

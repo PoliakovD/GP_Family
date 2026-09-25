@@ -10,10 +10,9 @@ import { WebSearchValveStore } from './web-search-valve.store';
  * конвейер без единой ошибки, поэтому о ней напоминаем везде, где админ смотрит на задачи.
  */
 @Component({
-  selector: 'app-web-search-banner',
-  standalone: true,
-  imports: [DatePipe, RouterLink],
-  template: `
+    selector: 'app-web-search-banner',
+    imports: [DatePipe, RouterLink],
+    template: `
     @if (store.valve(); as valve) {
       @if (valve.isPaused) {
         <div class="card mb-3">
@@ -29,7 +28,7 @@ import { WebSearchValveStore } from './web-search-valve.store';
         </div>
       }
     }
-  `,
+  `
 })
 export class WebSearchBannerComponent implements OnInit {
   readonly store = inject(WebSearchValveStore);

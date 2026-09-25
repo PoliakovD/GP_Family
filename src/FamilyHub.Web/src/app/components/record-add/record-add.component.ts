@@ -39,11 +39,10 @@ let nextInstanceId = 0;
  * см. shared/util/patient-options.ts, attachment-upload.ts, medical-record-labels.ts.
  */
 @Component({
-  selector: 'app-record-add',
-  standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent, PersonChipComponent],
-  templateUrl: './record-add.component.html',
-  styleUrl: './record-add.component.scss',
+    selector: 'app-record-add',
+    imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent, PersonChipComponent],
+    templateUrl: './record-add.component.html',
+    styleUrl: './record-add.component.scss'
 })
 export class RecordAddComponent implements OnInit, OnDestroy {
   readonly kind = input.required<MedicalRecordKind>();

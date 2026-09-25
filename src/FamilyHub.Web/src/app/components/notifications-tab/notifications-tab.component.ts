@@ -14,10 +14,9 @@ const MONTHS_GEN = [
 ];
 
 @Component({
-  selector: 'app-notifications-tab',
-  standalone: true,
-  imports: [FormsModule, LoadingSpinnerComponent],
-  templateUrl: './notifications-tab.component.html',
+    selector: 'app-notifications-tab',
+    imports: [FormsModule, LoadingSpinnerComponent],
+    templateUrl: './notifications-tab.component.html'
 })
 export class NotificationsTabComponent implements OnInit {
   private readonly api = inject(ApiService);

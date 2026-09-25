@@ -4,10 +4,9 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
 
 /** Зеркало record-detail-page.component.ts для «Врачи» — см. докстринг там же. */
 @Component({
-  selector: 'app-doctor-visit-detail-page',
-  standalone: true,
-  imports: [MedicalRecordsPanelComponent],
-  template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" [recordId]="id()" [firstReview]="firstReview()" />`,
+    selector: 'app-doctor-visit-detail-page',
+    imports: [MedicalRecordsPanelComponent],
+    template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" [recordId]="id()" [firstReview]="firstReview()" />`
 })
 export class DoctorVisitDetailPageComponent {
   readonly id = input.required<string>();

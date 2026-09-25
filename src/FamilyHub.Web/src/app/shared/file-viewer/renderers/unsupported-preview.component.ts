@@ -6,11 +6,10 @@ import { LoadingSpinnerComponent } from '../../loading-spinner/loading-spinner.c
  * и любого формата, для которого сервер не строит превью (см. AttachmentPreviewRenderer). Ни
  * ошибок, ни пустых экранов — только понятная карточка с типом/именем/размером (см. план). */
 @Component({
-  selector: 'app-unsupported-preview',
-  standalone: true,
-  imports: [LoadingSpinnerComponent],
-  templateUrl: './unsupported-preview.component.html',
-  styleUrl: './unsupported-preview.component.scss',
+    selector: 'app-unsupported-preview',
+    imports: [LoadingSpinnerComponent],
+    templateUrl: './unsupported-preview.component.html',
+    styleUrl: './unsupported-preview.component.scss'
 })
 export class UnsupportedPreviewComponent {
   @Input({ required: true }) fileName!: string;

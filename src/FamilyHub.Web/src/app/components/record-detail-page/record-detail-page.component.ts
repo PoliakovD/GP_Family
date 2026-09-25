@@ -11,10 +11,9 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
  * биндится автоматически).
  */
 @Component({
-  selector: 'app-record-detail-page',
-  standalone: true,
-  imports: [MedicalRecordsPanelComponent],
-  template: `<app-medical-records-panel [kind]="Kind.Analysis" [recordId]="id()" [firstReview]="firstReview()" />`,
+    selector: 'app-record-detail-page',
+    imports: [MedicalRecordsPanelComponent],
+    template: `<app-medical-records-panel [kind]="Kind.Analysis" [recordId]="id()" [firstReview]="firstReview()" />`
 })
 export class RecordDetailPageComponent {
   readonly id = input.required<string>();

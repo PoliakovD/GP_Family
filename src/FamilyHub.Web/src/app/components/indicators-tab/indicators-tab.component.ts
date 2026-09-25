@@ -25,11 +25,10 @@ const ALL_PATIENTS_KEY = 'all';
  * открывает историю ИМЕННО этого пациента (GET /api/indicators/{analyteKey}?dependentId=&targetUserId=).
  */
 @Component({
-  selector: 'app-indicators-tab',
-  standalone: true,
-  imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent],
-  templateUrl: './indicators-tab.component.html',
-  styleUrl: './indicators-tab.component.scss',
+    selector: 'app-indicators-tab',
+    imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent],
+    templateUrl: './indicators-tab.component.html',
+    styleUrl: './indicators-tab.component.scss'
 })
 export class IndicatorsTabComponent implements OnInit {
   private readonly api = inject(ApiService);

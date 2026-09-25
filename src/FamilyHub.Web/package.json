@@ -9,28 +9,28 @@
     "test": "ng test --no-watch --browsers ChromeHeadless"
   },
   "dependencies": {
-    "@angular/animations": "^18.2.0",
-    "@angular/common": "^18.2.0",
-    "@angular/compiler": "^18.2.0",
-    "@angular/core": "^18.2.0",
-    "@angular/forms": "^18.2.0",
-    "@angular/platform-browser": "^18.2.0",
-    "@angular/platform-browser-dynamic": "^18.2.0",
-    "@angular/router": "^18.2.0",
-    "@angular/service-worker": "^18.2.0",
+    "@angular/animations": "^20.3.32",
+    "@angular/common": "^20.3.32",
+    "@angular/compiler": "^20.3.32",
+    "@angular/core": "^20.3.32",
+    "@angular/forms": "^20.3.32",
+    "@angular/platform-browser": "^20.3.32",
+    "@angular/platform-browser-dynamic": "^20.3.32",
+    "@angular/router": "^20.3.32",
+    "@angular/service-worker": "^20.3.32",
     "@fontsource/source-serif-4": "^5.2.9",
     "@phosphor-icons/web": "^2.1.2",
     "pdfjs-dist": "^4.10.38",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "zone.js": "~0.14.0"
+    "zone.js": "~0.15.1"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^18.2.0",
-    "@angular/cli": "^18.2.0",
-    "@angular/compiler-cli": "^18.2.0",
+    "@angular-devkit/build-angular": "^20.3.37",
+    "@angular/cli": "^20.3.37",
+    "@angular/compiler-cli": "^20.3.32",
     "@types/node": "^18.18.0",
-    "typescript": "~5.4.0"
+    "typescript": "~5.8.3"
   },
   "allowScripts": {
     "esbuild@0.23.0": true,

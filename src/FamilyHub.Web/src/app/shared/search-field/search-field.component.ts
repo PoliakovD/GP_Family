@@ -13,10 +13,9 @@ import { FormsModule } from '@angular/forms';
  * DebouncedSearch.onQueryChange() / локальный matchesQuery()).
  */
 @Component({
-  selector: 'app-search-field',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './search-field.component.html',
+    selector: 'app-search-field',
+    imports: [FormsModule],
+    templateUrl: './search-field.component.html'
 })
 export class SearchFieldComponent {
   @Input() placeholder = 'Поиск…';

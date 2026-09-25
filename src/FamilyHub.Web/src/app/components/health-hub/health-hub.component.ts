@@ -15,11 +15,10 @@ import { PageActionService } from '../../services/page-action.service';
  * который такой дочерний компонент выставляет сам (шаблон).
  */
 @Component({
-  selector: 'app-health-hub',
-  standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
-  templateUrl: './health-hub.component.html',
-  styleUrl: './health-hub.component.scss',
+    selector: 'app-health-hub',
+    imports: [RouterLink, RouterLinkActive, RouterOutlet],
+    templateUrl: './health-hub.component.html',
+    styleUrl: './health-hub.component.scss'
 })
 export class HealthHubComponent {
   readonly pageAction = inject(PageActionService);

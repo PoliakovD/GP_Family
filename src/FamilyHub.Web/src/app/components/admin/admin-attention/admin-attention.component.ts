@@ -26,10 +26,9 @@ const TYPE_LABELS: Record<string, string> = {
  * ошибки, поэтому о нём напоминает баннер; переключается вентиль только в «Настройки → Веб-поиск».
  */
 @Component({
-  selector: 'app-admin-attention',
-  standalone: true,
-  imports: [AttentionCardComponent, WebSearchBannerComponent],
-  templateUrl: './admin-attention.component.html',
+    selector: 'app-admin-attention',
+    imports: [AttentionCardComponent, WebSearchBannerComponent],
+    templateUrl: './admin-attention.component.html'
 })
 export class AdminAttentionComponent implements OnInit {
   private readonly api = inject(AdminApiService);

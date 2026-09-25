@@ -25,10 +25,9 @@ const USERNAME_CHECK_DEBOUNCE_MS = 400;
  * случайном обновлении страницы посреди заполнения).
  */
 @Component({
-  selector: 'app-login',
-  standalone: true,
-  imports: [FormsModule, ModalComponent],
-  templateUrl: './login.component.html',
+    selector: 'app-login',
+    imports: [FormsModule, ModalComponent],
+    templateUrl: './login.component.html'
 })
 export class LoginComponent implements HasPendingCodeEntry {
   private readonly auth = inject(AuthService);

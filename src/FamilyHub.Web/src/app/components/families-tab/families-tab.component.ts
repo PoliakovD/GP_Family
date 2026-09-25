@@ -9,10 +9,9 @@ import { ModalComponent } from '../../shared/modal/modal.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
-  selector: 'app-families-tab',
-  standalone: true,
-  imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent],
-  templateUrl: './families-tab.component.html',
+    selector: 'app-families-tab',
+    imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent],
+    templateUrl: './families-tab.component.html'
 })
 export class FamiliesTabComponent {
   readonly state = inject(FamilyStateService);

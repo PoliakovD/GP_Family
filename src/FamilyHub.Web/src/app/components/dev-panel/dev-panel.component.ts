@@ -3,11 +3,10 @@ import { FormsModule } from '@angular/forms';
 import { DevLoggerService } from '../../services/dev-logger.service';
 
 @Component({
-  selector: 'app-dev-panel',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './dev-panel.component.html',
-  styleUrl: './dev-panel.component.scss',
+    selector: 'app-dev-panel',
+    imports: [FormsModule],
+    templateUrl: './dev-panel.component.html',
+    styleUrl: './dev-panel.component.scss'
 })
 export class DevPanelComponent {
   readonly devMode = isDevMode();
