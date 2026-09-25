@@ -8,10 +8,9 @@ import { runBusy } from '../settings-task';
 
 /** Вкладка «Данные»: политика конфиденциальности, выгрузка данных, удаление аккаунта (152-ФЗ). */
 @Component({
-  selector: 'app-settings-data',
-  standalone: true,
-  imports: [FormsModule, RouterLink],
-  templateUrl: './settings-data.component.html',
+    selector: 'app-settings-data',
+    imports: [FormsModule, RouterLink],
+    templateUrl: './settings-data.component.html'
 })
 export class SettingsDataComponent {
   private readonly auth = inject(AuthService);

@@ -12,10 +12,9 @@ import { runBusy } from '../settings/settings-task';
  * По структуре — как ConsentGateComponent (тот же auth-shell, одна форма, один submit).
  */
 @Component({
-  selector: 'app-profile-setup',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './profile-setup.component.html',
+    selector: 'app-profile-setup',
+    imports: [FormsModule],
+    templateUrl: './profile-setup.component.html'
 })
 export class ProfileSetupComponent {
   private readonly auth = inject(AuthService);

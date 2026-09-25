@@ -3,10 +3,9 @@ import { DecimalPipe } from '@angular/common';
 import { AdminApiService, AdminOverview } from '../../../services/admin-api.service';
 
 @Component({
-  selector: 'app-admin-overview',
-  standalone: true,
-  imports: [DecimalPipe],
-  templateUrl: './admin-overview.component.html',
+    selector: 'app-admin-overview',
+    imports: [DecimalPipe],
+    templateUrl: './admin-overview.component.html'
 })
 export class AdminOverviewComponent implements OnInit {
   private readonly api = inject(AdminApiService);

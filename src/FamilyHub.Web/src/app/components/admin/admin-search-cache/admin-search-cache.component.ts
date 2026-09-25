@@ -26,10 +26,9 @@ const PAGE_SIZE = 25;
  * Состояние в URL (?topic=&row=) — F5/«назад» не теряют контекст, ссылку на строку можно переслать.
  */
 @Component({
-  selector: 'app-admin-search-cache',
-  standalone: true,
-  imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent, TopicSwitchComponent],
-  templateUrl: './admin-search-cache.component.html',
+    selector: 'app-admin-search-cache',
+    imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent, TopicSwitchComponent],
+    templateUrl: './admin-search-cache.component.html'
 })
 export class AdminSearchCacheComponent implements OnInit {
   private readonly api = inject(AdminApiService);

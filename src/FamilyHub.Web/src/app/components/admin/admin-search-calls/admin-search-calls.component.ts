@@ -27,10 +27,9 @@ import { WebSearchBannerComponent } from '../shared/web-search-banner.component'
  * Состояние в URL (?topic=&call=) — ссылку на конкретный вызов можно переслать.
  */
 @Component({
-  selector: 'app-admin-search-calls',
-  standalone: true,
-  imports: [FormsModule, DatePipe, DecimalPipe, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent],
-  templateUrl: './admin-search-calls.component.html',
+    selector: 'app-admin-search-calls',
+    imports: [FormsModule, DatePipe, DecimalPipe, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent],
+    templateUrl: './admin-search-calls.component.html'
 })
 export class AdminSearchCallsComponent implements OnInit {
   private readonly api = inject(AdminApiService);

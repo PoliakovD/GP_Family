@@ -8,10 +8,9 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
  * врачей) — см. план разделения. Заголовок экрана печатает панель (редизайн v2.1), не эта обёртка.
  */
 @Component({
-  selector: 'app-doctor-visits-tab',
-  standalone: true,
-  imports: [MedicalRecordsPanelComponent],
-  template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" />`,
+    selector: 'app-doctor-visits-tab',
+    imports: [MedicalRecordsPanelComponent],
+    template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" />`
 })
 export class DoctorVisitsTabComponent {
   readonly Kind = MedicalRecordKind;

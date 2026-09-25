@@ -51,11 +51,10 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
  * (Escape тоже очищает) или переходом по результату.
  */
 @Component({
-  selector: 'app-search',
-  standalone: true,
-  imports: [RouterLink, LoadingSpinnerComponent, SearchFieldComponent],
-  templateUrl: './app-search.component.html',
-  styleUrl: './app-search.component.scss',
+    selector: 'app-search',
+    imports: [RouterLink, LoadingSpinnerComponent, SearchFieldComponent],
+    templateUrl: './app-search.component.html',
+    styleUrl: './app-search.component.scss'
 })
 export class AppSearchComponent {
   private readonly api = inject(ApiService);

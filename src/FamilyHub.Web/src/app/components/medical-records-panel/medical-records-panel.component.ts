@@ -116,18 +116,17 @@ let nextInstanceId = 0;
  * распознавания вместо статичной строки.
  */
 @Component({
-  selector: 'app-medical-records-panel',
-  standalone: true,
-  imports: [
-    NgTemplateOutlet,
-    FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
-    ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
-    AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
-    ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
-    AttachmentListComponent,
-  ],
-  templateUrl: './medical-records-panel.component.html',
-  styleUrl: './medical-records-panel.component.scss',
+    selector: 'app-medical-records-panel',
+    imports: [
+        NgTemplateOutlet,
+        FormsModule, LoadingSpinnerComponent, BottomSheetComponent, SearchFieldComponent,
+        ExpandableComponent, PipelineProgressComponent, KbCardComponent, StatusChipComponent,
+        AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
+        ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
+        AttachmentListComponent,
+    ],
+    templateUrl: './medical-records-panel.component.html',
+    styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly kind = input.required<MedicalRecordKind>();

@@ -24,11 +24,10 @@ interface JobSection {
  * компонент можно без внешней условной логики на стороне вызывающего шаблона.
  */
 @Component({
-  selector: 'app-background-jobs-dropdown',
-  standalone: true,
-  imports: [BottomSheetComponent],
-  templateUrl: './background-jobs-dropdown.component.html',
-  styleUrl: './background-jobs-dropdown.component.scss',
+    selector: 'app-background-jobs-dropdown',
+    imports: [BottomSheetComponent],
+    templateUrl: './background-jobs-dropdown.component.html',
+    styleUrl: './background-jobs-dropdown.component.scss'
 })
 export class BackgroundJobsDropdownComponent {
   readonly jobs = inject(BackgroundJobsStateService);

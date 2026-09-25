@@ -40,10 +40,9 @@ const ERROR_MESSAGES: Record<string, string> = {
  * и уход со страницы переспрашиваются (unsavedChangesGuard + beforeunload).
  */
 @Component({
-  selector: 'app-admin-credentials',
-  standalone: true,
-  imports: [DatePipe, SidePanelComponent, AdminStatusPipe],
-  templateUrl: './admin-credentials.component.html',
+    selector: 'app-admin-credentials',
+    imports: [DatePipe, SidePanelComponent, AdminStatusPipe],
+    templateUrl: './admin-credentials.component.html'
 })
 export class AdminCredentialsComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);

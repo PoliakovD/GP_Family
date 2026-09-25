@@ -20,10 +20,9 @@ import { pluralizeRu } from '../../shared/util/pluralize';
  * шапка с «Изменить»/«Удалить» самой аптечки, переехавшими с уже неактуальной строки списка.
  */
 @Component({
-  selector: 'app-medkit-detail-page',
-  standalone: true,
-  imports: [FormsModule, BackLinkComponent, ModalComponent, LoadingSpinnerComponent, MedicationsPanelComponent],
-  templateUrl: './medkit-detail-page.component.html',
+    selector: 'app-medkit-detail-page',
+    imports: [FormsModule, BackLinkComponent, ModalComponent, LoadingSpinnerComponent, MedicationsPanelComponent],
+    templateUrl: './medkit-detail-page.component.html'
 })
 export class MedkitDetailPageComponent implements OnInit, OnDestroy {
   readonly id = input.required<string>();

@@ -20,10 +20,9 @@ import { WebSearchValveStore } from '../shared/web-search-valve.store';
  * см. ReferenceRangeMerger), но UI один на обе темы.
  */
 @Component({
-  selector: 'app-admin-web-search',
-  standalone: true,
-  imports: [FormsModule, DatePipe, TopicSwitchComponent],
-  templateUrl: './admin-web-search.component.html',
+    selector: 'app-admin-web-search',
+    imports: [FormsModule, DatePipe, TopicSwitchComponent],
+    templateUrl: './admin-web-search.component.html'
 })
 export class AdminWebSearchComponent implements OnInit {
   private readonly api = inject(AdminApiService);

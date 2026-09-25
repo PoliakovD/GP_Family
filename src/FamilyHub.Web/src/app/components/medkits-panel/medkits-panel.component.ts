@@ -11,11 +11,10 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { pluralizeRu } from '../../shared/util/pluralize';
 
 @Component({
-  selector: 'app-medkits-panel',
-  standalone: true,
-  imports: [FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
-  templateUrl: './medkits-panel.component.html',
-  styleUrl: './medkits-panel.component.scss',
+    selector: 'app-medkits-panel',
+    imports: [FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
+    templateUrl: './medkits-panel.component.html',
+    styleUrl: './medkits-panel.component.scss'
 })
 export class MedkitsPanelComponent implements OnInit {
   readonly familyId = input.required<string>();

@@ -110,10 +110,9 @@ const EMPTY_REF_RANGE = (): RefRangeRow => ({
  *   тихо теряет текст.
  */
 @Component({
-  selector: 'app-admin-payload-editor',
-  standalone: true,
-  imports: [FormsModule],
-  templateUrl: './admin-payload-editor.component.html',
+    selector: 'app-admin-payload-editor',
+    imports: [FormsModule],
+    templateUrl: './admin-payload-editor.component.html'
 })
 export class AdminPayloadEditorComponent implements OnChanges {
   @Input({ required: true }) schema!: PayloadEditorSchema;

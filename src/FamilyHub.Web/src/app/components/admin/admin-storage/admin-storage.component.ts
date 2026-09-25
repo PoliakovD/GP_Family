@@ -3,10 +3,9 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { AdminApiService, AdminStorageStats } from '../../../services/admin-api.service';
 
 @Component({
-  selector: 'app-admin-storage',
-  standalone: true,
-  imports: [DatePipe, DecimalPipe],
-  templateUrl: './admin-storage.component.html',
+    selector: 'app-admin-storage',
+    imports: [DatePipe, DecimalPipe],
+    templateUrl: './admin-storage.component.html'
 })
 export class AdminStorageComponent implements OnInit {
   private readonly api = inject(AdminApiService);

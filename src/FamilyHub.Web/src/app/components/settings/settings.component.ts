@@ -9,9 +9,8 @@ import { RouterOutlet } from '@angular/router';
  * '' (settings-menu/settings-menu.component.ts), не таб-строка здесь.
  */
 @Component({
-  selector: 'app-settings',
-  standalone: true,
-  imports: [RouterOutlet],
-  templateUrl: './settings.component.html',
+    selector: 'app-settings',
+    imports: [RouterOutlet],
+    templateUrl: './settings.component.html'
 })
 export class SettingsComponent {}

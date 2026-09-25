@@ -40,23 +40,22 @@ interface SidebarItem {
 }
 
 @Component({
-  selector: 'app-root',
-  standalone: true,
-  imports: [
-    RouterOutlet,
-    RouterLink,
-    DevPanelComponent,
-    ToastContainerComponent,
-    ConfirmDialogComponent,
-    LoadingSpinnerComponent,
-    CookieBannerComponent,
-    BottomSheetComponent,
-    AvatarComponent,
-    AppSearchComponent,
-    SearchFieldComponent,
-    BackgroundJobsDropdownComponent,
-  ],
-  templateUrl: './app.component.html',
+    selector: 'app-root',
+    imports: [
+        RouterOutlet,
+        RouterLink,
+        DevPanelComponent,
+        ToastContainerComponent,
+        ConfirmDialogComponent,
+        LoadingSpinnerComponent,
+        CookieBannerComponent,
+        BottomSheetComponent,
+        AvatarComponent,
+        AppSearchComponent,
+        SearchFieldComponent,
+        BackgroundJobsDropdownComponent,
+    ],
+    templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
   readonly state = inject(FamilyStateService);

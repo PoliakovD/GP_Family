@@ -14,16 +14,15 @@ import { AvatarComponent, type AvatarPerson } from '../avatar/avatar.component';
  * (см. .person-chip-btn ниже) и сама решает, что делает клик; `selected` только красит рамку.
  */
 @Component({
-  selector: 'app-person-chip',
-  standalone: true,
-  imports: [AvatarComponent],
-  template: `
+    selector: 'app-person-chip',
+    imports: [AvatarComponent],
+    template: `
     <span class="person-chip" [class.person-chip-selected]="selected()" [title]="fullLabel()">
       <app-avatar [person]="avatarPerson()" size="sm" />
       <span class="person-chip-label">{{ shortLabel() }}</span>
     </span>
   `,
-  styleUrl: './person-chip.component.scss',
+    styleUrl: './person-chip.component.scss'
 })
 export class PersonChipComponent {
   readonly avatarPerson = input.required<AvatarPerson>();

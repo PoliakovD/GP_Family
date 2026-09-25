@@ -41,11 +41,10 @@ let nextInstanceId = 0;
  * случая "несколько страниц одного документа".
  */
 @Component({
-  selector: 'app-record-batch-add',
-  standalone: true,
-  imports: [NgTemplateOutlet, FileViewerComponent, PersonChipComponent],
-  templateUrl: './record-batch-add.component.html',
-  styleUrl: './record-batch-add.component.scss',
+    selector: 'app-record-batch-add',
+    imports: [NgTemplateOutlet, FileViewerComponent, PersonChipComponent],
+    templateUrl: './record-batch-add.component.html',
+    styleUrl: './record-batch-add.component.scss'
 })
 export class RecordBatchAddComponent implements OnInit, OnDestroy {
   readonly kind = input.required<MedicalRecordKind>();
