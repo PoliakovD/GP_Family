@@ -1,5 +1,6 @@
 using FamilyHub.Api.Health;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace FamilyHub.Api.Startup;
 
@@ -11,8 +12,27 @@ namespace FamilyHub.Api.Startup;
 /// </summary>
 public static class HealthChecksRegistration
 {
+    /// <summary>Встроенная проверка MassTransit (8.x регистрирует её сама с тегами "ready"/"masstransit").</summary>
+    public const string BusCheckName = "masstransit-bus";
+
+    /// <summary>Окно после старта процесса, в течение которого шина ещё может законно стартовать.
+    /// Kestrel начинает отвечать РАНЬШЕ, чем MassTransit поднимет шину (особенно Kafka Rider: вход в
+    /// consumer group, а после нечистой остановки брокер ещё ждёт session.timeout.ms «мёртвого»
+    /// члена группы) — без окна /health/ready отвечал бы 503 «Not ready: not started» на каждом
+    /// старте, хотя API уже может работать: события пишутся в EF-outbox и уходят в шину позже.</summary>
+    public static readonly TimeSpan BusStartupGrace = TimeSpan.FromMinutes(2);
+
+    private static DateTime _startedAtUtc = DateTime.UtcNow;
+
+    /// <summary>Входит ли проверка в /health/ready. В окне прогрева проверка шины пропускается,
+    /// дальше — обычная: шина, так и не стартовавшая за BusStartupGrace, честно даёт 503.</summary>
+    public static bool IsReadyCheck(HealthCheckRegistration check, TimeSpan sinceStart) =>
+        check.Tags.Contains("ready") && !(check.Name == BusCheckName && sinceStart < BusStartupGrace);
+
     public static WebApplicationBuilder AddFamilyHubHealthChecks(this WebApplicationBuilder builder)
     {
+        _startedAtUtc = DateTime.UtcNow;
+
         // "llm" — отдельный тег: LM Studio на ноутбуке пользователя за WireGuard, его
         // недоступность (сон/выключен) ожидаема и не должна валить общую готовность (тег "ready").
         builder.Services.AddHealthChecks()
@@ -32,7 +52,7 @@ public static class HealthChecksRegistration
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
         app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
-            Predicate = check => check.Tags.Contains("ready"),
+            Predicate = check => IsReadyCheck(check, DateTime.UtcNow - _startedAtUtc),
         }).AllowAnonymous();
         app.MapHealthChecks("/health/llm", new HealthCheckOptions
         {

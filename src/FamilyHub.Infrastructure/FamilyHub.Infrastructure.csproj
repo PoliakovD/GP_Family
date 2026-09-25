@@ -64,7 +64,6 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="NPOI" />
     <PackageReference Include="SixLabors.ImageSharp" />
-    <PackageReference Include="System.Text.Encoding.CodePages" />
   </ItemGroup>
 
   <!-- Authorization/Authentication-абстракции (IAuthorizationHandler, ClaimsPrincipal-расширения и т.п.)

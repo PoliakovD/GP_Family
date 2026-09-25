@@ -17,32 +17,32 @@
     <!-- Явная версия, совпадающая с Design/Npgsql, чтобы при транзитивном разрешении в
          зависимых проектах не подтягивалась более старая версия (у Npgsql.EntityFrameworkCore.
          PostgreSQL только нижняя граница диапазона). -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
     <!-- Нужен и в startup-проекте (design-time сборка dotnet-ef), и в Infrastructure. -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Label="Событийная шина">
     <!-- 8.5.1 — последняя версия под Apache-2.0 (v9, апрель 2025, ушла на коммерческую лицензию —
          та же история, что и с MediatR). MassTransit.EntityFrameworkCore собран против EF Core
          9.0.1, но резолвится с нашим пиннингом 10.0.9 без конфликтов (см. ADR-0006). -->
-    <PackageVersion Include="MassTransit" Version="8.5.1" />
-    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.1" />
-    <PackageVersion Include="MassTransit.Kafka" Version="8.5.1" />
+    <PackageVersion Include="MassTransit" Version="8.5.10" />
+    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.10" />
+    <PackageVersion Include="MassTransit.Kafka" Version="8.5.10" />
     <!-- Явная версия (не только транзитивная через MassTransit.Kafka) — Confluent.Kafka.Admin
          используется напрямую для явного создания топиков при старте (ADR-0007), и в
          IntegrationTests для raw-проб-консьюмера (KafkaBridgeFlowTests). -->
-    <PackageVersion Include="Confluent.Kafka" Version="2.11.0" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.15.1" />
   </ItemGroup>
 
   <ItemGroup Label="Фоновые задачи (Hangfire)">
-    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.23" />
-    <PackageVersion Include="Hangfire.Core" Version="1.8.23" />
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.Core" Version="1.8.25" />
     <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />
   </ItemGroup>
 
@@ -54,12 +54,12 @@
   </ItemGroup>
 
   <ItemGroup Label="Почта / Push / Хранилище / Telegram">
-    <PackageVersion Include="MailKit" Version="4.17.0" />
-    <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.0.102.3" />
+    <PackageVersion Include="MailKit" Version="4.18.0" />
+    <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.0.105.1" />
     <PackageVersion Include="WebPush" Version="1.0.13" />
     <PackageVersion Include="Minio" Version="7.0.0" />
-    <PackageVersion Include="Telegram.Bot" Version="22.10.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <PackageVersion Include="Telegram.Bot" Version="22.10.3.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Label="Документы / изображения (конвейер распознавания)">
@@ -69,33 +69,42 @@
          чужой уже скомпилированной сборки. Явный пиннинг фиксирует то, что и так резолвится
          транзитивно от PDFtoImage — чтобы версия не расползлась незаметно при будущем добавлении
          другого пакета с более широким диапазоном. -->
-    <PackageVersion Include="PdfPig" Version="0.1.11" />
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
     <PackageVersion Include="PDFtoImage" Version="4.1.1" />
-    <PackageVersion Include="SkiaSharp" Version="2.88.8" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
+    <PackageVersion Include="SkiaSharp" Version="2.88.9" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.9" />
     <PackageVersion Include="NPOI" Version="2.7.4" />
     <!-- Явный пиннинг: NPOI 2.7.4 транзитивно тянет SixLabors.ImageSharp 2.1.10, у которого
          известная DoS-уязвимость (NU1902, GHSA-rxmq-m78w-7wmc) — версия поднята до патченной. -->
     <PackageVersion Include="SixLabors.ImageSharp" Version="2.1.13" />
-    <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Swagger">
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
   <ItemGroup Label="Тесты">
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
-    <PackageVersion Include="FluentAssertions" Version="6.12.1" />
+    <PackageVersion Include="FluentAssertions" Version="6.12.2" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <!-- 3.10.0, не 4.x — совместимость между Testcontainers.PostgreSql/Minio/Kafka. -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="3.10.0" />
     <PackageVersion Include="Testcontainers.Minio" Version="3.10.0" />
     <PackageVersion Include="Testcontainers.Kafka" Version="3.10.0" />
+  </ItemGroup>
+
+
+  <ItemGroup Label="Транзитивные пины (закрытие уязвимых версий)">
+    <!-- Newtonsoft.Json 11.0.1 (транзитивно через Hangfire.Core) — GHSA-5crp-9r3c-p9vr (DoS). -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- SQLitePCLRaw.lib.e_sqlite3 2.1.11 (транзитивно через Microsoft.Data.Sqlite, только тесты) — GHSA-2m69-gcr7-jv3q. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
+    <!-- SSH.NET 2023.0.0 (транзитивно через Testcontainers, только тесты) — GHSA-q939-rpr3-3284. -->
+    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
 
 </Project>
