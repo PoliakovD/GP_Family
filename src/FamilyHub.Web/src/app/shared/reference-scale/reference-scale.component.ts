@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { IndicatorFlag } from '../../models/types';
 
@@ -35,6 +36,9 @@ function formatNumber(n: number): string {
  * пределы домена больше не рисует отдельную стрелку — палочка у края читается как «за пределами»
  * без специального случая (см. geometry() — просто clamp позиции).
  *
+ * Подписи (labels=true) — границы нормы под краями зелёной зоны и значение над засечкой: без них
+ * на шкале не видно, какие именно числа она изображает.
+ *
  * Деградация — штатный случай, не ошибка: если low или high не заданы (RefSource.None/
  * качественный результат без числа), компонент рендерит null. Вызывающая сторона обязана сама
  * решить, что показать вместо шкалы (refText или прочерк) — компонент не пытается угадать.
@@ -42,8 +46,26 @@ function formatNumber(n: number): string {
 @Component({
   selector: 'app-reference-scale',
   standalone: true,
+  imports: [NgTemplateOutlet],
   template: `
     @if (geometry(); as g) {
+      @if (labels()) {
+        <!-- Подписи — HTML-оверлей с left в % поверх SVG: текст внутри SVG не масштабируется
+             как надо и хуже читается на маленьких размерах. -->
+        <div class="rs-wrap" [style.width.px]="g.width" style="max-width:100%">
+          <div class="rs-value" [class.rs-value-bad]="isBad()" [style.left.%]="g.valueLabelPct">{{ valueText() }}</div>
+          <ng-container *ngTemplateOutlet="chart; context: { g: g }" />
+          <div class="rs-bounds">
+            <span [style.left.%]="g.normX1 / g.width * 100">{{ lowText() }}</span>
+            <span [style.left.%]="(g.normX1 + g.normWidth) / g.width * 100">{{ highText() }}</span>
+          </div>
+        </div>
+      } @else {
+        <ng-container *ngTemplateOutlet="chart; context: { g: g }" />
+      }
+    }
+
+    <ng-template #chart let-g="g">
       <svg
         [attr.viewBox]="'0 0 ' + g.width + ' ' + g.height"
         [attr.width]="g.width"
@@ -58,13 +80,28 @@ function formatNumber(n: number): string {
         <rect [attr.x]="g.stickX" [attr.y]="g.stickY" [attr.width]="g.stickWidth" [attr.height]="g.stickHeight"
               rx="1.5" [class]="stickClass()" />
       </svg>
-    }
+    </ng-template>
   `,
   styles: [`
     .rs-track { fill: var(--color-neutral-200); }
     .rs-norm { fill: color-mix(in srgb, var(--color-status-ok) 32%, var(--color-neutral-200)); }
     .rs-stick-ok { fill: var(--color-status-ok-text); }
     .rs-stick-bad { fill: var(--color-status-danger-text); }
+
+    // Подписи: мелко, но читаемо (12px) — границы нормы приглушённые, значение — цветом статуса.
+    .rs-wrap { position: relative; padding: 15px 0; }
+    .rs-wrap svg { display: block; width: 100%; height: auto; }
+    .rs-value, .rs-bounds span {
+      position: absolute;
+      transform: translateX(-50%);
+      font-size: 0.7059rem;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .rs-value { top: 0; font-weight: 600; color: var(--color-status-ok-text); }
+    .rs-value-bad { color: var(--color-status-danger-text); }
+    .rs-bounds { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; }
+    .rs-bounds span { color: var(--color-neutral-600); }
   `],
 })
 export class ReferenceScaleComponent {
@@ -73,14 +110,29 @@ export class ReferenceScaleComponent {
   readonly high = input.required<number | null>();
   readonly unit = input<string | null>(null);
   readonly variant = input<'full' | 'mini'>('full');
+  /** Подписи: границы нормы слева/справа под зоной и само значение над засечкой. */
+  readonly labels = input(false);
 
   /** IndicatorFlag — только для цвета палочки; сама зона нормы всегда зелёная (это она задаёт
    * "что такое норма", а не текущий статус значения). Ровно два состояния — см. докстринг класса. */
   readonly flag = input<number>(IndicatorFlag.Normal);
 
-  readonly stickClass = computed(() =>
-    this.flag() === IndicatorFlag.Normal ? 'rs-stick-ok' : 'rs-stick-bad',
-  );
+  readonly isBad = computed(() => this.flag() !== IndicatorFlag.Normal);
+
+  readonly stickClass = computed(() => (this.isBad() ? 'rs-stick-bad' : 'rs-stick-ok'));
+
+  readonly valueText = computed(() => {
+    const v = this.value();
+    return v === null ? '' : formatNumber(v);
+  });
+  readonly lowText = computed(() => {
+    const low = this.low();
+    return low === null ? '' : formatNumber(low);
+  });
+  readonly highText = computed(() => {
+    const high = this.high();
+    return high === null ? '' : formatNumber(high);
+  });
 
   readonly deviationLabel = computed(() => {
     const v = this.value();
@@ -118,6 +170,8 @@ export class ReferenceScaleComponent {
       width, height, pad: padding,
       trackY: mid - trackHeight / 2, trackHeight, innerWidth,
       normX1, normWidth: normX2 - normX1,
+      // Центр подписи значения — над засечкой, но не ближе ~8% к краю (подпись ≈ 30px шириной).
+      valueLabelPct: Math.min(Math.max((stickCenterX / width) * 100, 8), 92),
       stickX: stickCenterX - stickWidth / 2, stickY: mid - stickHeight / 2, stickWidth, stickHeight,
     };
   });

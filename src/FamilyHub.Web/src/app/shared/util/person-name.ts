@@ -52,6 +52,20 @@ export function shortenDisplayName(fullName: string): string {
   return `${last} ${rest.map((p) => `${initial(p)}.`).join('')}`;
 }
 
+/**
+ * «Фамилия И.О.» для врача из свободного текстового поля записи (`MedicalRecord.doctor` — не
+ * структурные поля, пользователь может ввести что угодно). Сокращаем только то, что похоже на ФИО:
+ * 2–3 слова с заглавной буквы без точек; уже сокращённое («Иванов И.И.»), с должностью («терапевт
+ * Иванов») или произвольный текст остаются как введены.
+ */
+export function shortenDoctorName(raw: string): string {
+  const text = raw.trim();
+  const parts = text.split(/\s+/);
+  if (parts.length < 2 || parts.length > 3) return text;
+  if (!parts.every((p) => /^[А-ЯЁA-Z][а-яёa-z-]+$/.test(p))) return text;
+  return shortenDisplayName(text);
+}
+
 /** Схлопывается корректно без отчества (не у всех есть) во всех трёх стилях. */
 export function formatPersonName(person: PersonNameParts, style: PersonNameStyle): string {
   const last = person.lastName?.trim() ?? '';

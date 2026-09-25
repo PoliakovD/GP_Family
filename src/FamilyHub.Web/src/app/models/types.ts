@@ -678,6 +678,9 @@ export interface RecordSummaryResponse {
     deviations: LabSummaryDeviation[];
     questionsForDoctor: string[];
     disclaimer: string;
+    /** Резюме устарело после ручной правки и пересчитывается в фоне (RecordSummaryRegenerationJob) —
+     * показываем «Обновляем резюме…» и опрашиваем эндпоинт, пока не появится актуальный текст. */
+    pending?: boolean;
 }
 
 // Редизайн v2 — справочник показателей анализов (GET /api/kb/analytes[/{id}]), зеркало

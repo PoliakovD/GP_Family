@@ -62,7 +62,9 @@ public record MyIndicatorSummary(
 
 /// <summary>Форма MedicalRecord.SummaryJson, которую пишет LabSummarizer — используется только
 /// для десериализации на чтении.</summary>
-public record RecordSummaryResponse(string? PlainSummary, IReadOnlyList<LabSummaryDeviation> Deviations, IReadOnlyList<string> QuestionsForDoctor, string Disclaimer);
+/// <summary>Pending — резюме устарело после ручной правки и пересчитывается в фоне (см.
+/// RecordSummaryRegenerationJob); фронт показывает «Обновляем резюме…» и опрашивает эндпоинт.</summary>
+public record RecordSummaryResponse(string? PlainSummary, IReadOnlyList<LabSummaryDeviation> Deviations, IReadOnlyList<string> QuestionsForDoctor, string Disclaimer, bool Pending = false);
 
 /// <summary>Назначенный препарат — ответ на чтение (GET .../conclusion, UX-редизайн). KbMedicationId
 /// резолвится ЖИВЫМ поиском по kb.global_medications_kb при каждом чтении (см.

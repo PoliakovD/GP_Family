@@ -7,6 +7,7 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Pipeline;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using DomainLabIndicator = FamilyHub.Domain.Entities.LabIndicator;
 
@@ -26,7 +27,7 @@ public class ExtractionQueryService(
     Kb.KbAnalyteCatalogService analyteCatalog, IMedicalAuditWriter audit, LabSummarizer summarizer,
     LabAnalyteKbLookupService analyteKbLookup, LabAnalyteEnrichmentRequestService enrichmentRequest,
     ILegitimacyGuardService legitimacyGuard, IAnalytePlausibilityGuardService plausibilityGuard,
-    LlmQueuePositionService queuePositionService)
+    LlmQueuePositionService queuePositionService, IBackgroundJobClient backgroundJobs)
 {
     /// <summary>Заметка 3 — гейты проверяются СИНХРОННО, до постановки обогащения в очередь, а не
     /// только внутри фонового LabAnalyteEnrichmentProcessor (тот же порог для ManualEntry, что уже
@@ -197,15 +198,46 @@ public class ExtractionQueryService(
         var access = await CheckAccessAsync(recordId, userId, ct, writeAudit: true);
         if (access != ExtractionQueryResult.Success) return (access, null);
 
-        var summaryJson = await db.MedicalRecords.AsNoTracking()
-            .Where(r => r.Id == recordId).Select(r => r.SummaryJson).FirstOrDefaultAsync(ct);
-        if (string.IsNullOrEmpty(summaryJson)) return (ExtractionQueryResult.NotFound, null);
+        var state = await db.MedicalRecords.AsNoTracking()
+            .Where(r => r.Id == recordId).Select(r => new { r.SummaryJson, r.SummaryDirtyAt }).FirstOrDefaultAsync(ct);
+        var pending = state?.SummaryDirtyAt is not null;
 
-        var summary = JsonSerializer.Deserialize<LabSummary>(summaryJson);
-        if (summary is null) return (ExtractionQueryResult.NotFound, null);
+        var summary = string.IsNullOrEmpty(state?.SummaryJson) ? null : JsonSerializer.Deserialize<LabSummary>(state.SummaryJson);
+        if (summary is null)
+        {
+            // Пересчёт после правки уже запланирован, но старое резюме нет (или сброшено) —
+            // отвечаем «в работе», а не 404: фронт по Pending показывает «Обновляем резюме…» и
+            // опрашивает эндпоинт, пока текст не появится.
+            return pending
+                ? (ExtractionQueryResult.Success, new RecordSummaryResponse(null, [], [], string.Empty, Pending: true))
+                : (ExtractionQueryResult.NotFound, null);
+        }
 
         return (ExtractionQueryResult.Success, new RecordSummaryResponse(
-            summary.PlainSummary, summary.Deviations, summary.QuestionsForDoctor, summary.Disclaimer));
+            summary.PlainSummary, summary.Deviations, summary.QuestionsForDoctor, summary.Disclaimer, pending));
+    }
+
+    /// <summary>Помечает резюме записи устаревшим и планирует его фоновый пересчёт (см. class doc
+    /// RecordSummaryRegenerationJob — дебаунс по токену). Зовётся после каждой ручной правки,
+    /// меняющей входные данные резюме: показатель добавлен/изменён/удалён, сменён источник записи.
+    /// Сбой постановки в Hangfire не должен ронять саму правку — тогда пометка снимается, и резюме
+    /// остаётся как есть (фронт при следующем открытии всё равно может запросить пересчёт).</summary>
+    private async Task MarkSummaryDirtyAsync(Guid recordId, CancellationToken ct)
+    {
+        var token = RecordSummaryRegenerationJob.NewDirtyToken();
+        await db.MedicalRecords.Where(r => r.Id == recordId)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.SummaryDirtyAt, token), ct);
+        try
+        {
+            var ticks = token.Ticks;
+            backgroundJobs.Schedule<RecordSummaryRegenerationJob>(
+                j => j.RunAsync(recordId, ticks, CancellationToken.None), RecordSummaryRegenerationJob.Delay);
+        }
+        catch
+        {
+            await db.MedicalRecords.Where(r => r.Id == recordId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.SummaryDirtyAt, (DateTime?)null), ct);
+        }
     }
 
     /// <summary>Пересчитывает "Резюме"/"Вопросы врачу" по ТЕКУЩИМ показателям записи — независимо
@@ -229,6 +261,9 @@ public class ExtractionQueryService(
         if (!summarized.Success || summarized.Summary is null) return (ExtractionQueryResult.Failed, null);
 
         record.SummaryJson = JsonSerializer.Serialize(summarized.Summary);
+        // Синхронный пересчёт актуален по определению — снимаем пометку, запланированная джоба
+        // (если есть) увидит null-токен и выйдет.
+        record.SummaryDirtyAt = null;
         await db.SaveChangesAsync(ct);
 
         return (ExtractionQueryResult.Success, new RecordSummaryResponse(
@@ -429,6 +464,7 @@ public class ExtractionQueryService(
         indicator.RefSource = refSource;
 
         await db.SaveChangesAsync(ct);
+        await MarkSummaryDirtyAsync(indicator.MedicalRecordId, ct);
 
         // Промах справочника по (показатель, источник) после правки — ставим обогащение в
         // очередь, тем же единственным входом, что и CreateIndicatorAsync (см. её class doc), но
@@ -498,6 +534,8 @@ public class ExtractionQueryService(
                 return (SetRecordSpecimenResult.Conflict, null);
             }
         }
+
+        if (indicators.Count > 0) await MarkSummaryDirtyAsync(recordId, ct);
 
         // Промах справочника по любому из показателей записи на новую пару — ставим обогащение в
         // очередь, тем же единственным входом, что и Update/CreateIndicatorAsync, но только после
@@ -594,6 +632,7 @@ public class ExtractionQueryService(
         };
         db.LabIndicators.Add(indicator);
         await db.SaveChangesAsync(ct);
+        await MarkSummaryDirtyAsync(recordId, ct);
 
         var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
             .Where(s => s.Id == record.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
@@ -621,8 +660,10 @@ public class ExtractionQueryService(
         if (indicator is null) return DeleteIndicatorResult.NotFound;
         if (indicator.OwnerUserId != userId) return DeleteIndicatorResult.Forbidden;
 
+        var recordId = indicator.MedicalRecordId;
         db.LabIndicators.Remove(indicator);
         await db.SaveChangesAsync(ct);
+        await MarkSummaryDirtyAsync(recordId, ct);
         return DeleteIndicatorResult.Success;
     }
 
