@@ -30,10 +30,12 @@ public static class ExtractionEndpoints
                     code = "already_queued",
                     message = "Распознавание уже в очереди — оно продолжится само, как только локальный сервер станет доступен.",
                 }),
-                ExtractionRequestResult.ServiceUnavailable => Results.Ok(new
+                // 202: задача СОЗДАНА, но ИИ недоступен — ждёт в очереди и запустится сама, когда
+                // сервер вернётся (LmStudioRecoverySweepJob). Пользователю ничего не нужно делать.
+                ExtractionRequestResult.QueuedWaitingForAi => Results.Accepted(null as string, new
                 {
-                    code = "llm_unavailable",
-                    message = "Локальный сервер распознавания пока недоступен, зайдите позже.",
+                    code = "waiting_for_ai",
+                    message = "ИИ сейчас недоступен. Документ сохранён и будет распознан автоматически, как только он вернётся.",
                 }),
                 ExtractionRequestResult.TooManyActiveJobs => Results.Json(
                     new { code = "too_many_active_jobs", message = "Слишком много запущенных распознаваний одновременно — дождитесь, пока часть завершится." },
@@ -88,10 +90,8 @@ public static class ExtractionEndpoints
             {
                 ExtractionQueryResult.NotFound => Results.NotFound(),
                 ExtractionQueryResult.Forbidden => Results.Forbid(),
-                ExtractionQueryResult.Failed => Results.Json(
-                    new { code = "summary_regeneration_failed", message = "Не удалось пересчитать резюме — локальный сервер распознавания недоступен или не смог обработать показатели." },
-                    statusCode: StatusCodes.Status502BadGateway),
-                _ => Results.Ok(item),
+                // 202: пересчёт поставлен в фон и выполнится сам (при недоступном ИИ — как только он вернётся).
+                _ => Results.Accepted(null as string, item),
             };
         }).RequireRateLimiting("llm");
 
@@ -119,6 +119,21 @@ public static class ExtractionEndpoints
                 // отклонил обогащение справочника хотя бы для одного показателя под новым
                 // источником; сама правка при этом не блокируется.
                 _ => warning is not null ? Results.Ok(new { warning }) : Results.NoContent(),
+            };
+        });
+
+        // Биоматериал введён при недоступном ИИ (POST /api/specimens ответил 503) — проверка
+        // откладывается до возвращения сервера, запись ничего не теряет (см. SetPendingSpecimenAsync).
+        records.MapPut("/{recordId:guid}/specimen-pending", async (
+            Guid recordId, SetPendingSpecimenRequest body, ExtractionQueryService service, ICurrentUser currentUser, CancellationToken ct) =>
+        {
+            var result = await service.SetPendingSpecimenAsync(recordId, currentUser.UserId, body.Name, ct);
+            return result switch
+            {
+                SetPendingSpecimenResult.NotFound => Results.NotFound(),
+                SetPendingSpecimenResult.Forbidden => Results.Forbid(),
+                SetPendingSpecimenResult.InvalidInput => Results.BadRequest(new { code = "invalid_input" }),
+                _ => Results.NoContent(),
             };
         });
 

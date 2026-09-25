@@ -91,7 +91,7 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
     }
 
     [Fact]
-    public async Task RegenerateSummary_WithIndicators_LmStudioUnavailable_ReturnsBadGateway_NotUnhandledError()
+    public async Task RegenerateSummary_WithIndicators_LmStudioUnavailable_IsQueuedNotLost()
     {
         var owner = ClientAs(FreshTelegramId());
         var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
@@ -100,8 +100,11 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
 
         var response = await owner.PostAsync($"/api/medical-records/{recordId}/summary/regenerate", null);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadGateway,
-            "LM Studio недоступен в тестовом хосте (см. class doc) — эндпоинт обязан отдать аккуратный 502, не 5xx-исключение");
+        // Раньше здесь был синхронный вызов LLM и 502. Теперь пересчёт ставится в очередь и
+        // переживает недоступность ИИ: 202 + pending, пометка SummaryDirtyAt остаётся до возвращения сервера.
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        (await response.Content.ReadFromJsonAsync<RecordSummaryResponse>(JsonOpts))!.Pending.Should().BeTrue();
+        (await GetDirtyAtAsync(recordId)).Should().NotBeNull();
     }
 
     private async Task<DateTime?> GetDirtyAtAsync(Guid recordId)
@@ -144,7 +147,7 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
     }
 
     [Fact]
-    public async Task SummaryJob_WithStaleToken_IsNoOp_WithCurrentToken_ClearsDirtyFlag()
+    public async Task SummaryJob_WithStaleToken_IsNoOp_AndWhenAiUnavailable_KeepsDirtyFlag()
     {
         var owner = ClientAs(FreshTelegramId());
         var specimenId = await SeedSpecimenAsync($"Кровь {Guid.NewGuid():N}");
@@ -155,10 +158,12 @@ public class RegenerateSummaryApiTests(FamilyHubWebFactory factory) : Integratio
         await RunJobAsync(recordId, token.Ticks - 10);
         (await GetDirtyAtAsync(recordId)).Should().Be(token, "джоба со старым токеном — устаревшая, свежая уже в пути");
 
-        // LM Studio в тестовом хосте недоступен: пересчёт не удаётся, резюме сбрасывается, но
-        // пометка снимается — фронт не должен вечно показывать «Обновляем резюме…».
+        // LM Studio в тестовом хосте недоступен: пересчёт НЕ теряется — пометка остаётся, резюме
+        // помечено pending, а досыпом займётся LmStudioRecoverySweepJob, когда ИИ вернётся.
         await RunJobAsync(recordId, token.Ticks);
-        (await GetDirtyAtAsync(recordId)).Should().BeNull();
-        (await owner.GetAsync($"/api/medical-records/{recordId}/summary")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetDirtyAtAsync(recordId)).Should().Be(token);
+        var response = await owner.GetAsync($"/api/medical-records/{recordId}/summary");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<RecordSummaryResponse>(JsonOpts))!.Pending.Should().BeTrue();
     }
 }

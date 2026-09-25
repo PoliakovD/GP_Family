@@ -193,6 +193,13 @@
              источник показан в мета-строке шапки, а меняется в форме «Редактировать» (поле
              «Биоматериал», каскадится на все показатели записи); здесь остаётся только баннер
              «уточните источник», когда модель не смогла определить локализацию. -->
+        @if (item.kind === Kind.Analysis && item.pendingSpecimenText) {
+          <div class="alert-info mb-2" style="font-size:0.7647rem">
+            <i class="ph ph-hourglass" aria-hidden="true"></i>
+            Биоматериал «{{ item.pendingSpecimenText }}» ждёт проверки: ИИ сейчас недоступен, название
+            будет проверено и применено автоматически, как только он вернётся.
+          </div>
+        }
         @if (item.kind === Kind.Analysis && item.specimenHint && canDelete(item)) {
           <div class="alert-info mb-2" style="font-size:0.7647rem">
             Уточните источник: «{{ item.specimenHint }}» — откуда именно?
@@ -219,7 +226,12 @@
           @if (summaryByRecord[item.id]; as summary) {
             @if (summary.pending) {
               <p class="muted mb-1" style="font-size:0.7647rem">
-                <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновляем резюме по вашим правкам…
+                @if (ai.unavailable()) {
+                  <i class="ph ph-hourglass" aria-hidden="true"></i>
+                  Ждём ИИ — резюме обновится автоматически, как только он станет доступен.
+                } @else {
+                  <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновляем резюме по вашим правкам…
+                }
               </p>
             }
             @if (summary.plainSummary) {
@@ -303,7 +315,11 @@
                         class="tag tag-neutral"
                         [title]="indicatorEnrichmentTitle(ind)"
                       >
-                        <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+                        @if (ind.enrichmentWaitingForAi) {
+                          <i class="ph ph-hourglass" aria-hidden="true"></i> ждём ИИ…
+                        } @else {
+                          <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+                        }
                       </span>
                     }
                   </td>
@@ -378,7 +394,11 @@
                         class="tag tag-neutral"
                         [title]="indicatorEnrichmentTitle(ind)"
                       >
-                        <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+                        @if (ind.enrichmentWaitingForAi) {
+                          <i class="ph ph-hourglass" aria-hidden="true"></i> ждём ИИ…
+                        } @else {
+                          <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+                        }
                       </span>
                     }
                   </div>
@@ -766,6 +786,10 @@
           <div class="muted mb-2" style="font-size:0.7647rem">Проверяем источник…</div>
         } @else if (customSpecimenError) {
           <div class="alert-danger mb-2" style="font-size:0.7647rem">{{ customSpecimenError }}</div>
+        } @else if (specimenCheckDeferred) {
+          <div class="muted mb-2" style="font-size:0.7647rem">
+            ИИ недоступен — название сохранится и будет проверено автоматически, когда он вернётся.
+          </div>
         } @else {
           <div class="mb-2"></div>
         }

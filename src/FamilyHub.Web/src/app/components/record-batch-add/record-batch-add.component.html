@@ -106,6 +106,13 @@
       @if (stoppedByLimit) {
         <div class="alert-danger mb-2">{{ stoppedByLimit }}</div>
       }
+      @if (waitingForAi) {
+        <div class="alert-info mb-2">
+          <i class="ph ph-hourglass" aria-hidden="true"></i>
+          ИИ сейчас недоступен. Документы сохранены и будут распознаны автоматически, как только он
+          вернётся — их можно не загружать повторно.
+        </div>
+      }
     </div>
 
     @if (done()) {

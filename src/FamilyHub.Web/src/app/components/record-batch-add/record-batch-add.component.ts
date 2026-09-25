@@ -68,6 +68,9 @@ export class RecordBatchAddComponent implements OnInit, OnDestroy {
   running = signal(false);
   done = signal(false);
   stoppedByLimit: string | null = null;
+  /** Хотя бы один документ поставлен в очередь при недоступном ИИ (ответ waiting_for_ai) — говорим,
+   * что ничего не потеряно и распознавание стартует само. */
+  waitingForAi = false;
   attachmentLimits: AttachmentLimits | null = null;
   extractionLimits: ExtractionLimits | null = null;
 
@@ -193,6 +196,7 @@ export class RecordBatchAddComponent implements OnInit, OnDestroy {
     this.running.set(true);
     this.done.set(false);
     this.stoppedByLimit = null;
+    this.waitingForAi = false;
 
     const recordDate = todayIso();
     const items = this.items();
@@ -215,7 +219,8 @@ export class RecordBatchAddComponent implements OnInit, OnDestroy {
         this.setItemStatus(i, { status: 'uploading', recordId: created.id });
 
         await this.api.uploadAttachment(created.id, items[i].file);
-        await this.api.requestExtraction(created.id);
+        const extraction = await this.api.requestExtraction(created.id);
+        if (extraction?.code === 'waiting_for_ai') this.waitingForAi = true;
         this.setItemStatus(i, { status: 'queued' });
       } catch (err) {
         const limitMessage = this.describeLimitError(err);

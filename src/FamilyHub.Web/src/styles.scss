@@ -1026,6 +1026,30 @@ select.input {
   position: relative;
 }
 
+// Глобальная плашка «ИИ временно недоступен» (AiStatusService) — под топбаром, над контентом.
+.ai-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--color-status-warning) 12%, var(--color-paper));
+  border: 1px solid color-mix(in srgb, var(--color-status-warning) 30%, var(--color-paper));
+  border-left: 4px solid var(--color-status-warning);
+  color: var(--color-status-warning-text);
+  font-size: var(--font-size-meta);
+  line-height: 1.45;
+
+  > i {
+    flex: none;
+    font-size: 1.4118rem;
+  }
+
+  strong {
+    font-weight: 600;
+  }
+}
+
 .app-sidebar-kicker {
   font-family: var(--font-heading);
   font-weight: 600;

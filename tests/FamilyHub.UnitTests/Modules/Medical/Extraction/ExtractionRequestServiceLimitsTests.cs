@@ -5,6 +5,7 @@ using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Hangfire;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -24,8 +25,34 @@ public class ExtractionRequestServiceLimitsTests : SqliteTestBase
     private readonly IBackgroundJobClient _backgroundJobs = Substitute.For<IBackgroundJobClient>();
     private readonly ILmStudioAvailabilityProbe _probe = Substitute.For<ILmStudioAvailabilityProbe>();
 
+    public ExtractionRequestServiceLimitsTests()
+    {
+        // По умолчанию ИИ доступен — иначе постановка уходила бы в «ждёт ИИ» и не в Hangfire.
+        _probe.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+    }
+
     private ExtractionRequestService CreateSut(ExtractionLimitsOptions limits) =>
         new(Db, _backgroundJobs, _probe, Options.Create(limits), NullLogger<ExtractionRequestService>.Instance);
+
+    /// <summary>ИИ недоступен: задача создаётся (пользователь ничего не теряет), помечается
+    /// WaitingForAi и НЕ уходит в Hangfire — её запустит LmStudioRecoverySweepJob, когда сервер вернётся.</summary>
+    [Fact]
+    public async Task RequestAsync_AiUnavailable_CreatesWaitingJob_WithoutEnqueuing()
+    {
+        var userId = Guid.NewGuid();
+        var recordId = SeedRecordWithPendingAttachment(userId);
+        _probe.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(false);
+        var sut = CreateSut(new ExtractionLimitsOptions { MaxActiveJobsPerUser = 5, DailyJobsPerUser = 100 });
+
+        var result = await sut.RequestAsync(recordId, userId);
+
+        result.Should().Be(ExtractionRequestResult.QueuedWaitingForAi);
+        var job = Db.MedicalDocumentExtractionJobs.Single(j => j.MedicalRecordId == recordId);
+        job.Status.Should().Be(EnrichmentJobStatus.Pending);
+        job.WaitingForAi.Should().BeTrue();
+        _backgroundJobs.ReceivedCalls().Should().BeEmpty("в очередь Hangfire задача попадёт только через sweep, когда ИИ вернётся");
+        Db.MedicalRecords.AsNoTracking().Single(r => r.Id == recordId).ExtractionStatus.Should().Be(ExtractionStatus.Pending);
+    }
 
     /// <summary>Запись + одно необработанное вложение — минимум, необходимый RequestAsync, чтобы
     /// дойти ДО проверки лимитов (NotFound/Forbidden/NothingToDo проверяются раньше в коде).</summary>

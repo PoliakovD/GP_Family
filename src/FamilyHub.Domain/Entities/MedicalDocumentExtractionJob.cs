@@ -51,6 +51,11 @@ public class MedicalDocumentExtractionJob : IPipelineJob
     /// возвращает их в очередь, когда сервер снова станет доступен.</summary>
     public bool IsTransientFailure { get; set; }
 
+    /// <summary>true — задача ЖДЁТ ИИ: LM Studio недоступен (при постановке или посреди прогона),
+    /// задача остаётся Pending и не сгорает по [AutomaticRetry]; LmStudioRecoverySweepJob запускает её
+    /// (сбрасывая флаг), как только сервер снова отвечает. Фронт показывает «ждём ИИ» вместо ошибки.</summary>
+    public bool WaitingForAi { get; set; }
+
     /// <summary>Живой обрывок текста внутри ещё не закрытого &lt;think&gt; модели, пока задача
     /// реально думает (план "живой поток мыслей") — null, когда модель сейчас не думает вслух
     /// (между вызовами, security-гейты, &lt;think&gt; уже закрылся) или задача не Running.

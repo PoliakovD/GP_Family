@@ -210,7 +210,8 @@ export class RecordAddComponent implements OnInit, OnDestroy {
       // OCR — ждать его не задерживает навигацию заметно.
       const uploadedCount = this.pendingFiles.length - uploadFailed;
       if (this.autoRecognize && uploadedCount > 0) {
-        await this.api.requestExtraction(created.id).catch(() => {});
+        const extraction = await this.api.requestExtraction(created.id).catch(() => null);
+        if (extraction?.code === 'waiting_for_ai') this.toast.info(extraction.message ?? 'ИИ недоступен — документ будет распознан позже.');
       }
 
       this.clearPendingFiles();

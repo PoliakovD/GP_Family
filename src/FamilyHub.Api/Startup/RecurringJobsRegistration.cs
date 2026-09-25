@@ -41,13 +41,14 @@ public static class RecurringJobsRegistration
             job => job.RunAsync(CancellationToken.None),
             "0 4 * * *");
 
-        // Досып задач, упавших технически из-за недоступного LM Studio (ноутбук выключен/спит) — каждые
-        // 5 минут проверяет доступность и возвращает такие задачи в очередь, как только сервер снова
-        // отвечает (см. класс-doc LmStudioRecoverySweepJob, план часть 1.4).
+        // Досып задач, ждущих ИИ (LM Studio недоступен: ноутбук выключен/спит) — каждую минуту проверяет
+        // доступность и запускает ждавшие распознавания/резюме/биоматериалы, как только сервер снова
+        // отвечает (см. класс-doc LmStudioRecoverySweepJob). Раз в минуту, а не в 5, — пользователь
+        // видит «ждём ИИ» и не должен ждать лишние минуты после возвращения сервера.
         app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<LmStudioRecoverySweepJob>(
             "lmstudio-recovery-sweep",
             job => job.RunAsync(CancellationToken.None),
-            "*/5 * * * *");
+            "* * * * *");
 
         return app;
     }

@@ -61,7 +61,7 @@ public class LabSummarizer(ILmStudioJsonClient client, IPromptProvider promptPro
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация анализа не удалась: {Error}", result.Error);
-            return LabSummaryResult.Failure(result.Error ?? "Модель не вернула структурированный ответ.");
+            return LabSummaryResult.Failure(result.Error ?? "Модель не вернула структурированный ответ.", result.IsTransient);
         }
 
         var usedNames = ReadStringArray(result.Payload, "usedIndicatorNames");
@@ -137,8 +137,10 @@ public record LabSummaryDeviation(string Name, string Meaning);
 
 public record LabSummary(string? PlainSummary, IReadOnlyList<LabSummaryDeviation> Deviations, IReadOnlyList<string> QuestionsForDoctor, string Disclaimer);
 
-public record LabSummaryResult(bool Success, LabSummary? Summary, string? Error)
+/// <summary>IsTransient — сбой технический (LM Studio недоступен/перегружен), а не смысловой отказ
+/// модели или гейта: повторить позже имеет смысл, см. RecordSummaryRegenerationJob.</summary>
+public record LabSummaryResult(bool Success, LabSummary? Summary, string? Error, bool IsTransient = false)
 {
     public static LabSummaryResult Ok(LabSummary summary) => new(true, summary, null);
-    public static LabSummaryResult Failure(string error) => new(false, null, error);
+    public static LabSummaryResult Failure(string error, bool isTransient = false) => new(false, null, error, isTransient);
 }

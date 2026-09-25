@@ -1,5 +1,6 @@
 using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Features.Admin;
+using FamilyHub.Api.Features.Ai;
 using FamilyHub.Api.Features.Auth;
 using FamilyHub.Api.Features.Account;
 using FamilyHub.Api.Features.Bot;
@@ -110,6 +111,7 @@ try
     // Глобальный индикатор фоновых процессов содержит медданные (названия записей/показателей/
     // препаратов) — та же консент-гарантия, что у Главной/Medical выше.
     app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapUserJobsEndpoints();
+    app.MapAiStatusEndpoints();
     app.MapNotificationEndpoints();
     app.MapPushEndpoints();
     if (internalBotApiConfigured)

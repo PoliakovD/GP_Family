@@ -135,6 +135,18 @@
       @if (showTabs() && state.loading()) {
         <app-loading-spinner />
       }
+      @if (showTabs() && ai.unavailable()) {
+        <!-- Локальный ИИ (LM Studio) недоступен: задачи не теряются, а ждут в очереди — говорим об
+             этом сразу, чтобы «в процессе» на записях не выглядело как зависание. -->
+        <div class="ai-banner" role="status">
+          <i class="ph-duotone ph-moon-stars" aria-hidden="true"></i>
+          <div>
+            <strong>ИИ временно недоступен.</strong>
+            Новые документы, резюме и другие задачи ждут в очереди и будут обработаны автоматически,
+            как только он вернётся — ничего повторно нажимать не нужно.
+          </div>
+        </div>
+      }
 
       <router-outlet></router-outlet>
     </main>

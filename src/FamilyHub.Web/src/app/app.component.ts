@@ -4,6 +4,7 @@ import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
 import { NotificationStateService } from './services/notification-state.service';
 import { BackgroundJobsStateService } from './services/background-jobs-state.service';
+import { AiStatusService } from './services/ai-status.service';
 import { PageActionService } from './services/page-action.service';
 import { BreakpointService } from './services/breakpoint.service';
 import { AuthService } from './services/auth.service';
@@ -62,6 +63,7 @@ export class AppComponent implements OnInit {
   readonly auth = inject(AuthService);
   readonly notifications = inject(NotificationStateService);
   readonly backgroundJobs = inject(BackgroundJobsStateService);
+  readonly ai = inject(AiStatusService);
   readonly pageAction = inject(PageActionService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly tg = inject(TelegramService);
@@ -192,6 +194,7 @@ export class AppComponent implements OnInit {
         this.state.refresh();
         void this.notifications.refresh();
         void this.backgroundJobs.refresh();
+        this.ai.start();
         void this.tryRedeemPendingInvite();
       }
     }, { allowSignalWrites: true });
@@ -209,6 +212,7 @@ export class AppComponent implements OnInit {
         this.state.refresh();
         void this.notifications.refresh();
         void this.backgroundJobs.refresh();
+        this.ai.start();
         void this.auth.loadMe();
         void this.tryRedeemPendingInvite();
       }

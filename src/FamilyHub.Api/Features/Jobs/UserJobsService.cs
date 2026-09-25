@@ -14,10 +14,12 @@ namespace FamilyHub.Api.Features.Jobs;
 /// LmStudioConcurrencyGate сериализует все вызовы LM Studio, значит "думает" всегда только одна
 /// задача из всех четырёх таблиц одновременно, остальные Pending просто ждут очередь. QueueAhead
 /// — сколько задач из ЛЮБОГО из четырёх конвейеров реально стоят раньше этой в общей очереди к
-/// LLM (см. LlmQueuePositionService) — 0 у той самой строки, что реально держит гейт прямо сейчас.</summary>
+/// LLM (см. LlmQueuePositionService) — 0 у той самой строки, что реально держит гейт прямо сейчас.
+/// WaitingForAi — распознавание ждёт, пока вернётся ИИ (LM Studio недоступен): позиция в очереди
+/// к модели тогда не показывается, UI пишет «ждём ИИ».</summary>
 public record ActiveJobItem(
     Guid JobId, string Label, Guid? RecordId, NotificationRelatedKind? RecordKind, DateTime CreatedAt,
-    string? LiveText = null, int QueueAhead = 0);
+    string? LiveText = null, int QueueAhead = 0, bool WaitingForAi = false);
 
 /// <summary>Total — реальный COUNT (для бейджа), Items — top-N старейших (для выпадающего списка,
 /// не грузим сотни строк ради индикатора).</summary>
@@ -65,7 +67,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(j => j.CreatedAt).Take(MaxItemsPerGroup)
-            .Select(j => new { j.Id, j.MedicalRecordId, j.CreatedAt, j.CurrentThought })
+            .Select(j => new { j.Id, j.MedicalRecordId, j.CreatedAt, j.CurrentThought, j.WaitingForAi })
             .ToListAsync(ct);
         if (rows.Count == 0) return new ActiveJobsGroup(total, []);
 
@@ -77,14 +79,14 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
         var items = rows.Select(r =>
         {
-            var queueAhead = LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt);
+            var queueAhead = r.WaitingForAi ? 0 : LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt);
             if (!records.TryGetValue(r.MedicalRecordId, out var mr))
-                return new ActiveJobItem(r.Id, "Медицинская запись", null, null, r.CreatedAt, r.CurrentThought, queueAhead);
+                return new ActiveJobItem(r.Id, "Медицинская запись", null, null, r.CreatedAt, r.CurrentThought, queueAhead, r.WaitingForAi);
 
             var isVisit = mr.Kind == MedicalRecordKind.DoctorVisit;
             var label = mr.Title ?? (isVisit ? "Приём врача" : "Анализ");
             var kind = isVisit ? NotificationRelatedKind.MedicalRecordVisit : NotificationRelatedKind.MedicalRecordAnalysis;
-            return new ActiveJobItem(r.Id, label, mr.Id, kind, r.CreatedAt, r.CurrentThought, queueAhead);
+            return new ActiveJobItem(r.Id, label, mr.Id, kind, r.CreatedAt, r.CurrentThought, queueAhead, r.WaitingForAi);
         }).ToList();
 
         return new ActiveJobsGroup(total, items);

@@ -79,7 +79,9 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация «{DisplayName}» не удалась: {Error}", displayName, result.Error);
-            return SummarizeResult.Failure(result.Error ?? "Модель не вернула структурированный ответ.");
+            return SummarizeResult.Failure(
+                result.Error ?? "Модель не вернула структурированный ответ.",
+                result.IsTransient ? EnrichmentFailureReason.LmStudioUnavailable : EnrichmentFailureReason.SummarizerFailed);
         }
 
         var usedIndexes = ReadIndexArray(result.Payload, "usedSourceIndexes")

@@ -50,7 +50,7 @@ public static class LmStudioRegistration
 
         // Доступность LM Studio (GET /v1/models) — общая реализация для /health/llm и
         // LmStudioRecoverySweepJob (см. класс-doc ILmStudioAvailabilityProbe).
-        builder.Services.AddScoped<ILmStudioAvailabilityProbe, LmStudioAvailabilityProbe>();
+        builder.Services.AddSingleton<ILmStudioAvailabilityProbe, LmStudioAvailabilityProbe>();
 
         return builder;
     }

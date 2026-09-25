@@ -7,6 +7,7 @@ import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
 import { PageActionService } from '../../services/page-action.service';
+import { AiStatusService } from '../../services/ai-status.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import {
   ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
@@ -58,6 +59,8 @@ const EXTRACTION_TERMINAL_STATUSES: number[] = [
 ];
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
+/** Опрос статуса задачи, пока она ждёт возвращения ИИ (LM Studio) — реже обычного. */
+const WAITING_POLL_INTERVAL_MS = 10_000;
 /** Подряд неудачных опросов статуса, после которых поллинг реально останавливается — 5 × 1.5с ≈
  * 7.5с непрерывных сбоев переживает короткий блип сети/фоновую вкладку, не маскирует настоящий
  * обрыв связи навсегда. См. pollFailureCounts. */
@@ -141,6 +144,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  readonly ai = inject(AiStatusService);
   private readonly confirm = inject(ConfirmService);
   private readonly pageAction = inject(PageActionService);
   private readonly router = inject(Router);
@@ -158,6 +162,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
    * задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
   indicatorEnrichmentTitle(ind: IndicatorDto): string {
+    if (ind.enrichmentWaitingForAi) return 'ИИ недоступен — уточнение нормы продолжится автоматически, когда он вернётся';
     return enrichmentStatusTitle(
       ind.enrichmentLiveText, ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
   }
@@ -245,6 +250,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * шёл дальше, а UI считал, что распознавание остановилось"). Останавливаем поллинг только после
    * MAX_CONSECUTIVE_POLL_FAILURES подряд неудач — это уже похоже на настоящий обрыв связи, не блип. */
   private readonly pollFailureCounts = new Map<string, number>();
+  /** Записи, чей поллинг статуса сейчас замедлен (задача ждёт ИИ) — см. WAITING_POLL_INTERVAL_MS. */
+  private readonly slowPolling = new Set<string>();
   /** §5 плана «живой конвейер» — отдельный от pollHandles поллинг: тот следит за самой
    * экстракцией (короче, до "Готово"), этот — за обогащением ОТДЕЛЬНЫХ показателей после неё
    * (может идти и после того, как экстракция давно завершилась). См. syncEnrichmentPolling. */
@@ -279,6 +286,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   customSpecimens: UserSpecimen[] = [];
   customSpecimenError: string | null = null;
   savingCustomSpecimen = false;
+  /** Проверка введённого биоматериала не состоялась из-за недоступного ИИ (503) — при сохранении
+   * формы название уйдёт в «ожидает проверки» (PUT .../specimen-pending), а не потеряется. */
+  specimenCheckDeferred = false;
   private specimenSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
@@ -826,11 +836,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     try {
       const response = await this.api.requestExtraction(record.id);
       this.error = null;
-      // already_queued/llm_unavailable — не ошибка и не новая постановка в очередь (см.
-      // ExtractionRequestResult на бэкенде): показываем как info-плашку и НЕ запускаем поллинг
-      // заново — на already_queued существующая задача уже опрашивается предыдущим вызовом (или
-      // будет подхвачена следующим обновлением списка), на llm_unavailable опрашивать нечего.
-      if (response?.code === 'already_queued' || response?.code === 'llm_unavailable') {
+      // already_queued — не ошибка и не новая постановка в очередь (см. ExtractionRequestResult на
+      // бэкенде): показываем как info-плашку и НЕ запускаем поллинг заново — существующая задача уже
+      // опрашивается предыдущим вызовом (или будет подхвачена следующим обновлением списка).
+      // waiting_for_ai — задача СОЗДАНА и ждёт возвращения ИИ: поллинг запускается как обычно, шаг
+      // «ждём ИИ» появится с первым же статусом (см. updatePipelineSteps).
+      if (response?.code === 'already_queued') {
         this.info = response.message ?? null;
         this.setRecognizing(record.id, false);
         this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [record.id]: [] };
@@ -883,6 +894,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
         this.updatePipelineSteps(record.id, status, prev);
 
+        // Пока задача ждёт ИИ (может быть часами), опрашиваем редко — 1,5 с на мёртвом сервере не нужны.
+        if (status.waitingForAi !== this.slowPolling.has(record.id) && !EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
+          if (status.waitingForAi) this.slowPolling.add(record.id); else this.slowPolling.delete(record.id);
+          const current = this.pollHandles.get(record.id);
+          if (current) clearInterval(current);
+          this.pollHandles.set(record.id, setInterval(
+            () => void tick(), status.waitingForAi ? WAITING_POLL_INTERVAL_MS : EXTRACTION_POLL_INTERVAL_MS));
+        }
+
         if (EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
           this.stopPolling(record.id);
           this.setRecognizing(record.id, false);
@@ -934,6 +954,18 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } else if (status.status === ExtractionJobStatus.Completed) {
       markLastDone();
       steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
+    } else if (status.waitingForAi) {
+      // ИИ (LM Studio) недоступен — задача не потеряна, стоит в очереди и стартует сама, как только
+      // сервер вернётся (LmStudioRecoverySweepJob). Явно говорим об этом, чтобы «в процессе» не
+      // выглядело как зависание и пользователь не жал «Распознать» повторно.
+      if (!prev || !prev.waitingForAi || steps.length === 0) {
+        markLastDone();
+        steps.push({
+          id: `waiting-ai-${steps.length}`,
+          label: 'Ждём ИИ — документ сохранён и будет распознан автоматически, как только он станет доступен. Страницу можно закрыть.',
+          state: 'active',
+        });
+      }
     } else if (status.queuePosition > 0) {
       // Общая очередь к единственной локальной модели (баг с живого отчёта — под нагрузкой,
       // когда параллельно идёт большой поток задач обогащения справочника, Status уже мог стать
@@ -952,7 +984,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     } else if (status.status === ExtractionJobStatus.Pending) {
       // Никого нет впереди ни в одном из четырёх конвейеров (queuePosition===0) — просто ждём,
       // пока воркер Hangfire реально возьмёт задачу в работу.
-      if (!prev || steps.length === 0 || prev.queuePosition > 0) {
+      if (!prev || steps.length === 0 || prev.queuePosition > 0 || prev.waitingForAi) {
         markLastDone();
         steps.push({ id: 'queue-next', label: 'В очереди — следующая на распознавание', state: 'active' });
       }
@@ -1036,6 +1068,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.pollHandles.delete(recordId);
     }
     this.pollFailureCounts.delete(recordId);
+    this.slowPolling.delete(recordId);
   }
 
   private async loadExtractionResult(record: MedicalRecord): Promise<void> {
@@ -1103,7 +1136,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     try {
       const summary = await this.api.regenerateRecordSummary(recordId);
       this.summaryByRecord = { ...this.summaryByRecord, [recordId]: summary };
-      this.stopSummaryPoll(recordId);
+      // 202 + pending: пересчёт поставлен в фон (при недоступном ИИ — дождётся его), ждём поллингом.
+      if (summary.pending) this.pollSummary(recordId);
+      else this.stopSummaryPoll(recordId);
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось составить резюме.';
     } finally {
@@ -1138,7 +1173,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (this.summaryPollHandles.has(recordId)) return;
     this.summaryPollAttempts.set(recordId, 0);
     this.summaryPollHandles.set(recordId, setInterval(() => {
-      const attempts = (this.summaryPollAttempts.get(recordId) ?? 0) + 1;
+      // Пока ИИ недоступен, пересчёт может ждать часами — потолок попыток считаем только когда он жив.
+      const attempts = (this.summaryPollAttempts.get(recordId) ?? 0) + (this.ai.unavailable() ? 0 : 1);
       this.summaryPollAttempts.set(recordId, attempts);
       if (attempts > SUMMARY_POLL_MAX_ATTEMPTS) {
         this.stopSummaryPoll(recordId);
@@ -1399,6 +1435,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
     this.savingCustomSpecimen = true;
     this.customSpecimenError = null;
+    this.specimenCheckDeferred = false;
     try {
       const created = await this.api.createSpecimen(trimmed);
       form.specimenKbId = created.specimenKbId;
@@ -1406,7 +1443,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.customSpecimens = [...this.customSpecimens, created].sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
       }
     } catch (err) {
-      this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить источник показателя.';
+      if (err instanceof ApiError && err.status === 503) {
+        // ИИ недоступен — это не ошибка ввода: название сохранится как «ожидает проверки».
+        this.specimenCheckDeferred = true;
+      } else {
+        this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить источник показателя.';
+      }
     } finally {
       this.savingCustomSpecimen = false;
     }
@@ -1433,6 +1475,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.recordSpecimenQuery = specimenHint ?? record.specimenDisplayName ?? '';
     this.recordSpecimenForm = { specimenKbId: record.specimenKbId };
     this.customSpecimenError = null;
+    this.specimenCheckDeferred = false;
     this.editRecordForm = {
       recordDate: record.recordDate,
       doctor: record.doctor ?? '',
@@ -1471,6 +1514,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       const newSpecimenId = this.recordSpecimenForm.specimenKbId;
       if (specimenChanged && newSpecimenId && newSpecimenId !== record.specimenKbId) {
         await this.api.setRecordSpecimen(record.id, newSpecimenId);
+      } else if (specimenChanged && this.specimenCheckDeferred) {
+        // ИИ недоступен — проверить название сейчас нечем; запоминаем его, и бэкенд применит
+        // биоматериал к записи автоматически, когда сервер вернётся.
+        await this.api.setPendingSpecimen(record.id, query);
+        this.info = `ИИ сейчас недоступен — биоматериал «${query}» будет проверен и применён к записи автоматически, когда он вернётся.`;
       }
       this.closeEditSheet();
       await this.refresh();
