@@ -734,6 +734,10 @@ public class MedicalRecordService(
             await db.FileAttachments
                 .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && a.OwnerId == recordId)
                 .ExecuteDeleteAsync(ct);
+            // Задача распознавания ссылается на запись справочно (без FK) — без явной чистки она
+            // осталась бы сиротой и висела в трее фоновых задач пользователя. Если Hangfire уже
+            // держит её в очереди, процессор увидит, что строки нет, и молча пропустит запуск.
+            await db.MedicalDocumentExtractionJobs.Where(j => j.MedicalRecordId == recordId).ExecuteDeleteAsync(ct);
             // MedicalRecordHidden по этой записи — каскадом FK (MedicalRecordHiddenConfiguration).
             await db.MedicalRecords.Where(r => r.Id == recordId).ExecuteDeleteAsync(ct);
             await audit.WriteAsync(ownerUserId, MedicalAccessAction.Delete, ownerUserId: ownerUserId, medicalRecordId: recordId, ct: ct);

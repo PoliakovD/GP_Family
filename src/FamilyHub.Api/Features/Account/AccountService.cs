@@ -109,6 +109,10 @@ public class AccountService(
         await db.FileAttachments
             .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
             .ExecuteDeleteAsync(ct);
+        // Задачи распознавания — без FK на запись (см. MedicalRecordService.DeleteAsync).
+        await db.MedicalDocumentExtractionJobs
+            .Where(j => recordIds.Contains(j.MedicalRecordId) || j.RequestedByUserId == userId)
+            .ExecuteDeleteAsync(ct);
         await db.MedicalRecords.Where(r => r.OwnerUserId == userId).ExecuteDeleteAsync(ct); // hidden — каскадом от записей
         await db.FamilyMedicalShares.Where(s => s.OwnerUserId == userId).ExecuteDeleteAsync(ct);
 

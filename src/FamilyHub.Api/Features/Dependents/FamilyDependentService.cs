@@ -136,6 +136,8 @@ public class FamilyDependentService(
             await db.FileAttachments
                 .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
                 .ExecuteDeleteAsync(ct);
+            // Задачи распознавания этих записей — без FK на запись, чистим явно (иначе висят в трее).
+            await db.MedicalDocumentExtractionJobs.Where(j => recordIds.Contains(j.MedicalRecordId)).ExecuteDeleteAsync(ct);
             // MedicalRecordHidden по этим записям — каскадом FK (MedicalRecordHiddenConfiguration).
             await db.MedicalRecords.Where(r => r.FamilyDependentId == dependentId).ExecuteDeleteAsync(ct);
             await db.FamilyDependents.Where(d => d.Id == dependentId).ExecuteDeleteAsync(ct);
