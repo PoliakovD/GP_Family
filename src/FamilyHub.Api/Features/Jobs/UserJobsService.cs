@@ -61,9 +61,12 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
     private async Task<ActiveJobsGroup> BuildExtractionGroupAsync(Guid userId, List<DateTime> activeTimestamps, CancellationToken ct)
     {
+        // Задача удалённой записи — сирота (ссылка без FK): в трее её быть не должно, даже если она
+        // осталась с времён до явной чистки при удалении записи.
         var query = db.MedicalDocumentExtractionJobs.AsNoTracking()
             .Where(j => j.RequestedByUserId == userId
-                && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running));
+                && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running)
+                && db.MedicalRecords.Any(r => r.Id == j.MedicalRecordId));
 
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(j => j.CreatedAt).Take(MaxItemsPerGroup)

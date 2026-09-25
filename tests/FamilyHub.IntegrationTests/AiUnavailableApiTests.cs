@@ -70,6 +70,38 @@ public class AiUnavailableApiTests(FamilyHubWebFactory factory) : IntegrationTes
         again.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    private record ActiveGroupDto(int Total);
+    private record ActiveSummaryDto(ActiveGroupDto Extraction);
+
+    /// <summary>Удалили запись, пока её распознавание ждёт ИИ, — задача удаляется вместе с ней и не
+    /// висит в трее фоновых задач пользователя.</summary>
+    [Fact]
+    public async Task DeleteRecord_RemovesItsQueuedExtractionJob_AndClearsTray()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var created = await owner.PostAsJsonAsync("/api/medical-records",
+            new CreateMedicalRecordRequest(new DateOnly(2026, 1, 1), null, null, null));
+        var recordId = (await created.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
+        var upload = new MultipartFormDataContent();
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes("scan"));
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        upload.Add(file, "file", "scan.pdf");
+        (await owner.PostAsync($"/api/medical-records/{recordId}/attachments", upload)).StatusCode.Should().Be(HttpStatusCode.Created);
+        (await owner.PostAsync($"/api/medical-records/{recordId}/extract", null)).StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        var before = await (await owner.GetAsync("/api/jobs/active-summary")).Content.ReadFromJsonAsync<ActiveSummaryDto>(JsonOpts);
+        before!.Extraction.Total.Should().Be(1, "ожидающая ИИ задача видна в трее");
+
+        (await owner.DeleteAsync($"/api/medical-records/{recordId}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.MedicalDocumentExtractionJobs.AsNoTracking().AnyAsync(j => j.MedicalRecordId == recordId))
+            .Should().BeFalse("задача удалённой записи не должна оставаться сиротой");
+        var after = await (await owner.GetAsync("/api/jobs/active-summary")).Content.ReadFromJsonAsync<ActiveSummaryDto>(JsonOpts);
+        after!.Extraction.Total.Should().Be(0);
+    }
+
     [Fact]
     public async Task PendingSpecimen_IsStoredForOwnerOnly_AndExposedOnRecord()
     {
