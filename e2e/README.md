@@ -48,3 +48,10 @@ E2E_STOP=1 E2E_REUSE=1 npx playwright test                 # тот же про�
 | `05-ai-unavailable` | плашка «ИИ недоступен», «ждём ИИ», задача уходит вместе с записью |
 | `06-auth-redirect` | гость → `/login` |
 | `07-mobile-nav` | нижняя панель на телефоне |
+
+## CI
+
+Workflow `.github/workflows/e2e.yml` запускает набор на push в `master` и вручную (`workflow_dispatch`) — на PR не
+запускается (минуты, нужен docker). При падении выгружает артефакт `e2e-report` (HTML-отчёт Playwright,
+трейсы, `api.log`). Устройство стека, грабли и политику зависимостей см. в
+[`.claude/research/frontend-toolchain-and-e2e.md`](../.claude/research/frontend-toolchain-and-e2e.md).

@@ -139,15 +139,15 @@ ACME_EMAIL=admin@<ваш-домен>
 
 ## Шаг 5 — первый деплой
 
-`Actions → Deploy → Run workflow` (ветка/тег в поле `ref`, обычно `master`; `run_tests: true`).
+`Actions → Deploy → Run workflow` (ветка/тег — селектор «Use workflow from», обычно `master`; определяет только файлы `deploy/`, образ всегда `:latest` из `build.yml`).
 
 Что делает workflow по шагам:
-1. `test` — юнит-тесты (если `run_tests=true`).
-2. `build-push` — собирает `src/FamilyHub.Api/Dockerfile`, пушит в
-   `ghcr.io/<owner>/gp_family-api` двумя тегами (`<git-sha>` и `latest`).
-3. `deploy` — по SSH кладёт на VPS `.env` (из `PROD_ENV` + тег образа), `docker-compose.yml`,
-   `Caddyfile`, `backup/`; `docker compose pull && up -d --remove-orphans`; ждёт
-   `/health/ready` изнутри контейнера `api` (до ~90 сек); чистит старые образы.
+Тестов и сборки образов в `deploy.yml` **нет** — образы (`api`, `telegrambot`, `wg-client`) публикует
+`build.yml` при push в `master`, тесты гоняет `ci.yml`. Единственный job `deploy`: рендерит `.env` и
+`wg/awg0.conf` из секретов, по SSH кладёт `.env`, `docker-compose.yml`, `Caddyfile`, `backup/`,
+`scripts/`; `docker compose pull`, пересоздаёт `wg-client`+`telegrambot` и `up -d --remove-orphans`; ждёт
+`/health/ready` в `api` и `telegrambot` (по ~90 сек на каждый); чистит старые образы. Шина MassTransit
+первые 2 минуты в готовность не входит — деплой не зависит от вступления Kafka Rider в consumer group.
 
 Первый запуск сам применит EF Core миграции (retry с backoff в `Program.cs`) и создаст Kafka-топики.
 
@@ -271,7 +271,7 @@ curl -i https://<домен>/health/ready
 | Симптом | Причина / что проверить |
 |---|---|
 | `scp deploy/backup` в логе `deploy.yml` ничего не находит | `.gitignore` снова исключает `deploy/backup/` — проверьте `git ls-files deploy/backup/` (см. выше) |
-| `/health/ready` не отвечает за ~90 сек, деплой падает на этом шаге | `docker compose logs --tail=200 api` (workflow сам печатает это при failure). Частые причины: `Jwt__SigningKey` не валидный base64, `ENCRYPTION_MASTER_KEY` не задан или равен dev-ключу из `.env.example`, Postgres/MinIO/Kafka ещё не прошли healthcheck |
+| `/health/ready` (api или telegrambot) не отвечает за ~90 сек, деплой падает на этом шаге | `docker compose logs --tail=200 api` (workflow сам печатает это при failure). Частые причины: `Jwt__SigningKey` не валидный base64, `ENCRYPTION_MASTER_KEY` не задан или равен dev-ключу из `.env.example`, Postgres/MinIO/Kafka ещё не прошли healthcheck |
 | `docker login ghcr.io` падает на VPS | `GITHUB_TOKEN` в workflow должен иметь `packages: write` (уже выставлено в `deploy.yml`); проверьте, что пакет `gp_family-api` в GHCR доступен для чтения из этого аккаунта |
 | Деплой прошёл, но `/hangfire`/`/swagger` отвечают 401 без пароля не для админ-домена, а на публичном `<домен>` | Caddy должен блокировать `/hangfire*`/`/swagger*`/`/dev/*` на публичном сайте — проверьте, что `deploy/Caddyfile` реально скопировался (тот же класс проблемы, что и с `deploy/backup/`, если правило `.gitignore` когда-нибудь тронут) |
 | WireGuard поднят, но `seq.<домен>:8443` недоступен | Порт `8443` слушается только на `10.8.0.1` (см. Шаг 6) — убедитесь, что запрос реально идёт через туннель, а не напрямую в интернет |

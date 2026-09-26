@@ -1,5 +1,9 @@
 # `FamilyHub.Web` — Telegram Mini App
 
+> **Устарел (историческая справка).** Описывает React + Vite версию. Фронт переписан на Angular
+> (сейчас 20) и обслуживает и PWA, и Mini App. Актуально: `auth-uiux-rework-stage.md`,
+> `../patterns/frontend_web.md`, `ui-rework-v2.3.md`, `frontend-toolchain-and-e2e.md`.
+
 React + TypeScript + Vite SPA. Собирается **прямо в `FamilyHub.Api/wwwroot`**
 (`vite.config.ts`: `build.outDir = "../FamilyHub.Api/wwwroot"`, `emptyOutDir: true`) — это не
 отдельный деплоймент, а статика, которую раздаёт сам API (`app.UseStaticFiles()` +

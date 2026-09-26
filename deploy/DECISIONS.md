@@ -21,13 +21,13 @@ VPS-стек) устроена именно так, и отдельно — та
 | `UseForwardedHeaders` в начале конвейера | За реверс-прокси `Request.Scheme` всегда `http`, а `RemoteIpAddress` — адрес Caddy. Без этого secure-cookie (JWT, CSRF) выставлялись бы без `Secure`, а партиционирование rate limiter по IP (`Program.cs`) и `RemoteIp` в логах Seq молча сломались бы — ни одной явной ошибки, только тихо неверное поведение. |
 | Условный `Strict-Transport-Security` (только при `Request.IsHttps`) | Закрывает находку 6 из `docs/security/module-review-2026-08-02/09-config-deployment-devops.md`, отложенную «до решения по реверс-прокси» — решение принято (Caddy). |
 | Hangfire-дашборд и Swagger — за `AdminBasicAuth`/`HangfireBasicAuthFilter`, а не голым `AllowAnonymous` | Защита в глубину: WireGuard — периметр (кто может достучаться), BasicAuth из `.env` — второй, независимый рубеж (кто именно). Один скомпрометированный уровень не открывает доступ полностью. |
-| Служебные пути (`/dev/*`, `/hangfire*`, `/swagger*`, `/health/*`) дополнительно блокируются на публичном домене в `Caddyfile` | Защита в глубину поверх `DevTools`-флагов: даже если флаг случайно включат в проде, снаружи с публичного домена эти пути всё равно не достижимы — видны только через админ-блок на WireGuard-адресе. |
+| Служебные пути (`/dev/*`, `/hangfire*`, `/swagger*`, `/internal/*`, `/admin*`, `/api/admin/*` и точечно `/health/live`, `/health/ready`, `/health/llm`) дополнительно блокируются на публичном домене в `Caddyfile` | Защита в глубину поверх `DevTools`-флагов: даже если флаг случайно включат в проде, снаружи с публичного домена эти пути всё равно не достижимы — видны только через админ-блок на WireGuard-адресе. |
 
 ## Health checks
 
 | Решение | Почему |
 |---|---|
-| Три отдельных эндпоинта: `/health/live`, `/health/ready`, `/health/llm` | `/health/live` — только «процесс жив» (для liveness-проб, без обращений к зависимостям). `/health/ready` — Postgres/MinIO/Kafka, тег `ready`, используется `depends_on: service_healthy` и деплой-workflow. `/health/llm` — намеренно отдельно. |
+| Три отдельных эндпоинта: `/health/live`, `/health/ready`, `/health/llm` | `/health/live` — только «процесс жив» (для liveness-проб, без обращений к зависимостям). `/health/ready` — Postgres/MinIO/Kafka (тег `ready`) и, **после 2 минут с запуска процесса**, шина MassTransit (`masstransit-bus`: она стартует позже Kestrel, поэтому в окне прогрева её отсутствие не считается сбоем); используется `depends_on: service_healthy` и деплой-workflow. `/health/llm` — намеренно отдельно. |
 | `/health/llm` возвращает `Degraded`, не `Unhealthy` | LM Studio живёт на ноутбуке пользователя за WireGuard-туннелем — недоступность (сон, выключен) ожидаема и не должна валить общую готовность контура. Использует уже существующую в коде грациозную деградацию (`LmStudioJsonClient` ловит `HttpRequestException`/`TaskCanceledException` и возвращает `Success=false`, а не бросает исключение) — новой логики деградации писать не пришлось. |
 | `/health/*` исключены из `UseSerilogRequestLogging` (уровень Debug, не Information) | Иначе Seq заливало бы шумом от healthcheck-поллинга раз в 10-15 секунд. |
 

@@ -13,7 +13,9 @@
 | [0005](0005-medication-enrichment-egress.md) | Обогащение справочника препаратов: исключение из egress-политики ADR-0001 |
 | [0006](0006-event-bus-masstransit-and-kafka.md) | Событийная шина: MediatR → MassTransit 8.5.1 + Kafka Rider (частично пересмотрен ADR-0007) |
 | [0007](0007-kafka-as-primary-event-transport.md) | Kafka Rider — реальный транспорт для бизнес-потребителей событий, не только внешний мост |
+| [0008](0008-telegram-bot-separate-process-and-awg-tunnel.md) | Telegram-бот — отдельный процесс без доступа к БД; исходящий трафик через AmneziaWG-сайдкар (восстановлен задним числом) |
 | [0009](0009-admin-panel-and-key-rotation.md) | Админ-панель (статистика + ротация ключей) и связки ключей Encryption/Jwt/Attachments |
 | [0010](0010-attachment-previews-and-gotenberg.md) | Встроенный просмотрщик вложений: серверная конвертация превью и сайдкар Gotenberg |
 | [0011](0011-least-privilege-db-minio-credentials.md) | Отдельные учётки приложения для Postgres и MinIO (вместо суперпользователя/root) и ротация их паролей |
 | [0012](0012-self-built-minio-image.md) | MinIO собственной сборки из исходников в нашем GHCR (upstream больше не публикует образы) |
+| [0013](0013-llm-unavailability-waiting-queue.md) | Недоступный ИИ: LLM-задачи ждут в очереди, а не пропадают; плашка и «ждём ИИ» в интерфейсе |

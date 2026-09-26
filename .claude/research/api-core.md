@@ -15,7 +15,8 @@ Composition root приложения (`Program.cs`) + core-фичи, котор
 5. Авторизация: `IFamilyAccessService`, `IAuthorizationHandler` (`FamilyRoleHandler`),
    `FallbackPolicy = DefaultPolicy` (всё требует аутентификации по умолчанию).
 6. Аутентификация: схема `"Smart"` (policy-схема, выбирает Dev/TelegramMiniApp по заголовку)
-   только в Development; в проде — прямо `TelegramMiniApp`.
+   только при `DevTools:DevAuthEnabled=true` (флаг, не `IsDevelopment()`); иначе — прямо
+   `TelegramMiniApp`/PWA-JWT.
 7. Hangfire: `AddHangfire` + `AddHangfireServer`, `ReminderScanJob`, `NotificationService`.
 8. **Бот — всё зависящее от `ITelegramBotClient` регистрируется только если
    `Telegram:BotToken` задан** (`telegramBotConfigured`): `ITelegramBotClient`,
@@ -33,7 +34,7 @@ Composition root приложения (`Program.cs`) + core-фичи, котор
     `MapBirthdayModule`, `MapNotificationEndpoints`, условно `MapBotEndpoints`); затем
     `MapFallbackToFile("index.html").AllowAnonymous()` (SPA fallback — обязателен
     `AllowAnonymous`, иначе `FallbackPolicy` зарубит до того, как дело дойдёт до React);
-    `MapHangfireDashboard("/hangfire")` только в Development.
+    `MapHangfireDashboard("/hangfire")` — за флагом `DevTools:AdminUiEnabled` и собственным BasicAuth.
 11. Регистрация recurring job — через `app.Services.GetRequiredService<IRecurringJobManager>()`,
     **не** статический `RecurringJob.AddOrUpdate` (см. `infrastructure.md`).
 

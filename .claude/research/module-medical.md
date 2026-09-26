@@ -115,7 +115,7 @@ PDF/офисные форматы напрямую через PdfPig/NPOI; visio
 последовательно обрабатывает ВСЕ ещё не распознанные вложения (`FileAttachment.ExtractedAt`
 — null у необработанных, проставляется сразу после чтения файла, до финального сохранения —
 повтор клика после сбоя не гоняет OCR по уже прочитанным файлам). Показатели из разных файлов
-МЕРЖАТСЯ upsert'ом по `(MedicalRecordId, AnalyteKey, Specimen)`, не blanket-delete — повторный
+МЕРЖАТСЯ upsert'ом по `(MedicalRecordId, AnalyteKey, SpecimenKbId)`, не blanket-delete — повторный
 клик «Распознать» после добавления нового файла не стирает результаты уже разобранных. Один
 проход `LabSummarizer` по полному смерженному набору — не по каждому файлу.
 
@@ -132,33 +132,35 @@ PDF/офисные форматы напрямую через PdfPig/NPOI; visio
 4. `None` — промах KB целиком → `LabAnalyteEnrichmentRequestService` ставит `LabAnalyteEnrichmentJob`
    в очередь `enrichment` (дедуп — частичный индекс по `NormalizedName`); `Flag=Unknown` до тех пор.
 
-Показатель хранится в `medical.LabIndicators` (`AnalyteKey`/`Flag`/`RefSource`/`Specimen`
-plaintext — по ним поиск/тренд/группировка, значения/референсы `[Encrypted]`).
-**`Specimen`** (`SpecimenType`: Blood/Urine/Stool/VaginalSwab/Saliva/Other/Unknown) — биоматериал,
-часть ключа группировки вместе с `AnalyteKey` везде (`GET /api/indicators`,
-`GET /api/indicators/{analyteKey}?specimen=&customId=`, upsert-ключ) — без него лейкоциты крови и
-мочи слились бы на одном графике. Редактируется вручную (`PUT /api/indicators/{id}`, только
-владелец — исправление ошибок OCR; ref-поля из запроса становятся новым `RefSource.Blank`, Flag
-пересчитывается тем же компаратором) либо добавляется с нуля
-(`POST /api/medical-records/{recordId}/indicators` — UX-редизайн, тот же расчёт `RefSource.Blank`,
-без повторного каскада KB) либо удаляется (`DELETE /api/indicators/{id}`) — обе мутации только
-владелец записи.
+Показатель хранится в `medical.LabIndicators` (`AnalyteKey`/`Flag`/`RefSource`/`SpecimenKbId`
+plaintext — по ним поиск/тренд/группировка, значения/референсы `[Encrypted]`). Правится вручную
+(`PUT /api/indicators/{id}`, только владелец — исправление ошибок OCR; ref-поля из запроса становятся
+новым `RefSource.Blank`, Flag пересчитывается тем же компаратором), добавляется с нуля
+(`POST /api/medical-records/{recordId}/indicators` — тот же расчёт `RefSource.Blank`, без повторного
+каскада KB) либо удаляется (`DELETE /api/indicators/{id}`) — все три мутации только владелец записи
+и все три помечают резюме записи устаревшим (см. «Резюме анализа» ниже).
 
-**Кастомный биоматериал (UX-редизайн).** `SpecimenType.Other` может нести
-`LabIndicator.SpecimenCustomId` (FK на `medical.UserSpecimens`, `DeleteBehavior.Restrict`) — личный
-справочник пользователя для значений вне фиксированного enum ("ликвор", "мокрота"). Ключ
-группировки везде расширен до `(AnalyteKey, Specimen, SpecimenCustomId)`, уникальный индекс
-`LabIndicators` объявлен с `.AreNullsDistinct(false)` (Npgsql 10 fluent API,
-`Npgsql:NullsDistinct` в миграции) — иначе Postgres по умолчанию считает `NULL != NULL`, и upsert-
-дедуп процессора (у большинства показателей `SpecimenCustomId=null`) сломался бы молча.
-`UserSpecimenService.CreateAsync` — рамки по длине/символам до вызова модели → дедуп в своём
-справочнике/против системных русских названий (без обращения к LLM) → один вызов
-`ILmStudioJsonClient` (запрет markdown/`<think>`, формат `{"valid","displayName","reason"}`) →
+**Источник анализа (биоматериал) — атрибут ВСЕЙ записи, не показателя.** `MedicalRecord.SpecimenKbId`
+— ссылка на общий справочник `kb.global_specimens_kb` (`GlobalSpecimenKb`; сентинел
+`SpecimenContextIds.Unresolved`, пока источник не определён), денормализована на каждый
+`LabIndicator.SpecimenKbId` (инвариант: всегда равен полю записи). Определяется `SpecimenResolver`
+при распознавании либо вручную `PUT /api/medical-records/{id}/specimen` (каскад на все показатели,
+сбрасывает `SpecimenHint`, ставит пересчёт резюме); в UI поле «Биоматериал» — в форме
+«Редактировать запись». Если модель увидела обобщённое слово без локализации («мазок») — оно
+сохраняется как `MedicalRecord.SpecimenHint`, запись остаётся Unresolved, а карточка просит уточнить.
+Ключ группировки истории/тренда — `(пациент, AnalyteKey, SpecimenKbId)`, где пациент =
+`(FamilyDependentId, TargetUserId)` (`GetMyIndicatorsAsync`): без источника лейкоциты крови и мочи
+слились бы на одном графике, без пациента — показатели разных членов семьи.
+
+Ввод источника: `GET /api/specimens/search` (нечёткий поиск pg_trgm по справочнику, без LLM),
+`GET /api/specimens` (недавно использованные — `UserSpecimen` хранит только `SpecimenKbId` +
+`LastUsedAt`), `POST /api/specimens` (`UserSpecimenService.CreateAsync`: рамки по длине/символам до
+вызова модели → поиск в общем справочнике → для НОВОГО названия один вызов `ILmStudioJsonClient` и
 **детерминированное вето поверх ответа модели**, тот же приём, что
-`MedicationEnrichmentProcessor.ResolveCorrectedName`: `TrigramSimilarity.Similarity` между
-нормализованными введённым и предложенным именем `< 0.3` → отклонить (модель подменила понятие,
-а не поправила орфографию). LM Studio недоступен → `Unavailable`, не "принять на веру" — запись
-ушла бы в справочник навсегда. `POST /api/specimens` / `GET /api/specimens`.
+`MedicationEnrichmentProcessor.ResolveCorrectedName`: `TrigramSimilarity` введённого и предложенного
+имени `< 0.3` → отклонить). LM Studio недоступен → `503`, не «принять на веру»; фронт в этом
+случае не теряет ввод, а отправляет его на `PUT .../specimen-pending` (`PendingSpecimenText`), и sweep
+применяет источник, когда ИИ вернётся ([ADR-0013](../../docs/adr/0013-llm-unavailability-waiting-queue.md)).
 
 **Дозаполнение задним числом.** Когда `LabAnalyteEnrichmentProcessor` наполняет
 `kb.global_lab_analytes_kb` (после промаха выше), он ставит `RecalculateIndicatorFlagsJob` —
@@ -173,6 +175,43 @@ plaintext — по ним поиск/тренд/группировка, знач
 (`GET .../extraction` — включает `totalFiles`/`processedFiles` для прогресса «файл N из M»,
 `.../indicators`, `.../summary`, `.../conclusion`, `GET /api/indicators`,
 `GET /api/indicators/{analyteKey}/{specimen}`), видимость — тот же предикат, что у записи.
+
+**Резюме анализа.** `MedicalRecord.SummaryJson` (`[Encrypted]`) строит `LabSummarizer` (один вызов
+LLM + антигаллюцинационный гейт) — при распознавании и после ручных правок. Кнопки «Пересчитать» нет:
+создание/правка/удаление показателя и смена источника вызывают
+`ExtractionQueryService.MarkSummaryDirtyAsync` → `RecordSummaryRegenerationJob.RescheduleAsync`:
+ставится токен-версия `MedicalRecord.SummaryDirtyAt` (микросекундная точность, как у Postgres) и
+планируется джоба очереди `extraction` с задержкой 15 с (дебаунс серии правок). Джоба выходит, если
+токен уже другой (свежая правка поставила свою джобу), и сверяет его ещё раз ПОСЛЕ вызова LLM.
+`GET .../summary` отдаёт `pending: true`, пока `SummaryDirtyAt` не пуст (при этом старый текст
+остаётся виден; если резюме ещё нет — 200 с пустыми полями и `pending: true`, а не 404). `POST
+.../summary/regenerate` больше не вызывает LLM синхронно: ставит ту же джобу без задержки и отвечает
+`202` + `pending` (нужен, когда резюме ещё нет; только владелец). Смысловой отказ (гейт/невалидный
+JSON) сбрасывает резюме и пометку; недоступность ИИ — оставляет пометку.
+
+**Недоступный ИИ («ждём ИИ»).** Сводка — [ADR-0013](../../docs/adr/0013-llm-unavailability-waiting-queue.md)
+и [`ai-availability-and-waiting-queue.md`](ai-availability-and-waiting-queue.md). Кратко по коду
+модуля: (1) `ExtractionRequestService.RequestAsync` при недоступном ИИ создаёт задачу с
+`WaitingForAi=true` БЕЗ Hangfire-энкью и возвращает `QueuedWaitingForAi` (`202
+{code: waiting_for_ai}`); (2) `MedicalDocumentExtractionProcessor` перехватывает
+`LmStudioUnavailableException` отдельным `catch`: задача → `Pending`, `WaitingForAi=true`, попытка
+`[AutomaticRetry]` не тратится, ничего не пробрасывается (прочие исключения идут прежним путём с
+3 попытками и терминальным `Failed`); (3) `ExtractionStatusResponse.WaitingForAi` и
+`IndicatorDto.EnrichmentWaitingForAi` — признаки для UI; (4) `CheckManualEntryGatesAsync`:
+`IsTransientFailure` гейта легитимности/правдоподобия НЕ блокирует постановку обогащения (процессор
+обогащения повторит гейты сам); суммаризаторы обогащения (`LabAnalyteKbSummarizer`,
+`MedicationSummarizer`) при `IsTransient` возвращают `EnrichmentFailureReason.LmStudioUnavailable`, и
+процессоры (лаб-показатели, препараты, препараты из заключений) помечают задачу `IsTransientFailure`
+— sweep такие задачи подхватывает; (5) `LmStudioRecoverySweepJob` — раз в минуту, если проба
+`ILmStudioAvailabilityProbe` проходит: запускает ждущие распознавания, перепланирует резюме со
+`SummaryDirtyAt` старше 2 минут, проверяет `PendingSpecimenText` (валидно → `SetRecordSpecimenAsync`,
+отказ → `SpecimenHint`), затем прежний досып `Failed`+`IsTransientFailure` (четыре конвейера, окно
+7 дней). Известные пробелы — в `TECH_DEBT.md`.
+
+**Удаление.** `MedicalRecordService.DeleteAsync` (а также удаление подопечного и аккаунта) явно
+удаляет `MedicalDocumentExtractionJobs` записи — у задачи нет FK на запись; без этого «ждущая»
+задача висела бы сиротой в глобальном трее (`UserJobsService` дополнительно игнорирует задачи
+несуществующих записей). Задачи обогащения справочника не удаляются: справочник общий.
 
 Конвейер обогащения `kb.global_lab_analytes_kb` — зеркало `MedicationEnrichmentProcessor`:
 `IMedicationSearchProvider.SearchAsync(name, WebSearchTopic.LabAnalyte)` (отдельный список
@@ -272,25 +311,22 @@ Postgres, переживает рестарт). Оба новых исхода `
 `"llm"` (`POST .../extract`, `.../summary/regenerate`, `POST /api/medications/ocr`) и
 `"medical-write"` (`POST /api/medical-records`, `POST .../attachments`).
 
-Фронт (`FamilyHub.Web`): одна кнопка «Распознать» на записи (не на вложении) —
-`medical-records-panel.component.ts` показывает живой прогресс (`shared/pipeline-progress` —
-растущий список выполненных шагов с галочками + пульсирующий текущий, не статичная строка), после
-`Completed` — таблицу показателей (Показатель/Значение/Единицы/Биоматериал/Норма — колонки
-разведены UX-редизайном, было слитно; бэйдж «ИИ» для `RefSource.KbCalculated`; строка
-раскрывается кликом — короткое `analyteKey` в ячейке, полное имя из бланка при раскрытии;
-инлайн-правка и удаление через карандаш/корзину; «+ Добавить показатель» — ручной ввод без
-распознавания) + LLM-резюме (Kind=Analysis) либо заключение врача (Kind=DoctorVisit,
-`GET .../conclusion`) — оба под `shared/expandable` («Резюме»), вместе с «Подробнее»/«Файлы»
-(вложения грузятся лениво при первом раскрытии «Файлы», не для всех записей страницы сразу).
-Форма создания — скрыта за широкой кнопкой «+ Добавить» (UX-редизайн, была всегда развёрнута),
-внутри — выбор пациента из self/подопечный/участник (без свободного поля имени), дата по
-умолчанию сегодня, врач — `<input list>`/`<datalist>` с подсказками (в проекте нет typeahead-
-компонента, нативный datalist — осознанный выбор). Список записей — сворачиваемая панель
-«Фильтры» (период/пациент/врач) + пагинация по 15 (UX-редизайн, было — нефильтруемый
-неотсортированный список целиком). Вкладка «Показатели» хаба «Здоровье» (`indicators-tab`,
-`/health/indicators`) группирует по `(analyteKey, specimen, specimenCustomId)` — история/спарклайн
-(`shared/sparkline`, inline SVG) по клику. Специмен-подписи — общий `shared/util/specimen.ts`
-(`specimenLabelWithCustom` учитывает личный справочник биоматериалов, `GET /api/specimens`).
+Фронт (`FamilyHub.Web`, актуальное состояние после редизайнов v2–v2.3; хронология — в
+[`ui-rework-v2.3.md`](ui-rework-v2.3.md)): вкладка «Анализы» (`medical-records-panel`) — записи
+**сгруппированы по человеку** (аватар, «N анализов · последний …», доступ словами) с таймлайном по
+датам, бесконечная прокрутка (`pageSize` 50, не пагинация), фильтр по людям чипами; поиск — в
+топбаре каркаса (`PageActionService.pageSearch`), «Фильтры» (период/врач) — попап/шторка. «Открыть» ведёт
+на отдельную страницу записи `/health/records/:id` (`RecordDetailPageComponent`; та же панель в
+single-mode обслуживает и страницу визита врача). Форма создания — отдельные роуты
+(`record-add`, `record-batch-add`), пациент — из self/подопечный/участник, врач — нативный
+`<datalist>` (typeahead-компонента в проекте нет, осознанно). Одна кнопка «Распознать» на записи, живой
+прогресс — `shared/pipeline-progress` (шаги с галочками; при недоступном ИИ — шаг «Ждём ИИ»,
+опрос статуса реже). Открытая запись: шапка «‹ Анализы» + действия (Файлы/Резюме/Редактировать/
+Доступ/Удалить), мета-строка, плитки «вне нормы/в норме/без нормы», таблица показателей со шкалой
+`shared/reference-scale` (подписи границ нормы и значения), клик по показателю — справка
+(`components/indicator-info`: боковая панель на десктопе, полноэкранно на мобильном). Вкладка
+«Показатели» (`indicators-tab`, `/health/indicators`) группирует по `(пациент, analyteKey,
+specimenKbId)`; подписи источника — `shared/util/specimen.ts`.
 
 Лимиты вложений мед-записи — `AttachmentUploadOptions` (env `Attachments__MaxFileSizeBytes`/
 `Attachments__MaxFilesPerRecord`, дефолт 5 МиБ/8 файлов на запись): проверка размера — как раньше,

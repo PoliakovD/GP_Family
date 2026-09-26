@@ -162,14 +162,21 @@ Settings → Secrets and variables → Actions → New repository secret:
 
 ## 6. Первый деплой
 
-Actions → Deploy → Run workflow (ветка `master`, `run_tests: true`). Workflow:
-1. Гоняет юнит-тесты (если `run_tests=true`).
-2. Собирает `src/FamilyHub.Api/Dockerfile`, пушит в `ghcr.io/<owner>/gp_family-api` двумя тегами
-   (`<git-sha>` и `latest`).
-3. По SSH кладёт на сервер `.env` (из `PROD_ENV` + тег образа), `docker-compose.yml`, `Caddyfile`,
-   `backup/`.
-4. `docker compose pull && up -d --remove-orphans`, ждёт `/health/ready` изнутри контейнера
-   `api` (до полутора минут), затем чистит старые образы.
+Actions → Deploy → Run workflow (ветка `master`). **Деплой ничего не собирает и не тестирует**: образы
+(`gp_family-api`, `gp_family-telegrambot`, `gp_family-wg-client`) заранее публикует `build.yml` при push в
+`master` (тег `latest`), тесты гоняет `ci.yml` — перед деплоем убедитесь, что `Build` на нужном коммите
+зелёный. Выбранная ветка/тег определяет только файлы `deploy/` (compose, Caddyfile). Workflow:
+1. Рендерит `.env` (из секрета `PROD_ENV` + `IMAGE`/`IMAGE_TAG=latest`/`IMAGE_BOT`/`WG_IMAGE`) и
+   `wg/awg0.conf` (из секрета `WG_CONF`, ADR-0008).
+2. По SSH кладёт на сервер `.env`, `docker-compose.yml`, `Caddyfile`, `backup/`, `scripts/`, `wg/awg0.conf`.
+3. `docker compose pull`, пересоздаёт `wg-client` и `telegrambot` вместе (общий сетевой namespace), затем
+   `up -d --remove-orphans`.
+4. Ждёт `/health/ready` изнутри контейнеров `api` и `telegrambot` (по 18 попыток × 5 с ≈ 1,5 минуты на
+   каждый), затем чистит старые образы; при неудаче печатает логи.
+
+`/health/ready` в первые 2 минуты после старта процесса **не требует шину MassTransit/Kafka Rider**
+(она стартует позже Kestrel), поэтому деплой не ждёт вступления в consumer group; после этого окна
+шина, так и не поднявшаяся, даёт 503. `start_period` docker healthcheck — api 120 с, бот 90 с.
 
 Первый запуск также автоматически применит все EF Core миграции (см. `Program.cs` — retry с
 экспоненциальной паузой) и создаст Kafka-топики (`EnsureTopicsExist`, ADR-0007).

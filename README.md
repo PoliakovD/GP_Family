@@ -11,8 +11,15 @@
   распознавание по фото (OCR через локальную LLM)
 - **Справочник препаратов** — общий обезличенный каталог, автообогащается веб-поиском +
   суммаризацией локальной моделью, когда препарата ещё нет в базе
-- **Мед-анализы** — записи по датам, врачам, описанию + PDF/фото-сканы. Персональные, с
-  двухуровневым управляемым шарингом на семью
+- **Мед-анализы и визиты к врачу** — записи по датам, врачам, описанию + PDF/фото-сканы.
+  Персональные, с двухуровневым управляемым шарингом на семью. Распознавание документа локальной
+  LLM (показатели, норма/отклонение, шкала «где в норме»), резюме простым языком и «вопросы врачу»
+  (пересчитываются сами после ручных правок), справка по каждому показателю из общего справочника
+- **Главная** — сводка «Требует внимания» (просроченные лекарства, заявки на вступление, ближайшие
+  дни рождения — с датами) и «В порядке»; «Кто в семье» с приглашением по ссылке
+- **Работа без ИИ** — если локальная LLM (ноутбук за WireGuard) недоступна, распознавание,
+  резюме и проверка биоматериала не пропадают, а ждут в очереди и запускаются сами; интерфейс это
+  показывает («ИИ временно недоступен», «ждём ИИ») — [ADR-0013](docs/adr/0013-llm-unavailability-waiting-queue.md)
 - **Дни рождения** членов семьи, с виджетом ближайших на главном экране
 - **Глобальный поиск** — по лекарствам, справочнику, анализам (Postgres full-text, русская морфология)
 - **Оповещения** — Telegram-бот и/или Web Push (сроки годности лекарств, дни рождения)
@@ -34,21 +41,24 @@
 ```
 GP_Family.slnx
 ├── FamilyHub.Api               // composition root (Program.cs), auth/families/invites/
-│                                //   members/consents/account/push/bot-webhook, раздача Angular SPA
+│                                //   members/consents/account/push, /internal/bot/*, раздача Angular SPA
 ├── FamilyHub.Contracts         // DTO/доменные события, общие между Api и модулями (шина — MassTransit)
 ├── FamilyHub.Domain            // сущности, enum'ы, value objects, интерфейсы (IFamilyOwned)
 ├── FamilyHub.Infrastructure    // EF Core, auth (JWT + Telegram), авторизация, шифрование,
-│                                //   файловое хранилище (MinIO/Local), Hangfire-оповещения,
+│                                //   файловое хранилище (MinIO), Hangfire-оповещения,
 │                                //   email, LM Studio, поиск, событийная шина (MassTransit), аудит
 ├── FamilyHub.Modules.Medical   // аптечка, анализы, вложения, OCR, справочник + AI-обогащение
 ├── FamilyHub.Modules.Birthdays // дни рождения
-└── FamilyHub.Web               // Angular 18 PWA — единственный фронтенд, обслуживает и браузер,
+├── FamilyHub.TelegramBot       // Telegram-бот отдельным процессом, без доступа к БД (ADR-0008)
+└── FamilyHub.Web               // Angular 20 PWA — единственный фронтенд, обслуживает и браузер,
                                  //   и Telegram Mini App (тот же билд, разное поведение по контексту)
 ```
 
-Отдельного проекта `FamilyHub.TelegramBot` нет — обработка апдейтов бота живёт в
-`FamilyHub.Api/Features/Bot` + `FamilyHub.Infrastructure/Telegram`, бот встроен в тот же процесс,
-что и API.
+Бот — **отдельный процесс** `FamilyHub.TelegramBot` (образ `gp_family-telegrambot`, в проде — профиль
+compose `bot`): у него нет доступа к БД, с API он общается внутренним HTTP `/internal/bot/*`
+(`X-Internal-Token`), оповещения получает из Kafka-топика `telegram-outbound`, а исходящий трафик к
+`api.telegram.org` идёт через AmneziaWG-сайдкар (`wg-client`) — см. [ADR-0008](docs/adr/0008-telegram-bot-separate-process-and-awg-tunnel.md).
+`FamilyHub.Api/Features/Bot` — только серверная сторона `/internal/bot/*`.
 
 **Принцип:** ядро (API + модель доступа + данные) — одно, клиенты (PWA, Telegram Mini App, бот)
 подключаются к нему поверх общего контракта.
@@ -93,7 +103,8 @@ GP_Family.slnx
   авто-создания аккаунта. Привязка — отдельный флоу (`/api/auth/telegram/{init,send-code,bind,revoke}`):
   email + одноразовый код на почту роднит `TelegramId` с существующим или новым `User`.
 - **Dev-режим** — `DevAuthenticationHandler` (заголовок `X-Dev-TelegramId`), регистрируется
-  только при `ASPNETCORE_ENVIRONMENT=Development`, структурно недоступен в проде.
+  только при `DevTools:DevAuthEnabled=true` (по умолчанию `false`, от `ASPNETCORE_ENVIRONMENT` не
+  зависит; на VPS всегда выключен).
 - Резервный сброс пароля, смена пароля, список сессий с ручным отзывом (`logout-all`) — в
   `/settings`.
 
@@ -170,7 +181,7 @@ var visibleRecords = _db.MedicalRecords
 - **Согласия (152-ФЗ)** — `ConsentRequiredFilter` блокирует Medical/Birthdays-модули до принятия
   актуальной версии политики (`/api/consents`), тексты — `Api/Legal/*.html`.
 - **Аудит** — `MedicalAccessAudit` логирует доступ к чужим медданным.
-- **Событийная шина (MassTransit 8.5.1 + EF Core Outbox + Kafka Rider)** — изоляция модулей друг
+- **Событийная шина (MassTransit 8.5.x + EF Core Outbox + Kafka Rider)** — изоляция модулей друг
   от друга через доменные события (`FamilyHub.Contracts/Events`, публикация — только через
   `IDomainEventPublisher`, `src/FamilyHub.Infrastructure/Messaging`); транзакционная запись в
   outbox поверх той же БД/транзакции, что и бизнес-запись, доставка — в реальный Kafka-топик
@@ -178,7 +189,8 @@ var visibleRecords = _db.MedicalRecords
   бизнес-потребители — задел под вынос модулей в микросервисы без переписывания контрактов/
   потребителей уже сегодня, не только "в будущем" (ADR-0006, ADR-0007). `Enabled=false`
   (дефолт `appsettings.json`, юнит-тесты, casual IDE-запуск) — dev-lite-режим на InMemory без брокера.
-- **Rate limiting** — на auth-эндпоинтах (`RequireRateLimiting("auth")`).
+- **Rate limiting** — политики `auth`/`auth-code`/`invite-redeem` (по IP: вход, коды на почту, погашение
+  инвайта) и `llm`/`medical-write` (по `UserId`: распознавание, OCR, запись медданных).
 - **Egress-политика** — данные по умолчанию не покидают РФ-контур; осознанные исключения
   задокументированы ADR'ами (Web Push через иностранные push-релеи — только зашифрованный
   RFC8291-payload; обогащение справочника — веб-поиск по обезличенному названию препарата).
@@ -203,8 +215,10 @@ var visibleRecords = _db.MedicalRecords
 ## 🖥 Инфраструктура и деплой
 
 - **Backend**: ASP.NET Core, PostgreSQL (EF Core), MinIO (S3-совместимое хранилище PDF/фото),
-  Seq (структурные логи, Serilog), Hangfire на PostgreSQL (фоновые задачи и очереди, включая
-  выделенную очередь `enrichment`).
+  Seq (структурные логи, Serilog), Hangfire на PostgreSQL (фоновые задачи и очереди: `extraction`
+  и `enrichment` — по одному воркеру, потому что LLM один; плюс `previews`, `rotation`).
+  Локальная LLM (LM Studio) недоступна штатно — ожидающие задачи запускает
+  `LmStudioRecoverySweepJob` раз в минуту (ADR-0013).
 - **Frontend**: Angular dev-server (`ng serve`) в контейнере с hot-reload через bind-mount;
   production-сборка (`ng build`) собирается отдельно и раздаётся тем же `FamilyHub.Api`.
 - Локальный dev-стек — `docker-compose.yml`: сервисы `postgres`, `minio`, `seq`, `kafka`
@@ -233,6 +247,22 @@ var visibleRecords = _db.MedicalRecords
 
 Отдельный контур на VPS (Caddy + образ из GHCR + WireGuard-туннель к LM Studio на ноутбуке) —
 файлы и инструкция в [`deploy/README.md`](deploy/README.md); CI/CD — `.github/workflows/`.
+
+---
+
+## 🧪 Тестирование и CI
+
+| Уровень | Где | Как запустить |
+|---|---|---|
+| Юнит | `tests/FamilyHub.UnitTests` (SQLite/NSubstitute) | `dotnet test tests/FamilyHub.UnitTests` |
+| Интеграционные | `tests/FamilyHub.IntegrationTests` — приложение целиком (`WebApplicationFactory`) против Postgres/MinIO в Testcontainers (Kafka — только в отдельных тестах шины), нужен Docker | `dotnet test tests/FamilyHub.IntegrationTests` |
+| E2E (Playwright) | `e2e/` — реальный API + Postgres + MinIO в docker + dev-сборка Angular, LM Studio на закрытом порту | `cd e2e && npm test` ([`e2e/README.md`](e2e/README.md)) |
+| Фронт | юнит-тестов нет — страховка e2e; сборка `ng build` в CI | `cd src/FamilyHub.Web && npm run build` |
+
+GitHub Actions (`.github/workflows/`): `ci.yml` (каждый push/PR: сборка + юнит-тесты, `ng build`),
+`build.yml` (push в master: образы в GHCR), `integration.yml` и `e2e.yml` (push в master и вручную),
+`deploy.yml` (**только вручную** — выкатка на VPS образом `:latest`), `minio-image.yml` (образ MinIO,
+ADR-0012). Подробности и грабли — `.claude/research/frontend-toolchain-and-e2e.md`.
 
 ---
 
@@ -265,13 +295,16 @@ at-rest шифрование персональных и медицинских 
 Актуальное «как сделано» по каждому модулю (индекс — `.claude/research/README.md`):
 `domain.md`, `infrastructure.md`, `api-core.md`, `module-medical.md`, `module-birthdays.md`,
 `auth-uiux-rework-stage.md`, `navigation-redesign-and-web-push.md`, `auth-email-anchor-jwt-rework.md`,
-`settings-hub-and-account-security.md`. (`web-miniapp.md` помечен устаревшим — описывает старый
-React-фронт, актуальная реализация — Angular, см. остальные файлы этого списка.)
+`settings-hub-and-account-security.md`, `identity-fio-rework.md`, `concurrency-correctness-audit-2026-08-27.md`,
+`ai-availability-and-waiting-queue.md` (недоступный ИИ), `ui-rework-v2.3.md` (Главная/запись анализа/справочник),
+`frontend-toolchain-and-e2e.md` (Angular 20, зависимости, e2e, CI). (`web-miniapp.md` помечен устаревшим —
+описывает старый React-фронт, актуальная реализация — Angular, см. остальные файлы этого списка.)
 
 ### Architecture Decision Records — `docs/adr/`
-`0001` локализация данных и egress, `0002` at-rest шифрование и управление ключами, `0003`
-архитектура поиска (Postgres FTS, отказ от OpenSearch), `0004` исключение для Web Push, `0005`
-исключение для обогащения справочника препаратов.
+Индекс — [`docs/adr/README.md`](docs/adr/README.md): `0001` локализация данных и egress, `0002` шифрование и
+ключи, `0003` поиск, `0004` Web Push, `0005` обогащение справочника, `0006`/`0007` событийная шина и Kafka,
+`0008` бот отдельным процессом + AmneziaWG, `0009` админ-панель и ротация ключей, `0010` превью вложений,
+`0011` учётки приложения Postgres/MinIO, `0012` MinIO собственной сборки, `0013` недоступный ИИ (очередь «ждём ИИ»).
 
 ### Безопасность — `docs/security/`
 `threat-model.md`, `access-matrix.md`, `backup-and-retention-policy.md`, и журнал модульного
@@ -295,16 +328,23 @@ React-фронт, актуальная реализация — Angular, см. �
 | Invites | `POST /api/families/{familyId}/invites`, `GET /api/families/{familyId}/current`, `POST /api/invites/{code}/redeem`, `POST /api/invites/{inviteId}/revoke`, `GET /api/families/{familyId}/pending`, `POST /api/families/{familyId}/members/{targetUserId}/{approve,reject}` |
 | Members | `POST /api/families/{familyId}/members/{targetUserId}/remove`, `POST /api/families/{familyId}/leave` |
 | Consents | `GET /api/consents/{current,status}`, `POST /api/consents/accept`, `GET /api/legal/privacy-policy` |
-| Account | `POST /api/account/delete`, `GET /api/account/export` |
+| Account | `POST /api/account/delete`, `GET /api/account/export`, `PUT /api/account/profile` |
 | Medkits / Medications | `GET/POST /api/families/{familyId}/medkits`, `PUT/DELETE /api/medkits/{medkitId}`, `GET/POST /api/medkits/{medkitId}/medications`, `PUT/DELETE /api/medications/{medicationId}`, `POST /api/medications/ocr` |
 | Справочник (KB) | `GET /api/kb/medications`, `GET /api/kb/medications/{id}`, `GET /api/medications/{medicationId}/kb`, `POST /api/medications/{medicationId}/kb/refresh` |
-| Medical records (анализы + врачи, `?kind=analysis\|visit`) | `GET/POST /api/medical-records`, `GET /api/medical-records/shares`, `POST /api/medical-records/{share,unshare}`, `POST /api/medical-records/{recordId}/{hide,unhide}` |
+| Medical records (анализы + врачи, `?kind=analysis\|visit`) | `GET/POST /api/medical-records`, `GET/PUT/DELETE /api/medical-records/{recordId}`, `GET /api/medical-records/{shares,doctors}`, `POST /api/medical-records/{share,unshare}`, `POST /api/medical-records/{recordId}/{hide,unhide}` |
+| Распознавание и показатели | `POST /api/medical-records/{recordId}/extract` (`202`; при недоступном ИИ — `202 {code:"waiting_for_ai"}`), `GET .../extraction`, `GET /api/medical-records/extraction-limits`, `GET/POST .../indicators`, `GET .../summary` (`pending`), `POST .../summary/regenerate` (`202`), `GET .../conclusion`, `PUT .../specimen`, `PUT .../specimen-pending`, `GET .../indicators/{indicatorId}/history`; `GET /api/indicators`, `GET /api/indicators/{analyteKey}`, `PUT/DELETE /api/indicators/{id}`, `GET /api/indicators/{id}/article` |
+| Источники (биоматериал) | `GET /api/specimens`, `GET /api/specimens/search`, `POST /api/specimens` (`503` при недоступном ИИ) |
+| Справочник показателей | `GET /api/kb/analytes`, `GET /api/kb/analytes/{id}` |
+| Главная / фоновые задачи | `GET /api/home/summary` (один агрегат «Требует внимания»), `GET /api/jobs/active-summary` (глобальный трей, `waitingForAi`) |
+| Статус ИИ | `GET /api/ai/status` → `{available}` |
+| Подопечные | `GET/POST /api/families/{familyId}/dependents`, `PUT/DELETE /api/dependents/{dependentId}` |
+| Bot (внутренний) | `/internal/bot/{ping,users/resolve,invites/redeem,telegram-link/peek,telegram-link/confirm}` (`X-Internal-Token`; закрыт на Caddy) |
 | Attachments | `POST /api/medical-records/{recordId}/attachments`, `GET /api/medical-records/{recordId}/attachments`, `GET /api/attachments/{attachmentId}/url`, `GET /api/attachments/{attachmentId}/file` |
 | Birthdays | `GET/POST /api/families/{familyId}/birthdays`, `PUT/DELETE /api/birthdays/{birthdayId}` |
 | Search | `GET /api/search?types=` (`medication\|kb\|record\|visit\|birthday`) |
 | Notifications | `GET /api/notifications?unreadOnly=`, `POST /api/notifications/{id}/read`, `GET/PUT /api/notifications/preferences` |
 | Push | `GET /api/push/vapid-public-key`, `POST /api/push/{subscribe,unsubscribe}` |
-| Bot | `POST /bot/webhook` (только если `Telegram:BotToken` задан) |
+| Bot | `POST /bot/webhook` — обслуживает процесс `FamilyHub.TelegramBot` (только если `Telegram:BotToken` задан) |
 
 Все группы, кроме `Consents`/`Account` (частично анонимные для anti-enumeration) и `Auth`
 (частично анонимные до входа), — `.RequireAuthorization()` по умолчанию; непокрытые маршруты
@@ -314,7 +354,7 @@ React-фронт, актуальная реализация — Angular, см. �
 
 ## 📱 Frontend — Angular PWA / Telegram Mini App
 
-Один Angular 18 SPA обслуживает и браузер (PWA, service worker через `@angular/service-worker`),
+Один Angular 20 SPA обслуживает и браузер (PWA, service worker через `@angular/service-worker`),
 и Telegram Mini App — поведение переключается по контексту (`isInsideTelegram()`), не отдельными
 сборками. Собирается в статику, раздаётся `FamilyHub.Api`.
 
@@ -327,18 +367,23 @@ React-фронт, актуальная реализация — Angular, см. �
   `doctor-visits-tab`, `birthdays-panel`/`-tab`, `birthday-widget`, `kb-card`/`kb-tab`),
   правовые модалки (`consent-gate`, `consent-text`, `privacy`), `dev-panel` (только dev-режим).
 - `shared/` — переиспользуемые примитивы: `modal`, `bottom-sheet`, `confirm`, `toast`,
-  `loading-spinner`, `search-field`, `cookie-banner`, общие утилиты (`util/`).
-- `services/`, `models/` — HTTP-слой к API и TS-зеркало backend DTO.
+  `loading-spinner`, `search-field`, `cookie-banner`, `invite-modal`, `reference-scale` (шкала «где в
+  норме»), `pipeline-progress`, `background-jobs-dropdown`, общие утилиты (`util/`).
+- `services/`, `models/` — HTTP-слой к API и TS-зеркало backend DTO; `ai-status.service.ts` — статус
+  локального ИИ для плашки «ИИ временно недоступен».
 
 ### Навигация
-Таб-бар: **Главная** (семьи + виджет ближайших ДР) / **Здоровье** (хаб: медикаменты + анализы +
-врачи + справочник) / **Уведомления** / **Профиль**. Поиск — на Главной, серверные фильтры по типу
+**Десктоп (≥1024px)** — боковое меню: Главная / Здоровье (Аптечка, Анализы, Посещения врачей,
+Справочник, Показатели анализов) / Семья / Уведомления / Профиль, внизу — переключатель текущей семьи.
+**Мобильный** — нижний таб-бар: Главная / Здоровье / Семья / Ещё (Уведомления и Профиль). Поиск — в верхней строке
+каркаса (страницы со своим списком подставляют туда свой поиск), серверные фильтры по типу
 (`?types=medication,kb,record,visit,birthday`).
 
 ### Локальная разработка без Telegram
 `http://localhost:<port>/?devTgId=<любое число>` — один раз кладёт `devTgId` в `localStorage`,
-дальше работает как обычная сессия через `X-Dev-TelegramId`. Работает только при
-`ASPNETCORE_ENVIRONMENT=Development`.
+дальше работает как обычная сессия через `X-Dev-TelegramId`. Нужны **dev-сборка фронта** (`ng serve` /
+`ng build --configuration development`; в production-сборке `isDevMode()` выключен) и
+`DevTools:DevAuthEnabled=true` на API (по умолчанию выключен, на VPS всегда выключен).
 
 ---
 
@@ -346,17 +391,18 @@ React-фронт, актуальная реализация — Angular, см. �
 
 | Слой | Технология |
 |---|---|
-| Backend | ASP.NET Core Web API (.NET 8/9), модульный монолит |
+| Backend | ASP.NET Core Web API (.NET 10), модульный монолит |
 | ORM / БД | EF Core / PostgreSQL |
-| Frontend | Angular 18 + Bootstrap 5, PWA (service worker), тот же SPA — Telegram Mini App |
+| Frontend | Angular 20 (TypeScript 5.8), собственная дизайн-система (без Bootstrap), PWA (service worker), тот же SPA — Telegram Mini App |
 | Аутентификация | Email + пароль → JWT + DB-backed refresh-сессии (PWA); Telegram `initData` HMAC, lookup-only (Mini App) |
 | Фоновые задачи | Hangfire на PostgreSQL (оповещения, обогащение справочника) |
-| Объектное хранилище | MinIO (S3-совместимое) / локальный диск для dev |
+| Объектное хранилище | MinIO (S3-совместимое; образ собственной сборки, ADR-0012) |
 | Логи | Serilog → Seq |
-| Локальная LLM | LM Studio (OCR медикаментов по фото, суммаризация для справочника) |
+| Локальная LLM | LM Studio (распознавание анализов и заключений, OCR медикаментов по фото, резюме, суммаризация для справочника); недоступность — штатная, ADR-0013 |
+| Тесты | xUnit + Testcontainers (юнит/интеграционные), Playwright (e2e) |
 | Веб-поиск для обогащения справочника | Yandex Web Search API / Brave (опционально, off по умолчанию) |
-| Push-уведомления | Telegram-бот (Telegram.Bot) и/или Web Push (VAPID) |
+| Push-уведомления | Telegram-бот (Telegram.Bot, отдельный процесс) и/или Web Push (VAPID) |
 | At-rest шифрование | AES-GCM, поле- и файл-уровень |
 
 **Принцип:** ядро (API + модель доступа + данные) — одно, клиенты подключаются поверх общего
-контракта. Бот — тонкий клиент, встроенный в тот же процесс, что и API.
+контракта. Бот — тонкий клиент в отдельном процессе без доступа к БД (ADR-0008).

@@ -1,51 +1,98 @@
 # Технический долг
 
 Зафиксированные ограничения и нерешённые мелочи, обнаруженные по ходу разработки.
-Не блокируют текущий v1, но стоит учитывать при дальнейшей работе.
+Не блокируют текущий v1, но стоит учитывать при дальнейшей работе. Актуализировано 2026-09-25.
 
-## 1. `dotnet ef` не подхватывает `ASPNETCORE_ENVIRONMENT` для design-time конфигурации
+## Закрыто / устарело (оставлено как история)
 
-`dotnet ef database update`/`dotnet ef dbcontext info`, запущенные из `src/FamilyHub.Api`,
-всегда резолвили строку подключения на БД `familyhub` (из `appsettings.json`), даже когда
-`ASPNETCORE_ENVIRONMENT=Development` был явно выставлен и через Bash `export`, и через
-PowerShell `$env:`. Ожидалось переключение на `familyhub_dev` (`appsettings.Development.json`).
+### 1. `dotnet ef` и `ASPNETCORE_ENVIRONMENT` — закрыто
+Раньше `dotnet ef`, запущенный из `src/FamilyHub.Api`, резолвил строку подключения на БД `familyhub`
+независимо от среды. Сейчас у Infrastructure есть `DesignTimeDbContextFactory` (строка — из
+переменной окружения `FAMILYHUB_CONNECTION_STRING`, есть дефолт), и миграции создаются без запуска
+хоста и без БД: `dotnet ef migrations add <Имя> --project src/FamilyHub.Infrastructure`. Для
+`database update` на конкретную БД — задавать `FAMILYHUB_CONNECTION_STRING` (или `--connection`).
 
-Причина не диагностирована до конца — похоже на особенность того, как design-time хост
-`dotnet-ef` в этом проекте поднимает `WebApplication`/конфигурацию.
+### 2. `docker-compose.yml` и имя dev-БД — закрыто
+Имя базы теперь одно на всех: `POSTGRES_DB` из `.env` (`dev.env.example` — `familyhub`) попадает и в
+контейнер Postgres, и в `ConnectionStrings__Postgres` сервиса `api`; строки подключения в
+`appsettings*.json` нет вовсе.
 
-**Воркэраунд:** передавать явный `--connection "Host=localhost;Port=5432;Database=familyhub_dev;Username=postgres;Password=postgres"`
-флагом в `dotnet ef`-команды, когда нужно работать с dev-базой.
+## Открытое
 
-## 2. `docker-compose.yml` создаёт не ту БД, на которую указывает dev-конфиг
+### 3. Регистрация вебхука бота на реальном домене не проверена
+`TelegramWebhookRegistrar` (теперь в `FamilyHub.TelegramBot`, ADR-0008) вызывает
+`SetWebhook`/`SetChatMenuButton` только если заданы `Telegram:BotToken` и `Telegram:WebhookUrl` — для
+локальной разработки это осознанно пропускается. Публичный домен с HTTPS, туннель AmneziaWG и
+`setWebhook` против настоящего Telegram проверены только синтетически (маршрут `/bot/webhook`
+запросом; `/health/telegram` доказывает egress через туннель, но только вручную). Сайдкар `wg-client`
+собирается из `master` upstream (`AMNEZIAWG_GO_COMMIT`/`AWGTOOLS_COMMIT` не закреплены) и не
+проверялся против конкретного Amnezia-сервера — см. комментарии в `deploy/wg/Dockerfile`.
 
-`POSTGRES_DB: familyhub` в `docker-compose.yml` создаёт только базу `familyhub`, а
-`appsettings.Development.json` указывает на `familyhub_dev`. После `docker compose up -d postgres`
-с нуля база `familyhub_dev` не существует, и API падает с
-`Npgsql.PostgresException: database "familyhub_dev" does not exist`, пока её не создать
-вручную (см. п.1 — миграции с явным `--connection` создают её как побочный эффект).
+Один дефект этого класса уже найден и исправлен по факту использования: `allowedUpdates` в
+`SetWebhook` не включал `UpdateType.CallbackQuery`, из-за чего инлайн-кнопки («Привязать»/«Отмена»)
+не доходили до бота; тесты синтезируют `Update` и шлют его напрямую, минуя `setWebhook`, поэтому дефект
+не ловился (регрессионный тест `TelegramWebhookRegistrarTests`).
 
-**Чтобы закрыть:** либо переименовать `POSTGRES_DB` в `familyhub_dev` в compose, либо завести
-в compose обе базы, либо привести имя в `appsettings.Development.json` к `familyhub`.
+### 4. Монетизация и чат/календарь вне объёма v1
+Монетизация/лимиты (этап 5 брифа) и чат/календарь (этап 6+) — намеренно вне объёма текущей работы.
+Готовые рычаги для тарифов уже есть: суточные лимиты на пользователя
+(`ExtractionLimitsOptions`), лимиты вложений, число семей.
 
-## 3. Публичная регистрация вебхука бота не настроена (вне объёма v1)
+### 5. ИИ недоступен: немые шаги конвейера после структурирования
+Очередь «ждём ИИ» (ADR-0013) покрывает постановку распознавания, резюме, отложенный биоматериал и
+обогащение. Но шаги **внутри** прогона распознавания после структурирования показателей —
+`SpecimenResolver`, `AnalysisTitleGenerator`, `AnalyteSubjectResolver`, `OcrNameCorrector`,
+`PatientReferenceCalculator`, `QualitativeNormJudge` — при сбое ИИ молча возвращают пусто/`null`:
+запись становится «Готово» без источника/названия/норм по полу и возрасту и больше не
+пересматривается. Нужно: отличать transient-сбой от «модель не смогла», при transient — оставлять
+задачу в ожидании (или помечать запись для дозапуска этих шагов).
 
-`TelegramWebhookRegistrar` вызывает `SetWebhook`/`SetChatMenuButton` только если заданы
-`Telegram:BotToken` и `Telegram:WebhookUrl` — для локальной разработки это осознанно
-пропускается. Реальный паблик-домен с HTTPS и проверка `setWebhook` против настоящего
-Telegram-сервера не проверялись (тестировался только маршрут `/bot/webhook` синтетическим
-запросом). Нужно сделать при деплое.
+### 6. `POST /api/medications/ocr` — синхронный
+Фото упаковки не хранятся (ADR-0001), поэтому OCR лекарств нельзя поставить в очередь без хранения
+снимков; при недоступном ИИ — `success:false` и заполнение полей руками. Запрос держит HTTP-соединение до
+`LmStudio:TimeoutSeconds`.
 
-Один конкретный дефект из этого класса уже найден и исправлен по факту реального
-использования: `allowedUpdates` в `SetWebhook` не включал `UpdateType.CallbackQuery`, из-за
-чего Telegram на своей стороне никогда не доставлял апдейты нажатий инлайн-кнопок (в т.ч.
-"Привязать"/"Отмена" в `TelegramUpdateHandler.HandleCallbackQueryAsync`) — `/bot/webhook`
-их вообще не получал. Прикладная логика была написана верно с самого начала и покрыта
-тестами, но тесты синтезируют `Update` и шлют его напрямую, минуя `setWebhook`, поэтому
-дефект не ловился (см. регрессионный тест `TelegramWebhookRegistrarTests`). Остальное по
-этому пункту (широкая проверка деплоя с реальным паблик-доменом) по-прежнему не сделано.
+### 7. `LmStudio:TimeoutSeconds` = 1000 при единственном воркере очереди
+«Молчащий» туннель (пакеты теряются, а не отбиваются) держит воркер очереди `extraction`/`enrichment` и
+`LmStudioConcurrencyGate` до таймаута — около 17 минут на один вызов. Проба перед джобой резюме и
+кэш 10 с смягчают, но не отменяют. Рассмотреть таймаут поменьше на «дешёвых» вызовах и проверку
+жизни соединения.
 
-## 4. Монетизация и чат/календарь вне объёма v1
+### 8. Задачи обогащения справочника удалённых записей остаются
+Удаление записи/подопечного/аккаунта чистит задачи распознавания, но задачи обогащения справочника
+(общие для справочника) остаются и в глобальном трее показываются без ссылки на запись. Решение
+(«отменять Pending-обогащение, порождённое только этой записью») потребует учёта владельца задачи.
 
-Монетизация/лимиты (этап 5 брифа) и чат/календарь (этап 6+) — намеренно вне объёма текущей
-работы. (Шифрование вложений — реализовано, `AttachmentService`/`IFileCipher`; эта строка была
-устаревшей и удалена.)
+### 9. Флейковый интеграционный тест
+`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
+падает на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
+`Hangfire.PostgreSql` (`monitoring.Queues()` в `AdminStatsService.GetSystemStatsAsync` — на собственном
+пуле соединений Hangfire). Повторный запуск проходит. Вероятная причина — устаревшее соединение в
+пуле Hangfire; варианты — ретрай вызова мониторинга или новое соединение в этом эндпоинте.
+
+### 10. Заморожённые зависимости
+См. таблицу в `.claude/research/frontend-toolchain-and-e2e.md`: MassTransit 8.5.x (не 9) и
+FluentAssertions 6.12.x (не 8) — коммерческие лицензии; NPOI 2.7.4 ↔ SkiaSharp 2.88 ↔ PDFtoImage 4.x —
+обновлять только вместе (NPOI 2.8 требует SkiaSharp 3); ImageSharp 2.1.13 закреплён как патченная версия.
+Тесты-зависимости с мажорами позади: NSubstitute, Testcontainers, xunit runner, coverlet.
+
+### 11. Фронт: нет юнит-тестов, e2e покрывает не всё
+Юнит-тестов у `FamilyHub.Web` нет вовсе (`ng test` без спеков). E2E (Playwright, `e2e/`) покрывает основные
+сценарии, но **не** PWA-вход по email+паролю (нужен OTP с почты) и не Telegram initData; workflow
+`e2e.yml` запускается только на push в `master`/вручную, не на PR.
+
+### 12. `profileGuard` принимает временный сбой за «профиль не заполнен»
+При 429 (rate limit `auth`: 10 запросов/мин на IP) или сетевом сбое `GET /api/auth/me` гард не
+получает профиль и уводит на `/profile-setup`. Нужно различать «нет данных» и «профиль неполон»
+(повторить/показать ошибку). За NAT с общим IP лимит `auth` даёт то же ложное срабатывание.
+
+### 13. Бюджет initial-бандла превышен
+`ng build` (prod) предупреждает: ≈885 кБ при предупредительном пороге 850 кБ (ошибка — с 1,5 МБ).
+Рост постепенный; при следующей крупной фиче — ленивые чанки.
+
+### 14. `Deploy` — только вручную
+Хотфиксы (например, `Caddyfile`) не выкатываются сами: после мержа нужен ручной запуск `Deploy`
+(решение зафиксировано в `deploy/DECISIONS.md`). Держать в голове при инцидентах.
+
+### 15. Опциональные миграции Angular не применены
+После `ng update` до 20 не запускались: `use-application-builder` (перенос на пакет `@angular/build`; сейчас — `@angular-devkit/build-angular:application`) и `router-current-navigation` (`Router.getCurrentNavigation` → сигнал). `control-flow-migration` не нужна — в шаблонах уже новый синтаксис `@if/@for`. Не нужны для безопасности; делать отдельными PR.
