@@ -30,4 +30,17 @@ public enum MedicalAccessAction
     /// <summary>Владелец безусловно удалил запись (независимо от того, кому она была видна —
     /// себе, подопечному семьи или назначенному TargetUserId).</summary>
     Delete = 8,
+
+    /// <summary>Владелец сформировал отчёт для врача.</summary>
+    DoctorReportCreated = 9,
+
+    /// <summary>Владелец выдал, продлил или перевыпустил публичную ссылку на отчёт.</summary>
+    DoctorReportLinkIssued = 10,
+
+    /// <summary>Владелец отозвал ссылку на отчёт.</summary>
+    DoctorReportLinkRevoked = 11,
+
+    /// <summary>Отчёт открыт по публичной ссылке. ActorUserId = Guid.Empty: смотрящий анонимен,
+    /// владелец — в OwnerUserId.</summary>
+    DoctorReportViewed = 12,
 }

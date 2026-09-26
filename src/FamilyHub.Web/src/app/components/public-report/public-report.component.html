@@ -1,0 +1,91 @@
+<div class="pr-page">
+  <header class="pr-bar">
+    <span class="pr-brand">FamilyHub</span>
+    <span class="pr-sub">· отчёт пациента для врача</span>
+    @if (state() === 'ready') {
+      <button type="button" class="btn btn-primary pr-download-top" (click)="download()">
+        <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Скачать PDF
+      </button>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('ready') {
+      @if (report(); as r) {
+        <main class="pr-main">
+          <aside class="pr-side">
+            <section class="pr-card">
+              <div class="pr-kicker">Пациент</div>
+              <div class="pr-name">{{ r.patientName }}</div>
+              @if (birthLine(r); as line) {
+                <div class="pr-muted">{{ line }}</div>
+              }
+              <dl class="pr-facts">
+                <div><dt>Период</dt><dd>{{ period(r) }}</dd></div>
+                <div><dt>Создан</dt><dd>{{ date(r.createdAt) }}</dd></div>
+                <div><dt>Ссылка</dt><dd>до {{ date(r.expiresAt) }}</dd></div>
+              </dl>
+            </section>
+
+            <div class="pr-warning" role="note">
+              <i class="ph-fill ph-warning" aria-hidden="true"></i>
+              <span>Сформировано пациентом в приложении. Не является официальным медицинским документом.</span>
+            </div>
+
+            @if (r.sections.length > 0) {
+              <section class="pr-card pr-toc">
+                <div class="pr-kicker">Содержание</div>
+                <ol>
+                  @for (s of r.sections; track s) {
+                    <li>{{ s }}</li>
+                  }
+                </ol>
+              </section>
+            }
+          </aside>
+
+          <section class="pr-viewer" aria-label="Документ">
+            <div class="pr-viewer-tools">
+              <span class="pr-muted">{{ r.pageCount > 0 ? r.pageCount + ' стр.' : '' }}</span>
+              <div class="pr-zoom">
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Уменьшить" (click)="zoom(-1)"><i class="ph ph-minus" aria-hidden="true"></i></button>
+                <span class="pr-zoom-label">{{ zoomLabel() }}</span>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Увеличить" (click)="zoom(1)"><i class="ph ph-plus" aria-hidden="true"></i></button>
+              </div>
+            </div>
+            @if (pdfUrl(); as url) {
+              <div class="pr-doc">
+                <app-pdf-preview [url]="url" [transform]="transform()" />
+              </div>
+            }
+          </section>
+        </main>
+
+        <div class="pr-bottom-bar">
+          <button type="button" class="btn btn-primary btn-block" (click)="download()">
+            <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Скачать отчёт PDF
+          </button>
+        </div>
+      }
+    }
+    @case ('gone') {
+      <main class="pr-gone">
+        <span class="pr-gone-icon"><i class="ph-duotone ph-clock-countdown" aria-hidden="true"></i></span>
+        <h2>Ссылка больше не работает</h2>
+        <p>Срок доступа к отчёту истёк или пациент отозвал доступ. Попросите пациента отправить новую ссылку.</p>
+        <p class="pr-muted">Данные пациента на этой странице не показываются</p>
+      </main>
+    }
+    @case ('error') {
+      <main class="pr-gone">
+        <span class="pr-gone-icon"><i class="ph-duotone ph-warning-circle" aria-hidden="true"></i></span>
+        <h2>Не удалось открыть отчёт</h2>
+        <p>Проверьте соединение и попробуйте ещё раз.</p>
+        <button type="button" class="btn btn-secondary" (click)="reload()">Повторить</button>
+      </main>
+    }
+    @default {
+      <main class="pr-gone"><p class="pr-muted">Открываем отчёт…</p></main>
+    }
+  }
+</div>

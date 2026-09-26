@@ -24,8 +24,9 @@ import { SearchFieldComponent } from './shared/search-field/search-field.compone
 import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdown/background-jobs-dropdown.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
+ * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
  * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения. */
-const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin'];
+const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin', '/r/'];
 
 /** Один пункт бокового меню (десктоп, ≥1024px) — редизайн v2, каркас навигации (PR2). Подпункты —
  * уже существующие роуты (Здоровье) или query-параметр на уже существующем роуте (Семья, см.
@@ -105,6 +106,8 @@ export class AppComponent implements OnInit {
         { path: '/health/medications', label: 'Аптечка' },
         { path: '/health/records', label: 'Анализы' },
         { path: '/health/visits', label: 'Посещения врачей' },
+        { path: '/health/notes', label: 'Дневник' },
+        { path: '/health/reports', label: 'Отчёты для врача' },
         { path: '/health/kb', label: 'Справочник' },
         { path: '/health/indicators', label: 'Показатели анализов' },
       ],

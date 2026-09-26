@@ -17,7 +17,7 @@ namespace FamilyHub.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -149,6 +149,84 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasFilter("\"Status\" = 0");
 
                     b.ToTable("CredentialRotations", (string)null);
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.DoctorReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IncludeAiSummaries")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IncludeLabs")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IncludeMeasurements")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IncludeMedications")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IncludeSymptomsNotes")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IncludeVisits")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PatientComment")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PatientSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("PeriodFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Recipient")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ShareExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ShareLastViewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ShareRevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ShareToken")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ShareTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ShareViewCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShareTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerUserId", "CreatedAt");
+
+                    b.ToTable("DoctorReports", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.EmailVerificationCode", b =>
@@ -656,6 +734,48 @@ namespace FamilyHub.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("global_specimens_kb", "kb");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.HealthNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DataJson")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IncludeInDoctorQuestions")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "OccurredAt");
+
+                    b.HasIndex("OwnerUserId", "Kind", "OccurredAt");
+
+                    b.ToTable("HealthNotes", "medical");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.KbRebuildRun", b =>

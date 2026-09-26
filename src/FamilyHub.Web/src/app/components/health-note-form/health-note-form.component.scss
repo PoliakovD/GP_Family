@@ -1,0 +1,326 @@
+// Форма записи дневника (макет «Screen - Diary»). Цвет выбранного типа приходит в --kind-color.
+
+:host { display: block; }
+
+.dn-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.dn-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+// Кнопки «Сохранить / Отмена» прилипают к низу панели/шторки — тело формы прокручивается под ними.
+.dn-footer {
+  position: sticky;
+  // Компенсирует внутренний отступ контейнера (side-panel-body / sheet-panel): иначе футер «зависает» выше края.
+  bottom: calc(-1 * var(--space-3));
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0 var(--space-1);
+  // Фон липкого футера совпадает с контейнером: бумага в боковой панели, --color-bg в нижнем листе.
+  background: var(--dn-surface, var(--color-paper));
+  border-top: 1px solid var(--color-divider);
+}
+
+.dn-save { flex: 1; }
+
+// ---- Выбор типа ----
+.dn-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dn-kind {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: var(--tap-min);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 0.8824rem;
+  color: var(--color-text);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+
+  i { font-size: 1.2rem; color: var(--kind-color); }
+
+  &.active {
+    font-weight: 600;
+    background: color-mix(in srgb, var(--kind-color) 10%, var(--color-paper));
+    border-color: var(--kind-color);
+  }
+
+  @media (max-width: 639px) {
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 4px;
+    font-size: 0.7647rem;
+  }
+}
+
+.dn-edit-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.05rem;
+
+  i { font-size: 1.3rem; color: var(--kind-color); }
+}
+
+// ---- Поля ----
+.dn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dn-label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.6471rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+.dn-optional {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-neutral-500);
+}
+
+.dn-sublabel {
+  font-size: 0.7647rem;
+  color: var(--color-neutral-600);
+}
+
+.dn-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.dn-hint {
+  margin: 0;
+  font-size: 0.7647rem;
+  color: var(--color-neutral-600);
+}
+
+.dn-detail { margin-top: 2px; }
+
+.dn-recents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.dn-recents-label { font-size: 0.7647rem; color: var(--color-neutral-600); }
+
+.dn-recent {
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 0.7941rem;
+  color: var(--color-neutral-800);
+  background: var(--color-surface);
+  border: 0;
+  cursor: pointer;
+
+  &:hover { background: var(--color-neutral-200); }
+}
+
+// ---- Интенсивность 1–10 ----
+.dn-scale {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.dn-scale-btn {
+  min-height: var(--tap-min);
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-neutral-700);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  cursor: pointer;
+
+  &.active {
+    color: #fff;
+    background: var(--color-kind-symptom);
+    border-color: var(--color-kind-symptom);
+  }
+}
+
+.dn-sev-word {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-kind-symptom-text);
+}
+
+.dn-scale-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7353rem;
+  color: var(--color-neutral-600);
+}
+
+// ---- Чипы ----
+.dn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.dn-chip {
+  min-height: var(--tap-min);
+  padding: 8px 13px;
+  font: inherit;
+  font-size: 0.8529rem;
+  color: var(--color-text);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  cursor: pointer;
+
+  &.active {
+    font-weight: 600;
+    color: var(--color-bg);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+}
+
+.dn-chip-sm { min-height: 36px; padding: 6px 11px; font-size: 0.7941rem; }
+
+// ---- Замер ----
+.dn-values {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.dn-value { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+
+.dn-number { font-weight: 600; font-size: 1.3rem; }
+.dn-time { font-weight: 600; font-size: 1.1rem; }
+
+.dn-slash {
+  padding-bottom: 10px;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--color-neutral-500);
+}
+
+.dn-unit {
+  padding-bottom: 12px;
+  font-size: 0.8235rem;
+  color: var(--color-neutral-600);
+  white-space: nowrap;
+}
+
+.dn-sleep-total {
+  flex: 1;
+  padding-bottom: 12px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--color-kind-sleep);
+  white-space: nowrap;
+}
+
+.dn-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  padding: 8px 13px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.8529rem;
+  color: var(--color-accent);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  cursor: pointer;
+
+  i { font-size: 1.1rem; }
+}
+
+// ---- Самочувствие ----
+.dn-moods {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dn-mood {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 2px;
+  font: inherit;
+  font-size: 0.7647rem;
+  color: var(--color-neutral-700);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  cursor: pointer;
+
+  i { font-size: 1.8rem; color: var(--color-neutral-600); }
+
+  &.active {
+    font-weight: 600;
+    color: var(--color-kind-wellbeing-text);
+    background: color-mix(in srgb, var(--color-kind-wellbeing) 12%, var(--color-paper));
+    border-color: var(--color-kind-wellbeing);
+
+    i { color: var(--color-kind-wellbeing); }
+  }
+}
+
+// ---- Сон: качество ----
+// Сегмент из <button>: сбрасываем нативный вид кнопки (глобальный .seg-opt рассчитан на label+radio).
+.dn-seg {
+  font: inherit;
+  font-size: 0.7647rem;
+  color: inherit;
+  background: transparent;
+  border: 0;
+
+  & + .dn-seg { border-left: 1px solid var(--color-divider); }
+}
+
+.dn-seg.active {
+  color: #fff;
+  background: var(--color-kind-sleep);
+  font-weight: 600;
+}
+
+// ---- Заметка ----
+.dn-note-text { min-height: 130px; }
+
+.dn-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  font-size: 0.8529rem;
+  color: var(--color-neutral-800);
+  background: var(--color-surface);
+  cursor: pointer;
+
+  i { font-size: 1.15rem; color: var(--color-neutral-700); }
+  span:first-of-type { flex: 1; }
+}

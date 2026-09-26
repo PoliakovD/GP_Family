@@ -3,6 +3,10 @@ import { HttpClient, HttpErrorResponse, HttpEventType } from '@angular/common/ht
 import { firstValueFrom } from 'rxjs';
 import {
   ActiveJobsSummaryResponse,
+  CreateDoctorReportRequest,
+  DoctorReport,
+  DoctorReportCounts,
+  PublicReportMeta,
   AppNotification,
   Attachment,
   AttachmentLimits,
@@ -18,6 +22,11 @@ import {
   FamilyDependentInput,
   FamilySummary,
   GlobalSpecimenDto,
+  HealthMetricPoint,
+  HealthNote,
+  HealthNoteCatalog,
+  HealthNoteInput,
+  HealthNoteKind,
   HomeSummaryResponse,
   IndicatorArticleResponse,
   IndicatorDto,
@@ -83,6 +92,17 @@ export class ApiService {
       const result = await firstValueFrom(this.http.get<T>(path));
       this.log.log('api', 'info', `GET ${path} ✓`);
       return result;
+    } catch (e) {
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `GET ${path} ✗ ${err.status}: ${err.message}`);
+      throw err;
+    }
+  }
+
+  private async getBlob(path: string): Promise<Blob> {
+    this.log.log('api', 'info', `GET ${path} (blob)`);
+    try {
+      return await firstValueFrom(this.http.get(path, { responseType: 'blob' }));
     } catch (e) {
       const err = this.toApiError(e);
       this.log.log('api', 'error', `GET ${path} ✗ ${err.status}: ${err.message}`);
@@ -492,4 +512,52 @@ export class ApiService {
     this.post<void>('/api/push/subscribe', { endpoint, p256dh, auth });
 
   unsubscribePush = (endpoint: string) => this.post<void>('/api/push/unsubscribe', { endpoint });
+
+  // Дневник самочувствия — строго личный, только свои записи.
+  getHealthNotes = (filter: { from?: string; to?: string; kind?: HealthNoteKind } = {}) =>
+    this.get<HealthNote[]>(`/api/health-notes${buildQuery(filter)}`);
+
+  getHealthNoteCatalog = () => this.get<HealthNoteCatalog>('/api/health-notes/catalog');
+
+  /** Недавние названия (симптомы/лекарства) для чипов «Недавние:». */
+  getRecentHealthNoteTitles = (kind: HealthNoteKind) =>
+    this.get<string[]>(`/api/health-notes/recent${buildQuery({ kind })}`);
+
+  getHealthMetricSeries = (code: string, range: { from?: string; to?: string } = {}) =>
+    this.get<HealthMetricPoint[]>(`/api/health-notes/metrics/${encodeURIComponent(code)}/series${buildQuery(range)}`);
+
+  createHealthNote = (input: HealthNoteInput) => this.post<HealthNote>('/api/health-notes', input);
+
+  updateHealthNote = (id: string, input: HealthNoteInput) =>
+    this.put<HealthNote>(`/api/health-notes/${id}`, input);
+
+  deleteHealthNote = (id: string) => this.del<void>(`/api/health-notes/${id}`);
+
+  // Отчёт для врача — PDF-снимок данных пациента + публичная ссылка.
+  getDoctorReports = () => this.get<DoctorReport[]>('/api/doctor-reports');
+
+  /** Счётчик под выбором периода: «4 анализа, 2 приёма, 38 записей дневника». */
+  previewDoctorReport = (from: string, to: string) =>
+    this.get<DoctorReportCounts>(`/api/doctor-reports/preview${buildQuery({ from, to })}`);
+
+  createDoctorReport = (request: CreateDoctorReportRequest) =>
+    this.post<DoctorReport>('/api/doctor-reports', request);
+
+  /** Выдаёт ссылку: у активной продлевает срок, иначе выпускает новую (старый токен мёртв). */
+  shareDoctorReport = (id: string, days: number) =>
+    this.post<DoctorReport>(`/api/doctor-reports/${id}/share`, { days });
+
+  revokeDoctorReport = (id: string) => this.post<DoctorReport>(`/api/doctor-reports/${id}/revoke`);
+
+  deleteDoctorReport = (id: string) => this.del<void>(`/api/doctor-reports/${id}`);
+
+  /** PDF владельца — только через HttpClient (в Telegram нет cookie, авторизация — заголовок интерцептора). */
+  downloadDoctorReportPdf = (id: string) => this.getBlob(`/api/doctor-reports/${id}/pdf`);
+
+  // Публичная страница врача (без аккаунта) — токен из ссылки {origin}/r/{token}.
+  getPublicReport = (token: string) =>
+    this.get<PublicReportMeta>(`/api/public/doctor-reports/${encodeURIComponent(token)}`);
+
+  getPublicReportPdf = (token: string) =>
+    this.getBlob(`/api/public/doctor-reports/${encodeURIComponent(token)}/pdf`);
 }

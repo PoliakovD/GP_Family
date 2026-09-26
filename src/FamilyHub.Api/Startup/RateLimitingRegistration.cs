@@ -77,6 +77,18 @@ public static class RateLimitingRegistration
                     QueueLimit = 0,
                 }));
 
+            // Публичная ссылка на отчёт для врача (анонимно, без аккаунта): партиция по IP. Токен —
+            // 256 бит, перебор бессмыслен; лимит защищает от нагрузки (каждый запрос PDF — чтение и
+            // расшифровка блоба) и от сканирования. Врачу хватает с запасом: страница = 2 запроса.
+            limiterOptions.AddPolicy("public-report", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+
             // Создание мед-записи/загрузка вложения — дешевле LLM-вызова, но тоже неограничено сегодня.
             limiterOptions.AddPolicy("medical-write", httpContext => RateLimitPartition.GetFixedWindowLimiter(
                 UserOrIpPartitionKey(httpContext),

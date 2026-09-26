@@ -1,7 +1,9 @@
 using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Medical.Attachments;
+using FamilyHub.Modules.Medical.DoctorReports;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Extraction;
+using FamilyHub.Modules.Medical.HealthNotes;
 using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
@@ -38,6 +40,9 @@ public static class MedicalModule
         services.AddScoped<IAnalytePlausibilityGuardService>(sp => sp.GetRequiredService<AnalytePlausibilityGuardService>());
 
         services.AddScoped<MedkitService>();
+        services.AddScoped<HealthNoteService>();
+        services.AddScoped<DoctorReportDataCollector>();
+        services.AddScoped<DoctorReportService>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
@@ -144,11 +149,16 @@ public static class MedicalModule
         module.MapMedkitEndpoints();
         module.MapMedicationEndpoints();
         module.MapMedicalRecordEndpoints();
+        module.MapHealthNoteEndpoints();
+        module.MapDoctorReportEndpoints();
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
         module.MapExtractionEndpoints();
         module.MapUserSpecimenEndpoints();
         module.MapSearchEndpoints();
         module.MapKbEndpoints();
+
+        // Публичная ссылка для врача — намеренно ВНЕ ConsentRequiredFilter: смотрит человек без аккаунта.
+        app.MapDoctorReportPublicEndpoints();
     }
 }

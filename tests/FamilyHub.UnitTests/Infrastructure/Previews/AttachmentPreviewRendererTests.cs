@@ -140,6 +140,9 @@ public class AttachmentPreviewRendererTests
             CallCount++;
             return Task.FromResult(pdfBytes);
         }
+
+        public Task<byte[]?> ConvertHtmlToPdfAsync(string html, string? footerHtml = null, CancellationToken ct = default) =>
+            Task.FromResult(pdfBytes);
     }
 
     private static byte[] CreateJpeg(int width, int height)

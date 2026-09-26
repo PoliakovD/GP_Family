@@ -853,3 +853,168 @@ export interface HomeSummaryResponse {
     ok: HomeOkChips;
     unreadNotifications: number;
 }
+
+// ============================================================================
+// Дневник самочувствия (HealthNote) — строго личные записи, см. HealthNoteService.
+// ============================================================================
+
+/** Значения — часть контракта с бэкендом (HealthNoteKind), не переупорядочивать. */
+export const HealthNoteKind = {
+    Symptom: 0, Metric: 1, Wellbeing: 2, MedicationIntake: 3, Sleep: 4, Note: 5,
+} as const;
+export type HealthNoteKind = typeof HealthNoteKind[keyof typeof HealthNoteKind];
+
+export interface SymptomData {
+    severity: number;
+    areas?: string[] | null;
+    detail?: string | null;
+}
+
+export interface MetricData {
+    code: string;
+    value: number;
+    /** Нижнее давление — только у составных замеров. */
+    value2?: number | null;
+}
+
+export interface WellbeingData {
+    score: number;
+    factors?: string[] | null;
+}
+
+export interface MedicationIntakeData {
+    dose?: string | null;
+}
+
+export interface SleepData {
+    bedTime: string;
+    wakeTime: string;
+    quality: number;
+}
+
+export interface HealthNote {
+    id: string;
+    kind: HealthNoteKind;
+    occurredAt: string;
+    title: string | null;
+    text: string | null;
+    includeInDoctorQuestions: boolean;
+    symptom: SymptomData | null;
+    metric: MetricData | null;
+    wellbeing: WellbeingData | null;
+    intake: MedicationIntakeData | null;
+    sleep: SleepData | null;
+    updatedAt: string;
+}
+
+export interface HealthNoteInput {
+    kind: HealthNoteKind;
+    occurredAt: string;
+    title?: string | null;
+    text?: string | null;
+    includeInDoctorQuestions?: boolean;
+    symptom?: SymptomData | null;
+    metric?: MetricData | null;
+    wellbeing?: WellbeingData | null;
+    intake?: MedicationIntakeData | null;
+    sleep?: SleepData | null;
+}
+
+export interface HealthMetricDefinition {
+    code: string;
+    name: string;
+    unit: string;
+    min: number;
+    max: number;
+    hasSecondValue: boolean;
+    min2: number | null;
+    max2: number | null;
+}
+
+export interface HealthNoteCatalog {
+    metrics: HealthMetricDefinition[];
+    bodyAreas: string[];
+    wellbeingFactors: string[];
+}
+
+export interface HealthMetricPoint {
+    occurredAt: string;
+    value: number;
+    value2: number | null;
+}
+
+// ============================================================================
+// Отчёт для врача (DoctorReport) — PDF-снимок данных пациента + публичная ссылка.
+// ============================================================================
+
+/** Значения — часть контракта с бэкендом (DoctorReportLinkStatus). */
+export const DoctorReportLinkStatus = {None: 0, Active: 1, Expired: 2, Revoked: 3} as const;
+export type DoctorReportLinkStatus = typeof DoctorReportLinkStatus[keyof typeof DoctorReportLinkStatus];
+
+export interface DoctorReportBlocks {
+    labs: boolean;
+    aiSummaries: boolean;
+    medications: boolean;
+    visits: boolean;
+    measurements: boolean;
+    symptomsNotes: boolean;
+}
+
+export interface DoctorReportLink {
+    status: DoctorReportLinkStatus;
+    /** Токен ссылки; адрес строится как {origin}/r/{token}. Есть у активной и истёкшей ссылки. */
+    token: string | null;
+    expiresAt: string | null;
+    revokedAt: string | null;
+    viewCount: number;
+    lastViewedAt: string | null;
+}
+
+export interface DoctorReport {
+    id: string;
+    periodFrom: string;
+    periodTo: string;
+    createdAt: string;
+    pageCount: number;
+    blockCount: number;
+    recipient: string | null;
+    blocks: DoctorReportBlocks;
+    link: DoctorReportLink;
+}
+
+export interface CreateDoctorReportRequest {
+    periodFrom: string;
+    periodTo: string;
+    includeLabs: boolean;
+    includeAiSummaries: boolean;
+    includeMedications: boolean;
+    includeVisits: boolean;
+    includeMeasurements: boolean;
+    includeSymptomsNotes: boolean;
+    recipient: string | null;
+    patientComment: string | null;
+    /** 7, 14 или 30 — сразу выпустить ссылку; null — только PDF. */
+    shareDays: number | null;
+}
+
+export interface DoctorReportCounts {
+    analyses: number;
+    visits: number;
+    diaryEntries: number;
+    /** Заметки дневника с пометкой «в вопросы к врачу» — попадут в блок жалоб. */
+    flaggedNotes: number;
+}
+
+/** Что видит врач на публичной странице до открытия PDF. */
+export interface PublicReportMeta {
+    patientName: string;
+    sex: string | null;
+    age: number | null;
+    birthDate: string | null;
+    periodFrom: string;
+    periodTo: string;
+    createdAt: string;
+    expiresAt: string;
+    pageCount: number;
+    sections: string[];
+}

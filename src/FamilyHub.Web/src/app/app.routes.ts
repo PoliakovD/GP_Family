@@ -45,6 +45,13 @@ export const routes: Routes = [
       import('./components/join-invite/join-invite.component').then((m) => m.JoinInviteComponent),
   },
   {
+    // Страница врача по публичной ссылке на отчёт — намеренно БЕЗ гардов и без оболочки приложения:
+    // смотрит человек без аккаунта (доступ — токен в пути, см. DoctorReportEndpoints).
+    path: 'r/:token',
+    loadComponent: () =>
+      import('./components/public-report/public-report.component').then((m) => m.PublicReportComponent),
+  },
+  {
     // Сбор ФИО/ДР/пола (identity rework) — единственный путь сюда: profileGuard на данных
     // роутах ниже, куда попадает свежепривязанный Telegram-аккаунт без профиля. authGuard, а не
     // profileGuard/consentGuard — экран сам и есть цель редиректа, требует только вход.
@@ -241,6 +248,23 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./components/doctor-visit-detail-page/doctor-visit-detail-page.component').then(
             (m) => m.DoctorVisitDetailPageComponent,
+          ),
+      },
+      {
+        // Личный дневник самочувствия — замеры, симптомы, самочувствие, лекарства, сон, заметки.
+        path: 'notes',
+        loadComponent: () =>
+          import('./components/health-notes-tab/health-notes-tab.component').then(
+            (m) => m.HealthNotesTabComponent,
+          ),
+      },
+      {
+        // Отчёты для врача — PDF-снимок данных пациента + публичная ссылка. ?new=1&diary=1 открывает
+        // создание сразу (кнопка «В отчёт для врача» в дневнике).
+        path: 'reports',
+        loadComponent: () =>
+          import('./components/doctor-reports-tab/doctor-reports-tab.component').then(
+            (m) => m.DoctorReportsTabComponent,
           ),
       },
       {

@@ -81,6 +81,18 @@
   --color-status-danger-text: #a01c1c;
   --color-status-warning-text: #8a5200;
 
+  // Дневник самочувствия — цвет по ТИПУ записи, не по тяжести (макет «Screen - Diary»). Красный
+  // намеренно не используется: в анализах он значит «вне нормы», и в дневнике создавал бы ложную
+  // тревогу. Первые три — из палитры приложения, amber/indigo — новые акценты дневника.
+  --color-kind-symptom: var(--color-accent-2);
+  --color-kind-symptom-text: var(--color-accent-2-700);
+  --color-kind-metric: var(--color-accent);
+  --color-kind-wellbeing: #d97700;
+  --color-kind-wellbeing-text: #8a4c00;
+  --color-kind-medication: var(--color-status-ok);
+  --color-kind-sleep: #5b5bd6;
+  --color-kind-note: var(--color-neutral-700);
+
   // Редизайн v2 — базовый кегль поднят под аудиторию, включающую пожилых родителей (17px вместо
   // 16), плюс отдельные размеры для заголовков записей и минимальная высота интерактивных
   // элементов. Применяются точечно к существующим селекторам — см. риск Р1 в плане редизайна.

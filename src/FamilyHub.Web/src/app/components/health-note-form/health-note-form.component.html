@@ -1,0 +1,256 @@
+<form class="dn-form" (ngSubmit)="save()">
+  <div class="dn-body">
+    @if (isEdit()) {
+      <div class="dn-edit-head" [style.--kind-color]="kindMeta(kind()).color">
+        <i class="ph-fill" [class]="'ph-' + kindMeta(kind()).icon" aria-hidden="true"></i>
+        <span>{{ kindMeta(kind()).label }}</span>
+      </div>
+    } @else {
+      <div class="dn-kinds" role="radiogroup" aria-label="Тип записи">
+        @for (k of kinds; track k.kind) {
+          <button
+            type="button"
+            class="dn-kind"
+            role="radio"
+            [class.active]="kind() === k.kind"
+            [attr.aria-checked]="kind() === k.kind"
+            [style.--kind-color]="k.color"
+            (click)="selectKind(k.kind)"
+          >
+            <i [class]="(kind() === k.kind ? 'ph-fill' : 'ph-duotone') + ' ph-' + k.icon" aria-hidden="true"></i>
+            <span>{{ k.label }}</span>
+          </button>
+        }
+      </div>
+    }
+
+    @switch (kind()) {
+      @case (Kind.Symptom) {
+        <div class="dn-field">
+          <label class="dn-label" for="dn-title">Что беспокоит</label>
+          <input id="dn-title" class="input" type="text" maxlength="200" autocomplete="off"
+                 placeholder="Например, головная боль"
+                 [ngModel]="title()" (ngModelChange)="title.set($event)" name="title" />
+          @if (recents().length > 0) {
+            <div class="dn-recents">
+              <span class="dn-recents-label">Недавние:</span>
+              @for (r of recents(); track r) {
+                <button type="button" class="dn-recent" (click)="setTitle(r)">{{ r }}</button>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="dn-field">
+          <div class="dn-label-row">
+            <span class="dn-label" id="dn-sev-label">Насколько сильно</span>
+            @if (severity(); as s) {
+              <span class="dn-sev-word">{{ s }} — {{ severityWord(s) }}</span>
+            }
+          </div>
+          <div class="dn-scale" role="radiogroup" aria-labelledby="dn-sev-label">
+            @for (n of severities; track n) {
+              <button type="button" class="dn-scale-btn" role="radio"
+                      [class.active]="severity() === n" [attr.aria-checked]="severity() === n"
+                      (click)="severity.set(n)">{{ n }}</button>
+            }
+          </div>
+          <div class="dn-scale-ends"><span>едва заметно</span><span>невыносимо</span></div>
+        </div>
+
+        <div class="dn-field">
+          <span class="dn-label">Где</span>
+          <div class="dn-chips">
+            @for (a of catalog()?.bodyAreas ?? []; track a) {
+              <button type="button" class="dn-chip" [class.active]="areas().includes(a)"
+                      [attr.aria-pressed]="areas().includes(a)" (click)="toggleIn(areas, a)">
+                {{ bodyAreaLabels[a] ?? a }}
+              </button>
+            }
+          </div>
+          <input class="input dn-detail" type="text" maxlength="200" autocomplete="off"
+                 placeholder="Уточнить: например, затылок"
+                 [ngModel]="detail()" (ngModelChange)="detail.set($event)" name="detail" />
+        </div>
+      }
+
+      @case (Kind.Metric) {
+        <div class="dn-field">
+          <span class="dn-label">Что измеряли</span>
+          <div class="dn-chips">
+            @for (m of catalog()?.metrics ?? []; track m.code) {
+              <button type="button" class="dn-chip" [class.active]="metricCode() === m.code"
+                      [attr.aria-pressed]="metricCode() === m.code" (click)="selectMetric(m.code)">
+                {{ m.name }}
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (metric(); as m) {
+          <div class="dn-field">
+            <div class="dn-values">
+              <div class="dn-value">
+                <label class="dn-sublabel" for="dn-v1">{{ m.hasSecondValue ? 'Верхнее' : 'Значение' }}</label>
+                <input id="dn-v1" class="input dn-number" type="number" inputmode="decimal" step="any"
+                       [min]="m.min" [max]="m.max"
+                       [ngModel]="value()" (ngModelChange)="value.set($event)" name="value" />
+              </div>
+              @if (m.hasSecondValue) {
+                <span class="dn-slash" aria-hidden="true">/</span>
+                <div class="dn-value">
+                  <label class="dn-sublabel" for="dn-v2">Нижнее</label>
+                  <input id="dn-v2" class="input dn-number" type="number" inputmode="decimal" step="any"
+                         [ngModel]="value2()" (ngModelChange)="value2.set($event)" name="value2" />
+                </div>
+              }
+              <span class="dn-unit">{{ m.unit }}</span>
+            </div>
+          </div>
+
+          @if (m.code === 'blood_pressure' && !isEdit()) {
+            @if (addPulse()) {
+              <div class="dn-field">
+                <label class="dn-sublabel" for="dn-pulse">Пульс, уд/мин</label>
+                <input id="dn-pulse" class="input dn-number" type="number" inputmode="numeric" step="1"
+                       [ngModel]="pulse()" (ngModelChange)="pulse.set($event)" name="pulse" />
+              </div>
+            } @else {
+              <button type="button" class="dn-add-row" (click)="addPulse.set(true)">
+                <i class="ph ph-plus-circle" aria-hidden="true"></i>
+                <span>Добавить пульс к этому замеру</span>
+              </button>
+            }
+          }
+        }
+      }
+
+      @case (Kind.Wellbeing) {
+        <div class="dn-field">
+          <span class="dn-label" id="dn-wb-label">Как вы сейчас</span>
+          <div class="dn-moods" role="radiogroup" aria-labelledby="dn-wb-label">
+            @for (l of wellbeingLevels; track l.score) {
+              <button type="button" class="dn-mood" role="radio"
+                      [class.active]="score() === l.score" [attr.aria-checked]="score() === l.score"
+                      (click)="score.set(l.score)">
+                <i [class]="(score() === l.score ? 'ph-fill' : 'ph') + ' ph-' + l.icon" aria-hidden="true"></i>
+                <span>{{ l.label }}</span>
+              </button>
+            }
+          </div>
+        </div>
+        <div class="dn-field">
+          <span class="dn-sublabel">Что влияет — необязательно</span>
+          <div class="dn-chips">
+            @for (f of catalog()?.wellbeingFactors ?? []; track f) {
+              <button type="button" class="dn-chip dn-chip-sm" [class.active]="factors().includes(f)"
+                      [attr.aria-pressed]="factors().includes(f)" (click)="toggleIn(factors, f)">
+                {{ factorLabels[f] ?? f }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      @case (Kind.MedicationIntake) {
+        <div class="dn-field">
+          <label class="dn-label" for="dn-med">Что приняли</label>
+          <input id="dn-med" class="input" type="text" maxlength="200" autocomplete="off"
+                 placeholder="Название препарата"
+                 [ngModel]="title()" (ngModelChange)="title.set($event)" name="med" />
+          @if (recents().length > 0) {
+            <div class="dn-recents">
+              <span class="dn-recents-label">Недавние:</span>
+              @for (r of recents(); track r) {
+                <button type="button" class="dn-recent" (click)="setTitle(r)">{{ r }}</button>
+              }
+            </div>
+          }
+        </div>
+        <div class="dn-field">
+          <label class="dn-label" for="dn-dose">Сколько</label>
+          <input id="dn-dose" class="input" type="text" maxlength="200" autocomplete="off"
+                 placeholder="Например, 1 таблетка"
+                 [ngModel]="dose()" (ngModelChange)="dose.set($event)" name="dose" />
+        </div>
+        <p class="dn-hint">Свободный текст — без связи с аптечкой. Недавние подставляются по истории дневника.</p>
+      }
+
+      @case (Kind.Sleep) {
+        <div class="dn-values">
+          <div class="dn-value">
+            <label class="dn-sublabel" for="dn-bed">Лёг</label>
+            <input id="dn-bed" class="input dn-time" type="time"
+                   [ngModel]="bedTime()" (ngModelChange)="bedTime.set($event)" name="bed" />
+          </div>
+          <div class="dn-value">
+            <label class="dn-sublabel" for="dn-wake">Встал</label>
+            <input id="dn-wake" class="input dn-time" type="time"
+                   [ngModel]="wakeTime()" (ngModelChange)="wakeTime.set($event)" name="wake" />
+          </div>
+          <span class="dn-sleep-total">{{ sleepMinutes() > 0 ? sleepPreview() : '—' }}</span>
+        </div>
+        <div class="dn-field">
+          <span class="dn-sublabel" id="dn-q-label">Качество</span>
+          <div class="seg" role="radiogroup" aria-labelledby="dn-q-label">
+            @for (q of sleepQualities; track q.value) {
+              <button type="button" class="seg-opt dn-seg" role="radio"
+                      [class.active]="quality() === q.value" [attr.aria-checked]="quality() === q.value"
+                      (click)="quality.set(q.value)">{{ q.label }}</button>
+            }
+          </div>
+        </div>
+      }
+
+      @case (Kind.Note) {
+        <div class="dn-field">
+          <label class="dn-label" for="dn-note">Заметка</label>
+          <textarea id="dn-note" class="input dn-note-text" rows="5" maxlength="4000"
+                    placeholder="Что важно не забыть или спросить у врача"
+                    [ngModel]="text()" (ngModelChange)="text.set($event)" name="note"></textarea>
+        </div>
+        <label class="dn-toggle-row">
+          <i class="ph ph-file-text" aria-hidden="true"></i>
+          <span>Включить в «Вопросы к врачу» в следующем отчёте</span>
+          <span class="switch">
+            <input type="checkbox" [checked]="includeInDoctorQuestions()"
+                   (change)="includeInDoctorQuestions.set($any($event.target).checked)" />
+            <span class="switch-knob"></span>
+          </span>
+        </label>
+      }
+    }
+
+    <div class="dn-field">
+      <label class="dn-label" for="dn-when">Когда</label>
+      @if (kind() === Kind.Sleep) {
+        <input id="dn-when" class="input" type="date" [max]="when().slice(0, 10)"
+               [ngModel]="when().slice(0, 10)" (ngModelChange)="onWhenDate($event)" name="whenDate" />
+        <span class="dn-hint">День, когда проснулись.</span>
+      } @else {
+        <input id="dn-when" class="input" type="datetime-local"
+               [ngModel]="when()" (ngModelChange)="when.set($event)" name="when" />
+      }
+    </div>
+
+    @if (kind() !== Kind.Note) {
+      <div class="dn-field">
+        <label class="dn-label" for="dn-text">Заметка <span class="dn-optional">— необязательно</span></label>
+        <textarea id="dn-text" class="input" rows="2" maxlength="4000"
+                  [placeholder]="kind() === Kind.Metric ? 'Например, «утром, сидя»' : 'Любые детали'"
+                  [ngModel]="text()" (ngModelChange)="text.set($event)" name="text"></textarea>
+      </div>
+    }
+
+    @if (error(); as e) {
+      <div class="alert-danger" role="alert">{{ e }}</div>
+    }
+  </div>
+
+  <div class="dn-footer">
+    <button type="submit" class="btn btn-primary dn-save" [disabled]="!canSave() || busy()">
+      {{ busy() ? 'Сохраняем…' : 'Сохранить' }}
+    </button>
+    <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
+  </div>
+</form>
