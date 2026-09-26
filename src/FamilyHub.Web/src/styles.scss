@@ -1145,6 +1145,17 @@ select.input {
   position: sticky;
   top: 0;
   z-index: 10;
+
+  // Поле поиска уступает место кнопкам действия: без min-width: 0 flex-элемент не сжимается меньше ширины
+  // своего input'а, и на телефоне (412px) шапка с двумя кнопками шире экрана — страница получает
+  // горизонтальный скролл, а мобильный Chrome раздувает layout-viewport.
+  > app-search-field,
+  > app-search {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  input { min-width: 0; }
 }
 
 .app-content {
