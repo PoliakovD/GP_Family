@@ -27,7 +27,8 @@ namespace FamilyHub.Infrastructure.Notifications;
 public class WebPushNotificationSender(
     IWebPushClient client,
     AppDbContext db,
-    ILogger<WebPushNotificationSender> logger) : INotificationSender
+    ILogger<WebPushNotificationSender> logger,
+    IEnumerable<IPushPayloadCustomizer>? customizers = null) : INotificationSender
 {
     private static readonly JsonSerializerOptions PayloadJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -41,7 +42,16 @@ public class WebPushNotificationSender(
 
         if (subscriptions.Count == 0) return;
 
-        var payload = BuildPayload();
+        // Тип уведомления может дополнить payload (кнопки, тег, тихий режим) — см. IPushPayloadCustomizer.
+        // null от кастомизатора — уведомление уже не актуально, push не шлём.
+        PushCustomization? customization = null;
+        if (customizers?.FirstOrDefault(c => c.CanHandle(notification.Type)) is { } customizer)
+        {
+            customization = await customizer.BuildAsync(notification, ct);
+            if (customization is null) return;
+        }
+
+        var payload = BuildPayload(customization);
         var expired = new List<DomainPushSubscription>();
 
         foreach (var subscription in subscriptions)
@@ -78,19 +88,40 @@ public class WebPushNotificationSender(
         }
     }
 
-    private static string BuildPayload() => JsonSerializer.Serialize(
-        new PushPayload(new PushNotificationPayload(
-            "FamilyHub",
-            "Новое уведомление",
-            "/icons/icon-192.png",
-            new PushActionData(new PushClickAction(new PushNavigateOperation("navigate", "/notifications"))))),
-        PayloadJsonOptions);
+    /// <summary>Обобщённый payload; кастомизация добавляет кнопки/тег/тишину и точечные действия клика.
+    /// Формат <c>{"notification":{...}}</c> Angular ngsw-worker.js понимает сам: поля уведомления он
+    /// передаёт в showNotification, а <c>data.onActionClick</c> — карта «кнопка → операция» (default —
+    /// клик по самому уведомлению).</summary>
+    public static string BuildPayload(PushCustomization? customization = null)
+    {
+        var onActionClick = new Dictionary<string, object>
+        {
+            ["default"] = new PushOperation(
+                customization?.DefaultUrl is null ? "navigate" : "navigateLastFocusedOrOpen",
+                customization?.DefaultUrl ?? "/notifications"),
+        };
+        foreach (var (action, url) in customization?.SendRequestUrls ?? new Dictionary<string, string>())
+            onActionClick[action] = new PushOperation("sendRequest", url);
 
-    // Формат, ожидаемый Angular ngsw-worker.js (camelCase через PayloadJsonOptions):
-    // {"notification":{"title":..,"body":..,"icon":..,"data":{"onActionClick":{"default":{"operation":"navigate","url":".."}}}}}
-    private sealed record PushPayload(PushNotificationPayload Notification);
-    private sealed record PushNotificationPayload(string Title, string Body, string Icon, PushActionData Data);
-    private sealed record PushActionData(PushClickAction OnActionClick);
-    private sealed record PushClickAction(PushNavigateOperation Default);
-    private sealed record PushNavigateOperation(string Operation, string Url);
+        var notification = new Dictionary<string, object?>
+        {
+            ["title"] = "FamilyHub",
+            ["body"] = customization?.Body ?? "Новое уведомление",
+            ["icon"] = "/icons/icon-192.png",
+            ["data"] = new Dictionary<string, object> { ["onActionClick"] = onActionClick },
+        };
+        if (customization is not null)
+        {
+            if (customization.Tag is not null) notification["tag"] = customization.Tag;
+            if (customization.Renotify) notification["renotify"] = true;
+            if (customization.RequireInteraction) notification["requireInteraction"] = true;
+            if (customization.Silent) notification["silent"] = true;
+            if (customization.Actions is { Count: > 0 })
+                notification["actions"] = customization.Actions.Select(a => new { action = a.Action, title = a.Title }).ToList();
+        }
+
+        return JsonSerializer.Serialize(new Dictionary<string, object?> { ["notification"] = notification }, PayloadJsonOptions);
+    }
+
+    private sealed record PushOperation(string Operation, string Url);
 }

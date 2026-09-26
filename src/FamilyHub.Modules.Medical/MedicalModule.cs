@@ -54,6 +54,9 @@ public static class MedicalModule
         services.AddScoped<MedicationReminderSettingsService>();
         // Напоминания о приёме: получатели + минутная и часовая фоновые задачи (расписание — в Program.cs).
         services.AddScoped<MedicationReminderRecipients>();
+        // Кнопки push-напоминания: одноразовые токены + расширение payload'а Web Push (ADR-0015).
+        services.AddScoped<DoseActionTokenService>();
+        services.AddScoped<FamilyHub.Infrastructure.Notifications.IPushPayloadCustomizer, DoseReminderPushCustomizer>();
         services.AddScoped<MedicationDoseScanJob>();
         services.AddScoped<MedicationCourseMaintenanceJob>();
         services.AddScoped<MedicationService>();
@@ -174,5 +177,8 @@ public static class MedicalModule
 
         // Публичная ссылка для врача — намеренно ВНЕ ConsentRequiredFilter: смотрит человек без аккаунта.
         app.MapDoctorReportPublicEndpoints();
+
+        // Кнопки push-напоминания о приёме — тоже вне консент-фильтра: их вызывает service worker по токену.
+        app.MapDoseActionPublicEndpoints();
     }
 }
