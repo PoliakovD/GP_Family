@@ -942,3 +942,79 @@ export interface HealthMetricPoint {
     value: number;
     value2: number | null;
 }
+
+// ============================================================================
+// Отчёт для врача (DoctorReport) — PDF-снимок данных пациента + публичная ссылка.
+// ============================================================================
+
+/** Значения — часть контракта с бэкендом (DoctorReportLinkStatus). */
+export const DoctorReportLinkStatus = {None: 0, Active: 1, Expired: 2, Revoked: 3} as const;
+export type DoctorReportLinkStatus = typeof DoctorReportLinkStatus[keyof typeof DoctorReportLinkStatus];
+
+export interface DoctorReportBlocks {
+    labs: boolean;
+    aiSummaries: boolean;
+    medications: boolean;
+    visits: boolean;
+    measurements: boolean;
+    symptomsNotes: boolean;
+}
+
+export interface DoctorReportLink {
+    status: DoctorReportLinkStatus;
+    /** Токен ссылки; адрес строится как {origin}/r/{token}. Есть у активной и истёкшей ссылки. */
+    token: string | null;
+    expiresAt: string | null;
+    revokedAt: string | null;
+    viewCount: number;
+    lastViewedAt: string | null;
+}
+
+export interface DoctorReport {
+    id: string;
+    periodFrom: string;
+    periodTo: string;
+    createdAt: string;
+    pageCount: number;
+    blockCount: number;
+    recipient: string | null;
+    blocks: DoctorReportBlocks;
+    link: DoctorReportLink;
+}
+
+export interface CreateDoctorReportRequest {
+    periodFrom: string;
+    periodTo: string;
+    includeLabs: boolean;
+    includeAiSummaries: boolean;
+    includeMedications: boolean;
+    includeVisits: boolean;
+    includeMeasurements: boolean;
+    includeSymptomsNotes: boolean;
+    recipient: string | null;
+    patientComment: string | null;
+    /** 7, 14 или 30 — сразу выпустить ссылку; null — только PDF. */
+    shareDays: number | null;
+}
+
+export interface DoctorReportCounts {
+    analyses: number;
+    visits: number;
+    diaryEntries: number;
+    /** Заметки дневника с пометкой «в вопросы к врачу» — попадут в блок жалоб. */
+    flaggedNotes: number;
+}
+
+/** Что видит врач на публичной странице до открытия PDF. */
+export interface PublicReportMeta {
+    patientName: string;
+    sex: string | null;
+    age: number | null;
+    birthDate: string | null;
+    periodFrom: string;
+    periodTo: string;
+    createdAt: string;
+    expiresAt: string;
+    pageCount: number;
+    sections: string[];
+}

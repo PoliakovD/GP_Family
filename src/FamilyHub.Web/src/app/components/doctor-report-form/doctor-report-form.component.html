@@ -1,0 +1,111 @@
+<form class="dr-form" (ngSubmit)="submit()">
+  <div class="dr-body">
+    <div class="dr-field">
+      <span class="dr-label" id="dr-period-label">Период</span>
+      <div class="seg" role="radiogroup" aria-labelledby="dr-period-label">
+        @for (p of presets; track p.value) {
+          <button type="button" class="seg-opt dr-seg" role="radio" [class.active]="preset() === p.value"
+                  [attr.aria-checked]="preset() === p.value" (click)="applyPreset(p.value)">{{ p.label }}</button>
+        }
+      </div>
+      <div class="dr-dates">
+        <input class="input" type="date" aria-label="Начало периода" [max]="to()"
+               [ngModel]="from()" (ngModelChange)="setDate('from', $event)" name="from" />
+        <span class="dr-dash" aria-hidden="true">—</span>
+        <input class="input" type="date" aria-label="Конец периода" [min]="from()"
+               [ngModel]="to()" (ngModelChange)="setDate('to', $event)" name="to" />
+      </div>
+      @if (countsText()) {
+        <span class="dr-hint">{{ countsText() }}</span>
+      }
+    </div>
+
+    <div class="dr-field">
+      <label class="dr-label" for="dr-comment">Жалобы и вопросы к врачу</label>
+      <textarea id="dr-comment" class="input" rows="4" maxlength="4000"
+                placeholder="Что беспокоит, о чём хотите спросить"
+                [ngModel]="comment()" (ngModelChange)="comment.set($event)" name="comment"></textarea>
+      @if ((counts()?.flaggedNotes ?? 0) > 0) {
+        <span class="dr-hint dr-hint-icon">
+          <i class="ph ph-note-pencil" aria-hidden="true"></i>
+          Из дневника будет добавлено заметок с пометкой «в вопросы к врачу»: {{ counts()!.flaggedNotes }}
+        </span>
+      }
+    </div>
+
+    <div class="dr-field">
+      <label class="dr-label" for="dr-recipient">Для кого <span class="dr-optional">— необязательно</span></label>
+      <input id="dr-recipient" class="input" type="text" maxlength="200" autocomplete="off"
+             placeholder="Например, терапевт Смирнова"
+             [ngModel]="recipient()" (ngModelChange)="recipient.set($event)" name="recipient" />
+      <span class="dr-hint">Подпись только в вашем списке отчётов — в PDF и у врача её не будет.</span>
+    </div>
+
+    <div class="dr-field">
+      <span class="dr-label" id="dr-link-label">Ссылка для врача</span>
+      <div class="seg" role="radiogroup" aria-labelledby="dr-link-label">
+        <button type="button" class="seg-opt dr-seg" role="radio" [class.active]="shareDays() === 0"
+                [attr.aria-checked]="shareDays() === 0" (click)="shareDays.set(0)">Без ссылки</button>
+        @for (d of shareOptions; track d) {
+          <button type="button" class="seg-opt dr-seg" role="radio" [class.active]="shareDays() === d"
+                  [attr.aria-checked]="shareDays() === d" (click)="shareDays.set(d)">{{ d }} дней</button>
+        }
+      </div>
+      <span class="dr-hint">{{ linkHint() }}</span>
+    </div>
+
+    <div class="dr-field">
+      <span class="dr-label">Что включить</span>
+
+      <div class="dr-group-title">Из медкарты</div>
+      <div class="dr-toggles">
+        <label class="dr-toggle">
+          <i class="ph-duotone ph-chart-line" aria-hidden="true"></i><span>Динамика анализов</span>
+          <span class="switch"><input type="checkbox" [checked]="labs()" (change)="labs.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+        </label>
+        <label class="dr-toggle">
+          <i class="ph-duotone ph-sparkle" aria-hidden="true"></i><span>ИИ-резюме анализов</span>
+          <span class="switch"><input type="checkbox" [checked]="aiSummaries()" (change)="aiSummaries.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+        </label>
+        <label class="dr-toggle">
+          <i class="ph-duotone ph-pill" aria-hidden="true"></i><span>Текущие препараты</span>
+          <span class="switch"><input type="checkbox" [checked]="medications()" (change)="medications.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+        </label>
+        <label class="dr-toggle">
+          <i class="ph-duotone ph-stethoscope" aria-hidden="true"></i><span>Приёмы врача</span>
+          <span class="switch"><input type="checkbox" [checked]="visits()" (change)="visits.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+        </label>
+      </div>
+
+      <div class="dr-group-title">Из дневника</div>
+      <div class="dr-toggles">
+        <label class="dr-toggle">
+          <i class="ph-duotone ph-heartbeat" aria-hidden="true"></i><span>Домашние замеры, самочувствие и сон</span>
+          <span class="switch"><input type="checkbox" [checked]="measurements()" (change)="measurements.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+        </label>
+        <label class="dr-toggle">
+          <i class="ph-duotone ph-lightning" aria-hidden="true"></i><span>Симптомы и заметки</span>
+          <span class="switch"><input type="checkbox" [checked]="symptomsNotes()" (change)="symptomsNotes.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+        </label>
+      </div>
+      @if (!anyBlock()) {
+        <span class="dr-hint dr-hint-warn">Включите хотя бы один блок.</span>
+      }
+    </div>
+
+    @if (error(); as e) {
+      <div class="alert-danger" role="alert">{{ e }}</div>
+    }
+  </div>
+
+  <div class="dr-footer">
+    <span class="dr-privacy">Отчёт увидит только тот, кому вы отправите ссылку или файл</span>
+    <div class="dr-actions">
+      <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="cancelled.emit()">Отмена</button>
+      <button type="submit" class="btn btn-primary" [disabled]="!canSubmit()">
+        <i class="ph ph-file-pdf" aria-hidden="true"></i>
+        {{ busy() ? 'Формируем PDF…' : 'Сформировать PDF' }}
+      </button>
+    </div>
+  </div>
+</form>

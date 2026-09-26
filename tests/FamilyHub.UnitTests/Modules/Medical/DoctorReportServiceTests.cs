@@ -404,7 +404,7 @@ public class DoctorReportServiceTests : SqliteTestBase
         var bad = await _sut.PreviewAsync(_me.Id, today, today.AddDays(-3));
 
         ok.Result.Should().Be(DoctorReportResult.Success);
-        ok.Counts.Should().Be(new ReportCounts(0, 0, 0));
+        ok.Counts.Should().Be(new ReportCounts(0, 0, 0, 0));
         bad.Result.Should().Be(DoctorReportResult.Invalid);
     }
 }

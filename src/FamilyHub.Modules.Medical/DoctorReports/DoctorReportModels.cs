@@ -10,8 +10,9 @@ public record ReportBlocks(
     public bool Any => Labs || AiSummaries || Medications || Visits || Measurements || SymptomsNotes;
 }
 
-/// <summary>Сколько данных попадёт в отчёт за период — счётчик под выбором периода в форме.</summary>
-public record ReportCounts(int Analyses, int Visits, int DiaryEntries);
+/// <summary>Сколько данных попадёт в отчёт за период — счётчик под выбором периода в форме.
+/// FlaggedNotes — заметки дневника с пометкой «в вопросы к врачу»: они попадут в блок жалоб.</summary>
+public record ReportCounts(int Analyses, int Visits, int DiaryEntries, int FlaggedNotes);
 
 /// <summary>Пациент на момент формирования. Sex — «м»/«ж»/null.</summary>
 public record ReportPatient(string FullName, string ShortName, string? Sex, DateOnly? BirthDate);

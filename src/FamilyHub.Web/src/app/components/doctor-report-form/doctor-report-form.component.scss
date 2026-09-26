@@ -1,0 +1,70 @@
+// Форма отчёта для врача (макет «Screen - Doctor report»).
+
+:host { display: block; }
+
+.dr-form { display: flex; flex-direction: column; min-height: 100%; }
+
+.dr-body { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; }
+
+.dr-field { display: flex; flex-direction: column; gap: 7px; }
+
+.dr-label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.6471rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+.dr-optional { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--color-neutral-500); }
+
+.dr-hint { font-size: 0.7647rem; color: var(--color-neutral-600); }
+.dr-hint-icon { display: flex; align-items: flex-start; gap: 8px; i { color: var(--color-accent); margin-top: 2px; } }
+.dr-hint-warn { color: var(--color-status-danger-text); }
+
+.dr-dates { display: flex; align-items: center; gap: 10px; }
+.dr-dash { color: var(--color-neutral-500); }
+
+// Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio).
+.dr-seg { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
+.dr-seg + .dr-seg { border-left: 1px solid var(--color-divider); }
+.dr-seg.active { color: var(--color-bg); background: var(--color-accent); }
+
+.dr-group-title { margin-top: 4px; font-size: 0.7647rem; color: var(--color-neutral-500); }
+
+.dr-toggles {
+  background: var(--color-paper);
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.dr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: var(--tap-min);
+  padding: 8px 14px;
+  font-size: 0.8824rem;
+  cursor: pointer;
+
+  & + & { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+  i { font-size: 1.15rem; color: var(--color-accent); }
+  span:not(.switch):not(.switch-knob) { flex: 1; }
+}
+
+// Липкий низ: кнопки всегда под рукой при прокрутке длинной формы.
+.dr-footer {
+  position: sticky;
+  // Компенсирует внутренний отступ контейнера (side-panel-body / sheet-panel): иначе футер «зависает» выше края.
+  bottom: calc(-1 * var(--space-3));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0 var(--space-1);
+  background: var(--dr-surface, var(--color-paper));
+  border-top: 1px solid var(--color-divider);
+}
+
+.dr-privacy { font-size: 0.7647rem; color: var(--color-neutral-600); }
+.dr-actions { display: flex; gap: var(--space-2); .btn-primary { flex: 1; } }

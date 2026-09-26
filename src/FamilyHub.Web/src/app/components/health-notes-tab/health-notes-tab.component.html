@@ -7,6 +7,9 @@
         Видите только вы · {{ countLabel() }}
       </div>
     </div>
+    <a class="btn btn-secondary dn-report" routerLink="/health/reports" [queryParams]="{ new: 1, diary: 1 }">
+      <i class="ph ph-file-text" aria-hidden="true"></i> В отчёт для врача
+    </a>
     <button type="button" class="btn btn-primary dn-add" (click)="openForm()">
       <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
     </button>

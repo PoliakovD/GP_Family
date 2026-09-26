@@ -43,7 +43,10 @@ public class DoctorReportDataCollector(AppDbContext db)
         var (fromUtc, toUtc) = DiaryBounds(from, to);
         var diary = await db.HealthNotes.AsNoTracking()
             .CountAsync(n => n.OwnerUserId == userId && n.OccurredAt >= fromUtc && n.OccurredAt < toUtc, ct);
-        return new ReportCounts(analyses, visits, diary);
+        var flagged = await db.HealthNotes.AsNoTracking()
+            .CountAsync(n => n.OwnerUserId == userId && n.OccurredAt >= fromUtc && n.OccurredAt < toUtc
+                && n.Kind == HealthNoteKind.Note && n.IncludeInDoctorQuestions, ct);
+        return new ReportCounts(analyses, visits, diary, flagged);
     }
 
     public async Task<ReportModel> CollectAsync(

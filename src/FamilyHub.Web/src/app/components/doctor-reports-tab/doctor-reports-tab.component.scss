@@ -1,0 +1,106 @@
+// Страница «Отчёты для врача» (макет «Screen - Doctor report»).
+
+.dr-page { display: flex; flex-direction: column; gap: var(--space-4); max-width: 1040px; }
+
+.dr-head { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
+.dr-head-text { flex: 1; min-width: 240px; }
+
+.dr-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+
+.dr-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 20px;
+  background: var(--color-paper);
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.dr-doc {
+  flex: none;
+  width: 54px;
+  height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: var(--color-bg);
+  border: 1px solid color-mix(in srgb, var(--color-text) 18%, transparent);
+
+  i { font-size: 1.5rem; color: var(--color-accent); }
+  span { font-size: 0.5882rem; color: var(--color-neutral-600); }
+}
+
+.dr-main { flex: 1; min-width: 0; }
+.dr-title { font-family: var(--font-heading); font-weight: 600; font-size: var(--font-size-record-title); line-height: 1.25; margin-bottom: 3px; }
+.dr-meta { font-size: 0.8529rem; color: var(--color-neutral-600); }
+
+.dr-status { flex: none; width: 230px; }
+.dr-caption { margin-top: 4px; font-size: 0.7647rem; color: var(--color-neutral-600); }
+
+.dr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  font-size: 0.8235rem;
+
+  &.dr-chip-active { background: var(--color-accent-100); color: var(--color-accent-800); i { color: var(--color-accent); } }
+  &.dr-chip-expired { background: var(--color-surface); color: var(--color-neutral-700); }
+  &.dr-chip-revoked { background: color-mix(in srgb, var(--color-accent-2) 10%, var(--color-paper)); color: var(--color-accent-2-800); }
+  &.dr-chip-none { border: 1px dashed color-mix(in srgb, var(--color-text) 26%, transparent); color: var(--color-neutral-600); }
+}
+
+.dr-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.dr-share { display: none; }
+.dr-download { width: var(--tap-min); padding: 0; white-space: nowrap; }
+.dr-download-text { display: none; }
+
+.dr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  background: var(--color-paper);
+  border: 1px dashed var(--color-divider);
+
+  i { font-size: 2.4rem; color: var(--color-neutral-500); }
+  h5, p { margin: 0; }
+  p { max-width: 460px; }
+}
+
+// Плавающая кнопка над нижним таб-баром (узкие экраны) + запас под неё в конце списка.
+.dr-fab {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  z-index: 90;
+  box-shadow: var(--shadow-md);
+}
+
+.dr-sheet { --dr-surface: var(--color-bg); }
+
+// Узкие экраны: карточка в столбик — название и меню сверху, статус, потом кнопки.
+@media (max-width: 1023px) {
+  .dr-page { padding-bottom: 72px; }
+  .dr-create { display: none; }
+
+  .dr-row {
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    padding: 14px 15px;
+  }
+  .dr-doc { display: none; }
+  .dr-main { flex: 1 1 100%; }
+  .dr-status { order: 2; flex: 1 1 100%; width: auto; }
+  .dr-actions { order: 3; flex: 1 1 100%; }
+  .dr-actions app-action-menu { margin-left: auto; }
+  .dr-share, .dr-download { flex: 1; width: auto; padding: 0 var(--space-3); }
+  .dr-share { display: inline-flex; }
+  .dr-download-text { display: inline; }
+  .dr-hide-narrow { display: none; }
+}

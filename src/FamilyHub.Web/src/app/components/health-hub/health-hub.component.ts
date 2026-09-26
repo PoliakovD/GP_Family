@@ -28,6 +28,7 @@ export class HealthHubComponent {
     { path: 'records', label: 'Анализы' },
     { path: 'visits', label: 'Посещения врачей' },
     { path: 'notes', label: 'Дневник' },
+    { path: 'reports', label: 'Отчёты для врача' },
     { path: 'kb', label: 'Справочник' },
     { path: 'indicators', label: 'Показатели анализов' },
   ];

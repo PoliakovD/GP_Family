@@ -304,10 +304,10 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         AddRecord(_me.Id, new DateOnly(2026, 6, 1), MedicalRecordKind.DoctorVisit);
         AddRecord(_me.Id, new DateOnly(2025, 1, 1)); // вне периода
         AddNote(new HealthNoteContent(HealthNoteKind.Note, null, "а"), Utc(9, 1));
-        AddNote(new HealthNoteContent(HealthNoteKind.Note, null, "б"), Utc(9, 2));
+        AddNote(new HealthNoteContent(HealthNoteKind.Note, null, "б"), Utc(9, 2), flagged: true);
 
         var counts = await _sut.CountAsync(_me.Id, From, To);
 
-        counts.Should().Be(new ReportCounts(2, 1, 2));
+        counts.Should().Be(new ReportCounts(2, 1, 2, 1));
     }
 }

@@ -1,0 +1,102 @@
+<div class="dr-page">
+  <div class="dr-head">
+    <div class="dr-head-text">
+      <h4 class="mb-1">Отчёты для врача</h4>
+      <p class="muted mb-0">
+        PDF с вашими данными за период. Скачайте его или отправьте врачу ссылку — она перестанет работать в указанный срок.
+      </p>
+    </div>
+    <button type="button" class="btn btn-primary dr-create" (click)="openForm()">
+      <i class="ph-bold ph-plus" aria-hidden="true"></i> Сформировать отчёт
+    </button>
+  </div>
+
+  @if (loadError(); as err) {
+    <div class="alert-danger" role="alert">
+      {{ err }}
+      <button type="button" class="btn-link" (click)="load()">Повторить</button>
+    </div>
+  }
+
+  @if (loading() && reports().length === 0) {
+    <p class="muted">Загружаем…</p>
+  } @else if (rows().length === 0 && !loadError()) {
+    <div class="dr-empty">
+      <i class="ph-duotone ph-file-pdf" aria-hidden="true"></i>
+      <h5>Пока нет отчётов</h5>
+      <p class="muted">
+        Соберите анализы, препараты, замеры и жалобы за период в один PDF — врачу будет проще увидеть картину за минуту.
+      </p>
+      <button type="button" class="btn btn-primary" (click)="openForm()">Сформировать первый отчёт</button>
+    </div>
+  } @else {
+    <ul class="dr-list">
+      @for (row of rows(); track row.report.id) {
+        <li class="dr-row">
+          <div class="dr-doc" aria-hidden="true">
+            <i class="ph-duotone ph-file-pdf"></i>
+            <span>{{ row.report.pageCount }} стр.</span>
+          </div>
+
+          <div class="dr-main">
+            <div class="dr-title">{{ row.title }}</div>
+            <div class="dr-meta">{{ row.meta }}</div>
+          </div>
+
+          <div class="dr-status">
+            <span class="dr-chip" [class]="'dr-chip dr-chip-' + row.link.tone">
+              <i [class]="row.link.icon" aria-hidden="true"></i> {{ row.link.label }}
+            </span>
+            <div class="dr-caption">{{ row.link.caption }}</div>
+          </div>
+
+          <div class="dr-actions">
+            @if (row.link.tone === 'active') {
+              <button type="button" class="btn btn-primary btn-sm dr-share" (click)="shareLink(row.report)">Поделиться</button>
+            }
+            <button type="button" class="btn btn-secondary btn-sm" [class.dr-hide-narrow]="row.link.tone === 'active'"
+                    (click)="row.primary.run()">
+              <i [class]="row.primary.icon" aria-hidden="true"></i> {{ row.primary.label }}
+            </button>
+            <button type="button" class="btn btn-secondary dr-download" aria-label="Скачать PDF" title="Скачать PDF"
+                    (click)="download(row.report)">
+              <i class="ph ph-download-simple" aria-hidden="true"></i>
+              <span class="dr-download-text">Скачать PDF</span>
+            </button>
+            <app-action-menu [actions]="row.actions" label="Действия с отчётом" />
+          </div>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (!isWide()) {
+    <button type="button" class="btn btn-primary dr-fab" (click)="openForm()">
+      <i class="ph-bold ph-plus" aria-hidden="true"></i> Сформировать отчёт
+    </button>
+  }
+</div>
+
+@if (isWide()) {
+  <app-side-panel [open]="formOpen()" title="Сформировать отчёт для врача" width="min(600px, 100vw)" (closed)="closeForm()">
+    @if (formOpen()) {
+      <app-doctor-report-form [fromDiary]="formFromDiary()" (created)="onCreated($event)" (cancelled)="closeForm()" />
+    }
+  </app-side-panel>
+} @else {
+  <app-bottom-sheet [open]="formOpen()" title="Новый отчёт" (closed)="closeForm()">
+    @if (formOpen()) {
+      <div class="dr-sheet">
+        <app-doctor-report-form [fromDiary]="formFromDiary()" (created)="onCreated($event)" (cancelled)="closeForm()" />
+      </div>
+    }
+  </app-bottom-sheet>
+}
+
+<app-doctor-report-link-dialog
+  [report]="linkTarget()"
+  [showResult]="linkShowResult()"
+  (changed)="load()"
+  (closed)="closeLinkDialog()" />
+
+<app-file-viewer [open]="viewerFile() !== null" [localFile]="viewerFile()" (closed)="viewerFile.set(null)" />

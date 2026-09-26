@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/action-menu.component';
@@ -72,7 +73,7 @@ function quantile(sorted: number[], q: number): number {
 @Component({
   selector: 'app-health-notes-tab',
   imports: [
-    ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, SearchFieldComponent,
+    ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, RouterLink, SearchFieldComponent,
     SidePanelComponent, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
