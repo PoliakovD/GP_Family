@@ -26,6 +26,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<Medkit> Medkits => Set<Medkit>();
     public DbSet<Medication> Medications => Set<Medication>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
+
+    /// <summary>Личный дневник самочувствия — строго персональный, без шаринга (см. HealthNote).</summary>
+    public DbSet<HealthNote> HealthNotes => Set<HealthNote>();
     public DbSet<FamilyMedicalShare> FamilyMedicalShares => Set<FamilyMedicalShare>();
     public DbSet<MedicalRecordHidden> MedicalRecordHiddens => Set<MedicalRecordHidden>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();

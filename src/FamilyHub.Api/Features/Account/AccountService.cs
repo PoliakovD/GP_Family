@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.HealthNotes;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
@@ -115,6 +116,8 @@ public class AccountService(
             .ExecuteDeleteAsync(ct);
         await db.MedicalRecords.Where(r => r.OwnerUserId == userId).ExecuteDeleteAsync(ct); // hidden — каскадом от записей
         await db.FamilyMedicalShares.Where(s => s.OwnerUserId == userId).ExecuteDeleteAsync(ct);
+        // Личный дневник самочувствия — тоже без FK на User.
+        await db.HealthNotes.Where(n => n.OwnerUserId == userId).ExecuteDeleteAsync(ct);
 
         // Идентификационные хвосты.
         await db.EmailVerificationCodes
@@ -230,6 +233,24 @@ public class AccountService(
             {
                 r.Id, r.Title, r.RecordDate, r.Doctor, r.Description,
                 r.FamilyDependentId, r.TargetUserId, r.CreatedAt,
+            }),
+            jsonOptions, ct);
+
+        // Дневник самочувствия: payload'ы разворачиваются в типизированные объекты, а не отдаются
+        // сырым DataJson — субъект получает читаемые данные.
+        var healthNotes = await db.HealthNotes.AsNoTracking()
+            .Where(n => n.OwnerUserId == userId)
+            .OrderBy(n => n.OccurredAt)
+            .ToListAsync(ct);
+        await AddJsonAsync(zip, "health-notes.json",
+            healthNotes.Select(n =>
+            {
+                var c = HealthNoteRules.ParseContent(n.Kind, n.Title, n.Text, n.DataJson);
+                return new
+                {
+                    n.Id, n.Kind, n.OccurredAt, n.Title, n.Text, n.IncludeInDoctorQuestions,
+                    c.Symptom, c.Metric, c.Wellbeing, c.Intake, c.Sleep, n.CreatedAt,
+                };
             }),
             jsonOptions, ct);
 
