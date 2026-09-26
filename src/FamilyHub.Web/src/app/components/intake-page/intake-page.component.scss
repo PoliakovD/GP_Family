@@ -1,0 +1,16 @@
+// Страница «Приём лекарств»: шапка с переключателем и кнопкой «Новый курс».
+
+.ip-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ip-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ip-new { margin-left: auto; }

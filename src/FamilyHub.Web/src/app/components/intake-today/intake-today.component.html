@@ -1,0 +1,204 @@
+<div class="it-page">
+  @if (loadError(); as err) {
+    <div class="alert-danger" role="alert">
+      {{ err }}
+      <button type="button" class="btn-link" (click)="load()">Повторить</button>
+    </div>
+  }
+
+  @if (loading() && !data()) {
+    <p class="muted">Загружаем…</p>
+  } @else if (data(); as d) {
+    @if (d.items.length === 0 && d.asNeeded.length === 0 && !hasCourses()) {
+      <div class="it-empty">
+        <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+        <h5>Пока нет курсов приёма</h5>
+        <p class="muted">Создайте курс из назначения врача или вручную — напомним о каждом приёме, спишем таблетку из аптечки и запишем в дневник.</p>
+        <button type="button" class="btn btn-primary" (click)="intake.openForm()">Создать первый курс</button>
+      </div>
+    } @else {
+      <div class="it-grid">
+        <div class="it-main">
+          <div class="it-title-row">
+            <div class="it-title-text">
+              <h4 class="it-heading">{{ heading() }}</h4>
+              <div class="it-summary">
+                @if (summary()) { <span>{{ summary() }}</span> } @else { <span>На сегодня приёмов нет</span> }
+              </div>
+            </div>
+            @if (d.counters.total > 0) {
+              <div class="it-bar-wrap">
+                <div class="it-bar" role="img"
+                     [attr.aria-label]="'Принято ' + d.counters.taken + ' из ' + d.counters.total">
+                  <span class="it-bar-ok" [style.width.%]="bar().taken"></span>
+                  <span class="it-bar-miss" [style.width.%]="bar().missed"></span>
+                </div>
+                <div class="it-bar-legend">
+                  <span>{{ d.counters.taken }} принято</span>
+                  @if (d.counters.missed > 0) { <span class="it-legend-miss">{{ d.counters.missed }} пропущен</span> }
+                  @if (d.counters.upcoming > 0) { <span>{{ d.counters.upcoming }} впереди</span> }
+                </div>
+              </div>
+            }
+          </div>
+
+          @if (multiPerson()) {
+            <div class="it-people" role="radiogroup" aria-label="Чьи приёмы показать">
+              <button type="button" class="it-person" role="radio" [class.active]="subject() === 'all'"
+                      [attr.aria-checked]="subject() === 'all'" (click)="setSubject('all')">Вся семья</button>
+              @for (s of d.subjects; track s.id) {
+                <button type="button" class="it-person" role="radio" [class.active]="subject() === subjectKey(s)"
+                        [attr.aria-checked]="subject() === subjectKey(s)" (click)="setSubject(subjectKey(s))">
+                  <app-avatar [person]="person(s)" size="sm" /> {{ subjectName(s) }}
+                </button>
+              }
+            </div>
+          }
+
+          @if (nowRow(); as now) {
+            <section class="it-now" [attr.id]="now.item.doseId ? 'dose-' + now.item.doseId : null" [class.hl]="now.highlighted">
+              <div class="it-now-head">
+                <span class="it-now-time">{{ now.time }}</span>
+                <span class="it-now-flag">сейчас</span>
+              </div>
+              <div class="it-now-body">
+                <div class="it-now-text">
+                  <div class="it-now-name">{{ now.item.drugName }}</div>
+                  <div class="it-sub">{{ now.sub }}</div>
+                  @if (multiPerson()) {
+                    <div class="it-who"><app-avatar [person]="person(now.item.subject)" size="sm" /> {{ subjectName(now.item.subject) }}</div>
+                  }
+                </div>
+                <div class="it-now-actions">
+                  <button type="button" class="btn it-take" [disabled]="isBusy(now.item)" (click)="act(now.item, Action.Taken)">
+                    <i class="ph-bold ph-check" aria-hidden="true"></i> Принял
+                  </button>
+                  <button type="button" class="btn btn-secondary" [disabled]="isBusy(now.item)" (click)="act(now.item, Action.Snooze10)">Отложить</button>
+                  <app-action-menu [actions]="now.actions" label="Действия с приёмом" />
+                </div>
+              </div>
+            </section>
+          }
+
+          <div class="it-groups">
+            @for (g of groups(); track g.period) {
+              <section>
+                <div class="it-group-head">
+                  <i [class]="g.icon" aria-hidden="true" [class.it-group-now]="g.isNow"></i>
+                  <h5>{{ g.title }}</h5>
+                  @if (g.isNow) { <span class="it-group-now-tag">сейчас</span> }
+                  <span class="it-group-rule"></span>
+                </div>
+                <ul class="it-list">
+                  @for (r of g.rows; track r.item.courseId + r.item.scheduledAt) {
+                    @if (r !== nowRow()) {
+                      <li class="it-row" [class.missed]="r.item.outcome === Outcome.Missed"
+                          [class.hl]="r.highlighted" [attr.id]="r.item.doseId ? 'dose-' + r.item.doseId : null">
+                        <button type="button" class="it-box" [class]="boxState(r.item)"
+                                [disabled]="!r.item.canAct || isBusy(r.item) || r.item.outcome === Outcome.OnTime || r.item.outcome === Outcome.Late"
+                                [attr.aria-label]="'Отметить принятым: ' + r.item.drugName"
+                                (click)="act(r.item, Action.Taken)">
+                          @if (r.item.outcome === Outcome.OnTime || r.item.outcome === Outcome.Late) {
+                            <i class="ph-bold ph-check" aria-hidden="true"></i>
+                          } @else if (r.item.outcome === Outcome.Missed) {
+                            <i class="ph-bold ph-x" aria-hidden="true"></i>
+                          } @else if (r.item.outcome === Outcome.Skipped) {
+                            <i class="ph-bold ph-minus" aria-hidden="true"></i>
+                          }
+                        </button>
+                        <span class="it-time" [class.miss]="r.item.outcome === Outcome.Missed">{{ r.time }}</span>
+                        <div class="it-row-main">
+                          <div class="it-name" [class.done]="r.item.outcome === Outcome.OnTime || r.item.outcome === Outcome.Late || r.item.outcome === Outcome.Skipped">{{ r.item.drugName }}</div>
+                          <div class="it-sub" [class.miss]="r.item.outcome === Outcome.Missed">{{ r.sub }}</div>
+                        </div>
+                        @if (multiPerson()) {
+                          <app-avatar class="it-avatar" [person]="person(r.item.subject)" size="sm" [attr.title]="subjectName(r.item.subject)" />
+                        }
+                        @if (r.item.outcome === Outcome.Due && r.item.canAct) {
+                          <button type="button" class="btn it-take it-take-sm" [disabled]="isBusy(r.item)" (click)="act(r.item, Action.Taken)">Принял</button>
+                        }
+                        @if (r.item.outcome === Outcome.Missed && !r.item.canAct) {
+                          <a class="btn btn-secondary it-open" [routerLink]="['/health/intake/courses', r.item.courseId]">Открыть курс</a>
+                        }
+                        @if (r.actions.length > 0) {
+                          <app-action-menu [actions]="r.actions" label="Действия с приёмом" />
+                        }
+                      </li>
+                    }
+                  }
+                </ul>
+              </section>
+            }
+          </div>
+
+          @for (p of asNeeded(); track p.courseId) {
+            <div class="it-prn">
+              <i class="ph-duotone ph-first-aid" aria-hidden="true"></i>
+              <span class="it-prn-text">
+                По необходимости: <strong>{{ p.drugName }}</strong>
+                @if (multiPerson()) { ({{ subjectName(p.subject) }}) }
+                <span class="muted"> · сегодня {{ p.takenToday }} из {{ p.maxPerDay }}</span>
+              </span>
+              @if (p.canAct) {
+                <button type="button" class="btn-link" [disabled]="busy() === p.courseId" (click)="takeAsNeeded(p)">Отметить приём</button>
+              }
+            </div>
+          }
+
+          @if (d.items.length === 0 && d.asNeeded.length === 0) {
+            <p class="muted">На этот день приёмов нет.</p>
+          }
+        </div>
+
+        <aside class="it-aside">
+          @for (a of alerts(); track a.courseId + a.scheduledAt) {
+            <div class="it-card it-card-alert">
+              <div class="it-card-title"><i class="ph-duotone ph-bell-ringing" aria-hidden="true"></i> Пропущен приём: {{ a.subject.name }}</div>
+              <p>{{ a.drugName }} в {{ clock(a.localTime) }} не отмечен. Вы получили уведомление, потому что следите за этим курсом.</p>
+              <a class="btn btn-secondary btn-sm" [routerLink]="['/health/intake/courses', a.courseId]">Открыть курс</a>
+            </div>
+          }
+
+          @if (lowStock().length > 0) {
+            <div class="it-card it-card-stock">
+              <div class="it-card-title"><i class="ph-duotone ph-package" aria-hidden="true"></i> Заканчивается</div>
+              @for (s of lowStock(); track s.courseId) {
+                <div class="it-stock">
+                  <div class="it-stock-line"><span>{{ s.drugName }}</span><strong>{{ s.quantityText }}</strong></div>
+                  <div class="it-stock-bar"><span [style.width.%]="stockBar(s)"></span></div>
+                  <div class="it-stock-cap">{{ stockCaption(s) }}</div>
+                </div>
+              }
+              <a class="btn-link" routerLink="/health/medications">Открыть аптечку</a>
+            </div>
+          }
+
+          @if (week().length > 0) {
+            <div class="it-card">
+              <div class="it-kicker">Неделя</div>
+              <div class="it-week">
+                @for (w of week(); track w.date) {
+                  <div class="it-week-day" [class.today]="w.isToday">
+                    <span class="it-week-name">{{ weekday(w) }}</span>
+                    <span class="it-week-col">
+                      @for (seg of weekSegments(w); track seg.cls) {
+                        <span [class]="'seg-' + seg.cls" [style.flex-grow]="seg.n"></span>
+                      }
+                    </span>
+                  </div>
+                }
+              </div>
+              @if (d.weekOnTimePercent !== null) {
+                <div class="it-stock-cap">{{ d.weekOnTimePercent }}% приёмов вовремя за неделю</div>
+              }
+            </div>
+          }
+
+          @if (alerts().length === 0 && lowStock().length === 0 && week().length === 0) {
+            <p class="muted">Здесь появятся пропуски близких, запас лекарств и итоги недели.</p>
+          }
+        </aside>
+      </div>
+    }
+  }
+</div>

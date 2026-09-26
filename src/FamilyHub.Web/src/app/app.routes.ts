@@ -185,6 +185,35 @@ export const routes: Routes = [
           ),
       },
       {
+        // Приём лекарств (ADR-0015): «Сегодня» и «Курсы» — вложенные роуты страницы-хаба, форма курса и
+        // настройки напоминаний — общие панели хаба. dose/:doseId — цель клика по push-уведомлению.
+        path: 'intake',
+        loadComponent: () =>
+          import('./components/intake-page/intake-page.component').then((m) => m.IntakePageComponent),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./components/intake-today/intake-today.component').then((m) => m.IntakeTodayComponent),
+          },
+          {
+            path: 'dose/:doseId',
+            loadComponent: () =>
+              import('./components/intake-today/intake-today.component').then((m) => m.IntakeTodayComponent),
+          },
+          {
+            path: 'courses',
+            loadComponent: () =>
+              import('./components/intake-courses/intake-courses.component').then((m) => m.IntakeCoursesComponent),
+          },
+          {
+            path: 'courses/:id',
+            loadComponent: () =>
+              import('./components/intake-courses/intake-courses.component').then((m) => m.IntakeCoursesComponent),
+          },
+        ],
+      },
+      {
         path: 'records',
         loadComponent: () =>
           import('./components/medical-records-tab/medical-records-tab.component').then(

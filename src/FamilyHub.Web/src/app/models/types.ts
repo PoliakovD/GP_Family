@@ -30,6 +30,9 @@ export const NotificationType = {
     MedicalDocumentExtracted: 7,
     MedicalDocumentExtractionFailed: 8,
     MedicationEnrichmentFailed: 9,
+    MedicationDoseDue: 10,
+    MedicationDoseMissed: 11,
+    MedicationStockLow: 12,
 } as const;
 
 export interface FamilySummary {
@@ -446,6 +449,8 @@ export const NotificationRelatedKind = {
     MedicalRecordAnalysis: 0,
     MedicalRecordVisit: 1,
     Medkit: 2,
+    MedicationDose: 3,
+    MedicationCourse: 4,
 } as const;
 export type NotificationRelatedKind = typeof NotificationRelatedKind[keyof typeof NotificationRelatedKind];
 
@@ -1017,4 +1022,327 @@ export interface PublicReportMeta {
     expiresAt: string;
     pageCount: number;
     sections: string[];
+}
+
+// ============================================================================
+// Приём лекарств (MedicationCourse) — курсы, приёмы, «Сегодня», напоминания (ADR-0015).
+// Значения enum'ов — часть контракта с бэкендом, не переупорядочивать. Время — «HH:mm:ss»
+// (TimeOnly), даты — «yyyy-MM-dd» (DateOnly), моменты — ISO UTC.
+// ============================================================================
+
+export const DoseScheduleMode = {
+    TimesPerDay: 0, EveryNHours: 1, Weekdays: 2, Cycle: 3, AsNeeded: 4,
+} as const;
+export type DoseScheduleMode = typeof DoseScheduleMode[keyof typeof DoseScheduleMode];
+
+export const FoodRelation = {Any: 0, Before: 1, With: 2, After: 3} as const;
+export type FoodRelation = typeof FoodRelation[keyof typeof FoodRelation];
+
+export const DoseUnit = {Tablet: 0, Capsule: 1, Ml: 2, Drop: 3, Sachet: 4, Dose: 5} as const;
+export type DoseUnit = typeof DoseUnit[keyof typeof DoseUnit];
+
+export const DoseStatus = {Pending: 0, Snoozed: 1, Taken: 2, Skipped: 3, Missed: 4} as const;
+export type DoseStatus = typeof DoseStatus[keyof typeof DoseStatus];
+
+export const DoseAction = {Taken: 0, Snooze10: 1, Snooze30: 2, Skip: 3} as const;
+export type DoseAction = typeof DoseAction[keyof typeof DoseAction];
+
+/** Итог приёма для сетки истории и «Сегодня»: вовремя / с опозданием / пропущен / впереди. */
+export const DoseOutcome = {
+    Upcoming: 0, Due: 1, OnTime: 2, Late: 3, Missed: 4, Skipped: 5,
+} as const;
+export type DoseOutcome = typeof DoseOutcome[keyof typeof DoseOutcome];
+
+export const CourseStatus = {Active: 0, Paused: 1, Completed: 2} as const;
+export type CourseStatus = typeof CourseStatus[keyof typeof CourseStatus];
+
+export const DayPeriod = {Morning: 0, Day: 1, Evening: 2} as const;
+export type DayPeriod = typeof DayPeriod[keyof typeof DayPeriod];
+
+export interface DoseTime {
+    /** «HH:mm:ss» */
+    at: string;
+    units: number;
+}
+
+export interface DoseSchedule {
+    mode: DoseScheduleMode;
+    times?: DoseTime[] | null;
+    intervalHours?: number | null;
+    intervalStart?: string | null;
+    intervalUnits?: number | null;
+    /** DayOfWeek: 0 — воскресенье … 6 — суббота (как в .NET и JS Date.getDay()). */
+    weekdays?: number[] | null;
+    cycleOnDays?: number | null;
+    cycleOffDays?: number | null;
+    maxPerDay?: number | null;
+}
+
+/** Кто принимает: kind — «user» (аккаунт) или «dependent» (подопечный); isSelf — это я. */
+export interface IntakeSubject {
+    kind: 'user' | 'dependent';
+    id: string;
+    name: string;
+    isSelf: boolean;
+}
+
+export interface CourseStock {
+    medicationId: string;
+    medicationName: string;
+    medkitName: string | null;
+    quantityText: string | null;
+    quantity: number | null;
+    daysCovered: number | null;
+    neededForCourse: number | null;
+    shortfall: number | null;
+}
+
+export interface CourseSummary {
+    id: string;
+    drugName: string;
+    subject: IntakeSubject;
+    status: CourseStatus;
+    schedule: DoseSchedule;
+    food: FoodRelation;
+    unit: DoseUnit;
+    startDate: string;
+    endDate: string | null;
+    dayNumber: number;
+    totalDays: number | null;
+    canEdit: boolean;
+    isWatching: boolean;
+    missedToday: boolean;
+    writeOffEnabled: boolean;
+    stock: CourseStock | null;
+}
+
+export interface CourseSource {
+    recordId: string;
+    doctor: string | null;
+    recordDate: string;
+}
+
+export interface Adherence {
+    onTime: number;
+    counted: number;
+    percent: number | null;
+}
+
+export interface CourseWatcher {
+    userId: string;
+    name: string;
+    receiveReminders: boolean;
+    notifyMissed: boolean;
+}
+
+export interface CourseDetail {
+    summary: CourseSummary;
+    notes: string | null;
+    prescriptionText: string | null;
+    source: CourseSource | null;
+    medicationId: string | null;
+    repeatAfterMinutes: number | null;
+    missedAfterMinutes: number;
+    lowStockDays: number;
+    timeZoneId: string;
+    nextBreakStart: string | null;
+    adherence: Adherence;
+    watchers: CourseWatcher[];
+    canDelete: boolean;
+}
+
+export interface CourseRequest {
+    dependentId: string | null;
+    drugName: string;
+    schedule: DoseSchedule;
+    food: FoodRelation;
+    unit: DoseUnit;
+    startDate: string;
+    endDate: string | null;
+    medicationId: string | null;
+    writeOff: boolean;
+    repeatAfterMinutes: number | null;
+    missedAfterMinutes: number;
+    lowStockDays: number;
+    sourceMedicalRecordId: string | null;
+    sourcePrescriptionIndex: number | null;
+    prescriptionText: string | null;
+    notes: string | null;
+}
+
+export interface CoursePreviewRequest {
+    schedule: DoseSchedule;
+    startDate: string;
+    endDate: string | null;
+    unit: DoseUnit;
+    medicationId: string | null;
+}
+
+export interface CoursePreview {
+    averageUnitsPerDay: number;
+    neededForCourse: number | null;
+    nextBreakStart: string | null;
+    medicationName: string | null;
+    quantityText: string | null;
+    quantity: number | null;
+    daysCovered: number | null;
+    shortfall: number | null;
+}
+
+export interface HistoryCell {
+    date: string;
+    time: string;
+    scheduledAt: string;
+    outcome: DoseOutcome;
+    doseId: string | null;
+}
+
+export interface CourseHistory {
+    from: string;
+    to: string;
+    cells: HistoryCell[];
+    adherence: Adherence;
+}
+
+/** Черновик полей формы, угаданный из текста назначения (частичный: что не распознано — null). */
+export interface PrescriptionDraft {
+    mode: DoseScheduleMode | null;
+    timesPerDay: number | null;
+    intervalHours: number | null;
+    units: number | null;
+    unit: DoseUnit | null;
+    durationDays: number | null;
+    food: FoodRelation | null;
+}
+
+export interface PrescriptionItem {
+    index: number;
+    name: string;
+    dosageInstructions: string | null;
+    draft: PrescriptionDraft;
+}
+
+export interface PrescriptionVisit {
+    recordId: string;
+    recordDate: string;
+    doctor: string | null;
+    title: string | null;
+    dependentId: string | null;
+    items: PrescriptionItem[];
+}
+
+export interface DoseResult {
+    id: string;
+    status: DoseStatus;
+    scheduledAt: string | null;
+    takenAt: string | null;
+    snoozedUntil: string | null;
+    units: number;
+    stockWrittenOff: boolean;
+}
+
+export interface TodayCounters {
+    taken: number;
+    missed: number;
+    upcoming: number;
+    skipped: number;
+    total: number;
+    nextAt: string | null;
+}
+
+export interface TodayDose {
+    courseId: string;
+    doseId: string | null;
+    scheduledAt: string;
+    localTime: string;
+    period: DayPeriod;
+    drugName: string;
+    units: number;
+    unit: DoseUnit;
+    food: FoodRelation;
+    subject: IntakeSubject;
+    outcome: DoseOutcome;
+    takenAt: string | null;
+    snoozedUntil: string | null;
+    dayNumber: number;
+    totalDays: number | null;
+    canAct: boolean;
+    isWatching: boolean;
+}
+
+export interface TodayAsNeeded {
+    courseId: string;
+    drugName: string;
+    subject: IntakeSubject;
+    maxPerDay: number;
+    takenToday: number;
+    units: number;
+    unit: DoseUnit;
+    canAct: boolean;
+}
+
+export interface FamilyAlert {
+    courseId: string;
+    doseId: string | null;
+    subject: IntakeSubject;
+    drugName: string;
+    scheduledAt: string;
+    localTime: string;
+}
+
+export interface LowStock {
+    courseId: string;
+    drugName: string;
+    quantityText: string | null;
+    daysCovered: number;
+    lowStockDays: number;
+    courseDaysLeft: number | null;
+}
+
+export interface WeekDay {
+    date: string;
+    onTime: number;
+    late: number;
+    missed: number;
+    skipped: number;
+    upcoming: number;
+    isToday: boolean;
+}
+
+export interface IntakeToday {
+    date: string;
+    timeZoneId: string;
+    counters: TodayCounters;
+    subjects: IntakeSubject[];
+    items: TodayDose[];
+    asNeeded: TodayAsNeeded[];
+    alerts: FamilyAlert[];
+    lowStock: LowStock[];
+    week: WeekDay[];
+    weekOnTimePercent: number | null;
+}
+
+export interface WatcherCandidate {
+    userId: string;
+    name: string;
+    enabled: boolean;
+}
+
+export interface WatchingEntry {
+    kind: 'user' | 'dependent';
+    id: string;
+    name: string;
+    courseCount: number;
+    isWatching: boolean;
+    notifyMissed: boolean;
+    receiveReminders: boolean;
+}
+
+export interface ReminderSettings {
+    timeZoneId: string | null;
+    /** «HH:mm:ss» или null — тихие часы выключены. */
+    quietHoursFrom: string | null;
+    quietHoursTo: string | null;
+    myWatchers: WatcherCandidate[];
+    watching: WatchingEntry[];
 }

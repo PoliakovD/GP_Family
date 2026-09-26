@@ -181,6 +181,7 @@ public static class AuthEndpoints
                 tgUsername = user.TgUsername,
                 hasTelegram = user.TelegramId is not null,
                 hasPassword = user.PasswordHash is not null,
+                timeZoneId = user.TimeZoneId,
             });
         });
 

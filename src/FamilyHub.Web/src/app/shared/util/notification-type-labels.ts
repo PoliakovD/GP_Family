@@ -20,6 +20,9 @@ export const NOTIFICATION_TYPE_LABEL: Record<number, string> = {
   // LmStudioRecoverySweepJob, и уведомления не создаёт).
   [NotificationType.MedicalDocumentExtractionFailed]: 'Не удалось распознать документ',
   [NotificationType.MedicationEnrichmentFailed]: 'Не удалось найти информацию о препарате',
+  [NotificationType.MedicationDoseDue]: 'Пора принять лекарство',
+  [NotificationType.MedicationDoseMissed]: 'Пропущен приём лекарства',
+  [NotificationType.MedicationStockLow]: 'Лекарство заканчивается',
 };
 
 export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
@@ -33,6 +36,9 @@ export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
   [NotificationType.MedicalDocumentExtracted]: 'ph-duotone ph-magic-wand',
   [NotificationType.MedicalDocumentExtractionFailed]: 'ph-duotone ph-warning-circle',
   [NotificationType.MedicationEnrichmentFailed]: 'ph-duotone ph-warning-circle',
+  [NotificationType.MedicationDoseDue]: 'ph-duotone ph-pill',
+  [NotificationType.MedicationDoseMissed]: 'ph-duotone ph-bell-ringing',
+  [NotificationType.MedicationStockLow]: 'ph-duotone ph-package',
 };
 
 export function notificationTypeLabel(type: number): string {
@@ -50,6 +56,9 @@ export const NOTIFICATION_TYPE_SECTION: Record<number, string> = {
   [NotificationType.MedicationExpired]: 'Аптечка',
   [NotificationType.MedicationEnriched]: 'Аптечка',
   [NotificationType.MedicationEnrichmentFailed]: 'Аптечка',
+  [NotificationType.MedicationDoseDue]: 'Приём лекарств',
+  [NotificationType.MedicationDoseMissed]: 'Приём лекарств',
+  [NotificationType.MedicationStockLow]: 'Приём лекарств',
   [NotificationType.BirthdayUpcoming]: 'Семья',
   [NotificationType.MemberLeft]: 'Семья',
   [NotificationType.MemberApproved]: 'Семья',

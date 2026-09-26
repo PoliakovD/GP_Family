@@ -1,0 +1,18 @@
+<div class="ip-page">
+  @if (!pageAction.immersive()) {
+    <div class="ip-head">
+      <div class="seg" role="tablist" aria-label="Раздел приёма лекарств">
+        <a class="seg-opt" role="tab" routerLink="./" routerLinkActive="active"
+           [routerLinkActiveOptions]="{ exact: true }">Сегодня</a>
+        <a class="seg-opt" role="tab" routerLink="courses" routerLinkActive="active">
+          Курсы@if (intake.courses(); as list) { · {{ list.length }}}
+        </a>
+      </div>
+      <button type="button" class="btn btn-primary ip-new" (click)="newCourse()">
+        <i class="ph-bold ph-plus" aria-hidden="true"></i> Новый курс
+      </button>
+    </div>
+  }
+
+  <router-outlet></router-outlet>
+</div>
