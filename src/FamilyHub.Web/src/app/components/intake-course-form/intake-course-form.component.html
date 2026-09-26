@@ -197,10 +197,10 @@
           <div class="cf-card-title">Списывать из аптечки</div>
           <div class="cf-card-sub">Каждый отмеченный приём уменьшит остаток</div>
         </div>
-        <span class="switch">
+        <label class="switch">
           <input type="checkbox" [checked]="writeOff()" (change)="setWriteOff($any($event.target).checked)" aria-label="Списывать из аптечки" />
           <span class="switch-knob"></span>
-        </span>
+        </label>
       </div>
       @if (writeOff()) {
         <select class="input" [ngModel]="medicationId()" (ngModelChange)="medicationId.set($event)" name="medication" aria-label="Препарат в аптечке">

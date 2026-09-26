@@ -19,10 +19,10 @@
             <li class="ir-row">
               <app-avatar [person]="person(w.userId, w.name)" size="sm" />
               <span class="ir-name">{{ w.name }}</span>
-              <span class="switch">
+              <label class="switch">
                 <input type="checkbox" [checked]="w.enabled" (change)="toggleMyWatcher(w.userId, $any($event.target).checked)" [attr.aria-label]="'Сообщать ' + w.name" />
                 <span class="switch-knob"></span>
-              </span>
+              </label>
             </li>
           }
         </ul>
@@ -44,32 +44,32 @@
                   <small>{{ w.courseCount }} @if (w.courseCount === 1) { курс } @else { курсов }@if (w.kind === 'user') { · выбрал(а) вас наблюдателем}</small>
                 </div>
                 @if (w.kind === 'dependent') {
-                  <span class="switch">
+                  <label class="switch">
                     <input type="checkbox" [checked]="w.isWatching" (change)="toggleWatch(w, $any($event.target).checked)" [attr.aria-label]="'Следить за ' + w.name" />
                     <span class="switch-knob"></span>
-                  </span>
+                  </label>
                 } @else {
-                  <span class="switch">
+                  <label class="switch">
                     <input type="checkbox" [checked]="w.notifyMissed" (change)="setWatching(w, { notifyMissed: $any($event.target).checked })" [attr.aria-label]="'Уведомлять о пропусках: ' + w.name" />
                     <span class="switch-knob"></span>
-                  </span>
+                  </label>
                 }
               </div>
               @if (w.kind === 'dependent' && w.isWatching) {
-                <label class="ir-sub">
+                <div class="ir-sub">
                   <span>Напоминать о каждом приёме</span>
-                  <span class="switch">
+                  <label class="switch">
                     <input type="checkbox" [checked]="w.receiveReminders" (change)="setWatching(w, { receiveReminders: $any($event.target).checked })" />
                     <span class="switch-knob"></span>
-                  </span>
-                </label>
-                <label class="ir-sub">
+                  </label>
+                </div>
+                <div class="ir-sub">
                   <span>Сообщать о пропусках</span>
-                  <span class="switch">
+                  <label class="switch">
                     <input type="checkbox" [checked]="w.notifyMissed" (change)="setWatching(w, { notifyMissed: $any($event.target).checked })" />
                     <span class="switch-knob"></span>
-                  </span>
-                </label>
+                  </label>
+                </div>
               }
             </li>
           }
@@ -83,10 +83,10 @@
         <div class="ir-line">
           <i class="ph ph-moon" aria-hidden="true"></i>
           <span class="ir-name">Напоминания без звука</span>
-          <span class="switch">
+          <label class="switch">
             <input type="checkbox" [checked]="quietOn()" (change)="setQuiet($any($event.target).checked)" aria-label="Тихие часы" />
             <span class="switch-knob"></span>
-          </span>
+          </label>
         </div>
         @if (quietOn()) {
           <div class="ir-times">
