@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -163,6 +164,9 @@ public class FamilyHubWebFactory : WebApplicationFactory<Program>, IAsyncLifetim
             services.AddSingleton<CapturingEmailSender>();
             services.AddSingleton<FamilyHub.Infrastructure.Email.IEmailSender>(
                 sp => sp.GetRequiredService<CapturingEmailSender>());
+            // Сайдкар Gotenberg в тестовом стеке не поднимается: отчёт для врача получает фиксированный PDF.
+            services.RemoveAll<FamilyHub.Infrastructure.Previews.IGotenbergConverter>();
+            services.AddSingleton<FamilyHub.Infrastructure.Previews.IGotenbergConverter, FakeGotenbergConverter>();
         });
     }
 

@@ -27,6 +27,13 @@ public static class HealthNoteRules
         "head", "chest", "abdomen", "back", "joints", "throat",
     };
 
+    /// <summary>Подписи локализации по-русски — для документов (PDF отчёта); в интерфейсе подписи свои.</summary>
+    public static readonly IReadOnlyDictionary<string, string> BodyAreaLabels = new Dictionary<string, string>
+    {
+        ["head"] = "голова", ["chest"] = "грудь", ["abdomen"] = "живот",
+        ["back"] = "спина", ["joints"] = "суставы", ["throat"] = "горло",
+    };
+
     public static readonly IReadOnlySet<string> WellbeingFactors = new HashSet<string>(StringComparer.Ordinal)
     {
         "rested", "stress", "sport", "weather",

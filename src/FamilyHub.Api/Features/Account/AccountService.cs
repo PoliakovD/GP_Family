@@ -70,8 +70,10 @@ public class AccountService(
 
         // Ключи хранилища собираем до удаления строк; сами объекты удаляем после коммита.
         var recordIds = await db.MedicalRecords.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToListAsync(ct);
+        var reportIds = await db.DoctorReports.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToListAsync(ct);
         var storageKeys = await db.FileAttachments
-            .Where(a => a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
+            .Where(a => (a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
+                     || (a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId)))
             .Select(a => a.StorageKey)
             .ToListAsync(ct);
 
@@ -118,6 +120,11 @@ public class AccountService(
         await db.FamilyMedicalShares.Where(s => s.OwnerUserId == userId).ExecuteDeleteAsync(ct);
         // Личный дневник самочувствия — тоже без FK на User.
         await db.HealthNotes.Where(n => n.OwnerUserId == userId).ExecuteDeleteAsync(ct);
+        // Отчёты для врача: строки, PDF-вложения (ключи блобов собраны выше) и тем самым публичные ссылки.
+        await db.FileAttachments
+            .Where(a => a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId))
+            .ExecuteDeleteAsync(ct);
+        await db.DoctorReports.Where(r => r.OwnerUserId == userId).ExecuteDeleteAsync(ct);
 
         // Идентификационные хвосты.
         await db.EmailVerificationCodes
@@ -251,6 +258,18 @@ public class AccountService(
                     n.Id, n.Kind, n.OccurredAt, n.Title, n.Text, n.IncludeInDoctorQuestions,
                     c.Symptom, c.Metric, c.Wellbeing, c.Intake, c.Sleep, n.CreatedAt,
                 };
+            }),
+            jsonOptions, ct);
+
+        // Отчёты для врача: только метаданные (период, состав, статус ссылки). Сами PDF — производный
+        // снимок данных, которые уже в экспорте выше; токены ссылок не отдаём.
+        var reports = await db.DoctorReports.AsNoTracking().Where(r => r.OwnerUserId == userId).OrderBy(r => r.CreatedAt).ToListAsync(ct);
+        await AddJsonAsync(zip, "doctor-reports.json",
+            reports.Select(r => new
+            {
+                r.Id, r.PeriodFrom, r.PeriodTo, r.CreatedAt, r.PageCount, r.Recipient, r.PatientComment,
+                blocks = new { r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements, r.IncludeSymptomsNotes },
+                link = new { r.ShareExpiresAt, r.ShareRevokedAt, viewCount = r.ShareViewCount, lastViewedAt = r.ShareLastViewedAt },
             }),
             jsonOptions, ct);
 

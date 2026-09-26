@@ -14,4 +14,10 @@ public class NullGotenbergConverter(ILogger<NullGotenbergConverter> logger) : IG
             contentType);
         return Task.FromResult<byte[]?>(null);
     }
+
+    public Task<byte[]?> ConvertHtmlToPdfAsync(string html, string? footerHtml = null, CancellationToken ct = default)
+    {
+        logger.LogDebug("Previews:GotenbergBaseUrl не задан — HTML→PDF недоступен.");
+        return Task.FromResult<byte[]?>(null);
+    }
 }
