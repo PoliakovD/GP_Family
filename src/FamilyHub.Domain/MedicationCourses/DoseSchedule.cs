@@ -49,6 +49,10 @@ public record DoseSchedule(
         }
     }
 
+    /// <summary>Доза одного приёма «по необходимости» (плана по времени нет, доза хранится в
+    /// <see cref="IntervalUnits"/>; по умолчанию одна единица).</summary>
+    public decimal AsNeededUnits => IntervalUnits ?? 1m;
+
     /// <summary>Суммарная доза за один активный день.</summary>
     public decimal UnitsPerActiveDay() => DailyTimes().Sum(t => t.Units);
 }

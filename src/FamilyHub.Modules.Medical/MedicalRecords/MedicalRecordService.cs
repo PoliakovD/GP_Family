@@ -46,27 +46,8 @@ public class MedicalRecordService(
     /// Опциональный <paramref name="kind"/> — фильтр по виду записи (анализ/посещение врача);
     /// Kind не зашифрован, поэтому фильтруется прямо в SQL, до расшифровки остальных полей.
     /// </summary>
-    private IQueryable<MedicalRecord> VisibleRecordsQuery(Guid userId, MedicalRecordKind? kind = null)
-    {
-        var query = db.MedicalRecords.AsNoTracking().Where(r =>
-            r.OwnerUserId == userId
-            || r.TargetUserId == userId
-            || db.FamilyMedicalShares.Any(share =>
-                   share.OwnerUserId == r.OwnerUserId &&
-                   db.FamilyMembers.Any(m =>
-                       m.FamilyId == share.FamilyId &&
-                       m.UserId == userId &&
-                       m.Status == MemberStatus.Active) &&
-                   !db.MedicalRecordHiddens.Any(h =>
-                       h.MedicalRecordId == r.Id &&
-                       h.FamilyId == share.FamilyId))
-            || (r.FamilyDependentId != null && db.FamilyMembers.Any(m =>
-                   m.UserId == userId &&
-                   m.Status == MemberStatus.Active &&
-                   db.FamilyDependents.Any(d => d.Id == r.FamilyDependentId && d.FamilyId == m.FamilyId))));
-
-        return kind is null ? query : query.Where(r => r.Kind == kind);
-    }
+    private IQueryable<MedicalRecord> VisibleRecordsQuery(Guid userId, MedicalRecordKind? kind = null) =>
+        MedicalRecordVisibility.Visible(db, userId, kind);
 
     /// <summary>Фильтры, которые не требуют расшифровки — все plaintext-колонки (RecordDate/
     /// FamilyDependentId/TargetUserId), применяются прямо в SQL, до материализации.</summary>

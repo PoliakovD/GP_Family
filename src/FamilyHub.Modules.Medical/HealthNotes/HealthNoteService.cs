@@ -55,6 +55,20 @@ public class HealthNoteService(AppDbContext db, ILogger<HealthNoteService> logge
         return (HealthNoteResult.Success, ToDto(note), null);
     }
 
+    /// <summary>Готовит запись «приём лекарства» без сохранения — для отметки приёма по курсу, где запись
+    /// дневника, приём и списание из аптечки должны попасть в одну транзакцию. Вызывающий сам делает
+    /// SaveChanges.</summary>
+    public HealthNote StageIntake(Guid userId, string drugName, string? dose, DateTime occurredAtUtc)
+    {
+        var now = DateTime.UtcNow;
+        var content = new HealthNoteContent(HealthNoteKind.MedicationIntake, Normalize(drugName), null,
+            Intake: new MedicationIntakeData(Normalize(dose)));
+        var note = new HealthNote { Id = Guid.NewGuid(), OwnerUserId = userId, CreatedAt = now, UpdatedAt = now };
+        Apply(note, content, AsUtc(occurredAtUtc), includeInDoctorQuestions: false);
+        db.HealthNotes.Add(note);
+        return note;
+    }
+
     public async Task<(HealthNoteResult Result, HealthNoteDto? Item, string? Error)> UpdateAsync(
         Guid userId, Guid noteId, HealthNoteRequest request, CancellationToken ct = default)
     {

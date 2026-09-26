@@ -71,7 +71,8 @@ public static class MedicationCourseRules
                 return ValidateTimes(s.Times);
 
             case DoseScheduleMode.AsNeeded:
-                return s.MaxPerDay is >= 1 and <= MaxPerDayLimit ? null : $"Лимит в сутки — от 1 до {MaxPerDayLimit}.";
+                if (s.MaxPerDay is not (>= 1 and <= MaxPerDayLimit)) return $"Лимит в сутки — от 1 до {MaxPerDayLimit}.";
+                return s.IntervalUnits is { } asNeededUnits ? ValidateUnits(asNeededUnits) : null;
 
             default:
                 return "Неизвестный режим расписания.";

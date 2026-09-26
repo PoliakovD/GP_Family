@@ -8,6 +8,7 @@ using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
+using FamilyHub.Modules.Medical.MedicationCourses;
 using FamilyHub.Modules.Medical.Ocr;
 using FamilyHub.Modules.Medical.Pipeline;
 using FamilyHub.Modules.Medical.Search;
@@ -43,6 +44,14 @@ public static class MedicalModule
         services.AddScoped<HealthNoteService>();
         services.AddScoped<DoctorReportDataCollector>();
         services.AddScoped<DoctorReportService>();
+        // Курсы приёма лекарств (ADR-0015): доступ, курсы, приёмы, «Сегодня», напоминания.
+        services.AddScoped<MedicationCourseAccess>();
+        services.AddScoped<CourseSubjects>();
+        services.AddScoped<MedkitStockService>();
+        services.AddScoped<MedicationCourseService>();
+        services.AddScoped<DoseService>();
+        services.AddScoped<MedicationTodayService>();
+        services.AddScoped<MedicationReminderSettingsService>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
@@ -151,6 +160,7 @@ public static class MedicalModule
         module.MapMedicalRecordEndpoints();
         module.MapHealthNoteEndpoints();
         module.MapDoctorReportEndpoints();
+        module.MapMedicationCourseEndpoints();
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
         module.MapExtractionEndpoints();
