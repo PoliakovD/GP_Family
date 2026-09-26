@@ -43,6 +43,10 @@
     "!/api/search/**",
     "!/api/push/**",
     "!/api/admin/**",
+    "!/api/public/**",
+    "!/api/medication-courses/**",
+    "!/api/medication-doses/**",
+    "!/api/medication-reminders/**",
 
     "!/hangfire",
     "!/hangfire/**",

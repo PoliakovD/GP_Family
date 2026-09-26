@@ -100,7 +100,7 @@ export class IntakeTodayComponent implements OnInit, OnDestroy {
   /** Активный курс есть хотя бы один — иначе показываем приглашение создать первый. */
   protected readonly hasCourses = computed(() => (this.intake.courses()?.length ?? 0) > 0);
 
-  protected readonly groups = computed<Group[]>(() => {
+  private readonly allGroups = computed<Group[]>(() => {
     const d = this.data();
     if (!d) return [];
     const focus = this.doseId();
@@ -112,7 +112,13 @@ export class IntakeTodayComponent implements OnInit, OnDestroy {
 
   /** Крупная карточка «сейчас»: первый наступивший приём, по которому я могу действовать. */
   protected readonly nowRow = computed<Row | null>(() =>
-    this.groups().flatMap((g) => g.rows).find((r) => r.item.outcome === DoseOutcome.Due && r.item.canAct) ?? null);
+    this.allGroups().flatMap((g) => g.rows).find((r) => r.item.outcome === DoseOutcome.Due && r.item.canAct) ?? null);
+
+  /** Группы без строк, целиком ушедших в карточку «сейчас», не показываем — пустой заголовок сбивает. */
+  protected readonly groups = computed<Group[]>(() => {
+    const now = this.nowRow();
+    return this.allGroups().map((g) => ({ ...g, rows: g.rows.filter((r) => r !== now) })).filter((g) => g.rows.length > 0);
+  });
 
   protected readonly alerts = computed(() => this.data()?.alerts ?? []);
   protected readonly lowStock = computed(() => this.data()?.lowStock ?? []);

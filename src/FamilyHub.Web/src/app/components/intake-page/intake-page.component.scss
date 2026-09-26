@@ -14,3 +14,6 @@
 }
 
 .ip-new { margin-left: auto; }
+
+// Содержимое нижнего листа: форма длинная — листаем внутри листа, а не страницу под ним.
+.ip-sheet { max-height: 75vh; overflow-y: auto; padding-bottom: 8px; }

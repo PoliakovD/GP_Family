@@ -233,6 +233,24 @@ public class MedicationCourseServiceTests : MedicationCourseTestBase
     }
 
     [Fact]
+    public async Task Update_WithoutSource_KeepsTheOriginalPrescription()
+    {
+        var (family, admin) = SeedFamily();
+        var recordId = Guid.NewGuid();
+        var course = SeedCourse(admin.Id, null, family.Id, admin.Id, AsNeeded());
+        course.SourceMedicalRecordId = recordId;
+        course.SourcePrescriptionIndex = 2;
+        Db.SaveChanges();
+
+        var (result, _, _) = await Courses.UpdateAsync(admin.Id, course.Id, Request(AsNeeded(), name: "Новое имя"));
+
+        result.Should().Be(CourseResult.Success);
+        var stored = Db.MedicationCourses.AsNoTracking().Single();
+        stored.SourceMedicalRecordId.Should().Be(recordId);
+        stored.SourcePrescriptionIndex.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Update_ByReadOnlyWatcher_IsForbidden()
     {
         var (family, admin) = SeedFamily();

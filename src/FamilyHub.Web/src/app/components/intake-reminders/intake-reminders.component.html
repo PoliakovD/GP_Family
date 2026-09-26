@@ -1,0 +1,107 @@
+<div class="ir">
+  @if (loadError(); as err) {
+    <div class="alert-danger" role="alert">
+      {{ err }}
+      <button type="button" class="btn-link" (click)="load()">Повторить</button>
+    </div>
+  } @else if (loading() && !settings()) {
+    <p class="muted">Загружаем…</p>
+  } @else if (settings(); as s) {
+    <p class="ir-intro">Повтор напоминания, порог пропуска и запас в аптечке задаются в каждом курсе — у разных лекарств они разные.</p>
+
+    <section>
+      <div class="ir-kicker">Кто узнает о моих пропусках</div>
+      @if (s.myWatchers.length === 0) {
+        <p class="muted ir-note">Пригласите близких в семью — и вы сможете выбрать, кому сообщать, если вы не отметили приём.</p>
+      } @else {
+        <ul class="ir-list">
+          @for (w of s.myWatchers; track w.userId) {
+            <li class="ir-row">
+              <app-avatar [person]="person(w.userId, w.name)" size="sm" />
+              <span class="ir-name">{{ w.name }}</span>
+              <span class="switch">
+                <input type="checkbox" [checked]="w.enabled" (change)="toggleMyWatcher(w.userId, $any($event.target).checked)" [attr.aria-label]="'Сообщать ' + w.name" />
+                <span class="switch-knob"></span>
+              </span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section>
+      <div class="ir-kicker">Я слежу за курсами</div>
+      @if (s.watching.length === 0) {
+        <p class="muted ir-note">Пока не за кем: здесь появятся подопечные вашей семьи и близкие, которые выбрали вас наблюдателем.</p>
+      } @else {
+        <ul class="ir-list">
+          @for (w of s.watching; track w.kind + w.id) {
+            <li class="ir-row ir-row-col">
+              <div class="ir-line">
+                <app-avatar [person]="person(w.id, w.name)" size="sm" />
+                <div class="ir-name">
+                  {{ w.name }}
+                  <small>{{ w.courseCount }} @if (w.courseCount === 1) { курс } @else { курсов }@if (w.kind === 'user') { · выбрал(а) вас наблюдателем}</small>
+                </div>
+                @if (w.kind === 'dependent') {
+                  <span class="switch">
+                    <input type="checkbox" [checked]="w.isWatching" (change)="toggleWatch(w, $any($event.target).checked)" [attr.aria-label]="'Следить за ' + w.name" />
+                    <span class="switch-knob"></span>
+                  </span>
+                } @else {
+                  <span class="switch">
+                    <input type="checkbox" [checked]="w.notifyMissed" (change)="setWatching(w, { notifyMissed: $any($event.target).checked })" [attr.aria-label]="'Уведомлять о пропусках: ' + w.name" />
+                    <span class="switch-knob"></span>
+                  </span>
+                }
+              </div>
+              @if (w.kind === 'dependent' && w.isWatching) {
+                <label class="ir-sub">
+                  <span>Напоминать о каждом приёме</span>
+                  <span class="switch">
+                    <input type="checkbox" [checked]="w.receiveReminders" (change)="setWatching(w, { receiveReminders: $any($event.target).checked })" />
+                    <span class="switch-knob"></span>
+                  </span>
+                </label>
+                <label class="ir-sub">
+                  <span>Сообщать о пропусках</span>
+                  <span class="switch">
+                    <input type="checkbox" [checked]="w.notifyMissed" (change)="setWatching(w, { notifyMissed: $any($event.target).checked })" />
+                    <span class="switch-knob"></span>
+                  </span>
+                </label>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section>
+      <div class="ir-kicker">Тихие часы</div>
+      <div class="ir-quiet">
+        <div class="ir-line">
+          <i class="ph ph-moon" aria-hidden="true"></i>
+          <span class="ir-name">Напоминания без звука</span>
+          <span class="switch">
+            <input type="checkbox" [checked]="quietOn()" (change)="setQuiet($any($event.target).checked)" aria-label="Тихие часы" />
+            <span class="switch-knob"></span>
+          </span>
+        </div>
+        @if (quietOn()) {
+          <div class="ir-times">
+            <label>с <input class="input" type="time" [value]="quietFrom()" (change)="quietFrom.set($any($event.target).value); saveQuiet()" /></label>
+            <label>до <input class="input" type="time" [value]="quietTo()" (change)="quietTo.set($any($event.target).value); saveQuiet()" /></label>
+          </div>
+        }
+        <p class="ir-note muted">Push приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
+      </div>
+    </section>
+
+    @if (s.timeZoneId) {
+      <p class="ir-note muted"><i class="ph ph-globe" aria-hidden="true"></i> Часовой пояс: {{ s.timeZoneId }} — время приёма считается в нём.</p>
+    }
+
+    <button type="button" class="btn btn-secondary ir-done" (click)="closed.emit()">Готово</button>
+  }
+</div>

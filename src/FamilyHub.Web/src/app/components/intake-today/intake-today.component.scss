@@ -23,7 +23,7 @@
 .it-bar { height: 8px; display: flex; background: var(--color-neutral-200); }
 .it-bar-ok { background: var(--color-status-ok); }
 .it-bar-miss { background: var(--color-status-danger); }
-.it-bar-legend { margin-top: 5px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.7353rem; color: var(--color-neutral-600); }
+.it-bar-legend { margin-top: 5px; display: flex; gap: 4px 10px; flex-wrap: wrap; font-size: 0.7353rem; color: var(--color-neutral-600); }
 .it-legend-miss { color: var(--color-status-danger-text); }
 
 // ---- Люди ----

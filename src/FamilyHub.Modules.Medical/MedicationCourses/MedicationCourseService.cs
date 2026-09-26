@@ -394,8 +394,12 @@ public class MedicationCourseService(
         course.StartDate = r.StartDate;
         course.EndDate = r.EndDate;
         course.TimeZoneId = tz.Id;
-        course.SourceMedicalRecordId = r.SourceMedicalRecordId;
-        course.SourcePrescriptionIndex = r.SourceMedicalRecordId is null ? null : r.SourcePrescriptionIndex;
+        // Источник (назначение врача) задаётся при создании; правка без него (карточка его не всегда видит) не затирает.
+        if (r.SourceMedicalRecordId is not null)
+        {
+            course.SourceMedicalRecordId = r.SourceMedicalRecordId;
+            course.SourcePrescriptionIndex = r.SourcePrescriptionIndex;
+        }
         course.MedicationId = r.MedicationId;
         course.WriteOffEnabled = r.WriteOff && r.MedicationId is not null;
         course.RepeatAfterMinutes = r.RepeatAfterMinutes;
