@@ -24,8 +24,18 @@ export class HistoryDismissController {
       // Закрыли не «назад» (крестик/бэкдроп/Escape) — саму фиктивную запись нужно убрать,
       // иначе следующее нажатие «назад» схлопнет её вникуда, а не уведёт на предыдущий экран.
       this.pushedHistoryEntry = false;
-      history.back();
+      this.popOwnEntry();
     }
+  }
+
+  /**
+   * Снимает фиктивную запись ТОЛЬКО если она всё ещё верхняя. Если оверлей закрылся уже после
+   * перехода на другой экран (пункт «Профиль» в листе «Ещё»: роутер добавил свою запись поверх нашей),
+   * `history.back()` откатил бы этот переход — экран «не меняется». Тогда фиктивная запись остаётся
+   * под новой: она указывает на прежний экран, лишнее «назад» просто вернёт туда, откуда пришли.
+   */
+  private popOwnEntry(): void {
+    if (history.state?.overlayDismiss) history.back();
   }
 
   onPopState(open: boolean): void {
@@ -38,7 +48,7 @@ export class HistoryDismissController {
   destroy(): void {
     if (this.pushedHistoryEntry) {
       this.pushedHistoryEntry = false;
-      history.back();
+      this.popOwnEntry();
     }
   }
 }
