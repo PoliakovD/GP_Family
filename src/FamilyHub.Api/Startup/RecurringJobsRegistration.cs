@@ -50,6 +50,17 @@ public static class RecurringJobsRegistration
             job => job.RunAsync(CancellationToken.None),
             "* * * * *");
 
+        // Напоминания о приёме лекарств (ADR-0015): раз в минуту — наступившие/повторные/пропущенные приёмы,
+        // раз в час — запас в аптечке, автозавершение курсов и чистка токенов push-кнопок.
+        app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<FamilyHub.Modules.Medical.MedicationCourses.MedicationDoseScanJob>(
+            "medication-dose-scan",
+            job => job.RunAsync(CancellationToken.None),
+            "* * * * *");
+        app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<FamilyHub.Modules.Medical.MedicationCourses.MedicationCourseMaintenanceJob>(
+            "medication-course-maintenance",
+            job => job.RunAsync(CancellationToken.None),
+            "0 * * * *");
+
         return app;
     }
 

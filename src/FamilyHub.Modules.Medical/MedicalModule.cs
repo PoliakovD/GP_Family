@@ -52,6 +52,10 @@ public static class MedicalModule
         services.AddScoped<DoseService>();
         services.AddScoped<MedicationTodayService>();
         services.AddScoped<MedicationReminderSettingsService>();
+        // Напоминания о приёме: получатели + минутная и часовая фоновые задачи (расписание — в Program.cs).
+        services.AddScoped<MedicationReminderRecipients>();
+        services.AddScoped<MedicationDoseScanJob>();
+        services.AddScoped<MedicationCourseMaintenanceJob>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
