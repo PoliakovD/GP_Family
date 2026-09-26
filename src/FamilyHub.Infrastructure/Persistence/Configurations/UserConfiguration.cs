@@ -19,6 +19,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.TgUsername).HasMaxLength(32);
         builder.Property(u => u.Email).HasMaxLength(320);
         builder.Property(u => u.PasswordHash).HasMaxLength(200);
+        builder.Property(u => u.TimeZoneId).HasMaxLength(64);
 
         // Оба идентификатора входа уникальны среди заполненных (nullable с этапа 2:
         // Telegram-only и PWA-only пользователи сосуществуют).

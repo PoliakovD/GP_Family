@@ -4,6 +4,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.HealthNotes;
+using FamilyHub.Domain.MedicationCourses;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
@@ -125,6 +126,12 @@ public class AccountService(
             .Where(a => a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId))
             .ExecuteDeleteAsync(ct);
         await db.DoctorReports.Where(r => r.OwnerUserId == userId).ExecuteDeleteAsync(ct);
+        // Курсы приёма лекарств: свои курсы (приёмы и токены кнопок — каскадом), наблюдатели в обе
+        // стороны и токены push-кнопок, выданные этому пользователю (FK на User нет).
+        await db.DoseActionTokens.Where(t => t.RecipientUserId == userId).ExecuteDeleteAsync(ct);
+        await db.MedicationCourses.Where(c => c.SubjectUserId == userId).ExecuteDeleteAsync(ct);
+        await db.MedicationWatchers.Where(w => w.SubjectUserId == userId || w.WatcherUserId == userId)
+            .ExecuteDeleteAsync(ct);
 
         // Идентификационные хвосты.
         await db.EmailVerificationCodes
@@ -270,6 +277,24 @@ public class AccountService(
                 r.Id, r.PeriodFrom, r.PeriodTo, r.CreatedAt, r.PageCount, r.Recipient, r.PatientComment,
                 blocks = new { r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements, r.IncludeSymptomsNotes },
                 link = new { r.ShareExpiresAt, r.ShareRevokedAt, viewCount = r.ShareViewCount, lastViewedAt = r.ShareLastViewedAt },
+            }),
+            jsonOptions, ct);
+
+        // Курсы приёма лекарств с историей приёмов (расписание разворачивается из JSON в объект).
+        var courses = await db.MedicationCourses.AsNoTracking()
+            .Where(c => c.SubjectUserId == userId).OrderBy(c => c.CreatedAt).ToListAsync(ct);
+        var courseIds = courses.Select(c => c.Id).ToList();
+        var doseRows = await db.MedicationDoses.AsNoTracking()
+            .Where(d => courseIds.Contains(d.CourseId)).OrderBy(d => d.ScheduledAt ?? d.TakenAt).ToListAsync(ct);
+        await AddJsonAsync(zip, "medication-courses.json",
+            courses.Select(c => new
+            {
+                c.Id, c.DrugName, c.Notes, c.PrescriptionText,
+                schedule = MedicationCourseRules.ParseSchedule(c.ScheduleJson),
+                c.Food, c.DoseUnit, c.StartDate, c.EndDate, c.TimeZoneId, c.Status,
+                c.WriteOffEnabled, c.RepeatAfterMinutes, c.MissedAfterMinutes, c.LowStockDays, c.CreatedAt,
+                doses = doseRows.Where(d => d.CourseId == c.Id)
+                    .Select(d => new { d.ScheduledAt, d.Units, d.Status, d.TakenAt }),
             }),
             jsonOptions, ct);
 

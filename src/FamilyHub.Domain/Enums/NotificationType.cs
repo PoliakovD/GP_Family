@@ -36,4 +36,14 @@ public enum NotificationType
     /// <summary>Обогащение справочника препаратом окончательно не удалось (этап 4) — тот же
     /// принцип, что MedicalDocumentExtractionFailed: не на технический сбой LM Studio.</summary>
     MedicationEnrichmentFailed = 9,
+
+    /// <summary>Пора принять лекарство (курс приёма). Текст намеренно без названия препарата:
+    /// таблица уведомлений не шифруется, а Telegram пересылает текст дословно (ADR-0015).</summary>
+    MedicationDoseDue = 10,
+
+    /// <summary>Приём лекарства не отмечен вовремя — адресуется наблюдателям за курсом.</summary>
+    MedicationDoseMissed = 11,
+
+    /// <summary>Остатка в аптечке хватит на несколько дней курса или меньше.</summary>
+    MedicationStockLow = 12,
 }

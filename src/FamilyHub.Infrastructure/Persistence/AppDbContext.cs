@@ -32,6 +32,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
 
     /// <summary>Отчёты для врача (PDF-снимок + публичная ссылка) — персональные, см. DoctorReport.</summary>
     public DbSet<DoctorReport> DoctorReports => Set<DoctorReport>();
+
+    /// <summary>Курсы приёма лекарств, их приёмы, наблюдатели и токены push-кнопок (ADR-0015).</summary>
+    public DbSet<MedicationCourse> MedicationCourses => Set<MedicationCourse>();
+    public DbSet<MedicationDose> MedicationDoses => Set<MedicationDose>();
+    public DbSet<MedicationWatcher> MedicationWatchers => Set<MedicationWatcher>();
+    public DbSet<DoseActionToken> DoseActionTokens => Set<DoseActionToken>();
     public DbSet<FamilyMedicalShare> FamilyMedicalShares => Set<FamilyMedicalShare>();
     public DbSet<MedicalRecordHidden> MedicalRecordHiddens => Set<MedicalRecordHidden>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
