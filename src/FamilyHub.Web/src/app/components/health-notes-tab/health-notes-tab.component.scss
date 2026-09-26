@@ -1,0 +1,258 @@
+// Страница «Дневник» (макет «Screen - Diary»). Цвет типа записи — в --kind-color на строке.
+
+.dn-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 940px;
+}
+
+.dn-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.dn-head-text { flex: 1; min-width: 220px; }
+
+.dn-privacy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8824rem;
+  color: var(--color-neutral-700);
+
+  i { color: var(--color-neutral-600); }
+}
+
+// ---- Сводка ----
+.dn-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+
+  // На узких экранах плитки листаются вбок (как в макете), а не ломают вёрстку.
+  @media (max-width: 1023px) {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+.dn-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  background: var(--color-paper);
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+
+  @media (max-width: 1023px) { flex: none; width: 200px; }
+}
+
+.dn-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7941rem;
+  color: var(--color-neutral-700);
+
+  i { font-size: 1.05rem; color: var(--color-kind-metric); }
+}
+
+.dn-tile-name { flex: 1; }
+.dn-tile-stamp {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-neutral-500);
+  white-space: nowrap;
+}
+
+.dn-tile-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+
+  strong { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1; }
+  span { font-size: 0.7647rem; color: var(--color-neutral-600); white-space: nowrap; }
+}
+
+.dn-tile-caption { font-size: 0.7353rem; color: var(--color-neutral-600); }
+
+.dn-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 38px;
+}
+
+.dn-bar {
+  flex: 1;
+  background: var(--color-kind-wellbeing);
+}
+
+// ---- Фильтр и поиск ----
+.dn-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.dn-search { flex: 1; min-width: 200px; max-width: 320px; }
+
+// ---- Лента ----
+.dn-feed { display: flex; flex-direction: column; gap: 18px; }
+
+.dn-day {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+
+  h5 { margin: 0; }
+}
+
+.dn-day-sub { font-size: 0.8235rem; color: var(--color-neutral-600); }
+
+.dn-day-rule {
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+.dn-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-paper);
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.dn-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  padding: 4px 4px 4px 16px;
+  box-shadow: inset 3px 0 0 var(--kind-color);
+
+  & + & { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+
+  @media (max-width: 639px) { gap: 10px; padding-left: 12px; }
+}
+
+.dn-time {
+  flex: none;
+  width: 46px;
+  font-size: 0.8235rem;
+  color: var(--color-neutral-600);
+
+  @media (max-width: 639px) { display: none; }
+}
+
+// Узкие экраны: время уезжает во вторую строку под названием (как в макете), колонка времени скрыта.
+.dn-sub-stacked { display: none; }
+
+
+.dn-icon { flex: none; font-size: 1.3rem; color: var(--kind-color); }
+
+.dn-row-main {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  // Одна строка с многоточием на десктопе (как в макете); на узких — см. медиа-блок ниже.
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dn-row-title { font-family: var(--font-heading); font-weight: 600; font-size: 0.97rem; }
+.dn-row-sub { font-size: 0.8235rem; color: var(--color-neutral-600); }
+.dn-flag { margin-left: 6px; color: var(--color-neutral-600); }
+
+.dn-badge {
+  flex: none;
+  padding: 3px 10px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.7941rem;
+  color: var(--color-kind-symptom-text);
+  background: color-mix(in srgb, var(--color-kind-symptom) 12%, var(--color-paper));
+}
+
+.dn-older { align-self: flex-start; }
+
+.dn-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  background: var(--color-paper);
+  border: 1px dashed var(--color-divider);
+
+  i { font-size: 2.4rem; color: var(--color-neutral-500); }
+  h5, p { margin: 0; }
+  p { max-width: 420px; }
+}
+
+// Плавающая кнопка над нижним таб-баром (узкие экраны) + запас под неё в конце ленты.
+.dn-fab {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  z-index: 90;
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 1023px) {
+  .dn-page { padding-bottom: 72px; }
+  .dn-add { display: none; }
+}
+
+// Нижний лист использует --color-bg, а форма по умолчанию рисует липкий футер на «бумаге».
+.dn-sheet { --dn-surface: var(--color-bg); }
+
+// Сегмент-фильтр собран из <button> (а не label+radio, как глобальный .seg-opt) — сбрасываем нативный
+// вид кнопки и повторяем глобальные разделитель/активное состояние.
+.seg-opt {
+  font: inherit;
+  font-size: 0.7647rem;
+  color: inherit;
+  background: transparent;
+  border: 0;
+
+  & + .seg-opt { border-left: 1px solid var(--color-divider); }
+
+  &.active {
+    color: var(--color-bg);
+    background: var(--color-accent);
+  }
+}
+
+// Узкие экраны — в конце файла, чтобы перебить базовые правила строки выше по каскаду.
+@media (max-width: 639px) {
+  .dn-sub-inline, .dn-flag-inline { display: none; }
+  .dn-sub-stacked { display: block; }
+  .dn-row-main { white-space: normal; }
+  .dn-row-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

@@ -37,7 +37,7 @@ public static class HealthNoteEndpoints
         {
             var (result, item, error) = await service.CreateAsync(currentUser.UserId, request, ct);
             return result == HealthNoteResult.Invalid
-                ? Results.BadRequest(new { error })
+                ? Results.BadRequest(new { message = error })
                 : Results.Created($"/api/health-notes/{item!.Id}", item);
         }).RequireRateLimiting("medical-write");
 
@@ -48,7 +48,7 @@ public static class HealthNoteEndpoints
             return result switch
             {
                 HealthNoteResult.NotFound => Results.NotFound(),
-                HealthNoteResult.Invalid => Results.BadRequest(new { error }),
+                HealthNoteResult.Invalid => Results.BadRequest(new { message = error }),
                 _ => Results.Ok(item),
             };
         }).RequireRateLimiting("medical-write");

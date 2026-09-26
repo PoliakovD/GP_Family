@@ -1,0 +1,149 @@
+<div class="dn-page">
+  <div class="dn-head">
+    <div class="dn-head-text">
+      <h4 class="mb-1">Дневник самочувствия</h4>
+      <div class="dn-privacy">
+        <i class="ph-fill ph-lock-simple" aria-hidden="true"></i>
+        Видите только вы · {{ countLabel() }}
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary dn-add" (click)="openForm()">
+      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
+    </button>
+  </div>
+
+  @if (loadError(); as err) {
+    <div class="alert-danger" role="alert">
+      {{ err }}
+      <button type="button" class="btn-link" (click)="load()">Повторить</button>
+    </div>
+  }
+
+  @if (tiles().length > 0 || wellbeingTile()) {
+    <div class="dn-tiles">
+      @for (t of tiles(); track t.code) {
+        <div class="dn-tile">
+          <div class="dn-tile-head">
+            <i class="ph-duotone" [class]="'ph-' + t.icon" aria-hidden="true"></i>
+            <span class="dn-tile-name">{{ t.name }}</span>
+            <span class="dn-tile-stamp">{{ t.stamp }}</span>
+          </div>
+          <div class="dn-tile-value"><strong>{{ t.value }}</strong><span>{{ t.unit }}</span></div>
+          @if (t.values.length > 1) {
+            <app-trend-line [values]="t.values" [band]="t.band" [label]="'Динамика: ' + t.name" />
+          }
+          <div class="dn-tile-caption">{{ t.caption }}</div>
+        </div>
+      }
+      @if (wellbeingTile(); as w) {
+        <div class="dn-tile">
+          <div class="dn-tile-head">
+            <i class="ph-duotone ph-smiley" aria-hidden="true" style="color: var(--color-kind-wellbeing)"></i>
+            <span class="dn-tile-name">Самочувствие</span>
+            <span class="dn-tile-stamp">7 дней</span>
+          </div>
+          <div class="dn-tile-value"><strong>{{ w.value }}</strong></div>
+          <div class="dn-bars" aria-hidden="true">
+            @for (b of w.bars; track $index) {
+              <span class="dn-bar" [style.height.%]="b.height || 8" [class.empty]="b.height === 0"
+                    [style.opacity]="b.height === 0 ? 0.25 : 0.35 + b.score * 0.13"></span>
+            }
+          </div>
+          <div class="dn-tile-caption">{{ w.caption }}</div>
+        </div>
+      }
+    </div>
+  }
+
+  <div class="dn-tools">
+    <div class="seg" role="radiogroup" aria-label="Фильтр по типу">
+      <button type="button" class="seg-opt" role="radio" [class.active]="filter() === null"
+              [attr.aria-checked]="filter() === null" (click)="setFilter(null)">Все</button>
+      @for (k of kinds; track k.kind) {
+        <button type="button" class="seg-opt" role="radio" [class.active]="filter() === k.kind"
+                [attr.aria-checked]="filter() === k.kind" (click)="setFilter(k.kind)">{{ k.filterLabel }}</button>
+      }
+    </div>
+    <app-search-field class="dn-search" placeholder="Поиск по дневнику…" [compact]="true"
+                      [value]="query()" (valueChange)="query.set($event)" />
+  </div>
+
+  @if (loading() && notes().length === 0) {
+    <p class="muted">Загружаем…</p>
+  } @else if (groups().length === 0) {
+    <div class="dn-empty">
+      @if (notes().length === 0) {
+        <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+        <h5>Пока нет записей</h5>
+        <p class="muted">Записывайте давление, самочувствие, симптомы и приём лекарств — врачу будет проще увидеть картину за период.</p>
+        <button type="button" class="btn btn-primary" (click)="openForm()">Добавить первую запись</button>
+      } @else {
+        <h5>Ничего не найдено</h5>
+        <p class="muted">Измените фильтр или поисковый запрос.</p>
+      }
+    </div>
+  } @else {
+    <div class="dn-feed">
+      @for (g of groups(); track g.key) {
+        <section>
+          <div class="dn-day">
+            <h5>{{ g.title }}</h5>
+            <span class="dn-day-sub">{{ g.subtitle }}</span>
+            <span class="dn-day-rule"></span>
+          </div>
+          <ul class="dn-list">
+            @for (it of g.items; track it.note.id) {
+              <li class="dn-row" [style.--kind-color]="it.color">
+                <span class="dn-time">{{ it.time }}</span>
+                <i class="ph-duotone dn-icon" [class]="'ph-' + it.icon" aria-hidden="true"></i>
+                <button type="button" class="dn-row-main" (click)="openForm(it.note)"
+                        [attr.aria-label]="'Изменить запись: ' + it.desc.title">
+                  <span class="dn-row-title">{{ it.desc.title }}</span>
+                  @if (it.desc.subtitle) {
+                    <span class="dn-row-sub dn-sub-inline"> · {{ it.desc.subtitle }}</span>
+                  }
+                  @if (it.flagged) {
+                    <i class="ph ph-file-text dn-flag dn-flag-inline" title="Будет в вопросах к врачу" aria-label="Будет в вопросах к врачу"></i>
+                  }
+                  <span class="dn-row-sub dn-sub-stacked">{{ it.time }}@if (it.desc.subtitle) { · {{ it.desc.subtitle }}}@if (it.flagged) { · <i class="ph ph-file-text dn-flag" aria-hidden="true"></i> в вопросы к врачу}</span>
+                </button>
+                @if (it.desc.badge) {
+                  <span class="dn-badge">{{ it.desc.badge }}</span>
+                }
+                <app-action-menu [actions]="it.actions" label="Действия с записью" />
+              </li>
+            }
+          </ul>
+        </section>
+      }
+      @if (!query() && filter() === null) {
+        <button type="button" class="btn btn-secondary dn-older" [disabled]="loading()" (click)="showOlder()">
+          Показать ещё 30 дней
+        </button>
+      }
+    </div>
+  }
+
+  @if (!isWide()) {
+    <button type="button" class="btn btn-primary dn-fab" (click)="openForm()">
+      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
+    </button>
+  }
+</div>
+
+@if (isWide()) {
+  <app-side-panel [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'"
+                  width="min(560px, 100vw)" (closed)="closeForm()">
+    @if (formOpen()) {
+      <app-health-note-form [catalog]="catalog()" [note]="editing()" (saved)="onSaved()" (cancelled)="closeForm()" />
+    }
+  </app-side-panel>
+} @else {
+  <app-bottom-sheet [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'" (closed)="closeForm()">
+    @if (formOpen()) {
+      <div class="dn-sheet">
+        <app-health-note-form [catalog]="catalog()" [note]="editing()" (saved)="onSaved()" (cancelled)="closeForm()" />
+      </div>
+    }
+  </app-bottom-sheet>
+}

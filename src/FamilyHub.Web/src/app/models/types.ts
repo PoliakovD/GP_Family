@@ -853,3 +853,92 @@ export interface HomeSummaryResponse {
     ok: HomeOkChips;
     unreadNotifications: number;
 }
+
+// ============================================================================
+// Дневник самочувствия (HealthNote) — строго личные записи, см. HealthNoteService.
+// ============================================================================
+
+/** Значения — часть контракта с бэкендом (HealthNoteKind), не переупорядочивать. */
+export const HealthNoteKind = {
+    Symptom: 0, Metric: 1, Wellbeing: 2, MedicationIntake: 3, Sleep: 4, Note: 5,
+} as const;
+export type HealthNoteKind = typeof HealthNoteKind[keyof typeof HealthNoteKind];
+
+export interface SymptomData {
+    severity: number;
+    areas?: string[] | null;
+    detail?: string | null;
+}
+
+export interface MetricData {
+    code: string;
+    value: number;
+    /** Нижнее давление — только у составных замеров. */
+    value2?: number | null;
+}
+
+export interface WellbeingData {
+    score: number;
+    factors?: string[] | null;
+}
+
+export interface MedicationIntakeData {
+    dose?: string | null;
+}
+
+export interface SleepData {
+    bedTime: string;
+    wakeTime: string;
+    quality: number;
+}
+
+export interface HealthNote {
+    id: string;
+    kind: HealthNoteKind;
+    occurredAt: string;
+    title: string | null;
+    text: string | null;
+    includeInDoctorQuestions: boolean;
+    symptom: SymptomData | null;
+    metric: MetricData | null;
+    wellbeing: WellbeingData | null;
+    intake: MedicationIntakeData | null;
+    sleep: SleepData | null;
+    updatedAt: string;
+}
+
+export interface HealthNoteInput {
+    kind: HealthNoteKind;
+    occurredAt: string;
+    title?: string | null;
+    text?: string | null;
+    includeInDoctorQuestions?: boolean;
+    symptom?: SymptomData | null;
+    metric?: MetricData | null;
+    wellbeing?: WellbeingData | null;
+    intake?: MedicationIntakeData | null;
+    sleep?: SleepData | null;
+}
+
+export interface HealthMetricDefinition {
+    code: string;
+    name: string;
+    unit: string;
+    min: number;
+    max: number;
+    hasSecondValue: boolean;
+    min2: number | null;
+    max2: number | null;
+}
+
+export interface HealthNoteCatalog {
+    metrics: HealthMetricDefinition[];
+    bodyAreas: string[];
+    wellbeingFactors: string[];
+}
+
+export interface HealthMetricPoint {
+    occurredAt: string;
+    value: number;
+    value2: number | null;
+}

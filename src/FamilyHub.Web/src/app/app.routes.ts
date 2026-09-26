@@ -244,6 +244,14 @@ export const routes: Routes = [
           ),
       },
       {
+        // Личный дневник самочувствия — замеры, симптомы, самочувствие, лекарства, сон, заметки.
+        path: 'notes',
+        loadComponent: () =>
+          import('./components/health-notes-tab/health-notes-tab.component').then(
+            (m) => m.HealthNotesTabComponent,
+          ),
+      },
+      {
         // Мини-хаб «Справочник» (редизайн v2, PR4) — тот же паттерн вложенности, что у health-hub
         // самого. medications — прежний KbTabComponent без изменений содержимого, просто
         // перемонтирован под дочерний роут; indicators — новый справочник показателей.

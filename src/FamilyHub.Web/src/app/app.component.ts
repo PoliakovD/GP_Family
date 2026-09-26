@@ -105,6 +105,7 @@ export class AppComponent implements OnInit {
         { path: '/health/medications', label: 'Аптечка' },
         { path: '/health/records', label: 'Анализы' },
         { path: '/health/visits', label: 'Посещения врачей' },
+        { path: '/health/notes', label: 'Дневник' },
         { path: '/health/kb', label: 'Справочник' },
         { path: '/health/indicators', label: 'Показатели анализов' },
       ],

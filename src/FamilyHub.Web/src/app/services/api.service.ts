@@ -18,6 +18,11 @@ import {
   FamilyDependentInput,
   FamilySummary,
   GlobalSpecimenDto,
+  HealthMetricPoint,
+  HealthNote,
+  HealthNoteCatalog,
+  HealthNoteInput,
+  HealthNoteKind,
   HomeSummaryResponse,
   IndicatorArticleResponse,
   IndicatorDto,
@@ -492,4 +497,24 @@ export class ApiService {
     this.post<void>('/api/push/subscribe', { endpoint, p256dh, auth });
 
   unsubscribePush = (endpoint: string) => this.post<void>('/api/push/unsubscribe', { endpoint });
+
+  // Дневник самочувствия — строго личный, только свои записи.
+  getHealthNotes = (filter: { from?: string; to?: string; kind?: HealthNoteKind } = {}) =>
+    this.get<HealthNote[]>(`/api/health-notes${buildQuery(filter)}`);
+
+  getHealthNoteCatalog = () => this.get<HealthNoteCatalog>('/api/health-notes/catalog');
+
+  /** Недавние названия (симптомы/лекарства) для чипов «Недавние:». */
+  getRecentHealthNoteTitles = (kind: HealthNoteKind) =>
+    this.get<string[]>(`/api/health-notes/recent${buildQuery({ kind })}`);
+
+  getHealthMetricSeries = (code: string, range: { from?: string; to?: string } = {}) =>
+    this.get<HealthMetricPoint[]>(`/api/health-notes/metrics/${encodeURIComponent(code)}/series${buildQuery(range)}`);
+
+  createHealthNote = (input: HealthNoteInput) => this.post<HealthNote>('/api/health-notes', input);
+
+  updateHealthNote = (id: string, input: HealthNoteInput) =>
+    this.put<HealthNote>(`/api/health-notes/${id}`, input);
+
+  deleteHealthNote = (id: string) => this.del<void>(`/api/health-notes/${id}`);
 }
