@@ -498,6 +498,48 @@ payload подписи включает scope, поэтому ссылка на 
 (карточка), `GET /api/medications/{medicationId}/kb` (статус обогащения конкретного медикамента),
 `POST /api/medications/{medicationId}/kb/refresh` (ручной рефреш).
 
+## Дневник самочувствия (`HealthNotes/`) — строго личный ресурс
+
+`HealthNote` (`medical."HealthNotes"`) — запись личного дневника: **шесть видов** (`HealthNoteKind`:
+Symptom, Metric «Замер», Wellbeing, MedicationIntake, Sleep, Note). НЕ `IFamilyOwned`, без FK на User, не
+шарится с семьёй, без подопечных; `OwnerUserId` скоупит каждую операцию (чужой id → 404, а не 403).
+
+- Открыто в БД только `Kind`, `OccurredAt`, флаг `IncludeInDoctorQuestions` (индексы
+  `(OwnerUserId, OccurredAt)`, `(OwnerUserId, Kind, OccurredAt)`). `Title`, `DataJson` (типизированный
+  payload вида), `Text` — `[Encrypted]`: фильтр по названию/значению — в памяти после расшифровки.
+- Payload'ы и правила — в **Domain** (`HealthNotes/`): `SymptomData`/`MetricData`/`WellbeingData`/
+  `MedicationIntakeData`/`SleepData`, `HealthMetricCatalog` (коды замеров стабильны: `blood_pressure`,
+  `pulse`, `weight`, `glucose`, `temperature`, `spo2`), `HealthNoteRules.Validate` (ровно один payload,
+  границы правдоподобного ввода — не медицинская норма). Приём лекарства — свободный текст без связи с
+  аптечкой (она семейная). Сон: длительность считается, `OccurredAt` = момент пробуждения.
+- Маршруты `/api/health-notes` (внутри `ConsentRequiredFilter`, запись — лимит `medical-write`):
+  `GET ?from&to&kind`, `GET /catalog`, `GET /recent?kind` (недавние названия для чипов),
+  `GET /metrics/{code}/series`, `POST`, `PUT /{id}`, `DELETE /{id}`. Ответ 400 несёт `{message}`.
+- Ротация ключей: `HealthNote` в конце `EncryptionRotationJob.FieldEntityTypes`. Удаление аккаунта чистит
+  дневник; экспорт — `health-notes.json` (расшифрованные payload'ы).
+
+## Отчёт для врача (`DoctorReports/`) — ADR-0014
+
+`DoctorReport` (`medical."DoctorReports"`) — PDF-снимок данных **самого пользователя** за период + публичная
+ссылка. PDF — шифрованный блоб под `FileAttachment` с `OwnerType = DoctorReport` (ротация и erasure — общим
+механизмом; `AttachmentService.HasAccessAsync` для него `false`: подписанных ссылок нет).
+
+- `DoctorReportDataCollector` — пациент = владелец без `FamilyDependentId`/`TargetUserId` либо
+  `TargetUserId == me`; блоки: динамика анализов (до 6 свежих дат, отклонения сверху, единичные «в норме»
+  в счётчик), готовые ИИ-резюме (устаревшие пропускаются), визиты, препараты (назначения визитов ∪ приёмы
+  дневника), замеры/самочувствие/сон, симптомы/заметки; помеченные «в вопросы к врачу» заметки — всегда в
+  жалобах. `DoctorReportHtmlRenderer` — HTML через `StringBuilder` + `HtmlEncode`, графики — inline-SVG.
+- `IGotenbergConverter.ConvertHtmlToPdfAsync` (Chromium-маршрут, A4, колонтитул «стр. X из Y»);
+  сайдкар не настроен/лежит → 503 и ничего не сохраняется.
+- Ссылка: 256-битный токен, в БД SHA-256 хеш + зашифрованная копия; 7/14/30 дней; продлить/перевыпустить/
+  отозвать; счётчик открытий; аудит (`DoctorReportViewed` с `Guid.Empty`); `public-report` — 30/мин на IP.
+- Маршруты владельца `/api/doctor-reports`: `GET`, `GET /preview?from&to`, `POST` (лимиты: период ≤ 2 лет,
+  ≤ 30 отчётов; 400/409/422/503 с `{message}`), `GET /{id}/pdf`, `POST /{id}/share {days}`,
+  `POST /{id}/revoke`, `DELETE /{id}`. Публичные (анонимно, вне consent-фильтра):
+  `GET /api/public/doctor-reports/{token}` (метаданные) и `/{token}/pdf` (фиксирует открытие).
+- Фронт: `/health/notes` (дневник), `/health/reports` (список + форма), `/r/:token` (страница врача, без
+  guard-ов и без оболочки — `/r/` в `AUTH_ROUTE_PREFIXES`).
+
 ## Wiring модуля (`MedicalModule.cs`)
 
 `AddMedicalModule()` регистрирует все сервисы модуля (`Medkit`/`Medication`/`MedicalRecord`/
