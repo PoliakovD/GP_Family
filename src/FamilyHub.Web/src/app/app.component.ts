@@ -3,6 +3,7 @@ import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, Navig
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
 import { NotificationStateService } from './services/notification-state.service';
+import { IntakeStateService } from './services/intake-state.service';
 import { BackgroundJobsStateService } from './services/background-jobs-state.service';
 import { AiStatusService } from './services/ai-status.service';
 import { PageActionService } from './services/page-action.service';
@@ -37,7 +38,7 @@ interface SidebarItem {
   icon: string;
   /** Абсолютный путь; для «Семьи» вычисляется динамически (см. familyHref()). */
   path?: string;
-  children?: { path: string; label: string; queryParams?: Record<string, string> }[];
+  children?: { path: string; label: string; queryParams?: Record<string, string>; badge?: 'intake' }[];
 }
 
 @Component({
@@ -62,6 +63,7 @@ export class AppComponent implements OnInit {
   readonly state = inject(FamilyStateService);
   readonly auth = inject(AuthService);
   readonly notifications = inject(NotificationStateService);
+  readonly intake = inject(IntakeStateService);
   readonly backgroundJobs = inject(BackgroundJobsStateService);
   readonly ai = inject(AiStatusService);
   readonly pageAction = inject(PageActionService);
@@ -104,6 +106,7 @@ export class AppComponent implements OnInit {
       path: '/health',
       children: [
         { path: '/health/medications', label: 'Аптечка' },
+        { path: '/health/intake', label: 'Приём лекарств', badge: 'intake' },
         { path: '/health/records', label: 'Анализы' },
         { path: '/health/visits', label: 'Посещения врачей' },
         { path: '/health/notes', label: 'Дневник' },
@@ -196,10 +199,18 @@ export class AppComponent implements OnInit {
         this.state.refresh();
         void this.notifications.refresh();
         void this.backgroundJobs.refresh();
+        void this.intake.refresh();
+        this.intake.startPolling();
         this.ai.start();
         void this.tryRedeemPendingInvite();
       }
     }, { allowSignalWrites: true });
+
+    // Часовой пояс браузера → сервер (время приёма лекарств и «сегодня» считаются в нём): на каждом появлении me.
+    effect(() => {
+      const me = this.auth.me();
+      if (me) void this.intake.syncTimeZone(me.timeZoneId);
+    });
 
     // Telegram: тот же принцип, что и выше для PWA, но по переходу telegramBound() в true — не
     // только на бутстрапе (initAuth ниже), а на ЛЮБОМ таком переходе, включая более поздний,
@@ -214,6 +225,8 @@ export class AppComponent implements OnInit {
         this.state.refresh();
         void this.notifications.refresh();
         void this.backgroundJobs.refresh();
+        void this.intake.refresh();
+        this.intake.startPolling();
         this.ai.start();
         void this.auth.loadMe();
         void this.tryRedeemPendingInvite();
@@ -280,6 +293,8 @@ export class AppComponent implements OnInit {
       this.state.refresh();
       void this.notifications.refresh();
       void this.backgroundJobs.refresh();
+      void this.intake.refresh();
+      this.intake.startPolling();
       this.ai.start();
       return;
     }
@@ -320,6 +335,7 @@ export class AppComponent implements OnInit {
         if (this.showTabs()) {
           void this.notifications.refresh();
           void this.backgroundJobs.refresh();
+          void this.intake.refresh();
         }
         this.log.log('nav', 'info', `✓ ${e.urlAfterRedirects}`);
       } else if (e instanceof NavigationError) {

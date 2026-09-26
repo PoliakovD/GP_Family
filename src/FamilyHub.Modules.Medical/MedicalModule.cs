@@ -8,6 +8,7 @@ using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
 using FamilyHub.Modules.Medical.Medkits;
+using FamilyHub.Modules.Medical.MedicationCourses;
 using FamilyHub.Modules.Medical.Ocr;
 using FamilyHub.Modules.Medical.Pipeline;
 using FamilyHub.Modules.Medical.Search;
@@ -43,6 +44,21 @@ public static class MedicalModule
         services.AddScoped<HealthNoteService>();
         services.AddScoped<DoctorReportDataCollector>();
         services.AddScoped<DoctorReportService>();
+        // Курсы приёма лекарств (ADR-0015): доступ, курсы, приёмы, «Сегодня», напоминания.
+        services.AddScoped<MedicationCourseAccess>();
+        services.AddScoped<CourseSubjects>();
+        services.AddScoped<MedkitStockService>();
+        services.AddScoped<MedicationCourseService>();
+        services.AddScoped<DoseService>();
+        services.AddScoped<MedicationTodayService>();
+        services.AddScoped<MedicationReminderSettingsService>();
+        // Напоминания о приёме: получатели + минутная и часовая фоновые задачи (расписание — в Program.cs).
+        services.AddScoped<MedicationReminderRecipients>();
+        // Кнопки push-напоминания: одноразовые токены + расширение payload'а Web Push (ADR-0015).
+        services.AddScoped<DoseActionTokenService>();
+        services.AddScoped<FamilyHub.Infrastructure.Notifications.IPushPayloadCustomizer, DoseReminderPushCustomizer>();
+        services.AddScoped<MedicationDoseScanJob>();
+        services.AddScoped<MedicationCourseMaintenanceJob>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
@@ -151,6 +167,7 @@ public static class MedicalModule
         module.MapMedicalRecordEndpoints();
         module.MapHealthNoteEndpoints();
         module.MapDoctorReportEndpoints();
+        module.MapMedicationCourseEndpoints();
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
         module.MapExtractionEndpoints();
@@ -160,5 +177,8 @@ public static class MedicalModule
 
         // Публичная ссылка для врача — намеренно ВНЕ ConsentRequiredFilter: смотрит человек без аккаунта.
         app.MapDoctorReportPublicEndpoints();
+
+        // Кнопки push-напоминания о приёме — тоже вне консент-фильтра: их вызывает service worker по токену.
+        app.MapDoseActionPublicEndpoints();
     }
 }

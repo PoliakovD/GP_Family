@@ -1,0 +1,144 @@
+// Форма курса (макет «Screen - Medication schedule», «новый курс»). Живёт в side-panel / bottom-sheet.
+
+:host { display: block; }
+
+.cf { display: flex; flex-direction: column; min-height: 0; }
+.cf-body { display: flex; flex-direction: column; gap: 16px; padding-bottom: 16px; }
+
+.cf-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cf-label {
+  font-size: 0.6471rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.cf-small { font-size: 0.8235rem; color: var(--color-neutral-700); }
+.cf-hint { margin: 0; font-size: 0.8235rem; color: var(--color-neutral-700); }
+
+.cf-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; @media (max-width: 479px) { grid-template-columns: minmax(0, 1fr); } }
+
+.cf-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.cf-chip {
+  min-height: var(--tap-min);
+  padding: 6px 13px;
+  font: inherit;
+  font-size: 0.8235rem;
+  cursor: pointer;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+
+  &.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); font-weight: 600; }
+}
+
+.cf-source { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cf-source-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  padding: 12px 14px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+
+  i { font-size: 1.25rem; color: var(--color-neutral-700); }
+  span { display: flex; flex-direction: column; }
+  small { font-size: 0.7353rem; color: var(--color-neutral-600); }
+  &.active { background: var(--color-accent-100); border-color: var(--color-accent); i, strong { color: var(--color-accent-800); } small { color: var(--color-accent-700); } }
+}
+
+.cf-prescriptions { display: flex; flex-direction: column; gap: 10px; }
+.cf-visit { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--color-paper); border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); }
+.cf-visit-head { font-size: 0.7647rem; color: var(--color-neutral-600); }
+.cf-rx {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+
+  &:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+  &.active { background: var(--color-accent-100); border-color: var(--color-accent); }
+  i { font-size: 1.15rem; color: var(--color-accent); flex: none; }
+  .cf-rx-check { color: var(--color-accent); margin-left: auto; }
+}
+.cf-rx-text { flex: 1; min-width: 0; }
+
+.cf-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-paper);
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+.cf-inline { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 0.9rem; }
+.cf-result { font-size: 0.8529rem; color: var(--color-accent-800); }
+
+.cf-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cf-day {
+  min-height: var(--tap-min);
+  font: inherit;
+  font-size: 0.8235rem;
+  cursor: pointer;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+
+  &.active { background: var(--color-accent); border-color: var(--color-accent); color: #fff; font-weight: 600; }
+}
+
+.cf-times { display: flex; flex-direction: column; gap: 8px; }
+.cf-time-row { display: flex; align-items: center; gap: 10px; }
+.cf-time { width: 118px; flex: none; }
+.cf-units { flex: 1; min-width: 0; }
+.cf-narrow { width: 84px; flex: none; }
+.cf-auto { width: auto; }
+.cf-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+
+.cf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-paper);
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+.cf-card-row { display: flex; align-items: center; gap: 11px; > i { font-size: 1.25rem; color: var(--color-accent); } }
+.cf-card-text { flex: 1; min-width: 0; }
+.cf-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 0.9412rem; line-height: 1.25; }
+.cf-card-sub { font-size: 0.7647rem; color: var(--color-neutral-600); }
+
+.cf-warn {
+  display: flex;
+  gap: 9px;
+  padding: 9px 11px;
+  font-size: 0.8235rem;
+  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-paper));
+  color: var(--color-status-warning-text);
+
+  i { margin-top: 2px; color: var(--color-status-warning); }
+  &.ok { background: color-mix(in srgb, var(--color-status-ok) 9%, var(--color-paper)); color: var(--color-status-ok-text); i { color: var(--color-status-ok); } }
+}
+
+.cf-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0 4px;
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-divider);
+}
+.cf-summary { display: flex; align-items: flex-start; gap: 10px; font-size: 0.8824rem; color: var(--color-accent-800); i { color: var(--color-accent); margin-top: 2px; } }
+.cf-actions { display: flex; gap: 12px; }
+.cf-save { flex: 1; }

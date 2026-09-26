@@ -57,6 +57,17 @@ import {
   UserSpecimen,
   VapidPublicKeyResponse,
   VisitConclusion,
+  CourseDetail,
+  CourseHistory,
+  CoursePreview,
+  CoursePreviewRequest,
+  CourseRequest,
+  CourseSummary,
+  DoseAction,
+  DoseResult,
+  IntakeToday,
+  PrescriptionVisit,
+  ReminderSettings,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -560,4 +571,65 @@ export class ApiService {
 
   getPublicReportPdf = (token: string) =>
     this.getBlob(`/api/public/doctor-reports/${encodeURIComponent(token)}/pdf`);
+
+  // Приём лекарств (ADR-0015): курсы, приёмы, «Сегодня», напоминания.
+  /** «Сегодня»: subject — all | me | u:{id} | d:{id}; date — локальная «yyyy-MM-dd» (по умолчанию сегодня). */
+  getIntakeToday = (params: { date?: string; subject?: string } = {}) =>
+    this.get<IntakeToday>(`/api/medication-courses/today${buildQuery(params)}`);
+
+  /** Сколько приёмов требуют внимания (наступили или пропущены) — бейдж в меню. */
+  getIntakeAttentionCount = () => this.get<{ count: number }>('/api/medication-courses/attention-count');
+
+  getCourses = (completed = false) =>
+    this.get<CourseSummary[]>(`/api/medication-courses${buildQuery({ status: completed ? 'completed' : undefined })}`);
+
+  getCourse = (id: string) => this.get<CourseDetail>(`/api/medication-courses/${id}`);
+
+  getCourseHistory = (id: string, weeks = 2) =>
+    this.get<CourseHistory>(`/api/medication-courses/${id}/history${buildQuery({ weeks })}`);
+
+  createCourse = (request: CourseRequest) => this.post<CourseDetail>('/api/medication-courses', request);
+
+  updateCourse = (id: string, request: CourseRequest) =>
+    this.put<CourseDetail>(`/api/medication-courses/${id}`, request);
+
+  pauseCourse = (id: string) => this.post<void>(`/api/medication-courses/${id}/pause`);
+
+  resumeCourse = (id: string) => this.post<void>(`/api/medication-courses/${id}/resume`);
+
+  completeCourse = (id: string) => this.post<void>(`/api/medication-courses/${id}/complete`);
+
+  deleteCourse = (id: string) => this.del<void>(`/api/medication-courses/${id}`);
+
+  /** «На курс нужно N, в аптечке M — хватит на K дней» до сохранения курса. */
+  previewCourse = (request: CoursePreviewRequest) =>
+    this.post<CoursePreview>('/api/medication-courses/preview', request);
+
+  /** Назначения врача (полгода) с черновиком формы; dependentId не задан — для меня. */
+  getPrescriptions = (dependentId?: string) =>
+    this.get<PrescriptionVisit[]>(`/api/medication-courses/prescriptions${buildQuery({ dependentId })}`);
+
+  /** Принял / отложить / пропустить плановый приём (scheduledAt — как вернул «Сегодня»). */
+  applyDose = (courseId: string, scheduledAt: string, action: DoseAction) =>
+    this.post<DoseResult>(`/api/medication-courses/${courseId}/doses`, { scheduledAt, action });
+
+  /** «По необходимости»; 409 с текстом «Сегодня уже принято…» — превышен лимит, нужно подтверждение (force). */
+  takeAsNeeded = (courseId: string, force = false) =>
+    this.post<DoseResult>(`/api/medication-courses/${courseId}/prn`, { force });
+
+  /** Отмена отметки: таблетки возвращаются в аптечку, запись дневника удаляется. */
+  undoDose = (doseId: string) => this.del<void>(`/api/medication-doses/${doseId}/action`);
+
+  getReminderSettings = () => this.get<ReminderSettings>('/api/medication-reminders/settings');
+
+  setMyWatchers = (userIds: string[]) => this.put<void>('/api/medication-reminders/my-watchers', { userIds });
+
+  setWatching = (kind: 'user' | 'dependent', id: string, notifyMissed: boolean, receiveReminders: boolean) =>
+    this.put<void>(`/api/medication-reminders/watching/${kind}/${id}`, { notifyMissed, receiveReminders });
+
+  setQuietHours = (from: string | null, to: string | null) =>
+    this.put<void>('/api/medication-reminders/quiet-hours', { from, to });
+
+  /** Часовой пояс браузера (IANA) — от него зависит «сегодня» и время приёма. */
+  setTimeZone = (timeZoneId: string) => this.put<void>('/api/account/time-zone', { timeZoneId });
 }

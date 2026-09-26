@@ -465,6 +465,8 @@
                   } @else {
                     <span class="muted" style="font-size:0.7059rem">— справка уточняется</span>
                   }
+                  <a class="btn-link" routerLink="/health/intake"
+                     [queryParams]="{ record: item.id, idx: $index, dep: item.familyDependentId }">Начать курс</a>
                 </li>
               }
             </ul>

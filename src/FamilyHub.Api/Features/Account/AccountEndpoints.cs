@@ -48,5 +48,12 @@ public static class AccountEndpoints
                 ? Results.Ok()
                 : Results.BadRequest(new { code = "invalid_profile" });
         });
+
+        // Часовой пояс из браузера (Intl) — основа «сегодня» и времени приёма лекарств.
+        group.MapPut("/time-zone", async (
+            SetTimeZoneRequest request, ProfileService service, ICurrentUser currentUser, CancellationToken ct) =>
+            await service.SetTimeZoneAsync(currentUser.UserId, request.TimeZoneId, ct)
+                ? Results.NoContent()
+                : Results.BadRequest(new { code = "invalid_time_zone" }));
     }
 }

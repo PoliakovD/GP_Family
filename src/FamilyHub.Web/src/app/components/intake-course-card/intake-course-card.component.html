@@ -1,0 +1,108 @@
+@if (loadError(); as err) {
+  <div class="alert-danger" role="alert">{{ err }}</div>
+} @else if (loading() && !detail()) {
+  <p class="muted">Загружаем…</p>
+} @else if (detail(); as d) {
+  @if (summary(); as s) {
+    <article class="cc">
+      <header class="cc-head">
+        <i class="ph-duotone ph-pill cc-pill" aria-hidden="true"></i>
+        <div class="cc-head-text">
+          <h4 class="cc-name">{{ s.drugName }}</h4>
+          <div class="cc-sub">
+            {{ subjectName(s.subject) }}@if (s.isWatching) { · вы следите}
+            @if (sourceText(); as src) {
+              · {{ src }}
+            }
+            @if (d.source; as source) {
+              <a class="cc-link" [routerLink]="['/health/visits', source.recordId]">открыть визит</a>
+            }
+          </div>
+          @if (s.status === Status.Paused) { <span class="tag tag-neutral">Приостановлен</span> }
+          @if (s.status === Status.Completed) { <span class="tag tag-neutral">Завершён</span> }
+        </div>
+        @if (s.canEdit && s.status !== Status.Completed) {
+          <button type="button" class="btn btn-secondary" (click)="edit()">Изменить</button>
+        }
+        @if (menu().length > 0) {
+          <app-action-menu [actions]="menu()" label="Действия с курсом" />
+        }
+      </header>
+
+      <div class="cc-tiles">
+        <div class="cc-tile">
+          <div class="cc-tile-label">Расписание</div>
+          <div class="cc-tile-main">{{ scheduleTile().main }}</div>
+          @if (scheduleTile().sub) { <div class="cc-tile-sub">{{ scheduleTile().sub }}</div> }
+        </div>
+        <div class="cc-tile">
+          <div class="cc-tile-label">Курс</div>
+          <div class="cc-tile-main">{{ courseTile().main }}</div>
+          <div class="cc-tile-sub">{{ courseTile().sub }}@if (progress() && s.totalDays !== null) { · {{ progress() }}}</div>
+          @if (s.totalDays !== null) {
+            <div class="cc-progress"><span [style.width.%]="courseTile().fraction * 100"></span></div>
+          }
+        </div>
+        @if (stockTile(); as st) {
+          <div class="cc-tile" [class.low]="st.low">
+            <div class="cc-tile-label">В аптечке</div>
+            <div class="cc-tile-main">{{ st.main }}</div>
+            @if (st.sub) { <div class="cc-tile-sub">{{ st.sub }}</div> }
+          </div>
+        }
+      </div>
+
+      @if (s.schedule.mode !== Mode.AsNeeded) {
+        <section>
+          <div class="cc-section-head">
+            <span class="cc-kicker">История приёмов</span>
+            <span class="cc-adherence">{{ adherenceText() }}</span>
+          </div>
+          <div class="cc-grid-wrap">
+            <div class="cc-grid cc-grid-head" aria-hidden="true">
+              <span></span>
+              @for (w of weekdayLabels; track w) { <span class="cc-wd">{{ w }}</span> }
+            </div>
+            @for (week of grid(); track week.start) {
+              <div class="cc-week">
+                @for (row of week.rows; track row.time) {
+                  <div class="cc-grid">
+                    <span class="cc-time">{{ clock(row.time + ':00') }}</span>
+                    @for (c of row.cells; track c.date) {
+                      <span class="cc-cell" [class]="'cc-cell ' + c.cls" [class.today]="c.today"
+                            [attr.title]="c.label" [attr.aria-label]="c.label"></span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+          <div class="cc-legend">
+            <span><i class="ok"></i>вовремя</span>
+            <span><i class="late"></i>с опозданием</span>
+            <span><i class="missed"></i>пропущен</span>
+            <span><i class="upcoming"></i>впереди</span>
+          </div>
+        </section>
+      }
+
+      <section>
+        <div class="cc-section-head">
+          <span class="cc-kicker">Напоминания</span>
+          @if (s.canEdit) {
+            <button type="button" class="btn-link" (click)="openReminders()">Настроить</button>
+          }
+        </div>
+        <ul class="cc-reminders">
+          @for (r of reminders(); track r.text) {
+            <li><i [class]="r.icon" aria-hidden="true"></i><span>{{ r.text }}</span></li>
+          }
+        </ul>
+      </section>
+
+      @if (footnote(); as note) {
+        <p class="cc-foot"><i class="ph ph-notebook" aria-hidden="true"></i> {{ note }}</p>
+      }
+    </article>
+  }
+}

@@ -21,13 +21,32 @@ self.addEventListener('push', (event) => {
       body: n.body || '',
       icon: n.icon || '/icons/icon-192.png',
       data: n.data || {},
+      // Кнопки, тег и тихий режим (напоминания о приёме лекарств, ADR-0015) — те же поля, что пропускает ngsw.
+      actions: n.actions || [],
+      tag: n.tag,
+      renotify: !!n.renotify,
+      requireInteraction: !!n.requireInteraction,
+      silent: !!n.silent,
     }),
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.onActionClick?.default?.url || '/notifications';
+  const onActionClick = event.notification.data?.onActionClick || {};
+  // Пустое action — клик по самому уведомлению («default»), иначе — по кнопке.
+  const handler = onActionClick[event.action || 'default'];
+
+  // Кнопка «Принял/Отложить/Пропустить»: фоновый запрос без открытия приложения — как операция
+  // sendRequest в ngsw. Авторизует одноразовый токен в URL, куки не нужны.
+  if (handler && handler.operation === 'sendRequest') {
+    event.waitUntil(
+      fetch(new URL(handler.url, self.registration.scope).href, { credentials: 'omit' }).catch(() => {}),
+    );
+    return;
+  }
+
+  const url = (handler && handler.url) || onActionClick.default?.url || '/notifications';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsList) => {

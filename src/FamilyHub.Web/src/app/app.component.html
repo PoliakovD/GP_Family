@@ -27,7 +27,10 @@
             <div class="app-sidebar-children">
               @for (sub of item.children ?? []; track sub.path) {
                 <a class="app-sidebar-child" [routerLink]="sub.path" [class.active]="currentUrl().startsWith(sub.path)">
-                  {{ sub.label }}
+                  <span class="flex-fill">{{ sub.label }}</span>
+                  @if (sub.badge === 'intake' && intake.attention() > 0) {
+                    <span class="app-sidebar-badge" title="Приёмы лекарств, требующие внимания">{{ intake.attention() }}</span>
+                  }
                 </a>
               }
             </div>

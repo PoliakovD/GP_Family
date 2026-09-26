@@ -25,6 +25,8 @@ export interface Me {
   tgUsername: string | null;
   hasTelegram: boolean;
   hasPassword: boolean;
+  /** IANA-часовой пояс, известный серверу (null — ещё не определён); браузер досылает свой при отличии. */
+  timeZoneId: string | null;
 }
 
 /** Профиль, задаваемый на регистрации/в настройках — см. FamilyHub.Domain.ValueObjects.PersonName. */

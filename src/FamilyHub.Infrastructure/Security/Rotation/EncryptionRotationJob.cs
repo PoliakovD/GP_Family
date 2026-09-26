@@ -57,7 +57,7 @@ public class EncryptionRotationJob(
         typeof(MedicalRecord), typeof(Birthday), typeof(FamilyDependent),
         typeof(PushSubscription), typeof(FileAttachment), typeof(LabIndicator),
         // Дописывается только в конец: FieldsStepIndex уже идущего прогона адресует позицию в списке.
-        typeof(HealthNote), typeof(DoctorReport),
+        typeof(HealthNote), typeof(DoctorReport), typeof(MedicationCourse),
     ];
 
     public async Task RunAsync(CancellationToken ct = default)

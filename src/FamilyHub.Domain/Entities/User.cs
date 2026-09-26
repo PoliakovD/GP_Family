@@ -55,6 +55,17 @@ public class User
     /// <summary>До этого момента PWA-вход заблокирован (после серии неудачных попыток входа).</summary>
     public DateTime? LockedUntil { get; set; }
 
+    /// <summary>IANA-часовой пояс пользователя (например «Europe/Moscow»), который присылает браузер.
+    /// Нужен, чтобы «8:00» в расписании лекарств и «сегодня» в интерфейсе означали местное время;
+    /// null — ещё не определён (используется Europe/Moscow).</summary>
+    public string? TimeZoneId { get; set; }
+
+    /// <summary>Тихие часы напоминаний о приёме лекарств (локальное время): с … — напоминания
+    /// приходят без звука. Оба null — тихие часы выключены.</summary>
+    public TimeOnly? QuietHoursFrom { get; set; }
+
+    public TimeOnly? QuietHoursTo { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public List<FamilyMember> Memberships { get; set; } = [];

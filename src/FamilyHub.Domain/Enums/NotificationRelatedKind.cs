@@ -18,4 +18,10 @@ public enum NotificationRelatedKind
 
     /// <summary>RelatedEntityId — Id аптечки (Medkit, НЕ Medication — экран открытой аптечки один на все медикаменты) → /health/medications/:id.</summary>
     Medkit = 2,
+
+    /// <summary>RelatedEntityId — Id приёма (MedicationDose) → /health/intake/dose/:id.</summary>
+    MedicationDose = 3,
+
+    /// <summary>RelatedEntityId — Id курса приёма (MedicationCourse) → /health/intake/courses/:id.</summary>
+    MedicationCourse = 4,
 }

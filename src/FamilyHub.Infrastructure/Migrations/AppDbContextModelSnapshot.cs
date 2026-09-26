@@ -229,6 +229,49 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("DoctorReports", "medical");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.DoseActionToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DoseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("UsedAction")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DoseId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RecipientUserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("DoseActionTokens", "medical");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.EmailVerificationCode", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1309,6 +1352,171 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("Medications", "medical");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationCourse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DoseUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DrugName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("EffectiveFromUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("FamilyDependentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Food")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LowStockDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LowStockNotifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("MedicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MissedAfterMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PausedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PrescriptionText")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RepeatAfterMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ScheduleJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("SourceMedicalRecordId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("SourcePrescriptionIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SubjectUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("WriteOffEnabled")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FamilyDependentId");
+
+                    b.HasIndex("MedicationId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SubjectUserId", "Status");
+
+                    b.ToTable("MedicationCourses", "medical");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationDose", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HealthNoteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RemindedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RepeatSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ScheduledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SnoozeCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("SnoozedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("TakenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Units")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<Guid?>("WriteOffMedicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("WriteOffUnits")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId", "ScheduledAt")
+                        .IsUnique()
+                        .HasFilter("\"ScheduledAt\" IS NOT NULL");
+
+                    b.HasIndex("Status", "ScheduledAt");
+
+                    b.ToTable("MedicationDoses", "medical");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationEnrichmentJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1419,6 +1627,48 @@ namespace FamilyHub.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("medication_search_cache", "kb");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationWatcher", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FamilyDependentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("NotifyMissed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ReceiveReminders")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("SubjectUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WatcherUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WatcherUserId");
+
+                    b.HasIndex("FamilyDependentId", "WatcherUserId")
+                        .IsUnique()
+                        .HasFilter("\"FamilyDependentId\" IS NOT NULL");
+
+                    b.HasIndex("SubjectUserId", "WatcherUserId")
+                        .IsUnique()
+                        .HasFilter("\"SubjectUserId\" IS NOT NULL");
+
+                    b.ToTable("MedicationWatchers", "medical", t =>
+                        {
+                            t.HasCheckConstraint("CK_MedicationWatchers_OneSubject", "(\"SubjectUserId\" IS NULL) <> (\"FamilyDependentId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Medkit", b =>
@@ -1819,12 +2069,22 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<TimeOnly?>("QuietHoursFrom")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly?>("QuietHoursTo")
+                        .HasColumnType("time without time zone");
+
                     b.Property<long?>("TelegramId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("TgUsername")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Username")
                         .HasMaxLength(32)
@@ -2337,6 +2597,15 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Navigation("Family");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.DoseActionToken", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.MedicationDose", null)
+                        .WithMany()
+                        .HasForeignKey("DoseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.FamilyDependent", b =>
                 {
                     b.HasOne("FamilyHub.Domain.Entities.Family", "Family")
@@ -2434,6 +2703,36 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Navigation("Family");
 
                     b.Navigation("Medkit");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationCourse", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.FamilyDependent", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyDependentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("FamilyHub.Domain.Entities.Medication", null)
+                        .WithMany()
+                        .HasForeignKey("MedicationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationDose", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.MedicationCourse", null)
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.MedicationWatcher", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.FamilyDependent", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyDependentId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Medkit", b =>

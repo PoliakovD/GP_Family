@@ -1,0 +1,93 @@
+<div class="ic" [class.ic-split]="isWide()">
+  @if (showList()) {
+    <div class="ic-list">
+      @if (intake.courses() === null) {
+        <p class="muted">Загружаем…</p>
+      } @else if (groups().length === 0 && (archive()?.length ?? 0) === 0) {
+        <div class="ic-empty">
+          <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+          <h5>Курсов пока нет</h5>
+          <p class="muted">Создайте курс из назначения врача или вручную.</p>
+          <button type="button" class="btn btn-primary" (click)="newCourse()">Создать курс</button>
+        </div>
+      }
+
+      @for (g of groups(); track g.subject.id) {
+        <section>
+          <div class="ic-group-head">
+            <app-avatar [person]="person(g.subject)" size="sm" />
+            <h5>{{ g.subject.isSelf ? 'Я' : g.subject.name }}</h5>
+            @if (g.watching) { <span class="ic-watching"><i class="ph-fill ph-eye" aria-hidden="true"></i> вы следите</span> }
+            <span class="ic-rule"></span>
+          </div>
+          <ul class="ic-courses">
+            @for (c of g.courses; track c.id) {
+              <li>
+                <a class="ic-course" [routerLink]="['/health/intake/courses', c.id]"
+                   [class.selected]="id() === c.id" [class.miss]="c.missedToday"
+                   [class.prn]="c.schedule.mode === Mode.AsNeeded" [class.paused]="c.status === Status.Paused">
+                  <div class="ic-course-top">
+                    <i [class]="c.schedule.mode === Mode.AsNeeded ? 'ph-duotone ph-first-aid' : 'ph-duotone ph-pill'" aria-hidden="true"></i>
+                    <div class="ic-course-text">
+                      <div class="ic-course-name">{{ c.drugName }}</div>
+                      <div class="ic-course-sub">{{ detailLine(c) }}</div>
+                    </div>
+                    @if (c.missedToday) {
+                      <span class="ic-badge ic-badge-miss">пропуск сегодня</span>
+                    } @else if (c.status === Status.Paused) {
+                      <span class="ic-badge">на паузе</span>
+                    } @else if (stockBadge(c); as badge) {
+                      <span class="ic-badge ic-badge-stock" [attr.title]="stockTitle(c)">{{ badge }}</span>
+                    }
+                  </div>
+                  @if (c.schedule.mode !== Mode.AsNeeded && c.totalDays !== null) {
+                    <div class="ic-progress"><span [style.width.%]="fraction(c)"></span></div>
+                    <div class="ic-progress-text">{{ progress(c) }}</div>
+                  }
+                </a>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
+      @if (intake.courses() !== null) {
+        <button type="button" class="ic-archive" [attr.aria-expanded]="archiveOpen()" (click)="toggleArchive()">
+          <i class="ph ph-archive" aria-hidden="true"></i>
+          <span>Завершённые курсы@if (archive(); as a) { · {{ a.length }}}</span>
+          <i [class]="archiveOpen() ? 'ph ph-caret-up' : 'ph ph-caret-down'" aria-hidden="true"></i>
+        </button>
+        @if (archiveOpen()) {
+          <ul class="ic-courses">
+            @for (c of archive() ?? []; track c.id) {
+              <li>
+                <a class="ic-course paused" [routerLink]="['/health/intake/courses', c.id]" [class.selected]="id() === c.id">
+                  <div class="ic-course-top">
+                    <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+                    <div class="ic-course-text">
+                      <div class="ic-course-name">{{ c.drugName }}</div>
+                      <div class="ic-course-sub">{{ subjectName(c.subject) }} · {{ detailLine(c) }}</div>
+                    </div>
+                  </div>
+                </a>
+              </li>
+            } @empty {
+              <li class="muted ic-none">Завершённых курсов нет.</li>
+            }
+          </ul>
+        }
+      }
+    </div>
+  }
+
+  @if (showCard()) {
+    <div class="ic-card">
+      @if (!isWide()) {
+        <button type="button" class="back-link" (click)="back()">
+          <i class="ph ph-caret-left" aria-hidden="true"></i> Курсы
+        </button>
+      }
+      <app-intake-course-card [courseId]="id()!" (removed)="afterRemoved()" />
+    </div>
+  }
+</div>

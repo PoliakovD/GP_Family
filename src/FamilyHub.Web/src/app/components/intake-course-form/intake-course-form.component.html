@@ -1,0 +1,286 @@
+<form class="cf" (ngSubmit)="save()">
+  <div class="cf-body">
+    @if (loading()) {
+      <p class="muted">Загружаем курс…</p>
+    }
+
+    @if (!isEdit() && subjectOptions().length > 1) {
+      <div class="cf-field">
+        <span class="cf-label" id="cf-for">Для кого</span>
+        <div class="cf-chips" role="radiogroup" aria-labelledby="cf-for">
+          @for (o of subjectOptions(); track o.id ?? 'me') {
+            <button type="button" class="cf-chip" role="radio" [class.active]="dependentId() === o.id"
+                    [attr.aria-checked]="dependentId() === o.id" (click)="dependentId.set(o.id)">{{ o.label }}</button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (!isEdit()) {
+      <div class="cf-source" role="radiogroup" aria-label="Откуда взять курс">
+        <button type="button" class="cf-source-tile" role="radio" [class.active]="source() === 'prescription'"
+                [attr.aria-checked]="source() === 'prescription'" (click)="setSource('prescription')">
+          <i [class]="(source() === 'prescription' ? 'ph-fill' : 'ph') + ' ph-stethoscope'" aria-hidden="true"></i>
+          <span><strong>Из назначения</strong><small>приём врача</small></span>
+        </button>
+        <button type="button" class="cf-source-tile" role="radio" [class.active]="source() === 'manual'"
+                [attr.aria-checked]="source() === 'manual'" (click)="setSource('manual')">
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+          <span><strong>Вручную</strong><small>без приёма</small></span>
+        </button>
+      </div>
+    }
+
+    @if (source() === 'prescription' && !isEdit()) {
+      @if (prescriptionsLoading()) {
+        <p class="muted">Ищем назначения…</p>
+      } @else if (visiblePrescriptions().length === 0) {
+        <p class="muted cf-hint">В приёмах врача за последние полгода нет назначений с лекарствами. Загрузите документ приёма или создайте курс вручную.</p>
+      } @else {
+        <div class="cf-prescriptions">
+          @for (v of visiblePrescriptions(); track v.recordId) {
+            <div class="cf-visit">
+              <div class="cf-visit-head">{{ v.doctor || v.title || 'Приём врача' }} · {{ formatVisitDate(v.recordDate) }}</div>
+              @for (it of v.items; track it.index) {
+                <button type="button" class="cf-rx" [class.active]="selectedPrescription()?.recordId === v.recordId && selectedPrescription()?.index === it.index"
+                        (click)="pickPrescription(v, it)">
+                  <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+                  <span class="cf-rx-text"><strong>{{ it.name }}</strong>@if (it.dosageInstructions) { — {{ it.dosageInstructions }}}</span>
+                  @if (selectedPrescription()?.recordId === v.recordId && selectedPrescription()?.index === it.index) {
+                    <i class="ph-fill ph-check-circle cf-rx-check" aria-hidden="true"></i>
+                  }
+                </button>
+              }
+            </div>
+          }
+          @if (prefilled()) {
+            <p class="cf-hint">Поля ниже заполнены из назначения — проверьте.</p>
+          }
+        </div>
+      }
+    }
+
+    <div class="cf-field">
+      <label class="cf-label" for="cf-name">Препарат</label>
+      <input id="cf-name" class="input" type="text" maxlength="200" autocomplete="off" placeholder="Например, Сорбифер Дурулес 100 мг"
+             [ngModel]="drugName()" (ngModelChange)="drugName.set($event)" name="drugName" />
+    </div>
+
+    <div class="cf-field">
+      <span class="cf-label" id="cf-freq">Как часто</span>
+      <div class="cf-chips" role="radiogroup" aria-labelledby="cf-freq">
+        @for (f of frequencies; track f.mode) {
+          <button type="button" class="cf-chip" role="radio" [class.active]="freq() === f.mode"
+                  [attr.aria-checked]="freq() === f.mode" (click)="setFreq(f.mode)">{{ f.label }}</button>
+        }
+      </div>
+    </div>
+
+    @switch (freq()) {
+      @case (Mode.EveryNHours) {
+        <div class="cf-box">
+          <div class="cf-inline">
+            <span>Каждые</span>
+            <select class="input cf-narrow" [ngModel]="everyHours()" (ngModelChange)="everyHours.set(+$event)" name="everyHours" aria-label="Интервал в часах">
+              @for (h of intervalHours; track h) { <option [ngValue]="h">{{ h }}</option> }
+            </select>
+            <span>часов, начиная с</span>
+            <input class="input cf-time" type="time" [ngModel]="everyStart()" (ngModelChange)="everyStart.set($event)" name="everyStart" aria-label="Время первого приёма" />
+          </div>
+          <div class="cf-inline">
+            <span>Доза</span>
+            <input class="input cf-narrow" type="number" min="0.25" step="0.25" [ngModel]="singleUnits()" (ngModelChange)="singleUnits.set($event)" name="everyUnits" aria-label="Доза" />
+          </div>
+          <div class="cf-result">→ {{ intervalTimes() }}</div>
+        </div>
+      }
+      @case (Mode.Weekdays) {
+        <div class="cf-days" role="group" aria-label="Дни недели">
+          @for (d of weekdayOrder; track d) {
+            <button type="button" class="cf-day" [class.active]="weekdays().includes(d)" [attr.aria-pressed]="weekdays().includes(d)"
+                    (click)="toggleWeekday(d)">{{ weekdayShort(d) }}</button>
+          }
+        </div>
+      }
+      @case (Mode.Cycle) {
+        <div class="cf-box">
+          <div class="cf-inline">
+            <input class="input cf-narrow" type="number" min="1" max="90" [ngModel]="cycleOn()" (ngModelChange)="cycleOn.set($event)" name="cycleOn" aria-label="Дней приёма" />
+            <span>дн. приём,</span>
+            <input class="input cf-narrow" type="number" min="1" max="90" [ngModel]="cycleOff()" (ngModelChange)="cycleOff.set($event)" name="cycleOff" aria-label="Дней перерыва" />
+            <span>перерыв</span>
+          </div>
+          <div class="cf-inline">
+            <button type="button" class="btn-link" (click)="setCyclePreset(1, 1)">Через день</button>
+            <button type="button" class="btn-link" (click)="setCyclePreset(21, 7)">21 / 7</button>
+          </div>
+          @if (breakText()) { <div class="cf-result">→ {{ breakText() }}</div> }
+        </div>
+      }
+      @case (Mode.AsNeeded) {
+        <div class="cf-box">
+          <p class="cf-hint">Без напоминаний. Приём отмечается вручную на странице «Сегодня».</p>
+          <div class="cf-inline">
+            <span>Не чаще</span>
+            <input class="input cf-narrow" type="number" min="1" max="24" [ngModel]="maxPerDay()" (ngModelChange)="maxPerDay.set($event)" name="maxPerDay" aria-label="Раз в сутки" />
+            <span>раз в сутки, доза</span>
+            <input class="input cf-narrow" type="number" min="0.25" step="0.25" [ngModel]="singleUnits()" (ngModelChange)="singleUnits.set($event)" name="prnUnits" aria-label="Доза" />
+          </div>
+          <div class="cf-result">→ предупредим при превышении</div>
+        </div>
+      }
+    }
+
+    @if (usesTimes()) {
+      <div class="cf-field">
+        <span class="cf-label">Время и доза</span>
+        <div class="cf-times">
+          @for (t of times(); track $index) {
+            <div class="cf-time-row">
+              <input class="input cf-time" type="time" [ngModel]="t.at" (ngModelChange)="setTime($index, $event)" [name]="'time' + $index" aria-label="Время приёма" />
+              <input class="input cf-units" type="number" min="0.25" step="0.25" [ngModel]="t.units" (ngModelChange)="setUnits($index, $event)" [name]="'units' + $index" aria-label="Доза" />
+              @if (times().length > 1) {
+                <button type="button" class="btn-icon" (click)="removeTime($index)" aria-label="Убрать время"><i class="ph ph-x" aria-hidden="true"></i></button>
+              }
+            </div>
+          }
+          @if (times().length < 12) {
+            <button type="button" class="btn-link cf-add" (click)="addTime()"><i class="ph ph-plus" aria-hidden="true"></i> Ещё время</button>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="cf-row">
+      <div class="cf-field">
+        <label class="cf-label" for="cf-unit">Единица дозы</label>
+        <select id="cf-unit" class="input" [ngModel]="unit()" (ngModelChange)="unit.set($any($event))" name="unit">
+          @for (u of doseUnits; track u.value) { <option [ngValue]="u.value">{{ u.label }}</option> }
+        </select>
+      </div>
+      <div class="cf-field">
+        <span class="cf-label" id="cf-food">Еда</span>
+        <div class="seg" role="radiogroup" aria-labelledby="cf-food">
+          @for (f of foodOptions; track f.value) {
+            <button type="button" class="seg-opt" role="radio" [class.active]="food() === f.value"
+                    [attr.aria-checked]="food() === f.value" (click)="food.set(f.value)">{{ f.label }}</button>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="cf-row">
+      <div class="cf-field">
+        <label class="cf-label" for="cf-start">Начало</label>
+        <input id="cf-start" class="input" type="date" [ngModel]="startDate()" (ngModelChange)="startDate.set($event)" name="startDate" />
+      </div>
+      <div class="cf-field">
+        <span class="cf-label" id="cf-dur">Длительность</span>
+        <div class="cf-inline" role="group" aria-labelledby="cf-dur">
+          @if (durKind() !== 'forever') {
+            <input class="input cf-narrow" type="number" min="1" max="3650" [ngModel]="durValue()" (ngModelChange)="durValue.set($event)" name="durValue" aria-label="Срок курса" />
+          }
+          <select class="input" [ngModel]="durKind()" (ngModelChange)="durKind.set($event)" name="durKind" aria-label="Единица срока">
+            <option value="days">дней</option>
+            <option value="weeks">недель</option>
+            <option value="months">месяцев</option>
+            <option value="forever">постоянно</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="cf-card">
+      <div class="cf-card-row">
+        <i class="ph-duotone ph-first-aid-kit" aria-hidden="true"></i>
+        <div class="cf-card-text">
+          <div class="cf-card-title">Списывать из аптечки</div>
+          <div class="cf-card-sub">Каждый отмеченный приём уменьшит остаток</div>
+        </div>
+        <span class="switch">
+          <input type="checkbox" [checked]="writeOff()" (change)="setWriteOff($any($event.target).checked)" aria-label="Списывать из аптечки" />
+          <span class="switch-knob"></span>
+        </span>
+      </div>
+      @if (writeOff()) {
+        <select class="input" [ngModel]="medicationId()" (ngModelChange)="medicationId.set($event)" name="medication" aria-label="Препарат в аптечке">
+          <option [ngValue]="null">Выберите препарат в аптечке…</option>
+          @for (m of medChoices(); track m.id) {
+            <option [ngValue]="m.id">{{ m.name }} · «{{ m.medkitName }}»@if (m.quantity) { · {{ m.quantity }}}</option>
+          }
+        </select>
+        @if (medsLoaded() && medChoices().length === 0) {
+          <p class="cf-hint">В аптечках нет лекарств. Добавьте препарат в «Аптечке» и вернитесь сюда.</p>
+        }
+        @if (preview(); as p) {
+          @if (p.quantity !== null) {
+            <div class="cf-warn" [class.ok]="!p.shortfall">
+              <i [class]="p.shortfall ? 'ph-fill ph-warning' : 'ph-fill ph-check-circle'" aria-hidden="true"></i>
+              <span>
+                @if (p.neededForCourse !== null) {
+                  На курс нужно {{ formatNumber(p.neededForCourse) }}, в аптечке {{ p.quantityText }}@if (p.daysCovered !== null) { — {{ coversText(p.daysCovered) }}}
+                } @else {
+                  В аптечке {{ p.quantityText }}@if (p.daysCovered !== null) { — {{ coversText(p.daysCovered) }}}
+                }
+              </span>
+            </div>
+          }
+        }
+        <div class="cf-inline">
+          <label class="cf-small" for="cf-low">Предупредить, когда останется на</label>
+          <input id="cf-low" class="input cf-narrow" type="number" min="1" max="60" [ngModel]="lowStockDays()" (ngModelChange)="lowStockDays.set($event)" name="lowStock" />
+          <span class="cf-small">дней</span>
+        </div>
+      }
+    </div>
+
+    @if (freq() !== Mode.AsNeeded) {
+      <div class="cf-card">
+        <div class="cf-card-row">
+          <i class="ph ph-users" aria-hidden="true"></i>
+          <div class="cf-card-text">
+            <div class="cf-card-title">Напоминания и пропуски</div>
+            <div class="cf-card-sub">Push в момент приёма; о пропуске узнают ваши наблюдатели</div>
+          </div>
+          <button type="button" class="btn-link" (click)="openReminders()">Настроить</button>
+        </div>
+        <div class="cf-inline">
+          <span class="cf-small">Повторить через</span>
+          <div class="seg" role="radiogroup" aria-label="Повтор напоминания">
+            <button type="button" class="seg-opt" role="radio" [class.active]="repeat() === null" [attr.aria-checked]="repeat() === null" (click)="repeat.set(null)">Нет</button>
+            @for (m of [5, 15, 30]; track m) {
+              <button type="button" class="seg-opt" role="radio" [class.active]="repeat() === m" [attr.aria-checked]="repeat() === m" (click)="repeat.set(m)">{{ m }}</button>
+            }
+          </div>
+          <span class="cf-small">мин</span>
+        </div>
+        <div class="cf-inline">
+          <label class="cf-small" for="cf-missed">Считать пропущенным через</label>
+          <select id="cf-missed" class="input cf-auto" [ngModel]="missedAfter()" (ngModelChange)="missedAfter.set(+$event)" name="missedAfter">
+            @for (o of missedOptions; track o.value) { <option [ngValue]="o.value">{{ o.label }}</option> }
+          </select>
+        </div>
+      </div>
+    }
+
+    <div class="cf-field">
+      <label class="cf-label" for="cf-notes">Заметка</label>
+      <textarea id="cf-notes" class="input" rows="2" maxlength="2000" placeholder="Необязательно"
+                [ngModel]="notes()" (ngModelChange)="notes.set($event)" name="notes"></textarea>
+    </div>
+
+    @if (error(); as err) {
+      <div class="alert-danger" role="alert">{{ err }}</div>
+    }
+  </div>
+
+  <div class="cf-foot">
+    <div class="cf-summary"><i class="ph-fill ph-calendar-check" aria-hidden="true"></i> {{ summary() }}</div>
+    <div class="cf-actions">
+      <button type="submit" class="btn btn-primary cf-save" [disabled]="!canSave() || busy()">
+        {{ isEdit() ? 'Сохранить' : 'Начать курс' }}
+      </button>
+      <button type="button" class="btn btn-secondary" (click)="cancel()">Отмена</button>
+    </div>
+  </div>
+</form>

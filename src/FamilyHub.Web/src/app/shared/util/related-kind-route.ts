@@ -14,5 +14,9 @@ export function relatedKindBasePath(kind: NotificationRelatedKind): string {
       return '/health/visits';
     case NotificationRelatedKind.Medkit:
       return '/health/medications';
+    case NotificationRelatedKind.MedicationDose:
+      return '/health/intake/dose';
+    case NotificationRelatedKind.MedicationCourse:
+      return '/health/intake/courses';
   }
 }

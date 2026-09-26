@@ -167,4 +167,80 @@ public class WebPushNotificationSenderTests : SqliteTestBase
         var remaining = await NewContext().PushSubscriptions.AsNoTracking().ToListAsync();
         remaining.Should().Contain(s => s.Id == broken.Id);
     }
+
+    // ── Кастомизация payload'а по типу уведомления (ADR-0015) ────────────────
+
+    private WebPushNotificationSender WithCustomizer(IPushPayloadCustomizer customizer) =>
+        new(_client, Db, NullLogger<WebPushNotificationSender>.Instance, [customizer]);
+
+    private string? CapturePayload()
+    {
+        string? captured = null;
+        _client.SendNotificationAsync(Arg.Any<WebPush.PushSubscription>(), Arg.Do<string>(p => captured = p),
+                Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        return captured;
+    }
+
+    [Fact]
+    public async Task SendAsync_CustomizedType_UsesCustomizerPayload_StillNeverRealTitleOrBody()
+    {
+        var owner = Db.AddUser();
+        AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/device-1");
+        await Db.SaveChangesAsync();
+        var customizer = Substitute.For<IPushPayloadCustomizer>();
+        customizer.CanHandle(NotificationType.MedicationDoseDue).Returns(true);
+        customizer.BuildAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns(new PushCustomization(
+            Body: "Время принять лекарство · 14:00", Tag: "dose-1", Actions: [new PushActionButton("taken", "Принял")]));
+        string? payload = null;
+        _client.SendNotificationAsync(Arg.Any<WebPush.PushSubscription>(), Arg.Do<string>(p => payload = p),
+                Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        var notification = NewNotification(owner.Id);
+        notification.Type = NotificationType.MedicationDoseDue;
+
+        await WithCustomizer(customizer).SendAsync(notification);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(payload!); // кириллица в JSON экранируется — сравниваем разобранное
+        var n = doc.RootElement.GetProperty("notification");
+        n.GetProperty("body").GetString().Should().Be("Время принять лекарство · 14:00");
+        n.GetProperty("tag").GetString().Should().Be("dose-1");
+        payload.Should().NotContain("Иванов").And.NotContain("Диагноз");
+    }
+
+    [Fact]
+    public async Task SendAsync_CustomizerReturnsNull_SendsNothing()
+    {
+        var owner = Db.AddUser();
+        AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/device-1");
+        await Db.SaveChangesAsync();
+        var customizer = Substitute.For<IPushPayloadCustomizer>();
+        customizer.CanHandle(Arg.Any<NotificationType>()).Returns(true);
+        customizer.BuildAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>()).Returns((PushCustomization?)null);
+
+        await WithCustomizer(customizer).SendAsync(NewNotification(owner.Id));
+
+        await _client.DidNotReceiveWithAnyArgs().SendNotificationAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task SendAsync_TypeWithoutCustomizer_KeepsGenericPayload()
+    {
+        var owner = Db.AddUser();
+        AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/device-1");
+        await Db.SaveChangesAsync();
+        var customizer = Substitute.For<IPushPayloadCustomizer>();
+        customizer.CanHandle(Arg.Any<NotificationType>()).Returns(false);
+        string? payload = null;
+        _client.SendNotificationAsync(Arg.Any<WebPush.PushSubscription>(), Arg.Do<string>(p => payload = p),
+                Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        await WithCustomizer(customizer).SendAsync(NewNotification(owner.Id));
+
+        using var doc = System.Text.Json.JsonDocument.Parse(payload!);
+        doc.RootElement.GetProperty("notification").GetProperty("body").GetString().Should().Be("Новое уведомление");
+        payload.Should().Contain("\"url\":\"/notifications\"");
+        await customizer.DidNotReceiveWithAnyArgs().BuildAsync(default!, default);
+    }
 }

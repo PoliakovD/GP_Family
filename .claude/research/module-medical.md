@@ -549,3 +549,28 @@ Null-реализация по умолчанию) + этап-4 `KbLookupService
 `MedicationEnrichmentProcessor`) в DI; `MapMedicalModule()` вызывает все `Map*Endpoints()`, вся
 группа — под `ConsentRequiredFilter`. Подключается из `FamilyHub.Api/Program.cs`, не имеет
 обратной зависимости на `FamilyHub.Api` или `FamilyHub.Modules.Birthdays`.
+
+## Приём лекарств (`MedicationCourses/`) — курсы, напоминания, push с кнопками
+
+Полное решение — ADR-0015. Кратко, что неочевидно:
+
+- Сущности `medical`: `MedicationCourse` (для пользователя **или** подопечного, `DrugName`/`Notes`/
+  `PrescriptionText` — `[Encrypted]`, расписание — jsonb `DoseSchedule`), `MedicationDose` (строка появляется, когда
+  приём наступил или его отметили; будущее не хранится), `MedicationWatcher`, `DoseActionToken` (хеш токена кнопок push).
+  `User` получил `TimeZoneId`, `QuietHoursFrom/To`. `MedicationCourse` дописана в конец `EncryptionRotationJob.FieldEntityTypes`.
+- Чистая логика — в Domain (`MedicationCourses/`): `DoseScheduleExpander` (5 режимов, локальное «настенное» время → UTC,
+  дыра/дубль часа при переводе часов), `DoseTiming` (опоздание 60 мин, срок пропуска = max(T+порог, отсрочка+30),
+  осознанный пропуск не считается в статистику), `StockMath` (количество в аптечке — строка `DataJson["quantity"]`),
+  `PrescriptionDraftParser` (эвристика по свободному тексту назначения), `QuietHours`.
+- Доступ (`MedicationCourseAccess`): свой курс; курс подопечного — любому активному члену его семьи; курс взрослого —
+  наблюдателю только на чтение, пока есть общая активная семья. Чужой курс = NotFound.
+- Отметка «Принял» (`DoseService`) — одна транзакция: приём + списание из аптечки (CAS по `DataJson`, 3 попытки) +
+  запись дневника (`HealthNoteService.StageIntake`, только для своего курса). Отмена возвращает таблетки.
+- Фон: `MedicationDoseScanJob` (каждую минуту: наступил/повтор/после «отложить»/пропущен → наблюдателям) и
+  `MedicationCourseMaintenanceJob` (раз в час: запас, автозавершение, чистка токенов). Тексты уведомлений без препаратов.
+- Push с кнопками: `IPushPayloadCustomizer` → `DoseReminderPushCustomizer` + анонимный
+  `GET /api/public/dose-actions/{token}?a=…` (`DoseActionTokenService`).
+- Часовой пояс приходит из браузера (`PUT /api/account/time-zone`, `/me` возвращает `timeZoneId`); смена пояса
+  переводит свои курсы и сдвигает `EffectiveFromUtc`, чтобы не появились «пропуски» задним числом.
+- Не проверялось живьём: интеграционные тесты (`MedicationCoursesApiTests`) компилируются, но Docker не запускался;
+  кнопки push в реальном браузере не нажимались (нужна production-сборка с ngsw и VAPID).

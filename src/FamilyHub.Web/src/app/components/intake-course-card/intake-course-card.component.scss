@@ -1,0 +1,81 @@
+// Карточка курса (макет «Screen - Medication schedule», правая часть «Курсы»).
+
+:host { display: block; }
+
+.cc { display: flex; flex-direction: column; gap: 20px; }
+
+.cc-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.cc-pill { font-size: 2rem; color: var(--color-accent); }
+.cc-head-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cc-name { margin: 0; font-family: var(--font-heading); font-size: 1.45rem; line-height: 1.15; letter-spacing: -0.015em; }
+.cc-sub { font-size: 0.8529rem; color: var(--color-neutral-700); }
+.cc-link { margin-left: 6px; color: var(--color-accent); text-decoration: underline; text-underline-offset: 3px; }
+
+.cc-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; @media (max-width: 639px) { grid-template-columns: minmax(0, 1fr); } }
+
+.cc-tile {
+  padding: 13px 15px;
+  background: var(--color-bg);
+  border: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+
+  &.low { background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-bg)); }
+  &.low .cc-tile-label, &.low .cc-tile-sub { color: var(--color-status-warning-text); }
+}
+
+.cc-tile-label { font-size: 0.7647rem; color: var(--color-neutral-600); margin-bottom: 3px; }
+.cc-tile-main { font-family: var(--font-heading); font-weight: 600; font-size: 0.9412rem; line-height: 1.3; }
+.cc-tile-sub { font-size: 0.7647rem; color: var(--color-neutral-700); }
+.cc-progress { height: 4px; margin-top: 6px; background: var(--color-neutral-200); span { display: block; height: 100%; background: var(--color-accent); } }
+
+.cc-section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.cc-kicker { font-size: 0.6471rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600); }
+.cc-adherence { font-size: 0.7941rem; color: var(--color-neutral-700); flex: 1; }
+
+// ---- Сетка истории ----
+.cc-grid-wrap { display: flex; flex-direction: column; gap: 6px; overflow-x: auto; }
+.cc-week { display: flex; flex-direction: column; gap: 4px; }
+.cc-grid { display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); gap: 4px; align-items: center; min-width: 260px; }
+.cc-grid-head { font-size: 0.7059rem; color: var(--color-neutral-600); }
+.cc-wd { text-align: center; }
+.cc-time { font-size: 0.7059rem; color: var(--color-neutral-600); }
+
+.cc-cell {
+  height: 26px;
+  background: var(--color-neutral-200);
+
+  &.ok { background: var(--color-status-ok); }
+  &.late { background: var(--color-status-warning); }
+  &.missed { background: var(--color-status-danger); }
+  &.skipped { background: var(--color-neutral-400); }
+  &.due { background: var(--color-neutral-200); box-shadow: inset 0 0 0 2px var(--color-accent); }
+  &.none { background: transparent; }
+  &.today { box-shadow: inset 0 0 0 2px var(--color-accent-800); }
+}
+
+.cc-legend {
+  margin-top: 9px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.7353rem;
+  color: var(--color-neutral-700);
+
+  span { display: inline-flex; align-items: center; gap: 6px; }
+  i { width: 11px; height: 11px; display: inline-block; background: var(--color-neutral-200); }
+  i.ok { background: var(--color-status-ok); }
+  i.late { background: var(--color-status-warning); }
+  i.missed { background: var(--color-status-danger); }
+}
+
+.cc-reminders {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-bg);
+
+  li { display: flex; align-items: center; gap: 12px; padding: 11px 14px; font-size: 0.8824rem; }
+  li + li { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+  i { font-size: 1.15rem; color: var(--color-accent); flex: none; }
+}
+
+.cc-foot { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 0.8235rem; color: var(--color-neutral-700); i { color: var(--color-accent); } }

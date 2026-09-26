@@ -89,6 +89,18 @@ public static class RateLimitingRegistration
                     QueueLimit = 0,
                 }));
 
+            // Кнопки push-напоминания о приёме (анонимно, по одноразовому токену): партиция по IP. Токен —
+            // 256 бит, перебор бессмыслен; лимит защищает от нагрузки и сканирования. Человеку хватает с
+            // запасом: одно нажатие кнопки — один запрос.
+            limiterOptions.AddPolicy("dose-action", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+
             // Создание мед-записи/загрузка вложения — дешевле LLM-вызова, но тоже неограничено сегодня.
             limiterOptions.AddPolicy("medical-write", httpContext => RateLimitPartition.GetFixedWindowLimiter(
                 UserOrIpPartitionKey(httpContext),
