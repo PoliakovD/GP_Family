@@ -291,6 +291,16 @@ export class AppComponent implements OnInit {
     void this.auth.loadMe();
   }
 
+  /**
+   * Пункт листа «Ещё». Лист закрывается по завершении перехода (NavigationEnd ниже), а не по клику:
+   * закрытие снимает фиктивную запись истории через history.back(), и сделанное СРАЗУ по клику оно
+   * отменяло бы ещё не завершившуюся навигацию — экран не менялся. Если пункт ведёт на текущий
+   * экран, перехода не будет — закрываем сразу.
+   */
+  onMoreItemClick(path: string): void {
+    if (this.currentUrl().startsWith(path)) this.moreSheetOpen.set(false);
+  }
+
   private isAuthRoute(url: string): boolean {
     return AUTH_ROUTE_PREFIXES.some((prefix) => url.startsWith(prefix));
   }
