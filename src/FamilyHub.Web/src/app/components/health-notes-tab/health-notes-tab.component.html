@@ -4,16 +4,43 @@
       <h4 class="mb-1">Дневник самочувствия</h4>
       <div class="dn-privacy">
         <i class="ph-fill ph-lock-simple" aria-hidden="true"></i>
-        Видите только вы · {{ countLabel() }}
+        @if (isReadOnly()) {
+          Доступ дал(а) {{ ownerName() }} · только чтение · {{ countLabel() }}
+        } @else {
+          Видите только вы · {{ countLabel() }}
+        }
       </div>
     </div>
-    <a class="btn btn-secondary dn-report" routerLink="/health/reports" [queryParams]="{ new: 1, diary: 1 }">
-      <i class="ph ph-file-text" aria-hidden="true"></i> В отчёт для врача
-    </a>
-    <button type="button" class="btn btn-primary dn-add" (click)="openForm()">
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
-    </button>
+    @if (!isReadOnly()) {
+      <a class="btn btn-secondary dn-report" routerLink="/health/reports" [queryParams]="{ new: 1, diary: 1 }">
+        <i class="ph ph-file-text" aria-hidden="true"></i> В отчёт для врача
+      </a>
+      <button type="button" class="btn btn-primary dn-add" (click)="openForm()">
+        <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
+      </button>
+    }
   </div>
+
+  <!-- ADR-0017 — чипы «Я» / те, кто дал доступ к своему дневнику; появляются, только если такой
+       доступ вообще есть (у большинства пользователей — никогда), чтобы не занимать место зря. -->
+  @if (diarySharedWithMe().length > 0) {
+    <div class="d-flex gap-2 flex-wrap mb-2">
+      <button type="button" class="person-chip-btn" (click)="selectOwner(null)">
+        <app-person-chip
+          [avatarPerson]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}"
+          shortLabel="Я" fullLabel="Мой дневник" [selected]="!isReadOnly()"
+        />
+      </button>
+      @for (s of diarySharedWithMe(); track s.ownerUserId) {
+        <button type="button" class="person-chip-btn" (click)="selectOwner(s.ownerUserId)">
+          <app-person-chip
+            [avatarPerson]="{key: s.ownerUserId, firstName: s.name}"
+            [shortLabel]="s.name" [fullLabel]="s.name" [selected]="ownerUserId() === s.ownerUserId"
+          />
+        </button>
+      }
+    </div>
+  }
 
   @if (loadError(); as err) {
     <div class="alert-danger" role="alert">
@@ -113,7 +140,9 @@
                 @if (it.desc.badge) {
                   <span class="dn-badge">{{ it.desc.badge }}</span>
                 }
-                <app-action-menu [actions]="it.actions" label="Действия с записью" />
+                @if (!isReadOnly()) {
+                  <app-action-menu [actions]="it.actions" label="Действия с записью" />
+                }
               </li>
             }
           </ul>

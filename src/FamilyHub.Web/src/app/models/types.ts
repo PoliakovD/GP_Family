@@ -1666,6 +1666,25 @@ export interface HealthSummaryReports {
     activeLinks: number;
 }
 
+// «Кто видит моё здоровье» (ADR-0017) — гранты доступа per-категория к дневнику/приёму/прививкам.
+// Битовая маска, значения — часть контракта с бэкендом (Domain.Enums.HealthShareCategory).
+export const HealthShareCategory = { None: 0, Intake: 1, Vaccinations: 2, Diary: 4 } as const;
+export type HealthShareCategory = typeof HealthShareCategory[keyof typeof HealthShareCategory];
+
+/** Кому я дал доступ (GET /api/health-shares/mine) — полная матрица, categories=None по умолчанию. */
+export interface HealthShareGrantDto {
+    viewerUserId: string;
+    name: string;
+    categories: number;
+}
+
+/** Чьё здоровье вижу я (GET /api/health-shares/shared-with-me) — только пока есть общая активная семья. */
+export interface HealthSharedWithMeDto {
+    ownerUserId: string;
+    name: string;
+    categories: number;
+}
+
 export interface HealthSummary {
     intake: HealthSummaryIntake | null;
     diary: HealthSummaryDiary | null;

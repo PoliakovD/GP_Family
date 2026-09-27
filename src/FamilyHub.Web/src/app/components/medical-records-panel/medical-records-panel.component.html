@@ -5,6 +5,15 @@
   @if (info) {
     <div class="alert-info mb-2">{{ info }}</div>
   }
+  @if (person() === 'me' && !personHintDismissed && !recordId()) {
+    <div class="alert-info mb-2 d-flex align-items-start gap-2">
+      <i class="ph ph-info" aria-hidden="true"></i>
+      <span class="flex-fill">Из хаба раздел открывается на вас. Остальных выберите в фильтре.</span>
+      <button type="button" class="btn-icon" (click)="dismissPersonHint()" aria-label="Скрыть подсказку">
+        <i class="ph ph-x" aria-hidden="true"></i>
+      </button>
+    </div>
+  }
 
   <!-- Редизайн v3 — форма создания переехала на отдельный роут (record-add.component.ts,
        боковая панель/полноэкранно), кнопка «Добавить» в топбаре теперь навигирует туда, не

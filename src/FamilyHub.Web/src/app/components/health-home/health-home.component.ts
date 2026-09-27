@@ -123,4 +123,12 @@ export class HealthHomeComponent implements OnInit {
   private sameDay(a: Date, b: Date): boolean {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
+
+  /** Плитка «Прививки» ведёт сразу на график себя, а не на обзор семьи — «person=me» здесь
+   * означает конкретный маршрут (vaccinations-page/vaccination-person), не query-фильтр, как у
+   * остальных плиток: у прививок нет отдельного «предвыбора человека» на обзорном экране. */
+  protected vaccinationHref(): string[] {
+    const id = this.auth.me()?.userId;
+    return id ? ['/health/vaccinations/people/user', id] : ['/health/vaccinations'];
+  }
 }

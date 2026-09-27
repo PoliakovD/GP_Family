@@ -1,17 +1,19 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { SidePanelComponent } from '../../shared/side-panel/side-panel.component';
 import { ToastService } from '../../shared/toast/toast.service';
 import { TrendLineComponent } from '../../shared/trend-line/trend-line.component';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import {
-  HealthMetricDefinition, HealthNote, HealthNoteCatalog, HealthNoteKind,
+  HealthMetricDefinition, HealthNote, HealthNoteCatalog, HealthNoteKind, HealthShareCategory, HealthSharedWithMeDto,
 } from '../../models/types';
 import {
   HEALTH_KINDS, NoteDescription, dayHeading, dayKey, describeNote, formatClock, formatNumber,
@@ -68,13 +70,14 @@ function quantile(sorted: number[], q: number): number {
 /**
  * Страница «Дневник» (вкладка хаба «Здоровье», макет «Screen - Diary»): сводка замеров с
  * трендом, лента по дням с фильтром по типу, форма записи в боковой панели (десктоп) или
- * нижнем листе (мобайл). Дневник строго личный — видите только вы, в семью не шарится.
+ * нижнем листе (мобайл). Свой дневник ведёт только сам человек; дневник другого — по гранту
+ * Diary (ADR-0017), только на чтение, чипом сверху (ownerUserId/sharedWithMe).
  */
 @Component({
   selector: 'app-health-notes-tab',
   imports: [
-    ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, RouterLink, SearchFieldComponent,
-    SidePanelComponent, TrendLineComponent,
+    ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, PersonChipComponent, RouterLink,
+    SearchFieldComponent, SidePanelComponent, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
   styleUrl: './health-notes-tab.component.scss',
@@ -84,6 +87,7 @@ export class HealthNotesTabComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
   private readonly breakpoints = inject(BreakpointService);
+  protected readonly auth = inject(AuthService);
 
   protected readonly kinds = HEALTH_KINDS;
 
@@ -95,6 +99,15 @@ export class HealthNotesTabComponent implements OnInit {
   readonly days = signal(PAGE_DAYS);
   readonly filter = signal<HealthNoteKind | null>(null);
   readonly query = signal('');
+
+  /** null — свой дневник; иначе userId владельца, чей дневник смотрю (только чтение). */
+  readonly ownerUserId = signal<string | null>(null);
+  readonly sharedWithMe = signal<HealthSharedWithMeDto[]>([]);
+  protected readonly diarySharedWithMe = computed(() =>
+    this.sharedWithMe().filter((s) => (s.categories & HealthShareCategory.Diary) === HealthShareCategory.Diary));
+  protected readonly isReadOnly = computed(() => this.ownerUserId() !== null);
+  protected readonly ownerName = computed(() =>
+    this.diarySharedWithMe().find((s) => s.ownerUserId === this.ownerUserId())?.name ?? null);
 
   readonly formOpen = signal(false);
   readonly editing = signal<HealthNote | null>(null);
@@ -112,6 +125,7 @@ export class HealthNotesTabComponent implements OnInit {
     const kind = this.filter();
     const q = this.query().trim().toLowerCase();
     const metrics = this.metrics();
+    const readOnly = this.isReadOnly();
     const byDay = new Map<string, FeedItem[]>();
 
     for (const note of this.notes()) {
@@ -126,7 +140,8 @@ export class HealthNotesTabComponent implements OnInit {
         icon: meta.icon,
         color: meta.color,
         flagged: note.includeInDoctorQuestions,
-        actions: [
+        // Грант Diary — только на чтение (ADR-0017): чужую запись не правим и не удаляем.
+        actions: readOnly ? [] : [
           { label: 'Изменить', icon: 'ph ph-pencil-simple', handler: () => this.openForm(note) },
           { label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.remove(note) },
         ],
@@ -152,13 +167,25 @@ export class HealthNotesTabComponent implements OnInit {
   ngOnInit(): void {
     void this.load();
     void this.loadCatalog();
+    void this.loadSharedWithMe();
   }
 
   protected setFilter(kind: HealthNoteKind | null): void {
     this.filter.set(kind);
   }
 
+  /** Переключение чипа «Я» / «{имя}» над лентой (ADR-0017) — null возвращает к своему дневнику. */
+  protected selectOwner(ownerUserId: string | null): void {
+    if (this.ownerUserId() === ownerUserId) return;
+    this.ownerUserId.set(ownerUserId);
+    void this.load();
+  }
+
   protected openForm(note: HealthNote | null = null): void {
+    // Чужой дневник (грант Diary) — только чтение: строка ленты остаётся кликабельной визуально
+    // ради единообразия разметки, но открывать форму править чужую запись не должна (см. также
+    // actions:[] в groups() и скрытый <app-action-menu> в шаблоне).
+    if (note && this.isReadOnly()) return;
     this.editing.set(note);
     this.formOpen.set(true);
   }
@@ -183,7 +210,8 @@ export class HealthNotesTabComponent implements OnInit {
     this.loadError.set(null);
     try {
       const from = new Date(Date.now() - this.days() * DAY_MS).toISOString();
-      this.notes.set(await this.api.getHealthNotes({ from }));
+      const subject = this.ownerUserId() ?? undefined;
+      this.notes.set(await this.api.getHealthNotes({ from, subject }));
     } catch {
       this.loadError.set('Не удалось загрузить дневник. Проверьте соединение и попробуйте ещё раз.');
     } finally {
@@ -197,6 +225,16 @@ export class HealthNotesTabComponent implements OnInit {
     } catch {
       // Без каталога лента всё равно работает (замеры покажутся по коду), а форма — без чипов.
       this.toast.error('Не удалось загрузить справочник замеров');
+    }
+  }
+
+  /** Кто дал мне доступ к своему дневнику (ADR-0017) — чипы над лентой; пусто у большинства
+   * пользователей, тогда чипы просто не показываются (не единственный человек в системе). */
+  private async loadSharedWithMe(): Promise<void> {
+    try {
+      this.sharedWithMe.set(await this.api.getHealthSharedWithMe());
+    } catch {
+      // Не критично — свой дневник всё равно доступен, чипы просто не появятся.
     }
   }
 

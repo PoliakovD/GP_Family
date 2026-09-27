@@ -157,7 +157,7 @@
           }
         </a>
 
-        <a class="hh-tile" routerLink="/health/vaccinations" [queryParams]="{person: 'me'}">
+        <a class="hh-tile" [routerLink]="vaccinationHref()">
           <div class="hh-tile-head">
             <i class="ph-duotone ph-syringe" aria-hidden="true"></i>
             <span class="hh-tile-title flex-fill">Прививки</span>
