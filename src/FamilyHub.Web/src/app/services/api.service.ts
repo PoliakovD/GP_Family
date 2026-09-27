@@ -27,6 +27,7 @@ import {
   HealthNoteCatalog,
   HealthNoteInput,
   HealthNoteKind,
+  HealthSummary,
   HomeSummaryResponse,
   IndicatorArticleResponse,
   IndicatorDto,
@@ -188,6 +189,9 @@ export class ApiService {
 
   // Редизайн v2 — агрегат Главной, одним запросом вместо 3-4 отдельных.
   getHomeSummary = () => this.get<HomeSummaryResponse>('/api/home/summary');
+
+  // Редизайн хаба «Здоровье» — агрегат плиток хаба, одним запросом вместо 8 отдельных.
+  getHealthSummary = () => this.get<HealthSummary>('/api/health/summary');
 
   // Семьи
   getFamilies = () => this.get<FamilySummary[]>('/api/families');
