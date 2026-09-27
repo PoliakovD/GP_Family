@@ -33,6 +33,9 @@ export const NotificationType = {
     MedicationDoseDue: 10,
     MedicationDoseMissed: 11,
     MedicationStockLow: 12,
+    VaccinationDue: 13,
+    VaccinationOverdue: 14,
+    VaccinationWellbeingCheck: 15,
 } as const;
 
 export interface FamilySummary {
@@ -451,6 +454,8 @@ export const NotificationRelatedKind = {
     Medkit: 2,
     MedicationDose: 3,
     MedicationCourse: 4,
+    VaccinationPersonUser: 5,
+    VaccinationPersonDependent: 6,
 } as const;
 export type NotificationRelatedKind = typeof NotificationRelatedKind[keyof typeof NotificationRelatedKind];
 
@@ -963,6 +968,7 @@ export interface DoctorReportBlocks {
     visits: boolean;
     measurements: boolean;
     symptomsNotes: boolean;
+    vaccinations: boolean;
 }
 
 export interface DoctorReportLink {
@@ -996,6 +1002,7 @@ export interface CreateDoctorReportRequest {
     includeVisits: boolean;
     includeMeasurements: boolean;
     includeSymptomsNotes: boolean;
+    includeVaccinations: boolean;
     recipient: string | null;
     patientComment: string | null;
     /** 7, 14 или 30 — сразу выпустить ссылку; null — только PDF. */
@@ -1345,4 +1352,209 @@ export interface ReminderSettings {
     quietHoursTo: string | null;
     myWatchers: WatcherCandidate[];
     watching: WatchingEntry[];
+}
+
+// Прививки (ADR-0016): график вычисляется бэкендом (Domain.Vaccinations.VaccinationScheduleCalculator)
+// по каталогу и дате рождения — фронт только отображает готовые статусы, ничего не считает сам.
+
+export const VaccineGroup = {National: 0, Adult: 1, Epidemic: 2} as const;
+export type VaccineGroup = typeof VaccineGroup[keyof typeof VaccineGroup];
+
+export const VaccinationStatus = {
+    Done: 0, HadDisease: 1, DueSoon: 2, CanDo: 3, Upcoming: 4, NoData: 5,
+} as const;
+export type VaccinationStatus = typeof VaccinationStatus[keyof typeof VaccinationStatus];
+
+export const VaccinationKind = {Done: 0, HadDisease: 1, Unknown: 2} as const;
+export type VaccinationKind = typeof VaccinationKind[keyof typeof VaccinationKind];
+
+export const VaccinationDatePrecision = {Day: 0, Month: 1, Year: 2} as const;
+export type VaccinationDatePrecision = typeof VaccinationDatePrecision[keyof typeof VaccinationDatePrecision];
+
+/** kind — 'user' (аккаунт) или 'dependent' (подопечный), как IntakeSubject. */
+export interface VaccinationSubject {
+    kind: 'user' | 'dependent';
+    id: string;
+    name: string;
+    isSelf: boolean;
+    canEdit: boolean;
+}
+
+export interface VaccinationScheduleItem {
+    seriesCode: string;
+    doseIndex: number;
+    label: string;
+    seriesName: string;
+    seriesShortName: string;
+    group: VaccineGroup;
+    /** Возрастной этап для группировки: "0-1"/"1-2"/"2-6"/"6-7"/"14+"/"adult"/"epidemic"/"closed"/"custom". */
+    stage: string;
+    status: VaccinationStatus;
+    windowFrom: string | null;
+    windowTo: string | null;
+    recordId: string | null;
+    date: string | null;
+    isRepeat: boolean;
+}
+
+export interface VaccinationAttentionCard {
+    subject: VaccinationSubject;
+    item: VaccinationScheduleItem;
+}
+
+export interface VaccinationSubjectSummary {
+    subject: VaccinationSubject;
+    done: number;
+    dueSoon: number;
+    canDo: number;
+    noData: number;
+    total: number;
+    hint: string | null;
+}
+
+export interface VaccinationOverview {
+    attention: VaccinationAttentionCard[];
+    people: VaccinationSubjectSummary[];
+}
+
+export interface VaccinationDiseaseGroup {
+    disease: string;
+    items: VaccinationScheduleItem[];
+}
+
+export interface VaccinationPersonSchedule {
+    subject: VaccinationSubject;
+    ageYears: number | null;
+    ageMonths: number | null;
+    hasBirthDate: boolean;
+    byAge: VaccinationScheduleItem[];
+    byDisease: VaccinationDiseaseGroup[];
+    /** Прививки не из календаря — своя секция, не смешиваются с byAge/byDisease. */
+    custom: VaccinationScheduleItem[];
+}
+
+export interface VaccinationAttachmentRef {
+    id: string;
+    fileName: string;
+    sizeBytes: number;
+    uploadedAt: string;
+}
+
+export interface VaccinationDiaryLink {
+    at: string;
+    kind: string;
+    text: string;
+}
+
+export interface VaccinationDoseDetail {
+    doseIndex: number;
+    label: string;
+    status: VaccinationStatus;
+    windowFrom: string | null;
+    windowTo: string | null;
+    recordId: string | null;
+    date: string | null;
+    vaccineName: string | null;
+    files: VaccinationAttachmentRef[];
+    diaryEntries: VaccinationDiaryLink[];
+}
+
+export interface VaccinationSeriesDetail {
+    seriesCode: string;
+    seriesName: string;
+    diseases: string[];
+    group: VaccineGroup;
+    about: string | null;
+    contraindications: string | null;
+    tradeNames: string[];
+    reactionHint: string | null;
+    doses: VaccinationDoseDetail[];
+}
+
+/** Прививка не из календаря — детали строятся вокруг одной записи, не серии. */
+export interface CustomVaccinationDetail {
+    id: string;
+    name: string;
+    vaccineName: string | null;
+    kind: VaccinationKind;
+    date: string | null;
+    datePrecision: VaccinationDatePrecision | null;
+    files: VaccinationAttachmentRef[];
+    diaryEntries: VaccinationDiaryLink[];
+    canEdit: boolean;
+}
+
+export interface CreateVaccinationRequest {
+    subjectKind: 'user' | 'dependent';
+    subjectId: string;
+    seriesCode: string | null;
+    doseIndex: number | null;
+    customName: string | null;
+    vaccineName: string | null;
+    kind: VaccinationKind;
+    date: string | null;
+    datePrecision: VaccinationDatePrecision | null;
+    certificateId: string | null;
+    requestWellbeingCheck: boolean;
+}
+
+export interface UpdateVaccinationRequest {
+    vaccineName: string | null;
+    kind: VaccinationKind;
+    date: string | null;
+    datePrecision: VaccinationDatePrecision | null;
+}
+
+export interface BulkMarkVaccinationItem {
+    seriesCode: string;
+    doseIndex: number;
+    kind: VaccinationKind;
+    date: string | null;
+    datePrecision: VaccinationDatePrecision | null;
+}
+
+export interface BulkMarkVaccinationRequest {
+    subjectKind: 'user' | 'dependent';
+    subjectId: string;
+    items: BulkMarkVaccinationItem[];
+    certificateId: string | null;
+}
+
+export interface BulkMarkVaccinationResult {
+    saved: number;
+}
+
+export interface VaccineCatalogDose {
+    label: string;
+    isAgeBased: boolean;
+}
+
+export interface VaccineCatalogSeries {
+    code: string;
+    name: string;
+    shortName: string;
+    group: VaccineGroup;
+    diseases: string[];
+    doses: VaccineCatalogDose[];
+    tradeNames: string[];
+    about: string | null;
+    contraindications: string | null;
+    reactionHint: string | null;
+    repeatEveryYears: number | null;
+    seasonal: boolean;
+}
+
+export interface VaccinationRecognizedItem {
+    seriesCode: string | null;
+    rawName: string;
+    vaccineName: string | null;
+    date: string | null;
+    datePrecision: VaccinationDatePrecision | null;
+    needsReview: boolean;
+}
+
+export interface VaccinationRecognitionResponse {
+    success: boolean;
+    items: VaccinationRecognizedItem[];
+    error: string | null;
 }

@@ -68,6 +68,17 @@ import {
   IntakeToday,
   PrescriptionVisit,
   ReminderSettings,
+  BulkMarkVaccinationRequest,
+  BulkMarkVaccinationResult,
+  CreateVaccinationRequest,
+  CustomVaccinationDetail,
+  UpdateVaccinationRequest,
+  VaccinationOverview,
+  VaccinationPersonSchedule,
+  VaccinationRecognitionResponse,
+  VaccinationScheduleItem,
+  VaccinationSeriesDetail,
+  VaccineCatalogSeries,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -632,4 +643,84 @@ export class ApiService {
 
   /** Часовой пояс браузера (IANA) — от него зависит «сегодня» и время приёма. */
   setTimeZone = (timeZoneId: string) => this.put<void>('/api/account/time-zone', { timeZoneId });
+
+  // Прививки (ADR-0016): график вычисляется на бэкенде, здесь только его чтение и запись фактов.
+  getVaccinationsOverview = () => this.get<VaccinationOverview>('/api/vaccinations/overview');
+
+  getVaccinationAttentionCount = () => this.get<{ count: number }>('/api/vaccinations/attention-count');
+
+  getVaccineCatalog = () => this.get<VaccineCatalogSeries[]>('/api/vaccinations/catalog');
+
+  getVaccinationPersonSchedule = (kind: 'user' | 'dependent', id: string) =>
+    this.get<VaccinationPersonSchedule>(`/api/vaccinations/people/${kind}/${id}`);
+
+  getVaccinationSeriesDetail = (kind: 'user' | 'dependent', id: string, seriesCode: string) =>
+    this.get<VaccinationSeriesDetail>(`/api/vaccinations/people/${kind}/${id}/series/${encodeURIComponent(seriesCode)}`);
+
+  getCustomVaccination = (id: string) => this.get<CustomVaccinationDetail>(`/api/vaccinations/${id}`);
+
+  createVaccination = (request: CreateVaccinationRequest) =>
+    this.post<VaccinationScheduleItem>('/api/vaccinations', request);
+
+  bulkMarkVaccinations = (request: BulkMarkVaccinationRequest) =>
+    this.post<BulkMarkVaccinationResult>('/api/vaccinations/bulk', request);
+
+  updateVaccination = (id: string, request: UpdateVaccinationRequest) =>
+    this.put<void>(`/api/vaccinations/${id}`, request);
+
+  deleteVaccination = (id: string) => this.del<void>(`/api/vaccinations/${id}`);
+
+  uploadVaccinationAttachment = (vaccinationId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.post<{ id: string }>(`/api/vaccinations/${vaccinationId}/attachments`, formData);
+  };
+
+  getVaccinationAttachments = (vaccinationId: string) =>
+    this.get<{ id: string; fileName: string; sizeBytes: number; uploadedAt: string }[]>(
+      `/api/vaccinations/${vaccinationId}/attachments`);
+
+  /** «Сертификат PDF» — снимок на лету, без хранения; качаем как blob (не навигацией — см. patterns/backend.md
+   * про Telegram-режим без cookie). */
+  getVaccinationCertificatePdf = (kind: 'user' | 'dependent', id: string) =>
+    this.getBlob(`/api/vaccinations/people/${kind}/${id}/certificate.pdf`);
+
+  /** Распознавание фото сертификата — ничего не сохраняет (см. подтверждение ниже). */
+  recognizeVaccinationCertificate(files: Blob[], onUploadProgress?: (percent: number) => void): Promise<VaccinationRecognitionResponse> {
+    this.log.log('api', 'info', `POST /api/vaccinations/certificate/recognize (${files.length} фото)`);
+    const formData = new FormData();
+    files.forEach((file, i) => formData.append('files', file, `page-${i}.jpg`));
+
+    return new Promise<VaccinationRecognitionResponse>((resolve, reject) => {
+      this.http
+        .post<VaccinationRecognitionResponse>('/api/vaccinations/certificate/recognize', formData, {
+          reportProgress: true,
+          observe: 'events',
+        })
+        .subscribe({
+          next: (event) => {
+            if (event.type === HttpEventType.UploadProgress && event.total) {
+              onUploadProgress?.(Math.round((100 * event.loaded) / event.total));
+            } else if (event.type === HttpEventType.Response && event.body) {
+              resolve(event.body);
+            }
+          },
+          error: (e) => reject(this.toApiError(e)),
+        });
+    });
+  }
+
+  /** Подтверждение находок — фото пересылается ПОВТОРНО (recognize ничего не сохранял) вместе с
+   * (возможно, поправленным) списком; сохраняет сертификат + файлы + N записей одним запросом. */
+  confirmVaccinationCertificate(
+    subjectKind: 'user' | 'dependent', subjectId: string, files: Blob[],
+    items: { seriesCode: string; doseIndex: number; kind: number; date: string | null; datePrecision: number | null }[],
+  ): Promise<BulkMarkVaccinationResult> {
+    const formData = new FormData();
+    formData.append('subjectKind', subjectKind);
+    formData.append('subjectId', subjectId);
+    formData.append('items', JSON.stringify(items));
+    files.forEach((file, i) => formData.append('files', file, `page-${i}.jpg`));
+    return this.post<BulkMarkVaccinationResult>('/api/vaccinations/certificate/confirm', formData);
+  }
 }
