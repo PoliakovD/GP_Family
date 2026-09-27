@@ -259,6 +259,9 @@ export interface MedicalRecordFilter {
     dependentId?: string;
     targetUserId?: string;
     self?: boolean;
+    /** 'me' — хаб «Здоровье» (редизайн навигации): действительно только мои записи, в отличие от
+     * self, которое пропускает чужие записи, расшарённые семье владельцем (см. backend MineOnly). */
+    subject?: 'me';
     doctor?: string;
     q?: string;
     page?: number;

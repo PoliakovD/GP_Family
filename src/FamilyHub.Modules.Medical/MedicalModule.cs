@@ -5,6 +5,7 @@ using FamilyHub.Modules.Medical.DoctorReports;
 using FamilyHub.Modules.Medical.Enrichment;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.HealthNotes;
+using FamilyHub.Modules.Medical.HealthSummary;
 using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.Medications;
@@ -51,6 +52,7 @@ public static class MedicalModule
         // Гранты доступа per-категория к дневнику/приёму/прививкам (ADR-0017) — источник WatchedUserIds
         // для SubjectScopeService выше.
         services.AddScoped<HealthShareService>();
+        services.AddScoped<HealthSummaryService>();
         // Курсы приёма лекарств (ADR-0015): доступ, курсы, приёмы, «Сегодня», напоминания.
         services.AddScoped<MedicationCourseAccess>();
         services.AddScoped<CourseSubjects>();
@@ -182,6 +184,7 @@ public static class MedicalModule
         module.MapMedicalRecordEndpoints();
         module.MapHealthNoteEndpoints();
         module.MapHealthShareEndpoints();
+        module.MapHealthSummaryEndpoints();
         module.MapDoctorReportEndpoints();
         module.MapMedicationCourseEndpoints();
         module.MapVaccinationEndpoints();

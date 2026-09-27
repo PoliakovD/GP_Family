@@ -598,6 +598,59 @@ public class MedicalRecordServiceTests : SqliteTestBase
         dto!.Title.Should().BeNull();
     }
 
+    // ── subject=me (хаб «Здоровье») — MineOnly действительно только мои, в отличие от SelfOnly ──────
+
+    [Fact]
+    public async Task MineOnly_ExcludesRecordsSharedByOtherFamilyMembers()
+    {
+        // SelfOnly (self=true) пропускает эту запись — она не привязана к подопечному/назначению,
+        // хотя владелец не я. MineOnly должен её исключить.
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        var (family, _) = Db.SeedFamilyWithAdmin();
+        var familyMate = Db.AddMember(family.Id);
+        Db.FamilyMedicalShares.Add(new FamilyMedicalShare
+        {
+            Id = Guid.NewGuid(), OwnerUserId = owner.Id, FamilyId = family.Id, SharedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var selfOnly = await _sut.GetVisibleRecordsAsync(familyMate.Id, new MedicalRecordFilter(SelfOnly: true, PageSize: 100));
+        selfOnly.Items.Should().ContainSingle(); // подтверждает описанную выше дыру SelfOnly
+
+        var mineOnly = await _sut.GetVisibleRecordsAsync(familyMate.Id, new MedicalRecordFilter(MineOnly: true, PageSize: 100));
+        mineOnly.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task MineOnly_IncludesOwnRecords_AndRecordsAssignedToMe_ExcludesDependents()
+    {
+        var owner = Db.AddUser();
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        // Владелец — активный член семьи подопечного, иначе запись подопечного не была бы видна
+        // вовсе (базовая видимость), и тест не отличал бы "исключено MineOnly" от "не видно вообще".
+        Db.FamilyMembers.Add(TestData.NewMember(family.Id, owner.Id, FamilyRole.Member, MemberStatus.Active));
+        var dependent = new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = family.Id, FirstName = "Дед", Gender = Gender.Male,
+            CreatedByUserId = admin.Id, CreatedAt = DateTime.UtcNow,
+        };
+        Db.FamilyDependents.Add(dependent);
+
+        var own = TestData.NewMedicalRecord(owner.Id);
+        var assignedToMe = TestData.NewMedicalRecord(admin.Id);
+        assignedToMe.TargetUserId = owner.Id;
+        var dependentRecord = TestData.NewMedicalRecord(admin.Id);
+        dependentRecord.FamilyDependentId = dependent.Id;
+        Db.MedicalRecords.AddRange(own, assignedToMe, dependentRecord);
+        await Db.SaveChangesAsync();
+
+        var mineOnly = await _sut.GetVisibleRecordsAsync(owner.Id, new MedicalRecordFilter(MineOnly: true, PageSize: 100));
+
+        mineOnly.Items.Select(r => r.Id).Should().BeEquivalentTo([own.Id, assignedToMe.Id]);
+    }
+
     private static LabIndicator NewIndicator(MedicalRecord record, Guid ownerUserId, IndicatorFlag flag) => new()
     {
         Id = Guid.NewGuid(),
