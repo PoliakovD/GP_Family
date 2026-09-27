@@ -16,5 +16,6 @@ export class KbHubComponent {
   readonly sections: { path: string; label: string }[] = [
     { path: 'medications', label: 'Медицинские препараты' },
     { path: 'indicators', label: 'Показатели анализов' },
+    { path: 'vaccines', label: 'Прививки' },
   ];
 }

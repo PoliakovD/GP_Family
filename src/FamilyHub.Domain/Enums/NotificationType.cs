@@ -46,4 +46,14 @@ public enum NotificationType
 
     /// <summary>Остатка в аптечке хватит на несколько дней курса или меньше.</summary>
     MedicationStockLow = 12,
+
+    /// <summary>Срок прививки по календарю приближается (за 2 недели). Текст намеренно без названия
+    /// инфекции/вакцины — по той же причине, что у MedicationDoseDue (ADR-0004/ADR-0016).</summary>
+    VaccinationDue = 13,
+
+    /// <summary>Срок прививки прошёл, но это не страшно — можно сделать. Одно уведомление, не повтор.</summary>
+    VaccinationOverdue = 14,
+
+    /// <summary>Напоминание о самочувствии через N дней после прививки (только для своих).</summary>
+    VaccinationWellbeingCheck = 15,
 }

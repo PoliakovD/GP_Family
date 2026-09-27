@@ -1,0 +1,15 @@
+// Страница «Прививки»: шапка с заголовком и кнопкой «Добавить прививку».
+
+.vp-page { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.vp-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.vp-new { margin-left: auto; }
+
+// Содержимое нижнего листа: форма/шторка длинная — листаем внутри листа, а не страницу под ним.
+.vp-sheet { max-height: 75vh; overflow-y: auto; padding-bottom: 8px; }

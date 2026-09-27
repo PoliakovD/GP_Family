@@ -30,6 +30,11 @@ export class HealthNoteFormComponent implements OnInit {
   readonly catalog = input<HealthNoteCatalog | null>(null);
   /** Правка существующей записи; null — создание. */
   readonly note = input<HealthNote | null>(null);
+  /** Предзаполнение при создании (напр. «Записать температуру» из шторки после прививки) — вид,
+   * код замера и момент времени; игнорируются в режиме правки. */
+  readonly presetKind = input<HealthNoteKind | null>(null);
+  readonly presetMetricCode = input<string | null>(null);
+  readonly presetAt = input<string | null>(null);
   readonly saved = output<void>();
   readonly cancelled = output<void>();
 
@@ -111,7 +116,13 @@ export class HealthNoteFormComponent implements OnInit {
 
   ngOnInit(): void {
     const n = this.note();
-    if (n) this.prefill(n);
+    if (n) {
+      this.prefill(n);
+    } else {
+      if (this.presetKind() !== null) this.kind.set(this.presetKind()!);
+      if (this.presetMetricCode() !== null) this.metricCode.set(this.presetMetricCode()!);
+      if (this.presetAt()) this.when.set(toLocalInput(new Date(this.presetAt()!)));
+    }
     void this.loadRecents();
   }
 

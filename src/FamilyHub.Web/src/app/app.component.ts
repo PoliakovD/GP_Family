@@ -4,6 +4,7 @@ import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
 import { NotificationStateService } from './services/notification-state.service';
 import { IntakeStateService } from './services/intake-state.service';
+import { VaccinationStateService } from './services/vaccination-state.service';
 import { BackgroundJobsStateService } from './services/background-jobs-state.service';
 import { AiStatusService } from './services/ai-status.service';
 import { PageActionService } from './services/page-action.service';
@@ -38,7 +39,7 @@ interface SidebarItem {
   icon: string;
   /** Абсолютный путь; для «Семьи» вычисляется динамически (см. familyHref()). */
   path?: string;
-  children?: { path: string; label: string; queryParams?: Record<string, string>; badge?: 'intake' }[];
+  children?: { path: string; label: string; queryParams?: Record<string, string>; badge?: 'intake' | 'vaccinations' }[];
 }
 
 @Component({
@@ -64,6 +65,7 @@ export class AppComponent implements OnInit {
   readonly auth = inject(AuthService);
   readonly notifications = inject(NotificationStateService);
   readonly intake = inject(IntakeStateService);
+  readonly vaccinations = inject(VaccinationStateService);
   readonly backgroundJobs = inject(BackgroundJobsStateService);
   readonly ai = inject(AiStatusService);
   readonly pageAction = inject(PageActionService);
@@ -109,6 +111,7 @@ export class AppComponent implements OnInit {
         { path: '/health/intake', label: 'Приём лекарств', badge: 'intake' },
         { path: '/health/records', label: 'Анализы' },
         { path: '/health/visits', label: 'Посещения врачей' },
+        { path: '/health/vaccinations', label: 'Прививки', badge: 'vaccinations' },
         { path: '/health/notes', label: 'Дневник' },
         { path: '/health/reports', label: 'Отчёты для врача' },
         { path: '/health/kb', label: 'Справочник' },
@@ -200,6 +203,7 @@ export class AppComponent implements OnInit {
         void this.notifications.refresh();
         void this.backgroundJobs.refresh();
         void this.intake.refresh();
+        void this.vaccinations.refresh();
         this.intake.startPolling();
         this.ai.start();
         void this.tryRedeemPendingInvite();
@@ -226,6 +230,7 @@ export class AppComponent implements OnInit {
         void this.notifications.refresh();
         void this.backgroundJobs.refresh();
         void this.intake.refresh();
+        void this.vaccinations.refresh();
         this.intake.startPolling();
         this.ai.start();
         void this.auth.loadMe();
@@ -294,6 +299,7 @@ export class AppComponent implements OnInit {
       void this.notifications.refresh();
       void this.backgroundJobs.refresh();
       void this.intake.refresh();
+      void this.vaccinations.refresh();
       this.intake.startPolling();
       this.ai.start();
       return;
@@ -336,6 +342,7 @@ export class AppComponent implements OnInit {
           void this.notifications.refresh();
           void this.backgroundJobs.refresh();
           void this.intake.refresh();
+          void this.vaccinations.refresh();
         }
         this.log.log('nav', 'info', `✓ ${e.urlAfterRedirects}`);
       } else if (e instanceof NavigationError) {

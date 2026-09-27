@@ -1,0 +1,54 @@
+<div class="vs">
+  <div class="vs-head">
+    <span class="vs-check"><i class="ph-fill ph-check" aria-hidden="true"></i></span>
+    <div class="flex-fill min-width-0">
+      <div class="vs-title">Прививка сохранена</div>
+      <div class="muted vs-sub">{{ info().item.seriesName }} · сегодня</div>
+    </div>
+  </div>
+
+  @if (info().reactionHint) {
+    <p class="vs-text">{{ info().reactionHint }}</p>
+  }
+
+  @if (info().subject.isSelf) {
+    @if (quickKind() === null) {
+      <div class="vs-actions">
+        <button type="button" class="vs-action" (click)="openQuick('temperature')">
+          <i class="ph-duotone ph-thermometer" aria-hidden="true"></i>
+          <span class="flex-fill">Записать температуру</span>
+          <i class="ph ph-caret-right" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="vs-action" (click)="openQuick('symptom')">
+          <i class="ph-duotone ph-lightning" aria-hidden="true"></i>
+          <span class="flex-fill">Записать симптом</span>
+          <i class="ph ph-caret-right" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <label class="vs-reminder">
+        <i class="ph ph-bell" aria-hidden="true"></i>
+        <span class="flex-fill">Напомнить о самочувствии через 7 дней</span>
+        <span class="switch">
+          <input type="checkbox" [checked]="reminderOn()" [disabled]="reminderBusy()"
+                 (change)="toggleReminder($any($event.target).checked)" />
+          <span class="switch-knob"></span>
+        </span>
+      </label>
+    } @else {
+      <app-health-note-form
+        [presetKind]="quickKind() === 'temperature' ? Kind.Metric : Kind.Symptom"
+        [presetMetricCode]="quickKind() === 'temperature' ? 'temperature' : null"
+        [catalog]="catalog()"
+        (saved)="onQuickSaved()"
+        (cancelled)="quickKind.set(null)"
+      />
+    }
+  } @else {
+    <p class="muted vs-text">О реакции подопечного можно записать в собственном дневнике, если вы за ним ведёте наблюдение.</p>
+  }
+
+  @if (quickKind() === null) {
+    <button type="button" class="btn btn-primary btn-block" (click)="closed.emit()">Готово</button>
+  }
+</div>

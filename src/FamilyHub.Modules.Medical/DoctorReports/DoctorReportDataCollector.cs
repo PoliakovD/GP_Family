@@ -3,6 +3,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.HealthNotes;
 using FamilyHub.Domain.ValueObjects;
+using FamilyHub.Domain.Vaccinations;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Extraction;
 using Microsoft.EntityFrameworkCore;
@@ -100,10 +101,35 @@ public class DoctorReportDataCollector(AppDbContext db)
                 .ToList();
         }
 
+        List<ReportVaccination>? vaccinations = blocks.Vaccinations ? await BuildVaccinationsAsync(userId, from, to, ct) : null;
+
         return new ReportModel(
             patient, from, to, DateTime.UtcNow, blocks,
             string.IsNullOrWhiteSpace(patientComment) ? null : patientComment.Trim(),
-            flagged, labs, summaries, skipped, meds, visits, metrics, wellbeing, sleep, symptoms, notes);
+            flagged, labs, summaries, skipped, meds, visits, metrics, wellbeing, sleep, symptoms, notes, vaccinations);
+    }
+
+    /// <summary>Сделанные прививки и перенесённые болезни за период — только сам пользователь
+    /// (отчёт строго персональный, как весь остальной сбор данных этого класса). Название и доза —
+    /// уже разрешены через VaccineCatalog по SeriesCode/DoseIndex, не сырые коды.</summary>
+    private async Task<List<ReportVaccination>> BuildVaccinationsAsync(Guid userId, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var rows = await db.Vaccinations.AsNoTracking()
+            .Where(v => v.SubjectUserId == userId
+                        && (v.Kind == VaccinationKind.Done || v.Kind == VaccinationKind.HadDisease)
+                        && v.Date != null && v.Date >= from && v.Date <= to)
+            .OrderBy(v => v.Date)
+            .ToListAsync(ct);
+
+        return rows.Select(v =>
+        {
+            var series = VaccineCatalog.Find(v.SeriesCode);
+            var name = series?.Name ?? v.CustomName ?? "Прививка не из календаря";
+            var dose = v.DoseIndex is { } idx && series is not null
+                ? (idx < series.Doses.Count ? series.Doses[idx].Label : "Ревакцинация")
+                : "—";
+            return new ReportVaccination(v.Date, name, dose, v.VaccineName, v.Kind == VaccinationKind.HadDisease);
+        }).ToList();
     }
 
     private async Task<ReportPatient> LoadPatientAsync(Guid userId, CancellationToken ct)

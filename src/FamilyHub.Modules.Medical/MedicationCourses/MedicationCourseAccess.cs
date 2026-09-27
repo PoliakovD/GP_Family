@@ -1,7 +1,6 @@
 using FamilyHub.Domain.Entities;
-using FamilyHub.Domain.Enums;
-using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Access;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyHub.Modules.Medical.MedicationCourses;
@@ -54,35 +53,14 @@ public class CourseScope(
             && (c.CreatedByUserId == UserId || AdminFamilyIds.Contains(f)));
 }
 
-public class MedicationCourseAccess(AppDbContext db, IFamilyAccessService access)
+public class MedicationCourseAccess(AppDbContext db, SubjectScopeService scopeService)
 {
+    /// <summary>Raw-выборка (семьи/админство/наблюдаемые) — общая с прививками, см. SubjectScopeService.
+    /// Здесь только оборачивается в CourseScope, поведение не изменилось.</summary>
     public async Task<CourseScope> GetScopeAsync(Guid userId, CancellationToken ct = default)
     {
-        var familyIds = await access.GetActiveFamilyIdsAsync(userId, ct);
-        var adminFamilyIds = await db.FamilyMembers.AsNoTracking()
-            .Where(m => m.UserId == userId && m.Status == MemberStatus.Active && m.Role == FamilyRole.Admin)
-            .Select(m => m.FamilyId)
-            .ToListAsync(ct);
-
-        // Наблюдатель за взрослым видит его курсы, только пока они состоят в общей активной семье.
-        var watchedUserIds = await db.MedicationWatchers.AsNoTracking()
-            .Where(w => w.WatcherUserId == userId && w.SubjectUserId != null)
-            .Select(w => w.SubjectUserId!.Value)
-            .ToListAsync(ct);
-        if (watchedUserIds.Count > 0 && familyIds.Count > 0)
-        {
-            watchedUserIds = await db.FamilyMembers.AsNoTracking()
-                .Where(m => m.Status == MemberStatus.Active && familyIds.Contains(m.FamilyId) && watchedUserIds.Contains(m.UserId))
-                .Select(m => m.UserId)
-                .Distinct()
-                .ToListAsync(ct);
-        }
-        else
-        {
-            watchedUserIds = [];
-        }
-
-        return new CourseScope(userId, familyIds, adminFamilyIds, watchedUserIds);
+        var s = await scopeService.GetScopeAsync(userId, ct);
+        return new CourseScope(s.UserId, s.FamilyIds, s.AdminFamilyIds, s.WatchedUserIds);
     }
 
     /// <summary>Загрузить курс (с отслеживанием) и уровень доступа к нему; чужой — (null, None).</summary>

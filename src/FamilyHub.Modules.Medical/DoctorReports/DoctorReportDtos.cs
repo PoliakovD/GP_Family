@@ -35,6 +35,7 @@ public record CreateDoctorReportRequest(
     bool IncludeVisits,
     bool IncludeMeasurements,
     bool IncludeSymptomsNotes,
+    bool IncludeVaccinations,
     string? Recipient,
     string? PatientComment,
     /// <summary>7, 14 или 30 — сразу выпустить ссылку на столько дней; null — без ссылки.</summary>
@@ -43,7 +44,7 @@ public record CreateDoctorReportRequest(
 public record ShareDoctorReportRequest(int Days);
 
 public record DoctorReportBlocksDto(
-    bool Labs, bool AiSummaries, bool Medications, bool Visits, bool Measurements, bool SymptomsNotes);
+    bool Labs, bool AiSummaries, bool Medications, bool Visits, bool Measurements, bool SymptomsNotes, bool Vaccinations);
 
 public record DoctorReportLinkDto(
     DoctorReportLinkStatus Status,

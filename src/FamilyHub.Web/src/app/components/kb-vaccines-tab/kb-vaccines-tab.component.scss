@@ -1,0 +1,37 @@
+// Справочник «Прививки»: карточки каталога + деталь (панель/шторка).
+
+:host { display: block; }
+
+.kv-search { max-width: 420px; margin-bottom: var(--space-4); }
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.kv-card {
+  display: block;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  cursor: pointer;
+
+  &:hover { border-color: color-mix(in srgb, var(--color-accent) 50%, transparent); }
+}
+
+.kv-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 0.9706rem; }
+.kv-card-sub { font-size: 0.7647rem; margin-top: 2px; }
+.kv-card-diseases { font-size: 0.7059rem; margin-top: 4px; }
+
+.kv-detail { display: flex; flex-direction: column; gap: 12px; font-size: 0.8824rem; }
+
+.kv-note {
+  display: flex;
+  gap: 10px;
+  padding: 11px 13px;
+  background: var(--color-neutral-100);
+
+  > i { color: var(--color-accent); margin-top: 1px; flex: none; }
+}

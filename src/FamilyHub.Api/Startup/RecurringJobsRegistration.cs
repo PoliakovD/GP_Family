@@ -61,6 +61,13 @@ public static class RecurringJobsRegistration
             job => job.RunAsync(CancellationToken.None),
             "0 * * * *");
 
+        // Напоминания о прививках (ADR-0016): раз в день — «за 2 недели до срока» и «срок прошёл»,
+        // плюс одноразовое «как самочувствие» через N дней после отметки (тот же cron-слот, что reminder-scan).
+        app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<FamilyHub.Modules.Medical.Vaccinations.VaccinationReminderJob>(
+            "vaccination-reminder-scan",
+            job => job.RunAsync(CancellationToken.None),
+            notificationOptions.Cron);
+
         return app;
     }
 

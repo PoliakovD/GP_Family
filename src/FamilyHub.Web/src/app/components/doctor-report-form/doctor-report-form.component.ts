@@ -57,6 +57,7 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
   readonly measurements = signal(true);
   /** Симптомы и заметки длинные — выключены по умолчанию (макет). */
   readonly symptomsNotes = signal(false);
+  readonly vaccinations = signal(true);
 
   readonly counts = signal<DoctorReportCounts | null>(null);
   readonly busy = signal(false);
@@ -66,7 +67,8 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
   private previewSeq = 0;
 
   protected readonly anyBlock = computed(() =>
-    this.labs() || this.aiSummaries() || this.medications() || this.visits() || this.measurements() || this.symptomsNotes());
+    this.labs() || this.aiSummaries() || this.medications() || this.visits() || this.measurements()
+    || this.symptomsNotes() || this.vaccinations());
 
   protected readonly periodValid = computed(() => !!this.from() && !!this.to() && this.from() <= this.to());
 
@@ -142,6 +144,7 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
       includeVisits: this.visits(),
       includeMeasurements: this.measurements(),
       includeSymptomsNotes: this.symptomsNotes(),
+      includeVaccinations: this.vaccinations(),
       recipient: this.recipient().trim() || null,
       patientComment: this.comment().trim() || null,
       shareDays: this.shareDays() || null,

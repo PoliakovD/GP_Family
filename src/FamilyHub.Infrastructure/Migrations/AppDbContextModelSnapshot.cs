@@ -175,6 +175,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<bool>("IncludeSymptomsNotes")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IncludeVaccinations")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IncludeVisits")
                         .HasColumnType("boolean");
 
@@ -2221,6 +2224,116 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("UserSpecimens", "medical");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.Vaccination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CertificateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomName")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("DatePrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("DoseIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("FamilyDependentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SeriesCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("SubjectUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VaccineName")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("WellbeingCheckAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("WellbeingCheckSent")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CertificateId");
+
+                    b.HasIndex("FamilyDependentId");
+
+                    b.HasIndex("SubjectUserId");
+
+                    b.HasIndex("FamilyDependentId", "SeriesCode", "DoseIndex")
+                        .IsUnique()
+                        .HasFilter("\"FamilyDependentId\" IS NOT NULL AND \"SeriesCode\" IS NOT NULL");
+
+                    b.HasIndex("SubjectUserId", "SeriesCode", "DoseIndex")
+                        .IsUnique()
+                        .HasFilter("\"SubjectUserId\" IS NOT NULL AND \"SeriesCode\" IS NOT NULL");
+
+                    b.ToTable("Vaccinations", "medical", t =>
+                        {
+                            t.HasCheckConstraint("CK_Vaccinations_OneSubject", "(\"SubjectUserId\" IS NULL) <> (\"FamilyDependentId\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.VaccinationCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FamilyDependentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SubjectUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FamilyDependentId");
+
+                    b.HasIndex("SubjectUserId");
+
+                    b.ToTable("VaccinationCertificates", "medical", t =>
+                        {
+                            t.HasCheckConstraint("CK_VaccinationCertificates_OneSubject", "(\"SubjectUserId\" IS NULL) <> (\"FamilyDependentId\" IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.VisitMedicationEnrichmentJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2773,6 +2886,22 @@ namespace FamilyHub.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Prompt");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.Vaccination", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.FamilyDependent", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyDependentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.VaccinationCertificate", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.FamilyDependent", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyDependentId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>

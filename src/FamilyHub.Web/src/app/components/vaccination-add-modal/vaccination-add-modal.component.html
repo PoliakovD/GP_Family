@@ -1,0 +1,197 @@
+<div class="va">
+  <div class="va-row">
+    <span class="muted va-label">Кому</span>
+    <div class="va-chips">
+      @for (s of subjects(); track s.kind + s.id) {
+        <button type="button" class="va-chip" [class.va-chip-selected]="s.kind === subjectKind() && s.id === subjectId()" (click)="selectSubject(s)">
+          <app-avatar [person]="{ key: s.id, firstName: s.name }" size="sm" />
+          {{ s.isSelf ? 'Я' : s.name }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="va-modes">
+    <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'one'" (click)="setMode('one')">
+      <i class="ph ph-syringe" aria-hidden="true"></i>
+      <div><div class="va-mode-title">Одна прививка</div><div class="muted va-mode-sub">сделали недавно</div></div>
+    </button>
+    <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'bulk'" (click)="setMode('bulk')">
+      <i class="ph-fill ph-list-checks" aria-hidden="true"></i>
+      <div><div class="va-mode-title">Отметить по календарю</div><div class="muted va-mode-sub">прошлые, сразу много</div></div>
+    </button>
+    <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'certificate'" (click)="setMode('certificate')">
+      <i class="ph ph-camera" aria-hidden="true"></i>
+      <div><div class="va-mode-title">Фото сертификата</div><div class="muted va-mode-sub">распознаем сами</div></div>
+    </button>
+  </div>
+
+  @if (error()) { <div class="alert-danger">{{ error() }}</div> }
+
+  @if (mode() === 'one') {
+    <div class="va-body">
+      <div class="form-label">От чего или вакцина</div>
+      <div class="va-autocomplete">
+        <input class="input" [ngModel]="query()" (ngModelChange)="query.set($event); clearSeries()" placeholder="Например, клещ или корь" />
+        @if (matches().length > 0 && !selectedSeries()) {
+          <div class="va-suggestions">
+            @for (m of matches(); track m.code) {
+              <button type="button" class="va-suggestion" (click)="pickSeries(m)">
+                <div class="va-suggestion-name">{{ m.name }}</div>
+                <div class="muted va-suggestion-sub">{{ m.group === Group.Epidemic ? 'по эпидпоказаниям' : m.diseases.join(', ') }}</div>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="d-flex gap-3">
+        <div class="flex-fill">
+          <div class="form-label">Дата</div>
+          <input class="input" type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
+        </div>
+        <div class="flex-fill" style="flex:1.3">
+          <div class="form-label">Вакцина <span class="muted">— необязательно</span></div>
+          <input class="input" [ngModel]="vaccineName()" (ngModelChange)="vaccineName.set($event)" placeholder="Название препарата" />
+        </div>
+      </div>
+
+      <label class="va-file-input">
+        <i class="ph ph-paperclip" aria-hidden="true"></i>
+        {{ file() ? file()!.name : 'Прикрепить фото или файл' }}
+        <input type="file" class="visually-hidden-input" accept="image/*,application/pdf" (change)="onFileSelected($any($event.target).files)" />
+      </label>
+
+      @if (hasMoreDoses()) {
+        <div class="va-hint"><i class="ph-fill ph-calendar-check" aria-hidden="true"></i> Есть следующая доза — напомним, когда подойдёт срок.</div>
+      }
+
+      <div class="va-footer">
+        <span class="flex-fill"></span>
+        <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
+        <button type="button" class="btn btn-primary" [disabled]="busy()" (click)="submitOne()">Сохранить</button>
+      </div>
+    </div>
+  }
+
+  @if (mode() === 'bulk') {
+    <div class="va-body">
+      <p class="muted va-bulk-hint">
+        Отметьте, что точно было. Дату можно не указывать — достаточно «было». Если не помните — оставьте
+        пустым, это не станет «просрочкой».
+      </p>
+
+      @if (nationalRows().length > 0) {
+        <div class="va-cal-group">
+          <div class="va-cal-group-title">Детство и школа</div>
+          @for (row of nationalRows(); track rowKey(row)) {
+            <div class="va-cal-row">
+              <button type="button" class="va-cal-check" [class.checked]="row.alreadyDone || choiceOf(row) === 'done'"
+                      [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')">
+                @if (row.alreadyDone || choiceOf(row) === 'done') { <i class="ph-bold ph-check" aria-hidden="true"></i> }
+              </button>
+              <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
+              @if (row.alreadyDone) {
+                <span class="muted va-cal-value">—</span>
+              } @else {
+                <div class="va-cal-actions">
+                  <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'unknown'" (click)="setChoice(row, 'unknown')">не помню</button>
+                  @if (row.closedByDisease) {
+                    <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'had'" (click)="setChoice(row, 'had')">болела</button>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (adultRows().length > 0) {
+        <div class="va-cal-group">
+          <div class="va-cal-group-title">Взрослые</div>
+          @for (row of adultRows(); track rowKey(row)) {
+            <div class="va-cal-row">
+              <button type="button" class="va-cal-check" [class.checked]="row.alreadyDone || choiceOf(row) === 'done'"
+                      [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')">
+                @if (row.alreadyDone || choiceOf(row) === 'done') { <i class="ph-bold ph-check" aria-hidden="true"></i> }
+              </button>
+              <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
+              @if (row.alreadyDone) {
+                <span class="muted va-cal-value">{{ row.doneDate ? row.doneDate.slice(0, 4) : '—' }}</span>
+              } @else if (choiceOf(row) === 'done') {
+                <input class="input va-cal-year" type="text" inputmode="numeric" maxlength="4" placeholder="год"
+                       [ngModel]="yearOf(row)" (ngModelChange)="setYear(row, $event)" />
+              } @else {
+                <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'unknown'" (click)="setChoice(row, 'unknown')">не помню</button>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <div class="va-footer">
+        <span class="muted flex-fill">Отмечено {{ bulkCount() }}</span>
+        <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
+        <button type="button" class="btn btn-primary" [disabled]="busy() || bulkCount() === 0" (click)="submitBulk()">
+          Сохранить {{ bulkCount() }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (mode() === 'certificate') {
+    <div class="va-body">
+      @if (certError()) { <div class="alert-danger">{{ certError() }}</div> }
+
+      @if (certStage() === 'pick') {
+        <label class="va-file-input va-file-input-lg">
+          <i class="ph ph-camera" aria-hidden="true"></i>
+          Выбрать фото страниц сертификата
+          <input type="file" class="visually-hidden-input" accept="image/*" multiple (change)="onCertFilesSelected($any($event.target).files)" />
+        </label>
+        @if (certFiles().length > 0) {
+          <div class="va-cert-files">
+            @for (f of certFiles(); track f.name + $index) {
+              <span class="va-cert-file">{{ f.name }} <button type="button" (click)="removeCertFile($index)"><i class="ph ph-x" aria-hidden="true"></i></button></span>
+            }
+          </div>
+          <button type="button" class="btn btn-primary btn-block" (click)="recognizeCertificate()">Распознать</button>
+        }
+      } @else if (certStage() === 'recognizing') {
+        <div class="va-progress">
+          <div class="va-progress-bar"><span [style.width.%]="certProgress()"></span></div>
+          <p class="muted">Загружаем и распознаём фото…</p>
+        </div>
+      } @else if (certStage() === 'review' || certStage() === 'saving') {
+        <p class="muted">Нашли {{ certItems().length }} записей · проверьте жёлтые</p>
+        <div class="va-cert-list">
+          @for (item of certItems(); track $index) {
+            <div class="va-cert-row" [class.va-cert-row-review]="item.needsReview">
+              <button type="button" class="va-cal-check" [class.checked]="item.checked" (click)="toggleCertItem($index)">
+                @if (item.checked) { <i class="ph-bold ph-check" aria-hidden="true"></i> }
+              </button>
+              <div class="flex-fill min-width-0">
+                <div class="va-cert-name">{{ item.rawName }}</div>
+                <select class="input va-cert-select" [ngModel]="item.seriesCodeEdit" (ngModelChange)="setCertSeries($index, $event)">
+                  <option [ngValue]="null">— выберите серию из календаря —</option>
+                  @for (c of vaccinations.catalog(); track c.code) {
+                    <option [ngValue]="c.code">{{ c.name }}</option>
+                  }
+                </select>
+              </div>
+              <input class="input va-cert-date" type="date" [ngModel]="item.dateEdit" (ngModelChange)="setCertDate($index, $event)" />
+            </div>
+          }
+        </div>
+        <p class="muted va-bulk-hint">Фото сохранится как файл у каждой найденной прививки.</p>
+        <div class="va-footer">
+          <span class="muted flex-fill">Отмечено {{ certChecked() }}</span>
+          <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
+          <button type="button" class="btn btn-primary" [disabled]="certStage() === 'saving' || certChecked() === 0" (click)="confirmCertificate()">
+            Сохранить {{ certChecked() }}
+          </button>
+        </div>
+      }
+    </div>
+  }
+</div>

@@ -28,6 +28,7 @@ export class HealthHubComponent {
     { path: 'intake', label: 'Приём лекарств' },
     { path: 'records', label: 'Анализы' },
     { path: 'visits', label: 'Посещения врачей' },
+    { path: 'vaccinations', label: 'Прививки' },
     { path: 'notes', label: 'Дневник' },
     { path: 'reports', label: 'Отчёты для врача' },
     { path: 'kb', label: 'Справочник' },

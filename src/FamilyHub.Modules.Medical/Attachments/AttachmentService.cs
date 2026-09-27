@@ -7,6 +7,7 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using FamilyHub.Modules.Medical.MedicalRecords;
+using FamilyHub.Modules.Medical.Vaccinations;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,7 @@ public class AttachmentService(
     DownloadTokenService downloadTokens,
     MedicalRecordService medicalRecords,
     IFamilyAccessService familyAccess,
+    VaccinationAccess vaccinationAccess,
     IMedicalAuditWriter audit,
     IBackgroundJobClient backgroundJobs,
     IOptions<AttachmentUploadOptions> uploadOptions,
@@ -385,6 +387,8 @@ public class AttachmentService(
         {
             FileOwnerType.MedicalRecord => await medicalRecords.IsVisibleToAsync(attachment.OwnerId, userId, ct),
             FileOwnerType.Medication => await HasMedicationAccessAsync(attachment.OwnerId, userId, ct),
+            FileOwnerType.Vaccination => await HasVaccinationAccessAsync(attachment.OwnerId, userId, ct),
+            FileOwnerType.VaccinationCertificate => await HasVaccinationCertificateAccessAsync(attachment.OwnerId, userId, ct),
             _ => false,
         };
 
@@ -396,6 +400,75 @@ public class AttachmentService(
             .FirstOrDefaultAsync(ct);
 
         return familyId != Guid.Empty && await familyAccess.HasRoleAsync(userId, familyId, FamilyRole.Member, ct);
+    }
+
+    private async Task<bool> HasVaccinationAccessAsync(Guid vaccinationId, Guid userId, CancellationToken ct)
+    {
+        var v = await db.Vaccinations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == vaccinationId, ct);
+        if (v is null) return false;
+        var scope = await vaccinationAccess.GetScopeAsync(userId, ct);
+        return scope.AccessTo(v) != VaccinationAccessLevel.None;
+    }
+
+    private async Task<bool> HasVaccinationCertificateAccessAsync(Guid certificateId, Guid userId, CancellationToken ct)
+    {
+        var c = await db.VaccinationCertificates.AsNoTracking().FirstOrDefaultAsync(x => x.Id == certificateId, ct);
+        if (c is null) return false;
+        var scope = await vaccinationAccess.GetScopeAsync(userId, ct);
+        return scope.AccessTo(c) != VaccinationAccessLevel.None;
+    }
+
+    /// <summary>Загрузка файла для владельца, чей доступ и лимиты проверяет сам вызывающий сервис
+    /// (VaccinationService/VaccinationCertificateService — доступ там уже трёхканальный, свой у
+    /// каждого владельца) — этот метод только шифрует, сохраняет блоб и заводит строку метаданных,
+    /// без собственной авторизации и без превью-конвейера (см. новый тип владельца — DoctorReport
+    /// делает так же). Картинки (сертификаты — почти всегда фото) отмечаются сразу Ready без
+    /// генерации миниатюры — тот же путь, что у изображений MedicalRecord без Thumbnail-артефакта
+    /// (AttachmentService.GetPreviewAsync рисует оригинал напрямую по content-type); иначе вьюер
+    /// показал бы только «скачать», хотя показать фото инлайн можно было бы сразу.</summary>
+    public async Task<AttachmentDto> UploadRawAsync(
+        FileOwnerType ownerType, Guid ownerId, string fileName, string contentType, long sizeBytes, Stream content,
+        CancellationToken ct = default)
+    {
+        fileName = FileNameSanitizer.Sanitize(fileName);
+        var attachmentId = Guid.NewGuid();
+        var storageKey = StorageKeyFactory.Create(attachmentId);
+
+        using var encrypted = new MemoryStream();
+        var encryptedSize = await fileCipher.EncryptAsync(content, encrypted, ct);
+        encrypted.Position = 0;
+        await storage.SaveAsync(storageKey, encrypted, encryptedSize, "application/octet-stream", ct);
+
+        var attachment = new FileAttachment
+        {
+            Id = attachmentId,
+            OwnerType = ownerType,
+            OwnerId = ownerId,
+            StorageKey = storageKey,
+            FileName = fileName,
+            ContentType = contentType,
+            SizeBytes = sizeBytes,
+            IsEncrypted = true,
+            KeyId = keyRing.ActiveKeyId,
+            UploadedAt = DateTime.UtcNow,
+            PreviewStatus = DocumentContentTypes.Images.Contains(contentType)
+                ? AttachmentPreviewStatus.Ready
+                : AttachmentPreviewStatus.Unsupported,
+        };
+        db.FileAttachments.Add(attachment);
+        await db.SaveChangesAsync(ct);
+        return ToDto(attachment);
+    }
+
+    /// <summary>Список файлов владельца без собственной авторизации (см. UploadRawAsync) — доступ
+    /// уже проверен вызывающим сервисом.</summary>
+    public async Task<List<AttachmentDto>> ListRawAsync(FileOwnerType ownerType, Guid ownerId, CancellationToken ct = default)
+    {
+        var items = await db.FileAttachments.AsNoTracking()
+            .Where(a => a.OwnerType == ownerType && a.OwnerId == ownerId)
+            .OrderBy(a => a.UploadedAt)
+            .ToListAsync(ct);
+        return items.Select(ToDto).ToList();
     }
 
     private static AttachmentDto ToDto(FileAttachment a) =>

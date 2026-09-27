@@ -574,3 +574,61 @@ Null-реализация по умолчанию) + этап-4 `KbLookupService
   переводит свои курсы и сдвигает `EffectiveFromUtc`, чтобы не появились «пропуски» задним числом.
 - Не проверялось живьём: интеграционные тесты (`MedicationCoursesApiTests`) компилируются, но Docker не запускался;
   кнопки push в реальном браузере не нажимались (нужна production-сборка с ngsw и VAPID).
+
+## Прививки (`Vaccinations/`) — вычисляемый график, доступ общий с курсами приёма
+
+Полное решение — ADR-0016. Кратко, что неочевидно:
+
+- **График не хранится.** `Domain.Vaccinations.VaccineCatalog` (нацкалендарь РФ, приказ №1122н,
+  взрослые ревакцинации, эпидпоказания) + `VaccinationScheduleCalculator.Calculate(birthDate, facts, today)` —
+  чистая функция (как `DoseScheduleExpander`), строит статус каждой дозы на лету. В БД (`Vaccination`,
+  схема `medical`) — только факты: `SeriesCode`+`DoseIndex` (или `CustomName` для прививки не из
+  календаря), `Kind` (`Done`/`HadDisease`/`Unknown`), дата с точностью (`VaccinationDatePrecision`).
+  Статусы: `Done/HadDisease/DueSoon/CanDo/Upcoming/NoData` — «нет данных» (окно закрылось больше года
+  назад без факта, или явный ответ «не помню») сознательно отличается от «можно сделать» (макет,
+  «нет данных ≠ пропущено»). Эпидемические серии (клещевой энцефалит и т.п.) не показываются в графике,
+  пока не внесена первая доза сами — добровольны. Повторы взрослых (`RepeatEveryYears`) генерируются по
+  одному — только ближайший неотмеченный; грипп — не повтором, а календарным сезоном (`SeasonalWindow`).
+- **Доступ — тот же трёхканальный, что у `MedicationCourse`** (свой/подопечный семьи — полностью/
+  наблюдаемый взрослый — только чтение), через ту же таблицу `MedicationWatcher`. Raw-выборка (активные
+  семьи, админство, наблюдаемые) вынесена в `Access/SubjectScopeService` — `MedicationCourseAccess`
+  теперь только оборачивает её в `CourseScope`, `Vaccinations/VaccinationAccess` — в `VaccinationScope`;
+  поведение курсов не изменилось.
+- **Сертификат — фото сохраняется**, в отличие от `MedicationOcrService`: два шага,
+  `POST /api/vaccinations/certificate/recognize` (синхронно, не сохраняет, как OCR препарата) →
+  `POST /api/vaccinations/certificate/confirm` (то же фото пересылается второй раз, сохраняет
+  `VaccinationCertificate` + `FileAttachment`(-ы) + N записей `Vaccination` с общим `CertificateId`).
+  Сопоставление названия с каталогом — простое нормализованное вхождение (не триграммы/веб-поиск —
+  закрытое множество из полутора десятков серий); `DoseIndex` эвристика не назначает, фронт сам
+  подставляет ближайшую неотмеченную дозу по уже загруженному графику человека.
+- **Вложения**: `FileOwnerType.Vaccination` (скан на одну дозу) и `.VaccinationCertificate` (общий скан
+  на несколько находок). `AttachmentService` получил доступ-агностичные `UploadRawAsync`/`ListRawAsync`
+  для владельцев, чей доступ проверяет сам вызывающий сервис (в отличие от `UploadForMedicalRecordAsync`,
+  который проверяет владельца сам) — тот же принцип, что раньше был у `DoctorReport` (превью
+  `Unsupported`, без превью-конвейера).
+- **Напоминания** (`VaccinationReminderJob`, ежедневно) — тексты без названия вакцины/инфекции (как
+  ADR-0004/0015): «Скоро прививка» за 2 недели, «Можно сделать прививку» once, когда срок прошёл.
+  Дедуп-ключ не зависит от даты прогона — пропуск одного тика не теряет напоминание. Плюс одноразовое
+  «как самочувствие» (`Vaccination.WellbeingCheckAt`/`WellbeingCheckSent`) — только для своих прививок.
+- **Реакция — через дневник, только для своих**: дневник остался строго личным (не расширяли
+  `HealthNote` полем подопечного); связь прививка↔запись дневника не хранится — вычисляется по
+  совпадению дат (`[дата прививки, +ReactionWindowDays]`), тем же приёмом, что `DoctorReportDataCollector`
+  сопоставляет назначения из визитов с приёмами дневника. Для подопечных — только текстовая подсказка.
+- **Отчёт врачу**: `DoctorReport.IncludeVaccinations` — седьмой блок из шести булевых галочек (не список
+  ключей), `DoctorReportDataCollector.BuildVaccinationsAsync` — только сам пользователь, только
+  `Done`/`HadDisease` за период отчёта.
+- **Справочник**: `/health/kb/vaccines` — статические карточки каталога, без ИИ-обогащения (закрытое
+  множество серий, KB-конвейер не нужен, в отличие от препаратов/анализов).
+
+Маршруты: `GET /api/vaccinations/overview`, `/catalog`, `/attention-count`,
+`GET /api/vaccinations/people/{kind}/{id}` (`kind` — `user`/`dependent`), `.../series/{seriesCode}`,
+`GET/PUT/DELETE /api/vaccinations/{id}`, `POST /api/vaccinations` и `/bulk`,
+`GET .../people/{kind}/{id}/certificate.pdf`, `POST /api/vaccinations/{id}/attachments`,
+`POST /api/vaccinations/certificate/recognize` и `/confirm`,
+`GET /api/vaccinations/certificates/{certificateId}/attachments`.
+
+Не проверялось живьём: кнопки push существующей инфраструктуры не переиспользуются (напоминания —
+обычные, без действий), фото-OCR сертификата не тестировался на реальной LM Studio (только на
+недоступном ИИ — фоллбэк «распознавание недоступно»). Интеграционные (`VaccinationsApiTests`, 6 тестов)
+и юнит-тесты (`VaccinationServiceTests`, 8, плюс 23 доменных) прогонялись реально — Docker был доступен
+в сессии, где сделана эта фича (в отличие от предыдущих трёх, где это отмечено как непроверенное).

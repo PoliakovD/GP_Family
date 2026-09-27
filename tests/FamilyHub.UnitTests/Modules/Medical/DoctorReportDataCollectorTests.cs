@@ -14,7 +14,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
 {
     private static readonly DateOnly From = new(2026, 3, 1);
     private static readonly DateOnly To = new(2026, 9, 30);
-    private static readonly ReportBlocks All = new(true, true, true, true, true, true);
+    private static readonly ReportBlocks All = new(true, true, true, true, true, true, true);
 
     private readonly DoctorReportDataCollector _sut;
     private readonly User _me;
@@ -268,7 +268,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         var record = AddRecord(_me.Id, new DateOnly(2026, 5, 1));
         AddIndicator(record, "ферритин", "9", IndicatorFlag.Low);
 
-        var model = await _sut.CollectAsync(_me.Id, From, To, new ReportBlocks(false, false, false, false, false, false), null);
+        var model = await _sut.CollectAsync(_me.Id, From, To, new ReportBlocks(false, false, false, false, false, false, false), null);
 
         model.Labs.Should().BeNull();
         model.Summaries.Should().BeNull();

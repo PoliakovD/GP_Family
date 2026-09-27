@@ -68,7 +68,7 @@ public class DoctorReportService(
 
         var blocks = new ReportBlocks(
             request.IncludeLabs, request.IncludeAiSummaries, request.IncludeMedications,
-            request.IncludeVisits, request.IncludeMeasurements, request.IncludeSymptomsNotes);
+            request.IncludeVisits, request.IncludeMeasurements, request.IncludeSymptomsNotes, request.IncludeVaccinations);
         var model = await collector.CollectAsync(userId, request.PeriodFrom, request.PeriodTo, blocks, request.PatientComment, ct);
         if (!model.HasContent)
             return (DoctorReportResult.NoData, null, "За выбранный период нет данных для отчёта. Расширьте период или включите другие блоки.");
@@ -109,6 +109,7 @@ public class DoctorReportService(
             IncludeVisits = request.IncludeVisits,
             IncludeMeasurements = request.IncludeMeasurements,
             IncludeSymptomsNotes = request.IncludeSymptomsNotes,
+            IncludeVaccinations = request.IncludeVaccinations,
             PageCount = PdfPageCounter.Count(pdf),
             Recipient = Normalize(request.Recipient),
             PatientComment = Normalize(request.PatientComment),
@@ -316,8 +317,13 @@ public class DoctorReportService(
     {
         var status = LinkStatus(r, now);
         var blocks = new DoctorReportBlocksDto(
-            r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements, r.IncludeSymptomsNotes);
-        var blockCount = new[] { r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements, r.IncludeSymptomsNotes }
+            r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements,
+            r.IncludeSymptomsNotes, r.IncludeVaccinations);
+        var blockCount = new[]
+            {
+                r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements,
+                r.IncludeSymptomsNotes, r.IncludeVaccinations,
+            }
             .Count(x => x);
         return new DoctorReportDto(
             r.Id, r.PeriodFrom, r.PeriodTo, r.CreatedAt, r.PageCount, blockCount, r.Recipient, blocks,
@@ -336,7 +342,8 @@ public class DoctorReportService(
     {
         var period = ValidatePeriod(r.PeriodFrom, r.PeriodTo);
         if (period is not null) return period;
-        if (!(r.IncludeLabs || r.IncludeAiSummaries || r.IncludeMedications || r.IncludeVisits || r.IncludeMeasurements || r.IncludeSymptomsNotes))
+        if (!(r.IncludeLabs || r.IncludeAiSummaries || r.IncludeMedications || r.IncludeVisits || r.IncludeMeasurements
+              || r.IncludeSymptomsNotes || r.IncludeVaccinations))
             return "Выберите хотя бы один блок для отчёта.";
         if (r.PatientComment is { Length: > MaxCommentLength }) return "Слишком длинный текст жалоб.";
         if (r.Recipient is { Length: > MaxRecipientLength }) return "Слишком длинная подпись «для кого».";

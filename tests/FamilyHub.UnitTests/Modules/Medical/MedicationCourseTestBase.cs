@@ -3,6 +3,7 @@ using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.MedicationCourses;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Modules.Medical.Access;
 using FamilyHub.Modules.Medical.HealthNotes;
 using FamilyHub.Modules.Medical.MedicationCourses;
 using FamilyHub.TestUtils;
@@ -24,7 +25,7 @@ public abstract class MedicationCourseTestBase : SqliteTestBase
     protected MedicationCourseTestBase()
     {
         var family = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
-        Access = new MedicationCourseAccess(Db, family);
+        Access = new MedicationCourseAccess(Db, new SubjectScopeService(Db, family));
         var subjects = new CourseSubjects(Db);
         var stock = new MedkitStockService(Db, family);
         Courses = new MedicationCourseService(Db, Access, subjects, stock, new MedicalAuditWriter(Db),

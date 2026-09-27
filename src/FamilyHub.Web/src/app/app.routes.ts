@@ -280,6 +280,40 @@ export const routes: Routes = [
           ),
       },
       {
+        // Прививки (ADR-0016): «Стоит запланировать» + семья в обзоре, график человека — вложенные
+        // роуты страницы-хаба (та же схема, что intake). people/:kind/:id/series/:code открывает
+        // деталь серии — на десктопе справа (сплит, как intake-courses/:id), на мобиле отдельным
+        // экраном (тот же компонент, id/code — опциональные component-bound входы маршрута).
+        path: 'vaccinations',
+        loadComponent: () =>
+          import('./components/vaccinations-page/vaccinations-page.component').then(
+            (m) => m.VaccinationsPageComponent,
+          ),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./components/vaccinations-overview/vaccinations-overview.component').then(
+                (m) => m.VaccinationsOverviewComponent,
+              ),
+          },
+          {
+            path: 'people/:kind/:id',
+            loadComponent: () =>
+              import('./components/vaccination-person/vaccination-person.component').then(
+                (m) => m.VaccinationPersonComponent,
+              ),
+          },
+          {
+            path: 'people/:kind/:id/series/:code',
+            loadComponent: () =>
+              import('./components/vaccination-person/vaccination-person.component').then(
+                (m) => m.VaccinationPersonComponent,
+              ),
+          },
+        ],
+      },
+      {
         // Личный дневник самочувствия — замеры, симптомы, самочувствие, лекарства, сон, заметки.
         path: 'notes',
         loadComponent: () =>
@@ -315,6 +349,15 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./components/kb-analyte-tab/kb-analyte-tab.component').then(
                 (m) => m.KbAnalyteTabComponent,
+              ),
+          },
+          {
+            // Статические карточки каталога прививок (ADR-0016) — без ИИ-обогащения, в отличие от
+            // соседних вкладок; ?id= открывает конкретную серию, тот же приём, что kb-analyte-tab.
+            path: 'vaccines',
+            loadComponent: () =>
+              import('./components/kb-vaccines-tab/kb-vaccines-tab.component').then(
+                (m) => m.KbVaccinesTabComponent,
               ),
           },
         ],
