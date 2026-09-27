@@ -1,5 +1,8 @@
+using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.HealthNotes;
+using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Modules.Medical.Access;
 using FamilyHub.Modules.Medical.HealthNotes;
 using FamilyHub.TestUtils;
 using FluentAssertions;
@@ -15,7 +18,8 @@ public class HealthNoteServiceTests : SqliteTestBase
 
     public HealthNoteServiceTests()
     {
-        _sut = new HealthNoteService(Db, NullLogger<HealthNoteService>.Instance);
+        var family = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
+        _sut = new HealthNoteService(Db, NullLogger<HealthNoteService>.Instance, new SubjectScopeService(Db, family));
     }
 
     private static HealthNoteRequest Symptom(string title = "Головная боль", DateTime? at = null, int severity = 7) =>
@@ -114,12 +118,12 @@ public class HealthNoteServiceTests : SqliteTestBase
         await _sut.CreateAsync(me.Id, Pressure(now.AddHours(-2), 120, 80));
         await _sut.CreateAsync(other.Id, Symptom("Чужой", now.AddHours(-1)));
 
-        var all = await _sut.ListAsync(me.Id, null, null, null);
-        all.Select(n => n.Title).Where(t => t != null).Should().Equal("Свежий", "Старый");
+        var all = await _sut.ListAsync(me.Id, me.Id, null, null, null);
+        all!.Select(n => n.Title).Where(t => t != null).Should().Equal("Свежий", "Старый");
         all.Should().OnlyContain(n => n.Id != Guid.Empty).And.HaveCount(3);
 
-        (await _sut.ListAsync(me.Id, null, null, HealthNoteKind.Metric)).Should().ContainSingle();
-        (await _sut.ListAsync(me.Id, now.AddDays(-1), null, null)).Should().HaveCount(2);
+        (await _sut.ListAsync(me.Id, me.Id, null, null, HealthNoteKind.Metric)).Should().ContainSingle();
+        (await _sut.ListAsync(me.Id, me.Id, now.AddDays(-1), null, null)).Should().HaveCount(2);
     }
 
     [Fact]
@@ -161,11 +165,11 @@ public class HealthNoteServiceTests : SqliteTestBase
         await _sut.CreateAsync(me.Id, new HealthNoteRequest(HealthNoteKind.Metric, now.AddDays(-1), null, null, false,
             null, new MetricData("pulse", 72, null), null, null, null));
 
-        var series = await _sut.GetMetricSeriesAsync(me.Id, "blood_pressure", null, null);
+        var series = await _sut.GetMetricSeriesAsync(me.Id, me.Id, "blood_pressure", null, null);
 
         series!.Select(p => p.Value).Should().Equal(130m, 125m);
         series![0].Value2.Should().Be(85m);
-        (await _sut.GetMetricSeriesAsync(me.Id, "unknown", null, null)).Should().BeNull();
+        (await _sut.GetMetricSeriesAsync(me.Id, me.Id, "unknown", null, null)).Should().BeNull();
     }
 
     [Fact]
@@ -182,6 +186,91 @@ public class HealthNoteServiceTests : SqliteTestBase
         titles.Should().HaveCount(2);
         titles[0].Should().BeEquivalentTo("головная боль");
         titles[1].Should().Be("Изжога");
+    }
+
+    // ADR-0017: чужой дневник читается только по гранту Diary, и только пока действует общая семья.
+
+    [Fact]
+    public async Task List_ByFamilyMemberWithoutGrant_ReturnsNull()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var viewer = Db.AddMember(family.Id);
+        await _sut.CreateAsync(owner.Id, Symptom());
+
+        (await _sut.ListAsync(viewer.Id, owner.Id, null, null, null)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task List_ByViewerWithDiaryGrant_ReturnsOwnersNotes()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var viewer = Db.AddMember(family.Id);
+        await _sut.CreateAsync(owner.Id, Symptom("Мигрень"));
+        Grant(owner.Id, viewer.Id, HealthShareCategory.Diary);
+
+        var notes = await _sut.ListAsync(viewer.Id, owner.Id, null, null, null);
+
+        notes.Should().ContainSingle(n => n.Title == "Мигрень");
+    }
+
+    [Fact]
+    public async Task List_ByViewerWithOnlyIntakeGrant_DoesNotSeeDiary()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var viewer = Db.AddMember(family.Id);
+        await _sut.CreateAsync(owner.Id, Symptom());
+        Grant(owner.Id, viewer.Id, HealthShareCategory.Intake);
+
+        (await _sut.ListAsync(viewer.Id, owner.Id, null, null, null)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task List_ByViewerWhoLeftFamily_LosesAccess_DespiteGrantStillStored()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var viewer = Db.AddMember(family.Id);
+        await _sut.CreateAsync(owner.Id, Symptom());
+        Grant(owner.Id, viewer.Id, HealthShareCategory.Diary);
+
+        Db.FamilyMembers.Remove(Db.FamilyMembers.Single(m => m.FamilyId == family.Id && m.UserId == viewer.Id));
+        Db.SaveChanges();
+
+        (await _sut.ListAsync(viewer.Id, owner.Id, null, null, null)).Should().BeNull();
+        Db.HealthShareGrants.Should().ContainSingle(); // грант не удалён, просто перестал действовать
+    }
+
+    [Fact]
+    public async Task MetricSeries_ByViewerWithDiaryGrant_ReturnsPoints_WithoutGrant_ReturnsNull()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var viewer = Db.AddMember(family.Id);
+        await _sut.CreateAsync(owner.Id, Pressure(DateTime.UtcNow.AddHours(-1), 128, 84));
+
+        (await _sut.GetMetricSeriesAsync(viewer.Id, owner.Id, "blood_pressure", null, null)).Should().BeNull();
+
+        Grant(owner.Id, viewer.Id, HealthShareCategory.Diary);
+        (await _sut.GetMetricSeriesAsync(viewer.Id, owner.Id, "blood_pressure", null, null)).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Update_ByViewerWithDiaryGrant_IsStillForbidden_GrantIsReadOnly()
+    {
+        var (family, owner) = Db.SeedFamilyWithAdmin();
+        var viewer = Db.AddMember(family.Id);
+        var created = (await _sut.CreateAsync(owner.Id, Symptom())).Item!;
+        Grant(owner.Id, viewer.Id, HealthShareCategory.Diary);
+
+        (await _sut.UpdateAsync(viewer.Id, created.Id, Symptom("Взлом"))).Result.Should().Be(HealthNoteResult.NotFound);
+    }
+
+    private void Grant(Guid ownerId, Guid viewerId, HealthShareCategory categories)
+    {
+        Db.HealthShareGrants.Add(new HealthShareGrant
+        {
+            Id = Guid.NewGuid(), OwnerUserId = ownerId, ViewerUserId = viewerId,
+            Categories = categories, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        });
+        Db.SaveChanges();
     }
 
     private async Task<string> ReadRawAsync(string sql)

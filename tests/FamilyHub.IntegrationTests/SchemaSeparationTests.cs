@@ -30,6 +30,7 @@ public class SchemaSeparationTests(FamilyHubWebFactory factory) : IntegrationTes
     [InlineData("DoseActionTokens", "medical")]
     [InlineData("Vaccinations", "medical")]
     [InlineData("VaccinationCertificates", "medical")]
+    [InlineData("HealthShareGrants", "medical")]
     [InlineData("OutboxMessage", "public")]
     [InlineData("OutboxState", "public")]
     [InlineData("InboxState", "public")]

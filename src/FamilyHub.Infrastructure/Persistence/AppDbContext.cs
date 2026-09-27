@@ -27,8 +27,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<Medication> Medications => Set<Medication>();
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
 
-    /// <summary>Личный дневник самочувствия — строго персональный, без шаринга (см. HealthNote).</summary>
+    /// <summary>Личный дневник самочувствия — пишет только владелец, читает по гранту
+    /// (HealthShareGrant.Diary) ещё и тот, кому он разрешил, см. HealthNote и ADR-0017.</summary>
     public DbSet<HealthNote> HealthNotes => Set<HealthNote>();
+
+    /// <summary>Доступ на чтение к дневнику/приёму/прививкам, выданный одному члену семьи (ADR-0017).</summary>
+    public DbSet<HealthShareGrant> HealthShareGrants => Set<HealthShareGrant>();
 
     /// <summary>Отчёты для врача (PDF-снимок + публичная ссылка) — персональные, см. DoctorReport.</summary>
     public DbSet<DoctorReport> DoctorReports => Set<DoctorReport>();

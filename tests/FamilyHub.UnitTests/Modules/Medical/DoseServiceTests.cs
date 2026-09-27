@@ -172,11 +172,7 @@ public class DoseServiceTests : MedicationCourseTestBase
     {
         var (user, course, _, at) = SeedOwnCourse();
         var watcher = AddMemberUtc(Db.FamilyMembers.First(m => m.UserId == user.Id).FamilyId);
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = user.Id, WatcherUserId = watcher.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(user.Id, watcher.Id);
 
         (await Doses.ApplyAsync(watcher.Id, course.Id, at, DoseAction.Taken, null)).Result.Should().Be(DoseResult.Forbidden);
     }

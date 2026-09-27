@@ -78,11 +78,7 @@ public class VaccinationServiceTests : SqliteTestBase
         var (family, admin) = Db.SeedFamilyWithAdmin();
         admin.BirthDate = new DateOnly(1990, 1, 1);
         var watcher = Db.AddMember(family.Id);
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = admin.Id, WatcherUserId = watcher.Id, ReceiveReminders = true, CreatedAt = DateTime.UtcNow,
-        });
-        await Db.SaveChangesAsync();
+        Grant(admin.Id, watcher.Id, HealthShareCategory.Vaccinations);
 
         var (createResult, _, _) = await _sut.CreateAsync(watcher.Id, MmrDose(VaccinationSubjects.UserKind, admin.Id, new DateOnly(2021, 1, 1)));
         createResult.Should().Be(VaccinationResult.Forbidden);
@@ -90,6 +86,61 @@ public class VaccinationServiceTests : SqliteTestBase
         var (readResult, schedule) = await _sut.GetPersonScheduleAsync(watcher.Id, VaccinationSubjects.UserKind, admin.Id);
         readResult.Should().Be(VaccinationResult.Success);
         schedule.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Watcher_WithMedicationWatcherRowButNoGrant_HasNoAccess()
+    {
+        // ADR-0017: MedicationWatcher больше не даёт доступ сам по себе — только уведомления.
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        admin.BirthDate = new DateOnly(1990, 1, 1);
+        var watcher = Db.AddMember(family.Id);
+        Db.MedicationWatchers.Add(new MedicationWatcher
+        {
+            Id = Guid.NewGuid(), SubjectUserId = admin.Id, WatcherUserId = watcher.Id, ReceiveReminders = true, CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        var (readResult, schedule) = await _sut.GetPersonScheduleAsync(watcher.Id, VaccinationSubjects.UserKind, admin.Id);
+        readResult.Should().Be(VaccinationResult.NotFound);
+        schedule.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Watcher_WithOnlyIntakeGrant_HasNoVaccinationAccess()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        admin.BirthDate = new DateOnly(1990, 1, 1);
+        var watcher = Db.AddMember(family.Id);
+        Grant(admin.Id, watcher.Id, HealthShareCategory.Intake);
+
+        var (readResult, _) = await _sut.GetPersonScheduleAsync(watcher.Id, VaccinationSubjects.UserKind, admin.Id);
+        readResult.Should().Be(VaccinationResult.NotFound);
+    }
+
+    [Fact]
+    public async Task Watcher_WhoLeftFamily_LosesAccess_DespiteGrantStillStored()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        admin.BirthDate = new DateOnly(1990, 1, 1);
+        var watcher = Db.AddMember(family.Id);
+        Grant(admin.Id, watcher.Id, HealthShareCategory.Vaccinations);
+
+        Db.FamilyMembers.Remove(Db.FamilyMembers.Single(m => m.FamilyId == family.Id && m.UserId == watcher.Id));
+        await Db.SaveChangesAsync();
+
+        var (readResult, _) = await _sut.GetPersonScheduleAsync(watcher.Id, VaccinationSubjects.UserKind, admin.Id);
+        readResult.Should().Be(VaccinationResult.NotFound);
+    }
+
+    private void Grant(Guid ownerId, Guid viewerId, HealthShareCategory categories)
+    {
+        Db.HealthShareGrants.Add(new HealthShareGrant
+        {
+            Id = Guid.NewGuid(), OwnerUserId = ownerId, ViewerUserId = viewerId,
+            Categories = categories, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        });
+        Db.SaveChanges();
     }
 
     [Fact]

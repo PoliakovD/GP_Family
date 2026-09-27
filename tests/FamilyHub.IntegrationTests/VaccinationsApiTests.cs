@@ -112,16 +112,15 @@ public class VaccinationsApiTests(FamilyHubWebFactory factory) : IntegrationTest
     [Fact]
     public async Task Watcher_OfAdult_CanReadButWriteIsForbidden()
     {
-        // Наблюдателем взрослого можно назначить только того, с кем есть общая активная семья
-        // (MedicationReminderSettingsService.SetMyWatchersAsync) — владелец и наблюдатель здесь
-        // состоят в одной семье, admin=owner, member=watcher.
+        // ADR-0017: доступ на чтение чужих прививок — отдельный грант, с кем есть общая активная семья
+        // (HealthShareService.SetAsync) — владелец и зритель здесь состоят в одной семье, admin=owner,
+        // member=viewer. В отличие от курсов приёма, «мои наблюдатели» (my-watchers) прививки не открывают.
         var (_, owner, watcher) = await CreateFamilyWithActiveMemberAsync();
         var ownerMe = await owner.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
         await SetBirthDateAsync(owner, new DateOnly(1990, 1, 1));
         var watcherMe = await watcher.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
 
-        // Владелец сам выбирает, кто следит за ним (та же таблица, что у курсов приёма — ADR-0015/0016).
-        (await owner.PutAsJsonAsync("/api/medication-reminders/my-watchers", new SetMyWatchersRequest([watcherMe!.UserId])))
+        (await owner.PutAsJsonAsync($"/api/health-shares/mine/{watcherMe!.UserId}", new { categories = (int)HealthShareCategory.Vaccinations }))
             .StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var readResponse = await watcher.GetAsync($"/api/vaccinations/people/{VaccinationSubjects.UserKind}/{ownerMe!.UserId}");
@@ -130,6 +129,23 @@ public class VaccinationsApiTests(FamilyHubWebFactory factory) : IntegrationTest
         var writeResponse = await watcher.PostAsJsonAsync(
             "/api/vaccinations", OneDose(VaccinationSubjects.UserKind, ownerMe.UserId, "mmr", 0, new DateOnly(2021, 1, 1)));
         writeResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task MyWatchers_Alone_DoesNotGrantVaccinationAccess()
+    {
+        // ADR-0017: «мои наблюдатели» (курсы приёма) больше не открывают прививки автоматически —
+        // это отдельная категория гранта.
+        var (_, owner, watcher) = await CreateFamilyWithActiveMemberAsync();
+        var ownerMe = await owner.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
+        await SetBirthDateAsync(owner, new DateOnly(1990, 1, 1));
+        var watcherMe = await watcher.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
+
+        (await owner.PutAsJsonAsync("/api/medication-reminders/my-watchers", new SetMyWatchersRequest([watcherMe!.UserId])))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var readResponse = await watcher.GetAsync($"/api/vaccinations/people/{VaccinationSubjects.UserKind}/{ownerMe!.UserId}");
+        readResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

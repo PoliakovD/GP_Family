@@ -2,6 +2,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Access;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyHub.Modules.Medical.MedicationCourses;
@@ -12,8 +13,17 @@ public enum ReminderSettingsResult { Success, NotFound, Invalid }
 /// Настройки напоминаний человека: кто узнает о его пропусках («мои наблюдатели»), за кем следит он
 /// сам (подопечные семей и взрослые, выбравшие его наблюдателем) и тихие часы. Числа напоминаний
 /// (повтор, порог пропуска, запас) — на самом курсе, а не здесь.
+///
+/// ADR-0017: с появлением per-категорийных грантов доступа <c>MedicationWatcher</c> для взрослого
+/// субъекта отвечает только за то, кого уведомлять — само право читать курсы даёт
+/// <c>HealthShareGrant.Intake</c>. SetMyWatchersAsync при добавлении наблюдателя выдаёт этот грант
+/// автоматически (тем же действием, что и раньше — отдельного экрана для этого не появилось); снятие
+/// наблюдателя грант НЕ отзывает — отзыв доступа теперь отдельное действие в настройках
+/// («Кто видит моё здоровье», HealthShareService.SetAsync), решение осознанное: отписка от уведомлений
+/// не должна неожиданно закрывать то, что человек уже открыл для чтения.
 /// </summary>
-public class MedicationReminderSettingsService(AppDbContext db, IFamilyAccessService access, CourseSubjects subjects)
+public class MedicationReminderSettingsService(
+    AppDbContext db, IFamilyAccessService access, CourseSubjects subjects, HealthShareService healthShare)
 {
     public async Task<ReminderSettingsResponse> GetAsync(Guid userId, CancellationToken ct = default)
     {
@@ -81,7 +91,8 @@ public class MedicationReminderSettingsService(AppDbContext db, IFamilyAccessSer
         db.MedicationWatchers.RemoveRange(existing.Where(w => !wanted.Contains(w.WatcherUserId)));
 
         var now = DateTime.UtcNow;
-        foreach (var id in wanted.Where(id => existing.All(w => w.WatcherUserId != id)))
+        var added = wanted.Where(id => existing.All(w => w.WatcherUserId != id)).ToList();
+        foreach (var id in added)
         {
             db.MedicationWatchers.Add(new MedicationWatcher
             {
@@ -90,6 +101,12 @@ public class MedicationReminderSettingsService(AppDbContext db, IFamilyAccessSer
             });
         }
         await db.SaveChangesAsync(ct);
+
+        // Наблюдатель может не только получать уведомления, но и читать курсы — выдаём это отдельным
+        // грантом (см. class doc), не полагаясь на саму строку MedicationWatcher.
+        foreach (var id in added)
+            await healthShare.GrantCategoryAsync(userId, id, HealthShareCategory.Intake, ct);
+
         return ReminderSettingsResult.Success;
     }
 

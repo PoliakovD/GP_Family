@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using FamilyHub.Api.Features.Invites;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.HealthNotes;
@@ -15,6 +16,32 @@ namespace FamilyHub.IntegrationTests;
 /// <summary>Личный дневник самочувствия: изоляция по владельцу, валидация, право на забвение и экспорт.</summary>
 public class HealthNotesApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(factory)
 {
+    private record CreateFamilyResponseDto(Guid Id);
+    private record CreateInviteResponseDto(Guid Id, string Code);
+    private record PendingMemberDto(Guid UserId);
+    private record MeDto(Guid UserId);
+
+    /// <summary>Та же сцена, что и в VaccinationsApiTests/MedicalRecordsApiTests — семья с админом и
+    /// одним активным членом (дублируется по тому же приёму, что и там, не выносится в общий хелпер).</summary>
+    private async Task<(Guid FamilyId, HttpClient Admin, HttpClient Member)> CreateFamilyWithActiveMemberAsync()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var family = await (await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" }))
+            .Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
+
+        var invite = await (await admin.PostAsJsonAsync($"/api/families/{family!.Id}/invites",
+                new CreateInviteRequest(TargetUserId: null, AssignedRole: FamilyRole.Member, MaxUses: 1, ExpiresAt: null)))
+            .Content.ReadFromJsonAsync<CreateInviteResponseDto>(JsonOpts);
+
+        var member = ClientAs(FreshTelegramId());
+        await member.PostAsync($"/api/invites/{invite!.Code}/redeem", null);
+        var pending = await (await admin.GetAsync($"/api/families/{family.Id}/pending"))
+            .Content.ReadFromJsonAsync<List<PendingMemberDto>>(JsonOpts);
+        await admin.PostAsync($"/api/families/{family.Id}/members/{pending!.Single().UserId}/approve", null);
+
+        return (family.Id, admin, member);
+    }
+
     private static object SymptomBody(string title = "Головная боль") => new
     {
         kind = (int)HealthNoteKind.Symptom,
@@ -106,6 +133,39 @@ public class HealthNotesApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         (await db.HealthNotes.AnyAsync(n => n.Id == dto!.Id)).Should().BeFalse("дневник удаляется вместе с аккаунтом");
+    }
+
+    [Fact]
+    public async Task Subject_FamilyMemberWithoutGrant_Gets404()
+    {
+        var (_, owner, viewer) = await CreateFamilyWithActiveMemberAsync();
+        var ownerMe = await owner.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
+        await owner.PostAsJsonAsync("/api/health-notes", SymptomBody());
+
+        (await viewer.GetAsync($"/api/health-notes?subject={ownerMe!.UserId}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await viewer.GetAsync($"/api/health-notes/metrics/blood_pressure/series?subject={ownerMe.UserId}"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Subject_FamilyMemberWithDiaryGrant_CanRead_ButNotWrite()
+    {
+        // ADR-0017: дневник читается по гранту Diary — единственный способ увидеть чужие записи.
+        var (_, owner, viewer) = await CreateFamilyWithActiveMemberAsync();
+        var ownerMe = await owner.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
+        var viewerMe = await viewer.GetFromJsonAsync<MeDto>("/api/auth/me", JsonOpts);
+        var created = await (await owner.PostAsJsonAsync("/api/health-notes", SymptomBody("Мигрень у мамы")))
+            .Content.ReadFromJsonAsync<HealthNoteDto>(JsonOpts);
+
+        (await owner.PutAsJsonAsync($"/api/health-shares/mine/{viewerMe!.UserId}", new { categories = (int)HealthShareCategory.Diary }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var notes = await viewer.GetFromJsonAsync<List<HealthNoteDto>>($"/api/health-notes?subject={ownerMe!.UserId}", JsonOpts);
+        notes.Should().ContainSingle(n => n.Id == created!.Id);
+
+        // Грант — только на чтение: свою запись владельца зритель менять/удалять не может.
+        (await viewer.PutAsJsonAsync($"/api/health-notes/{created!.Id}", SymptomBody("Взлом"))).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await viewer.DeleteAsync($"/api/health-notes/{created.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
