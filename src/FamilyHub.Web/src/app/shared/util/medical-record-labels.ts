@@ -36,7 +36,10 @@ export const MEDICAL_RECORD_KIND_LABELS: Record<MedicalRecordKind, MedicalRecord
     emptyLabel: 'Записей нет.',
   },
   [MedicalRecordKind.DoctorVisit]: {
-    title: 'Посещения врачей',
+    // Заголовок раздела — «Приёмы врача» (та же подпись, что в сайдбаре/на плитке хаба, редизайн
+    // навигации), остальной словарь ("посещение") не трогаем — внутренне согласован сам с собой,
+    // менять его целиком не входит в эту фичу.
+    title: 'Приёмы врача',
     countNounOne: 'посещение',
     countNounFew: 'посещения',
     countNounMany: 'посещений',

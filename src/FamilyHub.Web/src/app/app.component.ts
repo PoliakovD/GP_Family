@@ -19,16 +19,33 @@ import { ToastContainerComponent } from './shared/toast/toast-container.componen
 import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.component';
 import { LoadingSpinnerComponent } from './shared/loading-spinner/loading-spinner.component';
 import { CookieBannerComponent } from './shared/cookie-banner/cookie-banner.component';
-import { BottomSheetComponent } from './shared/bottom-sheet/bottom-sheet.component';
 import { AvatarComponent } from './shared/avatar/avatar.component';
 import { AppSearchComponent } from './components/app-search/app-search.component';
 import { SearchFieldComponent } from './shared/search-field/search-field.component';
 import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdown/background-jobs-dropdown.component';
+import { NotificationBellComponent } from './shared/notification-bell/notification-bell.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
  * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения. */
 const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin', '/r/'];
+
+/** Один пункт саб-меню (дочерний путь + подпись + опциональный бейдж) — общая форма для группы
+ * «Здоровье» и плоского списка «Профиль». */
+interface SidebarLink {
+  path: string;
+  label: string;
+  queryParams?: Record<string, string>;
+  badge?: 'intake' | 'vaccinations';
+}
+
+/** Группа подпунктов «Здоровье» (редизайн хаба, макет «Screen - Health hub») — «Каждый день» /
+ * «Медкарта» / «Инструменты», одни и те же названия и в сайдбаре, и на плитках хаба
+ * (health-home.component.ts), чтобы их не пришлось запоминать дважды. */
+interface SidebarGroup {
+  label: string;
+  items: SidebarLink[];
+}
 
 /** Один пункт бокового меню (десктоп, ≥1024px) — редизайн v2, каркас навигации (PR2). Подпункты —
  * уже существующие роуты (Здоровье) или query-параметр на уже существующем роуте (Семья, см.
@@ -39,7 +56,10 @@ interface SidebarItem {
   icon: string;
   /** Абсолютный путь; для «Семьи» вычисляется динамически (см. familyHref()). */
   path?: string;
-  children?: { path: string; label: string; queryParams?: Record<string, string>; badge?: 'intake' | 'vaccinations' }[];
+  /** Плоский список — «Профиль». */
+  children?: SidebarLink[];
+  /** Сгруппированный список — «Здоровье» (редизайн хаба). */
+  groups?: SidebarGroup[];
 }
 
 @Component({
@@ -52,11 +72,11 @@ interface SidebarItem {
         ConfirmDialogComponent,
         LoadingSpinnerComponent,
         CookieBannerComponent,
-        BottomSheetComponent,
         AvatarComponent,
         AppSearchComponent,
         SearchFieldComponent,
         BackgroundJobsDropdownComponent,
+        NotificationBellComponent,
     ],
     templateUrl: './app.component.html'
 })
@@ -81,8 +101,10 @@ export class AppComponent implements OnInit {
    * проекте), второй параллельный механизм не заводим (см. .claude/patterns/frontend_web.md). */
   readonly isWide = computed(() => this.breakpoints.tier() === 'wide');
 
-  readonly moreSheetOpen = signal(false);
   readonly familySwitcherOpen = signal(false);
+  /** Мобильная шапка (макет «Screen - Health hub»): по умолчанию заголовок + иконка поиска +
+   * колокольчик; клик по лупе разворачивает поле поиска на всю ширину строки вместо заголовка. */
+  readonly mobileSearchOpen = signal(false);
 
   // Активность пунктов навигации считается явно от текущего URL, а не через директиву
   // routerLinkActive — «Семья» ведёт на динамический /families/{id} с ?tab=, для неё
@@ -93,33 +115,52 @@ export class AppComponent implements OnInit {
 
   readonly isHomeActive = computed(() => this.currentUrl().startsWith('/home'));
   readonly isHealthActive = computed(() => this.currentUrl().startsWith('/health'));
+  /** Хаб «Здоровье» ровно на индексе (не на дочернем разделе) — там мобильная шапка рисует
+   * аватар+«Моё здоровье» вместо обычного заголовка (см. mobileTitle ниже), а на дочернем разделе
+   * появляется «‹ Здоровье» (health-hub.component.ts). */
+  readonly isHealthHubIndex = computed(() => this.currentUrl() === '/health');
   readonly isFamilyActive = computed(() => this.currentUrl().startsWith('/families'));
-  readonly isNotificationsActive = computed(() => this.currentUrl().startsWith('/notifications'));
   readonly isSettingsActive = computed(() => this.currentUrl().startsWith('/settings'));
 
-  /** Здоровье → существующие вложенные роуты health-hub. Семья → тот же /families/:id, что и
-   * обычный переход, но с ?tab= на нужный саб-таб (FamilyDetailsComponent, см. PR2). */
-  readonly sidebarItems: SidebarItem[] = [
-    { id: 'home', label: 'Главная', icon: 'ph-house', path: '/home' },
+  /** Группы подпунктов «Здоровье» (редизайн хаба, макет «Screen - Health hub») — те же названия и
+   * порядок, что и на плитках хаба (health-home.component.ts): «Каждый день» (то, что открывают
+   * ежедневно) / «Медкарта» (история) / «Инструменты» (редкое). Публичный (не private) — читается
+   * и из шаблона (сайдбар), и из mobileTitle() ниже. */
+  readonly healthGroups: SidebarGroup[] = [
     {
-      id: 'health',
-      label: 'Здоровье',
-      icon: 'ph-heartbeat',
-      path: '/health',
-      children: [
-        { path: '/health/medications', label: 'Аптечка' },
+      label: 'Каждый день',
+      items: [
         { path: '/health/intake', label: 'Приём лекарств', badge: 'intake' },
-        { path: '/health/records', label: 'Анализы' },
-        { path: '/health/visits', label: 'Посещения врачей' },
-        { path: '/health/vaccinations', label: 'Прививки', badge: 'vaccinations' },
         { path: '/health/notes', label: 'Дневник' },
-        { path: '/health/reports', label: 'Отчёты для врача' },
-        { path: '/health/kb', label: 'Справочник' },
-        { path: '/health/indicators', label: 'Показатели анализов' },
       ],
     },
+    {
+      label: 'Медкарта',
+      items: [
+        { path: '/health/records', label: 'Анализы' },
+        { path: '/health/visits', label: 'Приёмы врача' },
+        { path: '/health/indicators', label: 'Показатели' },
+        { path: '/health/vaccinations', label: 'Прививки', badge: 'vaccinations' },
+      ],
+    },
+    {
+      label: 'Инструменты',
+      items: [
+        { path: '/health/medications', label: 'Аптечка' },
+        { path: '/health/reports', label: 'Отчёты для врача' },
+        { path: '/health/kb', label: 'Справочник' },
+      ],
+    },
+  ];
+
+  /** Здоровье → сгруппированные вложенные роуты health-hub (см. healthGroups). Семья → тот же
+   * /families/:id, что и обычный переход, но с ?tab= на нужный саб-таб (FamilyDetailsComponent,
+   * см. PR2). «Уведомления» ушли из сайдбара в колокольчик топбара (app-notification-bell) —
+   * пятого таба/пункта не заводим (см. .claude/uirework .../handoff-prompt.md). */
+  readonly sidebarItems: SidebarItem[] = [
+    { id: 'home', label: 'Главная', icon: 'ph-house', path: '/home' },
+    { id: 'health', label: 'Здоровье', icon: 'ph-heartbeat', path: '/health', groups: this.healthGroups },
     { id: 'family', label: 'Семья', icon: 'ph-users-three' }, // path вычисляется — см. familyHref()
-    { id: 'notifications', label: 'Уведомления', icon: 'ph-bell', path: '/notifications' },
     {
       id: 'settings',
       label: 'Профиль',
@@ -155,11 +196,30 @@ export class AppComponent implements OnInit {
       case 'home': return this.isHomeActive();
       case 'health': return this.isHealthActive();
       case 'family': return this.isFamilyActive();
-      case 'notifications': return this.isNotificationsActive();
       case 'settings': return this.isSettingsActive();
       default: return false;
     }
   }
+
+  /** Заголовок мобильной шапки (макет «Screen - Health hub»): подпись пункта/подпункта каркаса,
+   * под который попадает текущий URL — та же подпись, что и в сайдбаре десктопа, единый источник
+   * (healthGroups/settings children), не отдельный список ярлыков. Хаб «Здоровье» на индексе —
+   * особый случай, там вместо заголовка аватар+«Моё здоровье» (см. шаблон). */
+  readonly mobileTitle = computed(() => {
+    const url = this.currentUrl();
+    if (this.isFamilyActive()) return 'Семья';
+    if (url.startsWith('/notifications')) return 'Уведомления';
+    if (this.isSettingsActive()) return 'Профиль';
+    if (this.isHealthActive()) {
+      for (const group of this.healthGroups) {
+        for (const item of group.items) {
+          if (url.startsWith(item.path)) return item.label;
+        }
+      }
+      return 'Здоровье';
+    }
+    return 'FamilyHub';
+  });
 
   toggleFamilySwitcher(): void {
     this.familySwitcherOpen.update((v) => !v);
@@ -312,16 +372,6 @@ export class AppComponent implements OnInit {
     void this.auth.loadMe();
   }
 
-  /**
-   * Пункт листа «Ещё». Лист закрывается по завершении перехода (NavigationEnd ниже), а не по клику:
-   * закрытие снимает фиктивную запись истории через history.back(), и сделанное СРАЗУ по клику оно
-   * отменяло бы ещё не завершившуюся навигацию — экран не менялся. Если пункт ведёт на текущий
-   * экран, перехода не будет — закрываем сразу.
-   */
-  onMoreItemClick(path: string): void {
-    if (this.currentUrl().startsWith(path)) this.moreSheetOpen.set(false);
-  }
-
   private isAuthRoute(url: string): boolean {
     return AUTH_ROUTE_PREFIXES.some((prefix) => url.startsWith(prefix));
   }
@@ -333,7 +383,7 @@ export class AppComponent implements OnInit {
       } else if (e instanceof NavigationEnd) {
         this.onAuthRoute.set(this.isAuthRoute(e.urlAfterRedirects));
         this.currentUrl.set(e.urlAfterRedirects);
-        this.moreSheetOpen.set(false);
+        this.mobileSearchOpen.set(false);
         this.familySwitcherOpen.set(false);
         // Редизайн v2 — бейдж уведомлений: обновляем счётчик на каждой навигации (дёшево, один
         // COUNT-запрос), пока показан таб-бар/сайдбар — покрывает и "прочитано на другом

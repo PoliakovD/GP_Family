@@ -15,26 +15,28 @@
           >
             <i [class]="(isSidebarItemActive(item.id) ? 'ph-fill ' : 'ph ') + item.icon" aria-hidden="true"></i>
             <span class="flex-fill">{{ item.label }}</span>
-            @if (item.id === 'notifications' && notifications.unread() > 0) {
-              <span class="app-sidebar-badge">{{ notifications.unread() }}</span>
-            }
             @if (item.id === 'health' && backgroundJobs.totalActive() > 0) {
               <span class="app-sidebar-badge" title="Идёт распознавание/обогащение в фоне">{{ backgroundJobs.totalActive() }}</span>
             }
           </a>
 
+          <!-- Редизайн хаба «Здоровье» — подпункты сгруппированы «Каждый день»/«Медкарта»/«Инструменты»
+               (те же группы и подписи, что на плитках health-home.component.ts). -->
           @if (item.id === 'health' && isHealthActive()) {
             <div class="app-sidebar-children">
-              @for (sub of item.children ?? []; track sub.path) {
-                <a class="app-sidebar-child" [routerLink]="sub.path" [class.active]="currentUrl().startsWith(sub.path)">
-                  <span class="flex-fill">{{ sub.label }}</span>
-                  @if (sub.badge === 'intake' && intake.attention() > 0) {
-                    <span class="app-sidebar-badge" title="Приёмы лекарств, требующие внимания">{{ intake.attention() }}</span>
-                  }
-                  @if (sub.badge === 'vaccinations' && vaccinations.attention() > 0) {
-                    <span class="app-sidebar-badge" title="Прививки, требующие внимания">{{ vaccinations.attention() }}</span>
-                  }
-                </a>
+              @for (group of item.groups ?? []; track group.label) {
+                <div class="app-sidebar-group-label">{{ group.label }}</div>
+                @for (sub of group.items; track sub.path) {
+                  <a class="app-sidebar-child" [routerLink]="sub.path" [class.active]="currentUrl().startsWith(sub.path)">
+                    <span class="flex-fill">{{ sub.label }}</span>
+                    @if (sub.badge === 'intake' && intake.attention() > 0) {
+                      <span class="app-sidebar-badge" title="Приёмы лекарств, требующие внимания">{{ intake.attention() }}</span>
+                    }
+                    @if (sub.badge === 'vaccinations' && vaccinations.attention() > 0) {
+                      <span class="app-sidebar-badge" title="Прививки, требующие внимания">{{ vaccinations.attention() }}</span>
+                    }
+                  </a>
+                }
               }
             </div>
           }
@@ -99,39 +101,79 @@
          ни в общем поиске, ни в кнопке действия — топбар в этом состоянии просто не нужен целиком
          (см. PageActionService.immersive). -->
     @if (showTabs() && !pageAction.immersive()) {
-      <header class="app-topbar">
-        <!-- Редизайн v2.1 — «один поиск на экране»: страницы со своим локальным поиском (Анализы,
-             Врачи, Аптечка) отдают сюда СВОЁ поле целиком (PageActionService.pageSearch), а не
-             просто прячут общее — раньше их поле стояло ниже заголовка экрана, теперь оно и есть
-             верхнее поле каркаса. Страницы без своего поиска по-прежнему получают общий <app-search>. -->
-        @if (pageAction.pageSearch(); as ps) {
-          <app-search-field
-            class="flex-fill"
-            [placeholder]="ps.placeholder"
-            [value]="ps.value()"
-            (valueChange)="ps.onChange($event)"
-          />
-        } @else {
-          <app-search />
-        }
-        <app-background-jobs-dropdown />
-        @if (pageAction.secondaryAction(); as secondary) {
-          <button type="button" class="btn btn-secondary text-nowrap" (click)="secondary.handler()">
-            @if (secondary.icon) {
-              <i [class]="secondary.icon" aria-hidden="true"></i>
+      @if (isWide()) {
+        <header class="app-topbar">
+          <!-- Редизайн v2.1 — «один поиск на экране»: страницы со своим локальным поиском (Анализы,
+               Врачи, Аптечка) отдают сюда СВОЁ поле целиком (PageActionService.pageSearch), а не
+               просто прячут общее — раньше их поле стояло ниже заголовка экрана, теперь оно и есть
+               верхнее поле каркаса. Страницы без своего поиска по-прежнему получают общий <app-search>. -->
+          @if (pageAction.pageSearch(); as ps) {
+            <app-search-field
+              class="flex-fill"
+              [placeholder]="ps.placeholder"
+              [value]="ps.value()"
+              (valueChange)="ps.onChange($event)"
+            />
+          } @else {
+            <app-search />
+          }
+          <app-background-jobs-dropdown />
+          @if (pageAction.secondaryAction(); as secondary) {
+            <button type="button" class="btn btn-secondary text-nowrap" (click)="secondary.handler()">
+              @if (secondary.icon) {
+                <i [class]="secondary.icon" aria-hidden="true"></i>
+              }
+              {{ secondary.label }}
+            </button>
+          }
+          @if (pageAction.action(); as action) {
+            <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
+              @if (action.icon) {
+                <i [class]="action.icon" aria-hidden="true"></i>
+              }
+              {{ action.label }}
+            </button>
+          }
+          <!-- Редизайн хаба «Здоровье» — «Уведомления» ушли из сайдбара сюда, рядом с аватаром,
+               как в привычных приложениях (макет «Screen - Health hub»). -->
+          <app-notification-bell />
+          <a routerLink="/settings" class="text-decoration-none" title="Профиль">
+            <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="sm" />
+          </a>
+        </header>
+      } @else {
+        <!-- Мобильная шапка (макет «Screen - Health hub»): заголовок + иконка поиска + колокольчик;
+             лупа разворачивает поле на всю строку вместо заголовка (то же место, компактнее). -->
+        <header class="app-topbar-mobile">
+          @if (mobileSearchOpen()) {
+            @if (pageAction.pageSearch(); as ps) {
+              <app-search-field
+                class="flex-fill"
+                [compact]="true"
+                [placeholder]="ps.placeholder"
+                [value]="ps.value()"
+                (valueChange)="ps.onChange($event)"
+              />
+            } @else {
+              <app-search class="flex-fill" />
             }
-            {{ secondary.label }}
-          </button>
-        }
-        @if (pageAction.action(); as action) {
-          <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
-            @if (action.icon) {
-              <i [class]="action.icon" aria-hidden="true"></i>
+            <button type="button" class="btn-icon" (click)="mobileSearchOpen.set(false)" aria-label="Закрыть поиск">
+              <i class="ph ph-x" aria-hidden="true"></i>
+            </button>
+          } @else {
+            @if (isHealthHubIndex()) {
+              <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="sm" />
+              <div class="app-topbar-mobile-title flex-fill">Моё здоровье</div>
+            } @else {
+              <div class="app-topbar-mobile-title flex-fill">{{ mobileTitle() }}</div>
             }
-            {{ action.label }}
-          </button>
-        }
-      </header>
+            <button type="button" class="btn-icon" (click)="mobileSearchOpen.set(true)" aria-label="Поиск">
+              <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+            </button>
+            <app-notification-bell />
+          }
+        </header>
+      }
     }
 
     <main class="app-content">
@@ -158,6 +200,8 @@
     </main>
   </div>
 
+  <!-- Редизайн хаба «Здоровье» — ровно 4 таба (Профиль вместо «Ещё»/«Уведомления»): лист «Ещё»
+       упразднён, «Профиль» ведёт прямо в /settings, «Уведомления» — колокольчик в мобильной шапке. -->
   @if (showTabs() && !isWide()) {
     <nav class="tab-bar">
       <button type="button" [routerLink]="'/home'" [class.active]="isHomeActive()">
@@ -177,32 +221,13 @@
         <i [class]="(isFamilyActive() ? 'ph-fill ' : 'ph ') + 'ph-users-three'" aria-hidden="true"></i>
         <span>Семья</span>
       </button>
-      <button type="button" (click)="moreSheetOpen.set(true)">
-        <span class="tab-bar-more-icon">
-          <i class="ph ph-dots-three-outline" aria-hidden="true"></i>
-          @if (notifications.unread() > 0) {
-            <span class="tab-bar-dot"></span>
-          }
-        </span>
-        <span>Ещё</span>
+      <button type="button" [routerLink]="'/settings'" [class.active]="isSettingsActive()">
+        <i [class]="(isSettingsActive() ? 'ph-fill ' : 'ph ') + 'ph-user'" aria-hidden="true"></i>
+        <span>Профиль</span>
       </button>
     </nav>
   }
 </div>
-
-<app-bottom-sheet title="Ещё" [open]="moreSheetOpen()" (closed)="moreSheetOpen.set(false)">
-  <a class="app-more-item" routerLink="/notifications" (click)="onMoreItemClick('/notifications')">
-    <i class="ph ph-bell" aria-hidden="true"></i>
-    <span class="flex-fill">Уведомления</span>
-    @if (notifications.unread() > 0) {
-      <span class="tag tag-accent-2">{{ notifications.unread() }}</span>
-    }
-  </a>
-  <a class="app-more-item" routerLink="/settings" (click)="onMoreItemClick('/settings')">
-    <i class="ph ph-user" aria-hidden="true"></i>
-    <span class="flex-fill">Профиль</span>
-  </a>
-</app-bottom-sheet>
 
 <app-dev-panel></app-dev-panel>
 <app-toast-container></app-toast-container>

@@ -1,16 +1,10 @@
 <div>
-  @if (!pageAction.immersive()) {
-    <h3 class="mb-3">Здоровье</h3>
-
-    <div class="seg mb-3">
-      @for (s of sections; track s.path) {
-        <a
-          class="seg-opt"
-          [routerLink]="[s.path]"
-          routerLinkActive="active"
-        >{{ s.label }}</a>
-      }
-    </div>
+  <!-- Редизайн хаба «Здоровье» (макет «Screen - Health hub») — на мобиле над заголовком раздела
+       ссылка «‹ Здоровье» ведёт обратно на хаб; таб «Здоровье» снизу остаётся активным (см.
+       app.component.ts isHealthActive). На хабе (индекс) и в immersive-режиме (открытая запись)
+       ссылка не нужна: на хабе мы уже там, в immersive — свою шапку рисует сама деталь-страница. -->
+  @if (!pageAction.immersive() && !isWide() && !isHubIndex()) {
+    <app-back-link label="Здоровье" (activated)="goToHub()" />
   }
 
   <router-outlet></router-outlet>
