@@ -78,7 +78,7 @@ public class DoctorReportServiceTests : SqliteTestBase
         int? shareDays = null, string? comment = "Слабость и головные боли", string? recipient = null,
         DateOnly? from = null, DateOnly? to = null, bool labs = true) =>
         new(from ?? DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-6), to ?? DateOnly.FromDateTime(DateTime.UtcNow),
-            labs, true, true, true, true, false, recipient, comment, shareDays);
+            labs, true, true, true, true, false, false, recipient, comment, shareDays);
 
     private async Task<DoctorReportDto> CreateAsync(int? shareDays = null, User? owner = null)
     {

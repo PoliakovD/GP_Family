@@ -6,8 +6,10 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
+using FamilyHub.Modules.Medical.Access;
 using FamilyHub.Modules.Medical.Attachments;
 using FamilyHub.Modules.Medical.MedicalRecords;
+using FamilyHub.Modules.Medical.Vaccinations;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Hangfire;
@@ -50,8 +52,9 @@ public class AttachmentServiceTests : SqliteTestBase
             new RussianTextSearcher(), _storage, NullLogger<MedicalRecordService>.Instance);
         var downloadTokens = new DownloadTokenService(
             Options.Create(new AttachmentDownloadOptions { DownloadSigningKey = "test-download-signing-key" }));
+        var vaccinationAccess = new VaccinationAccess(Db, new SubjectScopeService(Db, access));
         _sut = new AttachmentService(
-            Db, _storage, _fileCipher, _keyRing, downloadTokens, medicalRecords, access, auditWriter,
+            Db, _storage, _fileCipher, _keyRing, downloadTokens, medicalRecords, access, vaccinationAccess, auditWriter,
             Substitute.For<IBackgroundJobClient>(),
             Options.Create(new AttachmentUploadOptions()), NullLogger<AttachmentService>.Instance);
     }
@@ -163,6 +166,7 @@ public class AttachmentServiceTests : SqliteTestBase
                 Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance), new TestSupport.RecordingDomainEventPublisher(),
                 new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), new RussianTextSearcher(), _storage, NullLogger<MedicalRecordService>.Instance),
             new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance),
+            new VaccinationAccess(Db, new SubjectScopeService(Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance))),
             new FamilyHub.Infrastructure.Audit.MedicalAuditWriter(Db), Substitute.For<IBackgroundJobClient>(),
             options, NullLogger<AttachmentService>.Instance);
 

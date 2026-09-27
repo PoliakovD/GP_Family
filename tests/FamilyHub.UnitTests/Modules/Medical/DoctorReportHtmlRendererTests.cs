@@ -8,7 +8,7 @@ namespace FamilyHub.UnitTests.Modules.Medical;
 
 public class DoctorReportHtmlRendererTests
 {
-    private static readonly ReportBlocks All = new(true, true, true, true, true, true);
+    private static readonly ReportBlocks All = new(true, true, true, true, true, true, true);
 
     private static ReportModel Model(
         ReportBlocks? blocks = null, string? comment = "Слабость", IReadOnlyList<ReportNote>? flagged = null,
@@ -18,7 +18,7 @@ public class DoctorReportHtmlRendererTests
         IReadOnlyList<ReportNote>? notes = null, int skipped = 0) =>
         new(new ReportPatient("Поляков Даниил Александрович", "Поляков Д.А.", "м", new DateOnly(1998, 5, 4)),
             new DateOnly(2026, 3, 26), new DateOnly(2026, 9, 26), new DateTime(2026, 9, 26, 12, 0, 0, DateTimeKind.Utc),
-            blocks ?? All, comment, flagged ?? [], labs, summaries, skipped, meds, visits, metrics, null, null, symptoms, notes);
+            blocks ?? All, comment, flagged ?? [], labs, summaries, skipped, meds, visits, metrics, null, null, symptoms, notes, null);
 
     [Fact]
     public void Header_HasPatientPeriodAgeAndDisclaimer()
@@ -55,7 +55,7 @@ public class DoctorReportHtmlRendererTests
     [Fact]
     public void Sections_FollowEnabledBlocks_AndAreNumberedInOrder()
     {
-        var model = Model(blocks: new ReportBlocks(true, false, true, false, true, false), flagged: [new ReportNote(DateTime.UtcNow, "вопрос")]);
+        var model = Model(blocks: new ReportBlocks(true, false, true, false, true, false, false), flagged: [new ReportNote(DateTime.UtcNow, "вопрос")]);
 
         DoctorReportHtmlRenderer.Sections(model).Should().Equal(
             "Жалобы и вопросы пациента", "Препараты", "Динамика анализов", "Домашние замеры");

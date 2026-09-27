@@ -24,4 +24,12 @@ public enum NotificationRelatedKind
 
     /// <summary>RelatedEntityId — Id курса приёма (MedicationCourse) → /health/intake/courses/:id.</summary>
     MedicationCourse = 4,
+
+    /// <summary>RelatedEntityId — Id пользователя-субъекта прививки → /health/vaccinations/people/user/:id
+    /// (график вычисляется на лету, своей сущности «прививка» в БД, на которую можно сослаться одним
+    /// GUID, нет — ссылаемся на человека, не на конкретную дозу).</summary>
+    VaccinationPersonUser = 5,
+
+    /// <summary>RelatedEntityId — Id подопечного-субъекта прививки → /health/vaccinations/people/dependent/:id.</summary>
+    VaccinationPersonDependent = 6,
 }

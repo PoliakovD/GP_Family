@@ -5,9 +5,9 @@ namespace FamilyHub.Modules.Medical.DoctorReports;
 
 /// <summary>Какие блоки вошли в отчёт (галочки при создании).</summary>
 public record ReportBlocks(
-    bool Labs, bool AiSummaries, bool Medications, bool Visits, bool Measurements, bool SymptomsNotes)
+    bool Labs, bool AiSummaries, bool Medications, bool Visits, bool Measurements, bool SymptomsNotes, bool Vaccinations)
 {
-    public bool Any => Labs || AiSummaries || Medications || Visits || Measurements || SymptomsNotes;
+    public bool Any => Labs || AiSummaries || Medications || Visits || Measurements || SymptomsNotes || Vaccinations;
 }
 
 /// <summary>Сколько данных попадёт в отчёт за период — счётчик под выбором периода в форме.
@@ -45,6 +45,10 @@ public record ReportSymptom(string Title, int Episodes, double AverageSeverity, 
 
 public record ReportNote(DateTime At, string Text);
 
+/// <summary>Одна сделанная прививка/перенесённая болезнь за период — из графика, не отдельная выборка
+/// «сырых» полей: Name/Dose уже разрешены через VaccineCatalog (или CustomName, если не из календаря).</summary>
+public record ReportVaccination(DateOnly? Date, string Name, string Dose, string? VaccineName, bool HadDisease);
+
 /// <summary>Всё, что попадает в PDF. Необязательные блоки null, если выключены галочкой; пустые
 /// (включён, но данных нет) — пустые списки, и рендер решает, показывать ли заголовок.</summary>
 public record ReportModel(
@@ -64,7 +68,8 @@ public record ReportModel(
     ReportWellbeing? Wellbeing,
     ReportSleep? Sleep,
     IReadOnlyList<ReportSymptom>? Symptoms,
-    IReadOnlyList<ReportNote>? Notes)
+    IReadOnlyList<ReportNote>? Notes,
+    IReadOnlyList<ReportVaccination>? Vaccinations)
 {
     /// <summary>Есть ли в отчёте хоть что-то, кроме шапки — пустой PDF пользователю не нужен.</summary>
     public bool HasContent =>
@@ -78,5 +83,6 @@ public record ReportModel(
         || Wellbeing is not null
         || Sleep is not null
         || Symptoms is { Count: > 0 }
-        || Notes is { Count: > 0 };
+        || Notes is { Count: > 0 }
+        || Vaccinations is { Count: > 0 };
 }

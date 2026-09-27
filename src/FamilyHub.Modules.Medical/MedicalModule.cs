@@ -12,6 +12,7 @@ using FamilyHub.Modules.Medical.MedicationCourses;
 using FamilyHub.Modules.Medical.Ocr;
 using FamilyHub.Modules.Medical.Pipeline;
 using FamilyHub.Modules.Medical.Search;
+using FamilyHub.Modules.Medical.Vaccinations;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,6 +45,8 @@ public static class MedicalModule
         services.AddScoped<HealthNoteService>();
         services.AddScoped<DoctorReportDataCollector>();
         services.AddScoped<DoctorReportService>();
+        // Общий скоуп «свой/подопечный семьи/наблюдаемый взрослый» — курсы приёма и прививки (ADR-0016).
+        services.AddScoped<FamilyHub.Modules.Medical.Access.SubjectScopeService>();
         // Курсы приёма лекарств (ADR-0015): доступ, курсы, приёмы, «Сегодня», напоминания.
         services.AddScoped<MedicationCourseAccess>();
         services.AddScoped<CourseSubjects>();
@@ -59,6 +62,14 @@ public static class MedicalModule
         services.AddScoped<FamilyHub.Infrastructure.Notifications.IPushPayloadCustomizer, DoseReminderPushCustomizer>();
         services.AddScoped<MedicationDoseScanJob>();
         services.AddScoped<MedicationCourseMaintenanceJob>();
+        // Прививки (ADR-0016): доступ (тот же SubjectScopeService, что и курсы), сервис, сертификаты, напоминания.
+        services.AddScoped<VaccinationAccess>();
+        services.AddScoped<VaccinationSubjects>();
+        services.AddScoped<VaccinationService>();
+        services.AddScoped<VaccinationCertificateOcrService>();
+        services.AddScoped<VaccinationCertificateService>();
+        services.AddScoped<VaccinationCertificateExportService>();
+        services.AddScoped<VaccinationReminderJob>();
         services.AddScoped<MedicationService>();
         services.AddScoped<MedicalRecordService>();
         services.AddScoped<AttachmentService>();
@@ -168,6 +179,8 @@ public static class MedicalModule
         module.MapHealthNoteEndpoints();
         module.MapDoctorReportEndpoints();
         module.MapMedicationCourseEndpoints();
+        module.MapVaccinationEndpoints();
+        module.MapVaccinationFileEndpoints();
         module.MapAttachmentEndpoints();
         module.MapMedicationOcrEndpoints();
         module.MapExtractionEndpoints();

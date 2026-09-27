@@ -31,6 +31,7 @@ public static class DoctorReportHtmlRenderer
         if (m.Blocks.Measurements) s.Add("Домашние замеры");
         if (m.Blocks.Visits) s.Add("Приёмы врача");
         if (m.Blocks.SymptomsNotes) s.Add("Симптомы и заметки");
+        if (m.Blocks.Vaccinations) s.Add("Прививки");
         return s;
     }
 
@@ -54,6 +55,7 @@ public static class DoctorReportHtmlRenderer
         if (m.Blocks.Measurements) AppendMeasurements(sb, m, ++n);
         if (m.Blocks.Visits) AppendVisits(sb, m, ++n);
         if (m.Blocks.SymptomsNotes) AppendSymptomsNotes(sb, m, ++n);
+        if (m.Blocks.Vaccinations) AppendVaccinations(sb, m, ++n);
 
         sb.Append("</body></html>");
         return sb.ToString();
@@ -291,6 +293,26 @@ public static class DoctorReportHtmlRenderer
             sb.Append("</ul>");
         }
         if (!any) Empty(sb, "Симптомов и заметок за период нет.");
+    }
+
+    private static void AppendVaccinations(StringBuilder sb, ReportModel m, int n)
+    {
+        Heading(sb, n, "Прививки");
+        if (m.Vaccinations is not { Count: > 0 })
+        {
+            Empty(sb, "Отметок о прививках за период нет.");
+            return;
+        }
+
+        sb.Append("<table class=\"grid\"><thead><tr><th>Прививка</th><th>Доза</th><th>Вакцина</th><th>Дата</th></tr></thead><tbody>");
+        foreach (var v in m.Vaccinations)
+        {
+            sb.Append("<tr><td><b>").Append(E(v.Name)).Append("</b></td><td>")
+              .Append(v.HadDisease ? "перенесённая болезнь" : E(v.Dose)).Append("</td><td>")
+              .Append(string.IsNullOrWhiteSpace(v.VaccineName) ? "—" : E(v.VaccineName!)).Append("</td><td>")
+              .Append(v.Date is { } d ? Date(d) : "—").Append("</td></tr>");
+        }
+        sb.Append("</tbody></table>");
     }
 
     // ---- Мелочи ----

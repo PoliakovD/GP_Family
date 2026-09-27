@@ -72,9 +72,16 @@ public class AccountService(
         // Ключи хранилища собираем до удаления строк; сами объекты удаляем после коммита.
         var recordIds = await db.MedicalRecords.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToListAsync(ct);
         var reportIds = await db.DoctorReports.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToListAsync(ct);
+        // Свои прививки и сертификаты (не то, что этот пользователь загрузил ДЛЯ подопечного — то
+        // остаётся с подопечным). FileAttachment без FK на Vaccination/VaccinationCertificate —
+        // ключи блобов собираем здесь же, как для остальных владельцев.
+        var vaccinationIds = await db.Vaccinations.Where(v => v.SubjectUserId == userId).Select(v => v.Id).ToListAsync(ct);
+        var certificateIds = await db.VaccinationCertificates.Where(c => c.SubjectUserId == userId).Select(c => c.Id).ToListAsync(ct);
         var storageKeys = await db.FileAttachments
             .Where(a => (a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
-                     || (a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId)))
+                     || (a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId))
+                     || (a.OwnerType == FileOwnerType.Vaccination && vaccinationIds.Contains(a.OwnerId))
+                     || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId)))
             .Select(a => a.StorageKey)
             .ToListAsync(ct);
 
@@ -132,6 +139,13 @@ public class AccountService(
         await db.MedicationCourses.Where(c => c.SubjectUserId == userId).ExecuteDeleteAsync(ct);
         await db.MedicationWatchers.Where(w => w.SubjectUserId == userId || w.WatcherUserId == userId)
             .ExecuteDeleteAsync(ct);
+        // Прививки: вложения (ключи собраны выше), сами записи и свои сертификаты.
+        await db.FileAttachments
+            .Where(a => (a.OwnerType == FileOwnerType.Vaccination && vaccinationIds.Contains(a.OwnerId))
+                     || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId)))
+            .ExecuteDeleteAsync(ct);
+        await db.Vaccinations.Where(v => v.SubjectUserId == userId).ExecuteDeleteAsync(ct);
+        await db.VaccinationCertificates.Where(c => c.SubjectUserId == userId).ExecuteDeleteAsync(ct);
 
         // Идентификационные хвосты.
         await db.EmailVerificationCodes
@@ -275,7 +289,11 @@ public class AccountService(
             reports.Select(r => new
             {
                 r.Id, r.PeriodFrom, r.PeriodTo, r.CreatedAt, r.PageCount, r.Recipient, r.PatientComment,
-                blocks = new { r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements, r.IncludeSymptomsNotes },
+                blocks = new
+                {
+                    r.IncludeLabs, r.IncludeAiSummaries, r.IncludeMedications, r.IncludeVisits, r.IncludeMeasurements,
+                    r.IncludeSymptomsNotes, r.IncludeVaccinations,
+                },
                 link = new { r.ShareExpiresAt, r.ShareRevokedAt, viewCount = r.ShareViewCount, lastViewedAt = r.ShareLastViewedAt },
             }),
             jsonOptions, ct);
@@ -295,6 +313,16 @@ public class AccountService(
                 c.WriteOffEnabled, c.RepeatAfterMinutes, c.MissedAfterMinutes, c.LowStockDays, c.CreatedAt,
                 doses = doseRows.Where(d => d.CourseId == c.Id)
                     .Select(d => new { d.ScheduledAt, d.Units, d.Status, d.TakenAt }),
+            }),
+            jsonOptions, ct);
+
+        // Прививки: факты как есть — SeriesCode/DoseIndex адресуют каталог (Domain.Vaccinations),
+        // сам вычисляемый график в экспорт не входит (производные данные, как резюме анализа).
+        var vaccinationRows = await db.Vaccinations.AsNoTracking().Where(v => v.SubjectUserId == userId).OrderBy(v => v.CreatedAt).ToListAsync(ct);
+        await AddJsonAsync(zip, "vaccinations.json",
+            vaccinationRows.Select(v => new
+            {
+                v.Id, v.SeriesCode, v.DoseIndex, v.CustomName, v.VaccineName, v.Kind, v.Date, v.DatePrecision, v.CreatedAt,
             }),
             jsonOptions, ct);
 
