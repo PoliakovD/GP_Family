@@ -29,6 +29,7 @@ public class DoctorReport
     public bool IncludeVisits { get; set; }
     public bool IncludeMeasurements { get; set; }
     public bool IncludeSymptomsNotes { get; set; }
+    public bool IncludeVaccinations { get; set; }
 
     public int PageCount { get; set; }
 

@@ -38,6 +38,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<MedicationDose> MedicationDoses => Set<MedicationDose>();
     public DbSet<MedicationWatcher> MedicationWatchers => Set<MedicationWatcher>();
     public DbSet<DoseActionToken> DoseActionTokens => Set<DoseActionToken>();
+
+    /// <summary>Прививки: график вычисляется каталогом (Domain.Vaccinations), здесь — только факты.</summary>
+    public DbSet<Vaccination> Vaccinations => Set<Vaccination>();
+    public DbSet<VaccinationCertificate> VaccinationCertificates => Set<VaccinationCertificate>();
+
     public DbSet<FamilyMedicalShare> FamilyMedicalShares => Set<FamilyMedicalShare>();
     public DbSet<MedicalRecordHidden> MedicalRecordHiddens => Set<MedicalRecordHidden>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
