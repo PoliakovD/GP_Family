@@ -67,6 +67,10 @@ public static class VaccinationEndpoints
             Guid id, UpdateVaccinationRequest request, VaccinationService service, ICurrentUser currentUser, CancellationToken ct) =>
             Map(await service.UpdateAsync(currentUser.UserId, id, request, ct))).RequireRateLimiting("medical-write");
 
+        group.MapPut("/{id:guid}/wellbeing-check", async (
+            Guid id, WellbeingCheckRequest request, VaccinationService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Map(await service.SetWellbeingCheckAsync(currentUser.UserId, id, request.Requested, ct))).RequireRateLimiting("medical-write");
+
         group.MapDelete("/{id:guid}", async (
             Guid id, VaccinationService service, ICurrentUser currentUser, CancellationToken ct) =>
             Map(await service.DeleteAsync(currentUser.UserId, id, ct))).RequireRateLimiting("medical-write");

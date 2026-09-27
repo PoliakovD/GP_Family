@@ -421,8 +421,11 @@ public class AttachmentService(
     /// <summary>Загрузка файла для владельца, чей доступ и лимиты проверяет сам вызывающий сервис
     /// (VaccinationService/VaccinationCertificateService — доступ там уже трёхканальный, свой у
     /// каждого владельца) — этот метод только шифрует, сохраняет блоб и заводит строку метаданных,
-    /// без собственной авторизации и без превью (см. новый тип владельца — DoctorReport делает так
-    /// же, PreviewStatus.Unsupported).</summary>
+    /// без собственной авторизации и без превью-конвейера (см. новый тип владельца — DoctorReport
+    /// делает так же). Картинки (сертификаты — почти всегда фото) отмечаются сразу Ready без
+    /// генерации миниатюры — тот же путь, что у изображений MedicalRecord без Thumbnail-артефакта
+    /// (AttachmentService.GetPreviewAsync рисует оригинал напрямую по content-type); иначе вьюер
+    /// показал бы только «скачать», хотя показать фото инлайн можно было бы сразу.</summary>
     public async Task<AttachmentDto> UploadRawAsync(
         FileOwnerType ownerType, Guid ownerId, string fileName, string contentType, long sizeBytes, Stream content,
         CancellationToken ct = default)
@@ -448,7 +451,9 @@ public class AttachmentService(
             IsEncrypted = true,
             KeyId = keyRing.ActiveKeyId,
             UploadedAt = DateTime.UtcNow,
-            PreviewStatus = AttachmentPreviewStatus.Unsupported,
+            PreviewStatus = DocumentContentTypes.Images.Contains(contentType)
+                ? AttachmentPreviewStatus.Ready
+                : AttachmentPreviewStatus.Unsupported,
         };
         db.FileAttachments.Add(attachment);
         await db.SaveChangesAsync(ct);

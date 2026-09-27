@@ -1542,6 +1542,7 @@ export interface VaccineCatalogSeries {
     reactionHint: string | null;
     repeatEveryYears: number | null;
     seasonal: boolean;
+    closedByDisease: boolean;
 }
 
 export interface VaccinationRecognizedItem {

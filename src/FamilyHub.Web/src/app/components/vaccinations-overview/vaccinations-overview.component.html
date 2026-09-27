@@ -1,0 +1,85 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else if (error()) {
+  <div class="alert-danger">{{ error() }}</div>
+} @else if (overview(); as ov) {
+  <div class="vo">
+    @if (ov.attention.length > 0) {
+      <section>
+        <div class="vo-kicker">Стоит запланировать</div>
+        <div class="vo-attention-grid">
+          @for (card of ov.attention; track cardKey(card)) {
+            <div class="vo-card" [class.vo-card-duesoon]="card.item.status === Status.DueSoon" [class.vo-card-cando]="card.item.status === Status.CanDo">
+              <div class="vo-card-top">
+                <app-avatar [person]="person(card.subject)" size="sm" />
+                <span class="flex-fill vo-card-person">{{ card.subject.isSelf ? 'Я' : card.subject.name }}</span>
+                @if (card.item.status === Status.DueSoon) {
+                  <span class="vo-card-when vo-card-when-soon">{{ windowToText(card.item.windowTo) }}</span>
+                } @else {
+                  <span class="vo-card-when vo-card-when-can">можно сделать</span>
+                }
+              </div>
+              <div class="vo-card-body">
+                <div class="vo-card-title">{{ card.item.seriesName }}</div>
+                <div class="vo-card-sub muted">{{ card.item.label }}</div>
+              </div>
+              @if (card.item.status === Status.DueSoon) {
+                <button type="button" class="btn btn-primary btn-sm" [disabled]="isBusy(card)" (click)="quickMarkDone(card)">
+                  Отметить сделанной
+                </button>
+              } @else {
+                <div class="vo-card-hint">
+                  Срок прошёл — это не страшно. Обсудите с врачом на ближайшем приёме или
+                  <a [routerLink]="personLink(card.subject)">отметьте вручную</a>.
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <section>
+      <div class="vo-kicker">Семья</div>
+      <div class="vo-people">
+        @for (p of ov.people; track p.subject.kind + p.subject.id) {
+          <a class="vo-person" [routerLink]="personLink(p.subject)">
+            <app-avatar [person]="person(p.subject)" size="md" />
+            <div class="vo-person-body">
+              <div class="vo-person-name">{{ p.subject.isSelf ? 'Я' : p.subject.name }}</div>
+              @if (p.total > 0) {
+                <div class="vo-bar">
+                  <span class="vo-bar-done" [style.flex]="p.done"></span>
+                  <span class="vo-bar-duesoon" [style.flex]="p.dueSoon"></span>
+                  <span class="vo-bar-cando" [style.flex]="p.canDo"></span>
+                  <span class="vo-bar-nodata" [style.flex]="p.noData"></span>
+                </div>
+              }
+              <div class="vo-person-meta muted">
+                @if (p.hint) {
+                  {{ p.hint }}
+                } @else if (p.total > 0) {
+                  {{ p.done }} из {{ p.total }} по календарю
+                  @if (p.dueSoon > 0) { · {{ p.dueSoon }} скоро }
+                  @if (p.canDo > 0) { · {{ p.canDo }} можно сделать }
+                } @else {
+                  Нет данных
+                }
+              </div>
+            </div>
+            <i class="ph ph-caret-right" aria-hidden="true"></i>
+          </a>
+        }
+      </div>
+    </section>
+
+    <div class="vo-footer-hint">
+      <i class="ph ph-bell" aria-hidden="true"></i>
+      <span class="flex-fill">
+        Напоминаем за 2 недели до срока и если срок прошёл. О прививках подопечных узнают все, кто за ними следит.
+      </span>
+    </div>
+  </div>
+} @else {
+  <p class="muted">Нет данных.</p>
+}

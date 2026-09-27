@@ -322,6 +322,24 @@ public class VaccinationService(
         return VaccinationResult.Success;
     }
 
+    /// <summary>Переключатель «напомнить о самочувствии» в шторке после сохранения — узкое
+    /// обновление одного поля, не общий Update (тот пришлось бы кормить полным Kind/Date/
+    /// DatePrecision, которых нет на руках у фронта в этот момент — только что вернувшийся
+    /// ScheduleItemDto их не несёт). Только для своих прививок (подопечным дневник недоступен,
+    /// см. ADR-0016 §5).</summary>
+    public async Task<VaccinationResult> SetWellbeingCheckAsync(Guid userId, Guid id, bool requested, CancellationToken ct = default)
+    {
+        var (item, level, _) = await access.LoadAsync(userId, id, tracking: true, ct);
+        if (item is null) return VaccinationResult.NotFound;
+        if (level != VaccinationAccessLevel.Full || item.SubjectUserId != userId) return VaccinationResult.Forbidden;
+
+        item.WellbeingCheckAt = requested ? DateTime.UtcNow.AddDays(VaccinationRules.WellbeingCheckDays) : null;
+        if (!requested) item.WellbeingCheckSent = false;
+        item.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return VaccinationResult.Success;
+    }
+
     public async Task<VaccinationResult> DeleteAsync(Guid userId, Guid id, CancellationToken ct = default)
     {
         var (item, level, _) = await access.LoadAsync(userId, id, tracking: true, ct);
@@ -357,7 +375,8 @@ public class VaccinationService(
         VaccineCatalog.All.Select(s => new CatalogSeriesDto(
                 s.Code, s.Name, s.ShortName, s.Group, s.Diseases,
                 s.Doses.Select(d => new CatalogDoseDto(d.Label, d.IsAgeBased)).ToList(),
-                s.TradeNames, s.About, s.Contraindications, s.ReactionHint, s.RepeatEveryYears, s.SeasonalWindow is not null))
+                s.TradeNames, s.About, s.Contraindications, s.ReactionHint, s.RepeatEveryYears, s.SeasonalWindow is not null,
+                s.ClosedByDisease))
             .ToList();
 
     // ---- Внутреннее ----

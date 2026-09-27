@@ -1,0 +1,227 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else if (error()) {
+  <div class="alert-danger">{{ error() }}</div>
+} @else if (schedule(); as s) {
+  <div class="vx" [class.vx-split]="isWide()">
+    @if (showList()) {
+      <div class="vx-list">
+        <div class="vx-header">
+          <app-avatar [person]="{ key: s.subject.id, firstName: s.subject.name }" size="md" />
+          <div class="flex-fill min-width-0">
+            <h3 class="mb-0">{{ s.subject.isSelf ? 'Я' : s.subject.name }}</h3>
+            <div class="muted vx-header-meta">
+              @if (ageDisplay(); as age) { {{ age }} · } @if (s.hasBirthDate) {
+                {{ doneCount(s.byAge) }} из {{ s.byAge.length }} по календарю
+              } @else {
+                дата рождения не указана
+              }
+            </div>
+          </div>
+          @if (s.hasBirthDate) {
+            <button type="button" class="btn btn-secondary btn-sm" [disabled]="certificateBusy()" (click)="downloadCertificate()">
+              <i class="ph ph-file-pdf" aria-hidden="true"></i> Сертификат PDF
+            </button>
+          }
+          @if (s.subject.canEdit) {
+            <button type="button" class="btn btn-primary btn-sm" (click)="addForThisPerson()">
+              <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить
+            </button>
+          }
+        </div>
+
+        @if (!s.hasBirthDate) {
+          <div class="alert-info">Укажите дату рождения в профиле — без неё график не построить.</div>
+        } @else {
+          <div class="seg" role="tablist">
+            <button type="button" class="seg-opt" role="tab" [class.active]="view() === 'age'" (click)="view.set('age')">По возрасту</button>
+            <button type="button" class="seg-opt" role="tab" [class.active]="view() === 'disease'" (click)="view.set('disease')">По болезням</button>
+          </div>
+
+          @if (view() === 'age') {
+            @for (group of stageGroups(); track group.stage) {
+              <div class="vx-stage">
+                <button type="button" class="vx-stage-head" [attr.aria-expanded]="isOpen(group.stage)" (click)="toggleStage(group.stage)">
+                  @if (group.allDone) {
+                    <i class="ph-fill ph-check-circle vx-stage-icon" style="color: var(--color-status-ok)" aria-hidden="true"></i>
+                  } @else {
+                    <i class="ph ph-circle-dashed vx-stage-icon" aria-hidden="true"></i>
+                  }
+                  <span class="flex-fill">{{ stageLabel(group.stage) }}</span>
+                  <span class="muted vx-stage-count">{{ doneCount(group.items) }} из {{ group.items.length }}</span>
+                  <i [class]="isOpen(group.stage) ? 'ph ph-caret-up' : 'ph ph-caret-down'" aria-hidden="true"></i>
+                </button>
+                @if (isOpen(group.stage)) {
+                  <div class="vx-dose-list">
+                    @for (item of group.items; track itemKey(item)) {
+                      <button type="button" class="vx-dose" [class.vx-dose-current]="item.status === Status.DueSoon" (click)="openSeries(item)">
+                        <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
+                        <div class="flex-fill min-width-0">
+                          <div class="vx-dose-name">{{ item.seriesName }}</div>
+                          <div class="muted vx-dose-sub">{{ item.label }}</div>
+                        </div>
+                        @if (item.status === Status.Done || item.status === Status.HadDisease) {
+                          <span class="muted vx-dose-date">{{ preciseDateText(item.date, null) }}</span>
+                        } @else if (item.status === Status.DueSoon) {
+                          <span class="vx-dose-when vx-dose-when-soon">{{ windowToText(item.windowTo) }}</span>
+                          <button type="button" class="btn btn-primary btn-sm" [disabled]="busyKey() === itemKey(item)" (click)="quickMarkDone(item, $event)">
+                            Отметить сделанной
+                          </button>
+                        } @else if (item.status === Status.CanDo) {
+                          <span class="vx-dose-when vx-dose-when-can">можно сделать</span>
+                        } @else if (item.status === Status.Upcoming) {
+                          <span class="muted vx-dose-date">{{ windowToText(item.windowTo) }}</span>
+                        } @else {
+                          <span class="vx-dose-when vx-dose-when-nodata">нет данных</span>
+                        }
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
+
+            @if (s.custom.length > 0) {
+              <div class="vx-stage">
+                <div class="vx-stage-head vx-stage-head-static">
+                  <i class="ph ph-syringe vx-stage-icon" aria-hidden="true"></i>
+                  <span class="flex-fill">Не из календаря</span>
+                </div>
+                <div class="vx-dose-list">
+                  @for (item of s.custom; track itemKey(item)) {
+                    <div class="vx-dose">
+                      <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
+                      <div class="flex-fill min-width-0">
+                        <div class="vx-dose-name">{{ item.seriesName }}</div>
+                        <div class="muted vx-dose-sub">{{ statusLabel(item.status) }}</div>
+                      </div>
+                      <span class="muted vx-dose-date">{{ item.date ? preciseDateText(item.date, null) : '' }}</span>
+                      @if (s.subject.canEdit) {
+                        <button type="button" class="btn-icon" aria-label="Удалить" (click)="deleteCustom(item, $event)">
+                          <i class="ph ph-trash" aria-hidden="true"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          } @else {
+            @for (group of s.byDisease; track group.disease) {
+              <div class="vx-stage">
+                <div class="vx-stage-head vx-stage-head-static">
+                  <span class="flex-fill">{{ group.disease }}</span>
+                </div>
+                <div class="vx-dose-list">
+                  @for (item of group.items; track itemKey(item)) {
+                    <button type="button" class="vx-dose" (click)="openSeries(item)">
+                      <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
+                      <div class="flex-fill min-width-0">
+                        <div class="vx-dose-name">{{ item.seriesName }}</div>
+                        <div class="muted vx-dose-sub">{{ item.label }}</div>
+                      </div>
+                      <span class="muted vx-dose-date">{{ statusLabel(item.status) }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          }
+        }
+      </div>
+    }
+
+    @if (showDetail()) {
+      <div class="vx-detail">
+        @if (!isWide()) {
+          <button type="button" class="back-link" (click)="backToList()">
+            <i class="ph ph-caret-left" aria-hidden="true"></i> {{ s.subject.isSelf ? 'Я' : s.subject.name }}
+          </button>
+        }
+        @if (seriesLoading()) {
+          <app-loading-spinner />
+        } @else if (seriesError()) {
+          <div class="alert-danger">{{ seriesError() }}</div>
+        } @else if (seriesDetail(); as d) {
+          <div class="vx-series">
+            <div class="vx-series-kicker">Прививка · {{ s.subject.isSelf ? 'Я' : s.subject.name }}</div>
+            <h4 class="mb-0">{{ d.seriesName }}</h4>
+
+            <div class="vx-timeline">
+              @for (dose of d.doses; track dose.doseIndex) {
+                <div class="vx-timeline-row">
+                  <div class="vx-timeline-marker">
+                    <i [class]="statusIcon(dose.status)" [style.color]="statusColor(dose.status)" aria-hidden="true"></i>
+                  </div>
+                  <div class="vx-timeline-body">
+                    <div class="vx-timeline-head">
+                      <span class="vx-timeline-label">{{ dose.label }}</span>
+                      @if (dose.date) {
+                        <span class="muted">{{ preciseDateText(dose.date, null) }}@if (dose.vaccineName) { · {{ dose.vaccineName }} }</span>
+                      } @else if (dose.windowTo) {
+                        <span class="muted">{{ windowToText(dose.windowTo) }}</span>
+                      }
+                    </div>
+                    @if (dose.files.length > 0) {
+                      <div class="vx-timeline-files">
+                        @for (f of dose.files; track f.id) {
+                          <button type="button" class="vx-file-chip" (click)="openFiles(dose.files, $index)">
+                            <i class="ph ph-image" aria-hidden="true"></i> {{ f.fileName }}
+                          </button>
+                        }
+                      </div>
+                    }
+                    @for (link of dose.diaryEntries; track link.at) {
+                      <div class="vx-diary-link">
+                        <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+                        <div class="flex-fill min-width-0">
+                          <div>{{ link.text }}</div>
+                          <div class="muted vx-diary-link-date">из дневника</div>
+                        </div>
+                      </div>
+                    }
+                    @if (dose.status === Status.DueSoon || dose.status === Status.CanDo) {
+                      <button type="button" class="btn btn-primary btn-sm" [disabled]="busyKey() === (d.seriesCode + ':' + dose.doseIndex)"
+                              (click)="quickMarkDone({ seriesCode: d.seriesCode, doseIndex: dose.doseIndex, label: dose.label, seriesName: d.seriesName, seriesShortName: d.seriesName, group: d.group, stage: '', status: dose.status, windowFrom: dose.windowFrom, windowTo: dose.windowTo, recordId: dose.recordId, date: dose.date, isRepeat: false }, $event)">
+                        Отметить «{{ dose.label }}»
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            @if (d.reactionHint) {
+              <div class="vx-note">
+                <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+                <span>{{ d.reactionHint }}</span>
+              </div>
+            }
+
+            @if (d.about || d.contraindications || d.tradeNames.length > 0) {
+              <div class="vx-info">
+                @if (d.tradeNames.length > 0) {
+                  <div class="muted">Вакцины: {{ d.tradeNames.join(', ') }}</div>
+                }
+                @if (d.about) { <p>{{ d.about }}</p> }
+                @if (d.contraindications) { <p class="muted">{{ d.contraindications }}</p> }
+              </div>
+            }
+
+            <a class="vx-kb-link" [routerLink]="['/health/kb/vaccines']" [queryParams]="{ id: d.seriesCode }">
+              <i class="ph ph-book-open" aria-hidden="true"></i> О вакцине и противопоказаниях в справочнике
+            </a>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
+
+<app-file-viewer
+  [open]="viewerFiles() !== null"
+  [attachments]="viewerFiles() ?? []"
+  [activeIndex]="viewerIndex()"
+  (activeIndexChange)="viewerIndex.set($event)"
+  (closed)="viewerFiles.set(null)"
+/>

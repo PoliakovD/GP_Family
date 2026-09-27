@@ -57,6 +57,8 @@ public record CreateVaccinationRequest(
 public record UpdateVaccinationRequest(
     string? VaccineName, VaccinationKind Kind, DateOnly? Date, VaccinationDatePrecision? DatePrecision);
 
+public record WellbeingCheckRequest(bool Requested);
+
 public record BulkMarkItem(string SeriesCode, int DoseIndex, VaccinationKind Kind, DateOnly? Date, VaccinationDatePrecision? DatePrecision);
 
 public record BulkMarkRequest(string SubjectKind, Guid SubjectId, List<BulkMarkItem> Items, Guid? CertificateId);
@@ -68,6 +70,6 @@ public record CatalogDoseDto(string Label, bool IsAgeBased);
 public record CatalogSeriesDto(
     string Code, string Name, string ShortName, VaccineGroup Group, IReadOnlyList<string> Diseases,
     List<CatalogDoseDto> Doses, IReadOnlyList<string> TradeNames, string? About, string? Contraindications,
-    string? ReactionHint, int? RepeatEveryYears, bool Seasonal);
+    string? ReactionHint, int? RepeatEveryYears, bool Seasonal, bool ClosedByDisease);
 
 public record AttentionCountResponse(int Count);

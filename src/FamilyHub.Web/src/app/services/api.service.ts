@@ -668,6 +668,10 @@ export class ApiService {
   updateVaccination = (id: string, request: UpdateVaccinationRequest) =>
     this.put<void>(`/api/vaccinations/${id}`, request);
 
+  /** «Напомнить о самочувствии через 7 дней» — переключатель в шторке после сохранения. */
+  setVaccinationWellbeingCheck = (id: string, requested: boolean) =>
+    this.put<void>(`/api/vaccinations/${id}/wellbeing-check`, { requested });
+
   deleteVaccination = (id: string) => this.del<void>(`/api/vaccinations/${id}`);
 
   uploadVaccinationAttachment = (vaccinationId: string, file: File) => {

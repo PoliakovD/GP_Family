@@ -1,0 +1,66 @@
+// Шторка «Прививка сохранена» (макет «Screen - Vaccination»).
+
+:host { display: block; }
+
+.min-width-0 { min-width: 0; }
+
+.vs { display: flex; flex-direction: column; gap: 14px; }
+
+.vs-head { display: flex; align-items: center; gap: 12px; }
+
+.vs-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-status-ok) 18%, var(--color-paper));
+
+  > i { font-size: 1.4118rem; color: var(--color-status-ok); }
+}
+
+.vs-title { font-family: var(--font-heading); font-weight: 600; font-size: 1.1176rem; }
+.vs-sub { font-size: 0.8235rem; }
+
+.vs-text { margin: 0; font-size: 0.8824rem; line-height: 1.5; }
+
+.vs-actions {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+}
+
+.vs-action {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 0.8824rem;
+  color: inherit;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--color-divider);
+  cursor: pointer;
+
+  &:first-child { border-top: none; }
+  > i:first-child { font-size: 1.1765rem; color: var(--color-accent); }
+  > i:last-child { color: var(--color-neutral-500); }
+}
+
+.vs-reminder {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  background: var(--color-neutral-100);
+  font-size: 0.8235rem;
+  cursor: pointer;
+
+  > i { color: var(--color-neutral-600); flex: none; }
+}

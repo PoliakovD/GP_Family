@@ -31,6 +31,9 @@
                   @if (sub.badge === 'intake' && intake.attention() > 0) {
                     <span class="app-sidebar-badge" title="Приёмы лекарств, требующие внимания">{{ intake.attention() }}</span>
                   }
+                  @if (sub.badge === 'vaccinations' && vaccinations.attention() > 0) {
+                    <span class="app-sidebar-badge" title="Прививки, требующие внимания">{{ vaccinations.attention() }}</span>
+                  }
                 </a>
               }
             </div>

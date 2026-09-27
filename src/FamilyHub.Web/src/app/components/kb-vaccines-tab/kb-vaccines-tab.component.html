@@ -1,0 +1,60 @@
+@if ((vaccinations.catalog() ?? []).length === 0) {
+  <app-loading-spinner />
+} @else {
+  <input class="input kv-search" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Поиск по названию или инфекции" />
+
+  <div class="kv-grid">
+    @for (s of items(); track s.code) {
+      <button type="button" class="kv-card" (click)="open(s.code)">
+        <div class="kv-card-title">{{ s.name }}</div>
+        <div class="muted kv-card-sub">{{ groupLabel[s.group] }}</div>
+        @if (s.diseases.length > 1) {
+          <div class="muted kv-card-diseases">{{ s.diseases.join(', ') }}</div>
+        }
+      </button>
+    } @empty {
+      <p class="muted">Ничего не найдено.</p>
+    }
+  </div>
+}
+
+@if (isWide()) {
+  <app-side-panel [open]="selected() !== null" [title]="selected()?.name ?? ''" width="min(480px, 100vw)" (closed)="close()">
+    @if (selected(); as s) {
+      <ng-container *ngTemplateOutlet="detail; context: { s: s }" />
+    }
+  </app-side-panel>
+} @else {
+  <app-bottom-sheet [open]="selected() !== null" [title]="selected()?.name ?? ''" (closed)="close()">
+    @if (selected(); as s) {
+      <ng-container *ngTemplateOutlet="detail; context: { s: s }" />
+    }
+  </app-bottom-sheet>
+}
+
+<ng-template #detail let-s="s">
+  <div class="kv-detail">
+    @if (s.tradeNames.length > 0) {
+      <div class="muted">Вакцины: {{ s.tradeNames.join(', ') }}</div>
+    }
+    @if (s.about) { <p>{{ s.about }}</p> }
+    @if (s.contraindications) {
+      <div>
+        <div class="form-label">Противопоказания</div>
+        <p class="muted">{{ s.contraindications }}</p>
+      </div>
+    }
+    @if (s.reactionHint) {
+      <div class="kv-note">
+        <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+        <span>{{ s.reactionHint }}</span>
+      </div>
+    }
+    @if (s.repeatEveryYears) {
+      <p class="muted">Ревакцинация каждые {{ s.repeatEveryYears }} лет.</p>
+    }
+    @if (s.seasonal) {
+      <p class="muted">Сезонная прививка — актуальна ежегодно в свой сезон.</p>
+    }
+  </div>
+</ng-template>

@@ -1,0 +1,86 @@
+// Обзор «Прививки»: «Стоит запланировать» + «Семья» (макет «Screen - Vaccination»).
+
+:host { display: block; }
+
+.vo { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.vo-kicker {
+  font: 600 0.6471rem/1 var(--font-heading);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin-bottom: 10px;
+}
+
+.vo-attention-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.vo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-top: 3px solid var(--color-neutral-400);
+}
+.vo-card-duesoon { border-top-color: var(--color-accent); }
+.vo-card-cando { border-top-color: var(--color-status-warning); }
+
+.vo-card-top { display: flex; align-items: center; gap: 10px; }
+.vo-card-person { font-size: 0.7941rem; color: var(--color-neutral-600); }
+.vo-card-when { font: 600 0.7647rem var(--font-heading); flex: none; }
+.vo-card-when-soon { color: var(--color-accent-800); }
+.vo-card-when-can { color: var(--color-status-warning-text); }
+
+.vo-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 1.0588rem; line-height: 1.25; }
+.vo-card-sub { font-size: 0.7941rem; }
+
+.vo-card-hint { font-size: 0.7941rem; color: var(--color-status-warning-text); }
+
+.vo-people {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+}
+
+.vo-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  color: inherit;
+  text-decoration: none;
+  border-top: 1px solid var(--color-divider);
+
+  &:first-child { border-top: none; }
+  &:hover { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
+  > i { color: var(--color-neutral-500); flex: none; }
+}
+
+.vo-person-body { flex: 1; min-width: 0; }
+.vo-person-name { font-family: var(--font-heading); font-weight: 600; font-size: 1rem; }
+
+.vo-bar { height: 8px; display: flex; gap: 2px; margin-top: 6px; background: var(--color-neutral-200); }
+.vo-bar-done { background: var(--color-status-ok); }
+.vo-bar-duesoon { background: var(--color-accent); }
+.vo-bar-cando { background: var(--color-status-warning); }
+.vo-bar-nodata { background: repeating-linear-gradient(45deg, var(--color-neutral-200) 0 4px, var(--color-neutral-100) 4px 8px); }
+
+.vo-person-meta { font-size: 0.7353rem; margin-top: 5px; }
+
+.vo-footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-neutral-100);
+  font-size: 0.8235rem;
+  color: var(--color-neutral-800);
+
+  > i { color: var(--color-neutral-600); flex: none; }
+}
