@@ -258,9 +258,9 @@ export interface MedicalRecordFilter {
     to?: string;
     dependentId?: string;
     targetUserId?: string;
-    self?: boolean;
-    /** 'me' — хаб «Здоровье» (редизайн навигации): действительно только мои записи, в отличие от
-     * self, которое пропускает чужие записи, расшарённые семье владельцем (см. backend MineOnly). */
+    /** 'me' — действительно только мои записи. Backend также понимает старый self=true (пропускает
+     * чужие записи, расшарённые семье владельцем, см. MedicalRecordFilter.MineOnly на бэкенде) —
+     * фронт им больше не пользуется (TECH_DEBT.md #17), поле здесь намеренно убрано. */
     subject?: 'me';
     doctor?: string;
     q?: string;
