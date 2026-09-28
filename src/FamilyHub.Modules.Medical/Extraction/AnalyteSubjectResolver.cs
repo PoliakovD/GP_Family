@@ -143,13 +143,13 @@ public partial class AnalyteSubjectResolver(
         if (content.Kind == DocumentSourceKind.Text && !string.IsNullOrEmpty(content.Text))
         {
             var userText = BuildUserText(content.Text, indicatorNames);
-            result = await client.ExtractJsonAsync(prompt, userText, ct);
+            result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         }
         else if (content.Kind == DocumentSourceKind.Image && content.Images.Count > 0)
         {
             var userText = BuildUserText(null, indicatorNames);
             result = await client.ExtractJsonAsync(
-                prompt, userText, content.Images.Select(i => (i.Bytes, i.ContentType)).ToList(), ct);
+                prompt, userText, content.Images.Select(i => (i.Bytes, i.ContentType)).ToList(), ct, shortTimeout: true);
         }
         else
         {

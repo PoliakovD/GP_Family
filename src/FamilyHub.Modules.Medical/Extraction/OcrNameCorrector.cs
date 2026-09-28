@@ -89,7 +89,7 @@ public class OcrNameCorrector(ILmStudioJsonClient client, IPromptProvider prompt
 
         var userText = BuildUserText(names);
         var prompt = await promptProvider.GetAsync("analysis.ocr-correct", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, userText, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (result is null || !result.Success || result.Payload is null)
         {
             // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.

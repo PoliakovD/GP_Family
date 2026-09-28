@@ -46,6 +46,95 @@
 Регрессия закрыта тестами `*_TransientFailure_Throws` в юнит-тестах каждого из шести шагов;
 сам механизм `WaitingForAi` уже покрыт `AiUnavailableApiTests.RequestExtraction_WhenAiDown_*`.
 
+### 6/7. `LmStudio:TimeoutSeconds` = 1000 для всех вызовов — закрыто
+«Молчащий» туннель (пакеты теряются, а не отбиваются) держал любой вызов LM Studio, включая
+короткий текстовый промпт или синхронный `POST /api/medications/ocr`, до полного
+`LmStudio:TimeoutSeconds` (1000 c) — около 17 минут на один вызов, занимая воркер очереди
+`extraction`/`enrichment` и `LmStudioConcurrencyGate`, а для OCR ещё и держа открытым HTTP-запрос
+пользователя.
+
+`ILmStudioJsonClient.ExtractJsonAsync` получил параметр `shortTimeout` (тот же приём, что уже был у
+`suppressThinking`): при `true` вызов ограничен отдельным, гораздо более коротким
+`LmStudioOptions.ShortCallTimeoutSeconds` (120 c по умолчанию) через линкованный
+`CancellationTokenSource` — не подменяет переданный `ct` (реальная отмена вызывающим по-прежнему
+отличима от сработавшего короткого таймаута, см. комментарий в `LmStudioJsonClient.
+SendChatCompletionAsync`). Полный `TimeoutSeconds` остался только у многостраничного/многофотового
+распознавания документа (`LmStudioMedicalDocumentExtractor`) — ему действительно может понадобиться
+больше времени. Короткий таймаут применён везде, где вызов — один промпт или OCR нескольких (до
+5-8) фото: `DocumentKindClassifier`, `SpecimenResolver`, `AnalysisTitleGenerator`,
+`AnalyteSubjectResolver`, `OcrNameCorrector`, `PatientReferenceCalculator`, `QualitativeNormJudge`,
+`LegitimacyGuardService`, `AnalytePlausibilityGuardService`, суммаризаторы обогащения
+(`LabSummarizer`, `LabAnalyteKbSummarizer`, `MedicationSummarizer`, `GlobalSpecimenKbService`),
+`MedicationOcrService` и `VaccinationCertificateOcrService`. Регрессия закрыта тестами
+`LmStudioJsonClientTests.ExtractJsonAsync_ShortTimeout_*`.
+
+`LmStudioConcurrencyGate.WaitAsync` НЕ ограничен коротким таймаутом (сознательно): «дешёвый» шаг,
+вставший в очередь за уже идущим тяжёлым распознаванием, должен дождаться своей очереди, а не
+падать по таймауту только потому, что кто-то другой занял единственный физический инстанс модели.
+
+Осталось открытым (не про таймаут, отдельная архитектурная причина, ADR-0001): фото упаковки/OCR не
+хранятся, поэтому `POST /api/medications/ocr` и `POST /vaccinations/certificate/recognize`
+по-прежнему синхронные HTTP-эндпоинты, а не задачи в очереди — от 1000 до 120 секунд ожидания,
+но не в очередь.
+
+### 9. Флейковый интеграционный тест — закрыто
+`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
+падал на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
+`Hangfire.PostgreSql` (`monitoring.Queues()`/`FailedCount()` в `AdminStatsService.GetSystemStatsAsync`
+— на собственном пуле соединений Hangfire, в стороне от EF/AppDbContext). `GetHangfireStatsWithRetry`
+теперь до 2 раз повторяет вызов при `NpgsqlException`/`InvalidOperationException`, каждый раз заново
+запрашивая `IMonitoringApi` у `JobStorage.Current` — устаревшее соединение из пула не переиспользуется
+повторно, следующее почти всегда рабочее.
+
+### 12. `profileGuard` принимал временный сбой за «профиль не заполнен» — закрыто
+`GET /api/auth/me` делил бакет rate-limit `auth` (10/мин на IP) с попытками входа; 429 или сетевой
+сбой гард не отличал от «профиль не заполнен» и уводил на `/profile-setup` (тем же приёмом
+`authGuard` — на `/login`) уже аутентифицированного пользователя с заполненным профилем. Хуже всего
+это било по Telegram-режиму (`authGuard` там не грузит `me()`, поэтому `/me` дёргается на каждой
+guard-навигации без кеша) и по NAT с общим IP.
+
+Исправлено: `AuthService.loadMe()` (`auth.service.ts`) теперь различает `meLoadError`
+(`'unauthorized'` — настоящий 401, `'transient'` — 429/сеть/5xx); `authGuard`/`profileGuard`
+(`auth.guards.ts`) при транзиентном сбое один раз повторяют запрос и, если он всё равно не удался,
+не путают это с «не вошёл»/«профиль не заполнен» — пропускают навигацию (страница либо откроется
+нормально, либо её запросы получат 401, который разберёт `authInterceptor`). На бэкенде `/me`,
+`/refresh`, `/logout(-all)`, `/sessions*` переведены на отдельную, более мягкую политику
+`auth-session` (`AuthRateLimitOptions.AuthSessionPermitLimit`, 60/мин на IP по умолчанию) — логин и
+обычный трафик сессии больше не делят один лимит. Регрессия закрыта тестом
+`AuthRateLimitTests.Me_IsNotLimitedByLoginBruteForceBucket`.
+
+### 18. Флейковый e2e `14-vaccinations.spec.ts` возле полуночи — закрыто
+`VaccinationService` сравнивал дату прививки с «сегодня» по `DateTime.UtcNow`, а фронт
+(`todayLocal()`) шлёт локальную дату браузера — в часовых поясах восточнее UTC в первые часы после
+местной полуночи это давало ложное 400 «Дата не может быть в будущем». Теперь `VaccinationService`
+(create/bulk/update/schedule) считает «сегодня» в часовом поясе пользователя, выполняющего действие
+(`User.TimeZoneId`, тот же `TimeZones.Resolve`/`DoseScheduleExpander.LocalDate`, что и у курсов
+приёма лекарств) — регрессия закрыта тестами `VaccinationServiceTests.CreateAsync_UsesActingUsersTimeZone_NotUtc`
+и `..._RejectsDate_InFutureForActingUsersOwnTimeZone`.
+
+Сознательно не тронуто (не было частью этого дефекта, UTC-«сегодня» там не отклоняет запрос, а
+только на несколько часов сдвигает окно): `HealthSummaryService.BuildMedkitsAsync` (срок годности
+лекарств в аптечке) и `VaccinationReminderJob` (окно DueSoon/CanDo для напоминаний) — там для
+подопечных нет своего часового пояса (только `CreatedByUserId`), а неточность на пару часов раз в
+сутки не создаёт видимого пользователю бага.
+
+### 15. Опциональные миграции Angular — закрыто
+`use-application-builder` выполнена вручную (официальной ng-update схемы для смены ИМЕННО пакета не
+нашлось — CLI её не предложил, схема `application`/`dev-server` в `@angular/build` идентична
+`@angular-devkit/build-angular`): `angular.json` — builder `@angular/build:application`/
+`:dev-server`, `package.json` — `@angular-devkit/build-angular` заменён на `@angular/build` той же
+версии. Побочный эффект — `ng build` заметно быстрее (dev-сборка ~70-80 с → ~11 с, новый builder
+использует персистентный кэш на `@parcel/watcher`/`lmdb`) и initial-бандл меньше (см. #13: ≈885 кБ →
+710 кБ). `router-current-navigation` не нужна — `Router.getCurrentNavigation`/`currentNavigation` в
+кодовой базе не используется вовсе. `control-flow-migration` была не нужна и раньше (в шаблонах уже
+`@if`/`@for`).
+
+### 13. Бюджет initial-бандла превышен — закрыто (побочный эффект #15)
+`ng build` (prod) предупреждал: ≈885 кБ при предупредительном пороге 850 кБ (ошибка — с 1,5 МБ).
+Переход на `@angular/build` (#15) сам по себе уронил initial-бандл до 710 кБ — запас ≈140 кБ,
+предупреждение больше не показывается. Рост, разумеется, продолжится дальше — ленивые чанки
+остаются нужным приёмом на будущее, если бюджет снова станет тесным.
+
 ## Открытое
 
 ### 3. Регистрация вебхука бота на реальном домене не проверена
@@ -67,28 +156,10 @@
 Готовые рычаги для тарифов уже есть: суточные лимиты на пользователя
 (`ExtractionLimitsOptions`), лимиты вложений, число семей.
 
-### 6. `POST /api/medications/ocr` — синхронный
-Фото упаковки не хранятся (ADR-0001), поэтому OCR лекарств нельзя поставить в очередь без хранения
-снимков; при недоступном ИИ — `success:false` и заполнение полей руками. Запрос держит HTTP-соединение до
-`LmStudio:TimeoutSeconds`.
-
-### 7. `LmStudio:TimeoutSeconds` = 1000 при единственном воркере очереди
-«Молчащий» туннель (пакеты теряются, а не отбиваются) держит воркер очереди `extraction`/`enrichment` и
-`LmStudioConcurrencyGate` до таймаута — около 17 минут на один вызов. Проба перед джобой резюме и
-кэш 10 с смягчают, но не отменяют. Рассмотреть таймаут поменьше на «дешёвых» вызовах и проверку
-жизни соединения.
-
 ### 8. Задачи обогащения справочника удалённых записей остаются
 Удаление записи/подопечного/аккаунта чистит задачи распознавания, но задачи обогащения справочника
 (общие для справочника) остаются и в глобальном трее показываются без ссылки на запись. Решение
 («отменять Pending-обогащение, порождённое только этой записью») потребует учёта владельца задачи.
-
-### 9. Флейковый интеграционный тест
-`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
-падает на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
-`Hangfire.PostgreSql` (`monitoring.Queues()` в `AdminStatsService.GetSystemStatsAsync` — на собственном
-пуле соединений Hangfire). Повторный запуск проходит. Вероятная причина — устаревшее соединение в
-пуле Hangfire; варианты — ретрай вызова мониторинга или новое соединение в этом эндпоинте.
 
 ### 10. Заморожённые зависимости
 См. таблицу в `.claude/research/frontend-toolchain-and-e2e.md`: MassTransit 8.5.x (не 9) и
@@ -101,21 +172,9 @@ FluentAssertions 6.12.x (не 8) — коммерческие лицензии; 
 сценарии, но **не** PWA-вход по email+паролю (нужен OTP с почты) и не Telegram initData; workflow
 `e2e.yml` запускается только на push в `master`/вручную, не на PR.
 
-### 12. `profileGuard` принимает временный сбой за «профиль не заполнен»
-При 429 (rate limit `auth`: 10 запросов/мин на IP) или сетевом сбое `GET /api/auth/me` гард не
-получает профиль и уводит на `/profile-setup`. Нужно различать «нет данных» и «профиль неполон»
-(повторить/показать ошибку). За NAT с общим IP лимит `auth` даёт то же ложное срабатывание.
-
-### 13. Бюджет initial-бандла превышен
-`ng build` (prod) предупреждает: ≈885 кБ при предупредительном пороге 850 кБ (ошибка — с 1,5 МБ).
-Рост постепенный; при следующей крупной фиче — ленивые чанки.
-
 ### 14. `Deploy` — только вручную
 Хотфиксы (например, `Caddyfile`) не выкатываются сами: после мержа нужен ручной запуск `Deploy`
 (решение зафиксировано в `deploy/DECISIONS.md`). Держать в голове при инцидентах.
-
-### 15. Опциональные миграции Angular не применены
-После `ng update` до 20 не запускались: `use-application-builder` (перенос на пакет `@angular/build`; сейчас — `@angular-devkit/build-angular:application`) и `router-current-navigation` (`Router.getCurrentNavigation` → сигнал). `control-flow-migration` не нужна — в шаблонах уже новый синтаксис `@if/@for`. Не нужны для безопасности; делать отдельными PR.
 
 ### 16. Прививки (ADR-0016): нацкалендарь не выверен клинически, сертификат не протестирован на реальном LM Studio
 `VaccineCatalog` — приближение приказа №1122н (возрастные окна округлены до месяцев/дней силами
@@ -132,21 +191,11 @@ FluentAssertions 6.12.x (не 8) — коммерческие лицензии; 
   хаба, которая её показывает) — понадобился бы ещё один общий стейт-сервис ради одного индикатора;
   сама плитка хаба всё равно отражает это через `/api/health/summary`.
 - `GET /api/medical-records?self=true` (старое) продолжает пропускать анализы/визиты, которые
-  владелец расшарил моей семье — сознательно оставлено ради обратной совместимости; хаб и
-  прикладной код используют новый `subject=me` (`MedicalRecordFilter.MineOnly`), у которого этой
-  дыры нет (см. ADR-0017/`MedicalRecordServiceTests.MineOnly_*`). Если найдётся другой потребитель
-  `self=true`, стоит перевести и его.
+  владелец расшарил моей семье — единственный оставшийся потребитель (`medical-records-panel.
+  component.ts`, чип «Я») переведён на новый `subject=me` (`MedicalRecordFilter.MineOnly`), у
+  которого этой дыры нет (см. ADR-0017/`MedicalRecordServiceTests.MineOnly_*`). Сам параметр `self`
+  на бэкенде оставлен ради уже закешированных у пользователей старых PWA-бандлов — фронт его больше
+  не шлёт.
 - Плитка «Прививки» ведёт прямо на график пользователя (`/health/vaccinations/people/user/{id}`),
   а не на `/health/vaccinations?person=me` — у обзора прививок нет своего фильтра «на себя», это
   ближайший осмысленный аналог.
-
-### 18. Флейковый e2e `14-vaccinations.spec.ts` возле полуночи (не связано с ADR-0017)
-Обнаружено при тестировании хаба «Здоровье», причина — в существующей фиче quick-mark
-(`vaccinations-overview.component.ts` → `POST /api/vaccinations`, коммит `d67f83a`), не в этой
-ветке. `todayLocal()` во фронте берёт ЛОКАЛЬНУЮ дату браузера; бэкенд сравнивает её с
-`DateTime.UtcNow`. В часовых поясах восточнее UTC (Москва, UTC+3) в первые ~3 часа после полуночи
-по местному времени локальная дата уже «завтра» по UTC — запрос получает 400
-«Дата не может быть в будущем», сохранение прививки падает. Тест `Отметить сделанной` иногда падает
-именно в это окно; вне его — стабильно зелёный. Нужно либо слать вместе с датой часовой пояс
-пользователя (как это уже сделано для приёма лекарств, `DoseScheduleExpander`), либо сравнивать на
-бэкенде с локальной датой пользователя, а не с UTC.

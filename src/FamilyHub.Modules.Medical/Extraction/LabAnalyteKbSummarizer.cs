@@ -107,7 +107,7 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
 
         var userText = BuildUserText(displayName, snippets);
         var prompt = await promptProvider.GetAsync("lab-analyte.summarize", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, userText, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация показателя «{DisplayName}» не удалась: {Error}", displayName, result.Error);

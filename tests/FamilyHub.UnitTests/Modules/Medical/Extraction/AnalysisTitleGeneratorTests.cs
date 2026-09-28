@@ -25,7 +25,7 @@ public class AnalysisTitleGeneratorTests
     [Fact]
     public async Task GenerateAsync_ModelUnavailable_ReturnsNull_DoesNotThrow()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен"));
 
         var result = await _sut.GenerateAsync(TextContent("бланк"), ["Гемоглобин"]);
@@ -37,7 +37,7 @@ public class AnalysisTitleGeneratorTests
     [Fact]
     public async Task GenerateAsync_TransientFailure_Throws()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
 
         var act = () => _sut.GenerateAsync(TextContent("бланк"), ["Гемоглобин"]);

@@ -42,7 +42,7 @@ public class PatientReferenceCalculator(ILmStudioJsonClient client, IPromptProvi
     {
         var userText = BuildUserText(analyteName, calculationInstructions, ageYears, sex, unit);
         var prompt = await promptProvider.GetAsync("analysis.patient-reference", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, userText, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.

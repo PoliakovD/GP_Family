@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.MedicationCourses;
 using FamilyHub.Domain.Vaccinations;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Storage;
@@ -181,6 +182,42 @@ public class VaccinationServiceTests : SqliteTestBase
 
         (await _sut.DeleteAsync(admin.Id, item.RecordId!.Value)).Should().Be(VaccinationResult.Success);
         Db.Vaccinations.Should().BeEmpty();
+    }
+
+    /// <summary>Регрессия: раньше «сегодня» для валидации даты считалось в UTC (VaccinationService.
+    /// Today()), из-за чего пользователь восточнее UTC не мог отметить прививку сегодняшним числом в
+    /// первые часы после местной полуночи (см. TECH_DEBT.md, "Дата не может быть в будущем"). Пояса
+    /// UTC+14/UTC-12 без перехода на летнее время выбраны специально — их «сегодня» никогда не
+    /// совпадают (разница 26 часов), поэтому тест детерминирован в любое время суток.</summary>
+    [Fact]
+    public async Task CreateAsync_UsesActingUsersTimeZone_NotUtc()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        admin.BirthDate = new DateOnly(1990, 1, 1);
+        admin.TimeZoneId = "Pacific/Kiritimati"; // UTC+14
+        await Db.SaveChangesAsync();
+
+        var todayThere = DoseScheduleExpander.LocalDate(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific/Kiritimati"));
+
+        var (result, _, error) = await _sut.CreateAsync(admin.Id, MmrDose(VaccinationSubjects.UserKind, admin.Id, todayThere));
+
+        result.Should().Be(VaccinationResult.Success, error);
+    }
+
+    [Fact]
+    public async Task CreateAsync_RejectsDate_InFutureForActingUsersOwnTimeZone()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        admin.BirthDate = new DateOnly(1990, 1, 1);
+        admin.TimeZoneId = "Etc/GMT+12"; // UTC-12
+        await Db.SaveChangesAsync();
+
+        var todayFarAhead = DoseScheduleExpander.LocalDate(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Pacific/Kiritimati"));
+
+        var (result, _, error) = await _sut.CreateAsync(admin.Id, MmrDose(VaccinationSubjects.UserKind, admin.Id, todayFarAhead));
+
+        result.Should().Be(VaccinationResult.Invalid);
+        error.Should().Be("Дата не может быть в будущем.");
     }
 
     [Fact]

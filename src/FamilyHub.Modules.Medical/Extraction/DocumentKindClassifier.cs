@@ -60,13 +60,13 @@ public class DocumentKindClassifier(
         if (content.Kind == DocumentSourceKind.Text && !string.IsNullOrEmpty(content.Text))
         {
             var header = content.Text.Length > HeaderChars ? content.Text[..HeaderChars] : content.Text;
-            result = await client.ExtractJsonAsync(prompt, header, ct);
+            result = await client.ExtractJsonAsync(prompt, header, ct, shortTimeout: true);
         }
         else if (content.Kind == DocumentSourceKind.Image && content.Images.Count > 0)
         {
             var first = content.Images[0];
             result = await client.ExtractJsonAsync(
-                prompt, "Определи вид этого медицинского документа.", [(first.Bytes, first.ContentType)], ct);
+                prompt, "Определи вид этого медицинского документа.", [(first.Bytes, first.ContentType)], ct, shortTimeout: true);
         }
         else
         {
