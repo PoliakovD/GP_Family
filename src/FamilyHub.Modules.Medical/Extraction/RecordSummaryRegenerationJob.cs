@@ -28,6 +28,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 public class RecordSummaryRegenerationJob(
     AppDbContext db,
     LabSummarizer summarizer,
+    ClinicianLabSummarizer clinicianSummarizer,
     IPipelineConfigService pipelineConfig,
     ILmStudioAvailabilityProbe probe,
     ILogger<RecordSummaryRegenerationJob> logger)
@@ -105,6 +106,30 @@ public class RecordSummaryRegenerationJob(
             }
         }
 
+        // Отдельный вызов, отдельный промпт (план "качество ИИ-распознавания анализов", Этап 4) —
+        // клиническая сводка для врача, пересчитывается вместе с пациентской по тому же токену
+        // SummaryDirtyAt (см. докстринг MedicalRecord.ClinicianSummaryJson).
+        string? clinicianSummaryJson = null;
+        var clinicianEnabled = await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "record-summary-clinician", ct);
+        if (indicators.Count > 0 && clinicianEnabled)
+        {
+            var (ageYears, sex) = await PatientIdentityResolver.ResolveAsync(db, record, ct);
+            var clinicianSummarized = await clinicianSummarizer.SummarizeAsync(indicators, ageYears, sex, ct);
+            if (clinicianSummarized.Success && clinicianSummarized.Summary is not null)
+            {
+                clinicianSummaryJson = JsonSerializer.Serialize(clinicianSummarized.Summary);
+            }
+            else if (clinicianSummarized.IsTransient)
+            {
+                logger.LogInformation("Пересчёт клинической сводки записи {RecordId}: ИИ отвалился посреди вызова — ждём его.", recordId);
+                return;
+            }
+            else
+            {
+                logger.LogWarning("Автопересчёт клинической сводки записи {RecordId} не удался — сводка сброшена.", recordId);
+            }
+        }
+
         // LLM-вызов долгий — пока он шёл, правка могла повториться. Тогда токен уже другой, и
         // результат по старому набору показателей записывать нельзя (свежая джоба уже в пути).
         var currentToken = await db.MedicalRecords.AsNoTracking()
@@ -112,6 +137,7 @@ public class RecordSummaryRegenerationJob(
         if (currentToken?.Ticks != dirtyTicks) return;
 
         record.SummaryJson = summaryJson;
+        record.ClinicianSummaryJson = clinicianSummaryJson;
         record.SummaryDirtyAt = null;
         await db.SaveChangesAsync(ct);
     }

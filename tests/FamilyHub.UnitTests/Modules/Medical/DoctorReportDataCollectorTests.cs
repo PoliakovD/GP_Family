@@ -32,13 +32,15 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
     }
 
     private MedicalRecord AddRecord(Guid owner, DateOnly date, MedicalRecordKind kind = MedicalRecordKind.Analysis,
-        Guid? target = null, string? title = null, string? summaryJson = null, DateTime? dirtyAt = null, string? extracted = null, string? doctor = null)
+        Guid? target = null, string? title = null, string? summaryJson = null, DateTime? dirtyAt = null, string? extracted = null,
+        string? doctor = null, string? clinicianSummaryJson = null)
     {
         var r = TestData.NewMedicalRecord(owner, kind);
         r.RecordDate = date;
         r.TargetUserId = target;
         r.Title = title;
         r.SummaryJson = summaryJson;
+        r.ClinicianSummaryJson = clinicianSummaryJson;
         r.SummaryDirtyAt = dirtyAt;
         r.ExtractedDataJson = extracted;
         r.Doctor = doctor;
@@ -180,6 +182,37 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         model.Summaries!.Should().ContainSingle(s => s.Title == "Свежее" && s.PlainSummary == "Всё хорошо");
         model.Summaries![0].Deviations.Should().ContainSingle(d => d.Name == "Ферритин");
         model.SkippedSummaries.Should().Be(1);
+    }
+
+    /// <summary>Врачу — клиническая сводка (ClinicianLabSummarizer, план "качество ИИ-распознавания
+    /// анализов", Этап 4), не пациентская, когда обе есть.</summary>
+    [Fact]
+    public async Task Summaries_PrefersClinicianSummary_WhenBothAvailable()
+    {
+        var patient = JsonSerializer.Serialize(new LabSummary(
+            "Простыми словами: ферритин снижен.", [new LabSummaryDeviation("Ферритин", "может значить нехватку железа")], [], "Не диагноз"));
+        var clinician = JsonSerializer.Serialize(new ClinicianLabSummary(
+            "Железодефицит вероятен по ферритину.", [new ClinicianLabSummaryDeviation("Ферритин", "9 нг/мл, ниже нормы — картина ЖДА")], null));
+        AddRecord(_me.Id, new DateOnly(2026, 5, 1), title: "Анализ", summaryJson: patient, clinicianSummaryJson: clinician);
+
+        var model = await _sut.CollectAsync(_me.Id, From, To, All, null);
+
+        model.Summaries!.Should().ContainSingle(s => s.PlainSummary == "Железодефицит вероятен по ферритину.");
+        model.Summaries![0].Deviations.Should().ContainSingle(d => d.Name == "Ферритин" && d.Meaning.Contains("ЖДА"));
+    }
+
+    /// <summary>Клинической сводки нет (шаг выключен, не прошла гейт, или запись старая) —
+    /// пациентская сводка как fallback, запись не пропадает из отчёта вовсе.</summary>
+    [Fact]
+    public async Task Summaries_FallsBackToPatientSummary_WhenClinicianSummaryMissing()
+    {
+        var patient = JsonSerializer.Serialize(new LabSummary(
+            "Простыми словами: всё в норме.", [], [], "Не диагноз"));
+        AddRecord(_me.Id, new DateOnly(2026, 5, 1), title: "Анализ", summaryJson: patient, clinicianSummaryJson: null);
+
+        var model = await _sut.CollectAsync(_me.Id, From, To, All, null);
+
+        model.Summaries!.Should().ContainSingle(s => s.PlainSummary == "Простыми словами: всё в норме.");
     }
 
     [Fact]

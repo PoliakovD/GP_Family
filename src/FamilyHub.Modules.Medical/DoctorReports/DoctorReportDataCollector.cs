@@ -214,11 +214,20 @@ public class DoctorReportDataCollector(AppDbContext db)
         return null;
     }
 
+    /// <summary>Врачу — клиническая сводка (ClinicianLabSummarizer, план "качество
+    /// ИИ-распознавания анализов", Этап 4), не пациентская: плотнее, клиническим языком, без
+    /// разжёвывания. Fallback на пациентскую (LabSummarizer.SummaryJson) — шаг клинической сводки
+    /// может быть выключен из админки, не пройти антигаллюцинационный гейт, или запись создана до
+    /// введения ClinicianLabSummarizer — отчёт врачу в этих случаях лучше отдаст то, что есть, чем
+    /// пропустит запись вовсе. ReportSummaryItem/LabSummaryDeviation не меняются — клиническое
+    /// отклонение (Name, Clinical) проецируется в ту же форму (Name, Meaning), рендерер ничего не
+    /// знает про источник текста.</summary>
     private static (List<ReportSummaryItem> Items, int Skipped) BuildSummaries(List<MedicalRecord> analyses)
     {
         var items = new List<ReportSummaryItem>();
         var skipped = 0;
-        foreach (var record in analyses.Where(r => !string.IsNullOrEmpty(r.SummaryJson)))
+        foreach (var record in analyses.Where(
+            r => !string.IsNullOrEmpty(r.SummaryJson) || !string.IsNullOrEmpty(r.ClinicianSummaryJson)))
         {
             // Резюме устарело (показатели правили руками, пересчёт не завершён) — не отдаём врачу
             // устаревший текст; считаем, чтобы отчёт честно сказал, что часть резюме пропущена.
@@ -228,19 +237,32 @@ public class DoctorReportDataCollector(AppDbContext db)
                 continue;
             }
 
-            LabSummary? summary;
-            try
+            var clinician = TryDeserialize<ClinicianLabSummary>(record.ClinicianSummaryJson);
+            if (clinician is not null && (!string.IsNullOrWhiteSpace(clinician.Overview) || clinician.Deviations.Count > 0))
             {
-                summary = JsonSerializer.Deserialize<LabSummary>(record.SummaryJson!);
-            }
-            catch (JsonException)
-            {
+                var deviations = clinician.Deviations.Select(d => new LabSummaryDeviation(d.Name, d.Clinical)).ToList();
+                items.Add(new ReportSummaryItem(record.RecordDate, record.Title, clinician.Overview, deviations));
                 continue;
             }
+
+            var summary = TryDeserialize<LabSummary>(record.SummaryJson);
             if (summary is null || (string.IsNullOrWhiteSpace(summary.PlainSummary) && summary.Deviations.Count == 0)) continue;
             items.Add(new ReportSummaryItem(record.RecordDate, record.Title, summary.PlainSummary, summary.Deviations));
         }
         return (items, skipped);
+    }
+
+    private static T? TryDeserialize<T>(string? json) where T : class
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     // ---- Визиты и препараты ----

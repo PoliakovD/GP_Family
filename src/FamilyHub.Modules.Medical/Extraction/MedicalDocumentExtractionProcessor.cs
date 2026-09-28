@@ -49,6 +49,7 @@ public class MedicalDocumentExtractionProcessor(
     PatientReferenceCalculator referenceCalculator,
     QualitativeNormJudge qualitativeJudge,
     LabSummarizer summarizer,
+    ClinicianLabSummarizer clinicianSummarizer,
     Kb.KbLookupService medicationKbLookup,
     VisitMedicationEnrichmentRequestService visitMedicationEnrichment,
     IPipelineConfigService pipelineConfig,
@@ -638,6 +639,19 @@ public class MedicalDocumentExtractionProcessor(
             var summarized = await summarizer.SummarizeAsync(allIndicators, ct);
             record.SummaryJson = summarized.Success && summarized.Summary is not null
                 ? JsonSerializer.Serialize(summarized.Summary)
+                : null;
+        }
+
+        // Отдельный вызов, отдельный промпт (план "качество ИИ-распознавания анализов", Этап 4) —
+        // клиническая сводка для отчёта врачу, пациенту в самой записи никогда не показывается
+        // (см. ClinicianLabSummarizer). ageYears/sex уже резолвлены выше для каскада KbFixed —
+        // переиспользуем тот же вызов PatientIdentityResolver, не повторяем его.
+        record.ClinicianSummaryJson = null;
+        if (await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "record-summary-clinician", ct))
+        {
+            var clinicianSummarized = await clinicianSummarizer.SummarizeAsync(allIndicators, ageYears, sex, ct);
+            record.ClinicianSummaryJson = clinicianSummarized.Success && clinicianSummarized.Summary is not null
+                ? JsonSerializer.Serialize(clinicianSummarized.Summary)
                 : null;
         }
         record.ExtractionStatus = ExtractionStatus.Ready;

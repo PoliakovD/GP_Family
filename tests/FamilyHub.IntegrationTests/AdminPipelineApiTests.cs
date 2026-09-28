@@ -142,8 +142,10 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         // UpdateAnalysisExtractPromptForRowBatching → 4 — построчное извлечение, план "качество
         // ИИ-распознавания анализов"), analysis.qualitative-judge — версию 2
         // (UpdateQualitativeJudgePromptForRangeContext) — не все слоты обязаны застыть на версии 1
-        // навсегда, важно только, что у каждого есть РОВНО одна активная версия.
-        slots.Should().HaveCount(19);
+        // навсегда, важно только, что у каждого есть РОВНО одна активная версия. + 1 клиническая
+        // сводка для врача (AddClinicianSummaryToMedicalRecord, план "качество ИИ-распознавания
+        // анализов", Этап 4) — итого 20.
+        slots.Should().HaveCount(20);
         slots.Should().OnlyContain(s => s.ActiveVersion >= 1);
         slots.Should().Contain(s => s.Key == "analysis.specimen-resolve" && s.ActiveVersion == 2);
         slots.Should().Contain(s => s.Key == "analysis.specimen-validate" && s.ActiveVersion == 2);

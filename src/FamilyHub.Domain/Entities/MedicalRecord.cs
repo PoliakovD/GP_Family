@@ -78,6 +78,16 @@ public class MedicalRecord
     [Encrypted]
     public string? SummaryJson { get; set; }
 
+    /// <summary>Клиническая сводка для ВРАЧА (план "качество ИИ-распознавания анализов", Этап 4,
+    /// см. ClinicianLabSummarizer) — отдельная от <see cref="SummaryJson"/> (пациентской): плотнее,
+    /// клиническим языком, без разжёвывания. НИГДЕ не показывается пациенту в самой записи —
+    /// только в отчёте врачу (DoctorReportDataCollector/DoctorReportHtmlRenderer). Пересчитывается
+    /// вместе с SummaryJson по тому же <see cref="SummaryDirtyAt"/> — отдельного признака "грязно"
+    /// не заведено, оба резюме устаревают и обновляются одновременно от одного и того же набора
+    /// показателей.</summary>
+    [Encrypted]
+    public string? ClinicianSummaryJson { get; set; }
+
     /// <summary>Резюме устарело: показатели или источник записи изменили вручную, а пересчёт ещё
     /// не выполнен. Значение — токен-версия «грязного» состояния (момент последней правки, с
     /// точностью до микросекунды — как хранит Postgres): фоновая джоба RecordSummaryRegeneration

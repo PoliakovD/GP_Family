@@ -95,6 +95,7 @@ public static class MedicalModule
         // class doc QualitativeNormJudge).
         services.AddScoped<QualitativeNormJudge>();
         services.AddScoped<LabSummarizer>();
+        services.AddScoped<ClinicianLabSummarizer>();
         services.AddScoped<ExtractionRequestService>();
         services.AddScoped<ExtractionQueryService>();
         services.AddScoped<MedicalDocumentExtractionProcessor>();
