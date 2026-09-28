@@ -45,6 +45,10 @@ public class PatientReferenceCalculator(ILmStudioJsonClient client, IPromptProvi
         var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
+            // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.
+            if (result.IsTransient)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Расчёт референса «{Name}» не удался: {Error}", analyteName, result.Error);
             return null;
         }

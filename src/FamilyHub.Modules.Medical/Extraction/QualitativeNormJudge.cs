@@ -75,6 +75,10 @@ public class QualitativeNormJudge(ILmStudioJsonClient client, IPromptProvider pr
         var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
+            // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.
+            if (result.IsTransient)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Оценка нормы «{Name}» не удалась: {Error}", indicatorName, result.Error);
             return null;
         }

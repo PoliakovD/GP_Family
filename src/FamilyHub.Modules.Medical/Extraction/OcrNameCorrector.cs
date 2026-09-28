@@ -92,6 +92,13 @@ public class OcrNameCorrector(ILmStudioJsonClient client, IPromptProvider prompt
         var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (result is null || !result.Success || result.Payload is null)
         {
+            // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.
+            // Здесь тихий пропуск при отказе МОДЕЛИ по-прежнему безопасен (class doc выше — хуже,
+            // чем без коррекции, не станет), но транзиентный сбой всё равно должен вернуть задачу в
+            // ожидание, а не тихо оставить имена некорректированными навсегда.
+            if (result?.IsTransient == true)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Коррекция OCR-имён недоступна: {Error}", result?.Error);
             return corrected;
         }

@@ -158,6 +158,10 @@ public partial class AnalyteSubjectResolver(
 
         if (!result.Success || result.Payload is null)
         {
+            // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.
+            if (result.IsTransient)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Резолвинг объекта исследования недоступен: {Error}", result.Error);
             return AnalyteSubjectResolution.Empty;
         }

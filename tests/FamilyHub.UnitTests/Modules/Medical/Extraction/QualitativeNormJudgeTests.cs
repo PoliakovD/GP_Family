@@ -79,6 +79,21 @@ public class QualitativeNormJudgeTests
         result.Should().BeNull();
     }
 
+    /// <summary>Регрессия TECH_DEBT.md #5: раньше транзиентный сбой (LM Studio недоступен) и отказ
+    /// самой модели одинаково молча возвращали null — запись становилась «Готово» без нормы
+    /// навсегда. Теперь транзиентный сбой пробрасывается — MedicalDocumentExtractionProcessor
+    /// поймает и вернёт задачу в ожидание ИИ, не потратив попытку.</summary>
+    [Fact]
+    public async Task JudgeAsync_TransientFailure_Throws()
+    {
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
+
+        var act = () => _sut.JudgeAsync("Показатель", "значение", null, null, null, null, null);
+
+        await act.Should().ThrowAsync<LmStudioUnavailableException>();
+    }
+
     [Fact]
     public async Task JudgeAsync_AbsenceBelowNonZeroRange_PassesBoundsAndLowMeansToModel_ModelCanStillCallItNormal()
     {

@@ -39,6 +39,21 @@ public class OcrNameCorrectorTests
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
+    /// <summary>Регрессия TECH_DEBT.md #5 — транзиентный сбой (LM Studio недоступен) должен
+    /// пробрасываться, не молча оставлять имена некорректированными навсегда, как при обычном отказе
+    /// модели (см. class doc: тихий пропуск при отказе МОДЕЛИ по-прежнему безопасен — это про
+    /// сеть/сервер, а не про содержимое ответа).</summary>
+    [Fact]
+    public async Task CorrectBatchAsync_TransientFailure_Throws()
+    {
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
+
+        var act = () => _sut.CorrectBatchAsync(["Парацетамол"]);
+
+        await act.Should().ThrowAsync<LmStudioUnavailableException>();
+    }
+
     [Fact]
     public async Task CorrectAsync_MixedCyrillicLatinHomoglyphs_AppliesModelCorrection()
     {

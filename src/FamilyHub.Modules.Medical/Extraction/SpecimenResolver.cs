@@ -114,6 +114,14 @@ public class SpecimenResolver(
 
         if (!result.Success || result.Payload is null)
         {
+            // Технический сбой (LM Studio недоступен/таймаут/5xx) — не то же самое, что "модель не
+            // смогла": раньше оба исхода одинаково молча возвращали Empty, и запись становилась
+            // «Готово» без источника навсегда, хотя ИИ всего лишь не ответил в этот раз (TECH_DEBT.md
+            // #5). Пробрасываем — MedicalDocumentExtractionProcessor поймает и вернёт задачу в
+            // ожидание ИИ (WaitingForAi), не потратив попытку.
+            if (result.IsTransient)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Резолвинг источника показателя недоступен: {Error}", result.Error);
             return SpecimenDocumentResolution.Empty;
         }
