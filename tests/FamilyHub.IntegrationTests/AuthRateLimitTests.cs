@@ -75,6 +75,19 @@ public class AuthRateLimitTests(RateLimitedWebFactory factory)
             .StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
     }
 
+    // Регрессия на TECH_DEBT.md #12: /me раньше делил бакет с /login ("auth", 3/час в этой
+    // фабрике) — SPA дёргает /me на каждой guard-навигации, и пара запросов подряд гасила лимит,
+    // из-за чего guard принимал 429 за "профиль не заполнен"/"не аутентифицирован". Теперь у
+    // /me своя политика "auth-session" — число запросов здесь заведомо больше лимита "auth".
+    [Fact]
+    public async Task Me_IsNotLimitedByLoginBruteForceBucket()
+    {
+        var client = factory.CreateClientAs(FreshTelegramId());
+
+        for (var i = 0; i < 11; i++)
+            (await client.GetAsync("/api/auth/me")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     // Регрессия на аудит module-review-2026-08-02/02, находка 2: POST /invites/{code}/redeem —
     // единственный «угадай-секрет» эндпоинт вне /api/auth, раньше вообще без rate-limit.
     [Fact]
