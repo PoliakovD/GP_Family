@@ -17,6 +17,15 @@
 контейнер Postgres, и в `ConnectionStrings__Postgres` сервиса `api`; строки подключения в
 `appsettings*.json` нет вовсе.
 
+### 9. Флейковый интеграционный тест — закрыто
+`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
+падал на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
+`Hangfire.PostgreSql` (`monitoring.Queues()`/`FailedCount()` в `AdminStatsService.GetSystemStatsAsync`
+— на собственном пуле соединений Hangfire, в стороне от EF/AppDbContext). `GetHangfireStatsWithRetry`
+теперь до 2 раз повторяет вызов при `NpgsqlException`/`InvalidOperationException`, каждый раз заново
+запрашивая `IMonitoringApi` у `JobStorage.Current` — устаревшее соединение из пула не переиспользуется
+повторно, следующее почти всегда рабочее.
+
 ### 12. `profileGuard` принимал временный сбой за «профиль не заполнен» — закрыто
 `GET /api/auth/me` делил бакет rate-limit `auth` (10/мин на IP) с попытками входа; 429 или сетевой
 сбой гард не отличал от «профиль не заполнен» и уводил на `/profile-setup` (тем же приёмом
@@ -111,13 +120,6 @@ guard-навигации без кеша) и по NAT с общим IP.
 Удаление записи/подопечного/аккаунта чистит задачи распознавания, но задачи обогащения справочника
 (общие для справочника) остаются и в глобальном трее показываются без ссылки на запись. Решение
 («отменять Pending-обогащение, порождённое только этой записью») потребует учёта владельца задачи.
-
-### 9. Флейковый интеграционный тест
-`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
-падает на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
-`Hangfire.PostgreSql` (`monitoring.Queues()` в `AdminStatsService.GetSystemStatsAsync` — на собственном
-пуле соединений Hangfire). Повторный запуск проходит. Вероятная причина — устаревшее соединение в
-пуле Hangfire; варианты — ретрай вызова мониторинга или новое соединение в этом эндпоинте.
 
 ### 10. Заморожённые зависимости
 См. таблицу в `.claude/research/frontend-toolchain-and-e2e.md`: MassTransit 8.5.x (не 9) и
