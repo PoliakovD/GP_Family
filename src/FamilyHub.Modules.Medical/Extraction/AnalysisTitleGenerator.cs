@@ -54,11 +54,15 @@ public class AnalysisTitleGenerator(
         var userText = BuildUserText(content, indicatorNames);
 
         var result = content.Kind == DocumentSourceKind.Image && content.Images.Count > 0
-            ? await client.ExtractJsonAsync(prompt, userText, [(content.Images[0].Bytes, content.Images[0].ContentType)], ct)
-            : await client.ExtractJsonAsync(prompt, userText, ct);
+            ? await client.ExtractJsonAsync(prompt, userText, [(content.Images[0].Bytes, content.Images[0].ContentType)], ct, shortTimeout: true)
+            : await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
 
         if (!result.Success || result.Payload is null)
         {
+            // См. комментарий у SpecimenResolver.ResolveAsync (TECH_DEBT.md #5) — та же причина.
+            if (result.IsTransient)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Генерация названия анализа недоступна: {Error}", result.Error);
             return null;
         }

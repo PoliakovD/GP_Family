@@ -62,7 +62,7 @@ public class LmStudioMedicalDocumentExtractorTests
             ["indicators"] = JsonSerializer.SerializeToElement(
                 indicators.Select(i => new { name = i.Name, value = i.Value }).ToArray()),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
@@ -150,7 +150,7 @@ public class LmStudioMedicalDocumentExtractorTests
             ["indicators"] = JsonSerializer.SerializeToElement(new[] { new { name = "Гемоглобин", value = "118" } }),
             ["doctor"] = JsonSerializer.SerializeToElement("Петрова И.И."),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
@@ -171,7 +171,7 @@ public class LmStudioMedicalDocumentExtractorTests
                 new { name = "Парацетамол", dosageInstructions = "по 1 таблетке 3 раза в день" },
             }),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.DoctorVisit);

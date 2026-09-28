@@ -97,7 +97,7 @@ public class SpecimenResolver(
         {
             var header = content.Text.Length > HeaderChars ? content.Text[..HeaderChars] : content.Text;
             var prompt = await promptProvider.GetAsync("analysis.specimen-resolve", SystemPrompt, ct);
-            result = await client.ExtractJsonAsync(prompt, header, ct);
+            result = await client.ExtractJsonAsync(prompt, header, ct, shortTimeout: true);
         }
         else if (content.Kind == DocumentSourceKind.Image && content.Images.Count > 0)
         {
@@ -105,7 +105,7 @@ public class SpecimenResolver(
             var prompt = await promptProvider.GetAsync("analysis.specimen-resolve", SystemPrompt, ct);
             result = await client.ExtractJsonAsync(
                 prompt, "Определи источник показателей на этом изображении.",
-                [(first.Bytes, first.ContentType)], ct);
+                [(first.Bytes, first.ContentType)], ct, shortTimeout: true);
         }
         else
         {
@@ -114,6 +114,14 @@ public class SpecimenResolver(
 
         if (!result.Success || result.Payload is null)
         {
+            // Технический сбой (LM Studio недоступен/таймаут/5xx) — не то же самое, что "модель не
+            // смогла": раньше оба исхода одинаково молча возвращали Empty, и запись становилась
+            // «Готово» без источника навсегда, хотя ИИ всего лишь не ответил в этот раз (TECH_DEBT.md
+            // #5). Пробрасываем — MedicalDocumentExtractionProcessor поймает и вернёт задачу в
+            // ожидание ИИ (WaitingForAi), не потратив попытку.
+            if (result.IsTransient)
+                throw new LmStudioUnavailableException(result.Error ?? "Локальный сервер распознавания недоступен.");
+
             logger.LogInformation("Резолвинг источника показателя недоступен: {Error}", result.Error);
             return SpecimenDocumentResolution.Empty;
         }

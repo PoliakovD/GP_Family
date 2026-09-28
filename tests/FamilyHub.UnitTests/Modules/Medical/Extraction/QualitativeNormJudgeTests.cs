@@ -26,7 +26,7 @@ public class QualitativeNormJudgeTests
     }
 
     private void SetUpModelResponse(bool? isNormal, double confidence = 0.8) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
                 JsonSerializer.Serialize(new { isNormal, confidence })), null));
 
@@ -71,12 +71,27 @@ public class QualitativeNormJudgeTests
     [Fact]
     public async Task JudgeAsync_ModelUnavailable_ReturnsNull_DoesNotThrow()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен"));
 
         var result = await _sut.JudgeAsync("Показатель", "значение", null, null, null, null, null);
 
         result.Should().BeNull();
+    }
+
+    /// <summary>Регрессия TECH_DEBT.md #5: раньше транзиентный сбой (LM Studio недоступен) и отказ
+    /// самой модели одинаково молча возвращали null — запись становилась «Готово» без нормы
+    /// навсегда. Теперь транзиентный сбой пробрасывается — MedicalDocumentExtractionProcessor
+    /// поймает и вернёт задачу в ожидание ИИ, не потратив попытку.</summary>
+    [Fact]
+    public async Task JudgeAsync_TransientFailure_Throws()
+    {
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
+
+        var act = () => _sut.JudgeAsync("Показатель", "значение", null, null, null, null, null);
+
+        await act.Should().ThrowAsync<LmStudioUnavailableException>();
     }
 
     [Fact]

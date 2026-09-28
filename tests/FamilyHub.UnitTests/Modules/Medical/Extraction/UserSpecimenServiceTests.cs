@@ -38,7 +38,7 @@ public class UserSpecimenServiceTests : SqliteTestBase
         if (displayName is not null) payload["displayName"] = JsonSerializer.SerializeToElement(displayName);
         if (reason is not null) payload["reason"] = JsonSerializer.SerializeToElement(reason);
 
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
@@ -100,7 +100,7 @@ public class UserSpecimenServiceTests : SqliteTestBase
     public async Task CreateAsync_LmStudioUnavailable_ReturnsUnavailable_DoesNotPersist()
     {
         var owner = Db.AddUser();
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("timeout"));
 
         var (result, item, _) = await _sut.CreateAsync(owner.Id, "ликвор");

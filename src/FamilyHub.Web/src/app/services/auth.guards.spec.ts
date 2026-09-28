@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { authGuard, consentGuard, profileGuard } from './auth.guards';
 import { AuthService, type ConsentStatus, type Me } from './auth.service';
 import { TelegramService } from './telegram.service';
+import { ToastService } from '../shared/toast/toast.service';
 
 function fakeMe(overrides: Partial<Me> = {}): Me {
   return {
@@ -21,11 +22,13 @@ describe('auth.guards', () => {
     me: ReturnType<typeof signal<Me | null>>;
     consent: ReturnType<typeof signal<ConsentStatus | null>>;
     telegramBound: ReturnType<typeof signal<boolean | null>>;
+    meLoadError: ReturnType<typeof signal<'unauthorized' | 'transient' | null>>;
     loadMe: ReturnType<typeof vi.fn>;
     ensureTelegramBound: ReturnType<typeof vi.fn>;
     loadConsentStatus: ReturnType<typeof vi.fn>;
   };
   let tg: { isInsideTelegram: ReturnType<typeof vi.fn> };
+  let toastError: ReturnType<typeof vi.fn>;
   let createUrlTree: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -34,11 +37,13 @@ describe('auth.guards', () => {
       me: signal<Me | null>(null),
       consent: signal<ConsentStatus | null>(null),
       telegramBound: signal<boolean | null>(null),
+      meLoadError: signal<'unauthorized' | 'transient' | null>(null),
       loadMe: vi.fn(),
       ensureTelegramBound: vi.fn(),
       loadConsentStatus: vi.fn(),
     };
     tg = { isInsideTelegram: vi.fn().mockReturnValue(false) };
+    toastError = vi.fn();
     createUrlTree = vi.fn((commands: unknown[]) => ({ __redirectTo: commands[0] }));
 
     TestBed.configureTestingModule({
@@ -46,6 +51,7 @@ describe('auth.guards', () => {
         { provide: AuthService, useValue: auth },
         { provide: TelegramService, useValue: tg },
         { provide: Router, useValue: { createUrlTree } },
+        { provide: ToastService, useValue: { error: toastError } },
       ],
     });
   });
@@ -74,6 +80,31 @@ describe('auth.guards', () => {
       const result = await runGuard(authGuard);
 
       expect(result).toEqual({ __redirectTo: '/login' });
+    });
+
+    it('PWA mode: retries once on a transient loadMe() failure and passes through on success', async () => {
+      auth.loadMe
+        .mockImplementationOnce(() => {
+          auth.meLoadError.set('transient');
+          return Promise.resolve(null);
+        })
+        .mockImplementationOnce(() => {
+          auth.meLoadError.set(null);
+          return Promise.resolve(fakeMe());
+        });
+
+      await expect(runGuard(authGuard)).resolves.toBe(true);
+      expect(auth.loadMe).toHaveBeenCalledTimes(2);
+    });
+
+    it('PWA mode: does not redirect to /login when loadMe() keeps failing transiently', async () => {
+      auth.loadMe.mockImplementation(() => {
+        auth.meLoadError.set('transient');
+        return Promise.resolve(null);
+      });
+
+      await expect(runGuard(authGuard)).resolves.toBe(true);
+      expect(auth.loadMe).toHaveBeenCalledTimes(2);
     });
 
     it('Telegram mode: a dev header (not inside Telegram) passes through without checking binding', async () => {
@@ -156,6 +187,16 @@ describe('auth.guards', () => {
       const result = await runGuard(profileGuard);
 
       expect(result).toEqual({ __redirectTo: '/profile-setup' });
+    });
+
+    it('passes through with a toast when loadMe() keeps failing transiently', async () => {
+      auth.loadMe.mockImplementation(() => {
+        auth.meLoadError.set('transient');
+        return Promise.resolve(null);
+      });
+
+      await expect(runGuard(profileGuard)).resolves.toBe(true);
+      expect(toastError).toHaveBeenCalled();
     });
   });
 });

@@ -35,8 +35,23 @@ public class OcrNameCorrectorTests
         {
             ["corrections"] = JsonSerializer.SerializeToElement(array),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
+    }
+
+    /// <summary>Регрессия TECH_DEBT.md #5 — транзиентный сбой (LM Studio недоступен) должен
+    /// пробрасываться, не молча оставлять имена некорректированными навсегда, как при обычном отказе
+    /// модели (см. class doc: тихий пропуск при отказе МОДЕЛИ по-прежнему безопасен — это про
+    /// сеть/сервер, а не про содержимое ответа).</summary>
+    [Fact]
+    public async Task CorrectBatchAsync_TransientFailure_Throws()
+    {
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
+
+        var act = () => _sut.CorrectBatchAsync(["Парацетамол"]);
+
+        await act.Should().ThrowAsync<LmStudioUnavailableException>();
     }
 
     [Fact]
@@ -66,7 +81,7 @@ public class OcrNameCorrectorTests
     [Fact]
     public async Task CorrectAsync_ModelUnavailable_KeepsOriginal_DoesNotThrow()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен"));
 
         var result = await _sut.CorrectAsync("СYMАТPИПTАН");
@@ -82,7 +97,8 @@ public class OcrNameCorrectorTests
         var result = await _sut.CorrectBatchAsync(["СYMАТPИПTАН", "паРАЦЕтамол", "СYMАТPИПTАН"]);
 
         result.Should().Equal("Суматриптан", "Парацетамол", "Суматриптан");
-        await _client.Received(1).ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _client.Received(1).ExtractJsonAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>());
     }
 
     [Fact]

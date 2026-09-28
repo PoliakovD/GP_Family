@@ -35,9 +35,21 @@ public class SpecimenResolverTests : SqliteTestBase
     private static DocumentContent TextContent(string text) => DocumentContent.FromText(text);
 
     private void SetUpModelResponse(object payload) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(
                 true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(JsonSerializer.Serialize(payload)), null));
+
+    /// <summary>Регрессия TECH_DEBT.md #5 — см. QualitativeNormJudgeTests.JudgeAsync_TransientFailure_Throws.</summary>
+    [Fact]
+    public async Task ResolveAsync_TransientFailure_Throws()
+    {
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
+
+        var act = () => _sut.ResolveAsync(TextContent("текст бланка"));
+
+        await act.Should().ThrowAsync<LmStudioUnavailableException>();
+    }
 
     [Fact]
     public async Task ResolveAsync_GenericSwabWithoutSite_ReturnsNullContextAndNeedsSiteHint()
