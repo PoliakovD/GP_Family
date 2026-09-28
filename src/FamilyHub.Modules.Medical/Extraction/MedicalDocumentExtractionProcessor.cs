@@ -214,6 +214,18 @@ public class MedicalDocumentExtractionProcessor(
             // Pending с флагом WaitingForAi, попытка не тратится, запись по-прежнему «в процессе», а
             // LmStudioRecoverySweepJob запускает её, как только сервер снова отвечает. Ничего не
             // пробрасываем — Hangfire-повтор здесь только сжёг бы попытки впустую.
+            //
+            // TECH_DEBT.md #5: с тех пор, как транзиентный сбой может прилететь из шагов ВНУТРИ
+            // ProcessAnalysisAsync (PatientReferenceCalculator/QualitativeNormJudge и др., см. их
+            // class doc), к этому моменту в db могут висеть НЕсохранённые db.LabIndicators.Add(...)/
+            // правки record от прерванного прогона — следующий SaveChangesAsync ниже (для job)
+            // заодно сохранил бы и их, наполовину. Clear() отбрасывает их все разом; job при этом
+            // тоже отсоединяется — довешиваем его обратно, чтобы записать новый статус. Сама запись
+            // (record) просто перечитается заново на повторном прогоне — её локальные правки
+            // выше по стеку никуда не сохранялись и безопасно исчезают вместе с этим вызовом.
+            db.ChangeTracker.Clear();
+            db.MedicalDocumentExtractionJobs.Attach(job);
+
             job.Status = EnrichmentJobStatus.Pending;
             job.Stage = ExtractionStage.Queued;
             job.WaitingForAi = true;
