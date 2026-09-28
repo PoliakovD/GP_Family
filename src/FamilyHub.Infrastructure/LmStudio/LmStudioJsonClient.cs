@@ -66,23 +66,25 @@ public class LmStudioJsonClient(
         - Верни строго один JSON-объект, ничего кроме него.
         """;
 
-    /// <inheritdoc cref="ILmStudioJsonClient.ExtractJsonAsync(string, string, CancellationToken, bool)"/>
+    /// <inheritdoc cref="ILmStudioJsonClient.ExtractJsonAsync(string, string, CancellationToken, bool, bool)"/>
     public Task<LmStudioJsonResult> ExtractJsonAsync(
-        string systemPrompt, string userText, CancellationToken ct = default, bool suppressThinking = false) =>
-        ExtractJsonAsync(systemPrompt, userText, [], ct, suppressThinking);
+        string systemPrompt, string userText, CancellationToken ct = default, bool suppressThinking = false,
+        bool shortTimeout = false) =>
+        ExtractJsonAsync(systemPrompt, userText, [], ct, suppressThinking, shortTimeout);
 
     public async Task<LmStudioJsonResult> ExtractJsonAsync(
         string systemPrompt,
         string userText,
         IReadOnlyList<(byte[] Bytes, string ContentType)> images,
         CancellationToken ct = default,
-        bool suppressThinking = false)
+        bool suppressThinking = false,
+        bool shortTimeout = false)
     {
         var reasoning = await modelProvider.GetActiveReasoningAsync(options.Value.Reasoning, ct);
         var systemPromptWithReasoning = $"{systemPrompt}\n\n{ReasoningDirectives[reasoning]}";
 
         var (rawContent, sendError, isTransient) =
-            await SendChatCompletionAsync(systemPromptWithReasoning, userText, images, suppressThinking, ct);
+            await SendChatCompletionAsync(systemPromptWithReasoning, userText, images, suppressThinking, shortTimeout, ct);
         if (sendError is not null) return LmStudioJsonResult.Failure(sendError, isTransient);
         if (string.IsNullOrWhiteSpace(rawContent))
         {
@@ -102,7 +104,7 @@ public class LmStudioJsonClient(
             parseError, rawContent);
 
         var (repairedRaw, repairSendError, repairIsTransient) =
-            await SendChatCompletionAsync(JsonRepairSystemPrompt, candidate, [], suppressThinking, ct);
+            await SendChatCompletionAsync(JsonRepairSystemPrompt, candidate, [], suppressThinking, shortTimeout, ct);
         if (repairSendError is not null || string.IsNullOrWhiteSpace(repairedRaw))
         {
             logger.LogWarning("LM Studio: починка JSON недоступна ({Error}).", repairSendError ?? "пустой ответ");
@@ -138,7 +140,7 @@ public class LmStudioJsonClient(
     /// уже существующем поведении.</summary>
     private async Task<(string? RawContent, string? Error, bool IsTransient)> SendChatCompletionAsync(
         string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images,
-        bool suppressThinking, CancellationToken ct)
+        bool suppressThinking, bool shortTimeout, CancellationToken ct)
     {
         var contentParts = new List<ContentPart> { new("text", Text: userText) };
         foreach (var (bytes, contentType) in images)
@@ -160,16 +162,24 @@ public class LmStudioJsonClient(
             Temperature: 0.1,
             Stream: thinkingScope is not null);
 
+        // Короткий вызов (см. ExtractJsonAsync shortTimeout) получает свой, отдельный от
+        // HttpClient.Timeout, более узкий дедлайн — линкованный токен, а не подмена ct: исходный ct
+        // (реальная отмена — остановка хоста, обрыв запроса) остаётся снаружи и проверяется в catch
+        // ниже, поэтому срабатывание ЭТОГО таймаута не путается с отменой самим вызывающим.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (shortTimeout) timeoutCts.CancelAfter(TimeSpan.FromSeconds(options.Value.ShortCallTimeoutSeconds));
+        var callCt = timeoutCts.Token;
+
         await gate.WaitAsync(ct);
         try
         {
             if (thinkingScope is null)
             {
-                using var response = await httpClient.PostAsJsonAsync("v1/chat/completions", request, JsonOptions, ct);
+                using var response = await httpClient.PostAsJsonAsync("v1/chat/completions", request, JsonOptions, callCt);
                 if (!response.IsSuccessStatusCode)
-                    return (null, await BuildErrorAsync(response, ct), IsTransientStatus(response.StatusCode));
+                    return (null, await BuildErrorAsync(response, callCt), IsTransientStatus(response.StatusCode));
 
-                var parsed = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, ct);
+                var parsed = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, callCt);
                 return (parsed?.Choices?.FirstOrDefault()?.Message?.Content, null, false);
             }
 
@@ -179,20 +189,22 @@ public class LmStudioJsonClient(
             {
                 Content = JsonContent.Create(request, options: JsonOptions),
             };
-            using var streamingResponse = await httpClient.SendAsync(streamingRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var streamingResponse = await httpClient.SendAsync(streamingRequest, HttpCompletionOption.ResponseHeadersRead, callCt);
             if (!streamingResponse.IsSuccessStatusCode)
-                return (null, await BuildErrorAsync(streamingResponse, ct), IsTransientStatus(streamingResponse.StatusCode));
+                return (null, await BuildErrorAsync(streamingResponse, callCt), IsTransientStatus(streamingResponse.StatusCode));
 
-            var rawContent = await SendStreamingChatCompletionAsync(streamingResponse, thinkingScope, ct);
+            var rawContent = await SendStreamingChatCompletionAsync(streamingResponse, thinkingScope, callCt);
             return (rawContent, null, false);
         }
         // !ct.IsCancellationRequested исключает из этого catch отмену САМИМ вызывающим (аудит,
         // находка Medium #1) — TaskCanceledException прилетает и от клиентского HttpClient.Timeout
-        // (внутренний, не наш ct), и от отмены переданным ct (остановка хоста, обрыв запроса).
-        // Раньше оба случая превращались в одинаковый "Локальный сервер недоступен" — бизнес-исход,
-        // который Hangfire НЕ ретраит (RunAsync завершается штатно, без исключения). Из-за этого
-        // редеплой API посреди распознавания молча терял попытку вместо того, чтобы дать Hangfire
-        // повторить задачу: отмена нашим ct теперь просто пробрасывается дальше как есть.
+        // (внутренний, не наш ct), и от отмены переданным ct (остановка хоста, обрыв запроса), и
+        // теперь ещё от callCt (наш короткий таймаут выше). Раньше оба случая превращались в
+        // одинаковый "Локальный сервер недоступен" — бизнес-исход, который Hangfire НЕ ретраит
+        // (RunAsync завершается штатно, без исключения). Из-за этого редеплой API посреди
+        // распознавания молча терял попытку вместо того, чтобы дать Hangfire повторить задачу:
+        // отмена нашим ct теперь просто пробрасывается дальше как есть — сработавший короткий
+        // таймаут (callCt, но не ct) этому не мешает и корректно уходит в ветку ниже.
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
         {
             logger.LogWarning(ex, "LM Studio недоступен или запрос по фото препарата превысил таймаут");

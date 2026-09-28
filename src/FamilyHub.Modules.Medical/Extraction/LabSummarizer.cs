@@ -57,7 +57,7 @@ public class LabSummarizer(ILmStudioJsonClient client, IPromptProvider promptPro
 
         var userText = BuildUserText(indicators);
         var prompt = await promptProvider.GetAsync("analysis.record-summary", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, userText, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация анализа не удалась: {Error}", result.Error);

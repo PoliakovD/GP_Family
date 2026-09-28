@@ -151,7 +151,7 @@ public class GlobalSpecimenKbService(
         string trimmedRawName, string normalizedName, CancellationToken ct = default)
     {
         var prompt = await promptProvider.GetAsync("analysis.specimen-validate", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, trimmedRawName, ct);
+        var result = await client.ExtractJsonAsync(prompt, trimmedRawName, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Валидация источника «{Name}» недоступна: {Error}", trimmedRawName, result.Error);

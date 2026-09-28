@@ -33,10 +33,13 @@ public class LmStudioJsonClientTests
         }
     }
 
-    private static LmStudioJsonClient CreateSut(HttpMessageHandler handler)
+    private static LmStudioJsonClient CreateSut(HttpMessageHandler handler, int? shortCallTimeoutSeconds = null)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:1234/") };
-        var options = Options.Create(new LmStudioOptions());
+        var options = Options.Create(new LmStudioOptions
+        {
+            ShortCallTimeoutSeconds = shortCallTimeoutSeconds ?? new LmStudioOptions().ShortCallTimeoutSeconds,
+        });
         var modelProvider = Substitute.For<ILmStudioModelProvider>();
         modelProvider.GetActiveModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult((string)ci[0]));
@@ -53,6 +56,18 @@ public class LmStudioJsonClientTests
     {
         Content = JsonContent.Create(new { choices = new[] { new { message = new { content } } } }),
     };
+
+    /// <summary>"Молчащий" сервер — не отвечает вовсе, пока не истечёт delay или не сработает
+    /// отмена; настоящий HttpMessageHandler.SendAsync ведёт себя так же на потерянных пакетах
+    /// (TECH_DEBT.md #7), и реагирует на CancellationToken так же, как настоящий сокет.</summary>
+    private sealed class HangingHttpMessageHandler(TimeSpan delay) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(delay, cancellationToken);
+            return ChatResponse("""{"name": "не должно быть достигнуто"}""");
+        }
+    }
 
     /// <summary>Читает поля запроса через JsonDocument, а не строковым Contains по сырому телу —
     /// System.Text.Json по умолчанию экранирует кириллицу как \uXXXX на записи, сырой Contains по
@@ -161,5 +176,39 @@ public class LmStudioJsonClientTests
         result.Success.Should().BeTrue();
         result.Payload!["name"].GetString().Should().Be("Парацетамол");
         handler.RequestBodies.Should().HaveCount(1);
+    }
+
+    /// <summary>Регрессия на TECH_DEBT.md #6/#7: "дешёвый" вызов (shortTimeout: true) не должен
+    /// висеть до полного LmStudioOptions.TimeoutSeconds (1000 c в проде) — у "молчащего" туннеля
+    /// (сервер не отвечает вовсе, не отбивает ошибкой) он обязан сдаться намного раньше, по
+    /// ShortCallTimeoutSeconds.</summary>
+    [Fact]
+    public async Task ExtractJsonAsync_ShortTimeout_GivesUpBeforeServerResponds_ReturnsTransientFailure()
+    {
+        var handler = new HangingHttpMessageHandler(TimeSpan.FromSeconds(5));
+        var sut = CreateSut(handler, shortCallTimeoutSeconds: 1);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var result = await sut.ExtractJsonAsync("система", "пользователь", ct: default, shortTimeout: true);
+        stopwatch.Stop();
+
+        result.Success.Should().BeFalse();
+        result.IsTransient.Should().BeTrue("таймаут — техническая недоступность, не отказ модели по содержимому");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(4),
+            "короткий таймаут (1 c) должен сработать заметно раньше, чем ответит \"молчащий\" сервер (5 c)");
+    }
+
+    /// <summary>Обратная сторона теста выше: без shortTimeout (как у многостраничного распознавания,
+    /// LmStudioMedicalDocumentExtractor) ShortCallTimeoutSeconds вообще не применяется — вызов
+    /// дожидается ответа, даже если тот придёт позже короткого порога.</summary>
+    [Fact]
+    public async Task ExtractJsonAsync_WithoutShortTimeout_IgnoresShortCallTimeoutSeconds_Succeeds()
+    {
+        var handler = new HangingHttpMessageHandler(TimeSpan.FromSeconds(2));
+        var sut = CreateSut(handler, shortCallTimeoutSeconds: 1);
+
+        var result = await sut.ExtractJsonAsync("система", "пользователь", ct: default, shortTimeout: false);
+
+        result.Success.Should().BeTrue();
     }
 }

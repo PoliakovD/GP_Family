@@ -24,11 +24,12 @@ file sealed class AlwaysValidLmStudioJsonClient : ILmStudioJsonClient
 {
     public Task<LmStudioJsonResult> ExtractJsonAsync(
         string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images,
-        CancellationToken ct = default, bool suppressThinking = false) =>
-        ExtractJsonAsync(systemPrompt, userText, ct, suppressThinking);
+        CancellationToken ct = default, bool suppressThinking = false, bool shortTimeout = false) =>
+        ExtractJsonAsync(systemPrompt, userText, ct, suppressThinking, shortTimeout);
 
     public Task<LmStudioJsonResult> ExtractJsonAsync(
-        string systemPrompt, string userText, CancellationToken ct = default, bool suppressThinking = false)
+        string systemPrompt, string userText, CancellationToken ct = default, bool suppressThinking = false,
+        bool shortTimeout = false)
     {
         var payload = new Dictionary<string, JsonElement>
         {
