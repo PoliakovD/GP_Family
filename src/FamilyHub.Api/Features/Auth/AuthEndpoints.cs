@@ -109,16 +109,19 @@ public static class AuthEndpoints
         }).AllowAnonymous();
 
         // Отзывает refresh-токен ТЕКУЩЕГО устройства (не все сессии — logout-all для этого).
+        // "auth-session", не "auth" — см. AuthRateLimitOptions.AuthSessionPermitLimit.
         group.MapPost("/logout", async (HttpContext http, ITokenService tokenService, CancellationToken ct) =>
         {
             if (http.Request.Cookies.TryGetValue(PwaCookieNames.RefreshToken, out var refreshToken))
                 await tokenService.RevokeAsync(refreshToken, ct);
             PwaSessionCookieWriter.ClearSessionCookies(http);
             return Results.Ok();
-        });
+        }).RequireRateLimiting("auth-session");
 
         // Ротация: старый refresh — в утиль (revoke+ReplacedByTokenId), выдаются новые access+refresh.
         // AllowAnonymous — весь смысл эндпоинта в том, что access-токен уже истёк/отсутствует.
+        // "auth-session" — интерцептор фронта дёргает это на каждый первый 401 после протухания
+        // access-токена, это обычный трафик сессии, а не попытка входа.
         group.MapPost("/refresh", async (HttpContext http, ITokenService tokenService, CancellationToken ct) =>
         {
             if (!http.Request.Cookies.TryGetValue(PwaCookieNames.RefreshToken, out var refreshToken))
@@ -134,7 +137,7 @@ public static class AuthEndpoints
 
             PwaSessionCookieWriter.SetSessionCookies(http, session);
             return Results.Ok();
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting("auth-session");
 
         // Logout со ВСЕХ устройств (после смены пароля/подозрения на компрометацию/merge источника).
         group.MapPost("/logout-all", async (ICurrentUser currentUser, ITokenService tokenService, HttpContext http, CancellationToken ct) =>
@@ -142,8 +145,10 @@ public static class AuthEndpoints
             await tokenService.RevokeAllForUserAsync(currentUser.UserId, ct);
             PwaSessionCookieWriter.ClearSessionCookies(http);
             return Results.Ok();
-        });
+        }).RequireRateLimiting("auth-session");
 
+        // "auth-session", не "auth" — /me дёргается на каждой guard-навигации SPA (см.
+        // AuthRateLimitOptions.AuthSessionPermitLimit / TECH_DEBT.md #12).
         group.MapGet("/me", async (
             ICurrentUser currentUser, ClaimsPrincipal principal, AppDbContext db, HttpContext http,
             IAntiforgery antiforgery, IOptions<JwtOptions> jwtOptions, CancellationToken ct) =>
@@ -183,7 +188,7 @@ public static class AuthEndpoints
                 hasPassword = user.PasswordHash is not null,
                 timeZoneId = user.TimeZoneId,
             });
-        });
+        }).RequireRateLimiting("auth-session");
 
         // Смена пароля из настроек — в отличие от reset-password/*, требует знания ТЕКУЩЕГО
         // пароля, не анонимная. Компрометация пароля могла означать компрометацию сессии —
@@ -233,7 +238,7 @@ public static class AuthEndpoints
 
             return Results.Ok(sessions.Select(s => new SessionResponse(
                 s.Id, s.CreatedAt, s.ExpiresAt, s.IpAddress, UserAgentSummary.Describe(s.DeviceInfo), s.Id == currentSessionId)));
-        });
+        }).RequireRateLimiting("auth-session");
 
         group.MapPost("/sessions/{id:guid}/revoke", async (
             Guid id, ICurrentUser currentUser, ClaimsPrincipal principal, ITokenService tokenService,
@@ -248,7 +253,7 @@ public static class AuthEndpoints
                 PwaSessionCookieWriter.ClearSessionCookies(http);
 
             return Results.NoContent();
-        });
+        }).RequireRateLimiting("auth-session");
 
         group.MapPost("/link-email/start", async (
             StartCodeRequest request, PwaAuthService service, ICurrentUser currentUser, CancellationToken ct) =>
