@@ -15,6 +15,10 @@ public static class MedicalRecordEndpoints
         // UX-редизайн: серверные фильтры + пагинация (дефолт 15/стр.) вместо голого списка.
         // subject=me — хаб «Здоровье» (редизайн навигации): действительно только мои записи, в отличие
         // от self, которое пропускает чужие расшаренные семье (см. MedicalRecordFilter.MineOnly).
+        // self=true больше не шлётся фронтом (TECH_DEBT.md #17: последний потребитель,
+        // medical-records-panel.component.ts, переведён на subject=me) — параметр оставлен только
+        // ради уже закешированных у пользователей старых PWA-бандлов; убрать отдельной задачей,
+        // когда точно истекут все старые service worker'ы.
         group.MapGet("/", async (
             string? kind, DateOnly? from, DateOnly? to, Guid? dependentId, Guid? targetUserId, bool? self,
             string? subject, string? doctor, string? q, int? page, int? pageSize,

@@ -78,6 +78,16 @@ export class AuthService {
   readonly consent = signal<ConsentStatus | null>(null);
 
   /**
+   * Итог последнего loadMe(): 'unauthorized' — настоящий 401 (me точно обнулён), 'transient' —
+   * 429/сетевой сбой/5xx (me НЕ обнулён — см. loadMe()), null — последний вызов успешен либо
+   * ещё не было ни одного. Гарды (authGuard/profileGuard) читают это сразу после await loadMe(),
+   * чтобы не путать «сбой запроса» с «не аутентифицирован»/«профиль не заполнен» — иначе временный
+   * сбой на /api/auth/me (тот же rate-limit "auth", под который подпадает сам /me) уводил на
+   * /login или /profile-setup аутентифицированного пользователя с полностью заполненным профилем.
+   */
+  readonly meLoadError = signal<'unauthorized' | 'transient' | null>(null);
+
+  /**
    * null — ещё не проверяли; true/false — известный результат последнего /telegram/init.
    * Только для реального Telegram Mini App (initData) — dev-заголовок это не использует
    * (DevAuthenticationHandler по-прежнему авто-создаёт пользователя, привязка не нужна).
@@ -112,6 +122,7 @@ export class AuthService {
       try {
         const me = await firstValueFrom(this.http.get<Me>('/api/auth/me'));
         this.me.set(me);
+        this.meLoadError.set(null);
         this.log.log('auth', 'info', `GET /api/auth/me ✓ provider=${me.provider}`);
         return me;
       } catch (e) {
@@ -124,6 +135,9 @@ export class AuthService {
         const status = e instanceof HttpErrorResponse ? e.status : 0;
         if (status === 401) {
           this.me.set(null);
+          this.meLoadError.set('unauthorized');
+        } else {
+          this.meLoadError.set('transient');
         }
         this.log.log('auth', 'error', `GET /api/auth/me ✗ ${status} ${this.describeError(e)}`);
         return this.me();

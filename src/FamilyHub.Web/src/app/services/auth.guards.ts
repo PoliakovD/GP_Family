@@ -1,7 +1,21 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { AuthService } from './auth.service';
+import { AuthService, Me } from './auth.service';
 import { TelegramService } from './telegram.service';
+import { ToastService } from '../shared/toast/toast.service';
+
+/** Один короткий повтор при транзиентном сбое (429/сеть) — окно rate-limit'а обычно уже открыто
+ * заново через секунду; лишний запрос дешевле, чем неверно принятое решение гарда. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function loadMeWithRetry(auth: AuthService): Promise<Me | null> {
+  const me = await auth.loadMe();
+  if (me !== null || auth.meLoadError() !== 'transient') return me;
+  await delay(800);
+  return auth.loadMe();
+}
 
 /**
  * PWA-режим без cookie-сессии → /login; Telegram/dev-режим аутентифицируется
@@ -25,8 +39,13 @@ export const authGuard: CanActivateFn = async () => {
 
   if (auth.me() !== null) return true;
 
-  const me = await auth.loadMe();
-  return me !== null ? true : router.createUrlTree(['/login']);
+  const me = await loadMeWithRetry(auth);
+  if (me !== null) return true;
+  // Транзиентный сбой (429/сеть/5xx) — не значит "не аутентифицирован": не выгоняем на /login,
+  // страница откроется, а её собственные запросы либо пройдут (сессия жива), либо получат 401 и
+  // authInterceptor обработает это сам (refresh, а при неудаче — уже он уведёт на /login).
+  if (auth.meLoadError() === 'transient') return true;
+  return router.createUrlTree(['/login']);
 };
 
 /** Данные обрабатываются только после принятия актуального согласия ПДн (задача 2.3). */
@@ -56,10 +75,20 @@ export const consentGuard: CanActivateFn = async () => {
 export const profileGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
   const router = inject(Router);
+  const toast = inject(ToastService);
 
   const cached = auth.me();
   if (cached?.profileComplete) return true;
 
-  const me = cached ?? (await auth.loadMe());
-  return me?.profileComplete ? true : router.createUrlTree(['/profile-setup']);
+  const me = cached ?? (await loadMeWithRetry(auth));
+  if (me?.profileComplete) return true;
+  if (me === null && auth.meLoadError() === 'transient') {
+    // Не смогли проверить профиль (429/сеть) — это НЕ то же самое, что «профиль не заполнен»:
+    // authGuard уже подтвердил вход, значит скорее всего профиль давно заполнен, и отправлять
+    // на /profile-setup из-за сетевого сбоя неверно. Пропускаем; если профиль правда не заполнен,
+    // это вскроется на следующей навигации, когда /me снова ответит.
+    toast.error('Не удалось проверить профиль — попробуйте обновить страницу');
+    return true;
+  }
+  return router.createUrlTree(['/profile-setup']);
 };
