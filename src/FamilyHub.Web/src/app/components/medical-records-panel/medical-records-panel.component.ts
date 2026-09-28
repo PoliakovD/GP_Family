@@ -710,7 +710,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       to: this.filters.to || undefined,
       dependentId: opt?.familyDependentId ?? undefined,
       targetUserId: opt?.targetUserId ?? undefined,
-      self: this.filters.patientKey === 'self' ? true : undefined,
+      // subject: 'me', не self (TECH_DEBT.md #17) — self пропускает чужие записи, которые
+      // владелец расшарил моей семье; MineOnly (subject=me) этой дыры не имеет.
+      subject: this.filters.patientKey === 'self' ? 'me' : undefined,
       doctor: this.filters.doctor.trim() || undefined,
       q: this.searchQuery.trim() || undefined,
       page: this.page,
