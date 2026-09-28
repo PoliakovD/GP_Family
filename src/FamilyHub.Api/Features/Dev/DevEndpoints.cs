@@ -1,6 +1,7 @@
 using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Features.Auth;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Email;
 using FamilyHub.Infrastructure.Email.Templates;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Modules.Medical.Enrichment;
@@ -70,6 +71,18 @@ public static class DevEndpoints
             return html is null
                 ? Results.NotFound("Доступные имена: register | linkemail | resetpassword | telegrambind | temporary-password")
                 : Results.Content(html, "text/html; charset=utf-8");
+        }).AllowAnonymous();
+
+        // Программный доступ к последнему OTP-коду письма (TECH_DEBT.md #11) — без него e2e не мог
+        // пройти PWA-вход email+паролем (регистрация/сброс пароля/привязка требуют кода, реального
+        // почтового ящика в CI нет). Работает только пока IEmailSender = LoggingEmailSender (см.
+        // EmailRegistration — реальный провайдер не настроен, что в dev/e2e и так гарантировано этим
+        // же DevEndpointsEnabled-гейтом на проде). AllowAnonymous — тот же случай, что у
+        // email-preview выше: этот путь и не должен требовать аутентификации, код нужен ДО входа.
+        app.MapGet("/dev/last-otp", (string email, DevEmailCapture capture) =>
+        {
+            var code = capture.LastCodeFor(email);
+            return code is null ? Results.NotFound() : Results.Ok(new { code });
         }).AllowAnonymous();
     }
 }

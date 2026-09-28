@@ -6,9 +6,11 @@ import { API_URL } from './support/env';
  * Postgres + MinIO в docker, настоящий API (dotnet run, Development) и dev-сборка Angular из
  * src/FamilyHub.Api/wwwroot (API сам раздаёт SPA — один origin, без прокси).
  *
- * Вход — через dev-заголовок (?devTgId=…): в dev-сборке фронт кладёт его в localStorage и шлёт
- * X-Dev-TelegramId, сервер (DevAuthenticationHandler) заводит пользователя сам. Это НЕ проверяет
- * PWA-вход по email+паролю (ему нужен OTP с почты) — только то, что происходит после входа.
+ * Вход — в основном через dev-заголовок (?devTgId=…): в dev-сборке фронт кладёт его в localStorage
+ * и шлёт X-Dev-TelegramId, сервер (DevAuthenticationHandler) заводит пользователя сам — быстрее
+ * настоящего входа для сценариев, которым интересно только то, что происходит ПОСЛЕ него. PWA-вход
+ * по email+паролю (17-pwa-email-login.spec.ts) — свой отдельный сценарий, коду из письма помогает
+ * GET /dev/last-otp (TECH_DEBT.md #11).
  *
  * LM Studio направлен на закрытый порт: ИИ «недоступен» — заодно проверяется сценарий «ждём ИИ».
  */

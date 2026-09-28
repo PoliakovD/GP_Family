@@ -25,6 +25,10 @@ public static class EmailRegistration
         // ниже — регистрируем его безусловно, чтобы dev/тесты тоже видели настоящий рендер (опечатка
         // в плейсхолдере шаблона должна ронять сборку/тесты, а не только молчать в проде).
         builder.Services.AddSingleton<EmailTemplateRenderer>();
+        // Безусловно (не только в ветке LoggingEmailSender ниже) — GET /dev/last-otp резолвит эту
+        // зависимость всегда, пока DevEndpointsEnabled=true, независимо от того, настроен ли
+        // реальный провайдер письма в ЭТОМ конкретном запуске; пустой перехват безвреден.
+        builder.Services.AddSingleton<DevEmailCapture>();
         var emailProvidersConfigured = builder.Configuration.GetSection($"{EmailOptions.SectionName}:Providers").GetChildren().Any();
         var postboxApiSection = builder.Configuration.GetSection($"{EmailOptions.SectionName}:PostboxApi");
         var postboxApiConfigured = postboxApiSection.GetChildren().Any();

@@ -1,7 +1,7 @@
 # Технический долг
 
 Зафиксированные ограничения и нерешённые мелочи, обнаруженные по ходу разработки.
-Не блокируют текущий v1, но стоит учитывать при дальнейшей работе. Актуализировано 2026-09-25.
+Не блокируют текущий v1, но стоит учитывать при дальнейшей работе. Актуализировано 2026-09-28.
 
 ## Закрыто / устарело (оставлено как история)
 
@@ -16,6 +16,38 @@
 Имя базы теперь одно на всех: `POSTGRES_DB` из `.env` (`dev.env.example` — `familyhub`) попадает и в
 контейнер Postgres, и в `ConnectionStrings__Postgres` сервиса `api`; строки подключения в
 `appsettings*.json` нет вовсе.
+
+### 11. Фронт: нет юнит-тестов, e2e покрывает не всё — закрыто (кроме Telegram initData e2e, см. ниже)
+Юнит-тестов у `FamilyHub.Web` не было вовсе, `ng test` не запускал ничего. Подключён
+`@angular/build:unit-test` (Vitest, jsdom) — новый architect-таргет `test` в `angular.json`,
+`npm test` в `package.json` больше не висящий скрипт. Первые спеки: `auth.guards.spec.ts`
+(authGuard/consentGuard/profileGuard — TestBed.runInInjectionContext + фейковые AuthService/
+TelegramService/Router), `intake-labels.spec.ts` (включая регрессию на `todayLocal()`, TECH_DEBT.md
+#18), `patient-options.spec.ts`. `ci.yml` теперь гоняет `npm test` на каждый push/PR. Побочный
+эффект перехода на `@angular/build` (см. #15) — та же смена пакета дала доступ к builder'у
+`unit-test`, который нельзя было взять из старого `@angular-devkit/build-angular` в этой версии.
+Билдер помечен самим Angular как EXPERIMENTAL — приемлемо для первых спеков, но не повод класть на
+него что-то критичное без проверки при следующем мажоре Angular.
+
+`e2e.yml` теперь запускается и на `pull_request`, если правка касается `src/FamilyHub.Web/**` или
+`e2e/**` (paths-фильтр — чтобы не платить минуты за чисто бэкендные PR), не только на push в
+`master`/вручную.
+
+PWA-вход email+паролём (`17-pwa-email-login.spec.ts`) — сквозной сценарий регистрации: код из
+письма недоступен без реального ящика, поэтому добавлен `GET /dev/last-otp?email=` (гейт тот же
+`DevTools:DevEndpointsEnabled`, что и весь `DevEndpoints`) — `DevEmailCapture`, in-memory перехват
+письма внутри `LoggingEmailSender` (сам класс — уже dev-заглушка, используется только когда ни один
+реальный провайдер не настроен; тот же приём, что `CapturingEmailSender` в интеграционных тестах,
+только без доступа к DI реального процесса — e2e гоняет настоящий `dotnet run`, не
+`WebApplicationFactory`).
+
+Telegram initData e2e осталось не тронуто — HMAC-валидация (`TelegramInitDataValidator`) и
+lookup-only гейт (`TelegramMiniAppAuthenticationHandler`) уже покрыты юнит-тестами (включая крипто-
+корректность подписи), а `Telegram:BotToken` в e2e-стенде (`e2e/support/env.ts`) пуст — валидатор
+отклоняет ЛЮБОЙ initData без него по построению. Довести до e2e означало бы завести отдельный
+тестовый токен в общий бутстрап стенда (используется всеми сценариями) и подделывать
+`window.Telegram.WebApp` в браузере — отдельная, более рискованная для общей стабильности e2e
+задача, не сделана в этом заходе.
 
 ## Открытое
 
@@ -75,11 +107,6 @@
 FluentAssertions 6.12.x (не 8) — коммерческие лицензии; NPOI 2.7.4 ↔ SkiaSharp 2.88 ↔ PDFtoImage 4.x —
 обновлять только вместе (NPOI 2.8 требует SkiaSharp 3); ImageSharp 2.1.13 закреплён как патченная версия.
 Тесты-зависимости с мажорами позади: NSubstitute, Testcontainers, xunit runner, coverlet.
-
-### 11. Фронт: нет юнит-тестов, e2e покрывает не всё
-Юнит-тестов у `FamilyHub.Web` нет вовсе (`ng test` без спеков). E2E (Playwright, `e2e/`) покрывает основные
-сценарии, но **не** PWA-вход по email+паролю (нужен OTP с почты) и не Telegram initData; workflow
-`e2e.yml` запускается только на push в `master`/вручную, не на PR.
 
 ### 12. `profileGuard` принимает временный сбой за «профиль не заполнен»
 При 429 (rate limit `auth`: 10 запросов/мин на IP) или сетевом сбое `GET /api/auth/me` гард не
