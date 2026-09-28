@@ -1,7 +1,7 @@
 # Технический долг
 
 Зафиксированные ограничения и нерешённые мелочи, обнаруженные по ходу разработки.
-Не блокируют текущий v1, но стоит учитывать при дальнейшей работе. Актуализировано 2026-09-25.
+Не блокируют текущий v1, но стоит учитывать при дальнейшей работе. Актуализировано 2026-09-28.
 
 ## Закрыто / устарело (оставлено как история)
 
@@ -16,6 +16,15 @@
 Имя базы теперь одно на всех: `POSTGRES_DB` из `.env` (`dev.env.example` — `familyhub`) попадает и в
 контейнер Postgres, и в `ConnectionStrings__Postgres` сервиса `api`; строки подключения в
 `appsettings*.json` нет вовсе.
+
+### 9. Флейковый интеграционный тест — закрыто
+`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
+падал на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
+`Hangfire.PostgreSql` (`monitoring.Queues()`/`FailedCount()` в `AdminStatsService.GetSystemStatsAsync`
+— на собственном пуле соединений Hangfire, в стороне от EF/AppDbContext). `GetHangfireStatsWithRetry`
+теперь до 2 раз повторяет вызов при `NpgsqlException`/`InvalidOperationException`, каждый раз заново
+запрашивая `IMonitoringApi` у `JobStorage.Current` — устаревшее соединение из пула не переиспользуется
+повторно, следующее почти всегда рабочее.
 
 ## Открытое
 
@@ -62,13 +71,6 @@
 Удаление записи/подопечного/аккаунта чистит задачи распознавания, но задачи обогащения справочника
 (общие для справочника) остаются и в глобальном трее показываются без ссылки на запись. Решение
 («отменять Pending-обогащение, порождённое только этой записью») потребует учёта владельца задачи.
-
-### 9. Флейковый интеграционный тест
-`AdminStatsApiTests.StatsEndpoint_WithSession_Returns200(path: "/api/admin/stats/system")` изредка
-падает на CI с `Npgsql.NpgsqlException … Attempted to read past the end of the stream` из
-`Hangfire.PostgreSql` (`monitoring.Queues()` в `AdminStatsService.GetSystemStatsAsync` — на собственном
-пуле соединений Hangfire). Повторный запуск проходит. Вероятная причина — устаревшее соединение в
-пуле Hangfire; варианты — ретрай вызова мониторинга или новое соединение в этом эндпоинте.
 
 ### 10. Заморожённые зависимости
 См. таблицу в `.claude/research/frontend-toolchain-and-e2e.md`: MassTransit 8.5.x (не 9) и
