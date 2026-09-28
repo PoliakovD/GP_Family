@@ -13,14 +13,16 @@ public static class MedicalRecordEndpoints
 
         // kind опционален: без него отдаются оба вида (обратная совместимость со старыми клиентами).
         // UX-редизайн: серверные фильтры + пагинация (дефолт 15/стр.) вместо голого списка.
+        // subject=me — хаб «Здоровье» (редизайн навигации): действительно только мои записи, в отличие
+        // от self, которое пропускает чужие расшаренные семье (см. MedicalRecordFilter.MineOnly).
         group.MapGet("/", async (
             string? kind, DateOnly? from, DateOnly? to, Guid? dependentId, Guid? targetUserId, bool? self,
-            string? doctor, string? q, int? page, int? pageSize,
+            string? subject, string? doctor, string? q, int? page, int? pageSize,
             MedicalRecordService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
             var filter = new MedicalRecordFilter(
                 ParseKind(kind), from, to, dependentId, targetUserId, self ?? false, doctor, q,
-                page ?? 1, pageSize ?? 15);
+                page ?? 1, pageSize ?? 15, MineOnly: subject == "me");
             return Results.Ok(await service.GetVisibleRecordsAsync(currentUser.UserId, filter, ct));
         });
 

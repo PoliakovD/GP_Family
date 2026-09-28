@@ -1,0 +1,297 @@
+// Хаб «Здоровье» (редизайн навигации, макет «Screen - Health hub») — три группы плиток. Единый
+// стиль карточки на все девять плиток; размер группы (крупная/средняя/строка) — компоновкой
+// контейнера (grid/flex), не отдельной вёрсткой каждой плитки.
+
+.hh-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hh-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hh-title {
+  margin: 0;
+}
+
+.hh-subtitle {
+  color: var(--color-neutral-700);
+  font-size: var(--font-size-meta);
+}
+
+.hh-group {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.hh-group-label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.7059rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+// ── Плитка (общий стиль для «Каждый день» и «Медкарты») ────────────────────
+
+.hh-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+  min-height: var(--tap-min);
+
+  &:hover {
+    border-color: var(--color-accent-400);
+  }
+}
+
+.hh-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  > i:first-child {
+    font-size: 1.5294rem;
+    color: var(--color-accent);
+    flex: none;
+  }
+
+  > i:last-child {
+    color: var(--color-neutral-500);
+    flex: none;
+  }
+}
+
+.hh-tile-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.1765rem;
+}
+
+.hh-tile-empty {
+  color: var(--color-neutral-600);
+  font-size: 0.8824rem;
+}
+
+// ── «Каждый день» — две крупные плитки ──────────────────────────────────────
+
+.hh-everyday {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .hh-everyday {
+    gap: 10px;
+  }
+
+  .hh-tile-big {
+    padding: 14px;
+  }
+}
+
+.hh-tile-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.hh-tile-value {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.7647rem;
+  line-height: 1;
+}
+
+.hh-tile-value-sm {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.9412rem;
+  line-height: 1.3;
+}
+
+.hh-tile-meta {
+  font-size: 0.8235rem;
+  color: var(--color-neutral-700);
+  margin-top: 4px;
+}
+
+.hh-tile-total {
+  font-size: 0.7647rem;
+  color: var(--color-neutral-500);
+}
+
+.hh-dose-squares {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.hh-dose-square {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+}
+
+.hh-dose-square-taken {
+  background: var(--color-status-ok);
+}
+
+.hh-dose-square-missed {
+  background: var(--color-status-danger);
+}
+
+.hh-dose-square-next {
+  border: 2px solid var(--color-accent);
+  box-sizing: border-box;
+}
+
+.hh-dose-square-upcoming {
+  border: 2px solid var(--color-divider);
+  box-sizing: border-box;
+}
+
+.hh-tile-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  font-size: 0.8824rem;
+  border-radius: var(--radius-sm);
+
+  i {
+    color: var(--color-accent-2);
+    flex: none;
+  }
+}
+
+.hh-tile-next-time {
+  font-weight: 600;
+  flex: none;
+}
+
+.hh-take {
+  padding: 6px 12px;
+  background: var(--color-status-ok);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: 600 0.7941rem var(--font-heading);
+  cursor: pointer;
+  min-height: 32px;
+  flex: none;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.hh-trend {
+  flex: 1;
+  min-width: 0;
+}
+
+.hh-trend-sm {
+  max-width: 120px;
+}
+
+// ── «Медкарта» — четыре средние плитки на десктопе, список на узких экранах ─
+
+.hh-medcard {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1023px) {
+  .hh-medcard {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hh-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7353rem;
+  color: #fff;
+  flex: none;
+}
+
+.hh-badge-danger {
+  background: var(--color-status-danger);
+}
+
+// ── «Инструменты» — три узкие строки, три колонки на десктопе ───────────────
+
+.hh-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .hh-tools {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+}
+
+.hh-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 17px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+  min-height: var(--tap-min);
+
+  &:hover {
+    border-color: var(--color-accent-400);
+  }
+
+  > i:first-child {
+    font-size: 1.3529rem;
+    color: var(--color-accent);
+    flex: none;
+  }
+
+  > i:last-child {
+    color: var(--color-neutral-500);
+    flex: none;
+  }
+}
+
+.hh-tool-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.9706rem;
+}
+
+.hh-tool-sub {
+  font-size: 0.7941rem;
+  color: var(--color-neutral-600);
+}
+
+.hh-tool-sub-warn {
+  color: var(--color-status-warning-text);
+}

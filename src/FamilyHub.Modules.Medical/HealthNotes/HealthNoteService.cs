@@ -2,17 +2,24 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.HealthNotes;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.Access;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace FamilyHub.Modules.Medical.HealthNotes;
 
 /// <summary>
-/// Личный дневник самочувствия. Каждая операция скоупится по OwnerUserId: чужая запись для
-/// вызывающего неотличима от несуществующей (NotFound, не Forbidden — не раскрываем существование).
-/// Поля зашифрованы, поэтому SQL фильтрует по владельцу/виду/времени, остальное — в памяти.
+/// Личный дневник самочувствия. Пишет только владелец: каждая операция изменения скоупится по
+/// OwnerUserId, чужая запись для вызывающего неотличима от несуществующей (NotFound, не Forbidden —
+/// не раскрываем существование). Поля зашифрованы, поэтому SQL фильтрует по владельцу/виду/времени,
+/// остальное — в памяти.
+///
+/// ADR-0017: читать чужой дневник можно, если владелец дал грант <c>HealthShareGrant.Diary</c> —
+/// методы чтения принимают отдельно viewerId (кто спрашивает) и ownerId (чей дневник), проверяют
+/// доступ через <see cref="CanReadAsync"/> и возвращают null при отказе (тот же принцип
+/// «неотличимо от несуществующего», что и у записи/удаления).
 /// </summary>
-public class HealthNoteService(AppDbContext db, ILogger<HealthNoteService> logger)
+public class HealthNoteService(AppDbContext db, ILogger<HealthNoteService> logger, SubjectScopeService scopeService)
 {
     /// <summary>Потолок выдачи ленты — защита от выгрузки многолетнего дневника одним запросом.</summary>
     public const int MaxListSize = 1000;
@@ -20,10 +27,21 @@ public class HealthNoteService(AppDbContext db, ILogger<HealthNoteService> logge
     private static readonly TimeSpan FutureTolerance = TimeSpan.FromDays(1);
     private static readonly DateTime EarliestAllowed = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    public async Task<List<HealthNoteDto>> ListAsync(
-        Guid userId, DateTime? from, DateTime? to, HealthNoteKind? kind, CancellationToken ct = default)
+    /// <summary>Свой дневник — всегда; чужой — только по гранту Diary и только пока с владельцем есть
+    /// общая активная семья (проверяется при каждом обращении, как и у курсов/прививок).</summary>
+    public async Task<bool> CanReadAsync(Guid viewerId, Guid ownerId, CancellationToken ct = default)
     {
-        var query = db.HealthNotes.AsNoTracking().Where(n => n.OwnerUserId == userId);
+        if (viewerId == ownerId) return true;
+        var scope = await scopeService.GetScopeAsync(viewerId, HealthShareCategory.Diary, ct);
+        return scope.WatchedUserIds.Contains(ownerId);
+    }
+
+    public async Task<List<HealthNoteDto>?> ListAsync(
+        Guid viewerId, Guid ownerId, DateTime? from, DateTime? to, HealthNoteKind? kind, CancellationToken ct = default)
+    {
+        if (!await CanReadAsync(viewerId, ownerId, ct)) return null;
+
+        var query = db.HealthNotes.AsNoTracking().Where(n => n.OwnerUserId == ownerId);
         if (from is { } f) query = query.Where(n => n.OccurredAt >= AsUtc(f));
         if (to is { } t) query = query.Where(n => n.OccurredAt < AsUtc(t));
         if (kind is { } k) query = query.Where(n => n.Kind == k);
@@ -96,12 +114,13 @@ public class HealthNoteService(AppDbContext db, ILogger<HealthNoteService> logge
 
     /// <summary>Точки одного замера за период (по возрастанию времени) — для графика и тренда.</summary>
     public async Task<List<HealthMetricPoint>?> GetMetricSeriesAsync(
-        Guid userId, string code, DateTime? from, DateTime? to, CancellationToken ct = default)
+        Guid viewerId, Guid ownerId, string code, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
         if (HealthMetricCatalog.Find(code) is null) return null;
+        if (!await CanReadAsync(viewerId, ownerId, ct)) return null;
 
         var query = db.HealthNotes.AsNoTracking()
-            .Where(n => n.OwnerUserId == userId && n.Kind == HealthNoteKind.Metric);
+            .Where(n => n.OwnerUserId == ownerId && n.Kind == HealthNoteKind.Metric);
         if (from is { } f) query = query.Where(n => n.OccurredAt >= AsUtc(f));
         if (to is { } t) query = query.Where(n => n.OccurredAt < AsUtc(t));
 

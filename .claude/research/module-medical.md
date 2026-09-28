@@ -498,11 +498,17 @@ payload подписи включает scope, поэтому ссылка на 
 (карточка), `GET /api/medications/{medicationId}/kb` (статус обогащения конкретного медикамента),
 `POST /api/medications/{medicationId}/kb/refresh` (ручной рефреш).
 
-## Дневник самочувствия (`HealthNotes/`) — строго личный ресурс
+## Дневник самочувствия (`HealthNotes/`) — личный по умолчанию, читаемый по гранту (ADR-0017)
 
 `HealthNote` (`medical."HealthNotes"`) — запись личного дневника: **шесть видов** (`HealthNoteKind`:
 Symptom, Metric «Замер», Wellbeing, MedicationIntake, Sleep, Note). НЕ `IFamilyOwned`, без FK на User, не
-шарится с семьёй, без подопечных; `OwnerUserId` скоупит каждую операцию (чужой id → 404, а не 403).
+шарится с семьёй, без подопечных; `OwnerUserId` скоупит каждую write-операцию (чужой id → 404, а не 403).
+
+Чтение — по гранту `HealthShareGrant.Diary` (ADR-0017, тот же принцип, что у курсов приёма/прививок):
+`HealthNoteService.ListAsync`/`GetMetricSeriesAsync` принимают `viewerId` и `ownerId` отдельно, проверяют
+`CanReadAsync` (свой — всегда; чужой — грант + общая активная семья) и возвращают `null` при отказе —
+эндпоинт превращает это в 404, не раскрывая ни существование записи, ни самого гранта. Создание/правка/
+удаление по-прежнему возможны только владельцу.
 
 - Открыто в БД только `Kind`, `OccurredAt`, флаг `IncludeInDoctorQuestions` (индексы
   `(OwnerUserId, OccurredAt)`, `(OwnerUserId, Kind, OccurredAt)`). `Title`, `DataJson` (типизированный
@@ -590,10 +596,13 @@ Null-реализация по умолчанию) + этап-4 `KbLookupService
   пока не внесена первая доза сами — добровольны. Повторы взрослых (`RepeatEveryYears`) генерируются по
   одному — только ближайший неотмеченный; грипп — не повтором, а календарным сезоном (`SeasonalWindow`).
 - **Доступ — тот же трёхканальный, что у `MedicationCourse`** (свой/подопечный семьи — полностью/
-  наблюдаемый взрослый — только чтение), через ту же таблицу `MedicationWatcher`. Raw-выборка (активные
-  семьи, админство, наблюдаемые) вынесена в `Access/SubjectScopeService` — `MedicationCourseAccess`
-  теперь только оборачивает её в `CourseScope`, `Vaccinations/VaccinationAccess` — в `VaccinationScope`;
-  поведение курсов не изменилось.
+  наблюдаемый взрослый — только чтение). С ADR-0017 «наблюдаемый взрослый» определяется отдельным
+  грантом `HealthShareGrant.Vaccinations` (не `MedicationWatcher` — эта таблица отвечает только за
+  уведомления, категории независимы: наблюдатель курсов не видит прививки автоматически). Raw-выборка
+  (активные семьи, админство, кто дал грант нужной категории) вынесена в `Access/SubjectScopeService` —
+  `MedicationCourseAccess` только оборачивает её в `CourseScope` (категория `Intake`),
+  `Vaccinations/VaccinationAccess` — в `VaccinationScope` (категория `Vaccinations`); поведение курсов
+  не изменилось (весь их набор тестов зелёный).
 - **Сертификат — фото сохраняется**, в отличие от `MedicationOcrService`: два шага,
   `POST /api/vaccinations/certificate/recognize` (синхронно, не сохраняет, как OCR препарата) →
   `POST /api/vaccinations/certificate/confirm` (то же фото пересылается второй раз, сохраняет

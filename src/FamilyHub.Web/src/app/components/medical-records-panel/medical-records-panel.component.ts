@@ -138,6 +138,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * одноразовый баннер-подсказку над карточкой; не персистится (не добавляется обратно). */
   readonly firstReview = input<string | null>(null);
 
+  /** ?person=me — из плитки хаба «Здоровье» (редизайн навигации): раздел сразу отфильтрован на
+   * себя (тот же ключ 'self', что и у чипа «Я», см. buildFilter). Остальных людей по-прежнему
+   * выбирают чипом внутри раздела — подсказка об этом гасится по клику (personHintDismissed). */
+  readonly person = input<string | undefined>(undefined);
+  personHintDismissed = false;
+
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
@@ -373,6 +379,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // ?person=me — до первого refresh() ниже, чтобы список сразу загрузился уже отфильтрованным
+    // (не мигал «все записи» на долю секунды перед переключением на «я»).
+    if (this.person() === 'me' && this.filters.patientKey === 'all') this.filters.patientKey = 'self';
+
     // Первичная загрузка — здесь, а не только в effect(): effect выполняется на следующем цикле
     // change detection и может не успеть отработать до первого рендера шаблона. Та же причина —
     // почему кнопка топбара тоже дублируется явно здесь (иначе на первом рендере топбар недолго
@@ -639,6 +649,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (this.filters.patientKey === key) return;
     this.filters.patientKey = key;
     this.onFilterChange();
+  }
+
+  /** Подсказка «Из хаба раздел открывается на вас…» (макет «Screen - Health hub», мобильный экран
+   * «Анализы») — закрывается по клику, дальше не появляется до перезахода на страницу. */
+  dismissPersonHint(): void {
+    this.personHintDismissed = true;
   }
 
   resetFilters(): void {

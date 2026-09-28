@@ -824,6 +824,40 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("HealthNotes", "medical");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.HealthShareGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Categories")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ViewerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ViewerUserId");
+
+                    b.HasIndex("OwnerUserId", "ViewerUserId")
+                        .IsUnique();
+
+                    b.ToTable("HealthShareGrants", "medical", t =>
+                        {
+                            t.HasCheckConstraint("CK_HealthShareGrants_NotSelf", "\"OwnerUserId\" <> \"ViewerUserId\"");
+                        });
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.KbRebuildRun", b =>
                 {
                     b.Property<Guid>("Id")

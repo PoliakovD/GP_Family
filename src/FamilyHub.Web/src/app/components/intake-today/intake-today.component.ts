@@ -59,6 +59,11 @@ export class IntakeTodayComponent implements OnInit, OnDestroy {
   /** Приём, открытый из push-уведомления (/health/intake/dose/:doseId): подсвечивается и прокручивается в вид. */
   readonly doseId = input<string | undefined>(undefined);
 
+  /** ?person=me — хаб «Здоровье» (редизайн навигации) открывает раздел сразу отфильтрованным на
+   * себя; остальных людей по-прежнему выбирают чипом внутри раздела (см. setSubject). Названо не
+   * "person" — это имя уже занято методом person(subject) ниже (аватар чипа субъекта). */
+  readonly personParam = input<string | undefined>(undefined, { alias: 'person' });
+
   readonly data = signal<IntakeToday | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
@@ -135,6 +140,7 @@ export class IntakeTodayComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    if (this.personParam() === 'me') this.subject.set('me');
     // Приёмы «наступают» сами — обновляем раз в минуту, пока экран открыт.
     this.timer = setInterval(() => void this.load(true), REFRESH_MS);
   }

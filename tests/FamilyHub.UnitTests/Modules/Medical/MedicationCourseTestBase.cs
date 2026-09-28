@@ -22,18 +22,23 @@ public abstract class MedicationCourseTestBase : SqliteTestBase
     protected readonly MedicationReminderSettingsService Reminders;
     protected readonly MedicationCourseAccess Access;
 
+    protected readonly HealthShareService HealthShare;
+
     protected MedicationCourseTestBase()
     {
         var family = new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance);
-        Access = new MedicationCourseAccess(Db, new SubjectScopeService(Db, family));
+        var scope = new SubjectScopeService(Db, family);
+        Access = new MedicationCourseAccess(Db, scope);
         var subjects = new CourseSubjects(Db);
+        HealthShare = new HealthShareService(Db, family, subjects, NullLogger<HealthShareService>.Instance);
         var stock = new MedkitStockService(Db, family);
         Courses = new MedicationCourseService(Db, Access, subjects, stock, new MedicalAuditWriter(Db),
             NullLogger<MedicationCourseService>.Instance);
-        Doses = new DoseService(Db, Access, stock, new HealthNoteService(Db, NullLogger<HealthNoteService>.Instance),
+        Doses = new DoseService(Db, Access, stock,
+            new HealthNoteService(Db, NullLogger<HealthNoteService>.Instance, scope),
             NullLogger<DoseService>.Instance);
         Today = new MedicationTodayService(Db, Access, subjects, stock);
-        Reminders = new MedicationReminderSettingsService(Db, family, subjects);
+        Reminders = new MedicationReminderSettingsService(Db, family, subjects, HealthShare);
     }
 
     /// <summary>Семья с админом (UTC-пояс) — базовая сцена большинства тестов.</summary>
@@ -51,6 +56,24 @@ public abstract class MedicationCourseTestBase : SqliteTestBase
         user.TimeZoneId = "UTC";
         Db.SaveChanges();
         return user;
+    }
+
+    /// <summary>Взрослый субъект выбрал наблюдателя (ADR-0015 UI) — заводит и MedicationWatcher
+    /// (уведомления), и грант Intake (ADR-0017: сам доступ на чтение курсов даёт грант, не строка
+    /// наблюдателя), как это делает MedicationReminderSettingsService.SetMyWatchersAsync.</summary>
+    protected void SeedWatcher(Guid subjectUserId, Guid watcherId, bool notifyMissed = true, bool receiveReminders = false)
+    {
+        Db.MedicationWatchers.Add(new MedicationWatcher
+        {
+            Id = Guid.NewGuid(), SubjectUserId = subjectUserId, WatcherUserId = watcherId,
+            NotifyMissed = notifyMissed, ReceiveReminders = receiveReminders, CreatedAt = DateTime.UtcNow,
+        });
+        Db.HealthShareGrants.Add(new HealthShareGrant
+        {
+            Id = Guid.NewGuid(), OwnerUserId = subjectUserId, ViewerUserId = watcherId,
+            Categories = HealthShareCategory.Intake, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        });
+        Db.SaveChanges();
     }
 
     protected FamilyDependent AddDependent(Guid familyId, Guid createdBy, string name = "Мама")

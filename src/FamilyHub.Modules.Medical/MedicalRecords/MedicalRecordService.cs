@@ -50,12 +50,18 @@ public class MedicalRecordService(
         MedicalRecordVisibility.Visible(db, userId, kind);
 
     /// <summary>Фильтры, которые не требуют расшифровки — все plaintext-колонки (RecordDate/
-    /// FamilyDependentId/TargetUserId), применяются прямо в SQL, до материализации.</summary>
-    private static IQueryable<MedicalRecord> ApplySqlFilters(IQueryable<MedicalRecord> query, MedicalRecordFilter filter)
+    /// FamilyDependentId/TargetUserId/OwnerUserId), применяются прямо в SQL, до материализации.</summary>
+    private static IQueryable<MedicalRecord> ApplySqlFilters(Guid userId, IQueryable<MedicalRecord> query, MedicalRecordFilter filter)
     {
         if (filter.From is { } from) query = query.Where(r => r.RecordDate >= from);
         if (filter.To is { } to) query = query.Where(r => r.RecordDate <= to);
         if (filter.SelfOnly) query = query.Where(r => r.FamilyDependentId == null && r.TargetUserId == null);
+        // MineOnly — настоящее "только мои" (хаб «Здоровье»): владелец без подопечного/назначения,
+        // либо запись назначена лично мне — в отличие от SelfOnly, исключает чужие расшаренные записи.
+        if (filter.MineOnly)
+            query = query.Where(r =>
+                (r.OwnerUserId == userId && r.FamilyDependentId == null && r.TargetUserId == null)
+                || r.TargetUserId == userId);
         if (filter.FamilyDependentId is { } depId) query = query.Where(r => r.FamilyDependentId == depId);
         if (filter.TargetUserId is { } targetId) query = query.Where(r => r.TargetUserId == targetId);
         return query;
@@ -79,7 +85,7 @@ public class MedicalRecordService(
         var doctorQuery = string.IsNullOrWhiteSpace(filter.Doctor) ? null : filter.Doctor.Trim();
         var textQuery = string.IsNullOrWhiteSpace(filter.Query) ? null : filter.Query.Trim();
 
-        var baseQuery = ApplySqlFilters(VisibleRecordsQuery(userId, filter.Kind), filter);
+        var baseQuery = ApplySqlFilters(userId, VisibleRecordsQuery(userId, filter.Kind), filter);
 
         List<MedicalRecord> pageRecords;
         List<MedicalRecord> forAudit;

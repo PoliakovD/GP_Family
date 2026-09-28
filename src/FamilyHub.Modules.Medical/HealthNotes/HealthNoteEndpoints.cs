@@ -10,10 +10,14 @@ public static class HealthNoteEndpoints
     {
         var group = app.MapGroup("/api/health-notes").RequireAuthorization();
 
+        // subject — чужой владелец дневника (ADR-0017: доступ по гранту Diary), по умолчанию свой же.
         group.MapGet("", async (
-            DateTime? from, DateTime? to, HealthNoteKind? kind,
+            DateTime? from, DateTime? to, HealthNoteKind? kind, Guid? subject,
             HealthNoteService service, ICurrentUser currentUser, CancellationToken ct) =>
-            Results.Ok(await service.ListAsync(currentUser.UserId, from, to, kind, ct)));
+        {
+            var notes = await service.ListAsync(currentUser.UserId, subject ?? currentUser.UserId, from, to, kind, ct);
+            return notes is null ? Results.NotFound() : Results.Ok(notes);
+        });
 
         // Справочные данные для формы (и будущих клиентов): показатели с единицами и границами
         // ввода, допустимые ключи локализации и факторов самочувствия.
@@ -25,10 +29,10 @@ public static class HealthNoteEndpoints
             Results.Ok(await service.GetRecentTitlesAsync(currentUser.UserId, kind, ct: ct)));
 
         group.MapGet("/metrics/{code}/series", async (
-            string code, DateTime? from, DateTime? to,
+            string code, DateTime? from, DateTime? to, Guid? subject,
             HealthNoteService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var points = await service.GetMetricSeriesAsync(currentUser.UserId, code, from, to, ct);
+            var points = await service.GetMetricSeriesAsync(currentUser.UserId, subject ?? currentUser.UserId, code, from, to, ct);
             return points is null ? Results.NotFound() : Results.Ok(points);
         });
 

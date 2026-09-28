@@ -68,7 +68,13 @@ public record MedicalRecordFilter(
     string? Doctor = null,
     string? Query = null,
     int Page = 1,
-    int PageSize = 15)
+    int PageSize = 15,
+    // subject=me (хаб «Здоровье», редизайн навигации) — в отличие от SelfOnly, действительно только
+    // МОИ записи: (я владелец И не подопечного И не назначена другому) ИЛИ назначена мне (TargetUserId).
+    // SelfOnly оставлен как есть ради обратной совместимости со старыми клиентами — он фильтрует
+    // "не подопечный/не назначение", но не проверяет OwnerUserId, поэтому пропускает чужие записи,
+    // расшарённые семье (см. MedicalRecordService.ApplySqlFilters).
+    bool MineOnly = false)
 {
     public const int MaxPageSize = 100;
 }

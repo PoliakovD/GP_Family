@@ -1,0 +1,228 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else {
+  <div class="hh-page">
+    <div class="hh-header">
+      <app-avatar
+        [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}"
+        size="lg"
+      />
+      <div>
+        <h2 class="hh-title">Моё здоровье</h2>
+        <div class="hh-subtitle">
+          {{ auth.me()?.firstName }}@if (ageLabel()) {, {{ ageLabel() }}} · данные семьи — внутри разделов
+        </div>
+      </div>
+    </div>
+
+    <!-- Каждый день — то, что открывают ежедневно: две крупные плитки с действием внутри. -->
+    <div class="hh-group">
+      <div class="hh-group-label">Каждый день</div>
+      <div class="hh-everyday">
+        <a class="hh-tile hh-tile-big" routerLink="/health/intake" [queryParams]="{person: 'me'}">
+          <div class="hh-tile-head">
+            <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+            <span class="hh-tile-title flex-fill">Приём лекарств</span>
+            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+          </div>
+          @if (summary()?.intake; as ik) {
+            @if (ik.total > 0) {
+              <div class="hh-tile-row">
+                <div>
+                  <div class="hh-tile-value">{{ ik.taken }} из {{ ik.total }}</div>
+                  <div class="hh-tile-meta">принято сегодня</div>
+                </div>
+                <div class="hh-dose-squares">
+                  @for (sq of doseSquares(ik); track $index) {
+                    <span class="hh-dose-square" [class]="'hh-dose-square-' + sq"></span>
+                  }
+                </div>
+              </div>
+              @if (ik.next; as next) {
+                <div class="hh-tile-next">
+                  <span class="hh-tile-next-time">{{ next.localTime }}</span>
+                  <span class="flex-fill">{{ next.drugName }}</span>
+                  @if (next.canAct) {
+                    <button type="button" class="hh-take" [disabled]="busyDose()" (click)="takeDose(next, $event)">
+                      Принял
+                    </button>
+                  }
+                </div>
+              }
+            } @else {
+              <div class="hh-tile-empty">Нет активных курсов приёма</div>
+            }
+          } @else {
+            <div class="hh-tile-empty">Не удалось загрузить</div>
+          }
+        </a>
+
+        <a class="hh-tile hh-tile-big" routerLink="/health/notes">
+          <div class="hh-tile-head">
+            <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+            <span class="hh-tile-title flex-fill">Дневник</span>
+            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+          </div>
+          @if (summary()?.diary; as d) {
+            @if (d.latestBloodPressure; as bp) {
+              <div class="hh-tile-row">
+                <div>
+                  <div class="hh-tile-value">{{ bp.value }}@if (bp.value2) {/{{ bp.value2 }}}</div>
+                  <div class="hh-tile-meta">давление · {{ dayWord(bp.occurredAt).toLowerCase() }} {{ timeOfDay(bp.occurredAt) }}</div>
+                </div>
+                @if (bp.recentValues.length > 1) {
+                  <app-trend-line class="hh-trend" [values]="bp.recentValues" label="Давление за 14 дней" />
+                }
+              </div>
+            }
+            @if (d.latestSymptom; as s) {
+              <div class="hh-tile-next">
+                <i class="ph-duotone ph-lightning" aria-hidden="true"></i>
+                <span class="flex-fill">
+                  {{ dayWord(s.occurredAt) }}@if (s.title) {: {{ s.title }}}@if (s.severity) {, {{ s.severity }}/10}
+                </span>
+              </div>
+            }
+            @if (!d.latestBloodPressure && !d.latestSymptom) {
+              <div class="hh-tile-empty">Записей нет</div>
+            }
+          } @else {
+            <div class="hh-tile-empty">Не удалось загрузить</div>
+          }
+        </a>
+      </div>
+    </div>
+
+    <!-- Медкарта — история: анализы, приёмы врача, показатели, прививки. -->
+    <div class="hh-group">
+      <div class="hh-group-label">Медкарта</div>
+      <div class="hh-medcard">
+        <a class="hh-tile" routerLink="/health/records" [queryParams]="{person: 'me'}">
+          <div class="hh-tile-head">
+            <i class="ph-duotone ph-test-tube" aria-hidden="true"></i>
+            <span class="hh-tile-title flex-fill">Анализы</span>
+            @if (summary()?.analyses?.latest?.abnormalIndicatorCount; as n) {
+              <span class="hh-badge hh-badge-danger">{{ n }} вне нормы</span>
+            }
+          </div>
+          @if (summary()?.analyses; as a) {
+            @if (a.latest; as r) {
+              <div class="hh-tile-value-sm">{{ r.title || 'Без названия' }}</div>
+              <div class="hh-tile-meta">{{ formatDayMonth(r.recordDate) }}@if (r.indicatorCount) { · {{ r.indicatorCount }} {{ pluralizeRu(r.indicatorCount, 'показатель', 'показателя', 'показателей') }}}</div>
+              <div class="hh-tile-total">всего {{ a.total }} {{ pluralizeRu(a.total, 'анализ', 'анализа', 'анализов') }}</div>
+            } @else {
+              <div class="hh-tile-empty">Записей нет</div>
+            }
+          }
+        </a>
+
+        <a class="hh-tile" routerLink="/health/visits" [queryParams]="{person: 'me'}">
+          <div class="hh-tile-head">
+            <i class="ph-duotone ph-stethoscope" aria-hidden="true"></i>
+            <span class="hh-tile-title flex-fill">Приёмы врача</span>
+          </div>
+          @if (summary()?.visits; as v) {
+            @if (v.latest; as r) {
+              <div class="hh-tile-value-sm">{{ r.doctor || 'Врач не указан' }}</div>
+              <div class="hh-tile-meta">{{ formatDayMonth(r.recordDate) }}@if (r.prescriptionCount) { · {{ r.prescriptionCount }} {{ pluralizeRu(r.prescriptionCount, 'назначение', 'назначения', 'назначений') }}}</div>
+              <div class="hh-tile-total">всего {{ v.total }} {{ pluralizeRu(v.total, 'приём', 'приёма', 'приёмов') }}</div>
+            } @else {
+              <div class="hh-tile-empty">Записей нет</div>
+            }
+          }
+        </a>
+
+        <a class="hh-tile" routerLink="/health/indicators" [queryParams]="{person: 'me'}">
+          <div class="hh-tile-head">
+            <i class="ph-duotone ph-chart-line-up" aria-hidden="true"></i>
+            <span class="hh-tile-title flex-fill">Показатели</span>
+          </div>
+          @if (summary()?.indicators; as ind) {
+            @if (ind.highlight; as h) {
+              <div class="hh-tile-row">
+                <div>
+                  <div class="hh-tile-value-sm">{{ h.displayName }} {{ h.valueRaw }}</div>
+                  @if (h.recentValues.length > 1) {
+                    <div class="hh-tile-meta">{{ h.recentValues[0] }} → {{ h.recentValues[h.recentValues.length - 1] }} за период</div>
+                  }
+                </div>
+                @if (h.recentValues.length > 1) {
+                  <app-trend-line class="hh-trend hh-trend-sm" [values]="h.recentValues" label="Динамика показателя" />
+                }
+              </div>
+              <div class="hh-tile-total">{{ ind.trackedCount }} {{ pluralizeRu(ind.trackedCount, 'отслеживаемый', 'отслеживаемых', 'отслеживаемых') }}</div>
+            } @else {
+              <div class="hh-tile-empty">Нет отслеживаемых показателей</div>
+            }
+          }
+        </a>
+
+        <a class="hh-tile" [routerLink]="vaccinationHref()">
+          <div class="hh-tile-head">
+            <i class="ph-duotone ph-syringe" aria-hidden="true"></i>
+            <span class="hh-tile-title flex-fill">Прививки</span>
+            @if (summary()?.vaccinations?.nextDue; as due) {
+              <span class="hh-badge" [style.background]="statusColor(due.status)">{{ statusLabel(due.status) }}</span>
+            }
+          </div>
+          @if (summary()?.vaccinations; as v) {
+            @if (v.nextDue; as due) {
+              <div class="hh-tile-value-sm">{{ due.seriesName }}</div>
+              <div class="hh-tile-meta">{{ windowToText(due.windowTo) || 'рекомендуется скоро' }}</div>
+            } @else if (v.lastDone; as last) {
+              <div class="hh-tile-value-sm">Всё по графику</div>
+              <div class="hh-tile-meta">последняя: {{ last.label }}@if (last.date) {, {{ formatDayMonthYear(last.date) }}}</div>
+            } @else {
+              <div class="hh-tile-empty">Нет данных</div>
+            }
+          }
+        </a>
+      </div>
+    </div>
+
+    <!-- Инструменты — редкое: аптечка, отчёты для врача, справочник. -->
+    <div class="hh-group">
+      <div class="hh-group-label">Инструменты</div>
+      <div class="hh-tools">
+        <a class="hh-tool-row" routerLink="/health/medications">
+          <i class="ph-duotone ph-first-aid-kit" aria-hidden="true"></i>
+          <div class="flex-fill">
+            <div class="hh-tool-title">Аптечка</div>
+            @if (summary()?.medkits; as m) {
+              @if (m.expired > 0) {
+                <div class="hh-tool-sub hh-tool-sub-warn">{{ m.expired }} просрочено</div>
+              } @else if (m.expiring > 0) {
+                <div class="hh-tool-sub hh-tool-sub-warn">{{ m.expiring }} заканчивается</div>
+              }
+            }
+          </div>
+          <i class="ph ph-caret-right" aria-hidden="true"></i>
+        </a>
+
+        <a class="hh-tool-row" routerLink="/health/reports">
+          <i class="ph-duotone ph-file-text" aria-hidden="true"></i>
+          <div class="flex-fill">
+            <div class="hh-tool-title">Отчёты для врача</div>
+            <div class="hh-tool-sub">
+              @if (summary()?.reports?.activeLinks; as n) {
+                {{ n }} {{ pluralizeRu(n, 'ссылка', 'ссылки', 'ссылок') }} активна
+              } @else {
+                Нет активных ссылок
+              }
+            </div>
+          </div>
+          <i class="ph ph-caret-right" aria-hidden="true"></i>
+        </a>
+
+        <a class="hh-tool-row" routerLink="/health/kb">
+          <i class="ph-duotone ph-book-open" aria-hidden="true"></i>
+          <div class="flex-fill">
+            <div class="hh-tool-title">Справочник</div>
+            <div class="hh-tool-sub">лекарства и показатели</div>
+          </div>
+          <i class="ph ph-caret-right" aria-hidden="true"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+}

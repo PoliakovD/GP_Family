@@ -9,6 +9,61 @@
 </section>
 
 <section class="mb-2">
+  <h3>Кто видит моё здоровье</h3>
+  <p class="muted mb-2">
+    Доступ на чтение к дневнику, приёму лекарств и прививкам — по одному переключателю на
+    категорию, для взрослого ребёнка, который наблюдает за пожилым родителем, например. Анализы и
+    визиты настраиваются отдельно, в самом разделе «Анализы» («Доступ» → семья).
+  </p>
+  @if (sharesLoading()) {
+    <p class="muted">Загружаем…</p>
+  } @else if (shares().length === 0) {
+    <p class="muted">Делиться пока не с кем — доступ можно дать активным членам ваших семей.</p>
+  } @else {
+    <div class="settings-share-header">
+      <span>Человек</span>
+      <span class="text-center">Приём лекарств</span>
+      <span class="text-center">Прививки</span>
+      <span class="text-center">Дневник</span>
+    </div>
+    <div class="card" style="padding:0">
+      @for (grant of shares(); track grant.viewerUserId) {
+        <div class="settings-share-row">
+          <span>{{ grant.name }}</span>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [checked]="hasCategory(grant, Category.Intake)"
+              [disabled]="shareBusyKey() !== null"
+              (change)="toggleCategory(grant, Category.Intake)"
+            />
+            <span class="switch-knob"></span>
+          </label>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [checked]="hasCategory(grant, Category.Vaccinations)"
+              [disabled]="shareBusyKey() !== null"
+              (change)="toggleCategory(grant, Category.Vaccinations)"
+            />
+            <span class="switch-knob"></span>
+          </label>
+          <label class="switch">
+            <input
+              type="checkbox"
+              [checked]="hasCategory(grant, Category.Diary)"
+              [disabled]="shareBusyKey() !== null"
+              (change)="toggleCategory(grant, Category.Diary)"
+            />
+            <span class="switch-knob"></span>
+          </label>
+        </div>
+      }
+    </div>
+  }
+</section>
+
+<section class="mb-2">
   <h3>Удаление аккаунта</h3>
   <p class="muted mb-2">
     Безвозвратно удаляет аккаунт, медицинские записи, файлы и отзывает согласие на

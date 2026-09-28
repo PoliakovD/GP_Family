@@ -30,6 +30,23 @@ public class MedicationReminderSettingsServiceTests : MedicationCourseTestBase
     }
 
     [Fact]
+    public async Task MyWatchers_Add_GrantsIntakeAccess_Remove_DoesNotRevokeIt()
+    {
+        // ADR-0017: выбор наблюдателя выдаёт грант Intake автоматически; отписка от уведомлений
+        // грант не отзывает — это отдельное действие («Кто видит моё здоровье»).
+        var (family, admin) = SeedFamily();
+        var a = AddMemberUtc(family.Id);
+
+        await Reminders.SetMyWatchersAsync(admin.Id, new SetMyWatchersRequest([a.Id]));
+        var grant = Db.HealthShareGrants.AsNoTracking().Single(g => g.OwnerUserId == admin.Id && g.ViewerUserId == a.Id);
+        grant.Categories.Should().Be(HealthShareCategory.Intake);
+
+        await Reminders.SetMyWatchersAsync(admin.Id, new SetMyWatchersRequest([]));
+        Db.MedicationWatchers.Should().BeEmpty();
+        Db.HealthShareGrants.AsNoTracking().Should().ContainSingle(g => g.OwnerUserId == admin.Id && g.ViewerUserId == a.Id);
+    }
+
+    [Fact]
     public async Task Get_ListsCandidates_Dependents_AndAdultsWhoChoseMe()
     {
         var (family, admin) = SeedFamily();

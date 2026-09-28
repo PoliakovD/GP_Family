@@ -165,7 +165,13 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/health-hub/health-hub.component').then((m) => m.HealthHubComponent),
     children: [
-      { path: '', redirectTo: 'medications', pathMatch: 'full' },
+      {
+        // Хаб «Здоровье» (редизайн навигации, макет «Screen - Health hub») — плитки трёх групп
+        // со сводкой своих данных, заменил редирект на «Аптечку».
+        path: '',
+        loadComponent: () =>
+          import('./components/health-home/health-home.component').then((m) => m.HealthHomeComponent),
+      },
       {
         path: 'medications',
         loadComponent: () =>

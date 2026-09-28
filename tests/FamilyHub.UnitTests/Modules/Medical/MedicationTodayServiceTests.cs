@@ -62,11 +62,7 @@ public class MedicationTodayServiceTests : MedicationCourseTestBase
         var schedule = OnceAt(missedAt);
         SeedCourse(mama.Id, null, family.Id, mama.Id, schedule, missedAt.AddDays(-1), name: "Эналаприл");
         SeedCourse(null, dependent.Id, family.Id, admin.Id, schedule, missedAt.AddDays(-1), name: "Аспирин");
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = mama.Id, WatcherUserId = admin.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(mama.Id, admin.Id);
 
         var today = await Today.GetTodayAsync(admin.Id, DayOf(missedAt), null);
 
@@ -171,11 +167,7 @@ public class MedicationTodayServiceTests : MedicationCourseTestBase
         // Свой пропущенный приём (сегодня по UTC) — считается; чужой взрослого, за которым лишь слежу, — нет.
         SeedCourse(admin.Id, null, family.Id, admin.Id, OnceAt(missedAt), missedAt.AddDays(-1));
         SeedCourse(mama.Id, null, family.Id, mama.Id, OnceAt(missedAt), missedAt.AddDays(-1));
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = mama.Id, WatcherUserId = admin.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(mama.Id, admin.Id);
 
         var count = await Today.GetAttentionCountAsync(admin.Id);
 

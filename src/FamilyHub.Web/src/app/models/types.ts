@@ -259,6 +259,9 @@ export interface MedicalRecordFilter {
     dependentId?: string;
     targetUserId?: string;
     self?: boolean;
+    /** 'me' — хаб «Здоровье» (редизайн навигации): действительно только мои записи, в отличие от
+     * self, которое пропускает чужие записи, расшарённые семье владельцем (см. backend MineOnly). */
+    subject?: 'me';
     doctor?: string;
     q?: string;
     page?: number;
@@ -1558,4 +1561,137 @@ export interface VaccinationRecognitionResponse {
     success: boolean;
     items: VaccinationRecognizedItem[];
     error: string | null;
+}
+
+// Сводка хаба «Здоровье» (редизайн навигации, ADR-0017/бэкенд HealthSummaryDtos.cs) — превью для
+// плиток health-home.component.ts. Каждый блок nullable — отсутствует, если у пользователя нет
+// данных этой категории или блок не собрался (см. HealthSummaryService.SafeAsync).
+
+export interface HealthSummaryNextDose {
+    courseId: string;
+    scheduledAt: string;
+    localTime: string;
+    drugName: string;
+    units: number;
+    unit: DoseUnit;
+    canAct: boolean;
+}
+
+export interface HealthSummaryIntake {
+    taken: number;
+    missed: number;
+    upcoming: number;
+    skipped: number;
+    total: number;
+    next: HealthSummaryNextDose | null;
+}
+
+/** Только систолическое значение — того же вида, что спарклайн на макете. */
+export interface HealthSummaryBloodPressure {
+    value: number;
+    value2: number | null;
+    occurredAt: string;
+    recentValues: number[];
+}
+
+export interface HealthSummarySymptom {
+    title: string | null;
+    severity: number | null;
+    occurredAt: string;
+}
+
+export interface HealthSummaryDiary {
+    latestBloodPressure: HealthSummaryBloodPressure | null;
+    latestSymptom: HealthSummarySymptom | null;
+}
+
+export interface HealthSummaryLatestRecord {
+    id: string;
+    title: string | null;
+    recordDate: string;
+    doctor: string | null;
+    indicatorCount: number;
+    abnormalIndicatorCount: number;
+    /** Только у визитов, и только если заключение уже распознано — иначе null. */
+    prescriptionCount: number | null;
+}
+
+/** Общая форма для плиток «Анализы» и «Приёмы врача». */
+export interface HealthSummaryRecords {
+    latest: HealthSummaryLatestRecord | null;
+    total: number;
+}
+
+export interface HealthSummaryHighlightIndicator {
+    analyteKey: string;
+    displayName: string;
+    valueRaw: string;
+    unit: string | null;
+    flag: IndicatorFlag;
+    recentValues: number[];
+    firstDate: string;
+    lastDate: string;
+}
+
+export interface HealthSummaryIndicators {
+    /** Все мои отслеживаемые показатели, не только выделенный highlight. */
+    trackedCount: number;
+    highlight: HealthSummaryHighlightIndicator | null;
+}
+
+export interface HealthSummaryDueVaccine {
+    seriesName: string;
+    status: VaccinationStatus;
+    windowFrom: string | null;
+    windowTo: string | null;
+}
+
+export interface HealthSummaryLastVaccine {
+    label: string;
+    date: string | null;
+}
+
+export interface HealthSummaryVaccinations {
+    nextDue: HealthSummaryDueVaccine | null;
+    lastDone: HealthSummaryLastVaccine | null;
+}
+
+/** Аптечка — семейный ресурс (не «моё» в узком смысле), но плитка живёт в хабе по макету. */
+export interface HealthSummaryMedkits {
+    expiring: number;
+    expired: number;
+}
+
+export interface HealthSummaryReports {
+    activeLinks: number;
+}
+
+// «Кто видит моё здоровье» (ADR-0017) — гранты доступа per-категория к дневнику/приёму/прививкам.
+// Битовая маска, значения — часть контракта с бэкендом (Domain.Enums.HealthShareCategory).
+export const HealthShareCategory = { None: 0, Intake: 1, Vaccinations: 2, Diary: 4 } as const;
+export type HealthShareCategory = typeof HealthShareCategory[keyof typeof HealthShareCategory];
+
+/** Кому я дал доступ (GET /api/health-shares/mine) — полная матрица, categories=None по умолчанию. */
+export interface HealthShareGrantDto {
+    viewerUserId: string;
+    name: string;
+    categories: number;
+}
+
+/** Чьё здоровье вижу я (GET /api/health-shares/shared-with-me) — только пока есть общая активная семья. */
+export interface HealthSharedWithMeDto {
+    ownerUserId: string;
+    name: string;
+    categories: number;
+}
+
+export interface HealthSummary {
+    intake: HealthSummaryIntake | null;
+    diary: HealthSummaryDiary | null;
+    analyses: HealthSummaryRecords | null;
+    visits: HealthSummaryRecords | null;
+    indicators: HealthSummaryIndicators | null;
+    vaccinations: HealthSummaryVaccinations | null;
+    medkits: HealthSummaryMedkits | null;
+    reports: HealthSummaryReports | null;
 }

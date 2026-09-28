@@ -10,6 +10,11 @@ namespace FamilyHub.Modules.Medical.MedicationCourses;
 /// (свой курс) или дают лекарство (наблюдатели подопечного с ReceiveReminders). О пропуске узнают
 /// наблюдатели — но только пока они состоят в общей активной семье. «Пропустить» — осознанный отказ:
 /// о нём не сообщаем вовсе (это решает вызывающий, здесь получатели считаются только по факту пропуска).
+///
+/// ADR-0017: для взрослого субъекта наблюдатель без гранта <c>HealthShareGrant.Intake</c> уведомлений
+/// не получает — доступ мог быть отозван из настроек «Кто видит моё здоровье» уже после того, как
+/// наблюдатель был выбран в MedicationWatcher (снятие watcher-строки грант не трогает, но не наоборот:
+/// см. class doc MedicationReminderSettingsService).
 /// </summary>
 public class MedicationReminderRecipients(AppDbContext db)
 {
@@ -31,6 +36,13 @@ public class MedicationReminderRecipients(AppDbContext db)
             var watcherIds = await db.MedicationWatchers.AsNoTracking()
                 .Where(w => w.SubjectUserId == subject && w.NotifyMissed)
                 .Select(w => w.WatcherUserId).ToListAsync(ct);
+            if (watcherIds.Count == 0) return [];
+
+            watcherIds = await db.HealthShareGrants.AsNoTracking()
+                .Where(g => g.OwnerUserId == subject && watcherIds.Contains(g.ViewerUserId)
+                    && (g.Categories & HealthShareCategory.Intake) == HealthShareCategory.Intake)
+                .Select(g => g.ViewerUserId)
+                .ToListAsync(ct);
             return await SharingFamilyAsync(subject, watcherIds, ct);
         }
 

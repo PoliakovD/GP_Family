@@ -122,11 +122,7 @@ public class MedicationCourseServiceTests : MedicationCourseTestBase
         var dependent = AddDependent(family.Id, admin.Id);
         var ownCourse = SeedCourse(admin.Id, null, family.Id, admin.Id, AsNeeded());
         var depCourse = SeedCourse(null, dependent.Id, family.Id, admin.Id, AsNeeded());
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = admin.Id, WatcherUserId = member.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(admin.Id, member.Id);
         var stranger = Db.AddUser();
 
         // Владелец: своё и подопечного (он член семьи) — с правом правки.
@@ -156,16 +152,28 @@ public class MedicationCourseServiceTests : MedicationCourseTestBase
     }
 
     [Fact]
+    public async Task Visibility_MemberWithWatcherRowButNoGrant_DoesNotSeeAdultsCourse()
+    {
+        // ADR-0017: MedicationWatcher сам по себе больше не даёт доступ — только грант.
+        var (family, admin) = SeedFamily();
+        var member = AddMemberUtc(family.Id);
+        var course = SeedCourse(admin.Id, null, family.Id, admin.Id, AsNeeded());
+        Db.MedicationWatchers.Add(new MedicationWatcher
+        {
+            Id = Guid.NewGuid(), SubjectUserId = admin.Id, WatcherUserId = member.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
+        });
+        Db.SaveChanges();
+
+        (await Courses.GetAsync(member.Id, course.Id)).Result.Should().Be(CourseResult.NotFound);
+    }
+
+    [Fact]
     public async Task Visibility_WatcherWhoLeftFamily_LosesAccess()
     {
         var (family, admin) = SeedFamily();
         var watcher = AddMemberUtc(family.Id);
         var course = SeedCourse(admin.Id, null, family.Id, admin.Id, AsNeeded());
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = admin.Id, WatcherUserId = watcher.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(admin.Id, watcher.Id);
         (await Courses.GetAsync(watcher.Id, course.Id)).Result.Should().Be(CourseResult.Success);
 
         Db.FamilyMembers.Remove(Db.FamilyMembers.Single(m => m.UserId == watcher.Id));
@@ -256,11 +264,7 @@ public class MedicationCourseServiceTests : MedicationCourseTestBase
         var (family, admin) = SeedFamily();
         var watcher = AddMemberUtc(family.Id);
         var course = SeedCourse(admin.Id, null, family.Id, admin.Id, AsNeeded());
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = admin.Id, WatcherUserId = watcher.Id, NotifyMissed = true, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(admin.Id, watcher.Id);
 
         (await Courses.UpdateAsync(watcher.Id, course.Id, Request(AsNeeded()))).Result.Should().Be(CourseResult.Forbidden);
     }

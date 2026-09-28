@@ -38,13 +38,13 @@ public class MedicationDoseScanJobTests : MedicationCourseTestBase
         return course;
     }
 
+    // ADR-0017: доступ на чтение (нужен и для получения уведомлений о пропуске взрослого субъекта, см.
+    // MedicationReminderRecipients) даёт отдельный грант Intake, не сама строка MedicationWatcher —
+    // SeedWatcher (базовый класс) заводит обе; этот локальный хелпер лишь позволяет здесь же управлять
+    // notifyMissed без лишнего параметра в базовом методе.
     private void Watch(Guid subjectUserId, Guid watcherId, bool notifyMissed = true)
     {
-        Db.MedicationWatchers.Add(new MedicationWatcher
-        {
-            Id = Guid.NewGuid(), SubjectUserId = subjectUserId, WatcherUserId = watcherId, NotifyMissed = notifyMissed, CreatedAt = DateTime.UtcNow,
-        });
-        Db.SaveChanges();
+        SeedWatcher(subjectUserId, watcherId, notifyMissed);
     }
 
     // ── Напоминание о приёме ──────────────────────────────────────────────

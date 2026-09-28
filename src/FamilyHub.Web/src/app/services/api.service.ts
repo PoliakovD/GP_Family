@@ -27,6 +27,9 @@ import {
   HealthNoteCatalog,
   HealthNoteInput,
   HealthNoteKind,
+  HealthSharedWithMeDto,
+  HealthShareGrantDto,
+  HealthSummary,
   HomeSummaryResponse,
   IndicatorArticleResponse,
   IndicatorDto,
@@ -188,6 +191,9 @@ export class ApiService {
 
   // Редизайн v2 — агрегат Главной, одним запросом вместо 3-4 отдельных.
   getHomeSummary = () => this.get<HomeSummaryResponse>('/api/home/summary');
+
+  // Редизайн хаба «Здоровье» — агрегат плиток хаба, одним запросом вместо 8 отдельных.
+  getHealthSummary = () => this.get<HealthSummary>('/api/health/summary');
 
   // Семьи
   getFamilies = () => this.get<FamilySummary[]>('/api/families');
@@ -535,8 +541,8 @@ export class ApiService {
 
   unsubscribePush = (endpoint: string) => this.post<void>('/api/push/unsubscribe', { endpoint });
 
-  // Дневник самочувствия — строго личный, только свои записи.
-  getHealthNotes = (filter: { from?: string; to?: string; kind?: HealthNoteKind } = {}) =>
+  // Дневник самочувствия — свой всегда, чужой только по гранту Diary (ADR-0017, subject=ownerUserId).
+  getHealthNotes = (filter: { from?: string; to?: string; kind?: HealthNoteKind; subject?: string } = {}) =>
     this.get<HealthNote[]>(`/api/health-notes${buildQuery(filter)}`);
 
   getHealthNoteCatalog = () => this.get<HealthNoteCatalog>('/api/health-notes/catalog');
@@ -545,8 +551,16 @@ export class ApiService {
   getRecentHealthNoteTitles = (kind: HealthNoteKind) =>
     this.get<string[]>(`/api/health-notes/recent${buildQuery({ kind })}`);
 
-  getHealthMetricSeries = (code: string, range: { from?: string; to?: string } = {}) =>
+  getHealthMetricSeries = (code: string, range: { from?: string; to?: string; subject?: string } = {}) =>
     this.get<HealthMetricPoint[]>(`/api/health-notes/metrics/${encodeURIComponent(code)}/series${buildQuery(range)}`);
+
+  // «Кто видит моё здоровье» (ADR-0017) — настройка грантов доступа per-категория.
+  getMyHealthShares = () => this.get<HealthShareGrantDto[]>('/api/health-shares/mine');
+
+  getHealthSharedWithMe = () => this.get<HealthSharedWithMeDto[]>('/api/health-shares/shared-with-me');
+
+  setHealthShare = (viewerUserId: string, categories: number) =>
+    this.put<void>(`/api/health-shares/mine/${viewerUserId}`, { categories });
 
   createHealthNote = (input: HealthNoteInput) => this.post<HealthNote>('/api/health-notes', input);
 

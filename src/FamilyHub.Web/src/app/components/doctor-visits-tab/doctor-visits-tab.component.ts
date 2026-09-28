@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { MedicalRecordKind } from '../../models/types';
 import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-records-panel.component';
 
@@ -10,8 +10,12 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
 @Component({
     selector: 'app-doctor-visits-tab',
     imports: [MedicalRecordsPanelComponent],
-    template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" />`
+    template: `<app-medical-records-panel [kind]="Kind.DoctorVisit" [person]="person()" />`
 })
 export class DoctorVisitsTabComponent {
   readonly Kind = MedicalRecordKind;
+
+  /** ?person=me — плитка хаба «Здоровье» (редизайн навигации) открывает раздел сразу
+   * отфильтрованным на себя (см. MedicalRecordsPanelComponent). */
+  readonly person = input<string | undefined>(undefined);
 }

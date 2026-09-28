@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Access;
 using Microsoft.EntityFrameworkCore;
@@ -56,10 +57,10 @@ public class CourseScope(
 public class MedicationCourseAccess(AppDbContext db, SubjectScopeService scopeService)
 {
     /// <summary>Raw-выборка (семьи/админство/наблюдаемые) — общая с прививками, см. SubjectScopeService.
-    /// Здесь только оборачивается в CourseScope, поведение не изменилось.</summary>
+    /// Здесь только оборачивается в CourseScope; категория гранта — Intake (ADR-0017).</summary>
     public async Task<CourseScope> GetScopeAsync(Guid userId, CancellationToken ct = default)
     {
-        var s = await scopeService.GetScopeAsync(userId, ct);
+        var s = await scopeService.GetScopeAsync(userId, HealthShareCategory.Intake, ct);
         return new CourseScope(s.UserId, s.FamilyIds, s.AdminFamilyIds, s.WatchedUserIds);
     }
 

@@ -903,12 +903,11 @@ select.input {
 }
 
 // ============================================================================
-// Оболочка приложения — редизайн v2 (каркас навигации, PR2). Было: .app-wrapper (колонка) +
-// .app-header (просто заголовок) + .tab-bar (одинаково на всех ширинах). Стало: десктоп
-// (≥1024px, BreakpointService.tier()==='wide') — боковое меню вместо таб-бара, узкие экраны —
-// прежний таб-бар (теперь Главная/Здоровье/Семья/Ещё). .app-header/.app-header-action удалены —
-// первый заменён шапкой сайдбара/топбаром, второй был мёртвым CSS (поиск давно переехал на
-// Главную и никогда не пользовался этим классом).
+// Оболочка приложения — редизайн v2 (каркас навигации, PR2), таб-бар обновлён редизайном хаба
+// «Здоровье» (макет «Screen - Health hub»). Десктоп (≥1024px, BreakpointService.tier()==='wide') —
+// боковое меню с группами «Здоровья», колокольчик+аватар в топбаре. Узкие экраны — таб-бар ровно
+// из 4 пунктов (Главная/Здоровье/Семья/Профиль, без листа «Ещё» — он упразднён) и своя мобильная
+// шапка (.app-topbar-mobile) вместо всегда развёрнутого поля поиска.
 // ============================================================================
 .app-shell {
   display: flex;
@@ -1005,6 +1004,23 @@ select.input {
   flex-direction: column;
   gap: 2px;
   padding: 2px 0 6px 26px;
+}
+
+// Редизайн хаба «Здоровье» — подзаголовок группы подпунктов («Каждый день»/«Медкарта»/
+// «Инструменты», см. app.component.ts healthGroups) — те же токены, что у .app-sidebar-kicker,
+// но без отступа сверху (первая группа сразу под пунктом «Здоровье», не под футером).
+.app-sidebar-group-label {
+  padding: 10px 12px 2px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.7059rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+
+  &:first-child {
+    padding-top: 4px;
+  }
 }
 
 .app-sidebar-child {
@@ -1158,6 +1174,44 @@ select.input {
   input { min-width: 0; }
 }
 
+// ----------------------------------------------------------------------------
+// Мобильная шапка (редизайн хаба «Здоровье», макет «Screen - Health hub») — заголовок раздела +
+// иконка поиска + колокольчик, вместо поля поиска на всю ширину. Лупа временно подменяет заголовок
+// развёрнутым полем (app.component.ts mobileSearchOpen) — та же verstка-строка, что и десктопный
+// .app-topbar, просто другое содержимое.
+// ----------------------------------------------------------------------------
+.app-topbar-mobile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-divider);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: calc(var(--tap-min) + 8px);
+
+  app-avatar {
+    flex: none;
+  }
+
+  > app-search-field,
+  > app-search {
+    min-width: 0;
+  }
+}
+
+.app-topbar-mobile-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.2353rem;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app-content {
   flex: 1;
   padding: var(--space-3) var(--space-4) 88px;
@@ -1170,8 +1224,9 @@ select.input {
 }
 
 // ----------------------------------------------------------------------------
-// Нижний таб-бар (узкие экраны) — редизайн v2: Главная/Здоровье/Семья/Ещё вместо
-// Главная/Здоровье/Уведомл./Профиль (Профиль и Уведомления теперь в листе «Ещё»).
+// Нижний таб-бар (узкие экраны) — редизайн хаба «Здоровье»: Главная/Здоровье/Семья/Профиль вместо
+// Главная/Здоровье/Семья/Ещё — «Профиль» ведёт прямо в /settings, лист «Ещё» упразднён,
+// «Уведомления» — колокольчик в мобильной шапке (.app-topbar-mobile), не пятый пункт.
 // ----------------------------------------------------------------------------
 .tab-bar {
   position: fixed;
@@ -1198,28 +1253,6 @@ select.input {
   height: 8px;
   border-radius: 50%;
   background: var(--color-accent-2);
-}
-
-// ----------------------------------------------------------------------------
-// Лист «Ещё» (bottom-sheet, узкие экраны) — Уведомления/Профиль, редизайн v2.
-// ----------------------------------------------------------------------------
-.app-more-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 4px;
-  color: var(--color-text);
-  text-decoration: none;
-  min-height: var(--tap-min);
-
-  i {
-    font-size: 1.2353rem;
-    color: var(--color-neutral-600);
-  }
-
-  & + .app-more-item {
-    border-top: 1px solid var(--color-divider);
-  }
 }
 
 // ============================================================================

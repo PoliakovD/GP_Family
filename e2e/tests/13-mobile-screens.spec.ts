@@ -14,8 +14,8 @@ test('мобильные экраны здоровья не шире экран�
   await createFamily(api, 'Семья Орловых');
 
   for (const url of [
-    '/home', '/health/medications', '/health/intake', '/health/intake/courses', '/health/records', '/health/visits',
-    '/health/notes', '/health/reports', '/health/indicators', '/notifications', '/settings/profile',
+    '/home', '/health', '/health/medications', '/health/intake', '/health/intake/courses', '/health/records',
+    '/health/visits', '/health/notes', '/health/reports', '/health/indicators', '/notifications', '/settings/profile',
   ]) {
     await openAs(page, tgId, url);
     await expectNoHorizontalOverflow(page);
@@ -34,7 +34,7 @@ test('мобильный приём лекарств: форма курса от
   await expect(page.getByPlaceholder('Например, Сорбифер Дурулес 100 мг')).toHaveCount(0);
 });
 
-test('мобильная нижняя панель: Здоровье → Приём лекарств через вкладки хаба', async ({ page }) => {
+test('мобильная нижняя панель: Здоровье → Приём лекарств через плитку хаба', async ({ page }) => {
   const { tgId, api } = await newUser('Орлов', 'Олег');
   await createFamily(api, 'Семья Орловых');
 

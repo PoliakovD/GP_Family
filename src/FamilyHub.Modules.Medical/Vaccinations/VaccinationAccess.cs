@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Access;
 using Microsoft.EntityFrameworkCore;
@@ -63,7 +64,7 @@ public class VaccinationAccess(AppDbContext db, SubjectScopeService scopeService
 {
     public async Task<VaccinationScope> GetScopeAsync(Guid userId, CancellationToken ct = default)
     {
-        var s = await scopeService.GetScopeAsync(userId, ct);
+        var s = await scopeService.GetScopeAsync(userId, HealthShareCategory.Vaccinations, ct);
         return new VaccinationScope(s.UserId, s.FamilyIds, s.AdminFamilyIds, s.WatchedUserIds);
     }
 

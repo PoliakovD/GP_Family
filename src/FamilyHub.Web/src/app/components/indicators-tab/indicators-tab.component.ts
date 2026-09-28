@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, input } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import { IndicatorFlag } from '../../models/types';
 import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/types';
@@ -37,6 +37,10 @@ export class IndicatorsTabComponent implements OnInit {
 
   readonly IndicatorFlag = IndicatorFlag;
 
+  /** ?person=me — плитка хаба «Здоровье» (редизайн навигации) открывает раздел сразу
+   * отфильтрованным на себя (тот же ключ 'self', что даёт itemPatientKey() для своих записей). */
+  readonly person = input<string | undefined>(undefined);
+
   loading = true;
   error: string | null = null;
   items: MyIndicatorSummary[] = [];
@@ -49,6 +53,7 @@ export class IndicatorsTabComponent implements OnInit {
   history: IndicatorHistoryPoint[] = [];
 
   async ngOnInit(): Promise<void> {
+    if (this.person() === 'me') this.patientFilterKey = 'self';
     this.loading = true;
     try {
       this.items = await this.api.getMyIndicators();
