@@ -318,7 +318,8 @@ public class MedicalDocumentExtractionProcessor(
         // (не затираем то, что пользователь мог ввести вручную в форме создания).
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
-        if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
+        if (record.Doctor is null && doctor is not null && !await IsPatientOwnNameAsync(doctor, record, ct))
+            record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
         // Источник — атрибут ВСЕЙ записи, не отдельного показателя (заметка 1): смешанный бланк
         // (кровь+моча) пользователь разделяет вручную на две записи, не конвейер посекционно. Уже
@@ -691,7 +692,8 @@ public class MedicalDocumentExtractionProcessor(
         var doctor = results.Select(r => r.Doctor).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
-        if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
+        if (record.Doctor is null && doctor is not null && !await IsPatientOwnNameAsync(doctor, record, ct))
+            record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
         // Назначенные препараты — сверяем со справочником медикаментов (тот же, что у аптечки);
         // промах ставит обогащение в очередь (UX-редизайн, см. VisitMedicationEnrichmentRequestService).
@@ -724,6 +726,18 @@ public class MedicalDocumentExtractionProcessor(
         await tx.CommitAsync(ct);
 
         logger.LogInformation("MedicalDocumentExtractionJob {JobId}: заключение врача распознано.", job.Id);
+    }
+
+    /// <summary>Страховка от главной путаницы бланка (план "качество ИИ-распознавания анализов",
+    /// Этап 2, см. PatientDoctorNameGuard): извлечённое "doctor" — на самом деле ФИО ПАЦИЕНТА этой
+    /// записи, а не врача. Используется в обоих путях (ProcessAnalysisAsync/ProcessVisitAsync) ДО
+    /// записи в record.Doctor — совпадение не откладывается на потом (не сохраняем "неверного
+    /// врача", чтобы потом почистить), а просто не пишется вовсе, доктор остаётся null (как если
+    /// бы модель его не нашла).</summary>
+    private async Task<bool> IsPatientOwnNameAsync(string extractedDoctor, Domain.Entities.MedicalRecord record, CancellationToken ct)
+    {
+        var (firstName, lastName, middleName) = await PatientIdentityResolver.ResolveNameAsync(db, record, ct);
+        return PatientDoctorNameGuard.IsPatientName(extractedDoctor, firstName, lastName, middleName);
     }
 
     /// <summary>Проставляет FileAttachment.ExtractedAt для успешно прочитанных вложений — вызывается
