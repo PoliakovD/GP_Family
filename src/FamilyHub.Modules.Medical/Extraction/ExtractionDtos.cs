@@ -21,6 +21,17 @@ public record ExtractedLabIndicator(
     string Name, string Value, string? Unit, double? RefLow, double? RefHigh, string? RefText,
     string? RefExpected = null);
 
+/// <summary>Покрытие строк-кандидатов таблицы результатов (см. LabTableRowDetector) итоговым
+/// списком показателей — заполняется только для текстового пути analysis-extraction, когда
+/// детектор нашёл хотя бы одну строку (у vision-пути, у visit-extraction и у документов, где
+/// детектор не распознал ни одной строки — старый чанковый путь как fallback, см.
+/// LmStudioMedicalDocumentExtractor — покрытия нет, null). ExpectedRows — сколько строк-кандидатов
+/// нашёл детектор; MatchedRows — на сколько из них хотя бы один проход (включая повторы
+/// пропущенных) дал показатель, прошедший антигаллюцинационную сверку; UnmatchedRows — сырой текст
+/// строк, которые так и не дали результата — видно пользователю ("2 строки не распознаны") и можно
+/// добавить вручную (план "качество ИИ-распознавания анализов", Этап 1, пункт 7).</summary>
+public record ExtractionRowCoverage(int ExpectedRows, int MatchedRows, IReadOnlyList<string> UnmatchedRows);
+
 /// <summary>Один назначенный препарат из заключения врача (UX-редизайн) — DosageInstructions как
 /// написано в документе ("по 1 таблетке 2 раза в день после еды"), не структурировано дальше.
 /// Ссылка на общий справочник (KbMedicationId) НЕ хранится здесь — резолвится на чтение
@@ -87,4 +98,5 @@ public record ExtractionResult(
     SpecimenDocumentResolution? SpecimenResolution = null,
     bool IsTransientFailure = false,
     AnalyteSubjectResolution? SubjectResolution = null,
-    MedicalRecordKind Kind = MedicalRecordKind.Analysis);
+    MedicalRecordKind Kind = MedicalRecordKind.Analysis,
+    ExtractionRowCoverage? RowCoverage = null);
