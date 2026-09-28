@@ -34,6 +34,18 @@ public static class RateLimitingRegistration
                     QueueLimit = 0,
                 }));
 
+            // Сессионный трафик уже вошедшего пользователя (/me, /refresh, /logout(-all),
+            // /sessions*) — мягче политики "auth": это не попытки входа, а обычные запросы вроде
+            // /me на каждой guard-навигации SPA (см. AuthRateLimitOptions.AuthSessionPermitLimit).
+            limiterOptions.AddPolicy("auth-session", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = authRateLimits.AuthSessionPermitLimit,
+                    Window = TimeSpan.FromSeconds(authRateLimits.AuthSessionWindowSeconds),
+                    QueueLimit = 0,
+                }));
+
             // Жёстче для выдачи email-кодов: каждая выдача — реальное письмо.
             limiterOptions.AddPolicy("auth-code", httpContext => RateLimitPartition.GetFixedWindowLimiter(
                 httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",

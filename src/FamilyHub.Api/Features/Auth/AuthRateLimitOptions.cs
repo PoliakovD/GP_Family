@@ -14,6 +14,15 @@ public class AuthRateLimitOptions
 
     public int AuthWindowSeconds { get; set; } = 60;
 
+    /// <summary>Отдельный, более мягкий лимит для /me, /refresh, /logout(-all), /sessions* —
+    /// это не попытки входа (перебор пароля/кода здесь бессмыслен), а обычный трафик уже вошедшей
+    /// сессии: /me дёргается на каждой guard-навигации SPA. Раньше делили бакет с login (10/мин на
+    /// IP) — общий IP за NAT или пара 429 подряд у одного пользователя гасили /me и ошибочно
+    /// выглядели как "не аутентифицирован"/"профиль не заполнен" (см. TECH_DEBT.md #12).</summary>
+    public int AuthSessionPermitLimit { get; set; } = 60;
+
+    public int AuthSessionWindowSeconds { get; set; } = 60;
+
     /// <summary>Выдач email-кодов с одного IP за окно (каждая — реальное письмо).</summary>
     public int CodePermitLimit { get; set; } = 3;
 

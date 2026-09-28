@@ -6,9 +6,11 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using FamilyHub.Infrastructure.Storage;
 using Hangfire;
+using Hangfire.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace FamilyHub.Api.Features.Admin;
 
@@ -103,11 +105,7 @@ public class AdminStatsService(
             """SELECT COUNT(*) AS "UndeliveredBatches", MIN("Created") AS "OldestUndeliveredAt" FROM "OutboxState" WHERE "Delivered" IS NULL""")
             .SingleAsync(ct);
 
-        var monitoring = JobStorage.Current.GetMonitoringApi();
-        var queues = monitoring.Queues()
-            .Select(q => new HangfireQueueDto(q.Name, q.Length))
-            .ToList();
-        var failedTotal = monitoring.FailedCount();
+        var (queues, failedTotal) = GetHangfireStatsWithRetry();
 
         var report = await healthChecks.CheckHealthAsync(check => check.Tags.Contains("ready"), ct);
         bool IsHealthy(string name) =>
@@ -184,6 +182,32 @@ public class AdminStatsService(
             new EncryptionKeyRingDto(encryptionKeyRing.ActiveKeyId, encryptionKeyRing.PreviousKeyIds),
             new JwtKeyRingDto(jwt.ActiveKeyId, jwt.PreviousSigningKeys.Select(k => k.Id).ToList()),
             new DownloadKeyRingDto(attachmentOptions.Value.PreviousSigningKeys.Count));
+    }
+
+    /// <summary>Hangfire.PostgreSql держит собственный пул соединений (в стороне от EF/AppDbContext) —
+    /// изредка отдаёт из него устаревшее соединение, и чтение обрывается ("Attempted to read past the
+    /// end of the stream", TECH_DEBT.md #9). Повторный вызов почти всегда проходит: он получает НОВЫЙ
+    /// <see cref="IMonitoringApi"/> (а не переиспользует сорвавшийся), так что второе соединение из
+    /// пула обычно уже рабочее. Только этот флейк — HealthChecks/db-запросы выше по методу такого не
+    /// показывали, отдельного ретрая для них не заводим.</summary>
+    private static (List<HangfireQueueDto> Queues, long FailedTotal) GetHangfireStatsWithRetry()
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var monitoring = JobStorage.Current.GetMonitoringApi();
+                var queues = monitoring.Queues().Select(q => new HangfireQueueDto(q.Name, q.Length)).ToList();
+                var failedTotal = monitoring.FailedCount();
+                return (queues, failedTotal);
+            }
+            catch (Exception ex) when (attempt < maxAttempts && (ex is NpgsqlException or InvalidOperationException))
+            {
+                // Не логируем как ошибку — при успешном повторе это просто шум; сама ситуация уже
+                // задокументирована в TECH_DEBT.md #9.
+            }
+        }
     }
 
     private record OutboxBacklogRow(int UndeliveredBatches, DateTime? OldestUndeliveredAt);
