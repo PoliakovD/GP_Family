@@ -26,7 +26,7 @@ public class QualitativeNormJudgeTests
     }
 
     private void SetUpModelResponse(bool? isNormal, double confidence = 0.8) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
                 JsonSerializer.Serialize(new { isNormal, confidence })), null));
 
@@ -71,7 +71,7 @@ public class QualitativeNormJudgeTests
     [Fact]
     public async Task JudgeAsync_ModelUnavailable_ReturnsNull_DoesNotThrow()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен"));
 
         var result = await _sut.JudgeAsync("Показатель", "значение", null, null, null, null, null);

@@ -75,7 +75,7 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
 
         var userText = BuildUserText(displayName, snippets);
         var prompt = await promptProvider.GetAsync("medication.summarize", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, userText, ct);
+        var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Суммаризация «{DisplayName}» не удалась: {Error}", displayName, result.Error);

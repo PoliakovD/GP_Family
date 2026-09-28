@@ -54,8 +54,8 @@ public class AnalysisTitleGenerator(
         var userText = BuildUserText(content, indicatorNames);
 
         var result = content.Kind == DocumentSourceKind.Image && content.Images.Count > 0
-            ? await client.ExtractJsonAsync(prompt, userText, [(content.Images[0].Bytes, content.Images[0].ContentType)], ct)
-            : await client.ExtractJsonAsync(prompt, userText, ct);
+            ? await client.ExtractJsonAsync(prompt, userText, [(content.Images[0].Bytes, content.Images[0].ContentType)], ct, shortTimeout: true)
+            : await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
 
         if (!result.Success || result.Payload is null)
         {

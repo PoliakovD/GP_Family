@@ -35,7 +35,7 @@ public class SpecimenResolverTests : SqliteTestBase
     private static DocumentContent TextContent(string text) => DocumentContent.FromText(text);
 
     private void SetUpModelResponse(object payload) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(
                 true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(JsonSerializer.Serialize(payload)), null));
 

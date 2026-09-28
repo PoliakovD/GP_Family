@@ -70,7 +70,7 @@ public class VaccinationCertificateOcrService(
         }
 
         var prompt = await promptProvider.GetAsync("vaccination.certificate-ocr", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, UserText, images, ct);
+        var result = await client.ExtractJsonAsync(prompt, UserText, images, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Распознавание сертификата прививок не удалось: {Error}", result.Error);

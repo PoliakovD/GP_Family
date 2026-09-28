@@ -66,7 +66,7 @@ public class LegitimacyGuardService(ILmStudioJsonClient client, IPromptProvider 
         var userText = string.IsNullOrWhiteSpace(text) ? "Проверь содержимое приложенных изображений." : text;
         // suppressThinking: true — security-гейт (план "живой поток мыслей" явно исключает его,
         // даже когда вызывается изнутри фонового job-контекста, см. class doc LmStudioThinkingContext).
-        var result = await client.ExtractJsonAsync(prompt, userText, images, ct, suppressThinking: true);
+        var result = await client.ExtractJsonAsync(prompt, userText, images, ct, suppressThinking: true, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogWarning(

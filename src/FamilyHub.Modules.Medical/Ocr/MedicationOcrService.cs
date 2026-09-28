@@ -87,7 +87,7 @@ public class MedicationOcrService(
         }
 
         var prompt = await promptProvider.GetAsync("medication.ocr", SystemPrompt, ct);
-        var result = await client.ExtractJsonAsync(prompt, UserText, images, ct);
+        var result = await client.ExtractJsonAsync(prompt, UserText, images, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
         {
             logger.LogInformation("Распознавание препарата по фото не удалось: {Error}", result.Error);

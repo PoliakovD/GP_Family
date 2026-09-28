@@ -35,7 +35,7 @@ public class OcrNameCorrectorTests
         {
             ["corrections"] = JsonSerializer.SerializeToElement(array),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
@@ -66,7 +66,7 @@ public class OcrNameCorrectorTests
     [Fact]
     public async Task CorrectAsync_ModelUnavailable_KeepsOriginal_DoesNotThrow()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен"));
 
         var result = await _sut.CorrectAsync("СYMАТPИПTАН");
@@ -82,7 +82,8 @@ public class OcrNameCorrectorTests
         var result = await _sut.CorrectBatchAsync(["СYMАТPИПTАН", "паРАЦЕтамол", "СYMАТPИПTАН"]);
 
         result.Should().Equal("Суматриптан", "Парацетамол", "Суматриптан");
-        await _client.Received(1).ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _client.Received(1).ExtractJsonAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>());
     }
 
     [Fact]

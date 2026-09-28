@@ -30,7 +30,7 @@ public class DocumentKindClassifierTests
     private static DocumentContent TextContent(string text) => DocumentContent.FromText(text);
 
     private void SetUpModelResponse(object payload) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(
                 true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(JsonSerializer.Serialize(payload)), null));
 
@@ -68,7 +68,7 @@ public class DocumentKindClassifierTests
     [Fact]
     public async Task ClassifyAsync_TechnicalFailure_PropagatesIsTransientFailure()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Сервер недоступен", isTransient: true));
 
         var result = await _sut.ClassifyAsync(TextContent("любой текст"));
