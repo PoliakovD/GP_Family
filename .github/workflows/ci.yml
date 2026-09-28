@@ -1,9 +1,10 @@
 name: CI
 
-# Быстрый гейт на каждый push/PR: сборка всего решения, юнит-тесты (SQLite-in-memory, без
-# Docker) и продовая сборка Angular (ловит ошибки компиляции и превышение бюджетов из
-# angular.json — 850kb/1.5mb). Интеграционные тесты (Testcontainers: Postgres/MinIO/Kafka,
-# минуты) — отдельный workflow integration.yml, только на master (см. деплой-план, часть F).
+# Быстрый гейт на каждый push/PR: сборка всего решения, юнит-тесты бэкенда (SQLite-in-memory, без
+# Docker) и фронтенда (Vitest, TECH_DEBT.md #11), продовая сборка Angular (ловит ошибки компиляции
+# и превышение бюджетов из angular.json — 850kb/1.5mb). Интеграционные тесты (Testcontainers:
+# Postgres/MinIO/Kafka, минуты) — отдельный workflow integration.yml, только на master (см.
+# деплой-план, часть F).
 on:
   push:
     branches: ['**']
@@ -58,11 +59,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Unit tests
+        run: npm test
+
       # angular.json: defaultConfiguration=production (outputHashing, serviceWorker, бюджеты) —
       # обычный `ng build` уже собирает прод-конфигурацию, доп. флаг не нужен. Сборка идёт в
       # ../FamilyHub.Api/wwwroot (см. outputPath) — здесь это просто проверка, что она проходит;
       # реальный артефакт для деплоя собирается в Dockerfile (стадия web), не в этом workflow.
-      #
-      # `npm test` в package.json есть, но в angular.json нет architect-таргета test и karma-
-      # конфига — фронтовые тесты сюда намеренно не включены (отдельная задача).
       - run: npx ng build

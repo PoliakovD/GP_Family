@@ -81,6 +81,14 @@
           },
           "defaultConfiguration": "production"
         },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "tsconfig.spec.json",
+            "buildTarget": "familyhub-web:build",
+            "runner": "vitest"
+          }
+        },
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
