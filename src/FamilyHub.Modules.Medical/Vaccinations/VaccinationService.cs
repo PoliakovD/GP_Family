@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.HealthNotes;
+using FamilyHub.Domain.MedicationCourses;
 using FamilyHub.Domain.Vaccinations;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Storage;
@@ -23,7 +24,7 @@ public class VaccinationService(
     {
         var scope = await access.GetScopeAsync(userId, ct);
         var people = await subjects.ListVisibleAsync(userId, scope, ct);
-        var today = Today();
+        var today = await TodayForAsync(userId, ct);
 
         var attention = new List<AttentionCardDto>();
         var summaries = new List<SubjectSummaryDto>();
@@ -79,7 +80,7 @@ public class VaccinationService(
             return (VaccinationResult.Success, new PersonScheduleDto(subjectDto, null, null, false, [], [], custom));
 
         var facts = await LoadFactsAsync(subject, ct);
-        var today = Today();
+        var today = await TodayForAsync(userId, ct);
         var (years, months) = AgeOf(subject.BirthDate.Value, today);
         var items = VaccinationScheduleCalculator.Calculate(subject.BirthDate.Value, facts, today).Select(ToDto).ToList();
 
@@ -104,7 +105,8 @@ public class VaccinationService(
         if (subject is null || subject.BirthDate is null) return (VaccinationResult.NotFound, null);
 
         var facts = await LoadFactsAsync(subject, ct);
-        var items = VaccinationScheduleCalculator.Calculate(subject.BirthDate.Value, facts, Today())
+        var today = await TodayForAsync(userId, ct);
+        var items = VaccinationScheduleCalculator.Calculate(subject.BirthDate.Value, facts, today)
             .Where(i => i.SeriesCode == seriesCode)
             .ToList();
         if (items.Count == 0) return (VaccinationResult.NotFound, null);
@@ -171,9 +173,10 @@ public class VaccinationService(
         if (subject is null) return (VaccinationResult.NotFound, null, null);
         if (!subject.CanEdit) return (VaccinationResult.Forbidden, null, null);
 
+        var today = await TodayForAsync(userId, ct);
         var content = new VaccinationContent(
             request.SeriesCode, request.DoseIndex, request.CustomName, request.VaccineName, request.Kind,
-            request.Date, request.DatePrecision, subject.BirthDate, Today());
+            request.Date, request.DatePrecision, subject.BirthDate, today);
         var error = VaccinationRules.Validate(content);
         if (error is not null) return (VaccinationResult.Invalid, null, error);
 
@@ -229,7 +232,7 @@ public class VaccinationService(
         if (subject.BirthDate is { } birth && request.SeriesCode is not null)
         {
             var facts = await LoadFactsAsync(subject, ct);
-            var item = VaccinationScheduleCalculator.Calculate(birth, facts, Today())
+            var item = VaccinationScheduleCalculator.Calculate(birth, facts, today)
                 .FirstOrDefault(i => i.SeriesCode == request.SeriesCode && i.DoseIndex == request.DoseIndex);
             if (item is not null) dto = ToDto(item);
         }
@@ -251,13 +254,14 @@ public class VaccinationService(
         if (request.Items.Count == 0) return (VaccinationResult.Invalid, null, "Отметьте хотя бы одну прививку.");
 
         var now = DateTime.UtcNow;
+        var today = await TodayForAsync(userId, ct);
         var saved = 0;
         foreach (var entry in request.Items)
         {
             if (VaccineCatalog.Find(entry.SeriesCode) is null || entry.DoseIndex < 0) continue;
 
             var content = new VaccinationContent(
-                entry.SeriesCode, entry.DoseIndex, null, null, entry.Kind, entry.Date, entry.DatePrecision, subject.BirthDate, Today());
+                entry.SeriesCode, entry.DoseIndex, null, null, entry.Kind, entry.Date, entry.DatePrecision, subject.BirthDate, today);
             if (VaccinationRules.Validate(content) is not null) continue;
 
             var date = entry.Kind == VaccinationKind.Unknown ? null : entry.Date;
@@ -308,9 +312,10 @@ public class VaccinationService(
         if (level != VaccinationAccessLevel.Full) return VaccinationResult.Forbidden;
 
         var birth = await BirthDateOfAsync(item, ct);
+        var today = await TodayForAsync(userId, ct);
         var content = new VaccinationContent(
             item.SeriesCode, item.DoseIndex, item.CustomName, request.VaccineName, request.Kind,
-            request.Date, request.DatePrecision, birth, Today());
+            request.Date, request.DatePrecision, birth, today);
         if (VaccinationRules.Validate(content) is not null) return VaccinationResult.Invalid;
 
         item.VaccineName = string.IsNullOrWhiteSpace(request.VaccineName) ? null : request.VaccineName.Trim();
@@ -458,5 +463,13 @@ public class VaccinationService(
         return (months / 12, months % 12);
     }
 
-    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.UtcNow);
+    /// <summary>«Сегодня» в часовом поясе пользователя, выполняющего действие (не субъекта прививки —
+    /// подопечному отмечает прививку взрослый член семьи в своём часовом поясе). UTC-«сегодня» здесь не
+    /// годится: восточнее UTC (Москва и другие +N) первые несколько часов после местной полуночи локальная
+    /// дата уже «завтра» по UTC, и сохранение сегодняшней прививки падало на «дата в будущем».</summary>
+    private async Task<DateOnly> TodayForAsync(Guid userId, CancellationToken ct)
+    {
+        var timeZoneId = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.TimeZoneId).FirstOrDefaultAsync(ct);
+        return DoseScheduleExpander.LocalDate(DateTime.UtcNow, TimeZones.Resolve(timeZoneId));
+    }
 }
