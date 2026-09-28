@@ -483,7 +483,7 @@ public class MedicalDocumentExtractionProcessor(
                 ? null
                 : IndicatorFlagCalculator.PickBestRange(LabAnalyteKbPayload.ParseRefRanges(kbRow.Value.PayloadJson), ageYears, sex);
 
-            var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex);
+            var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex, analyteKey);
 
             // Каскад шаг 3: KB-запись есть, фиксированный диапазон не подошёл под пациента, но
             // есть словесная методика расчёта — просим локальную LLM посчитать под конкретного

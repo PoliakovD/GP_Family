@@ -29,7 +29,7 @@ public static class IndicatorFlagCalculator
     /// Low/Normal/High. Оставлено на будущее расширение (например, явный "критический" диапазон
     /// в справочнике) — сейчас Critical не выставляется никогда.</summary>
     public static (IndicatorFlag Flag, RefSource Source, double? EffectiveLow, double? EffectiveHigh) Calculate(
-        ExtractedLabIndicator indicator, KbReferenceRange? kbFallback, int? ageYears, Gender? sex)
+        ExtractedLabIndicator indicator, KbReferenceRange? kbFallback, int? ageYears, Gender? sex, string? analyteKey = null)
     {
         // Censored-значение самого показателя ("<0,5", ">1000" — за пределами чувствительности
         // метода) — числовая часть служит точкой сравнения (см. ReferenceRangeTextParser).
@@ -76,10 +76,59 @@ public static class IndicatorFlagCalculator
         //    ни KbCalculated, ни Inferred) — должно проваливаться дальше по каскаду, а не застревать.
         if (numericValue is not null && kbFallback is not null && MatchesPatient(kbFallback, ageYears, sex))
         {
-            return (CompareToRange(numericValue, kbFallback.Low, kbFallback.High), RefSource.KbFixed, kbFallback.Low, kbFallback.High);
+            // Единицы диапазона справочника и результата бланка могут не совпадать (план "качество
+            // ИИ-распознавания анализов", Этап 3 — живой случай: справочник в ммоль/л, бланк в мг/дл).
+            // Applicable=false — диапазон реально несопоставим (единицы распознаны, конвертация не
+            // удалась, например неизвестна молярная масса аналита) — RefSource.None, а не
+            // застревание на Unknown: та же логика, что "нечисловое значение" выше, даёт каскаду
+            // шанс на KbCalculated/Inferred, вместо того чтобы либо тихо сравнить несопоставимые
+            // числа (старое поведение), либо навсегда заблокировать дальнейшие шаги.
+            var (adjustedLow, adjustedHigh, applicable) = AdjustRangeForUnit(kbFallback, indicator.Unit, analyteKey);
+            if (!applicable) return (IndicatorFlag.Unknown, RefSource.None, null, null);
+            return (CompareToRange(numericValue, adjustedLow, adjustedHigh), RefSource.KbFixed, adjustedLow, adjustedHigh);
         }
 
         return (IndicatorFlag.Unknown, RefSource.None, null, null);
+    }
+
+    /// <summary>Приводит диапазон справочника к единице измерения РЕЗУЛЬТАТА (не наоборот — Low/High
+    /// дальше сравниваются с уже распознанным числом в его исходной единице). Публичный —
+    /// RecalculateIndicatorFlagsJob применяет ту же логику ВНЕ Calculate, когда справочник
+    /// дозаполняется задним числом уже после того, как показатель сохранён.
+    ///
+    /// Applicable=true в ДВУХ разных по духу случаях, которые вызывающему коду не нужно различать:
+    /// (а) хотя бы одна из единиц не задана/не распознана LabUnitNormalizer — недостаточно данных,
+    /// чтобы УТВЕРЖДАТЬ несовместимость, ведём себя как раньше (сравниваем как есть, не блокируем
+    /// то, что могло молча работать годами); (б) единицы распознаны и совпадают буквально — конверсия
+    /// не нужна. Applicable=false — единицы распознаны, ОТЛИЧАЮТСЯ, и LabUnitConverter не смог
+    /// перевести одну в другую (например, разные размерности и молярная масса аналита неизвестна) —
+    /// вот тут сравнивать напрямую было бы уже конкретной ошибкой, не просто отсутствием данных.</summary>
+    public static (double? Low, double? High, bool Applicable) AdjustRangeForUnit(
+        KbReferenceRange range, string? valueUnit, string? analyteKey)
+    {
+        if (string.IsNullOrWhiteSpace(range.Unit) || string.IsNullOrWhiteSpace(valueUnit))
+            return (range.Low, range.High, true);
+
+        var rangeCanonical = LabUnitNormalizer.Canonicalize(range.Unit);
+        var valueCanonical = LabUnitNormalizer.Canonicalize(valueUnit);
+        if (rangeCanonical is null || valueCanonical is null || rangeCanonical.Value.Canonical == valueCanonical.Value.Canonical)
+            return (range.Low, range.High, true);
+
+        double? convertedLow = null;
+        if (range.Low is { } low)
+        {
+            if (!LabUnitConverter.TryConvert(low, range.Unit, valueUnit, analyteKey, out var cl)) return (null, null, false);
+            convertedLow = cl;
+        }
+
+        double? convertedHigh = null;
+        if (range.High is { } high)
+        {
+            if (!LabUnitConverter.TryConvert(high, range.Unit, valueUnit, analyteKey, out var ch)) return (null, null, false);
+            convertedHigh = ch;
+        }
+
+        return (convertedLow, convertedHigh, true);
     }
 
     /// <summary>Применяет уже посчитанный диапазон (PatientReferenceCalculator, RefSource.KbCalculated) —

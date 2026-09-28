@@ -201,6 +201,78 @@ public class IndicatorFlagCalculatorTests
         source.Should().Be(RefSource.None);
     }
 
+    /// <summary>Живой сценарий (план "качество ИИ-распознавания анализов", Этап 3): справочник даёт
+    /// норму глюкозы в ммоль/л, бланк напечатал результат в мг/дл — раньше KbReferenceRange.Unit
+    /// вообще не читался, 90 (мг/дл) сравнивалось напрямую с границами "4.11-6.1" (ммоль/л) и
+    /// ложно получало High. Теперь диапазон конвертируется в единицу значения перед сравнением.</summary>
+    [Fact]
+    public void Calculate_KbRangeInDifferentButConvertibleUnit_ConvertsBeforeComparing()
+    {
+        var indicator = new ExtractedLabIndicator("Глюкоза", "90", "мг/дл", null, null, null);
+        var kbRange = new KbReferenceRange(AgeFrom: null, AgeTo: null, Sex: null, Low: 4.11, High: 6.1, Unit: "ммоль/л");
+
+        var (flag, source, effLow, effHigh) = IndicatorFlagCalculator.Calculate(
+            indicator, kbFallback: kbRange, ageYears: null, sex: null, analyteKey: "глюкоза");
+
+        flag.Should().Be(IndicatorFlag.Normal); // 90 мг/дл ≈ 5.0 ммоль/л, внутри 4.11-6.1
+        source.Should().Be(RefSource.KbFixed);
+        effLow.Should().BeApproximately(74.07, 0.5); // 4.11 ммоль/л → мг/дл
+        effHigh.Should().BeApproximately(109.9, 0.5); // 6.1 ммоль/л → мг/дл
+    }
+
+    /// <summary>Единицы распознаны, разные, и молярная масса аналита неизвестна (не в курируемой
+    /// таблице LabUnitConverter) — раньше сравнили бы напрямую (ложный флаг), теперь диапазон
+    /// считается неприменимым: Unknown/None, а не тихо неверный High/Low.</summary>
+    [Fact]
+    public void Calculate_KbRangeInIncompatibleUnit_UnknownAnalyte_TreatsRangeAsNotApplicable()
+    {
+        var indicator = new ExtractedLabIndicator("Неизвестный показатель", "5", "мг/дл", null, null, null);
+        var kbRange = new KbReferenceRange(AgeFrom: null, AgeTo: null, Sex: null, Low: 1, High: 2, Unit: "ммоль/л");
+
+        var (flag, source, effLow, effHigh) = IndicatorFlagCalculator.Calculate(
+            indicator, kbFallback: kbRange, ageYears: null, sex: null, analyteKey: "неизвестный-показатель-без-молярной-массы");
+
+        flag.Should().Be(IndicatorFlag.Unknown);
+        source.Should().Be(RefSource.None);
+        effLow.Should().BeNull();
+        effHigh.Should().BeNull();
+    }
+
+    /// <summary>Единицы буквально совпадают (после нормализации написания) — конвертация не нужна,
+    /// сравнение как раньше, никакого влияния LabUnitConverter/analyteKey.</summary>
+    [Fact]
+    public void Calculate_KbRangeSameUnitDifferentSpelling_ComparesDirectly()
+    {
+        var indicator = new ExtractedLabIndicator("Показатель", "10", "ММОЛЬ/Л", null, null, null);
+        var kbRange = new KbReferenceRange(AgeFrom: null, AgeTo: null, Sex: null, Low: 5, High: 8, Unit: "ммоль/л");
+
+        var (flag, source, effLow, effHigh) = IndicatorFlagCalculator.Calculate(
+            indicator, kbFallback: kbRange, ageYears: null, sex: null, analyteKey: null);
+
+        flag.Should().Be(IndicatorFlag.High);
+        source.Should().Be(RefSource.KbFixed);
+        effLow.Should().Be(5);
+        effHigh.Should().Be(8);
+    }
+
+    /// <summary>Единица результата не распознана LabUnitNormalizer (или не указана вовсе) —
+    /// недостаточно данных, чтобы утверждать несовместимость: сравниваем как раньше (не новый
+    /// регресс для единиц вне курируемых таблиц масс/молей — Ед/л, %, 10^9/л и т.п.).</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Ед/л")]
+    public void Calculate_ValueUnitUnrecognizedOrMissing_DoesNotBlockComparison(string? valueUnit)
+    {
+        var indicator = new ExtractedLabIndicator("Показатель", "10", valueUnit, null, null, null);
+        var kbRange = new KbReferenceRange(AgeFrom: null, AgeTo: null, Sex: null, Low: 5, High: 8, Unit: "ммоль/л");
+
+        var (flag, source, _, _) = IndicatorFlagCalculator.Calculate(
+            indicator, kbFallback: kbRange, ageYears: null, sex: null, analyteKey: null);
+
+        flag.Should().Be(IndicatorFlag.High);
+        source.Should().Be(RefSource.KbFixed);
+    }
+
     /// <summary>Редизайн v2 — тест-страж контракта IndicatorDto.RefLowText/RefHighText (см.
     /// XML-докстринг там же): все три места записи (MedicalDocumentExtractionProcessor,
     /// ExtractionQueryService, RecalculateIndicatorFlagsJob) пишут EffectiveLow/EffectiveHigh как

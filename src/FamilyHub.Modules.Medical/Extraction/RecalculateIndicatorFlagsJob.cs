@@ -84,12 +84,20 @@ public class RecalculateIndicatorFlagsJob(
                 if (indicator.RefSource is RefSource.None or RefSource.Inferred)
                 {
                     var kbFallback = IndicatorFlagCalculator.PickBestRange(refRanges, ageYears, sex);
-                    if (kbFallback is not null)
+                    // Единицы диапазона справочника и результата бланка могут не совпадать (план
+                    // "качество ИИ-распознавания анализов", Этап 3, см. IndicatorFlagCalculator.
+                    // AdjustRangeForUnit) — applicable=false (единицы распознаны, конвертация не
+                    // удалась) обрабатывается как "диапазон не подошёл", не как "показатель без
+                    // нормы": ниже есть шанс на KbCalculated по методике той же KB-записи.
+                    var (adjustedLow, adjustedHigh, applicable) = kbFallback is null
+                        ? (null, null, false)
+                        : IndicatorFlagCalculator.AdjustRangeForUnit(kbFallback, indicator.Unit, indicator.AnalyteKey);
+                    if (kbFallback is not null && applicable)
                     {
-                        indicator.Flag = IndicatorFlagCalculator.ApplyCalculatedRange(indicator.ValueRaw, kbFallback.Low, kbFallback.High);
+                        indicator.Flag = IndicatorFlagCalculator.ApplyCalculatedRange(indicator.ValueRaw, adjustedLow, adjustedHigh);
                         indicator.RefSource = RefSource.KbFixed;
-                        indicator.RefLowText = kbFallback.Low?.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                        indicator.RefHighText = kbFallback.High?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        indicator.RefLowText = adjustedLow?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        indicator.RefHighText = adjustedHigh?.ToString(System.Globalization.CultureInfo.InvariantCulture);
                         changed = true;
                     }
                     else if (!string.IsNullOrWhiteSpace(instructions) &&
