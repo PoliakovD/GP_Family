@@ -92,6 +92,55 @@ public class RecomputeIndicatorFlagsBackfillJobTests(AdminWebFactory factory)
         after.RefText.Should().Be("<47", "сырой текст референса не переписывается — пользователь видит исходную формулировку");
     }
 
+    /// <summary>Регрессия хронического падения в CI: в общей БД коллекции остаётся "честный Unknown"
+    /// другого теста — судейский шаг для него шёл в недоступный LM Studio, исключение вылетало ДО
+    /// SaveChanges, и уже посчитанный детерминированный флаг соседнего показателя терялся (ретрай
+    /// Hangfire ждёт минуту, тест — 30 с). Теперь результаты сохраняются, исключение пробрасывается
+    /// после — независимо от порядка обработки записей.</summary>
+    [Fact]
+    public async Task Recompute_AiUnavailableForOneIndicator_StillSavesDeterministicResults_ThenRethrows()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var owner = Guid.NewGuid();
+        var recordId = Guid.NewGuid();
+        db.MedicalRecords.Add(new MedicalRecord
+        {
+            Id = recordId, OwnerUserId = owner, Kind = MedicalRecordKind.Analysis,
+            RecordDate = new DateOnly(2026, 1, 1), ExtractionStatus = ExtractionStatus.Ready, CreatedAt = DateTime.UtcNow,
+        });
+        var fixableId = Guid.NewGuid();
+        var judgeOnlyId = Guid.NewGuid();
+        db.LabIndicators.AddRange(
+            new LabIndicator
+            {
+                Id = fixableId, MedicalRecordId = recordId, RecordDate = new DateOnly(2026, 1, 1), OwnerUserId = owner,
+                AnalyteKey = "исправимый", DisplayName = "Исправимый", Position = 0,
+                ValueRaw = "12", Flag = IndicatorFlag.Unknown, RefSource = RefSource.Blank, RefText = "<47",
+                CreatedAt = DateTime.UtcNow,
+            },
+            new LabIndicator
+            {
+                Id = judgeOnlyId, MedicalRecordId = recordId, RecordDate = new DateOnly(2026, 1, 1), OwnerUserId = owner,
+                AnalyteKey = "нужен-судья", DisplayName = "Нужен судья", Position = 1,
+                ValueRaw = "42", Flag = IndicatorFlag.Unknown, RefSource = RefSource.None,
+                CreatedAt = DateTime.UtcNow,
+            });
+        await db.SaveChangesAsync();
+
+        var job = scope.ServiceProvider.GetRequiredService<FamilyHub.Modules.Medical.Extraction.RecomputeIndicatorFlagsBackfillJob>();
+        var act = () => job.RunAsync();
+        await act.Should().ThrowAsync<FamilyHub.Infrastructure.LmStudio.LmStudioUnavailableException>();
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await verifyDb.LabIndicators.AsNoTracking().SingleAsync(i => i.Id == fixableId)).Flag
+            .Should().Be(IndicatorFlag.Normal, "детерминированный результат сохранён, несмотря на недоступный ИИ");
+        (await verifyDb.LabIndicators.AsNoTracking().SingleAsync(i => i.Id == judgeOnlyId)).Flag
+            .Should().Be(IndicatorFlag.Unknown);
+    }
+
     [Fact]
     public async Task Recompute_IndicatorWithHonestlyUnknownReference_StaysUnknown()
     {
