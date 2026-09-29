@@ -149,7 +149,7 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         slots.Should().OnlyContain(s => s.ActiveVersion >= 1);
         slots.Should().Contain(s => s.Key == "analysis.specimen-resolve" && s.ActiveVersion == 2);
         slots.Should().Contain(s => s.Key == "analysis.specimen-validate" && s.ActiveVersion == 2);
-        slots.Should().Contain(s => s.Key == "analysis.extract" && s.ActiveVersion == 4);
+        slots.Should().Contain(s => s.Key == "analysis.extract" && s.ActiveVersion == 5);
         slots.Should().Contain(s => s.Key == "analysis.title" && s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.subject-resolve" && s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.qualitative-judge" && s.ActiveVersion == 2);

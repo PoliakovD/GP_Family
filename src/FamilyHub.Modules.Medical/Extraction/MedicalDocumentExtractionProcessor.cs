@@ -583,8 +583,10 @@ public class MedicalDocumentExtractionProcessor(
             var cleanedFromForm = LabAnalyteNameCleaner.Clean(dto.Name);
             if (kbRow is not null)
             {
-                entity.DisplayName = kbRow.Value.DisplayName;
-                entity.RawDisplayName = string.Equals(kbRow.Value.DisplayName, cleanedFromForm, StringComparison.Ordinal)
+                // Справочник мог сохранить аббревиатуру в "литературном" виде ("Срб") — при том же
+                // имени с точностью до регистра показываем написание с бланка ("СРБ").
+                entity.DisplayName = LabAnalyteNameCleaner.RestoreAbbreviations(kbRow.Value.DisplayName, cleanedFromForm);
+                entity.RawDisplayName = string.Equals(entity.DisplayName, cleanedFromForm, StringComparison.Ordinal)
                     ? null : dto.Name;
             }
             else

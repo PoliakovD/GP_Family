@@ -34,6 +34,23 @@ public static partial class LabAnalyteNameCleaner
         return WhitespaceRegex().Replace(trimmedPunctuation, " ").Trim();
     }
 
+    /// <summary>Модель (промпт просит "литературный регистр") и справочник нередко приводят
+    /// аббревиатуры к обычному виду: "СРБ" → "Срб", "АЧТВ" → "Ачтв". Если candidate — то же имя,
+    /// что и напечатанное в бланке (source), с точностью до регистра, а в бланке есть слово-
+    /// аббревиатура (2+ буквы, все заглавные), возвращается написание из бланка; иначе candidate
+    /// без изменений. Целиком-КАПС бланк дальше приводит в порядок Clean (короткие токены
+    /// сохраняются, длинные слова понижаются).</summary>
+    public static string RestoreAbbreviations(string candidate, string? source)
+    {
+        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(candidate)) return candidate;
+        var src = source.Trim();
+        if (!string.Equals(candidate.Trim(), src, StringComparison.OrdinalIgnoreCase)) return candidate;
+        var hasAbbreviation = WhitespaceRegex().Split(src)
+            .SelectMany(w => w.Split('-', '(', ')', ',', '/'))
+            .Any(t => t.Count(char.IsLetter) >= 2 && t.Any(char.IsLetter) && !t.Any(char.IsLower));
+        return hasAbbreviation ? src : candidate;
+    }
+
     /// <summary>Та же чистка (нумерация/эхо-индекс/гомоглифы), но КАПС разбирается по словам, а не
     /// по фразе целиком — для ФИО ("ИВАНОВ ИВАН ИВАНОВИЧ" → "Иванов Иван Иванович"), где каждое
     /// слово — отдельное имя собственное, а не одна многословная фраза вроде "Общий белок"
