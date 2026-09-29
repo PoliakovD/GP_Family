@@ -137,6 +137,80 @@ public class LabTableRowDetectorTests
         result.Rows.Should().BeEmpty();
     }
 
+    /// <summary>Протокол медорганизации (выписка из ЕМИАС/МИС): колонки "Дата | Показатель |
+    /// Значение | Референс", название показателя переносится на несколько строк узкой колонки,
+    /// запись может перетекать через границу страницы, внизу каждой страницы блок ЭЦП. Текст —
+    /// синтетический, повторяет только раскладку.</summary>
+    private const string DatedProtocol = """
+        Протокол лабораторного исследования
+        Пациент: Тестовна Теста Тестовична (Женский), дата рождения: 22.02.2002
+        Референтный
+        Дата | Показатель | Значение
+        диапазон
+        Отдельные лабораторные тесты
+        01.01.2026 10:00 | Тестин, | +
+        обнаружение в
+        осадке пробы
+        01.01.2026 10:00 | Тестозид, | 2-4
+        количество в поле
+        зрения в осадке
+        PDF-представление подписано электронной подписью: | Оригинальный электронный документ подписан
+        ПОДПИСАНО ЭЛЕКТРОННОЙ ПОДПИСЬЮ | ПОДПИСАНО ЭЛЕКТРОННОЙ ПОДПИСЬЮ
+        Владелец: ТЕСТОВОЕ УЧРЕЖДЕНИЕ
+        ДОМ"
+        Протокол лабораторного исследования 1.2.3 страница 1 из 2
+
+        --- стр. 2 ---
+
+        пробы методом
+        микроскопии
+        01.01.2026 10:00 | Тестоген, | 0 г/л | 0-0.1
+        обнаружение в
+        пробе
+        01.01.2026 10:00 | Тестоген, | не обнаружен
+        обнаружение в | ммоль/л
+        пробе
+        01.01.2026 10:00 | Реакция пробы | 5,5
+        Оказанные услуги
+        B03.016.006 Тестовая услуга от 01.01.2026
+        Исполнители:
+        Тестовый техник, ТЕСТОВ ТЕСТ ТЕСТОВИЧ
+        """;
+
+    [Fact]
+    public void Detect_DatedMultiLineTable_JoinsWrappedNamesAcrossPagesAndIgnoresFooters()
+    {
+        var result = LabTableRowDetector.Detect(DatedProtocol);
+
+        result.Rows.Select(r => r.Cells[1]).Should().Equal(
+            "Тестин, обнаружение в осадке пробы",
+            "Тестозид, количество в поле зрения в осадке пробы методом микроскопии",
+            "Тестоген, обнаружение в пробе",
+            "Тестоген, обнаружение в пробе",
+            "Реакция пробы");
+        result.Rows.Should().OnlyContain(r => r.NameCellIndex == 1);
+    }
+
+    [Fact]
+    public void Detect_DatedMultiLineTable_KeepsValueUnitAndReference()
+    {
+        var rows = LabTableRowDetector.Detect(DatedProtocol).Rows;
+
+        rows[0].Cells[2].Should().Be("+");
+        rows[2].RawLine.Should().Be("01.01.2026 10:00 | Тестоген, обнаружение в пробе | 0 г/л | 0-0.1");
+        rows[3].Cells[2].Should().Be("не обнаружен ммоль/л", "единица из узкой колонки уходит к значению, а не в название");
+        rows[4].Cells[2].Should().Be("5,5");
+    }
+
+    [Fact]
+    public void Detect_DatedMultiLineTable_TrailingSectionsAfterTableAreNotRows()
+    {
+        var rows = LabTableRowDetector.Detect(DatedProtocol).Rows;
+
+        rows.Should().HaveCount(5);
+        rows.Should().NotContain(r => r.RawLine.Contains("услуга") || r.RawLine.Contains("ПОДПИСАНО"));
+    }
+
     [Fact]
     public void Detect_EmptyInput_ReturnsEmptyResult()
     {

@@ -6,8 +6,10 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// (LayoutTextReconstructor вставляет "|" на границах колонок), но НЕ распарсена в
 /// имя/значение/единицу/референс: это по-прежнему делает LLM (см. LmStudioMedicalDocumentExtractor),
 /// только теперь на строго определённом наборе строк с явным id вместо целого чанка текста —
-/// детектор отвечает только на вопрос "это результат анализа или нет".</summary>
-public sealed record LabTableRow(string RowId, IReadOnlyList<string> Cells, string RawLine);
+/// детектор отвечает только на вопрос "это результат анализа или нет". NameCellIndex — в какой
+/// ячейке название показателя: 0 в обычной таблице, 1 в таблице с датой в первой колонке
+/// (протоколы медорганизаций: Дата | Показатель | Значение | Референс).</summary>
+public sealed record LabTableRow(string RowId, IReadOnlyList<string> Cells, string RawLine, int NameCellIndex = 0);
 
 /// <summary>Результат разбора одной страницы/документа: только строки-результаты идут дальше в
 /// LLM, PanelHeaderLines/NoiseLines — для диагностики (почему модель получила меньше строк, чем
@@ -96,20 +98,86 @@ public static class LabTableRowDetector
     private static readonly HashSet<string> HeaderRefSynonyms = new(StringComparer.OrdinalIgnoreCase)
         { "реф. значения", "референсные значения", "референс", "норма" };
 
+    /// <summary>Строка записи в таблице с датой в первой колонке: "09.06.2026 13:51 | Название, | значение".</summary>
+    private static readonly Regex DateStartPattern = new(
+        @"^\d{2}\.\d{2}\.\d{4}(?:\s+\d{1,2}:\d{2})?$", RegexOptions.Compiled);
+
+    /// <summary>Блок ЭЦП/колонтитулов внизу страницы — до следующего маркера страницы все строки
+    /// пропускаются и НЕ закрывают начатую запись (название показателя может перетекать на
+    /// следующую страницу: "…в осадке" внизу страницы 1, "мочи методом микроскопии" вверху 2).</summary>
+    private static readonly Regex FooterStartPattern = new(
+        @"^(PDF-представление|ПОДПИСАНО|Сертификат\s*:|Владелец\s*:|Действителен\s*:|Оригинальный электронный)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Конец таблицы результатов — дальше идут услуги/исполнители/подписи, не показатели.</summary>
+    private static readonly Regex TableEndPattern = new(
+        @"^(Оказанные услуги|Исполнители|Документ составил|Документ заверил)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private const int MaxContinuationLines = 14;
+
+    /// <summary>Запись таблицы, начатая строкой с датой: название показателя переносится на
+    /// несколько строк (узкая колонка), значение и референс лежат на первой.</summary>
+    private sealed class DatedRecord(string date, string firstNamePart, string value, string? reference)
+    {
+        private readonly List<string> _nameParts = [firstNamePart];
+        private string _value = value;
+        private int _continuations;
+
+        public bool AddContinuation(IReadOnlyList<string> cells)
+        {
+            if (++_continuations > MaxContinuationLines) return false;
+            _nameParts.Add(cells[0]);
+            // Вторая ячейка продолжения — обычно единица измерения, выпавшая в узкую колонку.
+            if (cells.Count >= 2) _value += " " + cells[1];
+            return true;
+        }
+
+        public LabTableRow? TryBuild(int rowNumber)
+        {
+            var name = string.Join(' ', _nameParts).Trim();
+            if (name.Length is 0 or > MaxNameLength || _value.Length is 0 or > 40) return null;
+
+            List<string> cells = [date, name, _value];
+            if (!string.IsNullOrWhiteSpace(reference)) cells.Add(reference);
+            return new LabTableRow($"R{rowNumber}", cells, string.Join(" | ", cells), NameCellIndex: 1);
+        }
+    }
+
     public static LabTableDetectionResult Detect(string reconstructedText)
     {
         var rows = new List<LabTableRow>();
         var panelHeaderLines = 0;
         var noiseLines = 0;
         var inTable = false;
+        var inFooter = false;
+        DatedRecord? open = null;
+
+        void Flush()
+        {
+            if (open?.TryBuild(rows.Count + 1) is { } built) rows.Add(built);
+            open = null;
+        }
 
         foreach (var rawLine in reconstructedText.Split('\n'))
         {
             var line = rawLine.Trim();
-            if (line.Length == 0 || line.StartsWith("--- стр.", StringComparison.Ordinal)) continue;
+            if (line.Length == 0) continue;
+            if (line.StartsWith("--- стр.", StringComparison.Ordinal))
+            {
+                inFooter = false;
+                continue;
+            }
 
             var cells = line.Split(" | ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             if (cells.Length == 0) continue;
+
+            if (inFooter || FooterStartPattern.IsMatch(cells[0]))
+            {
+                inFooter = true;
+                noiseLines++;
+                continue;
+            }
 
             if (IsHeaderRow(cells))
             {
@@ -118,14 +186,38 @@ public static class LabTableRowDetector
                 continue;
             }
 
+            if (TableEndPattern.IsMatch(cells[0]))
+            {
+                Flush();
+                inTable = false;
+                noiseLines++;
+                continue;
+            }
+
+            if (inTable && cells.Length >= 3 && DateStartPattern.IsMatch(cells[0]))
+            {
+                Flush();
+                open = new DatedRecord(cells[0], cells[1], cells[2], cells.Length >= 4 ? cells[3] : null);
+                continue;
+            }
+
+            if (open is not null)
+            {
+                if (open.AddContinuation(cells)) continue;
+                Flush(); // слишком длинный "хвост" — это уже не перенос названия
+            }
+
             if (NoiseLinePrefixes.Any(pattern => pattern.IsMatch(cells[0])))
             {
                 noiseLines++;
                 continue;
             }
 
+            // Вторая ячейка — распознанная единица ("обнаружение в | ммоль/л") — это хвост
+            // названия с единицей в узкой колонке, а не значение показателя.
             if (inTable && cells.Length is >= 2 and <= 4 &&
-                cells[0].Length is > 0 and <= MaxNameLength && ValueCellPattern.IsMatch(cells[1]))
+                cells[0].Length is > 0 and <= MaxNameLength && ValueCellPattern.IsMatch(cells[1]) &&
+                LabUnitNormalizer.Canonicalize(cells[1]) is null)
             {
                 rows.Add(new LabTableRow($"R{rows.Count + 1}", cells, line));
                 continue;
@@ -140,6 +232,7 @@ public static class LabTableRowDetector
             noiseLines++;
         }
 
+        Flush();
         return new LabTableDetectionResult(rows, panelHeaderLines, noiseLines);
     }
 
