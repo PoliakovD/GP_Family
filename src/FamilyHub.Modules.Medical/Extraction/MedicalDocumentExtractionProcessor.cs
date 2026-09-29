@@ -49,6 +49,7 @@ public class MedicalDocumentExtractionProcessor(
     PatientReferenceCalculator referenceCalculator,
     QualitativeNormJudge qualitativeJudge,
     LabSummarizer summarizer,
+    ClinicianLabSummarizer clinicianSummarizer,
     Kb.KbLookupService medicationKbLookup,
     VisitMedicationEnrichmentRequestService visitMedicationEnrichment,
     IPipelineConfigService pipelineConfig,
@@ -318,7 +319,8 @@ public class MedicalDocumentExtractionProcessor(
         // (не затираем то, что пользователь мог ввести вручную в форме создания).
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
-        if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
+        if (record.Doctor is null && doctor is not null && !await IsPatientOwnNameAsync(doctor, record, ct))
+            record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
         // Источник — атрибут ВСЕЙ записи, не отдельного показателя (заметка 1): смешанный бланк
         // (кровь+моча) пользователь разделяет вручную на две записи, не конвейер посекционно. Уже
@@ -482,7 +484,7 @@ public class MedicalDocumentExtractionProcessor(
                 ? null
                 : IndicatorFlagCalculator.PickBestRange(LabAnalyteKbPayload.ParseRefRanges(kbRow.Value.PayloadJson), ageYears, sex);
 
-            var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex);
+            var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex, analyteKey);
 
             // Каскад шаг 3: KB-запись есть, фиксированный диапазон не подошёл под пациента, но
             // есть словесная методика расчёта — просим локальную LLM посчитать под конкретного
@@ -639,6 +641,19 @@ public class MedicalDocumentExtractionProcessor(
                 ? JsonSerializer.Serialize(summarized.Summary)
                 : null;
         }
+
+        // Отдельный вызов, отдельный промпт (план "качество ИИ-распознавания анализов", Этап 4) —
+        // клиническая сводка для отчёта врачу, пациенту в самой записи никогда не показывается
+        // (см. ClinicianLabSummarizer). ageYears/sex уже резолвлены выше для каскада KbFixed —
+        // переиспользуем тот же вызов PatientIdentityResolver, не повторяем его.
+        record.ClinicianSummaryJson = null;
+        if (await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "record-summary-clinician", ct))
+        {
+            var clinicianSummarized = await clinicianSummarizer.SummarizeAsync(allIndicators, ageYears, sex, ct);
+            record.ClinicianSummaryJson = clinicianSummarized.Success && clinicianSummarized.Summary is not null
+                ? JsonSerializer.Serialize(clinicianSummarized.Summary)
+                : null;
+        }
         record.ExtractionStatus = ExtractionStatus.Ready;
 
         var deviationCount = allIndicators.Count(i => i.Flag is IndicatorFlag.Low or IndicatorFlag.High or IndicatorFlag.Critical);
@@ -691,7 +706,8 @@ public class MedicalDocumentExtractionProcessor(
         var doctor = results.Select(r => r.Doctor).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (documentDate is not null) record.RecordDate = documentDate.Value;
         if (record.Title is null && suggestedTitle is not null) record.Title = suggestedTitle;
-        if (record.Doctor is null && doctor is not null) record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
+        if (record.Doctor is null && doctor is not null && !await IsPatientOwnNameAsync(doctor, record, ct))
+            record.Doctor = LabAnalyteNameCleaner.CleanPersonName(doctor);
 
         // Назначенные препараты — сверяем со справочником медикаментов (тот же, что у аптечки);
         // промах ставит обогащение в очередь (UX-редизайн, см. VisitMedicationEnrichmentRequestService).
@@ -724,6 +740,18 @@ public class MedicalDocumentExtractionProcessor(
         await tx.CommitAsync(ct);
 
         logger.LogInformation("MedicalDocumentExtractionJob {JobId}: заключение врача распознано.", job.Id);
+    }
+
+    /// <summary>Страховка от главной путаницы бланка (план "качество ИИ-распознавания анализов",
+    /// Этап 2, см. PatientDoctorNameGuard): извлечённое "doctor" — на самом деле ФИО ПАЦИЕНТА этой
+    /// записи, а не врача. Используется в обоих путях (ProcessAnalysisAsync/ProcessVisitAsync) ДО
+    /// записи в record.Doctor — совпадение не откладывается на потом (не сохраняем "неверного
+    /// врача", чтобы потом почистить), а просто не пишется вовсе, доктор остаётся null (как если
+    /// бы модель его не нашла).</summary>
+    private async Task<bool> IsPatientOwnNameAsync(string extractedDoctor, Domain.Entities.MedicalRecord record, CancellationToken ct)
+    {
+        var (firstName, lastName, middleName) = await PatientIdentityResolver.ResolveNameAsync(db, record, ct);
+        return PatientDoctorNameGuard.IsPatientName(extractedDoctor, firstName, lastName, middleName);
     }
 
     /// <summary>Проставляет FileAttachment.ExtractedAt для успешно прочитанных вложений — вызывается

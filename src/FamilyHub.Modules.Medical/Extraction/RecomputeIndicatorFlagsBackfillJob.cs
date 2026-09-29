@@ -75,7 +75,7 @@ public class RecomputeIndicatorFlagsBackfillJob(
                     }
                 }
 
-                var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex);
+                var (flag, refSource, effLow, effHigh) = IndicatorFlagCalculator.Calculate(dto, kbFallback, ageYears, sex, indicator.AnalyteKey);
 
                 // Последний резервный шаг (см. class doc) — только когда деterministic-каскад
                 // выше не дал вообще ничего; RefExpected здесь всегда null (никогда не

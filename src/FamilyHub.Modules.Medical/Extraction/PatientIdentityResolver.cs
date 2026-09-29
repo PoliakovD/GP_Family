@@ -39,6 +39,29 @@ public static class PatientIdentityResolver
         return age >= 0 ? age : null;
     }
 
+    /// <summary>ФИО пациента ОДНОЙ записи по частям (не отформатированной строкой, как
+    /// ResolvePatientNamesAsync) — нужно PatientDoctorNameGuard, чтобы собрать все стили написания
+    /// ("Иванов Иван Иванович"/"Иванов Иван И."/"Иванов И.И.", см. PersonName.Format) и сравнить с
+    /// тем, что модель вернула в поле "doctor" (план "качество ИИ-распознавания анализов", Этап 2:
+    /// главная путаница бланков — единственное ФИО на бланке принадлежит ПАЦИЕНТУ, а не врачу).
+    /// Та же ветка по идентичности (FamilyDependentId vs TargetUserId ?? OwnerUserId), что
+    /// ResolveAsync выше.</summary>
+    public static async Task<(string? FirstName, string? LastName, string? MiddleName)> ResolveNameAsync(
+        AppDbContext db, Domain.Entities.MedicalRecord record, CancellationToken ct = default)
+    {
+        if (record.FamilyDependentId is { } depId)
+        {
+            var dep = await db.FamilyDependents.AsNoTracking()
+                .Where(d => d.Id == depId).Select(d => new { d.FirstName, d.LastName, d.MiddleName }).FirstOrDefaultAsync(ct);
+            return dep is null ? (null, null, null) : (dep.FirstName, dep.LastName, dep.MiddleName);
+        }
+
+        var userId = record.TargetUserId ?? record.OwnerUserId;
+        var user = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId).Select(u => new { u.FirstName, u.LastName, u.MiddleName }).FirstOrDefaultAsync(ct);
+        return user is null ? (null, null, null) : (user.FirstName, user.LastName, user.MiddleName);
+    }
+
     /// <summary>Батч-резолв отображаемого имени пациента по идентичности (FamilyDependentId,
     /// TargetUserId, OwnerUserId) — та же формула, что MedicalRecordService.ResolvePersonNamesAsync,
     /// но ключ — сама идентичность пациента, не Id конкретной записи: нужно там, где под рукой нет

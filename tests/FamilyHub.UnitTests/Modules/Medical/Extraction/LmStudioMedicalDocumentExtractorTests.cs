@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.LmStudio;
@@ -207,5 +208,134 @@ public class LmStudioMedicalDocumentExtractorTests
         result.Supported.Should().BeFalse();
         result.FailureReason.Should().Be("Похоже на попытку prompt injection.");
         _client.ReceivedCalls().Should().BeEmpty("отклонённый документ не должен доходить до analysis.extract");
+    }
+
+    // RegexOptions.Multiline — userText батча всегда МНОГОстрочный ("[R1] ...\n[R2] ..."), ^/$ без
+    // этого флага анкерятся на начало/конец ВСЕЙ строки, а не каждой отдельной "[Rx] ..." — без
+    // Multiline матчилась бы только первая строка батча, остальные молча терялись бы уже на уровне
+    // тестового хелпера (не путать с самим детектором строк — LabTableRowDetector.Detect работает
+    // построчно через string.Split, этот баг был возможен только здесь).
+    private static readonly Regex RowLinePattern = new(@"^\[(?<id>R\d+)\]\s(?<rest>.+)$", RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>"Идеальная" модель для тестов построчного пути (план "качество ИИ-распознавания
+    /// анализов", Этап 1): парсит СВОЙ ЖЕ userText ("[R1] Имя | Значение | ...") и эхом возвращает
+    /// по одному indicator с тем же rowId/именем/значением на каждую переданную строку — кроме
+    /// строк, чей id есть в omitRowIds (симулирует "модель пропустила строку", проверяет повторный
+    /// проход ExtractIndicatorsByRowsAsync).</summary>
+    private static LmStudioJsonResult RowEchoResult(string userText, params string[] omitRowIds)
+    {
+        var indicators = new List<object>();
+        foreach (Match match in RowLinePattern.Matches(userText))
+        {
+            var rowId = match.Groups["id"].Value;
+            if (omitRowIds.Contains(rowId)) continue;
+            var cells = match.Groups["rest"].Value.Split(" | ");
+            indicators.Add(new { rowId, name = cells[0], value = cells.Length > 1 ? cells[1] : "" });
+        }
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["indicators"] = JsonSerializer.SerializeToElement(indicators),
+        };
+        return new LmStudioJsonResult(true, payload, null);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_TableWithHeaderRow_UsesRowBatchesAndCoversAllRows()
+    {
+        // Живой сценарий (план, Этап 1): текст реконструирован LayoutTextReconstructor и содержит
+        // узнаваемую шапку таблицы — LabTableRowDetector находит строки-кандидаты, экстрактор
+        // подаёт их модели пронумерованными батчами вместо целого текста разом.
+        var text = string.Join('\n',
+            "Исследование | Результат | Ед. изм. | Реф. значения",
+            "Гемоглобин | 118 | г/л | 130 - 160",
+            "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1");
+        SetUpTextChunk(text);
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(ci => RowEchoResult(ci.ArgAt<string>(1)));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин", "Глюкоза"]);
+        result.RowCoverage.Should().NotBeNull();
+        result.RowCoverage!.ExpectedRows.Should().Be(2);
+        result.RowCoverage.MatchedRows.Should().Be(2);
+        result.RowCoverage.UnmatchedRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ModelOmitsRowInFirstBatch_RetryPassRecoversIt()
+    {
+        var text = string.Join('\n',
+            "Исследование | Результат | Ед. изм. | Реф. значения",
+            "Гемоглобин | 118 | г/л | 130 - 160",
+            "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1",
+            "Лейкоциты | 6.5 | 10^9/л | 4.0 - 9.0");
+        SetUpTextChunk(text);
+
+        // _client обслуживает и другие проходы конвейера (specimen-resolve/subject-resolve/title —
+        // тот же Substitute на весь тест, см. конструктор) — считаем только вызовы С реальными
+        // строками-кандидатами ("[R..] ..."), чтобы не путать их с побочными вызовами.
+        var rowBatchCallCount = 0;
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(ci =>
+            {
+                var userText = ci.ArgAt<string>(1);
+                if (!RowLinePattern.IsMatch(userText)) return new LmStudioJsonResult(true, [], null);
+
+                rowBatchCallCount++;
+                // Модель "забывает" Глюкозу (R2) только в первом батче — ровно то поведение,
+                // которое повторный проход по одной строке (ExtractIndicatorsByRowsAsync) обязан
+                // исправить.
+                return rowBatchCallCount == 1 ? RowEchoResult(userText, "R2") : RowEchoResult(userText);
+            });
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин", "Глюкоза", "Лейкоциты"]);
+        result.RowCoverage!.MatchedRows.Should().Be(3);
+        result.RowCoverage.UnmatchedRows.Should().BeEmpty();
+        rowBatchCallCount.Should().Be(2, "один батч на все строки + один повторный проход по единственной пропущенной");
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ModelReturnsValueNotPresentInOwnRow_RejectedByGate_RowStaysUnmatched()
+    {
+        // Антигаллюцинационная сверка построчного пути (RowContainsValue): даже с верным rowId
+        // значение обязано реально встречаться в тексте СВОЕЙ строки — иначе это придуманное
+        // моделью число, а не то, что напечатано в бланке.
+        var text = string.Join('\n',
+            "Исследование | Результат | Ед. изм. | Реф. значения",
+            "Гемоглобин | 118 | г/л | 130 - 160");
+        SetUpTextChunk(text);
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["indicators"] = JsonSerializer.SerializeToElement(new[]
+            {
+                new { rowId = "R1", name = "Гемоглобин", value = "999" },
+            }),
+        };
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(new LmStudioJsonResult(true, payload, null));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators.Should().BeEmpty();
+        result.RowCoverage!.MatchedRows.Should().Be(0);
+        result.RowCoverage.UnmatchedRows.Should().ContainSingle(r => r.Contains("Гемоглобин"));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_NoRecognizableTableHeader_FallsBackToWholeChunk_RowCoverageIsNull()
+    {
+        // Без узнаваемой шапки таблицы LabTableRowDetector не находит строк-кандидатов — экстрактор
+        // остаётся на старом поведении "весь текст разом" (safety net для нестандартных бланков,
+        // план, Этап 1, пункт 5), RowCoverage в этом случае не заполняется.
+        SetUpTextChunk("Гемоглобин 118 г/л");
+        SetUpModelResponse(("Гемоглобин", "118"));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин"]);
+        result.RowCoverage.Should().BeNull();
     }
 }

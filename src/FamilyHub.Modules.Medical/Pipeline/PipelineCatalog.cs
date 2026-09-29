@@ -56,6 +56,7 @@ public static class PipelineCatalog
         new(AnalysisExtraction, "patient-reference", "Расчёт персонального референса по методике из справочника", false, "analysis.patient-reference"),
         new(AnalysisExtraction, "qualitative-judge", "Оценка нормы по смыслу свободного текста, когда референса в бланке нет (шкалы обильности, описательные находки мазков)", false, "analysis.qualitative-judge"),
         new(AnalysisExtraction, "record-summary", "Суммаризация показателей записи для пользователя", false, "analysis.record-summary"),
+        new(AnalysisExtraction, "record-summary-clinician", "Клиническая сводка записи для врача (отчёт/PDF, пациенту не показывается)", false, "analysis.record-summary.clinician"),
 
         new(VisitExtraction, "extract", "Структурирование заключения врача из текста/фото документа", true, "visit.extract"),
 
