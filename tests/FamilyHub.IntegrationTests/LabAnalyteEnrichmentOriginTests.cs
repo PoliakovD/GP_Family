@@ -84,6 +84,10 @@ public class LabAnalyteEnrichmentOriginTests(LabAnalyteEnrichmentOriginWebFactor
         {
             Id = Guid.NewGuid(), NormalizedName = analyteKey, SpecimenKbId = specimenId,
             DisplayName = "Гемоглобин", PayloadJson = "{}", Source = "тест",
+            // Текущая версия схемы: иначе фоновый LabAnalyteKbReenrichJob считает строку устаревшей,
+            // заводит для неё собственную задачу и вызывает тот же счётчик LLM-вызовов — гонка с
+            // тестом (дубликат ключа в LabAnalyteEnrichmentJobs / лишний вызов в CallCount).
+            PayloadVersion = LabAnalyteSummarySchema.CurrentVersion,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
         });
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
@@ -44,6 +45,12 @@ public class RecomputeIndicatorFlagsBackfillJob(
         }
 
         var updated = 0;
+        // Первый же технический сбой ИИ не должен ронять весь прогон вместе с уже посчитанным
+        // детерминированным результатом (раньше исключение вылетало до SaveChanges — все
+        // пересчитанные флаги терялись, а ретрай Hangfire ждал минуту): судейский шаг отключается
+        // на остаток прогона, результаты сохраняются, и только потом исключение пробрасывается —
+        // Hangfire повторит прогон для оставшихся.
+        LmStudioUnavailableException? aiUnavailable = null;
         foreach (var group in stuck.GroupBy(i => i.MedicalRecordId))
         {
             var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == group.Key, ct);
@@ -82,12 +89,21 @@ public class RecomputeIndicatorFlagsBackfillJob(
                 // персистится), но границы диапазона (свои или из KB) и пояснения справочника —
                 // уже полезный контекст сами по себе (живой случай: отсутствие — норма, хотя
                 // диапазон в справочнике начинается не с нуля, например "2-10" — см. LowMeans).
-                if (flag == IndicatorFlag.Unknown &&
+                if (flag == IndicatorFlag.Unknown && aiUnavailable is null &&
                     await pipelineConfig.IsEnabledAsync(PipelineCatalog.AnalysisExtraction, "qualitative-judge", ct))
                 {
-                    var isNormal = await qualitativeJudge.JudgeAsync(
-                        indicator.DisplayName, indicator.ValueRaw, indicator.Unit, modelExpectedNorm: null,
-                        effLow ?? kbFallback?.Low, effHigh ?? kbFallback?.High, kbNorm, ct);
+                    bool? isNormal = null;
+                    try
+                    {
+                        isNormal = await qualitativeJudge.JudgeAsync(
+                            indicator.DisplayName, indicator.ValueRaw, indicator.Unit, modelExpectedNorm: null,
+                            effLow ?? kbFallback?.Low, effHigh ?? kbFallback?.High, kbNorm, ct);
+                    }
+                    catch (LmStudioUnavailableException ex)
+                    {
+                        aiUnavailable = ex;
+                    }
+
                     if (isNormal is not null)
                     {
                         flag = isNormal.Value ? IndicatorFlag.Normal : IndicatorFlag.High;
@@ -109,6 +125,8 @@ public class RecomputeIndicatorFlagsBackfillJob(
         logger.LogInformation(
             "RecomputeIndicatorFlagsBackfillJob: пересчитано {Updated} из {Total} застрявших показателей.",
             updated, stuck.Count);
+
+        if (aiUnavailable is not null) throw aiUnavailable;
     }
 
     private static double? ParseDouble(string? value) =>
