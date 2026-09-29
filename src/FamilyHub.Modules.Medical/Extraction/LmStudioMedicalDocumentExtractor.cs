@@ -416,7 +416,7 @@ public class LmStudioMedicalDocumentExtractor(
                     matchedInBatch.Add(rowId);
                     // Модель по промпту "литературный регистр" портит аббревиатуры ("АЧТВ" → "Ачтв") —
                     // возвращаем написание из СВОЕЙ строки, если имя то же с точностью до регистра.
-                    indicators.Add(indicator with { Name = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.RestoreAbbreviations(indicator.Name, row.Cells[0]) });
+                    indicators.Add(indicator with { Name = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.RestoreAbbreviations(indicator.Name, row.Cells[row.NameCellIndex]) });
                 }
 
                 stillMissing.AddRange(batch.Where(r => !matchedInBatch.Contains(r.RowId)));
