@@ -85,7 +85,7 @@ interface ConfigRow {
   `,
   styles: [`
     .review-threshold { display: flex; align-items: center; gap: 8px; }
-    .review-threshold input[type='range'] { flex: 1; min-width: 100px; }
+    .review-threshold input[type='range'] { flex: 1; min-width: 100px; accent-color: var(--color-accent); }
   `],
 })
 export class ReviewConfigComponent implements OnInit {

@@ -42,10 +42,14 @@ export interface EnsureCacheRef {
 
     @if (cache) {
       <p class="text-muted" style="margin: 0 0 8px;">
-        {{ cache.snippetCount }} в наборе @if (cache.manualCount > 0) { · ручных {{ cache.manualCount }} }
-        @if (cache.provider && cache.lastUpdatedAt) {
-          · {{ cache.provider }}, {{ cache.lastUpdatedAt | date: 'dd.MM.yyyy' }}
-          · <span [class.text-danger]="!cache.fresh">{{ cache.fresh ? 'кэш свежий' : 'кэш устарел' }}</span>
+        @if (!cache.cacheId && sources.length > 0) {
+          Снимок источников черновика: {{ sources.length }} · строки кэша поиска нет
+        } @else {
+          {{ cache.snippetCount }} в наборе @if (cache.manualCount > 0) { · ручных {{ cache.manualCount }} }
+          @if (cache.provider && cache.lastUpdatedAt) {
+            · {{ cache.provider }}, {{ cache.lastUpdatedAt | date: 'dd.MM.yyyy' }}
+            · <span [class.text-danger]="!cache.fresh">{{ cache.fresh ? 'кэш свежий' : 'кэш устарел' }}</span>
+          }
         }
         @if (cache.searchGroupKey) { · группа поиска «{{ cache.searchGroupKey }}» }
       </p>

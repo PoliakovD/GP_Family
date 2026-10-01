@@ -101,6 +101,11 @@
 
 .inbox-detail { min-width: 0; }
 
+// Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
+.seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
+.seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
+.seg-opt.active, .seg-opt.active:hover { color: var(--color-bg); background: var(--color-accent); }
+
 kbd {
   padding: 0 5px;
   border: 1px solid var(--color-divider);

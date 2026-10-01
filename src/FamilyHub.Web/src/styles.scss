@@ -373,7 +373,9 @@ select.input {
     color: var(--color-bg);
   }
 
-  &:not(:has(input:checked)):hover {
+  // :not(.active) — иначе hover перебивает фон активной кнопки-сегмента (у неё нет input:checked),
+  // а светлый текст .active остаётся и становится нечитаемым.
+  &:not(:has(input:checked)):not(.active):hover {
     background: color-mix(in srgb, var(--color-text) 7%, transparent);
   }
 
