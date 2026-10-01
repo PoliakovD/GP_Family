@@ -121,6 +121,9 @@ export class AdminPayloadEditorComponent implements OnChanges {
   /** Верхнеуровневые ключи payload, отличающиеся от текущей записи справочника — их поля формы
    * подсвечиваются (очередь «Одобрение», ADR-0018: админ сразу видит, что именно ИИ поменял). */
   @Input() highlightKeys: readonly string[] = [];
+  /** Поля, у которых нет источника (ADR-0018: модель не указала, откуда взято значение) — подсвечиваются жёлтым,
+   * чтобы админ проверил их внимательнее остальных. */
+  @Input() warnKeys: readonly string[] = [];
   /** Скрывает собственные кнопки «Сохранить…» — когда родитель сам управляет действиями (очередь
    * «Одобрение»: «Одобрить с правками» читает значение через currentPayloadJson()). */
   @Input() hideSave = false;
@@ -262,6 +265,11 @@ export class AdminPayloadEditorComponent implements OnChanges {
 
   markChanged(key: string): void {
     this.changedKeys.add(key);
+  }
+
+  /** Подсветка поля без источника (см. warnKeys). */
+  isWarn(key: string): boolean {
+    return this.warnKeys.includes(key);
   }
 
   /** Подсветка поля, отличающегося от текущей записи справочника (см. highlightKeys). */

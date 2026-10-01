@@ -575,6 +575,13 @@ select.input {
   background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-surface));
 }
 
+// Поле без источника (модель не указала, откуда значение) — жёлтая подсветка, заметнее, чем .input-diff.
+.input-warn {
+  border-color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 22%, var(--color-surface));
+  box-shadow: 0 0 0 1px var(--color-status-warning);
+}
+
 // Бейдж-счётчик в пункте меню (админ-хаб).
 .nav-badge {
   display: inline-flex;

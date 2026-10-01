@@ -2,11 +2,19 @@
   <div class="card mb-3">
     <div class="card-title">Показатели</div>
     <div class="card-body">
-      <form class="d-flex gap-2 mb-3" (ngSubmit)="searchAnalytes()">
+      <form class="d-flex gap-2 mb-2" (ngSubmit)="searchAnalytes()">
         <input class="input" placeholder="поиск по названию…"
                [ngModel]="analyteQuery()" (ngModelChange)="analyteQuery.set($event)" name="analyteQuery" />
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="analytesLoading()">Найти</button>
       </form>
+      <div class="d-flex gap-2 mb-3" style="align-items: center; flex-wrap: wrap;">
+        <div class="seg">
+          <button type="button" class="seg-opt" [class.active]="analyteFilter() === 'all'" (click)="setAnalyteFilter('all')">Все</button>
+          <button type="button" class="seg-opt" [class.active]="analyteFilter() === 'unverified'" (click)="setAnalyteFilter('unverified')">Непроверенные</button>
+          <button type="button" class="seg-opt" [class.active]="analyteFilter() === 'verified'" (click)="setAnalyteFilter('verified')">Проверенные</button>
+        </div>
+        <span class="text-muted">{{ countsText(analyteCounts()) }}</span>
+      </div>
 
       @if (analyteMergeSourceId()) {
         <p class="text-muted mb-2">
@@ -18,7 +26,7 @@
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th>Биоматериал</th><th></th><th></th></tr></thead>
+          <thead><tr><th>Название</th><th>Биоматериал</th><th>Проверка</th><th></th><th></th></tr></thead>
           <tbody>
             @for (a of analytes(); track a.id) {
               <tr [class.text-muted]="analyteMergeSourceId() === a.id">
@@ -27,6 +35,7 @@
                   @if (analyteMergeSourceId() === a.id) { <span class="tag tag-neutral">проигравший</span> }
                 </td>
                 <td>{{ a.specimenDisplayName }}</td>
+                <td><app-verification-badge [status]="a.verificationStatus" [stale]="a.verificationStale" /></td>
                 <td><button type="button" class="btn btn-secondary btn-sm" (click)="openAnalyte(a)">Открыть</button></td>
                 <td>
                   @if (analyteMergeSourceId() === a.id) {
@@ -39,7 +48,7 @@
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="4" class="text-muted">Ничего не найдено.</td></tr>
+              <tr><td colspan="5" class="text-muted">Ничего не найдено.</td></tr>
             }
           </tbody>
         </table>
@@ -51,8 +60,10 @@
     @let d = analyteDetail()!;
     <div class="card">
       <div class="card-title d-flex justify-content-between" style="align-items: center;">
-        <span>{{ d.displayName }}</span>
-        <div class="d-flex gap-2">
+        <span>{{ d.displayName }} <app-verification-badge [status]="d.verificationStatus" [stale]="d.verificationStale" /></span>
+        <div class="d-flex gap-2" style="flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="markAnalyteVerified()">Отметить проверенным</button>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="showHistory.set(!showHistory())">{{ showHistory() ? 'Скрыть историю' : 'История' }}</button>
           <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="reenrichAnalyte()">Переобогатить</button>
           <button type="button" class="btn btn-danger btn-sm" [disabled]="analyteBusy()" (click)="deleteAnalyte()">Удалить</button>
         </div>
@@ -114,6 +125,10 @@
             (openRelated)="openAnalyteById($event.id)"
           />
         </div>
+
+        @if (showHistory()) {
+          <app-kb-history title="История записи" [target]="kbTargetAnalyte" [targetId]="d.id" (reverted)="onAnalyteReverted()" />
+        }
       </div>
     </div>
   }
@@ -123,25 +138,34 @@
   <div class="card mb-3">
     <div class="card-title">Медикаменты</div>
     <div class="card-body">
-      <form class="d-flex gap-2 mb-3" (ngSubmit)="searchMedications()">
+      <form class="d-flex gap-2 mb-2" (ngSubmit)="searchMedications()">
         <input class="input" placeholder="поиск по названию…"
                [ngModel]="medicationQuery()" (ngModelChange)="medicationQuery.set($event)" name="medicationQuery" />
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="medicationsLoading()">Найти</button>
       </form>
+      <div class="d-flex gap-2 mb-3" style="align-items: center; flex-wrap: wrap;">
+        <div class="seg">
+          <button type="button" class="seg-opt" [class.active]="medicationFilter() === 'all'" (click)="setMedicationFilter('all')">Все</button>
+          <button type="button" class="seg-opt" [class.active]="medicationFilter() === 'unverified'" (click)="setMedicationFilter('unverified')">Непроверенные</button>
+          <button type="button" class="seg-opt" [class.active]="medicationFilter() === 'verified'" (click)="setMedicationFilter('verified')">Проверенные</button>
+        </div>
+        <span class="text-muted">{{ countsText(medicationCounts()) }}</span>
+      </div>
 
       @if (medicationsLoading()) {
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th></th></tr></thead>
+          <thead><tr><th>Название</th><th>Проверка</th><th></th></tr></thead>
           <tbody>
             @for (m of medications(); track m.id) {
               <tr>
                 <td>{{ m.displayName }}</td>
+                <td><app-verification-badge [status]="m.verificationStatus" [stale]="m.verificationStale" /></td>
                 <td><button type="button" class="btn btn-secondary btn-sm" (click)="openMedication(m)">Открыть</button></td>
               </tr>
             } @empty {
-              <tr><td colspan="2" class="text-muted">Ничего не найдено.</td></tr>
+              <tr><td colspan="3" class="text-muted">Ничего не найдено.</td></tr>
             }
           </tbody>
         </table>
@@ -153,8 +177,12 @@
     @let d = medicationDetail()!;
     <div class="card">
       <div class="card-title d-flex justify-content-between" style="align-items: center;">
-        <span>{{ d.displayName }}</span>
-        <button type="button" class="btn btn-danger btn-sm" [disabled]="medicationBusy()" (click)="deleteMedication()">Удалить</button>
+        <span>{{ d.displayName }} <app-verification-badge [status]="d.verificationStatus" [stale]="d.verificationStale" /></span>
+        <div class="d-flex gap-2" style="flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="markMedicationVerified()">Отметить проверенным</button>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="showHistory.set(!showHistory())">{{ showHistory() ? 'Скрыть историю' : 'История' }}</button>
+          <button type="button" class="btn btn-danger btn-sm" [disabled]="medicationBusy()" (click)="deleteMedication()">Удалить</button>
+        </div>
       </div>
       <div class="card-body">
         <p class="text-muted mb-3">
@@ -211,6 +239,10 @@
             (save)="onMedicationPayloadSave($event)"
           />
         </div>
+
+        @if (showHistory()) {
+          <app-kb-history title="История записи" [target]="kbTargetMedication" [targetId]="d.id" (reverted)="onMedicationReverted()" />
+        }
       </div>
     </div>
   }
@@ -223,6 +255,11 @@
       <p class="text-muted mb-2">
         Биоматериал (кровь, моча…) и инструментальные исследования (ЭКГ, УЗИ…) — один общий справочник.
         Переименование меняет и ключ поиска; удаление заблокировано, пока источник ещё используется.
+      </p>
+      <p class="text-muted mb-2">
+        <strong>Группа поиска</strong> — биоматериалы с одинаковой группой (например, «кровь» у крови, венозной крови и плазмы)
+        делят кэш и платный запрос: «АЧТВ» ищется один раз, а не три. Записи справочника остаются отдельными для каждого
+        биоматериала. Пусто — биоматериал сам по себе.
       </p>
 
       <form class="d-flex gap-2 mb-3" (ngSubmit)="searchSpecimens()">
@@ -242,13 +279,22 @@
         <p class="text-muted">Загрузка…</p>
       } @else {
         <table class="table">
-          <thead><tr><th>Название</th><th></th><th></th><th></th></tr></thead>
+          <thead><tr><th>Название</th><th>Группа поиска</th><th></th><th></th><th></th></tr></thead>
           <tbody>
             @for (s of specimens(); track s.id) {
               <tr [class.text-muted]="specimenMergeSourceId() === s.id">
                 <td>
                   <input class="input" [ngModel]="specimenDraft(s)" (ngModelChange)="setSpecimenDraft(s.id, $event)" />
                   @if (specimenMergeSourceId() === s.id) { <span class="tag tag-neutral">проигравший</span> }
+                </td>
+                <td>
+                  <div class="d-flex gap-1" style="align-items: center;">
+                    <input class="input" style="min-width: 110px;" placeholder="без группы" [attr.aria-label]="'Группа поиска: ' + s.displayName"
+                           [ngModel]="specimenGroup(s)" (ngModelChange)="setSpecimenGroupDraft(s.id, $event)" />
+                    @if (specimenGroupChanged(s)) {
+                      <button type="button" class="btn btn-primary btn-sm" [disabled]="specimenBusy()" (click)="saveSpecimenGroup(s)">Сохранить</button>
+                    }
+                  </div>
                 </td>
                 <td>
                   <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="renameSpecimen(s)">
@@ -271,7 +317,7 @@
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="4" class="text-muted">Ничего не найдено.</td></tr>
+              <tr><td colspan="5" class="text-muted">Ничего не найдено.</td></tr>
             }
           </tbody>
         </table>

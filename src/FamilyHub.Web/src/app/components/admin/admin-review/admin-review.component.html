@@ -1,0 +1,117 @@
+<div class="d-flex justify-content-between mb-3" style="align-items: center; gap: 8px; flex-wrap: wrap;">
+  <div>
+    <h2 class="mb-0" style="font-size: 1.1rem;">Одобрение</h2>
+    <p class="text-muted mb-0">
+      Платные поиски ждут «да» админа, результаты с низкой уверенностью не попадают в справочник без проверки.
+      <kbd>J</kbd>/<kbd>K</kbd> — навигация, <kbd>A</kbd> — одобрить, <kbd>R</kbd> — отклонить, <kbd>E</kbd> — править.
+    </p>
+  </div>
+  <div class="d-flex gap-2" style="flex-wrap: wrap; align-items: center;">
+    <div class="seg">
+      <button type="button" class="seg-opt" [class.active]="stageFilter() === 'all'" (click)="setStage('all')">
+        Все ({{ searchesTotal() + resultsTotal() }})
+      </button>
+      <button type="button" class="seg-opt" [class.active]="stageFilter() === 'search'" (click)="setStage('search')">
+        Поиски ({{ searchesTotal() }})
+      </button>
+      <button type="button" class="seg-opt" [class.active]="stageFilter() === 'result'" (click)="setStage('result')">
+        Результаты ({{ resultsTotal() }})
+      </button>
+    </div>
+    <select class="input" style="width: auto;" aria-label="Вид задач" [ngModel]="kindFilter()" (ngModelChange)="setKind($event)">
+      <option value="">Все виды</option>
+      <option value="lab-analyte">Показатели</option>
+      <option value="medication">Препараты (аптечка)</option>
+      <option value="visit-medication">Препараты из заключений</option>
+    </select>
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load()">Обновить</button>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert-danger mb-3">{{ error() }}</div>
+}
+
+<div class="inbox">
+  <aside class="inbox-list card">
+    @if (checkedSearches().length > 0) {
+      <div class="inbox-bulk">
+        <strong>Выбрано: {{ checkedSearches().length }}</strong>
+        <button type="button" class="btn btn-primary btn-sm" [disabled]="bulkBusy()" (click)="bulkApprove()">Одобрить</button>
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="bulkBusy()" (click)="bulkReject()">Отклонить</button>
+      </div>
+    }
+
+    @if (loading() && rows().length === 0) {
+      <p class="text-muted" style="padding: 10px;">Загрузка…</p>
+    } @else if (rows().length === 0) {
+      <p class="text-muted" style="padding: 10px;">Очередь пуста — ничего не ждёт решения.</p>
+    } @else {
+      <div class="inbox-head">
+        <label class="d-flex" style="align-items: center; gap: 6px;">
+          <input type="checkbox" [checked]="allSearchesChecked()" (change)="toggleAllSearches()" aria-label="Выбрать все платные поиски" />
+          <span class="text-muted">все поиски</span>
+        </label>
+        @if (belowCount() > 0) { <span class="tag tag-danger">ниже порога: {{ belowCount() }}</span> }
+      </div>
+      <ul class="inbox-rows">
+        @for (r of rows(); track inboxKey(r)) {
+          <li class="inbox-row" [class.inbox-row-active]="inboxKey(r) === selectedKey()" [class.inbox-row-low]="r.belowThreshold"
+              (click)="select(r)">
+            @if (r.stage === 'search') {
+              <input type="checkbox" [checked]="checked().has(inboxKey(r))" (click)="toggleChecked(r, $event)"
+                     [attr.aria-label]="'Выбрать ' + r.name" />
+            } @else {
+              <span class="inbox-row-spacer"></span>
+            }
+            <div class="inbox-row-body">
+              <div class="inbox-row-title">{{ r.name }}</div>
+              <div class="inbox-row-meta">
+                <span class="tag" [class.tag-accent]="r.stage === 'search'" [class.tag-accent-2]="r.stage === 'result'">{{ stageLabel(r.stage) }}</span>
+                <span class="tag tag-neutral">{{ kindLabel(r.kind) }}</span>
+                @if (r.specimen) { <span class="tag tag-neutral">{{ r.specimen }}</span> }
+                @if (r.hasTwins) { <span class="tag tag-ok" title="Есть свежий кэш того же показателя у другого биоматериала">есть кэш</span> }
+                @if (r.hasNote) { <span class="tag tag-neutral" title="Есть заметка админа">заметка</span> }
+              </div>
+              @if (r.stage === 'search' && r.queryText && r.queryText !== r.name) {
+                <div class="text-muted inbox-row-query">запрос: {{ r.queryText }}</div>
+              }
+              <div class="text-muted inbox-row-meta">{{ originLabel(r.origin) }} · {{ r.createdAt | date: 'dd.MM HH:mm' }}</div>
+            </div>
+            <span class="tag inbox-row-confidence" [class.tag-danger]="r.belowThreshold" [class.tag-ok]="!r.belowThreshold"
+                  [title]="r.confidenceReason ?? ''">{{ confidenceLabel(r.confidence) }}</span>
+          </li>
+        }
+      </ul>
+    }
+  </aside>
+
+  <section class="inbox-detail">
+    @if (entityRef(); as ref) {
+      <div class="d-flex justify-content-between mb-2" style="align-items: center;">
+        <button type="button" class="btn btn-secondary btn-sm" (click)="closeEntity()">← К задаче</button>
+        <span class="text-muted">Карточка записи справочника</span>
+      </div>
+      <app-review-detail [kind]="ref.kind" [id]="ref.kbId" mode="entity"
+                         (acted)="onActed($event)" (openQueueItem)="openQueueItem($event)" />
+    } @else if (selected(); as sel) {
+      <app-review-detail [kind]="sel.kind" [id]="sel.id" mode="item"
+                         (acted)="onActed($event)" (skipped)="onSkip()" (openEntity)="openEntity($event)" />
+    } @else if (!loading()) {
+      <div class="card">
+        <div class="card-body">
+          <p class="text-muted mb-0">Выберите задачу слева, чтобы увидеть источники, черновик и вердикт.</p>
+        </div>
+      </div>
+    }
+  </section>
+</div>
+
+<div style="margin-top: 16px;">
+  <button type="button" class="btn btn-secondary btn-sm mb-2" (click)="showConfig.set(!showConfig())">
+    {{ showConfig() ? 'Скрыть настройки confidence' : 'Настройки confidence' }}
+  </button>
+  @if (showConfig()) {
+    <app-review-config />
+  }
+</div>

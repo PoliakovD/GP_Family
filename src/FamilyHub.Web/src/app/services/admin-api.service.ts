@@ -203,10 +203,15 @@ export interface PromptVersion { id: string; version: number; isActive: boolean;
 
 // --- Ручная правка справочников после ИИ (§3 плана) ---
 
-export interface KbAnalyteListItem { id: string; displayName: string; specimenKbId: string; specimenDisplayName: string | null; plainExplanation: string | null; }
+/** Строка админского списка: те же поля, что у публичного, плюс внутренний статус проверки (ADR-0018) и preview
+ * (plainExplanation у показателей, purpose у препаратов). verificationStale — проверенный payload с тех пор изменился. */
+export interface KbAnalyteListItem {
+  id: string; displayName: string; specimenKbId: string | null; specimenDisplayName: string | null; preview: string | null;
+  verificationStatus: KbVerificationStatusValue; verificationStale: boolean; updatedAt: string;
+}
 export interface KbAnalyteListResponse { items: KbAnalyteListItem[]; hasMore: boolean; }
 
-export interface KbListItem { id: string; displayName: string; purpose: string | null; }
+export type KbListItem = KbAnalyteListItem;
 export interface KbListResponse { items: KbListItem[]; hasMore: boolean; }
 
 /** LockedFields — подмножество {"displayName","payload","aliases"}; залоченное поле переживает
@@ -215,11 +220,16 @@ export interface AdminLabAnalyteDetail {
   id: string; normalizedName: string; specimenKbId: string; specimenDisplayName: string | null;
   displayName: string; payloadJson: string; source: string; aliases: string[]; lockedFields: string[];
   payloadVersion: number; createdAt: string; updatedAt: string;
+  verificationStatus: KbVerificationStatusValue; verifiedAt: string | null; verificationStale: boolean;
 }
 export interface AdminMedicationDetail {
   id: string; normalizedName: string; displayName: string; payloadJson: string; source: string;
   aliases: string[]; lockedFields: string[]; payloadVersion: number; createdAt: string; updatedAt: string;
+  verificationStatus: KbVerificationStatusValue; verifiedAt: string | null; verificationStale: boolean;
 }
+
+/** Фильтр списка справочника по статусу проверки (ADR-0018). */
+export type KbVerificationFilter = 'all' | 'unverified' | 'verified';
 
 /** lockedPayloadKeys — режим формы (§4/§10 плана): если задан вместе с payloadJson, лочатся
  * отдельные "payload.<key>" (реально изменённые поля формы), а не весь "payload" целиком, как при
@@ -318,40 +328,73 @@ export interface AdminAttention {
 /** Вид задачи очереди — те же дискриминаторы, что у PipelineJobType (кроме extraction). */
 export type ReviewKind = 'lab-analyte' | 'medication' | 'visit-medication';
 
+/** Стадия задачи: платный поиск ждёт одобрения / результат ждёт проверки. */
+export type ReviewStage = 'search' | 'result';
+
 /** Откуда пришла задача: показатели — extraction|manual|maintenance, препараты — medkit|visit. */
 export type ReviewOrigin = 'extraction' | 'manual' | 'maintenance' | 'medkit' | 'visit';
 
-export interface ReviewSearchItem {
-  id: string; kind: ReviewKind; name: string; specimen: string | null; queryText: string;
-  queryConfidence: number | null; queryConfidenceReason: string | null; threshold: number; belowThreshold: boolean;
-  origin: ReviewOrigin; createdAt: string;
+/** Строка единого Inbox: confidence/threshold — по стадии (запрос либо результат). */
+export interface ReviewInboxItem {
+  id: string; kind: ReviewKind; stage: ReviewStage; name: string; specimen: string | null; queryText: string | null;
+  confidence: number | null; confidenceReason: string | null; threshold: number; belowThreshold: boolean;
+  origin: ReviewOrigin; createdAt: string; hasTwins: boolean; hasNote: boolean;
 }
-export interface ReviewSearchList { rows: ReviewSearchItem[]; total: number; }
+export interface ReviewInbox { rows: ReviewInboxItem[]; total: number; searches: number; results: number; }
 
-export interface ReviewResultItem {
-  id: string; kind: ReviewKind; name: string; specimen: string | null;
-  resultConfidence: number | null; resultConfidenceReason: string | null; threshold: number; belowThreshold: boolean;
-  provider: string | null; createdAt: string;
-}
-export interface ReviewResultList { rows: ReviewResultItem[]; total: number; }
+/** Внутренний статус проверки записи справочника (числом, как enum на бэкенде) — ТОЛЬКО для админки. */
+export const KbVerificationStatus = { AiUnverified: 0, AdminVerified: 1, AdminEdited: 2, ManualKnowledge: 3 } as const;
+export type KbVerificationStatusValue = typeof KbVerificationStatus[keyof typeof KbVerificationStatus];
 
 export interface ReviewDraft { normalizedName: string; displayName: string; payloadJson: string; aliases: string[]; source: string; }
 export interface ReviewCurrentKb {
   id: string; displayName: string; payloadJson: string; aliases: string[]; lockedFields: string[]; updatedAt: string;
+  verificationStatus: KbVerificationStatusValue; verifiedAt: string | null; verificationStale: boolean;
 }
-export interface ReviewSnippet { index: number; title: string; url: string; text: string; used: boolean; }
-export interface ReviewResultDetail {
-  id: string; kind: ReviewKind; name: string; specimen: string | null;
-  resultConfidence: number | null; resultConfidenceReason: string | null; threshold: number; belowThreshold: boolean;
-  queryConfidence: number | null; queryConfidenceReason: string | null;
+
+/** Источник (сниппет кэша): enabled — итоговое решение; untrustedWarning — ручной/закреплённый с недоверенного
+ * домена (предупреждение, не блокировка); usedInDraft — на него опирается черновик. */
+export interface ReviewSource {
+  index: number; title: string; url: string; text: string; domain: string | null; trustedByDomain: boolean;
+  enabled: boolean; override: boolean | null; origin: 'Auto' | 'Manual'; kind: string | null; note: string | null;
+  pinned: boolean; usedInDraft: boolean; untrustedWarning: boolean;
+}
+export interface ReviewCache {
+  cacheId: string | null; topic: 'lab-analyte' | 'medication'; provider: string | null; lastUpdatedAt: string | null;
+  canBeUpdatedAfter: string | null; fresh: boolean; snippetCount: number; manualCount: number;
+  searchGroupKey: string | null; queryLabel: string | null;
+}
+export interface ReviewTwin { cacheId: string; specimen: string; searchGroupKey: string | null; provider: string; lastUpdatedAt: string; snippetCount: number; }
+export interface ReviewFieldSources { available: boolean; fieldSources: Record<string, string[]>; fieldsWithoutSource: string[]; }
+
+export interface ReviewItemDetail {
+  id: string; kind: ReviewKind; stage: ReviewStage; name: string; specimen: string | null; origin: ReviewOrigin;
   provider: string | null; createdAt: string;
-  draft: ReviewDraft; current: ReviewCurrentKb | null; snippets: ReviewSnippet[];
+  queryText: string; queryConfidence: number | null; queryConfidenceReason: string | null; queryThreshold: number; queryBelowThreshold: boolean;
+  resultConfidence: number | null; resultConfidenceReason: string | null; resultThreshold: number; resultBelowThreshold: boolean;
+  draft: ReviewDraft | null; current: ReviewCurrentKb | null; fieldSourceInfo: ReviewFieldSources | null;
+  cache: ReviewCache; sources: ReviewSource[]; twins: ReviewTwin[]; note: string | null;
 }
+
+/** Карточка записи справочника вне очереди (вариант C). */
+export interface ReviewEntity {
+  kind: ReviewKind; current: ReviewCurrentKb; specimen: string | null; cache: ReviewCache; sources: ReviewSource[];
+  queueJobId: string | null; queueStage: ReviewStage | null;
+}
+
+/** Предложение новой версии записи по текущему набору сниппетов — без записи в kb. */
+export interface ReviewResummarizePreview {
+  displayName: string; payloadJson: string; aliases: string[]; confidence: number | null; confidenceReason: string | null;
+  fieldSourceInfo: ReviewFieldSources; usedSources: ReviewSource[];
+}
+
+export interface ApproveSearchRequest { queryText?: string | null; mode?: 'search' | 'use-cache'; twinCacheId?: string | null; note?: string | null; }
+export interface ApproveResultRequest { payloadJson?: string | null; displayName?: string | null; aliases?: string[] | null; note?: string | null; }
+export interface AddManualSnippetRequest { kind: 'manual-quote' | 'expert-knowledge'; url?: string | null; title?: string | null; text: string; note?: string | null; }
 
 export interface ReviewItemRef { kind: ReviewKind; id: string; }
 export interface BulkApproveItem { kind: ReviewKind; id: string; queryText: string | null; }
 export interface BulkReviewResponse { processedCount: number; failedItems: ReviewItemRef[]; }
-export interface ApproveResultRequest { payloadJson: string | null; displayName: string | null; aliases: string[] | null; }
 
 export interface ReviewQueueCounts {
   searches: number; results: number; searchesByKind: Record<string, number>; resultsByKind: Record<string, number>;
@@ -364,6 +407,29 @@ export interface EnrichmentReviewConfig {
   updatedAt: string | null;
 }
 export type EnrichmentReviewConfigRequest = Omit<EnrichmentReviewConfig, 'updatedAt'>;
+
+// --- История правок (ADR-0018) ---
+
+/** KbChangeTarget на бэкенде — числом. */
+export const KbChangeTarget = { LabAnalyteKb: 0, MedicationKb: 1, LabAnalyteSearchCache: 2, MedicationSearchCache: 3 } as const;
+export type KbChangeTargetValue = typeof KbChangeTarget[keyof typeof KbChangeTarget];
+
+export interface KbChangeLogItem {
+  id: string; at: string; actor: 'admin' | 'system'; target: KbChangeTargetValue; targetId: string; targetLabel: string;
+  action: string; note: string | null; revertedLogId: string | null; canRevert: boolean;
+}
+export interface KbChangeLogList { items: KbChangeLogItem[]; total: number; }
+export interface KbChangeLogDetail extends Omit<KbChangeLogItem, 'canRevert'> { beforeJson: string | null; afterJson: string | null; }
+
+/** «Проверено X из Y» по одному справочнику; verified = всё, кроме AiUnverified. */
+export interface KbVerificationCounts {
+  total: number; aiUnverified: number; adminVerified: number; adminEdited: number; manualKnowledge: number; verified: number;
+}
+export interface KbVerificationSummary { labAnalytes: KbVerificationCounts; medications: KbVerificationCounts; }
+
+/** Биоматериал и его группа поиска (ADR-0018): биоматериалы с одинаковой группой делят платный поиск. */
+export interface SpecimenSearchGroupItem { id: string; displayName: string; searchGroupKey: string | null; cacheRows: number; }
+
 export interface TrustAndRetryResponse { retriedCount: number; }
 
 /** activeModel=null означает, что в БД ничего не выбрано и клиент шлёт fallbackModel
@@ -640,18 +706,28 @@ export class AdminApiService {
   trustDomainsAndRetry = (topic: WebSearchTopicValue, domains: string[]) =>
     this.post<TrustAndRetryResponse>('/api/admin/pipeline/attention/trust-and-retry', { topic, domains });
 
-  // Очередь «Одобрение» (ADR-0018) — ручное одобрение платных поисков и результатов обогащения.
-  // Ошибки: 409 wrong_status (задача уже обработана), 400 invalid (detail — причина), 502 upstream_failed.
+  // Очередь «Одобрение» (ADR-0018) — единый Inbox: ручное одобрение платных поисков и результатов обогащения.
+  // Ошибки: 409 wrong_status (задача уже обработана), 400 invalid (ApiError.detail — причина), 502 upstream_failed.
   getReviewCounts = () => this.get<ReviewQueueCounts>('/api/admin/review/counts');
 
-  getReviewSearches = (kind: ReviewKind | null, skip = 0, take = 200) =>
-    this.get<ReviewSearchList>(`/api/admin/review/searches?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}`);
+  getReviewInbox = (kind: ReviewKind | null, stage: ReviewStage | null, skip = 0, take = 500) =>
+    this.get<ReviewInbox>(
+      `/api/admin/review/inbox?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}${stage ? `&stage=${stage}` : ''}`);
 
-  approveReviewSearch = (kind: ReviewKind, id: string, queryText: string | null) =>
-    this.post<void>(`/api/admin/review/searches/${kind}/${id}/approve`, { queryText });
+  getReviewItem = (kind: ReviewKind, id: string) => this.get<ReviewItemDetail>(`/api/admin/review/items/${kind}/${id}`);
 
-  rejectReviewSearch = (kind: ReviewKind, id: string, reason: string | null = null) =>
-    this.post<void>(`/api/admin/review/searches/${kind}/${id}/reject`, { reason });
+  setReviewNote = (kind: ReviewKind, id: string, note: string | null) =>
+    this.put<void>(`/api/admin/review/items/${kind}/${id}/note`, { note });
+
+  /** Гарантирует строку кэша задачи (создаёт пустую, если её нет) — чтобы добавить ручной сниппет до первого поиска. */
+  ensureReviewCache = (kind: ReviewKind, id: string) =>
+    this.post<{ cacheId: string }>(`/api/admin/review/items/${kind}/${id}/cache/ensure`);
+
+  approveReviewSearch = (kind: ReviewKind, id: string, request: ApproveSearchRequest = {}) =>
+    this.post<void>(`/api/admin/review/searches/${kind}/${id}/approve`, request);
+
+  rejectReviewSearch = (kind: ReviewKind, id: string, reason: string | null = null, note: string | null = null) =>
+    this.post<void>(`/api/admin/review/searches/${kind}/${id}/reject`, { reason, note });
 
   bulkApproveReviewSearches = (items: BulkApproveItem[]) =>
     this.post<BulkReviewResponse>('/api/admin/review/searches/bulk-approve', { items });
@@ -659,29 +735,69 @@ export class AdminApiService {
   bulkRejectReviewSearches = (items: ReviewItemRef[], reason: string | null = null) =>
     this.post<BulkReviewResponse>('/api/admin/review/searches/bulk-reject', { items, reason });
 
-  getReviewResults = (kind: ReviewKind | null, skip = 0, take = 200) =>
-    this.get<ReviewResultList>(`/api/admin/review/results?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}`);
-
-  getReviewResult = (kind: ReviewKind, id: string) =>
-    this.get<ReviewResultDetail>(`/api/admin/review/results/${kind}/${id}`);
-
-  approveReviewResult = (kind: ReviewKind, id: string, request: ApproveResultRequest) =>
+  approveReviewResult = (kind: ReviewKind, id: string, request: ApproveResultRequest = {}) =>
     this.post<void>(`/api/admin/review/results/${kind}/${id}/approve`, request);
 
-  rejectReviewResult = (kind: ReviewKind, id: string, reason: string | null = null) =>
-    this.post<void>(`/api/admin/review/results/${kind}/${id}/reject`, { reason });
+  rejectReviewResult = (kind: ReviewKind, id: string, reason: string | null = null, note: string | null = null) =>
+    this.post<void>(`/api/admin/review/results/${kind}/${id}/reject`, { reason, note });
 
   resummarizeReviewResult = (kind: ReviewKind, id: string) =>
     this.post<void>(`/api/admin/review/results/${kind}/${id}/resummarize`);
+
+  // Набор источников (строка кэша поиска): ручные сниппеты, закрепление, включение/выключение, удаление.
+  addManualSnippet = (topic: 'lab-analyte' | 'medication', cacheId: string, request: AddManualSnippetRequest) =>
+    this.post<unknown>(`/api/admin/review/cache/${topic}/${cacheId}/snippets`, request);
+
+  removeSnippet = (topic: 'lab-analyte' | 'medication', cacheId: string, url: string) =>
+    this.del<unknown>(`/api/admin/review/cache/${topic}/${cacheId}/snippets?url=${encodeURIComponent(url)}`);
+
+  setSnippetEnabled = (topic: 'lab-analyte' | 'medication', cacheId: string, url: string, enabled: boolean | null) =>
+    this.post<unknown>(`/api/admin/review/cache/${topic}/${cacheId}/snippets/override`, { url, enabled });
+
+  setSnippetPinned = (topic: 'lab-analyte' | 'medication', cacheId: string, url: string, pinned: boolean) =>
+    this.post<unknown>(`/api/admin/review/cache/${topic}/${cacheId}/snippets/pin`, { url, pinned });
+
+  // Карточка записи справочника вне очереди + превью пересуммаризации по текущему набору сниппетов.
+  getReviewEntity = (kind: ReviewKind, kbId: string) => this.get<ReviewEntity>(`/api/admin/review/entity/${kind}/${kbId}`);
+
+  previewResummarize = (kind: ReviewKind, kbId: string) =>
+    this.post<ReviewResummarizePreview>(`/api/admin/review/entity/${kind}/${kbId}/resummarize-preview`);
 
   getReviewConfig = () => this.get<EnrichmentReviewConfig>('/api/admin/review/config');
 
   setReviewConfig = (request: EnrichmentReviewConfigRequest) =>
     this.put<EnrichmentReviewConfig>('/api/admin/review/config', request);
 
+  // История правок справочников и кэша (ADR-0018) + откат одной версии.
+  getHistory = (target: KbChangeTargetValue | null, targetId: string | null, skip = 0, take = 30) => {
+    const targetName = target === null ? null : (Object.keys(KbChangeTarget) as (keyof typeof KbChangeTarget)[])
+      .find((k) => KbChangeTarget[k] === target);
+    return this.get<KbChangeLogList>(
+      `/api/admin/history?skip=${skip}&take=${take}${targetName ? `&target=${targetName}` : ''}${targetId ? `&targetId=${targetId}` : ''}`);
+  };
+
+  getHistoryDetail = (id: string) => this.get<KbChangeLogDetail>(`/api/admin/history/${id}`);
+
+  revertHistory = (id: string) => this.post<void>(`/api/admin/history/${id}/revert`);
+
+  // Статус проверки записей справочника — внутренний маркер админки.
+  getVerificationSummary = () => this.get<KbVerificationSummary>('/api/admin/kb/verification-summary');
+
+  markLabAnalyteVerified = (id: string) => this.post<void>(`/api/admin/kb/lab-analytes/${id}/verify`);
+
+  markMedicationVerified = (id: string) => this.post<void>(`/api/admin/kb/medications/${id}/verify`);
+
+  // Группы поиска биоматериалов: биоматериалы с одинаковой группой делят платный поиск (кэш и запрос).
+  getSpecimenSearchGroups = (q: string, take = 100) =>
+    this.get<SpecimenSearchGroupItem[]>(`/api/admin/kb/specimens/search-groups?q=${encodeURIComponent(q)}&take=${take}`);
+
+  setSpecimenSearchGroup = (id: string, searchGroupKey: string | null) =>
+    this.put<{ mergedRows: number; copiedRows: number }>(`/api/admin/kb/specimens/${id}/search-group`, { searchGroupKey });
+
   // Ручная правка справочников после ИИ (§3 плана) — показатели, медикаменты, источники.
-  searchLabAnalytes = (q: string, skip: number, take: number) =>
-    this.get<KbAnalyteListResponse>(`/api/admin/kb/lab-analytes?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}`);
+  searchLabAnalytes = (q: string, skip: number, take: number, verification: KbVerificationFilter = 'all') =>
+    this.get<KbAnalyteListResponse>(
+      `/api/admin/kb/lab-analytes?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}&verification=${verification}`);
 
   getLabAnalyte = (id: string) => this.get<AdminLabAnalyteDetail>(`/api/admin/kb/lab-analytes/${id}`);
 
@@ -700,8 +816,9 @@ export class AdminApiService {
   mergeLabAnalytes = (loserId: string, winnerId: string) =>
     this.post<void>(`/api/admin/kb/lab-analytes/${loserId}/merge-into/${winnerId}`);
 
-  searchMedications = (q: string, skip: number, take: number) =>
-    this.get<KbListResponse>(`/api/admin/kb/medications?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}`);
+  searchMedications = (q: string, skip: number, take: number, verification: KbVerificationFilter = 'all') =>
+    this.get<KbListResponse>(
+      `/api/admin/kb/medications?q=${encodeURIComponent(q)}&skip=${skip}&take=${take}&verification=${verification}`);
 
   getMedication = (id: string) => this.get<AdminMedicationDetail>(`/api/admin/kb/medications/${id}`);
 

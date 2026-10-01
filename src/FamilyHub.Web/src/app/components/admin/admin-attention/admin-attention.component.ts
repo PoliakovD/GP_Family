@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { AdminApiService, AdminAttention, PipelineJobType, WebSearchTopic } from '../../../services/admin-api.service';
+import { AdminApiService, AdminAttention, PipelineJobType, ReviewQueueSummary, WebSearchTopic } from '../../../services/admin-api.service';
 import { AttentionCardComponent } from '../../../shared/attention-card/attention-card.component';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
@@ -57,6 +57,15 @@ export class AdminAttentionComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** «3 платных поиска и 2 результата ждут решения» — очередь «Одобрение» (ADR-0018). */
+  reviewSubtitle(q: ReviewQueueSummary): string {
+    return `Платных поисков: ${q.searches} · результатов на проверку: ${q.results}`;
+  }
+
+  openReview(): void {
+    void this.router.navigate(['/admin/review']);
   }
 
   typeLabel(type: string): string {

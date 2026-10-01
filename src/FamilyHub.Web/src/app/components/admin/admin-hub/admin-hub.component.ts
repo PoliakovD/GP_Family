@@ -1,5 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs';
 import { AdminApiService } from '../../../services/admin-api.service';
 import { ReviewQueueStore } from '../shared/review-queue.store';
 
@@ -29,6 +30,9 @@ export class AdminHubComponent implements OnInit {
   private readonly router = inject(Router);
   readonly reviewQueue = inject(ReviewQueueStore);
 
+  /** Страница «Одобрение» (Inbox с тремя колонками) не помещается в 960px оболочки — на ней оболочка шире. */
+  readonly wide = signal(false);
+
   readonly sections: { path: string; label: string }[] = [
     { path: 'attention', label: 'Требует внимания' },
     { path: 'review', label: 'Одобрение' },
@@ -41,6 +45,10 @@ export class AdminHubComponent implements OnInit {
 
   ngOnInit(): void {
     void this.reviewQueue.refresh();
+    this.wide.set(this.router.url.startsWith('/admin/review'));
+    this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe((e) => {
+      this.wide.set(e.urlAfterRedirects.startsWith('/admin/review'));
+    });
   }
 
   async logout(): Promise<void> {

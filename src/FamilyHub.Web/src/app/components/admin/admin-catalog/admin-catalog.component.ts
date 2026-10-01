@@ -9,11 +9,17 @@ import {
   AdminMedicationDetail,
   GlobalSpecimen,
   KbAnalyteListItem,
+  KbChangeTarget,
   KbListItem,
+  KbVerificationCounts,
+  KbVerificationFilter,
+  SpecimenSearchGroupItem,
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
+import { KbHistoryComponent } from '../admin-review/kb-history.component';
+import { VerificationBadgeComponent } from '../shared/verification-badge.component';
 
 const PAGE_SIZE = 20;
 
@@ -29,7 +35,7 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
  */
 @Component({
     selector: 'app-admin-catalog',
-    imports: [FormsModule, DatePipe, AdminPayloadEditorComponent],
+    imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, KbHistoryComponent, VerificationBadgeComponent],
     templateUrl: './admin-catalog.component.html'
 })
 export class AdminCatalogComponent implements OnInit {
@@ -42,6 +48,15 @@ export class AdminCatalogComponent implements OnInit {
   /** Какая из трёх страниц справочника открыта — задаётся роутом (`data.tab`, см. admin.routes.ts),
    * переключатель между ними — второй уровень навигации раздела (AdminSectionComponent). */
   readonly tab = signal<CatalogTab>(this.route.snapshot.data['tab'] ?? 'analytes');
+
+  /** Статус проверки записей (ADR-0018) — внутренний маркер админки: фильтр списка, счётчик «проверено X из Y», бейджи. */
+  readonly analyteFilter = signal<KbVerificationFilter>('all');
+  readonly medicationFilter = signal<KbVerificationFilter>('all');
+  readonly analyteCounts = signal<KbVerificationCounts | null>(null);
+  readonly medicationCounts = signal<KbVerificationCounts | null>(null);
+  readonly showHistory = signal(false);
+  readonly kbTargetAnalyte = KbChangeTarget.LabAnalyteKb;
+  readonly kbTargetMedication = KbChangeTarget.MedicationKb;
 
   // --- Показатели ---
   readonly analyteQuery = signal('');
@@ -74,12 +89,86 @@ export class AdminCatalogComponent implements OnInit {
    * одной, см. class doc GlobalSpecimenKbService.MergeAsync на бэкенде) — та же двухкликовая
    * схема, что у показателей: отметить проигравшего, затем кликнуть "Слить сюда" на победителе. */
   readonly specimenMergeSourceId = signal<string | null>(null);
+  /** Группы поиска (ADR-0018): биоматериалы с одинаковой группой делят кэш и запрос платного поиска. */
+  readonly specimenGroups = signal<Record<string, SpecimenSearchGroupItem>>({});
+  readonly specimenGroupDrafts = signal<Record<string, string>>({});
 
   ngOnInit(): void {
+    void this.loadVerificationSummary();
     const tab = this.tab();
     if (tab === 'analytes') void this.searchAnalytes();
     else if (tab === 'medications') void this.searchMedications();
     else void this.searchSpecimens();
+  }
+
+  async loadVerificationSummary(): Promise<void> {
+    try {
+      const summary = await this.api.getVerificationSummary();
+      this.analyteCounts.set(summary.labAnalytes);
+      this.medicationCounts.set(summary.medications);
+    } catch {
+      // Счётчик — подсказка, не данные: без него список работает как раньше.
+    }
+  }
+
+  setAnalyteFilter(filter: KbVerificationFilter): void {
+    this.analyteFilter.set(filter);
+    void this.searchAnalytes();
+  }
+
+  setMedicationFilter(filter: KbVerificationFilter): void {
+    this.medicationFilter.set(filter);
+    void this.searchMedications();
+  }
+
+  /** «Проверено X из Y». */
+  countsText(c: KbVerificationCounts | null): string {
+    return c ? `Проверено ${c.verified} из ${c.total}` : '';
+  }
+
+  async markAnalyteVerified(): Promise<void> {
+    const detail = this.analyteDetail();
+    if (!detail) return;
+    this.analyteBusy.set(true);
+    try {
+      await this.api.markLabAnalyteVerified(detail.id);
+      this.analyteDetail.set(await this.api.getLabAnalyte(detail.id));
+      this.toast.success('Отмечено проверенным.');
+      await Promise.all([this.searchAnalytes(), this.loadVerificationSummary()]);
+    } catch {
+      this.toast.error('Не удалось отметить проверенным.');
+    } finally {
+      this.analyteBusy.set(false);
+    }
+  }
+
+  async markMedicationVerified(): Promise<void> {
+    const detail = this.medicationDetail();
+    if (!detail) return;
+    this.medicationBusy.set(true);
+    try {
+      await this.api.markMedicationVerified(detail.id);
+      this.medicationDetail.set(await this.api.getMedication(detail.id));
+      this.toast.success('Отмечено проверенным.');
+      await Promise.all([this.searchMedications(), this.loadVerificationSummary()]);
+    } catch {
+      this.toast.error('Не удалось отметить проверенным.');
+    } finally {
+      this.medicationBusy.set(false);
+    }
+  }
+
+  /** После отката по журналу — перечитать открытую запись и список/счётчик. */
+  async onAnalyteReverted(): Promise<void> {
+    const detail = this.analyteDetail();
+    if (detail) await this.openAnalyteById(detail.id);
+    await Promise.all([this.searchAnalytes(), this.loadVerificationSummary()]);
+  }
+
+  async onMedicationReverted(): Promise<void> {
+    const detail = this.medicationDetail();
+    if (detail) await this.openMedication({ id: detail.id } as KbListItem);
+    await Promise.all([this.searchMedications(), this.loadVerificationSummary()]);
   }
 
   // --- Показатели ---
@@ -87,7 +176,7 @@ export class AdminCatalogComponent implements OnInit {
   async searchAnalytes(): Promise<void> {
     this.analytesLoading.set(true);
     try {
-      const page = await this.api.searchLabAnalytes(this.analyteQuery(), 0, PAGE_SIZE);
+      const page = await this.api.searchLabAnalytes(this.analyteQuery(), 0, PAGE_SIZE, this.analyteFilter());
       this.analytes.set(page.items);
     } catch {
       this.toast.error('Не удалось загрузить список показателей.');
@@ -250,7 +339,7 @@ export class AdminCatalogComponent implements OnInit {
   async searchMedications(): Promise<void> {
     this.medicationsLoading.set(true);
     try {
-      const page = await this.api.searchMedications(this.medicationQuery(), 0, PAGE_SIZE);
+      const page = await this.api.searchMedications(this.medicationQuery(), 0, PAGE_SIZE, this.medicationFilter());
       this.medications.set(page.items);
     } catch {
       this.toast.error('Не удалось загрузить список медикаментов.');
@@ -355,10 +444,48 @@ export class AdminCatalogComponent implements OnInit {
     this.specimensLoading.set(true);
     try {
       this.specimens.set(await this.api.searchSpecimens(this.specimenQuery()));
+      // Группы поиска (ADR-0018) — отдельным запросом: список биоматериалов строит публичный сервис, группы — админский.
+      const groups = await this.api.getSpecimenSearchGroups(this.specimenQuery(), 200);
+      this.specimenGroups.set(Object.fromEntries(groups.map((g) => [g.id, g])));
+      this.specimenGroupDrafts.set({});
     } catch {
       this.toast.error('Не удалось загрузить список источников.');
     } finally {
       this.specimensLoading.set(false);
+    }
+  }
+
+  /** Текущая группа поиска биоматериала (ADR-0018) — пусто, если биоматериал сам по себе. */
+  specimenGroup(s: GlobalSpecimen): string {
+    return this.specimenGroupDrafts()[s.id] ?? this.specimenGroups()[s.id]?.searchGroupKey ?? '';
+  }
+
+  setSpecimenGroupDraft(id: string, value: string): void {
+    this.specimenGroupDrafts.update((d) => ({ ...d, [id]: value }));
+  }
+
+  specimenGroupChanged(s: GlobalSpecimen): boolean {
+    const saved = this.specimenGroups()[s.id]?.searchGroupKey ?? '';
+    return this.specimenGroup(s).trim().toLowerCase() !== saved;
+  }
+
+  /** Присваивает группу поиска. Биоматериалы с одинаковой группой делят платный поиск; уже накопленные строки кэша
+   * внутри группы сливаются (свежая побеждает), при выходе из группы биоматериал получает копию кэша. */
+  async saveSpecimenGroup(s: GlobalSpecimen): Promise<void> {
+    const group = this.specimenGroup(s).trim();
+    this.specimenBusy.set(true);
+    try {
+      const res = await this.api.setSpecimenSearchGroup(s.id, group || null);
+      this.toast.success(
+        group
+          ? `Группа «${group.toLowerCase()}» сохранена${res.mergedRows ? `, слито строк кэша: ${res.mergedRows}` : ''}.`
+          : `Биоматериал вынесен из группы${res.copiedRows ? `, скопировано строк кэша: ${res.copiedRows}` : ''}.`,
+      );
+      await this.searchSpecimens();
+    } catch {
+      this.toast.error('Не удалось сохранить группу поиска.');
+    } finally {
+      this.specimenBusy.set(false);
     }
   }
 

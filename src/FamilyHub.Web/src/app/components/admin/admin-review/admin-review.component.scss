@@ -1,0 +1,109 @@
+// Единый Inbox «Одобрение»: список слева, карточка справа. Широкая раскладка (admin-hub расширяет оболочку на этой странице).
+:host { display: block; }
+
+.inbox {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .inbox { grid-template-columns: 1fr; }
+}
+
+.inbox-list {
+  padding: 0;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  position: sticky;
+  top: 8px;
+}
+
+@media (max-width: 900px) {
+  .inbox-list { position: static; max-height: 340px; }
+}
+
+.inbox-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-paper);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.inbox-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.inbox-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  cursor: pointer;
+
+  &:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+}
+
+.inbox-row-low {
+  background: color-mix(in srgb, var(--color-status-danger) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-status-danger);
+}
+
+.inbox-row-active {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.inbox-row-spacer { width: 13px; flex-shrink: 0; }
+
+.inbox-row-body { flex: 1; min-width: 0; }
+
+.inbox-row-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 0.7647rem;
+}
+
+.inbox-row-query {
+  font-size: 0.7647rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-row-confidence { flex-shrink: 0; }
+
+.inbox-detail { min-width: 0; }
+
+kbd {
+  padding: 0 5px;
+  border: 1px solid var(--color-divider);
+  border-radius: 4px;
+  font-size: 0.7rem;
+}

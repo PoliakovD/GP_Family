@@ -13,37 +13,37 @@
     <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
       <div class="flex-fill">
         <label class="form-label">LOINC</label>
-        <input [class.input-diff]="isDiff('loincCode')" class="input" style="width: 100%;" [ngModel]="loincCode()" (ngModelChange)="loincCode.set($event); markChanged('loincCode')" />
+        <input [class.input-diff]="isDiff('loincCode')" [class.input-warn]="isWarn('loincCode')" class="input" style="width: 100%;" [ngModel]="loincCode()" (ngModelChange)="loincCode.set($event); markChanged('loincCode')" />
       </div>
       <div class="flex-fill">
         <label class="form-label">Единица по умолчанию</label>
-        <input [class.input-diff]="isDiff('defaultUnit')" class="input" style="width: 100%;" [ngModel]="defaultUnit()" (ngModelChange)="defaultUnit.set($event); markChanged('defaultUnit')" />
+        <input [class.input-diff]="isDiff('defaultUnit')" [class.input-warn]="isWarn('defaultUnit')" class="input" style="width: 100%;" [ngModel]="defaultUnit()" (ngModelChange)="defaultUnit.set($event); markChanged('defaultUnit')" />
       </div>
     </div>
 
     <label class="form-label">Простыми словами</label>
-    <textarea [class.input-diff]="isDiff('plainExplanation')" class="input mb-2" rows="2" style="width: 100%;"
+    <textarea [class.input-diff]="isDiff('plainExplanation')" [class.input-warn]="isWarn('plainExplanation')" class="input mb-2" rows="2" style="width: 100%;"
               [ngModel]="plainExplanation()" (ngModelChange)="plainExplanation.set($event); markChanged('plainExplanation')"></textarea>
 
     <label class="form-label">Зачем измеряют</label>
-    <textarea [class.input-diff]="isDiff('whyMeasured')" class="input mb-2" rows="2" style="width: 100%;"
+    <textarea [class.input-diff]="isDiff('whyMeasured')" [class.input-warn]="isWarn('whyMeasured')" class="input mb-2" rows="2" style="width: 100%;"
               [ngModel]="whyMeasured()" (ngModelChange)="whyMeasured.set($event); markChanged('whyMeasured')"></textarea>
 
     <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
       <div class="flex-fill">
         <label class="form-label">Что значит высокое</label>
-        <textarea [class.input-diff]="isDiff('highMeans')" class="input" rows="2" style="width: 100%;"
+        <textarea [class.input-diff]="isDiff('highMeans')" [class.input-warn]="isWarn('highMeans')" class="input" rows="2" style="width: 100%;"
                   [ngModel]="highMeans()" (ngModelChange)="highMeans.set($event); markChanged('highMeans')"></textarea>
       </div>
       <div class="flex-fill">
         <label class="form-label">Что значит низкое</label>
-        <textarea [class.input-diff]="isDiff('lowMeans')" class="input" rows="2" style="width: 100%;"
+        <textarea [class.input-diff]="isDiff('lowMeans')" [class.input-warn]="isWarn('lowMeans')" class="input" rows="2" style="width: 100%;"
                   [ngModel]="lowMeans()" (ngModelChange)="lowMeans.set($event); markChanged('lowMeans')"></textarea>
       </div>
     </div>
 
     <label class="form-label">Методика расчёта (если норма не фиксированная)</label>
-    <textarea [class.input-diff]="isDiff('calculationInstructions')" class="input mb-2" rows="2" style="width: 100%;"
+    <textarea [class.input-diff]="isDiff('calculationInstructions')" [class.input-warn]="isWarn('calculationInstructions')" class="input mb-2" rows="2" style="width: 100%;"
               [ngModel]="calculationInstructions()" (ngModelChange)="calculationInstructions.set($event); markChanged('calculationInstructions')"></textarea>
 
     <label class="form-label">Что смотрят вместе</label>
@@ -149,35 +149,35 @@
     </div>
   } @else {
     <label class="form-label">МНН</label>
-    <input [class.input-diff]="isDiff('internationalName')" class="input mb-2" style="width: 100%;" [ngModel]="internationalName()" (ngModelChange)="internationalName.set($event); markChanged('internationalName')" />
+    <input [class.input-diff]="isDiff('internationalName')" [class.input-warn]="isWarn('internationalName')" class="input mb-2" style="width: 100%;" [ngModel]="internationalName()" (ngModelChange)="internationalName.set($event); markChanged('internationalName')" />
 
     <label class="form-label">Торговые названия (через запятую)</label>
-    <input [class.input-diff]="isDiff('tradeNames')" class="input mb-2" style="width: 100%;" [ngModel]="tradeNames()" (ngModelChange)="tradeNames.set($event); markChanged('tradeNames')" />
+    <input [class.input-diff]="isDiff('tradeNames')" [class.input-warn]="isWarn('tradeNames')" class="input mb-2" style="width: 100%;" [ngModel]="tradeNames()" (ngModelChange)="tradeNames.set($event); markChanged('tradeNames')" />
 
     <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
       <div class="flex-fill">
         <label class="form-label">Форма выпуска</label>
-        <input [class.input-diff]="isDiff('form')" class="input" style="width: 100%;" [ngModel]="form()" (ngModelChange)="form.set($event); markChanged('form')" />
+        <input [class.input-diff]="isDiff('form')" [class.input-warn]="isWarn('form')" class="input" style="width: 100%;" [ngModel]="form()" (ngModelChange)="form.set($event); markChanged('form')" />
       </div>
     </div>
 
     <label class="form-label">Назначение</label>
-    <textarea [class.input-diff]="isDiff('purpose')" class="input mb-2" rows="2" style="width: 100%;" [ngModel]="purpose()" (ngModelChange)="purpose.set($event); markChanged('purpose')"></textarea>
+    <textarea [class.input-diff]="isDiff('purpose')" [class.input-warn]="isWarn('purpose')" class="input mb-2" rows="2" style="width: 100%;" [ngModel]="purpose()" (ngModelChange)="purpose.set($event); markChanged('purpose')"></textarea>
 
     <label class="form-label">Назначение простыми словами</label>
-    <textarea [class.input-diff]="isDiff('simplePurpose')" class="input mb-2" rows="2" style="width: 100%;" [ngModel]="simplePurpose()" (ngModelChange)="simplePurpose.set($event); markChanged('simplePurpose')"></textarea>
+    <textarea [class.input-diff]="isDiff('simplePurpose')" [class.input-warn]="isWarn('simplePurpose')" class="input mb-2" rows="2" style="width: 100%;" [ngModel]="simplePurpose()" (ngModelChange)="simplePurpose.set($event); markChanged('simplePurpose')"></textarea>
 
     <label class="form-label">Способ применения и дозы</label>
-    <textarea [class.input-diff]="isDiff('usage')" class="input mb-2" rows="3" style="width: 100%;" [ngModel]="usage()" (ngModelChange)="usage.set($event); markChanged('usage')"></textarea>
+    <textarea [class.input-diff]="isDiff('usage')" [class.input-warn]="isWarn('usage')" class="input mb-2" rows="3" style="width: 100%;" [ngModel]="usage()" (ngModelChange)="usage.set($event); markChanged('usage')"></textarea>
 
     <label class="form-label">Хранение</label>
-    <input [class.input-diff]="isDiff('storage')" class="input mb-2" style="width: 100%;" [ngModel]="storage()" (ngModelChange)="storage.set($event); markChanged('storage')" />
+    <input [class.input-diff]="isDiff('storage')" [class.input-warn]="isWarn('storage')" class="input mb-2" style="width: 100%;" [ngModel]="storage()" (ngModelChange)="storage.set($event); markChanged('storage')" />
 
     <label class="form-label">Влияние на вождение</label>
-    <input [class.input-diff]="isDiff('driving')" class="input mb-2" style="width: 100%;" [ngModel]="driving()" (ngModelChange)="driving.set($event); markChanged('driving')" />
+    <input [class.input-diff]="isDiff('driving')" [class.input-warn]="isWarn('driving')" class="input mb-2" style="width: 100%;" [ngModel]="driving()" (ngModelChange)="driving.set($event); markChanged('driving')" />
 
     <label class="form-label">Противопоказания и рекомендации</label>
-    <textarea [class.input-diff]="isDiff('specialNotes')" class="input mb-3" rows="3" style="width: 100%;" [ngModel]="specialNotes()" (ngModelChange)="specialNotes.set($event); markChanged('specialNotes')"></textarea>
+    <textarea [class.input-diff]="isDiff('specialNotes')" [class.input-warn]="isWarn('specialNotes')" class="input mb-3" rows="3" style="width: 100%;" [ngModel]="specialNotes()" (ngModelChange)="specialNotes.set($event); markChanged('specialNotes')"></textarea>
   }
 
   @if (!hideSave) {

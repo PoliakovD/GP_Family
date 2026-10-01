@@ -1,0 +1,276 @@
+@if (loading() && !item() && !entity()) {
+  <p class="text-muted">Загрузка…</p>
+} @else if (error()) {
+  <div class="alert-danger">{{ error() }}</div>
+} @else {
+  @if (item(); as it) {
+    <header class="rd-head">
+      <div>
+        <button type="button" class="rd-title btn-link" [disabled]="!kbId()" (click)="openEntityCard()"
+                [title]="kbId() ? 'Открыть карточку записи справочника' : ''">{{ it.name }}</button>
+        <div class="rd-meta">
+          <span class="tag tag-neutral">{{ kindLabel(it.kind) }}</span>
+          <span class="tag" [class.tag-accent]="it.stage === 'search'" [class.tag-accent-2]="it.stage === 'result'">{{ stageLabel(it.stage) }}</span>
+          @if (it.specimen) { <span class="tag tag-neutral">{{ it.specimen }}</span> }
+          <span class="text-muted">{{ originLabel(it.origin) }} · {{ it.createdAt | date: 'dd.MM.yyyy HH:mm' }}</span>
+          @if (it.current) { <app-verification-badge [status]="it.current.verificationStatus" [stale]="it.current.verificationStale" /> }
+        </div>
+      </div>
+    </header>
+
+    <div class="rd-grid">
+      <!-- Колонка 1: источники -->
+      <section class="rd-col">
+        <app-review-sources
+          [sources]="it.sources"
+          [cache]="it.cache"
+          [ensureRef]="{ kind: it.kind, id: it.id }"
+          (changed)="onSourcesChanged()"
+        />
+      </section>
+
+      <!-- Колонка 2: запрос (стадия поиска) либо черновик/запись (стадия результата) -->
+      <section class="rd-col">
+        @if (it.stage === 'search') {
+          <div class="card-title">Платный поиск</div>
+          <label class="form-label" for="rd-query">Текст запроса</label>
+          <input id="rd-query" class="input mb-1" [ngModel]="queryText()" (ngModelChange)="queryText.set($event)"
+                 [disabled]="!isChoice('paid')" maxlength="300" />
+          <p class="text-muted mb-3" style="margin-top: 0;">
+            Нормализованное название, которое уйдёт во внешний поиск@if (it.cache.queryLabel) {
+              ; в запрос подставляется «{{ it.cache.queryLabel }}»}. Правка применяется только к платному поиску.
+          </p>
+
+          @if (it.twins.length > 0) {
+            <p class="rd-hint">
+              Этот показатель уже искали для другого биоматериала — бесплатный кэш можно взять вместо нового платного поиска.
+            </p>
+          }
+
+          <div class="rd-choices">
+            @for (t of it.twins; track t.cacheId) {
+              <label class="rd-choice" [class.rd-choice-active]="isChoice('twin', t.cacheId)">
+                <input type="radio" name="rd-choice" [checked]="isChoice('twin', t.cacheId)" (change)="pickChoice('twin', t.cacheId)" />
+                <span>
+                  <strong>Использовать кэш: {{ t.specimen }}</strong> <span class="tag tag-ok">бесплатно</span><br />
+                  <span class="text-muted">{{ t.snippetCount }} источников · {{ t.provider }} · {{ t.lastUpdatedAt | date: 'dd.MM.yyyy' }}</span>
+                </span>
+              </label>
+            }
+            @if (it.cache.snippetCount > 0) {
+              <label class="rd-choice" [class.rd-choice-active]="isChoice('own')">
+                <input type="radio" name="rd-choice" [checked]="isChoice('own')" (change)="pickChoice('own')" />
+                <span>
+                  <strong>Использовать мой набор из кэша</strong> <span class="tag tag-ok">бесплатно</span><br />
+                  <span class="text-muted">{{ it.cache.snippetCount }} источников (ручных {{ it.cache.manualCount }})</span>
+                </span>
+              </label>
+            }
+            <label class="rd-choice" [class.rd-choice-active]="isChoice('paid')">
+              <input type="radio" name="rd-choice" [checked]="isChoice('paid')" (change)="pickChoice('paid')" />
+              <span>
+                <strong>{{ it.twins.length > 0 ? 'Искать отдельно' : 'Выполнить платный поиск' }}</strong>
+                <span class="tag tag-warning">платно</span>
+              </span>
+            </label>
+          </div>
+        } @else {
+          <div class="card-title">Черновик</div>
+          @if (it.draft) {
+            @if (!it.current) {
+              <p class="rd-hint">Записи в справочнике ещё нет — будет создана.</p>
+            } @else if (diffs().length > 0) {
+              <div class="rd-diff">
+                <strong>Отличается от текущей записи ({{ diffs().length }}):</strong>
+                @for (d of diffs(); track d.key) {
+                  <div class="rd-diff-row">
+                    <span class="tag tag-warning">{{ fieldLabel(d.key) }}</span>
+                    <span class="rd-diff-before">{{ previewText(d.before) }}</span>
+                    <span class="text-muted">→</span>
+                    <span class="rd-diff-after">{{ previewText(d.after) }}</span>
+                  </div>
+                }
+              </div>
+            } @else {
+              <p class="rd-hint">Черновик совпадает с текущей записью.</p>
+            }
+
+            <label class="form-label" for="rd-name">Название</label>
+            <input id="rd-name" class="input mb-2" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" />
+            <label class="form-label" for="rd-aliases">Синонимы (через запятую)</label>
+            <input id="rd-aliases" class="input mb-2" [ngModel]="aliasesText()" (ngModelChange)="aliasesText.set($event)" />
+
+            @if (fieldSourceRows().length > 0 || warnKeys().length > 0) {
+              <div class="rd-provenance">
+                <strong>Откуда поля</strong>
+                @for (r of fieldSourceRows(); track r.key) {
+                  <div><span class="text-muted">{{ r.label }}:</span> @for (dm of r.domains; track dm) { <span class="tag tag-neutral">{{ dm }}</span> }</div>
+                }
+                @for (k of warnKeys(); track k) {
+                  <div><span class="tag tag-warning">без источника</span> {{ fieldLabel(k) }}</div>
+                }
+              </div>
+            }
+
+            <div #editorHost class="rd-editor">
+              <app-admin-payload-editor
+                [schema]="it.kind === 'lab-analyte' ? 'lab-analyte' : 'medication'"
+                [payloadJson]="editorPayload()"
+                [highlightKeys]="diffKeys()"
+                [warnKeys]="warnKeys()"
+                [hideSave]="true"
+              />
+            </div>
+          }
+        }
+      </section>
+
+      <!-- Колонка 3: вердикт -->
+      <section class="rd-col">
+        <div class="card-title">Вердикт</div>
+        @if (it.stage === 'search') {
+          <div class="rd-confidence" [class.rd-confidence-low]="it.queryBelowThreshold">
+            <span class="rd-confidence-value">{{ confidenceLabel(it.queryConfidence) }}</span>
+            <span class="text-muted">порог {{ confidenceLabel(it.queryThreshold) }}</span>
+          </div>
+          @if (it.queryBelowThreshold) {
+            <p class="rd-warn">Уверенность стража ниже порога{{ it.queryConfidence === null ? ' (оценка не получена)' : '' }} — проверьте название.</p>
+          }
+          @if (it.queryConfidenceReason) { <p class="rd-reason">{{ it.queryConfidenceReason }}</p> }
+        } @else {
+          <div class="rd-confidence" [class.rd-confidence-low]="it.resultBelowThreshold">
+            <span class="rd-confidence-value">{{ confidenceLabel(it.resultConfidence) }}</span>
+            <span class="text-muted">порог {{ confidenceLabel(it.resultThreshold) }}</span>
+          </div>
+          @if (it.resultBelowThreshold) {
+            <p class="rd-warn">Уверенность суммаризатора ниже порога{{ it.resultConfidence === null ? ' (оценка не получена)' : '' }} — в справочник не записано.</p>
+          }
+          @if (it.resultConfidenceReason) { <p class="rd-reason">{{ it.resultConfidenceReason }}</p> }
+          @if (it.queryConfidence !== null) {
+            <p class="text-muted">Уверенность запроса при одобрении поиска: {{ confidenceLabel(it.queryConfidence) }}</p>
+          }
+        }
+
+        @if (sourcesDirty() && it.stage === 'result') {
+          <p class="rd-hint">Набор источников изменён — нажмите «Пересуммировать», чтобы он попал в черновик.</p>
+        }
+
+        <label class="form-label" for="rd-note">Заметка админа</label>
+        <textarea id="rd-note" class="input mb-3" rows="3" [ngModel]="note()" (ngModelChange)="note.set($event)"
+                  (blur)="saveNote()" placeholder="Почему так решили (не уходит ни в поиск, ни в модель)"></textarea>
+
+        <div class="rd-actions">
+          <button type="button" class="btn btn-primary" [disabled]="busy()" (click)="approve()">
+            {{ it.stage === 'search' ? (isChoice('paid') ? 'Одобрить поиск' : 'Принять кэш') : 'Одобрить' }} <kbd>A</kbd>
+          </button>
+          @if (it.stage === 'result') {
+            <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="approveWithEdits()">Одобрить с правками <kbd>E</kbd></button>
+            <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="resummarize()">Пересуммировать</button>
+          }
+          <button type="button" class="btn btn-danger" [disabled]="busy()" (click)="reject()">Отклонить <kbd>R</kbd></button>
+          <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="skip()">Далее <kbd>J</kbd></button>
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (entity(); as en) {
+    <header class="rd-head">
+      <div>
+        <div class="rd-title">{{ en.current.displayName }}</div>
+        <div class="rd-meta">
+          <span class="tag tag-neutral">{{ kindLabel(en.kind) }}</span>
+          @if (en.specimen) { <span class="tag tag-neutral">{{ en.specimen }}</span> }
+          <app-verification-badge [status]="en.current.verificationStatus" [stale]="en.current.verificationStale" />
+          <span class="text-muted">обновлено {{ en.current.updatedAt | date: 'dd.MM.yyyy HH:mm' }}</span>
+          @if (en.queueJobId && en.queueStage) {
+            <button type="button" class="btn btn-secondary btn-sm"
+                    (click)="openQueueItem.emit({ kind: en.kind, id: en.queueJobId })">
+              В очереди: {{ stageLabel(en.queueStage) }}
+            </button>
+          }
+        </div>
+      </div>
+    </header>
+
+    <div class="rd-grid">
+      <section class="rd-col">
+        <app-review-sources [sources]="en.sources" [cache]="en.cache" (changed)="onSourcesChanged()" />
+      </section>
+
+      <section class="rd-col">
+        <div class="card-title">Запись справочника</div>
+        @if (preview(); as pv) {
+          <div class="rd-diff">
+            <strong>Предложение пересуммаризации · уверенность {{ confidenceLabel(pv.confidence) }}</strong>
+            @if (pv.confidenceReason) { <div class="text-muted">{{ pv.confidenceReason }}</div> }
+            @for (d of diffs(); track d.key) {
+              <div class="rd-diff-row">
+                <span class="tag tag-warning">{{ fieldLabel(d.key) }}</span>
+                <span class="rd-diff-before">{{ previewText(d.before) }}</span>
+                <span class="text-muted">→</span>
+                <span class="rd-diff-after">{{ previewText(d.after) }}</span>
+              </div>
+            } @empty {
+              <div class="text-muted">Предложение совпадает с текущей записью.</div>
+            }
+            <div class="d-flex gap-2" style="margin-top: 6px;">
+              <button type="button" class="btn btn-primary btn-sm" (click)="applyPreview()">Применить в редактор</button>
+              <button type="button" class="btn btn-secondary btn-sm" (click)="discardPreview()">Отбросить</button>
+            </div>
+          </div>
+        }
+        <label class="form-label" for="rd-name2">Название</label>
+        <input id="rd-name2" class="input mb-2" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" />
+        <label class="form-label" for="rd-aliases2">Синонимы (через запятую)</label>
+        <input id="rd-aliases2" class="input mb-2" [ngModel]="aliasesText()" (ngModelChange)="aliasesText.set($event)" />
+        @if (fieldSourceRows().length > 0 || warnKeys().length > 0) {
+          <div class="rd-provenance">
+            <strong>Откуда поля (предложение)</strong>
+            @for (r of fieldSourceRows(); track r.key) {
+              <div><span class="text-muted">{{ r.label }}:</span> @for (dm of r.domains; track dm) { <span class="tag tag-neutral">{{ dm }}</span> }</div>
+            }
+            @for (k of warnKeys(); track k) {
+              <div><span class="tag tag-warning">без источника</span> {{ fieldLabel(k) }}</div>
+            }
+          </div>
+        }
+        <div #editorHost class="rd-editor">
+          <app-admin-payload-editor
+            [schema]="en.kind === 'lab-analyte' ? 'lab-analyte' : 'medication'"
+            [payloadJson]="editorPayload()"
+            [highlightKeys]="diffKeys()"
+            [warnKeys]="warnKeys()"
+            [busy]="busy()"
+            [excludeId]="en.current.id"
+            (save)="saveEntity($event)"
+          />
+        </div>
+      </section>
+
+      <section class="rd-col">
+        <div class="card-title">Проверка</div>
+        <p class="text-muted">
+          @if (en.current.verifiedAt) { Проверено {{ en.current.verifiedAt | date: 'dd.MM.yyyy HH:mm' }}. }
+          @else { Запись ещё не проверялась человеком. }
+        </p>
+        @if (sourcesDirty()) {
+          <p class="rd-hint">Набор источников изменён — запросите предложение пересуммаризации.</p>
+        }
+        <div class="rd-actions">
+          <button type="button" class="btn btn-primary" [disabled]="busy()" (click)="markVerified()">Отметить проверенным</button>
+          <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="resummarize()">Пересуммировать (предложение)</button>
+          <button type="button" class="btn btn-secondary" (click)="showHistory.set(!showHistory())">
+            {{ showHistory() ? 'Скрыть историю' : 'История правок' }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    @if (showHistory()) {
+      <div class="card" style="margin-top: 12px; padding: 10px;">
+        <app-kb-history title="История записи" [target]="kbTarget()" [targetId]="en.current.id" (reverted)="load()" />
+      </div>
+    }
+  }
+}
