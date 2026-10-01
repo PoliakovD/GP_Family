@@ -30,7 +30,9 @@ public record KbMedicationCard(
     DateTime UpdatedAt);
 
 /// <summary>Статус обогащения конкретного медикамента пользователя (GET /api/medications/{id}/kb).</summary>
-public enum MedicationKbStatus { None, Pending, Running, Failed, Ready }
+/// <summary>UnderReview — ждёт ручного одобрения админом (ADR-0018): платный поиск или черновик результата.
+/// Значение в конце — числовые значения остальных не сдвигаются (фронт держит их константами).</summary>
+public enum MedicationKbStatus { None, Pending, Running, Failed, Ready, UnderReview }
 
 /// <summary>Card заполнена только при Ready. Candidate — неуверенная нечёткая привязка (см.
 /// KbLookupService), которую фронт может предложить пользователю подтвердить вручную, но

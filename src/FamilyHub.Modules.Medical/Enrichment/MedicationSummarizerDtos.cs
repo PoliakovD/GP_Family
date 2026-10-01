@@ -44,9 +44,15 @@ public record MedicationSummary(
 
 /// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина
 /// отказа записи в справочник. Reason — см. LabAnalyteSummarizeResult.Reason, тот же приём.</summary>
-public record SummarizeResult(bool Success, MedicationSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None)
+public record SummarizeResult(
+    bool Success, MedicationSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None,
+    double? Confidence = null, string? ConfidenceReason = null)
 {
     public static SummarizeResult Failure(string error, EnrichmentFailureReason reason = EnrichmentFailureReason.SummarizerFailed) =>
         new(false, null, error, reason);
-    public static SummarizeResult Ok(MedicationSummary summary) => new(true, summary, null, EnrichmentFailureReason.None);
+
+    /// <summary>Confidence/ConfidenceReason — самооценка модели 0..1 (ADR-0018, этап результата);
+    /// null — не вернула/невалидна, гейт ревью трактует как «ниже порога».</summary>
+    public static SummarizeResult Ok(MedicationSummary summary, double? confidence = null, string? confidenceReason = null) =>
+        new(true, summary, null, EnrichmentFailureReason.None, confidence, confidenceReason);
 }

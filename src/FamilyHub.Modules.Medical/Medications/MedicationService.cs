@@ -85,8 +85,7 @@ public class MedicationService(
         // аптечки это ещё живая задача, не "нет данных": иначе UI предложил бы «Уточнить в
         // справочнике», а тот молча упёрся бы в дедуп-индекс, вернув Requested() — ложь пользователю.
         var pending = await db.MedicationEnrichmentJobs.AsNoTracking()
-            .Where(j => (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
-                    || j.Status == EnrichmentJobStatus.Deferred)
+            .Where(j => EnrichmentJobStatusSets.Live.Contains(j.Status)
                 && normalizedNames.Contains(j.NormalizedName))
             .Select(j => new { j.NormalizedName, j.CurrentThought, j.CreatedAt })
             .ToListAsync(ct);

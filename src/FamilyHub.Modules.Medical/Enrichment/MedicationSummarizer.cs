@@ -41,10 +41,16 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
           "driving": "влияние на способность управлять транспортом или null",
           "specialNotes": "противопоказания, побочные эффекты, меры предосторожности и другие важные рекомендации из инструкции или null",
           "correctedName": "настоящее название препарата, если переданное название искажено (опечатка, ошибка распознавания по фото упаковки), а сниппеты явно указывают на конкретный другой препарат — иначе null",
-          "usedSourceIndexes": [0, 2]
+          "usedSourceIndexes": [0, 2],
+          "confidence": 0.85,
+          "confidenceReason": "краткая причина оценки уверенности"
         }
 
         Правила:
+        - "confidence" — число от 0 до 1: твоя уверенность, что ответ верен и подтверждён
+          сниппетами. Снижай, если сниппеты неполны, противоречат друг другу или относятся к
+          другому препарату/форме выпуска. "confidenceReason" — одна короткая фраза по-русски,
+          почему такая оценка. Заполняй оба поля ВСЕГДА.
         - "simplePurpose" — коротко и просто, обычными словами, которыми говорят в быту, а не
           медицинскими терминами. Если по сути совпадает с "purpose" и упростить нечего — можно
           оставить null.
@@ -138,7 +144,9 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
             return SummarizeResult.Failure("Модель не извлекла ни одного содержательного поля.");
         }
 
-        return SummarizeResult.Ok(summary);
+        // Уверенность (ADR-0018): отсутствие/невалидность → null, гейт ревью трактует как "ниже порога".
+        return SummarizeResult.Ok(
+            summary, LmStudioPayloadReader.ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"));
     }
 
     private static string BuildUserText(string displayName, IReadOnlyList<WebSnippet> snippets)

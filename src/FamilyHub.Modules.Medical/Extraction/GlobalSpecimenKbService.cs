@@ -311,7 +311,7 @@ public class GlobalSpecimenKbService(
     }
 
     /// <summary>Pending/Running/Deferred задачи под частичным уникальным индексом (NormalizedName,
-    /// SpecimenKbId, Status IN (0,1,5)) — после редиректа на победителя коллизия с уже идущей там же
+    /// SpecimenKbId, Status IN (0,1,5,6,7)) — после редиректа на победителя коллизия с уже идущей там же
     /// задачей нарушила бы индекс. Deferred (вентиль платного поиска закрыт, ADR-0005 §9) — та же
     /// "живая" строка под тем же индексом, просто ждёт открытия вентиля. "Мягкая" отмена
     /// (Failed + причина), не удаление — сохраняет историю. Завершённые задачи
@@ -320,8 +320,7 @@ public class GlobalSpecimenKbService(
     {
         var active = await db.LabAnalyteEnrichmentJobs
             .Where(j => (j.SpecimenKbId == loserId || j.SpecimenKbId == winnerId) &&
-                        (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
-                            || j.Status == EnrichmentJobStatus.Deferred))
+                        EnrichmentJobStatusSets.Live.Contains(j.Status))
             .ToListAsync(ct);
 
         foreach (var group in active.GroupBy(j => j.NormalizedName))

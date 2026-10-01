@@ -206,6 +206,8 @@
       } @else {
         @if (kbResponse.status === MedicationKbStatus.Pending || kbResponse.status === MedicationKbStatus.Running) {
           <p class="muted">Справочник уточняется — обычно это занимает до минуты. Загляните сюда чуть позже.</p>
+        } @else if (kbResponse.status === MedicationKbStatus.UnderReview) {
+          <p class="muted">Информация об этом препарате на проверке у администратора — она появится здесь после одобрения.</p>
         } @else if (kbResponse.status === MedicationKbStatus.Failed) {
           <p class="muted">Не удалось найти информацию об этом препарате в открытых источниках.</p>
         } @else {

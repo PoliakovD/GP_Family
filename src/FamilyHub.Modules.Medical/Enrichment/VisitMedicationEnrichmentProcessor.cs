@@ -4,6 +4,7 @@ using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.LmStudio;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Kb;
+using FamilyHub.Modules.Medical.Pipeline;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -28,16 +29,14 @@ public class VisitMedicationEnrichmentProcessor(
     IMedicationSearchProvider provider,
     WebSearchCallLogger callLogger,
     IWebSearchValveService searchValve,
+    IEnrichmentReviewConfigService reviewConfig,
+    ILegitimacyGuardService legitimacyGuard,
     MedicationSummarizer summarizer,
     KbWriter kbWriter,
     EnrichmentTrustedDomainService trustedDomains,
     IOptions<EnrichmentOptions> options,
     ILogger<VisitMedicationEnrichmentProcessor> logger)
 {
-    /// <summary>Тот же порог, что MedicationEnrichmentProcessor — исправленное название должно
-    /// быть очевидной опечаткой исходного, а не другим препаратом.</summary>
-    private const double MinCorrectionSimilarity = 0.3;
-
     /// <summary>Должно совпадать с Attempts в [AutomaticRetry] — см. MedicalDocumentExtractionProcessor.MaxAttempts.</summary>
     public const int MaxAttempts = 3;
 
@@ -91,19 +90,44 @@ public class VisitMedicationEnrichmentProcessor(
             }
             else
             {
-                // Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — только на ветке
-                // реального платного вызова. Null-провайдер не гейтим — он никуда не ходит.
-                if (provider.Name != "Null" && await searchValve.IsPausedAsync(ct))
+                if (provider.Name != "Null")
                 {
-                    job.Status = EnrichmentJobStatus.Deferred;
-                    job.Error = "Платный веб-поиск на паузе — задача отложена до его включения.";
-                    await db.SaveChangesAsync(ct); // НЕ CompletedAt: задача не завершена, а отложена
-                    logger.LogInformation("VisitMedicationEnrichmentJob {JobId}: отложена — вентиль платного поиска закрыт.", job.Id);
-                    return;
+                    // Гейт 1 (ADR-0018): каждый платный поиск ждёт ручного одобрения админа. В отличие
+                    // от MedicationEnrichmentProcessor у этого конвейера нет собственного шага
+                    // легитимности, поэтому оценку этапа запроса снимаем здесь — только когда она
+                    // реально нужна (задача ещё не одобрена). Отказ стража НЕ останавливает задачу
+                    // (поведение конвейера не меняем): он превращается в уверенность 0 с причиной —
+                    // админ увидит красную строку и решит сам. Технический сбой — ретрай Hangfire.
+                    if (job.SearchApprovedAt is null)
+                    {
+                        var guard = await legitimacyGuard.CheckAsync(job.SourceDisplayName, ct);
+                        if (!guard.IsLegitimate && guard.IsTransientFailure)
+                            throw new LmStudioUnavailableException(guard.Reason ?? "Локальный сервер распознавания недоступен.");
+
+                        var confidence = guard.IsLegitimate ? guard.Confidence : 0d;
+                        var reason = guard.IsLegitimate ? guard.ConfidenceReason : guard.Reason;
+                        EnrichmentReviewGate.TryParkForSearchApproval(job, confidence, reason);
+                        await db.SaveChangesAsync(ct); // НЕ CompletedAt: ждёт админа; return без исключения — как Deferred
+                        logger.LogInformation(
+                            "VisitMedicationEnrichmentJob {JobId}: платный поиск ждёт одобрения админа (уверенность {Confidence}).",
+                            job.Id, job.QueryConfidence);
+                        return;
+                    }
+
+                    // Вентиль платного поиска (ADR-0005 §9) — поверх одобрения (см. MedicationEnrichmentProcessor).
+                    if (await searchValve.IsPausedAsync(ct))
+                    {
+                        job.Status = EnrichmentJobStatus.Deferred;
+                        job.Error = "Платный веб-поиск на паузе — задача отложена до его включения.";
+                        await db.SaveChangesAsync(ct); // НЕ CompletedAt: задача не завершена, а отложена
+                        logger.LogInformation("VisitMedicationEnrichmentJob {JobId}: отложена — вентиль платного поиска закрыт.", job.Id);
+                        return;
+                    }
                 }
 
                 var callContext = new WebSearchCallContext(nameof(LlmJobKind.VisitMedicationEnrichment), job.Id);
-                rawSnippets = await provider.SearchAsync(job.NormalizedName, WebSearchTopic.Medication, ct: ct, callContext: callContext);
+                rawSnippets = await provider.SearchAsync(
+                    EnrichmentReviewGate.EffectiveQuery(job), WebSearchTopic.Medication, ct: ct, callContext: callContext);
                 if (provider.Name != "Null")
                 {
                     job.ExternalSearchAt = DateTime.UtcNow;
@@ -144,8 +168,28 @@ public class VisitMedicationEnrichmentProcessor(
                 return;
             }
 
-            var source = BuildSourceLabel(provider.Name, snippets, summarized.Summary.UsedSourceIndexes);
+            var source = MedicationNameCorrection.BuildSourceLabel(provider.Name, snippets, summarized.Summary.UsedSourceIndexes);
             var (finalNormalizedName, finalDisplayName, extraAliases) = ResolveCorrectedName(job, summarized.Summary);
+
+            // Гейт 2 (ADR-0018) — см. MedicationEnrichmentProcessor.
+            var thresholds = await reviewConfig.GetAsync(ct);
+            if (EnrichmentReviewGate.NeedsResultReview(
+                    summarized.Confidence, thresholds.ResultMin(EnrichmentReviewDomain.Medication)))
+            {
+                var draft = new MedicationDraft(
+                    finalNormalizedName, finalDisplayName, extraAliases, source, summarized.Summary,
+                    EnrichmentDraftSerializer.ToDraftSnippets(snippets));
+                EnrichmentReviewGate.ParkForResultReview(
+                    job, EnrichmentDraftSerializer.Serialize(draft), summarized.Confidence, summarized.ConfidenceReason);
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation(
+                    "VisitMedicationEnrichmentJob {JobId}: уверенность результата {Confidence} ниже порога — черновик ждёт ревью админа.",
+                    job.Id, summarized.Confidence);
+                return;
+            }
+
+            job.ResultConfidence = summarized.Confidence;
+            job.ResultConfidenceReason = summarized.ConfidenceReason;
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             var writeResult = await kbWriter.UpsertAsync(
@@ -195,35 +239,15 @@ public class VisitMedicationEnrichmentProcessor(
     private (string NormalizedName, string DisplayName, IReadOnlyList<string>? ExtraAliases) ResolveCorrectedName(
         VisitMedicationEnrichmentJob job, MedicationSummary summary)
     {
-        var correctedName = summary.CorrectedName?.Trim();
-        if (string.IsNullOrEmpty(correctedName)) return (job.NormalizedName, job.SourceDisplayName, null);
-
-        var correctedNormalized = MedicationNameNormalizer.Normalize(correctedName);
-        if (correctedNormalized.Length == 0 || correctedNormalized == job.NormalizedName)
-            return (job.NormalizedName, job.SourceDisplayName, null);
-
-        var similarity = TrigramSimilarity.Similarity(correctedNormalized, job.NormalizedName);
-        if (similarity < MinCorrectionSimilarity)
+        var resolution = MedicationNameCorrection.Resolve(job.NormalizedName, job.SourceDisplayName, summary);
+        if (resolution.Outcome == MedicationNameCorrectionOutcome.RejectedLowSimilarity)
         {
             logger.LogWarning(
                 "VisitMedicationEnrichmentJob {JobId}: модель предложила «{Corrected}» вместо «{Original}», " +
                 "но схожесть {Similarity:F2} слишком низкая — коррекция отклонена.",
-                job.Id, correctedName, job.SourceDisplayName, similarity);
-            return (job.NormalizedName, job.SourceDisplayName, null);
+                job.Id, resolution.CorrectedName, job.SourceDisplayName, resolution.Similarity);
         }
 
-        return (correctedNormalized, correctedName, [job.NormalizedName]);
-    }
-
-    private static string BuildSourceLabel(string providerName, IReadOnlyList<WebSnippet> snippets, IReadOnlyList<int> usedIndexes)
-    {
-        var domains = usedIndexes
-            .Where(i => i >= 0 && i < snippets.Count)
-            .Select(i => Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
-            .Where(host => host is not null)
-            .Distinct()
-            .ToList();
-
-        return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
+        return (resolution.NormalizedName, resolution.DisplayName, resolution.ExtraAliases);
     }
 }

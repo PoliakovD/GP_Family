@@ -128,6 +128,7 @@ public class ExtractionQueryService(
         var rows = await db.LabAnalyteEnrichmentJobs.AsNoTracking()
             .Where(j => specimenIds.Contains(j.SpecimenKbId)
                 && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
+                    || EnrichmentJobStatusSets.AwaitingAdmin.Contains(j.Status) // ждёт админа (ADR-0018) — тоже «в процессе»
                     || (j.Status == EnrichmentJobStatus.Failed && j.IsTransientFailure && j.CreatedAt > waitingSince)))
             .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought, j.CreatedAt, Waiting = j.Status == EnrichmentJobStatus.Failed })
             .ToListAsync(ct);

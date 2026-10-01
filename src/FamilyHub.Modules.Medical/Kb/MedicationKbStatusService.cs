@@ -79,6 +79,8 @@ public class MedicationKbStatusService(
             // с точки зрения пользователя это неотличимо от обычного "ещё обрабатывается".
             EnrichmentJobStatus.Pending or EnrichmentJobStatus.Deferred => MedicationKbStatus.Pending,
             EnrichmentJobStatus.Running => MedicationKbStatus.Running,
+            // Ждёт одобрения админом (ADR-0018) — пользователю: «на проверке».
+            EnrichmentJobStatus.AwaitingSearchApproval or EnrichmentJobStatus.AwaitingResultReview => MedicationKbStatus.UnderReview,
             EnrichmentJobStatus.Failed or EnrichmentJobStatus.Skipped => MedicationKbStatus.Failed,
             _ => MedicationKbStatus.None,
         };
