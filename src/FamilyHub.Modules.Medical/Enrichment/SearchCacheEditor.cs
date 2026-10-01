@@ -123,6 +123,36 @@ public class SearchCacheEditor(AppDbContext db, KbChangeLogService changeLog)
         return CacheEditOutcome.Ok();
     }
 
+    /// <summary>Копирует набор сниппетов «двойника» в строку этой задачи (ADR-0018): авто-сниппеты берутся у источника,
+    /// ручные сниппеты и override'ы получателя сохраняются, провайдер и свежесть — как у источника (копия бесплатна, платного
+    /// запроса не было). Применяется только к анализам: у препаратов нет биоматериалов и, значит, двойников.</summary>
+    public async Task<CacheEditOutcome> CopyFromAsync(Guid targetId, Guid sourceId, CancellationToken ct = default)
+    {
+        var target = await db.LabAnalyteSearchCaches.FirstOrDefaultAsync(c => c.Id == targetId, ct);
+        var source = await db.LabAnalyteSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.Id == sourceId, ct);
+        if (target is null || source is null) return CacheEditOutcome.NotFound;
+        if (target.NormalizedName != source.NormalizedName) return CacheEditOutcome.Invalid("Двойник — это кэш того же названия показателя.");
+
+        var before = SearchCacheSnapshots.From(target);
+        var own = SearchCacheSnippets.Parse(target.SnippetsJson);
+        var merged = SearchCacheSnippets.MergeAfterSearch(own, SearchCacheSnippets.Parse(source.SnippetsJson)
+            .Where(s => s.Origin == SnippetOrigin.Auto).ToList());
+        target.SnippetsJson = SearchCacheSnippets.Serialize(merged);
+
+        var overrides = SearchCacheSnippets.ParseOverrides(source.OverridesJson);
+        foreach (var (url, flag) in SearchCacheSnippets.ParseOverrides(target.OverridesJson)) overrides[url] = flag;
+        var urls = merged.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        target.OverridesJson = SearchCacheSnippets.SerializeOverrides(
+            overrides.Where(kv => urls.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value));
+        target.Provider = source.Provider;
+        target.LastUpdatedAt = source.LastUpdatedAt;
+        target.CanBeUpdatedAfter = source.CanBeUpdatedAfter;
+
+        await SaveAndLogAsync(WebSearchTopic.LabAnalyte, target, before, "cache-replace",
+            $"Скопирован кэш двойника {sourceId}", ct);
+        return CacheEditOutcome.Ok();
+    }
+
     private async Task<ISearchCacheRow?> LoadAsync(WebSearchTopic topic, Guid id, CancellationToken ct) =>
         topic == WebSearchTopic.Medication
             ? await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.Id == id, ct)

@@ -1,13 +1,15 @@
+using FamilyHub.Domain.Enums;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace FamilyHub.Api.Features.Admin;
 
 /// <summary>
-/// Очередь «Одобрение» (ADR-0018) — ручное одобрение платных поисков и результатов обогащения
-/// с уверенностью ниже порога, плюс настройка порогов. Все действия сбрасывают кэш «Требует
-/// внимания» (AdminPipelineEndpoints.AttentionCacheKey) — счётчик в меню не должен отставать на
-/// 60 секунд от только что сделанного клика. Коды ответов: 404 — нет такой задачи/вид; 409 —
-/// задача уже обработана (другой вкладкой/админом); 400 — невалидный вход; 502 — модель не ответила.
+/// Очередь «Одобрение» (ADR-0018) — единый Inbox: ручное одобрение платных поисков и результатов обогащения
+/// с уверенностью ниже порога, правка набора источников (ручные сниппеты, закрепление, включение), карточка
+/// сущности вне очереди и настройка порогов. Все действия сбрасывают кэш «Требует внимания»
+/// (AdminPipelineEndpoints.AttentionCacheKey) — счётчик в меню не должен отставать на 60 секунд от только что
+/// сделанного клика. Коды ответов: 404 — нет такой задачи/вид; 409 — задача уже обработана (другой вкладкой/админом);
+/// 400 — невалидный вход; 502 — модель не ответила.
 /// </summary>
 public static class AdminEnrichmentReviewEndpoints
 {
@@ -21,6 +23,70 @@ public static class AdminEnrichmentReviewEndpoints
 
         group.MapGet("/counts", async (AdminEnrichmentReviewService review, CancellationToken ct) =>
             Results.Ok(await review.GetCountsAsync(ct)));
+
+        // --- Единый Inbox и деталь ---
+
+        group.MapGet("/inbox", async (
+            string? kind, string? stage, int? skip, int? take, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (kind is not null && !ReviewKinds.IsValid(kind)) return BadKind();
+            if (stage is not null && stage is not (ReviewStages.Search or ReviewStages.Result))
+                return Results.BadRequest(new { message = "stage должен быть search|result." });
+            return Results.Ok(await review.ListInboxAsync(kind, stage, Math.Max(skip ?? 0, 0), PageSize(take), ct));
+        });
+
+        group.MapGet("/items/{kind}/{id:guid}", async (
+            string kind, Guid id, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            var detail = await review.GetItemAsync(kind, id, ct);
+            return detail is null ? Results.NotFound() : Results.Ok(detail);
+        });
+
+        group.MapPut("/items/{kind}/{id:guid}/note", async (
+            string kind, Guid id, SetReviewNoteRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            return Respond(await review.SetNoteAsync(kind, id, request.Note, ct), null);
+        });
+
+        // --- Набор источников (строка кэша поиска) ---
+
+        group.MapPost("/items/{kind}/{id:guid}/cache/ensure", async (
+            string kind, Guid id, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            var outcome = await review.EnsureCacheAsync(kind, id, ct);
+            return outcome.Result == ReviewActionResult.Ok ? Results.Ok(new { cacheId = outcome.Value }) : Results.NotFound();
+        });
+
+        group.MapPost("/cache/{topic}/{cacheId:guid}/snippets", async (
+            string topic, Guid cacheId, AddManualSnippetRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!TryTopic(topic, out var t)) return BadTopic();
+            return Respond(await review.AddManualSnippetAsync(t, cacheId, request, ct));
+        });
+
+        group.MapDelete("/cache/{topic}/{cacheId:guid}/snippets", async (
+            string topic, Guid cacheId, string url, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!TryTopic(topic, out var t)) return BadTopic();
+            return Respond(await review.RemoveSnippetAsync(t, cacheId, url, ct));
+        });
+
+        group.MapPost("/cache/{topic}/{cacheId:guid}/snippets/override", async (
+            string topic, Guid cacheId, SnippetOverrideRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!TryTopic(topic, out var t)) return BadTopic();
+            return Respond(await review.SetSnippetOverrideAsync(t, cacheId, request.Url, request.Enabled, ct));
+        });
+
+        group.MapPost("/cache/{topic}/{cacheId:guid}/snippets/pin", async (
+            string topic, Guid cacheId, SnippetPinRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!TryTopic(topic, out var t)) return BadTopic();
+            return Respond(await review.SetSnippetPinnedAsync(t, cacheId, request.Url, request.Pinned, ct));
+        });
 
         // --- Поиски (гейт 1) ---
 
@@ -36,7 +102,7 @@ public static class AdminEnrichmentReviewEndpoints
             IMemoryCache cache, CancellationToken ct) =>
         {
             if (!ReviewKinds.IsValid(kind)) return BadKind();
-            return Respond(await review.ApproveSearchAsync(kind, id, request?.QueryText, ct), cache);
+            return Respond(await review.ApproveSearchAsync(kind, id, request ?? new ApproveSearchRequest(), ct), cache);
         });
 
         group.MapPost("/searches/{kind}/{id:guid}/reject", async (
@@ -44,7 +110,7 @@ public static class AdminEnrichmentReviewEndpoints
             IMemoryCache cache, CancellationToken ct) =>
         {
             if (!ReviewKinds.IsValid(kind)) return BadKind();
-            return Respond(await review.RejectSearchAsync(kind, id, request?.Reason, ct), cache);
+            return Respond(await review.RejectSearchAsync(kind, id, request?.Reason, request?.Note, ct), cache);
         });
 
         group.MapPost("/searches/bulk-approve", async (
@@ -82,8 +148,8 @@ public static class AdminEnrichmentReviewEndpoints
             string kind, Guid id, AdminEnrichmentReviewService review, CancellationToken ct) =>
         {
             if (!ReviewKinds.IsValid(kind)) return BadKind();
-            var detail = await review.GetResultAsync(kind, id, ct);
-            return detail is null ? Results.NotFound() : Results.Ok(detail);
+            var detail = await review.GetItemAsync(kind, id, ct);
+            return detail is null || detail.Stage != ReviewStages.Result ? Results.NotFound() : Results.Ok(detail);
         });
 
         group.MapPost("/results/{kind}/{id:guid}/approve", async (
@@ -99,7 +165,7 @@ public static class AdminEnrichmentReviewEndpoints
             IMemoryCache cache, CancellationToken ct) =>
         {
             if (!ReviewKinds.IsValid(kind)) return BadKind();
-            return Respond(await review.RejectResultAsync(kind, id, request?.Reason, ct), cache);
+            return Respond(await review.RejectResultAsync(kind, id, request?.Reason, request?.Note, ct), cache);
         });
 
         group.MapPost("/results/{kind}/{id:guid}/resummarize", async (
@@ -107,6 +173,23 @@ public static class AdminEnrichmentReviewEndpoints
         {
             if (!ReviewKinds.IsValid(kind)) return BadKind();
             return Respond(await review.ResummarizeAsync(kind, id, ct), cache);
+        });
+
+        // --- Карточка сущности вне очереди (вариант C) ---
+
+        group.MapGet("/entity/{kind}/{kbId:guid}", async (
+            string kind, Guid kbId, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            var entity = await review.GetEntityAsync(kind, kbId, ct);
+            return entity is null ? Results.NotFound() : Results.Ok(entity);
+        });
+
+        group.MapPost("/entity/{kind}/{kbId:guid}/resummarize-preview", async (
+            string kind, Guid kbId, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            return Respond(await review.PreviewResummarizeAsync(kind, kbId, ct));
         });
 
         // --- Пороги уверенности ---
@@ -128,21 +211,38 @@ public static class AdminEnrichmentReviewEndpoints
     private static IResult BadKind() =>
         Results.BadRequest(new { message = "kind должен быть lab-analyte|medication|visit-medication." });
 
-    private static IResult Respond(ReviewActionOutcome outcome, IMemoryCache cache)
-    {
-        if (outcome.Result == ReviewActionResult.Ok) cache.Remove(AdminPipelineEndpoints.AttentionCacheKey);
+    private static IResult BadTopic() =>
+        Results.BadRequest(new { message = "topic должен быть lab-analyte|medication." });
 
-        return outcome.Result switch
+    private static bool TryTopic(string topic, out WebSearchTopic result)
+    {
+        switch (topic)
         {
-            ReviewActionResult.Ok => Results.NoContent(),
-            ReviewActionResult.NotFound => Results.NotFound(),
-            ReviewActionResult.WrongStatus => Results.Json(
-                new { code = "wrong_status", message = outcome.Message ?? "Задача уже обработана." },
-                statusCode: StatusCodes.Status409Conflict),
-            ReviewActionResult.UpstreamFailed => Results.Json(
-                new { code = "upstream_failed", message = outcome.Message ?? "Модель не ответила." },
-                statusCode: StatusCodes.Status502BadGateway),
-            _ => Results.BadRequest(new { code = "invalid", message = outcome.Message ?? "Некорректный запрос." }),
-        };
+            case "lab-analyte": result = WebSearchTopic.LabAnalyte; return true;
+            case "medication": result = WebSearchTopic.Medication; return true;
+            default: result = default; return false;
+        }
     }
+
+    private static IResult Respond(ReviewActionOutcome outcome, IMemoryCache? cache)
+    {
+        if (outcome.Result == ReviewActionResult.Ok) cache?.Remove(AdminPipelineEndpoints.AttentionCacheKey);
+        return ToResult(outcome.Result, outcome.Message, Results.NoContent());
+    }
+
+    private static IResult Respond<T>(ReviewActionOutcome<T> outcome) =>
+        ToResult(outcome.Result, outcome.Message, Results.Ok(outcome.Value));
+
+    private static IResult ToResult(ReviewActionResult result, string? message, IResult ok) => result switch
+    {
+        ReviewActionResult.Ok => ok,
+        ReviewActionResult.NotFound => Results.NotFound(),
+        ReviewActionResult.WrongStatus => Results.Json(
+            new { code = "wrong_status", message = message ?? "Задача уже обработана." },
+            statusCode: StatusCodes.Status409Conflict),
+        ReviewActionResult.UpstreamFailed => Results.Json(
+            new { code = "upstream_failed", message = message ?? "Модель не ответила." },
+            statusCode: StatusCodes.Status502BadGateway),
+        _ => Results.BadRequest(new { code = "invalid", message = message ?? "Некорректный запрос." }),
+    };
 }
