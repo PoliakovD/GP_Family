@@ -155,7 +155,14 @@ public class SpecimenSearchGroupService(AppDbContext db, KbChangeLogService chan
         winner.OverridesJson = SearchCacheSnippets.SerializeOverrides(
             overrides.Where(kv => finalUrls.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value));
 
+        // Победитель занимает ключ группы (если победила собственная строка биоматериала, её ключ был "specimen:..."):
+        // сначала удаляем проигравшую (освобождая уникальный ключ), затем перекладываем победителя — двумя
+        // SaveChanges, потому что порядок DELETE/UPDATE внутри одного не гарантирован.
+        var groupKey = existing.SearchGroupKey;
         db.LabAnalyteSearchCaches.Remove(loser);
+        await db.SaveChangesAsync(ct);
+        winner.SearchGroupKey = groupKey;
+        await db.SaveChangesAsync(ct);
         await changeLog.RecordAsync(
             KbChangeTarget.LabAnalyteSearchCache, winner.Id, winner.NormalizedName, "cache-merge",
             KbChangeLogService.ToJson(winnerBefore), KbChangeLogService.ToJson(SearchCacheSnapshots.From(winner)),

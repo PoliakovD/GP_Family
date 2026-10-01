@@ -54,7 +54,7 @@ public partial class AdminCatalogService(AppDbContext db, KbChangeLogService cha
     {
         var row = await db.Database.SqlQuery<AdminMedicationRow>($"""
             SELECT "Id", "NormalizedName", "DisplayName", "PayloadJson", "Source", "Aliases", "LockedFields",
-                   "PayloadVersion", "CreatedAt", "UpdatedAt"
+                   "PayloadVersion", "CreatedAt", "UpdatedAt", "VerificationStatus", "VerifiedAt", "VerifiedPayloadHash"
             FROM kb.global_medications_kb WHERE "NormalizedName" = {normalizedName}
             """).FirstOrDefaultAsync(ct);
 

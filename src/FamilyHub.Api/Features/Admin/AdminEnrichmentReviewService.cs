@@ -367,7 +367,7 @@ public class AdminEnrichmentReviewService(
     /// <summary>Атрибуция полей к источникам (ADR-0018). Поле — «без источника», если оно непустое, а модель не указала
     /// ни одного сниппета (для refRanges — ни у одного диапазона нет sourceIndex). Если модель вообще не вернула атрибуцию
     /// (Available=false), подсвечивать нечего — иначе подсвечивалось бы всё.</summary>
-    internal static ReviewFieldSourcesDto BuildFieldSourceInfo(
+    public static ReviewFieldSourcesDto BuildFieldSourceInfo(
         string[] checkedFields, string payloadJson, IReadOnlyDictionary<string, List<int>>? fieldSources,
         IReadOnlyList<DraftSnippet> snippets, LabAnalyteSummary? labSummary)
     {
@@ -827,7 +827,7 @@ public class AdminEnrichmentReviewService(
     /// <summary>Что админ реально поменял относительно черновика. Не изменённое поле остаётся null
     /// (AdminCatalogService его не трогает и не лочит); для payload лочатся только отличающиеся
     /// ключи верхнего уровня ("payload.&lt;key&gt;"), а не весь payload — как режим формы редактора.</summary>
-    internal static AdminKbEditRequest? BuildEdit(
+    public static AdminKbEditRequest? BuildEdit(
         ApproveResultRequest request, string draftPayload, string draftName, string[] draftAliases,
         Func<string, string> normalizeAlias)
     {
