@@ -45,7 +45,7 @@ import { AttachmentListComponent } from '../../shared/attachment-list/attachment
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { indicatorShortName } from '../../shared/util/indicator-name';
+import { indicatorLabel as indicatorLabelOf } from '../../shared/util/indicator-name';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
@@ -1220,7 +1220,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   indicatorsFor(recordId: string): IndicatorDto[] {
     const items = [...(this.indicatorsByRecord[recordId] ?? [])];
     if (this.indicatorSortMode === 'alpha') {
-      items.sort((a, b) => this.shortIndicatorName(a).localeCompare(this.shortIndicatorName(b), 'ru'));
+      items.sort((a, b) => this.indicatorLabel(a).localeCompare(this.indicatorLabel(b), 'ru'));
     } else if (this.indicatorSortMode === 'abnormal') {
       // Стабильная сортировка (гарантия спецификации Array.prototype.sort) — внутри каждой
       // группы порядок из бланка сохраняется, меняется только относительный порядок двух групп.
@@ -1290,11 +1290,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return Math.min(status.processedFiles + 1, status.totalFiles);
   }
 
-  /** Короткое имя показателя для строки таблицы — отображаемое имя без пояснений в скобках и единиц
-   * (UX-редизайн: полное имя из бланка показывается только при раскрытии строки). НЕ из analyteKey: ключ
-   * сворачивает латиницу в кириллицу фонетически («MCV» → «мкв»), см. indicatorShortName. */
-  shortIndicatorName(indicator: IndicatorDto): string {
-    return indicatorShortName(indicator.displayName, indicator.analyteKey);
+  /** Название показателя для строки таблицы — ПОЛНОЕ, как в бланке («MCH (среднее содержание Hb в эритроците)»).
+   * НЕ из analyteKey: ключ сворачивает латиницу в кириллицу фонетически («MCV» → «мкв»), см. indicatorLabel. */
+  indicatorLabel(indicator: IndicatorDto): string {
+    return indicatorLabelOf(indicator.displayName, indicator.analyteKey);
   }
 
   specimenLabelFor(indicator: { specimenDisplayName: string | null }): string {
@@ -1606,7 +1605,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.infoPatient = null;
     this.infoIndicatorId = indicator.id;
     this.infoIndicator = indicator;
-    this.infoDisplayName = this.shortIndicatorName(indicator);
+    this.infoDisplayName = this.indicatorLabel(indicator);
     // Редизайн v2.2 — на мобиле показатель открывается своим URL (?indicator=), не просто
     // in-memory состоянием: apparatus «назад» должен закрыть именно его, не всю запись (тот же
     // приём, что kb-analyte-tab уже применяет для ?id=). На wide экранах URL не трогаем — там

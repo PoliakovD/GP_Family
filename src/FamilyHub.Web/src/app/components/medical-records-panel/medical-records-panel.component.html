@@ -301,7 +301,7 @@
                      подсвечена по статусу (rowStatusClass). -->
                 <tr class="indicator-row" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
                   <td>
-                    {{ shortIndicatorName(ind) }}
+                    {{ indicatorLabel(ind) }}
                     @if (indicatorReference(ind); as ref) {
                       <div class="muted" style="font-size:0.6471rem">
                         {{ ref }}
@@ -394,7 +394,7 @@
               <button type="button" class="indicator-card" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
                 <div class="indicator-card-head">
                   <div class="flex-fill" style="min-width:0">
-                    <div class="card-title" style="font-size:0.8824rem">{{ shortIndicatorName(ind) }}</div>
+                    <div class="card-title" style="font-size:0.8824rem">{{ indicatorLabel(ind) }}</div>
                     @if (indicatorReference(ind); as ref) {
                       <div class="muted" style="font-size:0.6471rem">{{ ref }}</div>
                     }
