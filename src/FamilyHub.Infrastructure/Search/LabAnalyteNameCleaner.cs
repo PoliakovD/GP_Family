@@ -51,6 +51,45 @@ public static partial class LabAnalyteNameCleaner
         return hasAbbreviation ? src : candidate;
     }
 
+    /// <summary>Название показателя из ячейки бланка БЕЗ слипшегося с ним значения: в узкой колонке PDF «название» и
+    /// «результат» нередко склеиваются в одну ячейку («MCV (ср. объем эритр.) 84.2»). Значение (и маркер «*») отрезается
+    /// с конца, только если ячейка им действительно заканчивается.</summary>
+    public static string BlankNameWithoutValue(string? cell, string? value)
+    {
+        var name = (cell ?? string.Empty).Trim();
+        var v = (value ?? string.Empty).Trim().TrimEnd('*').Trim();
+        if (v.Length == 0) return name;
+
+        var withoutStar = name.TrimEnd('*').TrimEnd();
+        // Приклеенное значение отделено от названия пробелом ("… эритр.) 84.2"); без пробела это часть названия ("Витамин B12").
+        if (withoutStar.Length > v.Length && withoutStar.EndsWith(v, StringComparison.OrdinalIgnoreCase) &&
+            char.IsWhiteSpace(withoutStar[withoutStar.Length - v.Length - 1]))
+        {
+            var stripped = withoutStar[..^v.Length].TrimEnd();
+            if (stripped.Length > 0) return stripped;
+        }
+
+        return name;
+    }
+
+    /// <summary>Модель нередко сокращает название («MCV (ср. объем эритр.)» → «MCV», «Эозинофилы, %» → «Эозинофилы»), а
+    /// пользователь открывает анализ, чтобы прочитать название из бланка целиком. Если имя из бланка (после той же
+    /// чистки) НАЧИНАЕТСЯ с имени модели и длиннее него — берётся полное имя из бланка; иначе — имя модели без изменений
+    /// (переименование/перевод/исправление опечатки модели не перетираем).</summary>
+    public static string PreferFullBlankName(string candidate, string? blankName, int maxLength = 160)
+    {
+        if (string.IsNullOrWhiteSpace(candidate) || string.IsNullOrWhiteSpace(blankName)) return candidate;
+
+        var cleanedBlank = Clean(blankName);
+        var cleanedCandidate = Clean(candidate);
+        if (cleanedCandidate.Length == 0 || cleanedBlank.Length <= cleanedCandidate.Length || cleanedBlank.Length > maxLength) return candidate;
+        if (!cleanedBlank.StartsWith(cleanedCandidate, StringComparison.OrdinalIgnoreCase)) return candidate;
+
+        // Граница слова: «Гемоглобин» → «Гемоглобин (HGB)», но не «Гем» → «Гемоглобин».
+        var next = cleanedBlank[cleanedCandidate.Length];
+        return next is ' ' or '(' or ',' or '/' or '-' ? cleanedBlank : candidate;
+    }
+
     /// <summary>Та же чистка (нумерация/эхо-индекс/гомоглифы), но КАПС разбирается по словам, а не
     /// по фразе целиком — для ФИО ("ИВАНОВ ИВАН ИВАНОВИЧ" → "Иванов Иван Иванович"), где каждое
     /// слово — отдельное имя собственное, а не одна многословная фраза вроде "Общий белок"
