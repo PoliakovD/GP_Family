@@ -541,7 +541,9 @@ public class LmStudioMedicalDocumentExtractor(
             if (item.ValueKind != JsonValueKind.Object) continue;
 
             var name = ReadString(item, "name")?.Trim();
-            var value = ReadString(item, "value")?.Trim();
+            // Завершающая «*» — маркер «вне референса» из бланка («50.0*»), не часть значения: с ней число не
+            // разбирается (ValueNumericText = null — нет тренда/графика), а флаг считается отдельно по референсу.
+            var value = ReadString(item, "value")?.Trim().TrimEnd('*').TrimEnd();
             // Показатель без имени/значения, с неправдоподобно длинным именем (модель
             // сгенерировала предложение, не название показателя), или со значением-плейсхолдером
             // "нет данных" вместо реального пропуска ячейки — отбрасываем. Порог поднят с 80 до 160

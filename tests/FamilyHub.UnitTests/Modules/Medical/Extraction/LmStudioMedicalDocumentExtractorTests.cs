@@ -325,6 +325,35 @@ public class LmStudioMedicalDocumentExtractorTests
     }
 
     [Fact]
+    public async Task ExtractAsync_OutOfRangeAsteriskMarker_IsStrippedFromValue_AndRowIsMatched()
+    {
+        // Бланк печатает значения вне нормы со звёздочкой («50.0*»): строка обязана дойти до модели (детектор), а
+        // значение в результате — быть числом БЕЗ «*», иначе ValueNumericText = null (нет тренда/графика).
+        var text = string.Join('\n',
+            "Исследование | Результат | Единицы | Референсные | Комментарий",
+            "Гематокрит | 50.0* | % | 39.0 - 49.0",
+            "Гемоглобин | 17.3 | г/дл | 13.2 - 17.3");
+        SetUpTextChunk(text);
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["indicators"] = JsonSerializer.SerializeToElement(new[]
+            {
+                new { rowId = "R1", name = "Гематокрит", value = "50.0*" },
+                new { rowId = "R2", name = "Гемоглобин", value = "17.3" },
+            }),
+        };
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(new LmStudioJsonResult(true, payload, null));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => (i.Name, i.Value)).Should().BeEquivalentTo(
+            new[] { ("Гематокрит", "50.0"), ("Гемоглобин", "17.3") });
+        result.RowCoverage!.MatchedRows.Should().Be(2);
+        result.RowCoverage.UnmatchedRows.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task ExtractAsync_NoRecognizableTableHeader_FallsBackToWholeChunk_RowCoverageIsNull()
     {
         // Без узнаваемой шапки таблицы LabTableRowDetector не находит строк-кандидатов — экстрактор
