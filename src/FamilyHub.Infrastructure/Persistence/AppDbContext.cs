@@ -84,6 +84,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// IWebSearchValveService/WebSearchValveService.</summary>
     public DbSet<WebSearchConfig> WebSearchConfigs => Set<WebSearchConfig>();
 
+    /// <summary>Пороги уверенности для ручного одобрения обогащения (ADR-0018) — см.
+    /// IEnrichmentReviewConfigService.</summary>
+    public DbSet<EnrichmentReviewConfig> EnrichmentReviewConfigs => Set<EnrichmentReviewConfig>();
+
     /// <summary>Управление enrich-пайплайном из админки (§2) — слоты промптов, их версии
     /// и вкл/выкл шагов. См. PromptProvider, PipelineConfigService.</summary>
     public DbSet<PipelinePrompt> PipelinePrompts => Set<PipelinePrompt>();

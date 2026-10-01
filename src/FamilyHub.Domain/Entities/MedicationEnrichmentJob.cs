@@ -10,7 +10,7 @@ namespace FamilyHub.Domain.Entities;
 /// Дедуп на уровне БД: частичный уникальный индекс по NormalizedName среди Pending/Running —
 /// один и тот же препарат, сохранённый одновременно в разных семьях, порождает один внешний запрос.
 /// </summary>
-public class MedicationEnrichmentJob : IPipelineJob
+public class MedicationEnrichmentJob : IReviewableEnrichmentJob
 {
     public Guid Id { get; set; }
 
@@ -60,4 +60,27 @@ public class MedicationEnrichmentJob : IPipelineJob
     public DateTime? StartedAt { get; set; }
 
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>Уверенность модели-стража (ADR-0018, этап запроса) 0..1; null — не вернула/невалидна.</summary>
+    public double? QueryConfidence { get; set; }
+
+    public string? QueryConfidenceReason { get; set; }
+
+    /// <summary>Текст запроса для платного поиска, предложенный системой (правится админом).</summary>
+    public string? ProposedQueryText { get; set; }
+
+    /// <summary>Момент одобрения платного поиска админом (ADR-0018); null — ещё не одобрен.</summary>
+    public DateTime? SearchApprovedAt { get; set; }
+
+    /// <summary>JSON-черновик результата суммаризации, не записанный в kb (ждёт ревью).</summary>
+    public string? DraftPayloadJson { get; set; }
+
+    /// <summary>Уверенность суммаризатора (ADR-0018, этап результата) 0..1; null — не вернул/невалидна.</summary>
+    public double? ResultConfidence { get; set; }
+
+    public string? ResultConfidenceReason { get; set; }
+
+    public Guid? ReviewedByUserId { get; set; }
+
+    public DateTime? ReviewedAt { get; set; }
 }

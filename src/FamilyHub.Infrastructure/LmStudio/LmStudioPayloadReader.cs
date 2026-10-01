@@ -74,6 +74,15 @@ public static class LmStudioPayloadReader
         _ => null,
     };
 
+    /// <summary>Уверенность модели 0..1 (ADR-0018). Отсутствие поля, не число или значение вне
+    /// диапазона [0..1] (в том числе NaN) → null: вызывающая сторона трактует null как «ниже
+    /// порога» (безопасный дефолт), а не подгоняет выход за диапазон в границу.</summary>
+    public static double? ReadConfidence(Dictionary<string, JsonElement> payload, string key = "confidence")
+    {
+        var value = ReadDouble(payload, key);
+        return value is { } v && !double.IsNaN(v) && v >= 0 && v <= 1 ? v : null;
+    }
+
     /// <summary>true/false → значение; JSON null или отсутствие поля → null ("модель не уверена" —
     /// вызывающая сторона должна оставить прежний результат, не подставлять ни один флаг).</summary>
     public static bool? ReadBool(Dictionary<string, JsonElement> payload, string key)
