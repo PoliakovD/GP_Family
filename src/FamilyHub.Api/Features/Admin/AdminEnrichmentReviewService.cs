@@ -335,8 +335,13 @@ public class AdminEnrichmentReviewService(
         var sources = await BuildSourcesAsync(topic, cacheRow, usedUrls, ct);
         // Нет строки кэша, но есть снимок сниппетов черновика (например, кэш удалили) — показываем снимок только для чтения.
         if (cacheRow is null && draftSnippets.Count > 0)
+        {
+            var snapshotDomains = await trustedDomains.GetActiveDomainsByPriorityAsync(topic, ct);
             sources = draftSnippets.Select((s, i) => new ReviewSourceDto(
-                i, s.Title, s.Url, string.Empty, HostOf(s.Url), false, true, null, s.Origin, s.Kind, null, false, true, false)).ToList();
+                i, s.Title, s.Url, s.Text, SnippetKinds.IsExpertUrl(s.Url) ? SnippetKinds.ExpertSourceLabel : HostOf(s.Url),
+                EnrichmentSnippetFilter.IsTrustedDomain(s.Url, snapshotDomains), true, null, s.Origin, s.Kind, null, false,
+                usedUrls.Contains(s.Url), false)).ToList();
+        }
 
         var twins = new List<ReviewTwinDto>();
         if (stage == ReviewStages.Search && specimenId is { } sid)
@@ -473,6 +478,37 @@ public class AdminEnrichmentReviewService(
         var row = job is LabAnalyteEnrichmentJob lab
             ? (ISearchCacheRow)await labCache.GetOrCreateAsync(lab.NormalizedName, lab.SpecimenKbId, ct)
             : await medCache.GetOrCreateAsync(job.NormalizedName, ct);
+
+        // Кэша не было, а у задачи есть черновик: наполняем новую строку снимком его сниппетов. Иначе пустая строка
+        // заменила бы в карточке снимок черновика, и «Пересуммировать» после добавления своего источника потерял бы
+        // все исходные. Уже лежащие в строке (ручные) сниппеты сохраняются.
+        if (!string.IsNullOrEmpty(job.DraftPayloadJson) && SearchCacheSnippets.Parse(row.SnippetsJson).Count == 0)
+        {
+            IReadOnlyList<DraftSnippet> draftSnippets;
+            string source;
+            if (job is LabAnalyteEnrichmentJob)
+            {
+                var draft = EnrichmentDraftSerializer.Deserialize<LabAnalyteDraft>(job.DraftPayloadJson);
+                draftSnippets = draft?.Snippets ?? [];
+                source = draft?.Source ?? string.Empty;
+            }
+            else
+            {
+                var draft = EnrichmentDraftSerializer.Deserialize<MedicationDraft>(job.DraftPayloadJson);
+                draftSnippets = draft?.Snippets ?? [];
+                source = draft?.Source ?? string.Empty;
+            }
+
+            if (draftSnippets.Count > 0)
+            {
+                // Подпись источника «brave: vidal.ru» → провайдер «brave».
+                var provider = source.Split(':')[0].Trim() is { Length: > 0 } p ? p : null;
+                var snippets = EnrichmentDraftSerializer.ToWebSnippets(draftSnippets);
+                if (job is LabAnalyteEnrichmentJob) await labCache.UpdateAsync(row.Id, provider, snippets, ct);
+                else await medCache.UpdateAsync(row.Id, provider, snippets, ct);
+            }
+        }
+
         return new ReviewActionOutcome<Guid>(ReviewActionResult.Ok, row.Id);
     }
 

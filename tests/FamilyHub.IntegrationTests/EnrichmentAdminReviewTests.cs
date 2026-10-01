@@ -422,6 +422,62 @@ public class EnrichmentAdminReviewTests(ReviewWebFactory factory)
     }
 
     [Fact]
+    public async Task DraftSnapshotSources_WithoutCacheRow_ShowTextAndMarkOnlyCitedSourcesAsUsed()
+    {
+        var name = Name("низкрез");
+        var jobId = await RunMedicationJobAsync(name);
+        var admin = await AdminClientAsync();
+        (await admin.PostAsJsonAsync($"/api/admin/review/searches/medication/{jobId}/approve", new { })).EnsureSuccessStatusCode();
+        await WaitForStatusAsync(jobId, EnrichmentJobStatus.AwaitingResultReview, "ниже порога — результат на ревью");
+
+        // Кэша поиска нет (удалён), а в черновике два сниппета: модель сослалась только на индекс 0.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.MedicationSearchCaches.Where(c => c.NormalizedName == name).ExecuteDeleteAsync();
+            var job = await db.MedicationEnrichmentJobs.SingleAsync(j => j.Id == jobId);
+            var draft = EnrichmentDraftSerializer.Deserialize<MedicationDraft>(job.DraftPayloadJson!)!;
+            job.DraftPayloadJson = EnrichmentDraftSerializer.Serialize(draft with
+            {
+                Snippets = [.. draft.Snippets, new DraftSnippet("Блог", "https://example-blog.test/x", "Не процитированный текст")],
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/results/medication/{jobId}", JsonOpts);
+        detail!.Cache.CacheId.Should().BeNull("строки кэша нет — показан снимок черновика");
+        detail.Sources.Should().HaveCount(2);
+        detail.Sources.Should().OnlyContain(s => !string.IsNullOrEmpty(s.Text), "текст выдержки виден и в снимке");
+        detail.Sources.Single(s => s.Domain == "www.vidal.ru").UsedInDraft.Should().BeTrue();
+        detail.Sources.Single(s => s.Domain == "example-blog.test").UsedInDraft.Should().BeFalse("модель на него не ссылалась");
+    }
+
+    [Fact]
+    public async Task EnsureCache_OnDraftWithoutCacheRow_SeedsDraftSnippets_SoAddedSourceDoesNotReplaceThem()
+    {
+        var name = Name("низкрез");
+        var jobId = await RunMedicationJobAsync(name);
+        var admin = await AdminClientAsync();
+        (await admin.PostAsJsonAsync($"/api/admin/review/searches/medication/{jobId}/approve", new { })).EnsureSuccessStatusCode();
+        await WaitForStatusAsync(jobId, EnrichmentJobStatus.AwaitingResultReview, "ниже порога — результат на ревью");
+
+        using (var scope = factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+                .MedicationSearchCaches.Where(c => c.NormalizedName == name).ExecuteDeleteAsync();
+
+        var ensure = await admin.PostAsync($"/api/admin/review/items/medication/{jobId}/cache/ensure", null);
+        ensure.EnsureSuccessStatusCode();
+        var cacheId = (await ensure.Content.ReadFromJsonAsync<JsonElement>(JsonOpts)).GetProperty("cacheId").GetGuid();
+        (await admin.PostAsJsonAsync($"/api/admin/review/cache/medication/{cacheId}/snippets",
+            new { kind = "expert-knowledge", text = "Своё знание админа." })).EnsureSuccessStatusCode();
+
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/results/medication/{jobId}", JsonOpts);
+        detail!.Sources.Should().HaveCount(2, "исходный источник черновика не потерян + добавленное знание");
+        detail.Sources.Should().Contain(s => s.Domain == "www.vidal.ru" && s.UsedInDraft);
+        detail.Sources.Should().Contain(s => s.Kind == "expert-knowledge");
+    }
+
+    [Fact]
     public async Task MissingConfidence_IsTreatedAsBelowThreshold()
     {
         var name = Name("безоценки");
