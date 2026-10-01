@@ -256,7 +256,7 @@ public class LabAnalyteEnrichmentProcessor(
             var mergedRanges = ReferenceRangeMerger.Merge(summarized.Summary.RefRanges, sortedSnippets, trustedDomainsByPriority);
             var summary = summarized.Summary with { RefRanges = mergedRanges };
 
-            var source = BuildSourceLabel(provider.Name, sortedSnippets, summary.UsedSourceIndexes);
+            var source = EnrichmentReviewGate.BuildSourceLabel(provider.Name, sortedSnippets, summary.UsedSourceIndexes);
 
             // Гейт 2 (ADR-0018): уверенность ниже порога (или не вернулась) — в kb НЕ пишем,
             // черновик ждёт ревью админа; LabAnalyteKbWriter и RecalculateIndicatorFlagsJob не вызываются.
@@ -321,19 +321,6 @@ public class LabAnalyteEnrichmentProcessor(
             logger.LogError(ex, "LabAnalyteEnrichmentJob {JobId} упал на попытке {Attempts} — Hangfire повторит.", job.Id, job.Attempts);
             throw;
         }
-    }
-
-    /// <summary>"brave: helix.ru, invitro.ru" — провайдер + реально использованные модельным ответом домены.</summary>
-    private static string BuildSourceLabel(string providerName, IReadOnlyList<WebSnippet> snippets, IReadOnlyList<int> usedIndexes)
-    {
-        var domains = usedIndexes
-            .Where(i => i >= 0 && i < snippets.Count)
-            .Select(i => Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
-            .Where(host => host is not null)
-            .Distinct()
-            .ToList();
-
-        return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
     }
 
     /// <summary>Индекс домена в trustedDomainsByPriority — общий примитив, см.

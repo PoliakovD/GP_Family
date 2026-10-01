@@ -421,7 +421,7 @@ public static class AdminPipelineEndpoints
 
             var reset = await ResetAndEnqueueAsync(type, id, db, backgroundJobs, ct);
             if (reset) cache.Remove(AttentionCacheKey);
-            return reset ? Results.Accepted() : Results.NotFound();
+            return reset ? Results.Accepted() : await NotRetryableAsync(type, id, db, ct);
         });
 
         // «Применить и перезапустить» из карточки задачи — доверяет домены/override'ы конкретных
@@ -499,7 +499,7 @@ public static class AdminPipelineEndpoints
             // (единственный воркер очереди enrichment не должен подхватить задачу раньше коммита).
             var reset = await ResetAndEnqueueAsync(type, id, db, backgroundJobs, ct);
             if (reset) cache.Remove(AttentionCacheKey);
-            return reset ? Results.Accepted() : Results.NotFound();
+            return reset ? Results.Accepted() : await NotRetryableAsync(type, id, db, ct);
         });
 
         // Массовый перезапуск — чекбоксы в списке задач («Требует внимания» → «Доверить все и
@@ -661,7 +661,7 @@ public static class AdminPipelineEndpoints
     /// позволено знать, какой Enqueue&lt;TProcessor&gt; соответствует какому "type" (тот же generic
     /// generic-параметр Hangfire видит в выражении, что и раньше в каждой из четырёх копий switch —
     /// это НЕ меняет то, как Hangfire сериализует/резолвит задачу, только убирает копипасту диспетчеризации).</summary>
-    private static readonly Dictionary<string, Action<IBackgroundJobClient, Guid>> EnqueueByType = new()
+    internal static readonly Dictionary<string, Action<IBackgroundJobClient, Guid>> EnqueueByType = new()
     {
         ["lab-analyte"] = (bg, id) => bg.Enqueue<LabAnalyteEnrichmentProcessor>(p => p.RunAsync(id, CancellationToken.None)),
         ["medication"] = (bg, id) => bg.Enqueue<MedicationEnrichmentProcessor>(p => p.RunAsync(id, CancellationToken.None)),
@@ -688,12 +688,36 @@ public static class AdminPipelineEndpoints
         };
         if (job is null) return false;
 
+        // Задачи на ручном одобрении (ADR-0018: AwaitingSearchApproval/AwaitingResultReview) этим
+        // retry НЕ перезапускаются: их единственный выход — очередь «Одобрение» (иначе сброс в
+        // Pending стёр бы ожидающий черновик/решение админа). Гейт в самом процессоре (по
+        // SearchApprovedAt) всё равно не дал бы обойти одобрение платного поиска.
+        if (job.Status.IsAwaitingAdmin()) return false;
+
         job.Status = EnrichmentJobStatus.Pending;
         job.Error = null;
         job.FailureReason = null;
         await db.SaveChangesAsync(ct);
         EnqueueByType[type](backgroundJobs, id);
         return true;
+    }
+
+    /// <summary>Ответ на retry, который не сработал: 409, если задача ждёт решения админа в очереди
+    /// «Одобрение» (ADR-0018), иначе 404 — как раньше.</summary>
+    private static async Task<IResult> NotRetryableAsync(string type, Guid id, AppDbContext db, CancellationToken ct)
+    {
+        var status = type switch
+        {
+            "lab-analyte" => await db.LabAnalyteEnrichmentJobs.AsNoTracking().Where(j => j.Id == id).Select(j => (EnrichmentJobStatus?)j.Status).FirstOrDefaultAsync(ct),
+            "medication" => await db.MedicationEnrichmentJobs.AsNoTracking().Where(j => j.Id == id).Select(j => (EnrichmentJobStatus?)j.Status).FirstOrDefaultAsync(ct),
+            "visit-medication" => await db.VisitMedicationEnrichmentJobs.AsNoTracking().Where(j => j.Id == id).Select(j => (EnrichmentJobStatus?)j.Status).FirstOrDefaultAsync(ct),
+            _ => null,
+        };
+        return status is { } st && st.IsAwaitingAdmin()
+            ? Results.Json(
+                new { code = "awaiting_admin", message = "Задача ждёт решения в очереди «Одобрение» — перезапуск отсюда недоступен." },
+                statusCode: StatusCodes.Status409Conflict)
+            : Results.NotFound();
     }
 
     /// <summary>Удаляет одну задачу по (type, id) — общий хвост для одиночного и массового

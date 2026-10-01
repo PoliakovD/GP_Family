@@ -37,19 +37,7 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
             return KbWriteResult.Rejected($"Payload содержит подозрение на персональный контекст: {violation}");
         }
 
-        var payloadJson = JsonSerializer.Serialize(new
-        {
-            schemaVersion = MedicationSummarySchema.CurrentVersion,
-            internationalName = summary.InternationalName,
-            tradeNames = summary.TradeNames,
-            form = summary.Form,
-            purpose = summary.Purpose,
-            simplePurpose = summary.SimplePurpose,
-            usage = summary.Usage,
-            storage = summary.Storage,
-            driving = summary.Driving,
-            specialNotes = summary.SpecialNotes,
-        });
+        var payloadJson = BuildPayloadJson(summary);
 
         // Гранулярные локи подполей (§4 плана) — см. LabAnalyteKbWriter.UpsertAsync, тот же приём
         // на другую таблицу (KbPayloadLockMerger общий для обоих writer'ов).
@@ -66,12 +54,7 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
         // Алиасы — нормализованные торговые названия (та же функция, что и ключ дедупликации) плюс
         // extraAliases (исходное искажённое OCR название при переименовании, см. параметр выше),
         // без самого NormalizedName (иначе он же попал бы и в основной ключ, и в алиасы).
-        var aliases = summary.TradeNames
-            .Concat(extraAliases ?? [])
-            .Select(MedicationNameNormalizer.Normalize)
-            .Where(a => a.Length > 0 && a != normalizedName)
-            .Distinct()
-            .ToArray();
+        var aliases = BuildAliases(normalizedName, summary, extraAliases);
 
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -108,6 +91,31 @@ public class KbWriter(AppDbContext db, ILogger<KbWriter> logger)
             displayName, normalizedName, source);
         return KbWriteResult.Ok(actualId);
     }
+
+    /// <summary>Форма jsonb-поля PayloadJson — единственное место, которое её знает (его же использует
+    /// очередь «Одобрение», ADR-0018, чтобы показать черновик в том виде, в каком он ляжет в kb).</summary>
+    public static string BuildPayloadJson(MedicationSummary summary) => JsonSerializer.Serialize(new
+    {
+        schemaVersion = MedicationSummarySchema.CurrentVersion,
+        internationalName = summary.InternationalName,
+        tradeNames = summary.TradeNames,
+        form = summary.Form,
+        purpose = summary.Purpose,
+        simplePurpose = summary.SimplePurpose,
+        usage = summary.Usage,
+        storage = summary.Storage,
+        driving = summary.Driving,
+        specialNotes = summary.SpecialNotes,
+    });
+
+    /// <summary>Нормализованные алиасы записи — торговые названия плюс extraAliases, без самого ключа.</summary>
+    public static string[] BuildAliases(string normalizedName, MedicationSummary summary, IReadOnlyList<string>? extraAliases) =>
+        summary.TradeNames
+            .Concat(extraAliases ?? [])
+            .Select(MedicationNameNormalizer.Normalize)
+            .Where(a => a.Length > 0 && a != normalizedName)
+            .Distinct()
+            .ToArray();
 
     private static string? FindViolation(string displayName, MedicationSummary summary, IReadOnlyList<string>? extraAliases)
     {

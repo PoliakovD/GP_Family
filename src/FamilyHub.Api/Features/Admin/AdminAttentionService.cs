@@ -32,7 +32,22 @@ public class AdminAttentionService(
         var reasons = await BuildReasonsAsync(ct);
         var dropped = await BuildDroppedDomainsAsync(ct);
         var webSearchPaused = await BuildWebSearchPausedAsync(ct);
-        return new AdminAttentionDto(reasons, dropped, webSearchPaused);
+        var reviewQueue = await BuildReviewQueueAsync(ct);
+        return new AdminAttentionDto(reasons, dropped, webSearchPaused, reviewQueue);
+    }
+
+    /// <summary>Задачи, ждущие решения админа в очереди «Одобрение» (статусы 6/7, ADR-0018).</summary>
+    private async Task<ReviewQueueSummaryDto> BuildReviewQueueAsync(CancellationToken ct)
+    {
+        var searches =
+            await db.LabAnalyteEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingSearchApproval, ct) +
+            await db.MedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingSearchApproval, ct) +
+            await db.VisitMedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingSearchApproval, ct);
+        var results =
+            await db.LabAnalyteEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingResultReview, ct) +
+            await db.MedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingResultReview, ct) +
+            await db.VisitMedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingResultReview, ct);
+        return new ReviewQueueSummaryDto(searches, results, searches + results);
     }
 
     /// <summary>Deferred-задачи (вентиль закрыт, ADR-0005 §9) — та же природа, что AttentionReasonDto,

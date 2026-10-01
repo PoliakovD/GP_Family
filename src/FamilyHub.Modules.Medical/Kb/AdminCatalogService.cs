@@ -29,6 +29,36 @@ public class AdminCatalogService(AppDbContext db)
         return row is null ? null : ToDetail(row);
     }
 
+    /// <summary>Строка справочника по ключу дедупликации (показатель + биоматериал) — для очереди
+    /// «Одобрение» (ADR-0018): показать текущую запись рядом с черновиком для сравнения.</summary>
+    public async Task<AdminLabAnalyteDetail?> GetLabAnalyteByKeyAsync(
+        string normalizedName, Guid specimenKbId, CancellationToken ct = default)
+    {
+        var row = await db.Database.SqlQuery<AdminLabAnalyteRow>($"""
+            SELECT a."Id", a."NormalizedName", a."SpecimenKbId", s."DisplayName" AS "SpecimenDisplayName",
+                   a."DisplayName", a."PayloadJson", a."Source", a."Aliases", a."LockedFields", a."PayloadVersion",
+                   a."CreatedAt", a."UpdatedAt"
+            FROM kb.global_lab_analytes_kb a
+            LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
+            WHERE a."NormalizedName" = {normalizedName} AND a."SpecimenKbId" = {specimenKbId}
+            """).FirstOrDefaultAsync(ct);
+
+        return row is null ? null : ToDetail(row);
+    }
+
+    /// <summary>Строка справочника препаратов по NormalizedName (см. GetLabAnalyteByKeyAsync).</summary>
+    public async Task<AdminMedicationDetail?> GetMedicationByNormalizedNameAsync(
+        string normalizedName, CancellationToken ct = default)
+    {
+        var row = await db.Database.SqlQuery<AdminMedicationRow>($"""
+            SELECT "Id", "NormalizedName", "DisplayName", "PayloadJson", "Source", "Aliases", "LockedFields",
+                   "PayloadVersion", "CreatedAt", "UpdatedAt"
+            FROM kb.global_medications_kb WHERE "NormalizedName" = {normalizedName}
+            """).FirstOrDefaultAsync(ct);
+
+        return row is null ? null : ToDetail(row);
+    }
+
     public async Task<(AdminKbEditResult Result, AdminLabAnalyteDetail? Detail, string? Reason)> UpdateLabAnalyteAsync(
         Guid id, AdminKbEditRequest request, CancellationToken ct = default)
     {

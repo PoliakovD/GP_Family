@@ -25,6 +25,7 @@ public static class AdminServicesRegistration
         builder.Services.AddScoped<AdminCredentialsService>();
         builder.Services.AddScoped<AdminKbRebuildService>();
         builder.Services.AddScoped<AdminAttentionService>();
+        builder.Services.AddScoped<AdminEnrichmentReviewService>();
         builder.Services.AddScoped<AdminSearchWarmupService>();
 
         return builder;

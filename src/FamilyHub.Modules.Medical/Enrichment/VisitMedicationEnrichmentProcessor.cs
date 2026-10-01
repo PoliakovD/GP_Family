@@ -168,7 +168,7 @@ public class VisitMedicationEnrichmentProcessor(
                 return;
             }
 
-            var source = MedicationNameCorrection.BuildSourceLabel(provider.Name, snippets, summarized.Summary.UsedSourceIndexes);
+            var source = EnrichmentReviewGate.BuildSourceLabel(provider.Name, snippets, summarized.Summary.UsedSourceIndexes);
             var (finalNormalizedName, finalDisplayName, extraAliases) = ResolveCorrectedName(job, summarized.Summary);
 
             // Гейт 2 (ADR-0018) — см. MedicationEnrichmentProcessor.

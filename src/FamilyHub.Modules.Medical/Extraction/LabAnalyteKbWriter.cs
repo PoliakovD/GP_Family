@@ -24,6 +24,15 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// </summary>
 public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> logger)
 {
+    /// <summary>Нормализованные алиасы записи (без самого ключа) — общий с очередью «Одобрение»
+    /// (ADR-0018), чтобы черновик показывал ровно те алиасы, что лягут в kb.</summary>
+    public static string[] BuildAliases(string normalizedName, LabAnalyteSummary summary) =>
+        summary.Aliases
+            .Select(LabAnalyteNormalizer.NormalizeAnalyteKey)
+            .Where(a => a.Length > 0 && a != normalizedName)
+            .Distinct()
+            .ToArray();
+
     public async Task<KbWriteResult> UpsertAsync(
         string normalizedName, Guid specimenKbId, string rawDisplayName, LabAnalyteSummary summary,
         string source, CancellationToken ct = default)
@@ -57,11 +66,7 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
                 payloadJson = KbPayloadLockMerger.MergeLockedKeys(existingLocks.PayloadJson, payloadJson, lockedKeys);
         }
 
-        var aliases = summary.Aliases
-            .Select(LabAnalyteNormalizer.NormalizeAnalyteKey)
-            .Where(a => a.Length > 0 && a != normalizedName)
-            .Distinct()
-            .ToArray();
+        var aliases = BuildAliases(normalizedName, summary);
 
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;

@@ -126,6 +126,7 @@ try
         app.MapAdminWarmupEndpoints();
         app.MapAdminSearchCallsEndpoints();
         app.MapAdminPipelineEndpoints();
+        app.MapAdminEnrichmentReviewEndpoints();
         app.MapAdminCatalogEndpoints();
         app.MapAdminLmStudioEndpoints();
     }

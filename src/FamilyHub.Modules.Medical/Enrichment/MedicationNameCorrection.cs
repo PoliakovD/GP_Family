@@ -1,5 +1,4 @@
 using FamilyHub.Infrastructure.Search;
-using FamilyHub.Modules.Medical.Kb;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
 
@@ -56,19 +55,5 @@ public static class MedicationNameCorrection
         return new MedicationNameResolution(
             correctedNormalized, correctedName, [jobNormalizedName],
             MedicationNameCorrectionOutcome.Corrected, correctedName, similarity);
-    }
-
-    /// <summary>"brave: vidal.ru, rlsnet.ru" — провайдер + реально использованные модельным ответом домены.</summary>
-    public static string BuildSourceLabel(
-        string providerName, IReadOnlyList<FamilyHub.Infrastructure.Enrichment.WebSnippet> snippets, IReadOnlyList<int> usedIndexes)
-    {
-        var domains = usedIndexes
-            .Where(i => i >= 0 && i < snippets.Count)
-            .Select(i => Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
-            .Where(host => host is not null)
-            .Distinct()
-            .ToList();
-
-        return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
     }
 }

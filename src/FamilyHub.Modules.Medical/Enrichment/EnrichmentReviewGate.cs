@@ -72,6 +72,21 @@ public static class EnrichmentReviewGate
         return true;
     }
 
+    /// <summary>"brave: vidal.ru, rlsnet.ru" — провайдер + реально использованные модельным ответом домены.
+    /// Общий для процессоров и очереди «Одобрение» (пересуммаризация строит ту же подпись источника).</summary>
+    public static string BuildSourceLabel(
+        string providerName, IReadOnlyList<FamilyHub.Infrastructure.Enrichment.WebSnippet> snippets, IReadOnlyList<int> usedIndexes)
+    {
+        var domains = usedIndexes
+            .Where(i => i >= 0 && i < snippets.Count)
+            .Select(i => Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
+            .Where(host => host is not null)
+            .Distinct()
+            .ToList();
+
+        return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
+    }
+
     /// <summary>Текст запроса, который уйдёт в провайдер: правка админа, иначе нормализованное имя.</summary>
     public static string EffectiveQuery(IReviewableEnrichmentJob job) =>
         string.IsNullOrWhiteSpace(job.ProposedQueryText) ? job.NormalizedName : job.ProposedQueryText.Trim();
