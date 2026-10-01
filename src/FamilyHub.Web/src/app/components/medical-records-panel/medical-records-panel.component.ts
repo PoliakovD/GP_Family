@@ -45,6 +45,7 @@ import { AttachmentListComponent } from '../../shared/attachment-list/attachment
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { indicatorShortName } from '../../shared/util/indicator-name';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
@@ -1289,11 +1290,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return Math.min(status.processedFiles + 1, status.totalFiles);
   }
 
-  /** Короткое имя показателя для строки таблицы — нормализованный analyteKey с заглавной буквы
-   * (UX-редизайн: полное имя из бланка показывается только при раскрытии строки). */
+  /** Короткое имя показателя для строки таблицы — отображаемое имя без пояснений в скобках и единиц
+   * (UX-редизайн: полное имя из бланка показывается только при раскрытии строки). НЕ из analyteKey: ключ
+   * сворачивает латиницу в кириллицу фонетически («MCV» → «мкв»), см. indicatorShortName. */
   shortIndicatorName(indicator: IndicatorDto): string {
-    const key = indicator.analyteKey.trim();
-    return key.length > 0 ? key[0].toUpperCase() + key.slice(1) : indicator.displayName;
+    return indicatorShortName(indicator.displayName, indicator.analyteKey);
   }
 
   specimenLabelFor(indicator: { specimenDisplayName: string | null }): string {
