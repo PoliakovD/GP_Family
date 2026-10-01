@@ -18,6 +18,7 @@ public static class EnrichmentRegistration
         // зависит от выбранного провайдера: NullMedicationSearchProvider просто не вызывает LogAsync.
         builder.Services.AddSingleton<WebSearchCallLogger>();
         builder.Services.AddScoped<IWebSearchValveService, WebSearchValveService>();
+        builder.Services.AddScoped<IEnrichmentReviewConfigService, EnrichmentReviewConfigService>();
         var enrichmentOptions = builder.Configuration.GetSection(EnrichmentOptions.SectionName).Get<EnrichmentOptions>()
             ?? new EnrichmentOptions();
         if (enrichmentOptions.Provider != MedicationSearchProviderKind.Null && string.IsNullOrWhiteSpace(enrichmentOptions.ApiKey))

@@ -35,9 +35,13 @@ public class AnalytePlausibilityGuardService(
         ИМЕННО этот показатель именно в этом источнике. Верни ТОЛЬКО валидный JSON, без пояснений,
         без markdown, без блока <think>.
 
-        Формат ответа: {"valid": true, "reason": null}
+        Формат ответа: {"valid": true, "reason": null, "confidence": 0.9, "confidenceReason": "..."}
 
         Правила:
+        - "confidence" — число от 0 до 1: твоя уверенность, что это реальный лабораторный показатель
+          и сочетание с источником осмысленно. Ниже ~0.7 — если название редкое, неоднозначное,
+          похоже на опечатку или сочетание сомнительно. "confidenceReason" — одна короткая фраза
+          по-русски, почему такая оценка. Заполняй эти поля ВСЕГДА, в том числе при "valid": true.
         - "valid": false — если название не является реально существующим лабораторным/клиническим
           показателем (случайный текст, выдумка, название препарата или источника вместо
           показателя, оскорбление, посторонний контент), ЛИБО если указанное сочетание
@@ -77,7 +81,9 @@ public class AnalytePlausibilityGuardService(
             return AnalytePlausibilityResult.Implausible("Проверка правдоподобности не смогла вынести решение.");
         }
 
-        if (validEl.ValueKind == JsonValueKind.True) return AnalytePlausibilityResult.Plausible();
+        // Уверенность (ADR-0018): отсутствие/невалидность → null, потребитель трактует как "ниже порога".
+        if (validEl.ValueKind == JsonValueKind.True)
+            return AnalytePlausibilityResult.Plausible(ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"));
 
         var reason = ReadString(result.Payload, "reason");
         var effectiveReason = string.IsNullOrWhiteSpace(reason) ? "Показатель не прошёл проверку правдоподобности." : reason;

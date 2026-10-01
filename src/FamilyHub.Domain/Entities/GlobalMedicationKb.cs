@@ -41,4 +41,16 @@ public class GlobalMedicationKb
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>Статус проверки человеком (ADR-0018) — внутренний маркер для админки, пользователям не
+    /// отдаётся. Автообогащение, изменившее payload, сбрасывает его в AiUnverified. Поля «кто проверил»
+    /// (UserId) здесь намеренно нет: kb не хранит персональный контекст (KbIsolationGuardTests), а админ
+    /// платформы — не пользователь; «кто/когда» ведёт журнал KbChangeLog.</summary>
+    public Enums.KbVerificationStatus VerificationStatus { get; set; } = Enums.KbVerificationStatus.AiUnverified;
+
+    public DateTime? VerifiedAt { get; set; }
+
+    /// <summary>SHA-256 канонического payload на момент проверки: если payload с тех пор изменился,
+    /// проверка устарела (см. KbPayloadHash).</summary>
+    public string? VerifiedPayloadHash { get; set; }
 }

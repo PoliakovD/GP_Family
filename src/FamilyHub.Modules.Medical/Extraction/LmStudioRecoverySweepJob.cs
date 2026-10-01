@@ -201,12 +201,11 @@ public class LmStudioRecoverySweepJob(
         var requeued = 0;
         foreach (var job in candidates)
         {
-            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5)),
+            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5,6,7)),
             // просто ждёт открытия вентиля платного поиска (ADR-0005 §9).
             var hasLiveJob = await db.LabAnalyteEnrichmentJobs.AnyAsync(j =>
                 j.Id != job.Id && j.NormalizedName == job.NormalizedName && j.SpecimenKbId == job.SpecimenKbId &&
-                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
-                    || j.Status == EnrichmentJobStatus.Deferred), ct);
+                EnrichmentJobStatusSets.Live.Contains(j.Status), ct);
             if (hasLiveJob) continue;
 
             ResetForRetry(job);
@@ -226,12 +225,11 @@ public class LmStudioRecoverySweepJob(
         var requeued = 0;
         foreach (var job in candidates)
         {
-            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5)),
+            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5,6,7)),
             // просто ждёт открытия вентиля платного поиска (ADR-0005 §9).
             var hasLiveJob = await db.MedicationEnrichmentJobs.AnyAsync(j =>
                 j.Id != job.Id && j.NormalizedName == job.NormalizedName &&
-                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
-                    || j.Status == EnrichmentJobStatus.Deferred), ct);
+                EnrichmentJobStatusSets.Live.Contains(j.Status), ct);
             if (hasLiveJob) continue;
 
             ResetForRetry(job);
@@ -251,12 +249,11 @@ public class LmStudioRecoverySweepJob(
         var requeued = 0;
         foreach (var job in candidates)
         {
-            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5)),
+            // Deferred тоже "живая" — та же строка под тем же дедуп-индексом (Status IN (0,1,5,6,7)),
             // просто ждёт открытия вентиля платного поиска (ADR-0005 §9).
             var hasLiveJob = await db.VisitMedicationEnrichmentJobs.AnyAsync(j =>
                 j.Id != job.Id && j.NormalizedName == job.NormalizedName &&
-                (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
-                    || j.Status == EnrichmentJobStatus.Deferred), ct);
+                EnrichmentJobStatusSets.Live.Contains(j.Status), ct);
             if (hasLiveJob) continue;
 
             ResetForRetry(job);

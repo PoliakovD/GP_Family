@@ -33,4 +33,9 @@ public class GlobalSpecimenKb
     public string[] Aliases { get; set; } = [];
 
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Группа поиска (ADR-0018): биоматериалы с одинаковым значением делят кэш платного поиска и
+    /// поисковый запрос (текст группы подставляется в запрос вместо названия биоматериала), см. SearchGroupKeys.
+    /// null — биоматериал в группе один, не склеивается. Задаётся админом (Админка → Справочник → Биоматериалы).</summary>
+    public string? SearchGroupKey { get; set; }
 }

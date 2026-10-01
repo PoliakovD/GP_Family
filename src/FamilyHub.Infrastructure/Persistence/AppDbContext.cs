@@ -73,6 +73,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<LabAnalyteSearchCache> LabAnalyteSearchCaches => Set<LabAnalyteSearchCache>();
     public DbSet<GlobalSpecimenKb> GlobalSpecimensKb => Set<GlobalSpecimenKb>();
 
+    /// <summary>Журнал изменений записей справочников и кэша поиска с откатом (ADR-0018) — см. KbChangeLogService.</summary>
+    public DbSet<KbChangeLog> KbChangeLogs => Set<KbChangeLog>();
+
     /// <summary>Прогоны пересборки справочника показателей (пересборка enrich-пайплайна, §4.2) —
     /// см. LabAnalyteKbRebuildJob.</summary>
     public DbSet<KbRebuildRun> KbRebuildRuns => Set<KbRebuildRun>();
@@ -83,6 +86,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>Вентиль платного веб-поиска (замена месячной квоты, ADR-0005 §9) — см.
     /// IWebSearchValveService/WebSearchValveService.</summary>
     public DbSet<WebSearchConfig> WebSearchConfigs => Set<WebSearchConfig>();
+
+    /// <summary>Пороги уверенности для ручного одобрения обогащения (ADR-0018) — см.
+    /// IEnrichmentReviewConfigService.</summary>
+    public DbSet<EnrichmentReviewConfig> EnrichmentReviewConfigs => Set<EnrichmentReviewConfig>();
 
     /// <summary>Управление enrich-пайплайном из админки (§2) — слоты промптов, их версии
     /// и вкл/выкл шагов. См. PromptProvider, PipelineConfigService.</summary>

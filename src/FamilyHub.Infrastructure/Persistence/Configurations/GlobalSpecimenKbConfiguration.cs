@@ -17,6 +17,7 @@ public class GlobalSpecimenKbConfiguration : IEntityTypeConfiguration<GlobalSpec
         builder.Property(s => s.NormalizedName).HasMaxLength(100).IsRequired();
         builder.Property(s => s.DisplayName).HasMaxLength(100).IsRequired();
         builder.Property(s => s.Source).HasMaxLength(50).IsRequired();
+        builder.Property(s => s.SearchGroupKey).HasMaxLength(100);
 
         // Aliases — Postgres text[], заводится raw SQL в миграции (как у GlobalLabAnalyteKb.Aliases) —
         // нет единого кроссплатформенного маппинга для SQLite-юнит-тестов.

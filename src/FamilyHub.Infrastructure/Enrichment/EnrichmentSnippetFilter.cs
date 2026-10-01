@@ -15,7 +15,36 @@ public static class EnrichmentSnippetFilter
     public static List<WebSnippet> SelectEnabled(
         IReadOnlyList<WebSnippet> snippets, IReadOnlyList<string> trustedDomains,
         IReadOnlyDictionary<string, bool>? overrides) =>
-        snippets.Where(s => IsEnabled(s.Url, trustedDomains, overrides)).ToList();
+        snippets.Where(s => IsEnabled(s, trustedDomains, overrides)).ToList();
+
+    /// <summary>Итоговый набор для суммаризатора: включённые сниппеты, ручные и закреплённые — первыми
+    /// (админ добавил/закрепил их сознательно, лимит их не отрезает), остальные — в порядке выдачи или,
+    /// при rankOrder, по приоритету домена (анализы: приоритетный источник не должен срезаться
+    /// MaxSnippets, см. ReferenceRangeMerger). Порядок значим для индексов "[N]" в промпте.</summary>
+    public static List<WebSnippet> SelectForSummary(
+        IReadOnlyList<WebSnippet> snippets, IReadOnlyList<string> trustedDomains,
+        IReadOnlyDictionary<string, bool>? overrides, int maxSnippets, bool rankOrder = false)
+    {
+        return snippets
+            .Select((s, i) => (Snippet: s, Index: i))
+            .Where(x => IsEnabled(x.Snippet, trustedDomains, overrides))
+            .OrderBy(x => x.Snippet.Pinned || x.Snippet.Origin == SnippetOrigin.Manual ? 0 : 1)
+            .ThenBy(x => !rankOrder ? 0
+                : Uri.TryCreate(x.Snippet.Url, UriKind.Absolute, out var uri) ? RankOf(uri.Host, trustedDomains) : trustedDomains.Count)
+            .ThenBy(x => x.Index)
+            .Select(x => x.Snippet)
+            .Take(maxSnippets)
+            .ToList();
+    }
+
+    /// <summary>Как <see cref="IsEnabled(string, IReadOnlyList{string}, IReadOnlyDictionary{string, bool}?)"/>,
+    /// но с учётом ручных и закреплённых сниппетов: они включены по умолчанию даже с недоверенного
+    /// домена (недоверенный домен у ручного — предупреждение в UI, не блокировка); явный override
+    /// администратора по-прежнему побеждает.</summary>
+    public static bool IsEnabled(WebSnippet snippet, IReadOnlyList<string> trustedDomains, IReadOnlyDictionary<string, bool>? overrides) =>
+        overrides is not null && overrides.TryGetValue(snippet.Url, out var explicitFlag)
+            ? explicitFlag
+            : snippet.Origin == SnippetOrigin.Manual || snippet.Pinned || IsTrustedDomain(snippet.Url, trustedDomains);
 
     public static bool IsEnabled(string url, IReadOnlyList<string> trustedDomains, IReadOnlyDictionary<string, bool>? overrides) =>
         overrides is not null && overrides.TryGetValue(url, out var explicitFlag) ? explicitFlag : IsTrustedDomain(url, trustedDomains);

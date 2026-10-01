@@ -24,6 +24,10 @@ public class GlobalMedicationKbConfiguration : IEntityTypeConfiguration<GlobalMe
         // миграции AddMedicationEnrichment, как и search_vector: не единого кроссплатформенного
         // маппинга (Npgsql array vs SQLite-юнит-тесты), читается/пишется только через raw SQL
         // (KbLookupService/KbWriter) — исключаем из EF-модели, иначе SQLite-тесты не соберут модель.
+        // Внутренний маркер проверки (ADR-0018): INSERT-ы писателей без этих колонок получают значение по умолчанию.
+        builder.Property(k => k.VerificationStatus).HasDefaultValue(FamilyHub.Domain.Enums.KbVerificationStatus.AiUnverified).IsRequired();
+        builder.Property(k => k.VerifiedPayloadHash).HasMaxLength(64);
+
         builder.Ignore(k => k.Aliases);
         builder.Ignore(k => k.LockedFields);
 

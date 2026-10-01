@@ -25,7 +25,7 @@ public class UserSpecimenServiceTests : SqliteTestBase
         // клиента, реальный сервис поверх него, чтобы поведение UserSpecimenService проверялось
         // сквозь настоящую логику гейта/детерминированного вето, а не через второй мок.
         var globalKb = new GlobalSpecimenKbService(
-            Db, _client, TestPromptProvider.ReturningFallback(), new AdminCatalogService(Db), NullLogger<GlobalSpecimenKbService>.Instance);
+            Db, _client, TestPromptProvider.ReturningFallback(), new AdminCatalogService(Db, new KbChangeLogService(Db, NullLogger<KbChangeLogService>.Instance)), NullLogger<GlobalSpecimenKbService>.Instance);
         _sut = new UserSpecimenService(Db, globalKb, NullLogger<UserSpecimenService>.Instance);
     }
 

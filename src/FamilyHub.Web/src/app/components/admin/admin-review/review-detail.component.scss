@@ -1,0 +1,144 @@
+// Карточка очереди «Одобрение» (ADR-0018): три колонки (источники | черновик/запись | вердикт). Колонки сворачиваются
+// в одну на узком экране; цвета — только токены дизайн-системы, чтобы читаться и в тёмной теме.
+:host { display: block; }
+
+.rd-head {
+  margin-bottom: 12px;
+}
+
+.rd-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0;
+}
+
+.rd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.rd-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.5fr) minmax(240px, 0.8fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .rd-grid { grid-template-columns: 1fr; }
+}
+
+.rd-col {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+}
+
+.rd-hint {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-paper));
+  font-size: 0.8235rem;
+}
+
+.rd-warn {
+  margin: 0 0 6px;
+  color: var(--color-status-danger-text);
+  font-size: 0.8235rem;
+}
+
+.rd-reason {
+  margin: 0 0 8px;
+  font-size: 0.8235rem;
+}
+
+.rd-confidence {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));
+}
+
+.rd-confidence-low {
+  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));
+}
+
+.rd-confidence-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.rd-choices {
+  display: grid;
+  gap: 8px;
+}
+
+.rd-choice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.rd-choice-active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-paper));
+}
+
+.rd-diff {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-paper));
+}
+
+.rd-diff-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 4px;
+}
+
+.rd-diff-before { color: var(--color-status-danger-text); }
+.rd-diff-after { color: var(--color-status-ok-text); }
+
+.rd-provenance {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 0.8235rem;
+}
+
+.rd-editor {
+  margin-top: 8px;
+}
+
+.rd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+kbd {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  opacity: 0.75;
+}

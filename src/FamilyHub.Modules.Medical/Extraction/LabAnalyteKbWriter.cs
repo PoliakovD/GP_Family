@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Kb;
@@ -22,11 +23,22 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// это и проще для реализации, и честнее — переобогащение всё равно пишет payload целиком,
 /// частичный лок отдельных ключей создавал бы иллюзию точности там, где её нет.
 /// </summary>
-public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> logger)
+public class LabAnalyteKbWriter(AppDbContext db, KbChangeLogService changeLog, ILogger<LabAnalyteKbWriter> logger)
 {
+    /// <summary>Нормализованные алиасы записи (без самого ключа) — общий с очередью «Одобрение»
+    /// (ADR-0018), чтобы черновик показывал ровно те алиасы, что лягут в kb.</summary>
+    public static string[] BuildAliases(string normalizedName, LabAnalyteSummary summary) =>
+        summary.Aliases
+            .Select(LabAnalyteNormalizer.NormalizeAnalyteKey)
+            .Where(a => a.Length > 0 && a != normalizedName)
+            .Distinct()
+            .ToArray();
+
+    /// <param name="actor">Кто пишет — в журнал изменений (ADR-0018): "system" — автообогащение, "admin" — одобрение из очереди.</param>
     public async Task<KbWriteResult> UpsertAsync(
         string normalizedName, Guid specimenKbId, string rawDisplayName, LabAnalyteSummary summary,
-        string source, CancellationToken ct = default)
+        string source, CancellationToken ct = default,
+        string actor = KbChangeLogService.ActorSystem, string? logNote = null)
     {
         // Каноническое имя справочника — очищенное (без нумерации пункта бланка, без КАПС), не
         // сырое SourceDisplayName задачи (пересборка enrich-пайплайна): это единственный писатель
@@ -46,22 +58,18 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
         // Гранулярные локи подполей (§4 плана) — LockedFields может нести "payload.<key>" помимо
         // "payload" целиком (см. KbPayloadLockMerger); лишнее чтение на upsert, но обогащение и
         // так уже сделало платный веб-запрос выше по цепочке — не узкое место.
-        var existingLocks = await db.Database.SqlQuery<ExistingPayloadRow>($"""
-            SELECT "PayloadJson", "LockedFields" FROM kb.global_lab_analytes_kb
-            WHERE "NormalizedName" = {normalizedName} AND "SpecimenKbId" = {specimenKbId}
-            """).FirstOrDefaultAsync(ct);
-        if (existingLocks is not null && !existingLocks.LockedFields.Contains("payload"))
+        var before = await KbRowStore.ReadLabAnalyteAsync(db, normalizedName, specimenKbId, ct);
+        if (before is not null && !before.LockedFields.Contains("payload"))
         {
-            var lockedKeys = KbPayloadLockMerger.ExtractLockedPayloadKeys(existingLocks.LockedFields);
+            var lockedKeys = KbPayloadLockMerger.ExtractLockedPayloadKeys(before.LockedFields);
             if (lockedKeys.Count > 0)
-                payloadJson = KbPayloadLockMerger.MergeLockedKeys(existingLocks.PayloadJson, payloadJson, lockedKeys);
+                payloadJson = KbPayloadLockMerger.MergeLockedKeys(before.PayloadJson, payloadJson, lockedKeys);
         }
 
-        var aliases = summary.Aliases
-            .Select(LabAnalyteNormalizer.NormalizeAnalyteKey)
-            .Where(a => a.Length > 0 && a != normalizedName)
-            .Distinct()
-            .ToArray();
+        // Проверка человеком (ADR-0018) сбрасывается, если итоговый payload отличается от проверенного.
+        var keepVerification = KbRowStore.KeepVerification(before, payloadJson);
+
+        var aliases = BuildAliases(normalizedName, summary);
 
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -88,12 +96,25 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
                 "Aliases" = CASE WHEN 'aliases' = ANY(kb.global_lab_analytes_kb."LockedFields")
                     THEN kb.global_lab_analytes_kb."Aliases"
                     ELSE ARRAY(SELECT DISTINCT unnest(kb.global_lab_analytes_kb."Aliases" || EXCLUDED."Aliases")) END,
+                "VerificationStatus" = CASE WHEN {keepVerification} OR 'payload' = ANY(kb.global_lab_analytes_kb."LockedFields")
+                    THEN kb.global_lab_analytes_kb."VerificationStatus" ELSE 0 END,
+                "VerifiedAt" = CASE WHEN {keepVerification} OR 'payload' = ANY(kb.global_lab_analytes_kb."LockedFields")
+                    THEN kb.global_lab_analytes_kb."VerifiedAt" ELSE NULL END,
+                "VerifiedPayloadHash" = CASE WHEN {keepVerification} OR 'payload' = ANY(kb.global_lab_analytes_kb."LockedFields")
+                    THEN kb.global_lab_analytes_kb."VerifiedPayloadHash" ELSE NULL END,
                 "UpdatedAt" = EXCLUDED."UpdatedAt"
             """, ct);
 
-        var actualId = await db.Database.SqlQuery<KbIdRow>($"""
-            SELECT "Id" FROM kb.global_lab_analytes_kb WHERE "NormalizedName" = {normalizedName} AND "SpecimenKbId" = {specimenKbId}
-            """).Select(r => r.Id).SingleAsync(ct);
+        var after = await KbRowStore.ReadLabAnalyteAsync(db, normalizedName, specimenKbId, ct)
+            ?? throw new InvalidOperationException("Запись справочника не найдена сразу после upsert.");
+        var actualId = after.Id;
+
+        if (KbRowStore.Differs(before, after))
+        {
+            await changeLog.RecordAsync(
+                KbChangeTarget.LabAnalyteKb, actualId, after.DisplayName, "ai-write",
+                KbChangeLogService.ToJson(before), KbChangeLogService.ToJson(after), actor, logNote, ct: ct);
+        }
 
         logger.LogInformation(
             "Справочник показателей пополнен: «{DisplayName}» ({NormalizedName}, {SpecimenKbId}), источник: {Source}.",
@@ -111,11 +132,5 @@ public class LabAnalyteKbWriter(AppDbContext db, ILogger<LabAnalyteKbWriter> log
         candidates.AddRange(summary.Aliases);
 
         return KbIsolationGuard.FindViolation(candidates);
-    }
-
-    private sealed class ExistingPayloadRow
-    {
-        public string PayloadJson { get; set; } = "{}";
-        public string[] LockedFields { get; set; } = [];
     }
 }

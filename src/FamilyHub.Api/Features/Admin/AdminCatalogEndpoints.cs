@@ -1,3 +1,4 @@
+using FamilyHub.Domain.Enums;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Kb;
 
@@ -19,9 +20,19 @@ public static class AdminCatalogEndpoints
 
         // --- Показатели ---
 
+        // Админский список (ADR-0018): те же поля, что у публичного, плюс внутренний статус проверки и фильтр
+        // verification=all|unverified|verified. Пользовательские DTO статус не содержат (KbVerificationNotExposedTests).
         group.MapGet("/lab-analytes", async (
-            string? q, int? skip, int? take, KbAnalyteCatalogService catalog, CancellationToken ct) =>
-            Results.Ok(await catalog.SearchAsync(q, skip ?? 0, take ?? 20, ct)));
+            string? q, int? skip, int? take, string? verification, AdminCatalogService admin, CancellationToken ct) =>
+            Results.Ok(await admin.SearchLabAnalytesAsync(q, ParseVerificationFilter(verification), skip ?? 0, take ?? 20, ct)));
+
+        // Отметить проверенным без правок («Отметить проверенным»); status — необязательный: по умолчанию AdminVerified.
+        group.MapPost("/lab-analytes/{id:guid}/verify", async (Guid id, AdminCatalogService admin, CancellationToken ct) =>
+            await admin.MarkVerifiedAsync(KbChangeTarget.LabAnalyteKb, id, KbVerificationStatus.AdminVerified, "Отмечено проверенным", ct)
+                ? Results.NoContent() : Results.NotFound());
+
+        group.MapGet("/verification-summary", async (AdminCatalogService admin, CancellationToken ct) =>
+            Results.Ok(await admin.GetVerificationSummaryAsync(ct)));
 
         group.MapGet("/lab-analytes/{id:guid}", async (Guid id, AdminCatalogService admin, CancellationToken ct) =>
         {
@@ -73,8 +84,12 @@ public static class AdminCatalogEndpoints
         // --- Медикаменты ---
 
         group.MapGet("/medications", async (
-            string? q, int? skip, int? take, KbCatalogService catalog, CancellationToken ct) =>
-            Results.Ok(await catalog.SearchAsync(q, skip ?? 0, take ?? 20, ct)));
+            string? q, int? skip, int? take, string? verification, AdminCatalogService admin, CancellationToken ct) =>
+            Results.Ok(await admin.SearchMedicationsAsync(q, ParseVerificationFilter(verification), skip ?? 0, take ?? 20, ct)));
+
+        group.MapPost("/medications/{id:guid}/verify", async (Guid id, AdminCatalogService admin, CancellationToken ct) =>
+            await admin.MarkVerifiedAsync(KbChangeTarget.MedicationKb, id, KbVerificationStatus.AdminVerified, "Отмечено проверенным", ct)
+                ? Results.NoContent() : Results.NotFound());
 
         group.MapGet("/medications/{id:guid}", async (Guid id, AdminCatalogService admin, CancellationToken ct) =>
         {
@@ -103,6 +118,22 @@ public static class AdminCatalogEndpoints
             await admin.DeleteMedicationAsync(id, ct) ? Results.NoContent() : Results.NotFound());
 
         // --- Источники показателей ---
+
+        // Группы поиска биоматериалов (ADR-0018): биоматериалы с одной группой делят кэш и запрос платного поиска.
+        group.MapGet("/specimens/search-groups", async (string? q, int? take, SpecimenSearchGroupService groups, CancellationToken ct) =>
+            Results.Ok(await groups.ListAsync(q, take ?? 100, ct)));
+
+        group.MapPut("/specimens/{id:guid}/search-group", async (
+            Guid id, SetSearchGroupRequest request, SpecimenSearchGroupService groups, CancellationToken ct) =>
+        {
+            var outcome = await groups.SetGroupAsync(id, request.SearchGroupKey, ct);
+            return outcome.Result switch
+            {
+                SetSearchGroupResult.Ok => Results.Ok(new { mergedRows = outcome.MergedRows, copiedRows = outcome.CopiedRows }),
+                SetSearchGroupResult.Invalid => Results.BadRequest(new { code = "invalid", message = outcome.Error }),
+                _ => Results.NotFound(),
+            };
+        });
 
         group.MapGet("/specimens", async (string? q, int? take, GlobalSpecimenKbService specimens, CancellationToken ct) =>
             Results.Ok(await specimens.SearchAsync(q, take ?? 20, ct)));
@@ -154,4 +185,14 @@ public static class AdminCatalogEndpoints
             };
         });
     }
+
+    private static AdminKbVerificationFilter ParseVerificationFilter(string? value) => value?.ToLowerInvariant() switch
+    {
+        "unverified" => AdminKbVerificationFilter.Unverified,
+        "verified" => AdminKbVerificationFilter.Verified,
+        _ => AdminKbVerificationFilter.All,
+    };
 }
+
+/// <summary>Тело PUT /specimens/{id}/search-group: null/пусто — биоматериал вне групп (свой кэш и запрос).</summary>
+public record SetSearchGroupRequest(string? SearchGroupKey);

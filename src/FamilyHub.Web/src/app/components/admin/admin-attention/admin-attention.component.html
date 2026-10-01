@@ -4,7 +4,7 @@
   <div class="alert-danger">{{ error() }}</div>
 } @else if (attention()) {
   @let a = attention()!;
-  @if (a.reasons.length === 0 && a.droppedDomains.length === 0 && !a.webSearchPaused.isPaused) {
+  @if (a.reasons.length === 0 && a.droppedDomains.length === 0 && !a.webSearchPaused.isPaused && a.reviewQueue.total === 0) {
     <div class="card">
       <div class="card-body">
         <p class="text-muted mb-0">Падений нет — конвейер обогащения работает штатно.</p>
@@ -14,6 +14,21 @@
 
   @if (a.webSearchPaused.isPaused) {
     <app-web-search-banner [deferredTotal]="a.webSearchPaused.deferredTotal" />
+  }
+
+  @if (a.reviewQueue.total > 0) {
+    <div class="mb-3">
+      <app-attention-card
+        icon="ph-duotone ph-hand-pointing"
+        color="var(--color-status-warning)"
+        title="Ждёт вашего решения"
+        [subtitle]="reviewSubtitle(a.reviewQueue)"
+      >
+        <div actions>
+          <button type="button" class="btn btn-primary btn-sm" (click)="openReview()">Открыть «Одобрение»</button>
+        </div>
+      </app-attention-card>
+    </div>
   }
 
   @if (a.reasons.length > 0) {

@@ -100,6 +100,9 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Человекочитаемое сообщение бэкенда (поле `message` тела ошибки), если оно есть — `message`
+     * выше остаётся машинным кодом. Нужен там, где причина отказа важна пользователю (очередь «Одобрение»). */
+    public readonly detail?: string,
   ) {
     super(message);
   }

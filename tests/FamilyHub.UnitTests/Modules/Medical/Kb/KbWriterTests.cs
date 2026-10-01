@@ -21,7 +21,7 @@ public class KbWriterTests : SqliteTestBase
 
     public KbWriterTests()
     {
-        _sut = new KbWriter(Db, NullLogger<KbWriter>.Instance);
+        _sut = new KbWriter(Db, new KbChangeLogService(Db, NullLogger<KbChangeLogService>.Instance), NullLogger<KbWriter>.Instance);
     }
 
     private static MedicationSummary SummaryWithNote(string specialNotes) =>

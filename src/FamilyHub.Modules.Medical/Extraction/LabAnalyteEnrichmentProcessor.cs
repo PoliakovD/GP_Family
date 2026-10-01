@@ -37,6 +37,7 @@ public class LabAnalyteEnrichmentProcessor(
     ILegitimacyGuardService legitimacyGuard,
     IAnalytePlausibilityGuardService plausibilityGuard,
     IWebSearchValveService searchValve,
+    IEnrichmentReviewConfigService reviewConfig,
     IOptions<EnrichmentOptions> options,
     IBackgroundJobClient backgroundJobs,
     ILogger<LabAnalyteEnrichmentProcessor> logger)
@@ -90,6 +91,7 @@ public class LabAnalyteEnrichmentProcessor(
             // EnrichmentRequestOrigin, class doc AnalytePlausibilityGuardService): документное
             // извлечение уже прошло собственный антигаллюцинационный гейт (имя показателя обязано
             // встречаться в тексте бланка), у ручного ввода такой перекрёстной проверки нет.
+            (double? Confidence, string? Reason)? plausibilityConfidence = null;
             if (job.Origin == EnrichmentRequestOrigin.ManualEntry)
             {
                 var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
@@ -109,6 +111,8 @@ public class LabAnalyteEnrichmentProcessor(
                         "LabAnalyteEnrichmentJob {JobId} остановлена гейтом правдоподобности: {Reason}", job.Id, plausibility.Reason);
                     return;
                 }
+
+                plausibilityConfidence = (plausibility.Confidence, plausibility.ConfidenceReason);
             }
 
             // Соседняя задача (другой анализ, тот же показатель+биоматериал) могла успеть наполнить
@@ -137,8 +141,9 @@ public class LabAnalyteEnrichmentProcessor(
 
             IReadOnlyList<WebSnippet> rawSnippets;
             IReadOnlyDictionary<string, bool>? overrides = null;
-            var specimenDisplayNameForLog = await db.GlobalSpecimensKb.AsNoTracking()
-                .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+            // Слово биоматериала в поисковом запросе — текст группы поиска (ADR-0018: кровь/венозная кровь/плазма
+            // → один запрос «… (кровь)»), у биоматериала без группы — его собственное название.
+            var specimenDisplayNameForLog = (await searchCache.GetSearchGroupAsync(job.SpecimenKbId, ct)).QueryLabel;
 
             if (cached is not null && cached.IsFresh)
             {
@@ -159,25 +164,45 @@ public class LabAnalyteEnrichmentProcessor(
             }
             else
             {
-                // Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — проверяется ТОЛЬКО
-                // на ветке реального платного вызова, не на кэш-хите выше: кэш ничего не стоит
-                // независимо от вентиля. Null-провайдер не гейтим вовсе — он никуда не ходит, иначе
-                // в dev/тестах задачи парковались бы навсегда без реального провайдера.
-                if (provider.Name != "Null" && await searchValve.IsPausedAsync(ct))
+                // Проверки платной ветки — ТОЛЬКО на реальном платном вызове, не на кэш-хите выше:
+                // кэш ничего не стоит независимо от вентиля и одобрения. Null-провайдер не гейтим
+                // вовсе — он никуда не ходит, иначе в dev/тестах задачи парковались бы навсегда
+                // без реального провайдера.
+                if (provider.Name != "Null")
                 {
-                    job.Status = EnrichmentJobStatus.Deferred;
-                    job.Error = "Платный веб-поиск на паузе — задача отложена до его включения.";
-                    await db.SaveChangesAsync(ct); // НЕ CompletedAt: задача не завершена, а отложена
-                    logger.LogInformation("LabAnalyteEnrichmentJob {JobId}: отложена — вентиль платного поиска закрыт.", job.Id);
-                    return;
+                    // Гейт 1 (ADR-0018): каждый платный поиск ждёт ручного одобрения админа.
+                    // Уверенность этапа запроса — страж легитимности, а для ручного ввода ещё и
+                    // страж правдоподобности: берём минимум (любая отсутствующая → null → «ниже порога»).
+                    var (queryConfidence, queryReason) = EnrichmentReviewGate.CombineQueryConfidence(
+                        (guardResult.Confidence, guardResult.ConfidenceReason), plausibilityConfidence);
+                    if (EnrichmentReviewGate.TryParkForSearchApproval(job, queryConfidence, queryReason))
+                    {
+                        await db.SaveChangesAsync(ct); // НЕ CompletedAt: ждёт админа; return без исключения — как Deferred
+                        logger.LogInformation(
+                            "LabAnalyteEnrichmentJob {JobId}: платный поиск ждёт одобрения админа (уверенность {Confidence}).",
+                            job.Id, job.QueryConfidence);
+                        return;
+                    }
+
+                    // Вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — поверх
+                    // одобрения: одобренная задача при закрытом вентиле уходит в Deferred.
+                    if (await searchValve.IsPausedAsync(ct))
+                    {
+                        job.Status = EnrichmentJobStatus.Deferred;
+                        job.Error = "Платный веб-поиск на паузе — задача отложена до его включения.";
+                        await db.SaveChangesAsync(ct); // НЕ CompletedAt: задача не завершена, а отложена
+                        logger.LogInformation("LabAnalyteEnrichmentJob {JobId}: отложена — вентиль платного поиска закрыт.", job.Id);
+                        return;
+                    }
                 }
 
                 // Отображаемое имя источника для текста поискового запроса (AnalyteSearchQueryBuilder) —
                 // читается по факту непосредственно перед платным вызовом, не заранее: на кэш-хите
                 // выше этот запрос вообще не нужен.
                 var callContext = new WebSearchCallContext(nameof(LlmJobKind.LabAnalyteEnrichment), job.Id);
+                // Текст запроса — правка админа (ProposedQueryText) либо нормализованное имя.
                 rawSnippets = await provider.SearchAsync(
-                    job.NormalizedName, WebSearchTopic.LabAnalyte, specimenDisplayNameForLog, ct, callContext);
+                    EnrichmentReviewGate.EffectiveQuery(job), WebSearchTopic.LabAnalyte, specimenDisplayNameForLog, ct, callContext);
                 if (provider.Name != "Null")
                 {
                     job.ExternalSearchAt = DateTime.UtcNow;
@@ -196,10 +221,8 @@ public class LabAnalyteEnrichmentProcessor(
             // источник должен попасть в контекст первым и не срезаться лимитом MaxSnippets (порядок
             // в БД значим, см. ReferenceRangeMerger).
             var trustedDomainsByPriority = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.LabAnalyte, ct);
-            var sortedSnippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, trustedDomainsByPriority, overrides)
-                .OrderBy(s => DomainRank(s.Url, trustedDomainsByPriority))
-                .Take(options.Value.MaxSnippets)
-                .ToList();
+            var sortedSnippets = EnrichmentSnippetFilter.SelectForSummary(
+                rawSnippets, trustedDomainsByPriority, overrides, options.Value.MaxSnippets, rankOrder: true);
 
             // Пустой результат фильтрации — самый частый и самый дешёвый в починке отказ (см.
             // «Требует внимания» в админке): всё, что вернул поиск, отбросил домен-фильтр.
@@ -232,7 +255,28 @@ public class LabAnalyteEnrichmentProcessor(
             var mergedRanges = ReferenceRangeMerger.Merge(summarized.Summary.RefRanges, sortedSnippets, trustedDomainsByPriority);
             var summary = summarized.Summary with { RefRanges = mergedRanges };
 
-            var source = BuildSourceLabel(provider.Name, sortedSnippets, summary.UsedSourceIndexes);
+            var source = EnrichmentReviewGate.BuildSourceLabel(provider.Name, sortedSnippets, summary.UsedSourceIndexes);
+
+            // Гейт 2 (ADR-0018): уверенность ниже порога (или не вернулась) — в kb НЕ пишем,
+            // черновик ждёт ревью админа; LabAnalyteKbWriter и RecalculateIndicatorFlagsJob не вызываются.
+            var thresholds = await reviewConfig.GetAsync(ct);
+            if (EnrichmentReviewGate.NeedsResultReview(
+                    summarized.Confidence, thresholds.ResultMin(EnrichmentReviewDomain.Analyte)))
+            {
+                var draft = new LabAnalyteDraft(
+                    job.NormalizedName, job.SpecimenKbId, job.SourceDisplayName, source, summary,
+                    EnrichmentDraftSerializer.ToDraftSnippets(sortedSnippets), summarized.FieldSources);
+                EnrichmentReviewGate.ParkForResultReview(
+                    job, EnrichmentDraftSerializer.Serialize(draft), summarized.Confidence, summarized.ConfidenceReason);
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation(
+                    "LabAnalyteEnrichmentJob {JobId}: уверенность результата {Confidence} ниже порога — черновик ждёт ревью админа.",
+                    job.Id, summarized.Confidence);
+                return;
+            }
+
+            job.ResultConfidence = summarized.Confidence;
+            job.ResultConfidenceReason = summarized.ConfidenceReason;
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             var writeResult = await kbWriter.UpsertAsync(job.NormalizedName, job.SpecimenKbId, job.SourceDisplayName, summary, source, ct);
@@ -277,25 +321,4 @@ public class LabAnalyteEnrichmentProcessor(
             throw;
         }
     }
-
-    /// <summary>"brave: helix.ru, invitro.ru" — провайдер + реально использованные модельным ответом домены.</summary>
-    private static string BuildSourceLabel(string providerName, IReadOnlyList<WebSnippet> snippets, IReadOnlyList<int> usedIndexes)
-    {
-        var domains = usedIndexes
-            .Where(i => i >= 0 && i < snippets.Count)
-            .Select(i => Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
-            .Where(host => host is not null)
-            .Distinct()
-            .ToList();
-
-        return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
-    }
-
-    /// <summary>Индекс домена в trustedDomainsByPriority — общий примитив, см.
-    /// EnrichmentSnippetFilter.RankOf; применяется к порядку СНИППЕТОВ перед тем, как их увидит
-    /// модель (см. class doc: приоритетный источник не должен срезаться MaxSnippets).</summary>
-    private static int DomainRank(string url, IReadOnlyList<string> trustedDomainsByPriority) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            ? EnrichmentSnippetFilter.RankOf(uri.Host, trustedDomainsByPriority)
-            : trustedDomainsByPriority.Count;
 }

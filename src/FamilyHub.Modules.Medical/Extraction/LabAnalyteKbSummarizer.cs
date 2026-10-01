@@ -46,10 +46,21 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
           "calculationInstructions": "если норма зависит от веса/роста/срока беременности/фазы цикла и т.п. и НЕ сводится к фиксированным диапазонам — словами, как её вычислить, иначе null",
           "aliases": ["другое название/сокращение показателя", "..."],
           "relatedAnalytes": ["показатель, который обычно смотрят вместе с этим", "..."],
-          "usedSourceIndexes": [0, 2]
+          "usedSourceIndexes": [0, 2],
+          "confidence": 0.85,
+          "confidenceReason": "краткая причина оценки уверенности",
+          "fieldSources": { "plainExplanation": [0], "whyMeasured": [1], "highMeans": [1] }
         }
 
         Правила:
+        - "confidence" — число от 0 до 1: твоя уверенность, что ответ верен и полностью подтверждён
+          сниппетами (нормы, единицы, пол/возраст). Снижай, если сниппеты противоречат друг другу,
+          неполны, нормы взяты не для того биоматериала или единицы неясны. "confidenceReason" —
+          одна короткая фраза по-русски, почему такая оценка. Заполняй оба поля ВСЕГДА.
+        - "fieldSources" — для КАЖДОГО непустого текстового поля (loincCode, defaultUnit, plainExplanation,
+          whyMeasured, highMeans, lowMeans, calculationInstructions) индексы сниппетов, из которых оно
+          взято. Поле без опоры на сниппет оставь пустым (null). Для refRanges источник — "sourceIndex" в
+          самом диапазоне.
         - "plainExplanation" — коротко и просто, обычными словами, которыми говорят в быту, не
           медицинскими терминами.
         - "refRanges" — один или несколько референсных диапазонов, КАЖДЫЙ обязательно со своим
@@ -166,7 +177,10 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
             return LabAnalyteSummarizeResult.Failure("Модель не извлекла ни одного содержательного поля.");
         }
 
-        return LabAnalyteSummarizeResult.Ok(summary);
+        // Уверенность (ADR-0018): отсутствие/невалидность → null, гейт ревью трактует как "ниже порога".
+        return LabAnalyteSummarizeResult.Ok(
+            summary, ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"),
+            ReadFieldSources(result.Payload, snippets.Count));
     }
 
     private static List<LabAnalyteReferenceRange> ReadRefRanges(

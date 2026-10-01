@@ -17,27 +17,51 @@ public record CachedAnalyteSearch(
     public bool IsFresh => CanBeUpdatedAfter > DateTime.UtcNow;
 }
 
+/// <summary>Группа поиска биоматериала (ADR-0018): EffectiveKey — ключ строки кэша; QueryLabel — слово, которое
+/// подставляется в поисковый запрос вместо названия биоматериала (текст группы либо название самого биоматериала).</summary>
+public record SpecimenSearchGroup(string EffectiveKey, string? GroupKey, string QueryLabel);
+
+/// <summary>«Двойник» (ADR-0018): свежий кэш того же названия показателя у ДРУГОЙ группы поиска — админ может взять его
+/// вместо платного поиска. Автоматически схлопываются только биоматериалы одной группы; между группами — лишь подсказка.</summary>
+public record CacheTwin(
+    Guid CacheId, Guid SpecimenKbId, string SpecimenDisplayName, string? SearchGroupKey, string Provider,
+    DateTime LastUpdatedAt, DateTime CanBeUpdatedAfter, int SnippetCount);
+
 /// <summary>
 /// Настоящий кэш обращений к платному внешнему поиску для лабораторных показателей — зеркало
 /// <see cref="Enrichment.MedicationSearchCacheService"/> целиком, включая обработку гонки на
 /// уникальном индексе (пересборка enrich-пайплайна анализов, закрывает задокументированный ранее
 /// пропуск: без этого кэша каждая доработка промпта суммаризатора/схемы полей означала новый
-/// платный запрос на каждый показатель заново). Ключ — пара (NormalizedName, SpecimenKbId).
+/// платный запрос на каждый показатель заново). Ключ — пара (NormalizedName, группа поиска биоматериала): биоматериалы одной
+/// группы (GlobalSpecimenKb.SearchGroupKey) делят строку и платный запрос (ADR-0018).
 /// </summary>
 public class LabAnalyteSearchCacheService(
     AppDbContext db, IOptions<EnrichmentOptions> options, ILogger<LabAnalyteSearchCacheService> logger)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = SearchCacheSnippets.JsonOptions;
 
-    /// <summary>Null — по этой паре (название, источник) ещё ни разу не искали платно.</summary>
+    /// <summary>Группа поиска биоматериала: эффективный ключ строки кэша и слово для поискового запроса.</summary>
+    public async Task<SpecimenSearchGroup> GetSearchGroupAsync(Guid specimenKbId, CancellationToken ct = default)
+    {
+        var specimen = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => s.Id == specimenKbId)
+            .Select(s => new { s.DisplayName, s.SearchGroupKey })
+            .FirstOrDefaultAsync(ct);
+        var groupKey = SearchGroupKeys.Normalize(specimen?.SearchGroupKey);
+        return new SpecimenSearchGroup(
+            SearchGroupKeys.Effective(specimenKbId, groupKey), groupKey, groupKey ?? specimen?.DisplayName ?? string.Empty);
+    }
+
+    /// <summary>Null — по этой паре (название, группа поиска) ещё ни разу не искали платно.</summary>
     public async Task<CachedAnalyteSearch?> GetCachedAsync(
         string normalizedName, Guid specimenKbId, CancellationToken ct = default)
     {
+        var group = await GetSearchGroupAsync(specimenKbId, ct);
         var cache = await db.LabAnalyteSearchCaches.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
         if (cache?.SnippetsJson is null) return null;
 
-        var snippets = JsonSerializer.Deserialize<List<WebSnippet>>(cache.SnippetsJson, JsonOptions) ?? [];
+        var snippets = SearchCacheSnippets.Parse(cache.SnippetsJson);
         var overrides = ParseOverrides(cache.OverridesJson);
         return new CachedAnalyteSearch(snippets, cache.Provider, cache.LastUpdatedAt, cache.CanBeUpdatedAfter, overrides);
     }
@@ -78,9 +102,39 @@ public class LabAnalyteSearchCacheService(
     /// <summary>Обратный поиск строки кэша по ключу (название, источник) — карточка задачи в
     /// админке знает NormalizedName+SpecimenKbId (из самой задачи), не Id строки кэша.</summary>
     public async Task<LabAnalyteSearchCache?> GetByNameAsync(
-        string normalizedName, Guid specimenKbId, CancellationToken ct = default) =>
-        await db.LabAnalyteSearchCaches.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
+        string normalizedName, Guid specimenKbId, CancellationToken ct = default)
+    {
+        var group = await GetSearchGroupAsync(specimenKbId, ct);
+        return await db.LabAnalyteSearchCaches.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
+    }
+
+    /// <summary>Свежие строки кэша того же названия у ДРУГИХ групп поиска — «двойники» для очереди «Одобрение»
+    /// (ADR-0018): вместо нового платного поиска админ может взять кэш двойника.</summary>
+    public async Task<List<CacheTwin>> FindTwinsAsync(string normalizedName, Guid specimenKbId, CancellationToken ct = default)
+    {
+        var group = await GetSearchGroupAsync(specimenKbId, ct);
+        var now = DateTime.UtcNow;
+        var rows = await db.LabAnalyteSearchCaches.AsNoTracking()
+            .Where(c => c.NormalizedName == normalizedName && c.SearchGroupKey != group.EffectiveKey
+                && c.CanBeUpdatedAfter > now && c.SnippetsJson != null && c.SnippetsJson != "[]")
+            .OrderByDescending(c => c.LastUpdatedAt)
+            .ToListAsync(ct);
+        if (rows.Count == 0) return [];
+
+        var specimenIds = rows.Select(r => r.SpecimenKbId).Distinct().ToList();
+        var specimens = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(s => specimenIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => new { s.DisplayName, s.SearchGroupKey }, ct);
+
+        return rows.Select(r =>
+        {
+            var spec = specimens.GetValueOrDefault(r.SpecimenKbId);
+            return new CacheTwin(
+                r.Id, r.SpecimenKbId, spec?.DisplayName ?? r.SpecimenKbId.ToString(), SearchGroupKeys.Normalize(spec?.SearchGroupKey),
+                r.Provider, r.LastUpdatedAt, r.CanBeUpdatedAfter, SearchCacheSnippets.Parse(r.SnippetsJson).Count);
+        }).ToList();
+    }
 
     /// <summary>Полное редактирование строки кэша из админки — снипеты (заголовок/ссылка/текст)
     /// заменяются целиком присланным списком (тот же приём, что у payload-редактора справочника:
@@ -96,12 +150,15 @@ public class LabAnalyteSearchCacheService(
         if (cache is null) return false;
 
         if (provider is not null) cache.Provider = provider;
-        cache.SnippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
+        // Ручные сниппеты (ADR-0018), которых нет в присланном списке, остаются — старый редактор
+        // кэша про них не знает; явно удалить ручной сниппет можно через очередь «Одобрение».
+        var merged = SearchCacheSnippets.MergeAfterReplace(SearchCacheSnippets.Parse(cache.SnippetsJson), snippets);
+        cache.SnippetsJson = SearchCacheSnippets.Serialize(merged);
 
         var overrides = ParseOverrides(cache.OverridesJson);
         if (overrides is not null)
         {
-            var urls = snippets.Select(s => s.Url).ToHashSet();
+            var urls = merged.Select(s => s.Url).ToHashSet();
             var pruned = overrides.Where(kv => urls.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
             cache.OverridesJson = pruned.Count == 0 ? null : JsonSerializer.Serialize(pruned, JsonOptions);
         }
@@ -123,7 +180,40 @@ public class LabAnalyteSearchCacheService(
     /// когда источник был enum SpecimenType.Unknown, см. миграцию ReworkSpecimenAsData) никогда
     /// больше не будут прочитаны ни одной задачей — чистый мусор. Возвращает число удалённых строк.</summary>
     public async Task<int> PurgeUnresolvedSpecimenAsync(CancellationToken ct = default) =>
-        await db.LabAnalyteSearchCaches.Where(c => c.SpecimenKbId == SpecimenContextIds.Unresolved).ExecuteDeleteAsync(ct);
+        // Строки с ручными сниппетами (ADR-0018) не чистим — это работа админа, а не мусор автопоиска.
+        await db.LabAnalyteSearchCaches
+            .Where(c => c.SpecimenKbId == SpecimenContextIds.Unresolved
+                && (c.SnippetsJson == null || !c.SnippetsJson.Contains("\"Manual\"")))
+            .ExecuteDeleteAsync(ct);
+
+    /// <summary>Строка кэша по ключу; если её нет — создаёт пустую «устаревшую» (см. MedicationSearchCacheService.GetOrCreateAsync).</summary>
+    public async Task<LabAnalyteSearchCache> GetOrCreateAsync(string normalizedName, Guid specimenKbId, CancellationToken ct = default)
+    {
+        var group = await GetSearchGroupAsync(specimenKbId, ct);
+        var existing = await db.LabAnalyteSearchCaches
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
+        if (existing is not null) return existing;
+
+        var now = DateTime.UtcNow;
+        var cache = new LabAnalyteSearchCache
+        {
+            Id = Guid.NewGuid(), NormalizedName = normalizedName, SpecimenKbId = specimenKbId,
+            SearchGroupKey = group.EffectiveKey, Provider = "manual",
+            LastUpdatedAt = now, CanBeUpdatedAfter = now, SnippetsJson = "[]",
+        };
+        db.LabAnalyteSearchCaches.Add(cache);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return cache;
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(cache).State = EntityState.Detached;
+            return await db.LabAnalyteSearchCaches
+                .SingleAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
+        }
+    }
 
     private static Dictionary<string, bool>? ParseOverrides(string? overridesJson) =>
         overridesJson is null ? null : JsonSerializer.Deserialize<Dictionary<string, bool>>(overridesJson, JsonOptions);
@@ -139,11 +229,12 @@ public class LabAnalyteSearchCacheService(
         var canBeUpdatedAfter = now.AddMonths(options.Value.MinRefreshIntervalMonths);
         var snippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
 
+        var group = await GetSearchGroupAsync(specimenKbId, ct);
         var existing = await db.LabAnalyteSearchCaches
-            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
+            .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
         if (existing is not null)
         {
-            ApplyRecord(existing, provider, now, canBeUpdatedAfter, snippetsJson);
+            ApplyRecord(existing, provider, now, canBeUpdatedAfter, MergeKeepingManual(existing.SnippetsJson, snippets));
             await db.SaveChangesAsync(ct);
             return;
         }
@@ -153,6 +244,7 @@ public class LabAnalyteSearchCacheService(
             Id = Guid.NewGuid(),
             NormalizedName = normalizedName,
             SpecimenKbId = specimenKbId,
+            SearchGroupKey = group.EffectiveKey,
             Provider = provider,
             LastUpdatedAt = now,
             CanBeUpdatedAfter = canBeUpdatedAfter,
@@ -174,11 +266,15 @@ public class LabAnalyteSearchCacheService(
             db.Entry(cache).State = EntityState.Detached;
 
             var existingAfterRace = await db.LabAnalyteSearchCaches
-                .SingleAsync(c => c.NormalizedName == normalizedName && c.SpecimenKbId == specimenKbId, ct);
-            ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, snippetsJson);
+                .SingleAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
+            ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, MergeKeepingManual(existingAfterRace.SnippetsJson, snippets));
             await db.SaveChangesAsync(ct);
         }
     }
+
+    /// <summary>Свежая выдача заменяет авто-сниппеты, ручные и закреплённые остаются (ADR-0018).</summary>
+    private static string MergeKeepingManual(string? existingSnippetsJson, IReadOnlyList<WebSnippet> fresh) =>
+        SearchCacheSnippets.Serialize(SearchCacheSnippets.MergeAfterSearch(SearchCacheSnippets.Parse(existingSnippetsJson), fresh));
 
     private static void ApplyRecord(
         LabAnalyteSearchCache cache, string provider, DateTime now, DateTime canBeUpdatedAfter, string snippetsJson)

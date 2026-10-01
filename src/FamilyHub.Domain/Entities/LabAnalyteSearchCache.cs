@@ -9,13 +9,19 @@ namespace FamilyHub.Domain.Entities;
 /// GlobalLabAnalyteKb — только нормализованное название и источник, никакого персонального
 /// контекста (см. KbIsolationGuardTests).
 /// </summary>
-public class LabAnalyteSearchCache
+public class LabAnalyteSearchCache : ISearchCacheRow
 {
     public Guid Id { get; set; }
 
     public string NormalizedName { get; set; } = string.Empty;
 
+    /// <summary>«Представитель» строки — биоматериал, с которого строка создана; при общей группе поиска
+    /// строкой пользуются все биоматериалы группы (ключ — SearchGroupKey), эта колонка нужна для отображения.</summary>
     public Guid SpecimenKbId { get; set; }
+
+    /// <summary>Эффективный ключ группы поиска (см. SearchGroupKeys.Effective): "group:кровь" либо
+    /// "specimen:&lt;guid&gt;". Вместе с NormalizedName образует уникальный ключ кэша.</summary>
+    public string SearchGroupKey { get; set; } = string.Empty;
 
     public string Provider { get; set; } = string.Empty;
 

@@ -14,7 +14,7 @@ namespace FamilyHub.Domain.Entities;
 /// ТАБЛИЦЫ ЗАДАЧ, поэтому дедуп по NormalizedName проверяется в сервисе против обеих сразу).
 /// Наружу конвейер отправляет только нормализованное имя — см. VisitMedicationEnrichmentProcessor.
 /// </summary>
-public class VisitMedicationEnrichmentJob : IPipelineJob
+public class VisitMedicationEnrichmentJob : IReviewableEnrichmentJob
 {
     public Guid Id { get; set; }
 
@@ -58,4 +58,30 @@ public class VisitMedicationEnrichmentJob : IPipelineJob
     public DateTime? StartedAt { get; set; }
 
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>Уверенность модели-стража (ADR-0018, этап запроса) 0..1; null — не вернула/невалидна.</summary>
+    public double? QueryConfidence { get; set; }
+
+    public string? QueryConfidenceReason { get; set; }
+
+    /// <summary>Текст запроса для платного поиска, предложенный системой (правится админом).</summary>
+    public string? ProposedQueryText { get; set; }
+
+    /// <summary>Момент одобрения платного поиска админом (ADR-0018); null — ещё не одобрен.</summary>
+    public DateTime? SearchApprovedAt { get; set; }
+
+    /// <summary>JSON-черновик результата суммаризации, не записанный в kb (ждёт ревью).</summary>
+    public string? DraftPayloadJson { get; set; }
+
+    /// <summary>Уверенность суммаризатора (ADR-0018, этап результата) 0..1; null — не вернул/невалидна.</summary>
+    public double? ResultConfidence { get; set; }
+
+    public string? ResultConfidenceReason { get; set; }
+
+    public Guid? ReviewedByUserId { get; set; }
+
+    public DateTime? ReviewedAt { get; set; }
+
+    /// <summary>Заметка админа к решению в очереди «Одобрение» (ADR-0018) — не уходит ни во внешний поиск, ни в модель.</summary>
+    public string? ReviewNote { get; set; }
 }

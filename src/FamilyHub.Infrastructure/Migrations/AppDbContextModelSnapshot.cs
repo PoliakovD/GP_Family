@@ -375,6 +375,35 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("EncryptionRotationRuns", (string)null);
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.EnrichmentReviewConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("AnalyteQueryMinConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("AnalyteResultMinConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MedicationQueryMinConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MedicationResultMinConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EnrichmentReviewConfigs", (string)null);
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.EnrichmentTrustedDomain", b =>
                 {
                     b.Property<Guid>("Id")
@@ -700,6 +729,18 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("VerificationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VerifiedPayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName", "SpecimenKbId")
@@ -742,6 +783,18 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("VerificationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VerifiedPayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
@@ -766,6 +819,10 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<string>("NormalizedName")
                         .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SearchGroupKey")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -858,6 +915,57 @@ namespace FamilyHub.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.KbChangeLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RevertedLogId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Target")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetLabel")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("Target", "TargetId", "At");
+
+                    b.ToTable("change_log", "kb");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.KbRebuildRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -927,6 +1035,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<string>("CurrentThought")
                         .HasColumnType("text");
 
+                    b.Property<string>("DraftPayloadJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -957,12 +1068,39 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<int>("Origin")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ProposedQueryText")
+                        .HasColumnType("text");
+
                     b.Property<string>("Provider")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<double?>("QueryConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("QueryConfidenceReason")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("RequestedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<double?>("ResultConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ResultConfidenceReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SearchApprovedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceDisplayName")
                         .IsRequired()
@@ -984,7 +1122,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("NormalizedName", "SpecimenKbId")
                         .IsUnique()
-                        .HasFilter("\"Status\" IN (0, 1, 5)");
+                        .HasFilter("\"Status\" IN (0, 1, 5, 6, 7)");
 
                     b.HasIndex("Status", "CreatedAt");
 
@@ -1016,6 +1154,11 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("SearchGroupKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<string>("SnippetsJson")
                         .HasColumnType("text");
 
@@ -1024,7 +1167,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NormalizedName", "SpecimenKbId")
+                    b.HasIndex("NormalizedName", "SearchGroupKey")
                         .IsUnique();
 
                     b.ToTable("lab_analyte_search_cache", "kb");
@@ -1575,6 +1718,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<string>("CurrentThought")
                         .HasColumnType("text");
 
+                    b.Property<string>("DraftPayloadJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -1602,12 +1748,39 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("ProposedQueryText")
+                        .HasColumnType("text");
+
                     b.Property<string>("Provider")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<double?>("QueryConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("QueryConfidenceReason")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("RequestedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<double?>("ResultConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ResultConfidenceReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SearchApprovedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceDisplayName")
                         .IsRequired()
@@ -1626,7 +1799,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("NormalizedName")
                         .IsUnique()
-                        .HasFilter("\"Status\" IN (0, 1, 5)");
+                        .HasFilter("\"Status\" IN (0, 1, 5, 6, 7)");
 
                     b.HasIndex("Status", "CreatedAt");
 
@@ -2389,6 +2562,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<string>("CurrentThought")
                         .HasColumnType("text");
 
+                    b.Property<string>("DraftPayloadJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -2413,12 +2589,39 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("ProposedQueryText")
+                        .HasColumnType("text");
+
                     b.Property<string>("Provider")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<double?>("QueryConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("QueryConfidenceReason")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("RequestedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<double?>("ResultConfidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ResultConfidenceReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("SearchApprovedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceDisplayName")
                         .IsRequired()
@@ -2437,7 +2640,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasIndex("NormalizedName")
                         .IsUnique()
-                        .HasFilter("\"Status\" IN (0, 1, 5)");
+                        .HasFilter("\"Status\" IN (0, 1, 5, 6, 7)");
 
                     b.HasIndex("Status", "CreatedAt");
 

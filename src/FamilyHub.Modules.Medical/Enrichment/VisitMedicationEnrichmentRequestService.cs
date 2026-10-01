@@ -28,8 +28,7 @@ public class VisitMedicationEnrichmentRequestService(
         // Deferred (вентиль платного поиска закрыт, ADR-0005 §9) — тоже "уже идёт": та же строка
         // под тем же дедуп-индексом, просто ждёт открытия вентиля.
         var alreadyRunning = await db.MedicationEnrichmentJobs.AnyAsync(
-            j => j.NormalizedName == normalizedName && (j.Status == EnrichmentJobStatus.Pending
-                || j.Status == EnrichmentJobStatus.Running || j.Status == EnrichmentJobStatus.Deferred), ct);
+            j => j.NormalizedName == normalizedName && EnrichmentJobStatusSets.Live.Contains(j.Status), ct);
         if (alreadyRunning)
         {
             logger.LogDebug(

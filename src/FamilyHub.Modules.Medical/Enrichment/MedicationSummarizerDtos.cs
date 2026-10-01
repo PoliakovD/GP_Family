@@ -44,9 +44,20 @@ public record MedicationSummary(
 
 /// <summary>Итог суммаризации: либо знание, прошедшее антигаллюцинационный гейт, либо причина
 /// отказа записи в справочник. Reason — см. LabAnalyteSummarizeResult.Reason, тот же приём.</summary>
-public record SummarizeResult(bool Success, MedicationSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None)
+public record SummarizeResult(
+    bool Success, MedicationSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None,
+    double? Confidence = null, string? ConfidenceReason = null,
+    IReadOnlyDictionary<string, List<int>>? FieldSources = null)
 {
     public static SummarizeResult Failure(string error, EnrichmentFailureReason reason = EnrichmentFailureReason.SummarizerFailed) =>
         new(false, null, error, reason);
-    public static SummarizeResult Ok(MedicationSummary summary) => new(true, summary, null, EnrichmentFailureReason.None);
+
+    /// <summary>Confidence/ConfidenceReason — самооценка модели 0..1 (ADR-0018, этап результата);
+    /// null — не вернула/невалидна, гейт ревью трактует как «ниже порога».</summary>
+    /// <param name="fieldSources">Поле → индексы сниппетов, откуда оно взято (ADR-0018, подсветка «поле без
+    /// источника» в очереди «Одобрение»); null/пусто — модель не вернула атрибуцию.</param>
+    public static SummarizeResult Ok(
+        MedicationSummary summary, double? confidence = null, string? confidenceReason = null,
+        IReadOnlyDictionary<string, List<int>>? fieldSources = null) =>
+        new(true, summary, null, EnrichmentFailureReason.None, confidence, confidenceReason, fieldSources);
 }

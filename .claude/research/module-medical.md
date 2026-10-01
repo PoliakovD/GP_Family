@@ -444,7 +444,9 @@ payload подписи включает scope, поэтому ссылка на 
   вызывается из `MedicationService.CreateAsync`/`UpdateAsync` сразу после сохранения. `RequestAsync`
   прерывается на уверенном `Hit`; `RequestRefreshAsync` (ручное «Уточнить в справочнике») — нет.
   Дедуп на уровне БД — частичный уникальный индекс `MedicationEnrichmentJobs.NormalizedName` среди
-  `Pending`/`Running`/`Deferred` задач (последний — вентиль закрыт, ADR-0005 §9, задача жива).
+  `Pending`/`Running`/`Deferred`/`AwaitingSearchApproval`/`AwaitingResultReview` задач (`Status IN (0,1,5,6,7)`;
+  `Deferred` — вентиль закрыт, ADR-0005 §9; 6/7 — ждёт решения админа, ADR-0018; набор живых статусов —
+  `EnrichmentJobStatusSets.Live`).
 
   **Дедуп дублирующихся Failed-задач (найдено на проде — «Требует внимания» заполнялся десятками
   одинаковых карточек).** Частичный индекс выше дедупит только ПОКА задача жива — Failed из-под
@@ -470,7 +472,9 @@ payload подписи включает scope, поэтому ссылка на 
   (`[Queue("enrichment")]`, один воркер — см. `Program.cs`, естественно укладывается в лимит
   Brave free-tier 1 req/s), `[AutomaticRetry(Attempts = 3)]` только на настоящие сбои; ожидаемые
   исходы (нет доверенных источников) переводят статус задачи в `Failed` обычным `return`, без
-  ретрая; закрытый вентиль — в `Deferred` (не терминально, возобновляется автоматически).
+  ретрая; закрытый вентиль — в `Deferred` (не терминально, возобновляется автоматически);
+  платный поиск без одобрения админа — в `AwaitingSearchApproval`, результат с низкой уверенностью — в
+  `AwaitingResultReview` (см. раздел «Ручное одобрение обогащения» ниже, ADR-0018).
 - **`IMedicationSearchProvider`** (`FamilyHub.Infrastructure.Enrichment`) — `NullMedicationSearchProvider`
   по умолчанию (наружу не уходит ничего); активный провайдер — `YandexSearchProvider`
   (`Enrichment:Provider=Yandex`, Web Search API `v2/gen/search`/GenSearch, egress через
@@ -497,6 +501,49 @@ payload подписи включает scope, поэтому ссылка на 
 Маршруты: `GET /api/kb/medications` (поиск/листинг для UI), `GET /api/kb/medications/{id}`
 (карточка), `GET /api/medications/{medicationId}/kb` (статус обогащения конкретного медикамента),
 `POST /api/medications/{medicationId}/kb/refresh` (ручной рефреш).
+
+## Ручное одобрение обогащения (`Enrichment/EnrichmentReviewGate`, `Api/Features/Admin/AdminEnrichmentReview*`) — ADR-0018
+
+Каждый платный поиск ждёт клика админа; результат суммаризатора с уверенностью ниже порога (или без неё) не пишется
+в kb до решения. Полное обоснование — [ADR-0018](../../docs/adr/0018-enrichment-admin-review.md); здесь — карта кода.
+
+- **Статусы и индексы.** `EnrichmentJobStatus.AwaitingSearchApproval = 6`, `AwaitingResultReview = 7` — живые;
+  входят в `HasFilter("Status" IN (0, 1, 5, 6, 7))` трёх таблиц задач (`*EnrichmentJobConfiguration`) и в
+  `EnrichmentJobStatusSets.Live` (запросы дедупа, sweep, карточка аптечки). `EnrichmentFailureReason.RejectedByAdmin`.
+  Общие поля трёх job-сущностей — интерфейс `IReviewableEnrichmentJob` (`QueryConfidence`, `ProposedQueryText`,
+  `SearchApprovedAt`, `DraftPayloadJson`, `ResultConfidence`, `ReviewedAt`, `ReviewNote`…).
+- **Гейты в процессорах** (`MedicationEnrichmentProcessor`, `VisitMedicationEnrichmentProcessor`,
+  `LabAnalyteEnrichmentProcessor`): гейт 1 — на кэш-промахе при не-`Null` провайдере, перед проверкой вентиля
+  (`EnrichmentReviewGate.TryParkForSearchApproval`, возврат без исключения); гейт 2 — после суммаризации
+  (`NeedsResultReview` + `ParkForResultReview`, `KbWriter`/`LabAnalyteKbWriter` не вызываются). Общие хелперы —
+  `EnrichmentReviewGate`, черновики — `MedicationDraft`/`LabAnalyteDraft` (с `DraftSnippet` и `FieldSources`).
+  `EffectiveQuery(job)` — правка админа либо `NormalizedName`. Страж легитимности в конвейере заключений врача
+  вызывается только на гейте 1.
+- **Уверенность модели.** `confidence`/`confidenceReason` у `LegitimacyGuardService`, `AnalytePlausibilityGuardService`
+  (`LegitimacyCheckResult`/`AnalytePlausibilityResult`), `MedicationSummarizer`/`LabAnalyteKbSummarizer`
+  (`SummarizeResult`/`LabAnalyteSummarizeResult`); разбор — `LmStudioPayloadReader.ReadConfidence` (вне [0..1] → null,
+  null = «ниже порога»). `ReadFieldSources` — атрибуция полей. Новые версии промптов — миграция
+  `AddEnrichmentAdminReview` (копия активной + дописанный блок).
+- **Пороги.** `EnrichmentReviewConfig` (singleton; 0.7/0.8 по умолчанию) + `IEnrichmentReviewConfigService`
+  (без кеша) + `EnrichmentReviewThresholds.IsConfident`.
+- **Очередь.** `AdminEnrichmentReviewService` / `AdminEnrichmentReviewEndpoints` (`/api/admin/review/*`): единый Inbox,
+  деталь (черновик, текущая запись, источники кэша, атрибуция полей, «двойники»), approve/reject/bulk, approve результата
+  с правками (через `AdminCatalogService` → `LockedFields`), `resummarize`, карточка сущности вне очереди + превью
+  пересуммаризации, заметка, пороги. Retry из «Задач» для статусов 6/7 → 409 (`AdminPipelineEndpoints.NotRetryableAsync`).
+- **Источники.** `WebSnippet` (`Origin`/`Kind`/`Note`/`Pinned`), `SearchCacheSnippets` (слияние при автообновлении,
+  ручные сниппеты, лимит 800), `SearchCacheEditor` (добавление/удаление/закрепление/override/копия кэша «двойника»,
+  с журналом), `EnrichmentSnippetFilter.SelectForSummary`; `ISearchCacheRow` — общая форма двух таблиц кэша.
+- **Журнал и проверка.** `KbChangeLog` (`kb.change_log`) + `KbChangeLogService` (raw SQL) + откат в
+  `AdminCatalogService.RevertAsync`; `/api/admin/history`. `VerificationStatus`/`VerifiedAt`/`VerifiedPayloadHash` на
+  `GlobalLabAnalyteKb`/`GlobalMedicationKb` (`KbPayloadHash`, `KbRowStore.KeepVerification`): писатели kb сбрасывают статус,
+  если payload изменился; `AdminCatalogService.MarkVerifiedAsync`, админский список с фильтром. **Не отдаётся пользователям**
+  (`KbVerificationNotExposedTests`).
+- **Группы поиска биоматериалов.** `GlobalSpecimenKb.SearchGroupKey`, `LabAnalyteSearchCache.SearchGroupKey` (ключ кэша
+  `(NormalizedName, SearchGroupKey)`), `SearchGroupKeys.Effective`, `LabAnalyteSearchCacheService.GetSearchGroupAsync`/`FindTwinsAsync`,
+  `SpecimenSearchGroupService` (присвоение группы со слиянием строк кэша), `GlobalSpecimenKbService.MergeSearchCacheAsync`.
+- **Пользовательский вид.** `MedicationKbStatus.UnderReview` («на проверке») для статусов 6/7.
+- **Фронт.** `Web/.../admin/admin-review/` (Inbox, `review-detail` — три колонки, `review-sources`, `kb-history`,
+  `review-config`), бейдж в `admin-hub`, статус проверки/фильтр/группы поиска/история в `admin-catalog`.
 
 ## Дневник самочувствия (`HealthNotes/`) — личный по умолчанию, читаемый по гранту (ADR-0017)
 

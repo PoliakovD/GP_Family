@@ -62,6 +62,10 @@ file sealed class FakeLmStudioJsonClient : ILmStudioJsonClient
         {
             ["valid"] = JsonSerializer.SerializeToElement(true),
             ["reason"] = JsonSerializer.SerializeToElement((string?)null),
+            // Достаточная уверенность стража и суммаризатора (ADR-0018): пороги по умолчанию 0.7/0.8 пройдены,
+            // результат пишется в справочник без ручной проверки — одобрения требует только платный поиск.
+            ["confidence"] = JsonSerializer.SerializeToElement(0.95),
+            ["confidenceReason"] = JsonSerializer.SerializeToElement("тест"),
             ["internationalName"] = JsonSerializer.SerializeToElement("Тестовое МНН"),
             ["tradeNames"] = JsonSerializer.SerializeToElement(new[] { "Тестпрепарат" }),
             ["form"] = JsonSerializer.SerializeToElement("таблетки"),
@@ -116,6 +120,8 @@ file sealed class FakeCorrectingLmStudioJsonClient : ILmStudioJsonClient
             // конвейера, см. class doc FakeLmStudioJsonClient).
             ["valid"] = JsonSerializer.SerializeToElement(true),
             ["reason"] = JsonSerializer.SerializeToElement((string?)null),
+            ["confidence"] = JsonSerializer.SerializeToElement(0.95),
+            ["confidenceReason"] = JsonSerializer.SerializeToElement("тест"),
             ["internationalName"] = JsonSerializer.SerializeToElement(CorrectedName),
             ["tradeNames"] = JsonSerializer.SerializeToElement(Array.Empty<string>()),
             ["form"] = JsonSerializer.SerializeToElement("таблетки"),
@@ -320,6 +326,7 @@ public class EnrichmentNoTrustedSnippetsTests(EnrichmentNoTrustedDomainWebFactor
         medicationResponse.EnsureSuccessStatusCode();
 
         var normalizedName = MedicationNameNormalizer.Normalize(medicationName);
+        await ReviewTestHelper.ApproveMedicationSearchAsync(factory.Services, normalizedName);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -341,10 +348,11 @@ public class EnrichmentNoTrustedSnippetsTests(EnrichmentNoTrustedDomainWebFactor
             "структурная причина должна отличать «нет доверенных сниппетов» от прочих отказов — именно она группируется в «Требует внимания»");
         failedJob.ExternalSearchAt.Should().NotBeNull("платный поиск реально произошёл — просто ни один результат не прошёл фильтр доверия");
 
-        // Главное утверждение: суммаризатор вызывается ОДИН раз (только гейт легитимности,
-        // PipelineCatalog.LegitimacyCheckStep) — на пустом после фильтрации списке сниппетов
-        // MedicationSummarizer.SummarizeAsync не должен вызываться вовсе.
-        FakeCountingLmStudioJsonClient.CallCount.Should().Be(1,
+        // Главное утверждение: суммаризатор не вызывается вовсе — LLM дёргается ровно дважды, и оба раза это
+        // гейт легитимности (PipelineCatalog.LegitimacyCheckStep: до парковки на одобрении поиска и после одобрения,
+        // ADR-0018 — обязательный шаг отрабатывает на каждом запуске задачи), а на пустом после фильтрации списке
+        // сниппетов MedicationSummarizer.SummarizeAsync не должен вызываться.
+        FakeCountingLmStudioJsonClient.CallCount.Should().Be(2,
             "суммаризация не должна вызываться на пустом после фильтрации списке сниппетов — единственный воркер очереди enrichment не тратится впустую");
 
         (await db.GlobalMedicationsKb.AnyAsync(k => k.NormalizedName == normalizedName)).Should().BeFalse(
@@ -538,7 +546,11 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
         var familyId = await CreateFamilyAsync(admin);
         var medkitId = await CreateMedkitAsync(admin, familyId);
 
-        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Тестовыйпрепарат{UniqueDrugNameSuffix()}");
+        var drugName = $"Тестовыйпрепарат{UniqueDrugNameSuffix()}";
+        var medicationId = await CreateMedicationAsync(admin, medkitId, drugName);
+
+        // Платный поиск ждёт одобрения админа (ADR-0018) — играем роль админа.
+        await ReviewTestHelper.ApproveMedicationSearchAsync(factory.Services, MedicationNameNormalizer.Normalize(drugName));
 
         await WaitForAsync(
             async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,
@@ -564,7 +576,9 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
         var familyId = await CreateFamilyAsync(admin);
         var medkitId = await CreateMedkitAsync(admin, familyId);
 
-        var medicationId = await CreateMedicationAsync(admin, medkitId, $"Кэшпрепарат{UniqueDrugNameSuffix()}");
+        var cachedDrugName = $"Кэшпрепарат{UniqueDrugNameSuffix()}";
+        var medicationId = await CreateMedicationAsync(admin, medkitId, cachedDrugName);
+        await ReviewTestHelper.ApproveMedicationSearchAsync(factory.Services, MedicationNameNormalizer.Normalize(cachedDrugName));
 
         await WaitForAsync(
             async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,
@@ -585,7 +599,8 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
 
         // Ручной «Уточнить в справочнике» сразу после первого обогащения — то, что раньше упиралось
         // в кулдаун и полностью блокировалось. Теперь задача должна выполниться, переиспользовав
-        // закэшированные сниппеты, без нового обращения к платному API.
+        // закэшированные сниппеты, без нового обращения к платному API. Кэш-хит бесплатен — одобрения
+        // админа (ADR-0018) эта вторая задача НЕ требует: тест сам по себе доказывает, что кэш проходит без очереди.
         var refreshResponse = await admin.PostAsync($"/api/medications/{medicationId}/kb/refresh", null);
         refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var outcome = await refreshResponse.Content.ReadFromJsonAsync<RefreshOutcomeDto>(JsonOpts);
@@ -709,6 +724,8 @@ public class EnrichmentNameCorrectionTests(EnrichmentCorrectionWebFactory factor
         var medkitId = await CreateMedkitAsync(admin, familyId);
 
         var medicationId = await CreateMedicationAsync(admin, medkitId, FakeCorrectingLmStudioJsonClient.GarbledName);
+        await ReviewTestHelper.ApproveMedicationSearchAsync(
+            factory.Services, MedicationNameNormalizer.Normalize(FakeCorrectingLmStudioJsonClient.GarbledName));
 
         await WaitForAsync(
             async () => (await GetKbStatusAsync(admin, medicationId)).Status == StatusReady,

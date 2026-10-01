@@ -24,9 +24,11 @@ public class MedicationEnrichmentJobConfiguration : IEntityTypeConfiguration<Med
         // задача жива (Pending=0/Running=1/Deferred=5 — вентиль платного поиска закрыт, ADR-0005 §9,
         // задача жива, просто ждёт); завершённые (Completed/Failed/Skipped) не мешают повторной
         // попытке обогащения того же названия в будущем.
+        // 6/7 — AwaitingSearchApproval/AwaitingResultReview (ADR-0018): задача ждёт админа и жива —
+        // без них в фильтре повторный запрос того же имени породил бы дубликат в очереди одобрения.
         builder.HasIndex(j => j.NormalizedName)
             .IsUnique()
-            .HasFilter("\"Status\" IN (0, 1, 5)");
+            .HasFilter("\"Status\" IN (0, 1, 5, 6, 7)");
 
         // Выборка очереди/статусов и карточки конкретного медикамента.
         builder.HasIndex(j => new { j.Status, j.CreatedAt });

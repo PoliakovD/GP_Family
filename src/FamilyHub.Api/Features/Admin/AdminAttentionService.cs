@@ -32,7 +32,22 @@ public class AdminAttentionService(
         var reasons = await BuildReasonsAsync(ct);
         var dropped = await BuildDroppedDomainsAsync(ct);
         var webSearchPaused = await BuildWebSearchPausedAsync(ct);
-        return new AdminAttentionDto(reasons, dropped, webSearchPaused);
+        var reviewQueue = await BuildReviewQueueAsync(ct);
+        return new AdminAttentionDto(reasons, dropped, webSearchPaused, reviewQueue);
+    }
+
+    /// <summary>Задачи, ждущие решения админа в очереди «Одобрение» (статусы 6/7, ADR-0018).</summary>
+    private async Task<ReviewQueueSummaryDto> BuildReviewQueueAsync(CancellationToken ct)
+    {
+        var searches =
+            await db.LabAnalyteEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingSearchApproval, ct) +
+            await db.MedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingSearchApproval, ct) +
+            await db.VisitMedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingSearchApproval, ct);
+        var results =
+            await db.LabAnalyteEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingResultReview, ct) +
+            await db.MedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingResultReview, ct) +
+            await db.VisitMedicationEnrichmentJobs.CountAsync(j => j.Status == EnrichmentJobStatus.AwaitingResultReview, ct);
+        return new ReviewQueueSummaryDto(searches, results, searches + results);
     }
 
     /// <summary>Deferred-задачи (вентиль закрыт, ADR-0005 §9) — та же природа, что AttentionReasonDto,
@@ -85,13 +100,13 @@ public class AdminAttentionService(
         }
 
         await AddAsync("lab-analyte", db.LabAnalyteEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason != EnrichmentFailureReason.RejectedByAdmin)
             .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, j.SpecimenKbId)));
         await AddAsync("medication", db.MedicationEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason != EnrichmentFailureReason.RejectedByAdmin)
             .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, null)));
         await AddAsync("visit-medication", db.VisitMedicationEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason != EnrichmentFailureReason.RejectedByAdmin)
             .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, null)));
         await AddAsync("extraction", db.MedicalDocumentExtractionJobs
             .Where(j => j.Status == EnrichmentJobStatus.Failed)
@@ -202,6 +217,7 @@ public class AdminAttentionService(
         nameof(EnrichmentFailureReason.LmStudioUnavailable) => "LM Studio недоступна",
         nameof(EnrichmentFailureReason.ProviderFailed) => "Сбой провайдера поиска",
         nameof(EnrichmentFailureReason.Unknown) => "Неизвестная ошибка",
+        nameof(EnrichmentFailureReason.RejectedByAdmin) => "Отклонено администратором",
         "Unclassified" => "Причина не определена (задача упала до этого обновления)",
         _ => reason,
     };

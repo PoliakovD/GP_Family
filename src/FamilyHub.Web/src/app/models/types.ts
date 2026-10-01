@@ -415,7 +415,7 @@ export interface KbMedicationCard {
 }
 
 /** Статус обогащения конкретного медикамента пользователя (GET /api/medications/{id}/kb). */
-export const MedicationKbStatus = { None: 0, Pending: 1, Running: 2, Failed: 3, Ready: 4 } as const;
+export const MedicationKbStatus = { None: 0, Pending: 1, Running: 2, Failed: 3, Ready: 4, UnderReview: 5 } as const;
 export type MedicationKbStatus = typeof MedicationKbStatus[keyof typeof MedicationKbStatus];
 
 export interface KbCandidate {

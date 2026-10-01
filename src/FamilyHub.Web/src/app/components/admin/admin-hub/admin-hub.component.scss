@@ -5,3 +5,8 @@
   margin: 1rem auto;
   padding: 0 1rem;
 }
+
+// Широкая оболочка для страницы «Одобрение» (Inbox: список + три колонки карточки).
+.admin-shell-wide {
+  max-width: 1680px;
+}

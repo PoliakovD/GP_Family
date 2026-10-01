@@ -4,6 +4,7 @@ using FamilyHub.Modules.Medical.Kb;
 using FamilyHub.TestUtils;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Kb;
@@ -70,10 +71,11 @@ public class KbIsolationGuardTests : SqliteTestBase
     }
 
     [Fact]
-    public void LabAnalyteSearchCache_LivesInKbSchema_WithUniqueNormalizedNameAndSpecimen()
+    public void LabAnalyteSearchCache_LivesInKbSchema_WithUniqueNormalizedNameAndSearchGroup()
     {
         // Кэш платного поиска для анализов (пересборка enrich-пайплайна, зеркало
-        // MedicationSearchCache) — тот же инвариант изоляции, проверенный отдельно.
+        // MedicationSearchCache) — тот же инвариант изоляции, проверенный отдельно. Ключ — (название, группа
+        // поиска биоматериала, ADR-0018): биоматериалы одной группы делят строку кэша.
         var entity = Db.Model.FindEntityType(typeof(LabAnalyteSearchCache))!;
 
         entity.GetSchema().Should().Be("kb");
@@ -81,7 +83,7 @@ public class KbIsolationGuardTests : SqliteTestBase
         entity.GetIndexes().Should().Contain(i =>
             i.IsUnique && i.Properties.Count == 2 &&
             i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.NormalizedName)) &&
-            i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.SpecimenKbId)));
+            i.Properties.Any(p => p.Name == nameof(LabAnalyteSearchCache.SearchGroupKey)));
     }
 
     [Fact]
@@ -138,7 +140,7 @@ public class KbIsolationGuardTests : SqliteTestBase
         // Ручная правка справочника после ИИ (§3 плана) — AdminCatalogService.UpdateMedicationAsync
         // проверяет тот же KbIsolationGuard, что автоматические writer'ы (KbWriterTests), ДО
         // похода в БД — безопасно проверить на SQLite без реально существующей строки.
-        var sut = new AdminCatalogService(Db);
+        var sut = new AdminCatalogService(Db, new KbChangeLogService(Db, NullLogger<KbChangeLogService>.Instance));
 
         var (result, detail, reason) = await sut.UpdateMedicationAsync(
             Guid.NewGuid(), new AdminKbEditRequest(null, """{"specialNotes":"Уточнить у ivan.petrov@example.com"}""", null));
@@ -157,7 +159,7 @@ public class KbIsolationGuardTests : SqliteTestBase
         // того же payload должно найтись как обычно — большие JSON-числа не маскируют его и сами
         // по себе тревогу не поднимают (проверяется без похода в БД — числа никогда не станут
         // "кандидатами" для FindViolation, только строки).
-        var sut = new AdminCatalogService(Db);
+        var sut = new AdminCatalogService(Db, new KbChangeLogService(Db, NullLogger<KbChangeLogService>.Instance));
 
         var (result, _, reason) = await sut.UpdateLabAnalyteAsync(
             Guid.NewGuid(), new AdminKbEditRequest(

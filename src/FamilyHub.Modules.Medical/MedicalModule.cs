@@ -156,6 +156,9 @@ public static class MedicalModule
         services.AddScoped<KbWriter>();
         // Ручная правка справочников после ИИ из админки (§3 плана) — единственный писатель,
         // кроме автоматического обогащения (LabAnalyteKbWriter/KbWriter выше).
+        services.AddScoped<KbChangeLogService>();
+        services.AddScoped<SearchCacheEditor>();
+        services.AddScoped<SpecimenSearchGroupService>();
         services.AddScoped<AdminCatalogService>();
         services.AddScoped<MedicationSummarizer>();
         services.AddScoped<MedicationSearchCacheService>();

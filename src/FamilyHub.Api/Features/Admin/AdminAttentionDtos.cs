@@ -19,7 +19,13 @@ public record DroppedDomainDto(string Domain, string Topic, int JobCount, string
 /// разбивка отложенных по конвейеру ("lab-analyte"/"medication"/"visit-medication").</summary>
 public record WebSearchPausedDto(bool IsPaused, DateTime? PausedAt, string? Note, int DeferredTotal, Dictionary<string, int> ByType);
 
-public record AdminAttentionDto(List<AttentionReasonDto> Reasons, List<DroppedDomainDto> DroppedDomains, WebSearchPausedDto WebSearchPaused);
+/// <summary>Очередь «Одобрение» (ADR-0018) — сколько платных поисков и результатов ждут решения админа
+/// (для бейджа в меню). Это не отказ и не пауза, а ожидание человека — отдельный блок, как WebSearchPaused.</summary>
+public record ReviewQueueSummaryDto(int Searches, int Results, int Total);
+
+public record AdminAttentionDto(
+    List<AttentionReasonDto> Reasons, List<DroppedDomainDto> DroppedDomains, WebSearchPausedDto WebSearchPaused,
+    ReviewQueueSummaryDto ReviewQueue);
 
 /// <summary>Topic — числом (см. WebSearchTopic, конвенция запросов админки). Добавляет все домены
 /// в доверенные для этой темы и перезапускает все Failed-задачи с NoTrustedSnippets этой темы.</summary>
