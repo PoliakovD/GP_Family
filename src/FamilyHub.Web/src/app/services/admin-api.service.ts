@@ -390,6 +390,13 @@ export interface ReviewResummarizePreview {
 
 export interface ApproveSearchRequest { queryText?: string | null; mode?: 'search' | 'use-cache'; twinCacheId?: string | null; note?: string | null; }
 export interface ApproveResultRequest { payloadJson?: string | null; displayName?: string | null; aliases?: string[] | null; note?: string | null; }
+/** Кандидат «взять из готового кэша» — любая непустая строка кэша той же темы (другое написание, торговое/МНН). */
+export interface ReviewCacheCandidate {
+  cacheId: string; topic: 'lab-analyte' | 'medication'; normalizedName: string; specimen: string | null;
+  provider: string; lastUpdatedAt: string; fresh: boolean; snippetCount: number; manualCount: number;
+}
+export interface ImportReviewCacheResponse { cacheId: string; imported: number; }
+export interface EditSnippetRequest { url: string; title?: string | null; text: string; note?: string | null; }
 export interface AddManualSnippetRequest { kind: 'manual-quote' | 'expert-knowledge'; url?: string | null; title?: string | null; text: string; note?: string | null; }
 
 export interface ReviewItemRef { kind: ReviewKind; id: string; }
@@ -744,7 +751,18 @@ export class AdminApiService {
   resummarizeReviewResult = (kind: ReviewKind, id: string) =>
     this.post<void>(`/api/admin/review/results/${kind}/${id}/resummarize`);
 
-  // Набор источников (строка кэша поиска): ручные сниппеты, закрепление, включение/выключение, удаление.
+  /** «Взять из готового кэша»: кандидаты (query пустой — по словам названия задачи) и импорт выбранных сниппетов. */
+  getReviewCacheCandidates = (kind: ReviewKind, id: string, query: string) =>
+    this.get<ReviewCacheCandidate[]>(
+      `/api/admin/review/items/${kind}/${id}/cache-candidates${query.trim() ? `?query=${encodeURIComponent(query.trim())}` : ''}`);
+
+  importReviewCache = (kind: ReviewKind, id: string, sourceCacheId: string, urls: string[] | null) =>
+    this.post<ImportReviewCacheResponse>(`/api/admin/review/items/${kind}/${id}/cache/import`, { sourceCacheId, urls });
+
+  // Набор источников (строка кэша поиска): ручные сниппеты, правка, закрепление, включение/выключение, удаление.
+  editSnippet = (topic: 'lab-analyte' | 'medication', cacheId: string, request: EditSnippetRequest) =>
+    this.put<unknown>(`/api/admin/review/cache/${topic}/${cacheId}/snippets`, request);
+
   addManualSnippet = (topic: 'lab-analyte' | 'medication', cacheId: string, request: AddManualSnippetRequest) =>
     this.post<unknown>(`/api/admin/review/cache/${topic}/${cacheId}/snippets`, request);
 

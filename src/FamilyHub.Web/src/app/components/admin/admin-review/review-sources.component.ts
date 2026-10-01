@@ -24,7 +24,7 @@ export interface EnsureCacheRef {
 /**
  * Колонка «Источники» карточки очереди «Одобрение» (ADR-0018): набор сниппетов строки кэша поиска — домен и
  * доверенность, включение/выключение, закрепление, удаление и добавление своего источника (цитата со ссылкой либо
- * знание эксперта без URL). Каждое изменение сразу сохраняется (с записью в журнал) и сообщается родителю через
+ * знание эксперта без URL), правка заголовка/текста/заметки. Каждое изменение сразу сохраняется (с записью в журнал) и сообщается родителю через
  * `changed`: набор изменился — черновик нужно пересуммаризовать.
  */
 @Component({
@@ -104,10 +104,29 @@ export interface EnsureCacheRef {
               </label>
             }
           </div>
-          <p class="review-source-text" [class.review-source-text-open]="expanded() === s.url" (click)="expand(s.url)">{{ s.text }}</p>
-          @if (s.note) { <p class="text-muted mb-1">Заметка: {{ s.note }}</p> }
-          @if (!readonly) {
+          @if (editingUrl() === s.url) {
+            <form class="review-edit" (ngSubmit)="saveEdit(s)">
+              <input class="input mb-2" placeholder="Заголовок" aria-label="Заголовок источника"
+                     [ngModel]="editTitle()" (ngModelChange)="editTitle.set($event)" name="editTitle" />
+              <textarea class="input mb-1" rows="5" aria-label="Текст источника" [attr.maxlength]="editLimit(s)"
+                        [ngModel]="editText()" (ngModelChange)="editText.set($event)" name="editText"></textarea>
+              <p class="text-muted mb-2" style="margin-top: 0;">
+                {{ editText().length }} / {{ editLimit(s) }}@if (s.origin === 'Auto') { — после правки источник станет ручной цитатой и переживёт обновление кэша }
+              </p>
+              <input class="input mb-2" placeholder="Заметка (в модель не передаётся)" aria-label="Заметка к источнику"
+                     [ngModel]="editNote()" (ngModelChange)="editNote.set($event)" name="editNote" />
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm" [disabled]="busy() || !canSaveEdit(s)">Сохранить</button>
+                <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="cancelEdit()">Отмена</button>
+              </div>
+            </form>
+          } @else {
+            <p class="review-source-text" [class.review-source-text-open]="expanded() === s.url" (click)="expand(s.url)">{{ s.text }}</p>
+            @if (s.note) { <p class="text-muted mb-1">Заметка: {{ s.note }}</p> }
+          }
+          @if (!readonly && editingUrl() !== s.url) {
             <div class="d-flex gap-2" style="flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="startEdit(s)">Править</button>
               <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pin(s)">{{ s.pinned ? 'Открепить' : 'Закрепить' }}</button>
               @if (s.override !== null) {
                 <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="resetOverride(s)">По умолчанию</button>
@@ -154,6 +173,11 @@ export class ReviewSourcesComponent {
   readonly addTitle = signal('');
   readonly addText = signal('');
   readonly addNote = signal('');
+  /** Правка сниппета (заголовок/текст/заметка) — одна форма за раз, по URL сниппета. */
+  readonly editingUrl = signal<string | null>(null);
+  readonly editTitle = signal('');
+  readonly editText = signal('');
+  readonly editNote = signal('');
 
   kindLabel(s: ReviewSource): string | null {
     return sourceKindLabel(s.kind, s.origin);
@@ -220,6 +244,40 @@ export class ReviewSourcesComponent {
       this.addNote.set('');
       this.showAdd.set(false);
     }
+  }
+
+  /** Предел правки — как на бэкенде (SearchCacheSnippets.ApplyEdit): не длиннее лимита ручной цитаты либо исходного
+   * текста, если он длиннее — авто-выдержку можно подрезать, но не превратить в статью. */
+  editLimit(s: ReviewSource): number {
+    return Math.max(MANUAL_TEXT_LIMIT, s.text.length);
+  }
+
+  startEdit(s: ReviewSource): void {
+    this.editingUrl.set(s.url);
+    this.editTitle.set(s.title);
+    this.editText.set(s.text);
+    this.editNote.set(s.note ?? '');
+  }
+
+  cancelEdit(): void {
+    this.editingUrl.set(null);
+  }
+
+  canSaveEdit(s: ReviewSource): boolean {
+    const text = this.editText().trim();
+    if (text.length === 0 || text.length > this.editLimit(s)) return false;
+    return text !== s.text || this.editTitle().trim() !== s.title || (this.editNote().trim() || null) !== s.note;
+  }
+
+  async saveEdit(s: ReviewSource): Promise<void> {
+    if (!this.canSaveEdit(s)) return;
+    const ok = await this.run(
+      (id) => this.api.editSnippet(this.topic, id, {
+        url: s.url, title: this.editTitle().trim() || null, text: this.editText().trim(), note: this.editNote().trim() || null,
+      }),
+      'Источник исправлен — пересуммируйте, чтобы правка попала в черновик.',
+    );
+    if (ok) this.editingUrl.set(null);
   }
 
   async toggle(s: ReviewSource, event: Event): Promise<void> {

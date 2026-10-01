@@ -134,6 +134,20 @@ public record AddManualSnippetRequest(string? Kind, string? Url, string? Title, 
 
 public record SnippetOverrideRequest(string Url, bool? Enabled);
 
+/// <summary>Правка сниппета набора: заголовок, текст (короткая выдержка), заметка. URL — ключ сниппета, не меняется.</summary>
+public record EditSnippetRequest(string Url, string? Title, string? Text, string? Note);
+
+/// <summary>Кандидат «взять из готового кэша»: любая непустая строка кэша той же темы (другое написание, торговое
+/// название/МНН, похожий показатель). Specimen — для показателей. Fresh — кэш ещё не устарел (на выбор не влияет).</summary>
+public record ReviewCacheCandidateDto(
+    Guid CacheId, string Topic, string NormalizedName, string? Specimen, string Provider, DateTime LastUpdatedAt, bool Fresh,
+    int SnippetCount, int ManualCount);
+
+/// <summary>Импорт сниппетов кандидата в набор задачи. Urls — выбранные сниппеты (null — все).</summary>
+public record ImportReviewCacheRequest(Guid SourceCacheId, List<string>? Urls);
+
+public record ImportReviewCacheResponse(Guid CacheId, int Imported);
+
 public record SnippetPinRequest(string Url, bool Pinned);
 
 public record ReviewQueueCountsDto(int Searches, int Results, Dictionary<string, int> SearchesByKind, Dictionary<string, int> ResultsByKind);

@@ -111,6 +111,64 @@ public class SearchCacheSnippetsTests
         SearchCacheSnippets.HasManual(json).Should().BeTrue();
         SearchCacheSnippets.HasManual("[{\"title\":\"t\",\"url\":\"https://o.ru\",\"text\":\"x\"}]").Should().BeFalse();
     }
+
+    // ------------------------------------------------------------------ правка и импорт («взять из готового кэша»)
+
+    [Fact]
+    public void ApplyEdit_AutoSnippetBecomesManualQuote_KeepingUrlAndPin()
+    {
+        var original = Auto("https://vidal.ru/a", pinned: true);
+
+        var (edited, error) = SearchCacheSnippets.ApplyEdit(original, " Новый заголовок ", " исправленный текст ", " почему ");
+
+        error.Should().BeNull();
+        edited!.Url.Should().Be("https://vidal.ru/a");
+        edited.Title.Should().Be("Новый заголовок");
+        edited.Text.Should().Be("исправленный текст");
+        edited.Note.Should().Be("почему");
+        edited.Pinned.Should().BeTrue();
+        edited.Origin.Should().Be(SnippetOrigin.Manual, "правка админа должна пережить автообновление кэша");
+        edited.Kind.Should().Be(SnippetKinds.ManualQuote);
+    }
+
+    [Fact]
+    public void ApplyEdit_ExpertKnowledgeStaysExpert_EmptyTitleFallsBackToLabel()
+    {
+        var original = Manual("expert://admin/1", SnippetKinds.ExpertKnowledge);
+
+        var (edited, _) = SearchCacheSnippets.ApplyEdit(original, "  ", "новое знание", null);
+
+        edited!.Kind.Should().Be(SnippetKinds.ExpertKnowledge);
+        edited.Title.Should().Be(SnippetKinds.ExpertSourceLabel);
+    }
+
+    [Fact]
+    public void ApplyEdit_RejectsEmptyText_AndTextLongerThanOriginalOrLimit()
+    {
+        SearchCacheSnippets.ApplyEdit(Auto("https://a.ru"), null, "  ", null).Error.Should().NotBeNull();
+        SearchCacheSnippets.ApplyEdit(Auto("https://a.ru"), null, new string('а', SnippetKinds.MaxManualTextLength + 1), null)
+            .Error.Should().NotBeNull("короткую авто-выдержку нельзя превратить в статью");
+
+        var longAuto = new WebSnippet("Т", "https://b.ru", new string('б', 1200));
+        SearchCacheSnippets.ApplyEdit(longAuto, null, new string('б', 1100), null).Error
+            .Should().BeNull("длинную авто-выдержку можно подрезать");
+        SearchCacheSnippets.ApplyEdit(longAuto, null, new string('б', 1201), null).Error.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Import_AddsOnlySelectedNewUrls_AndNeverOverwritesOwnSnippets()
+    {
+        var own = new List<WebSnippet> { Manual("https://same.ru/1"), Auto("https://own.ru/1") };
+        var source = new List<WebSnippet> { Auto("https://same.ru/1"), Auto("https://src.ru/1"), Auto("https://src.ru/2") };
+
+        var (merged, imported) = SearchCacheSnippets.Import(own, source, ["https://SAME.ru/1", "https://src.ru/2"]);
+
+        imported.Select(s => s.Url).Should().Equal("https://src.ru/2");
+        merged.Select(s => s.Url).Should().Equal("https://same.ru/1", "https://own.ru/1", "https://src.ru/2");
+        merged[0].Origin.Should().Be(SnippetOrigin.Manual, "свой (ручной) сниппет с тем же URL не перетирается");
+
+        SearchCacheSnippets.Import(own, source, null).Imported.Should().HaveCount(2, "без выбора — все новые URL");
+    }
 }
 
 public class EnrichmentSnippetFilterManualTests

@@ -64,6 +64,57 @@ public static class SearchCacheSnippets
         return result;
     }
 
+    /// <summary>Правка сниппета админом (очередь «Одобрение»): заголовок, текст, заметка. Текст не пустой и не длиннее
+    /// большего из <see cref="SnippetKinds.MaxManualTextLength"/> и исходной длины — авто-выдержку можно подрезать или
+    /// поправить, но не превратить в статью. Правленый авто-сниппет становится ручной цитатой (Manual + manual-quote):
+    /// иначе следующий платный поиск (<see cref="MergeAfterSearch"/>) молча заменил бы правку свежей выдачей.
+    /// Знание эксперта остаётся знанием эксперта. URL, закрепление — без изменений.</summary>
+    public static (WebSnippet? Snippet, string? Error) ApplyEdit(WebSnippet original, string? title, string? text, string? note)
+    {
+        var body = text?.Trim();
+        if (string.IsNullOrEmpty(body)) return (null, "Текст не может быть пустым.");
+        var limit = Math.Max(SnippetKinds.MaxManualTextLength, original.Text.Length);
+        if (body.Length > limit)
+            return (null, $"Текст длиннее {limit} символов — оставьте короткую выдержку, не статью целиком.");
+
+        var cleanNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (cleanNote is { Length: > MaxNoteLength }) return (null, $"Заметка длиннее {MaxNoteLength} символов.");
+
+        var expert = original.Kind == SnippetKinds.ExpertKnowledge;
+        var cleanTitle = !string.IsNullOrWhiteSpace(title)
+            ? title.Trim()
+            : expert ? SnippetKinds.ExpertSourceLabel
+            : Uri.TryCreate(original.Url, UriKind.Absolute, out var uri) ? uri.Host : original.Title;
+
+        return (original with
+        {
+            Title = cleanTitle,
+            Text = body,
+            Note = cleanNote,
+            Origin = SnippetOrigin.Manual,
+            Kind = expert ? SnippetKinds.ExpertKnowledge : SnippetKinds.ManualQuote,
+        }, null);
+    }
+
+    /// <summary>Импорт сниппетов из чужой строки кэша (очередь «Одобрение»: «взять из готового кэша»): выбранные URL
+    /// (null — все) дописываются к своему набору, дубли по URL пропускаются — свои сниппеты (в том числе правленые)
+    /// не перетираются. Происхождение/вид/закрепление сохраняются как у источника.</summary>
+    public static (List<WebSnippet> Merged, List<WebSnippet> Imported) Import(
+        IReadOnlyList<WebSnippet> own, IReadOnlyList<WebSnippet> source, IReadOnlyCollection<string>? urls)
+    {
+        var wanted = urls is null ? null : new HashSet<string>(urls, StringComparer.OrdinalIgnoreCase);
+        var present = own.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var imported = new List<WebSnippet>();
+        foreach (var s in source)
+        {
+            if (wanted is not null && !wanted.Contains(s.Url)) continue;
+            if (!present.Add(s.Url)) continue;
+            imported.Add(s);
+        }
+
+        return ([.. own, .. imported], imported);
+    }
+
     /// <summary>Строит ручной сниппет по вводу админа или возвращает текст ошибки. manual-quote —
     /// ссылка на источник + короткая цитата; expert-knowledge — знание без URL (служебный
     /// expert://admin/&lt;id&gt;, подпись «Эксперт: админ»). Целые статьи не принимаются: лимит
