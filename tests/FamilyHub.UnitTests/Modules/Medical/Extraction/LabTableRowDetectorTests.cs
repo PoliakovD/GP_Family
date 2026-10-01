@@ -57,7 +57,7 @@ public class LabTableRowDetectorTests
     public void Detect_RowWithCommentColumn_IsDetected_AndWrappedCommentLinesAreNot()
     {
         // Пятая колонка «Комментарий» переносится на несколько строк: сама строка результата — 5 ячеек,
-        // а хвост комментария («(общ.число), % | анализаторе …») строкой результата не считается.
+        // хвост названия («(общ.число), %») приклеивается к имени, а остаток комментария строкой результата не считается.
         var text = string.Join('\n',
             "Исследование | Результат | Единицы | Референсные | Комментарий",
             "Лейкоциты | 7.14 | тыс/мкл | 4.50 - 11.00",
@@ -69,7 +69,40 @@ public class LabTableRowDetectorTests
 
         var result = LabTableRowDetector.Detect(text);
 
-        result.Rows.Select(r => r.Cells[0]).Should().Equal("Лейкоциты", "Нейтрофилы", "Лимфоциты, %");
+        result.Rows.Select(r => r.Cells[0]).Should().Equal("Лейкоциты", "Нейтрофилы (общ.число), %", "Лимфоциты, %");
+        result.Rows[1].RawLine.Should().StartWith("Нейтрофилы (общ.число), % | 46.2* | % | 48.0 - 78.0");
+    }
+
+    [Fact]
+    public void Detect_NameWrappedToNextLine_IsJoinedBackIntoOneName()
+    {
+        // Живой баг: в узкой колонке название переносится («MCH (ср. содер. Hb в» / «эр.)»), а вторая строка —
+        // одна ячейка — терялась, и в таблице анализа имя оставалось обрезанным.
+        var text = string.Join('\n',
+            "Исследование | Результат | Единицы | Референсные | Комментарий",
+            "RDW (шир. распред. | 11.8 | % | 11.6 - 14.8",
+            "эритр)",
+            "MCH (ср. содер. Hb в | 29.1 | пг | 27.0 - 34.0",
+            "эр.)",
+            "Тромбоциты | 298 | тыс/мкл | 150 - 400");
+
+        var result = LabTableRowDetector.Detect(text);
+
+        result.Rows.Select(r => r.Cells[0]).Should().Equal("RDW (шир. распред. эритр)", "MCH (ср. содер. Hb в эр.)", "Тромбоциты");
+        result.Rows[1].RawLine.Should().Be("MCH (ср. содер. Hb в эр.) | 29.1 | пг | 27.0 - 34.0");
+    }
+
+    [Fact]
+    public void Detect_LineAfterRow_ThatIsItselfAResultRow_IsNotSwallowedAsNameContinuation()
+    {
+        var text = string.Join('\n',
+            "Исследование | Результат | Единицы | Референсные",
+            "Панель (общая | 5 | г/л | 1 - 9",
+            "(скобка) | 7 | г/л | 1 - 9");
+
+        var result = LabTableRowDetector.Detect(text);
+
+        result.Rows.Should().HaveCount(2, "строка со значением во второй ячейке — самостоятельный результат");
     }
 
     [Fact]
