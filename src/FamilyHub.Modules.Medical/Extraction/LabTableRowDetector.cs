@@ -62,7 +62,7 @@ public static class LabTableRowDetector
     /// синхронизированными опаснее, чем собрать паттерн строкой один раз в статике.</summary>
     private static readonly Regex ValueCellPattern = new(
         "^(?:[↑↓]\\s*)?(?:[<>≤≥]\\s?\\d+(?:[.,]\\d+)?|-?\\d+(?:[.,]\\d+)?|[А-ЯЁа-яё][А-ЯЁа-яё\\s/-]{" +
-        (MinQualitativeValueLength - 1) + "," + (MaxQualitativeValueLength - 1) + "})$",
+        (MinQualitativeValueLength - 1) + "," + (MaxQualitativeValueLength - 1) + "})(?:\\s?\\*)?$",
         RegexOptions.Compiled);
 
     /// <summary>Строки, которые НИКОГДА не являются результатом анализа, даже если случайно прошли
@@ -215,7 +215,8 @@ public static class LabTableRowDetector
 
             // Вторая ячейка — распознанная единица ("обнаружение в | ммоль/л") — это хвост
             // названия с единицей в узкой колонке, а не значение показателя.
-            if (inTable && cells.Length is >= 2 and <= 4 &&
+            // До 5 ячеек: имя | значение | единица | референс | комментарий (колонка «Комментарий» есть в шапке многих бланков).
+            if (inTable && cells.Length is >= 2 and <= 5 &&
                 cells[0].Length is > 0 and <= MaxNameLength && ValueCellPattern.IsMatch(cells[1]) &&
                 LabUnitNormalizer.Canonicalize(cells[1]) is null)
             {
