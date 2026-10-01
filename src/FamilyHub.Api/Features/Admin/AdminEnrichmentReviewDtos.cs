@@ -58,8 +58,10 @@ public record RejectRequest(string? Reason);
 
 public record ReviewItemRef(string Kind, Guid Id);
 
-/// <summary>Массовое действие над поисками. Queries — необязательные правки текста запроса по id.</summary>
-public record BulkApproveSearchesRequest(List<ReviewItemRef> Items);
+/// <summary>Элемент массового одобрения: QueryText — правка текста запроса этой строки (null — как предложено).</summary>
+public record BulkApproveItem(string Kind, Guid Id, string? QueryText);
+
+public record BulkApproveSearchesRequest(List<BulkApproveItem> Items);
 
 public record BulkRejectRequest(List<ReviewItemRef> Items, string? Reason);
 

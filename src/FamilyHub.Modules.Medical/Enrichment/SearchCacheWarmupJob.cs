@@ -59,8 +59,8 @@ public class SearchCacheWarmupJob(
         string? specimenDisplayName = null;
         if (run.Topic == WebSearchTopic.LabAnalyte && run.SpecimenKbId is { } specimenId)
         {
-            specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
-                .Where(s => s.Id == specimenId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+            // Слово биоматериала в запросе — текст группы поиска (ADR-0018), иначе его название.
+            specimenDisplayName = (await analyteCache.GetSearchGroupAsync(specimenId, ct)).QueryLabel;
         }
 
         try

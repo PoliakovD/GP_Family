@@ -141,8 +141,9 @@ public class LabAnalyteEnrichmentProcessor(
 
             IReadOnlyList<WebSnippet> rawSnippets;
             IReadOnlyDictionary<string, bool>? overrides = null;
-            var specimenDisplayNameForLog = await db.GlobalSpecimensKb.AsNoTracking()
-                .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+            // Слово биоматериала в поисковом запросе — текст группы поиска (ADR-0018: кровь/венозная кровь/плазма
+            // → один запрос «… (кровь)»), у биоматериала без группы — его собственное название.
+            var specimenDisplayNameForLog = (await searchCache.GetSearchGroupAsync(job.SpecimenKbId, ct)).QueryLabel;
 
             if (cached is not null && cached.IsFresh)
             {
@@ -220,10 +221,8 @@ public class LabAnalyteEnrichmentProcessor(
             // источник должен попасть в контекст первым и не срезаться лимитом MaxSnippets (порядок
             // в БД значим, см. ReferenceRangeMerger).
             var trustedDomainsByPriority = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.LabAnalyte, ct);
-            var sortedSnippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, trustedDomainsByPriority, overrides)
-                .OrderBy(s => DomainRank(s.Url, trustedDomainsByPriority))
-                .Take(options.Value.MaxSnippets)
-                .ToList();
+            var sortedSnippets = EnrichmentSnippetFilter.SelectForSummary(
+                rawSnippets, trustedDomainsByPriority, overrides, options.Value.MaxSnippets, rankOrder: true);
 
             // Пустой результат фильтрации — самый частый и самый дешёвый в починке отказ (см.
             // «Требует внимания» в админке): всё, что вернул поиск, отбросил домен-фильтр.
@@ -266,7 +265,7 @@ public class LabAnalyteEnrichmentProcessor(
             {
                 var draft = new LabAnalyteDraft(
                     job.NormalizedName, job.SpecimenKbId, job.SourceDisplayName, source, summary,
-                    EnrichmentDraftSerializer.ToDraftSnippets(sortedSnippets));
+                    EnrichmentDraftSerializer.ToDraftSnippets(sortedSnippets), summarized.FieldSources);
                 EnrichmentReviewGate.ParkForResultReview(
                     job, EnrichmentDraftSerializer.Serialize(draft), summarized.Confidence, summarized.ConfidenceReason);
                 await db.SaveChangesAsync(ct);
@@ -322,12 +321,4 @@ public class LabAnalyteEnrichmentProcessor(
             throw;
         }
     }
-
-    /// <summary>Индекс домена в trustedDomainsByPriority — общий примитив, см.
-    /// EnrichmentSnippetFilter.RankOf; применяется к порядку СНИППЕТОВ перед тем, как их увидит
-    /// модель (см. class doc: приоритетный источник не должен срезаться MaxSnippets).</summary>
-    private static int DomainRank(string url, IReadOnlyList<string> trustedDomainsByPriority) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            ? EnrichmentSnippetFilter.RankOf(uri.Host, trustedDomainsByPriority)
-            : trustedDomainsByPriority.Count;
 }

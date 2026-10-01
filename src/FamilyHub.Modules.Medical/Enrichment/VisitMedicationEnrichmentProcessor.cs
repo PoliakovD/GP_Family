@@ -140,9 +140,7 @@ public class VisitMedicationEnrichmentProcessor(
             // См. MedicationEnrichmentProcessor doc — фильтрация по доверенным доменам переехала
             // на процессор (БД-список EnrichmentTrustedDomain + override'ы конкретных URL).
             var domains = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.Medication, ct);
-            var snippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, domains, overrides)
-                .Take(options.Value.MaxSnippets)
-                .ToList();
+            var snippets = EnrichmentSnippetFilter.SelectForSummary(rawSnippets, domains, overrides, options.Value.MaxSnippets);
 
             // См. MedicationEnrichmentProcessor — проверяем ДО суммаризатора, единственный воркер
             // очереди enrichment не должен тратиться на вызов LLM, заведомо обречённый на отказ.
@@ -178,7 +176,7 @@ public class VisitMedicationEnrichmentProcessor(
             {
                 var draft = new MedicationDraft(
                     finalNormalizedName, finalDisplayName, extraAliases, source, summarized.Summary,
-                    EnrichmentDraftSerializer.ToDraftSnippets(snippets));
+                    EnrichmentDraftSerializer.ToDraftSnippets(snippets), summarized.FieldSources);
                 EnrichmentReviewGate.ParkForResultReview(
                     job, EnrichmentDraftSerializer.Serialize(draft), summarized.Confidence, summarized.ConfidenceReason);
                 await db.SaveChangesAsync(ct);

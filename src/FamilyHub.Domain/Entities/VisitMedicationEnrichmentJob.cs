@@ -81,4 +81,7 @@ public class VisitMedicationEnrichmentJob : IReviewableEnrichmentJob
     public Guid? ReviewedByUserId { get; set; }
 
     public DateTime? ReviewedAt { get; set; }
+
+    /// <summary>Заметка админа к решению в очереди «Одобрение» (ADR-0018) — не уходит ни во внешний поиск, ни в модель.</summary>
+    public string? ReviewNote { get; set; }
 }

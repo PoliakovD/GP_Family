@@ -550,6 +550,46 @@ select.input {
 .tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
 .tag-outline { background: transparent; border: 1px solid var(--color-accent); color: var(--color-accent); }
 
+// Очередь «Одобрение» (ADR-0018): уверенность модели ниже порога — красный, достаточная — зелёный.
+// Фон — смесь статусного цвета с --color-paper, текст — тёмный вариант токена (читается в обеих темах).
+.tag-danger {
+  background: color-mix(in srgb, var(--color-status-danger) 16%, var(--color-paper));
+  color: var(--color-status-danger-text);
+}
+.tag-ok {
+  background: color-mix(in srgb, var(--color-status-ok) 16%, var(--color-paper));
+  color: var(--color-status-ok-text);
+}
+.tag-warning {
+  background: color-mix(in srgb, var(--color-status-warning) 18%, var(--color-paper));
+  color: var(--color-status-warning-text);
+}
+
+// Строка таблицы очереди: ниже порога — красноватый фон, курсор клавиатурной навигации — рамка слева.
+.table tbody tr.row-danger { background: color-mix(in srgb, var(--color-status-danger) 8%, transparent); }
+.table tbody tr.row-cursor { box-shadow: inset 3px 0 0 var(--color-accent); }
+
+// Поле, отличающееся от текущей записи справочника (редактор payload в очереди «Одобрение»).
+.input-diff {
+  border-color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-surface));
+}
+
+// Бейдж-счётчик в пункте меню (админ-хаб).
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.7059rem;
+  font-weight: 600;
+  background: var(--color-status-danger);
+  color: var(--color-bg);
+}
+
 // §5 плана «живой конвейер» — глобальная копия shared/pipeline-progress/pipeline-progress.
 // component.scss:.pipeline-step-spinner (та же анимация, тот же класс), чтобы чип «уточняем
 // норму…» у отдельного показателя/медикамента (medical-records-panel/medications-panel) мог

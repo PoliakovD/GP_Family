@@ -11,7 +11,7 @@ import {
 /**
  * Дочерние роуты `/admin` (грузятся лениво из app.routes.ts, гард `adminGuard` стоит на родителе).
  *
- * Шесть разделов верхнего уровня; у каждого, кроме «Требует внимания», — вторая ступень вкладок
+ * Семь разделов верхнего уровня («Одобрение» — отдельная страница с внутренними вкладками); у каждого, кроме «Требует внимания», — вторая ступень вкладок
  * (`AdminSectionComponent` рисует её из `data.tabs`). Страницы со сохраняемыми формами
  * (ИИ-модель, Промпты, Учётки БД/MinIO — показанный один раз секрет) закрыты `unsavedChangesGuard`.
  *
@@ -83,6 +83,13 @@ export const ADMIN_ROUTES: Routes = [
     path: 'attention',
     loadComponent: () =>
       import('./admin-attention/admin-attention.component').then((m) => m.AdminAttentionComponent),
+  },
+
+  {
+    // Очередь «Одобрение» (ADR-0018) — ручное одобрение платных поисков и результатов ИИ с низкой
+    // уверенностью + пороги. Внутренние вкладки — query-параметр ?tab= (одна страница, не дочерние роуты).
+    path: 'review',
+    loadComponent: () => import('./admin-review/admin-review.component').then((m) => m.AdminReviewComponent),
   },
 
   section('monitoring', MONITORING_TABS, [

@@ -43,7 +43,8 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
           "correctedName": "настоящее название препарата, если переданное название искажено (опечатка, ошибка распознавания по фото упаковки), а сниппеты явно указывают на конкретный другой препарат — иначе null",
           "usedSourceIndexes": [0, 2],
           "confidence": 0.85,
-          "confidenceReason": "краткая причина оценки уверенности"
+          "confidenceReason": "краткая причина оценки уверенности",
+          "fieldSources": { "purpose": [0], "usage": [1, 2], "specialNotes": [1] }
         }
 
         Правила:
@@ -51,6 +52,9 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
           сниппетами. Снижай, если сниппеты неполны, противоречат друг другу или относятся к
           другому препарату/форме выпуска. "confidenceReason" — одна короткая фраза по-русски,
           почему такая оценка. Заполняй оба поля ВСЕГДА.
+        - "fieldSources" — для КАЖДОГО непустого текстового поля (internationalName, tradeNames, form,
+          purpose, simplePurpose, usage, storage, driving, specialNotes) индексы сниппетов, из которых оно
+          взято. Поле без опоры на сниппет оставь пустым (null), а не выдумывай источник.
         - "simplePurpose" — коротко и просто, обычными словами, которыми говорят в быту, а не
           медицинскими терминами. Если по сути совпадает с "purpose" и упростить нечего — можно
           оставить null.
@@ -146,7 +150,8 @@ public class MedicationSummarizer(ILmStudioJsonClient client, IPromptProvider pr
 
         // Уверенность (ADR-0018): отсутствие/невалидность → null, гейт ревью трактует как "ниже порога".
         return SummarizeResult.Ok(
-            summary, LmStudioPayloadReader.ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"));
+            summary, LmStudioPayloadReader.ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"),
+            LmStudioPayloadReader.ReadFieldSources(result.Payload, snippets.Count));
     }
 
     private static string BuildUserText(string displayName, IReadOnlyList<WebSnippet> snippets)

@@ -151,7 +151,8 @@ public static class AdminEnrichmentEndpoints
                 if (string.IsNullOrWhiteSpace(s.Url))
                     return Results.BadRequest(new { code = "empty_url", message = "У сниппета не может быть пустая ссылка." });
 
-            var snippets = request.Snippets.Select(s => new WebSnippet(s.Title, s.Url, s.Text)).ToList();
+            var snippets = request.Snippets.Select(s => new WebSnippet(
+                s.Title, s.Url, s.Text, s.Origin ?? SnippetOrigin.Auto, s.Kind, s.Note, s.Pinned ?? false)).ToList();
             var updated = request.Topic == WebSearchTopic.Medication
                 ? await medicationCache.UpdateAsync(id, request.Provider, snippets, ct)
                 : await analyteCache.UpdateAsync(id, request.Provider, snippets, ct);
@@ -182,8 +183,10 @@ public static class AdminEnrichmentEndpoints
             var domain = Uri.TryCreate(s.Url, UriKind.Absolute, out var uri) ? uri.Host : null;
             var isTrusted = EnrichmentSnippetFilter.IsTrustedDomain(s.Url, activeDomains);
             var hasOverride = overrides is not null && overrides.TryGetValue(s.Url, out var overrideValue);
-            var enabled = hasOverride ? overrides![s.Url] : isTrusted;
-            return new SearchCacheSnippetDto(s.Title, s.Url, s.Text, domain, isTrusted, hasOverride ? overrides![s.Url] : null, enabled);
+            var enabled = hasOverride ? overrides![s.Url] : EnrichmentSnippetFilter.IsEnabled(s, activeDomains, null);
+            return new SearchCacheSnippetDto(
+                s.Title, s.Url, s.Text, domain, isTrusted, hasOverride ? overrides![s.Url] : null, enabled,
+                s.Origin, s.Kind, s.Note, s.Pinned);
         }).ToList();
 
         return new SearchCacheDetailDto(id, normalizedName, specimen, provider, lastUpdatedAt, canBeUpdatedAfter, snippetDtos);

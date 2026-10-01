@@ -28,7 +28,7 @@ public class SpecimenResolverTests : SqliteTestBase
         // GlobalSpecimenKbService.FindAsync — реальный запрос к БД до триграммного вето (не только
         // после), нужна настоящая (пусть и SQLite) база, не null/мок конкретного класса.
         var specimenKb = new GlobalSpecimenKbService(
-            Db, _client, TestPromptProvider.ReturningFallback(), new AdminCatalogService(Db), NullLogger<GlobalSpecimenKbService>.Instance);
+            Db, _client, TestPromptProvider.ReturningFallback(), new AdminCatalogService(Db, new KbChangeLogService(Db, NullLogger<KbChangeLogService>.Instance)), NullLogger<GlobalSpecimenKbService>.Instance);
         _sut = new SpecimenResolver(_client, specimenKb, TestPromptProvider.ReturningFallback(), NullLogger<SpecimenResolver>.Instance);
     }
 

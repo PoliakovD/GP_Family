@@ -125,7 +125,7 @@ public class LabAnalyteKbRebuildJob(
         // один проход в памяти без постраничного курсора оправдан, в отличие от
         // EncryptionRotationRun, рассчитанного на все [Encrypted]-сущности БД разом.
         var rows = await db.LabAnalyteSearchCaches.ToListAsync(ct);
-        var byKey = new Dictionary<(string NormalizedName, Guid SpecimenKbId), bool>();
+        var byKey = new Dictionary<(string NormalizedName, string SearchGroupKey), bool>();
 
         // От свежих к старым — при коллизии ключа после перенормализации первой (свежей) достаётся
         // ключ, остальные (более старые дубликаты) удаляются, не наоборот.
@@ -134,7 +134,7 @@ public class LabAnalyteKbRebuildJob(
             var renormalized = LabAnalyteNormalizer.NormalizeAnalyteKey(row.NormalizedName);
             if (renormalized.Length == 0) renormalized = row.NormalizedName; // защитно — не должно случаться
 
-            var key = (renormalized, row.SpecimenKbId);
+            var key = (renormalized, row.SearchGroupKey);
             if (byKey.ContainsKey(key))
             {
                 db.LabAnalyteSearchCaches.Remove(row);
@@ -256,8 +256,10 @@ public class LabAnalyteKbRebuildJob(
         // их не трогает; безусловный DELETE стирал бы эту работу без возможности отличить её от
         // строк, наполненных только конвейером. LockedFields вне EF-модели (Postgres text[], см.
         // GlobalLabAnalyteKbConfiguration) — членство читается raw SQL, тем же приёмом, что AdminCatalogService.
+        // Так же переживают пересборку записи, проверенные админом (VerificationStatus <> 0, ADR-0018):
+        // проверка человеком — такая же ценная работа, как правка, и стёрлась бы без следа.
         var lockedIds = await db.Database.SqlQuery<Guid>($"""
-            SELECT "Id" FROM kb.global_lab_analytes_kb WHERE cardinality("LockedFields") > 0
+            SELECT "Id" FROM kb.global_lab_analytes_kb WHERE cardinality("LockedFields") > 0 OR "VerificationStatus" <> 0
             """).ToListAsync(ct);
         var lockedSet = lockedIds.ToHashSet();
 
@@ -273,7 +275,7 @@ public class LabAnalyteKbRebuildJob(
                 ct);
 
         run.CatalogDeleted = await db.Database.ExecuteSqlRawAsync(
-            "DELETE FROM kb.global_lab_analytes_kb WHERE cardinality(\"LockedFields\") = 0", ct);
+            "DELETE FROM kb.global_lab_analytes_kb WHERE cardinality(\"LockedFields\") = 0 AND \"VerificationStatus\" = 0", ct);
         await db.SaveChangesAsync(ct);
     }
 

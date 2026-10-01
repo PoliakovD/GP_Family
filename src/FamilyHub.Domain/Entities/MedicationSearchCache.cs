@@ -8,7 +8,7 @@ namespace FamilyHub.Domain.Entities;
 /// если строка в kb так и не появилась. Обезличено, как и GlobalMedicationKb —
 /// только нормализованное название, никакого персонального контекста (см. KbIsolationGuardTests).
 /// </summary>
-public class MedicationSearchCache
+public class MedicationSearchCache : ISearchCacheRow
 {
     public Guid Id { get; set; }
 

@@ -184,9 +184,7 @@ public class MedicationEnrichmentProcessor(
             // так смена списка/override не требует нового платного запроса, только пересчёта поверх
             // уже закэшированных сырых сниппетов.
             var domains = await trustedDomains.GetActiveDomainsByPriorityAsync(WebSearchTopic.Medication, ct);
-            var snippets = EnrichmentSnippetFilter.SelectEnabled(rawSnippets, domains, overrides)
-                .Take(options.Value.MaxSnippets)
-                .ToList();
+            var snippets = EnrichmentSnippetFilter.SelectForSummary(rawSnippets, domains, overrides, options.Value.MaxSnippets);
 
             // См. LabAnalyteEnrichmentProcessor — проверяем ДО суммаризатора, не полагаемся на его
             // собственную (тоже верную) проверку: единственный воркер очереди enrichment не должен
@@ -226,7 +224,7 @@ public class MedicationEnrichmentProcessor(
             {
                 var draft = new MedicationDraft(
                     finalNormalizedName, finalDisplayName, extraAliases, source, summarized.Summary,
-                    EnrichmentDraftSerializer.ToDraftSnippets(snippets));
+                    EnrichmentDraftSerializer.ToDraftSnippets(snippets), summarized.FieldSources);
                 EnrichmentReviewGate.ParkForResultReview(
                     job, EnrichmentDraftSerializer.Serialize(draft), summarized.Confidence, summarized.ConfidenceReason);
                 await db.SaveChangesAsync(ct);

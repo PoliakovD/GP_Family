@@ -11,7 +11,10 @@ namespace FamilyHub.Modules.Medical.Enrichment;
 /// (DraftPayloadJson), а не берётся из кэша поиска в момент ревью: кэш могли обновить
 /// (SearchCacheWarmupJob/рефреш), и индексы UsedSourceIndexes перестали бы указывать на те же
 /// сниппеты, а повторная суммаризация («пересуммаризировать») обязана идти ровно по тем же.</summary>
-public record DraftSnippet(string Title, string Url, string Text);
+public record DraftSnippet(
+    string Title, string Url, string Text,
+    FamilyHub.Infrastructure.Enrichment.SnippetOrigin Origin = FamilyHub.Infrastructure.Enrichment.SnippetOrigin.Auto,
+    string? Kind = null);
 
 /// <summary>Черновик результата для препарата (MedicationEnrichmentProcessor/Visit…). Хранит уже
 /// разрешённые процессором NormalizedName/DisplayName/ExtraAliases (коррекция названия по
@@ -19,13 +22,15 @@ public record DraftSnippet(string Title, string Url, string Text);
 /// процессор при достаточной уверенности.</summary>
 public record MedicationDraft(
     string NormalizedName, string DisplayName, IReadOnlyList<string>? ExtraAliases, string Source,
-    MedicationSummary Summary, IReadOnlyList<DraftSnippet> Snippets);
+    MedicationSummary Summary, IReadOnlyList<DraftSnippet> Snippets,
+    IReadOnlyDictionary<string, List<int>>? FieldSources = null);
 
 /// <summary>Черновик результата для показателя (LabAnalyteEnrichmentProcessor) — Summary уже после
 /// детерминированного ReferenceRangeMerger.</summary>
 public record LabAnalyteDraft(
     string NormalizedName, Guid SpecimenKbId, string DisplayName, string Source,
-    LabAnalyteSummary Summary, IReadOnlyList<DraftSnippet> Snippets);
+    LabAnalyteSummary Summary, IReadOnlyList<DraftSnippet> Snippets,
+    IReadOnlyDictionary<string, List<int>>? FieldSources = null);
 
 public static class EnrichmentDraftSerializer
 {
@@ -39,10 +44,10 @@ public static class EnrichmentDraftSerializer
     public static T? Deserialize<T>(string json) where T : class => JsonSerializer.Deserialize<T>(json, Options);
 
     public static IReadOnlyList<DraftSnippet> ToDraftSnippets(IEnumerable<FamilyHub.Infrastructure.Enrichment.WebSnippet> snippets) =>
-        snippets.Select(s => new DraftSnippet(s.Title, s.Url, s.Text)).ToList();
+        snippets.Select(s => new DraftSnippet(s.Title, s.Url, s.Text, s.Origin, s.Kind)).ToList();
 
     public static IReadOnlyList<FamilyHub.Infrastructure.Enrichment.WebSnippet> ToWebSnippets(IEnumerable<DraftSnippet> snippets) =>
-        snippets.Select(s => new FamilyHub.Infrastructure.Enrichment.WebSnippet(s.Title, s.Url, s.Text)).ToList();
+        snippets.Select(s => new FamilyHub.Infrastructure.Enrichment.WebSnippet(s.Title, s.Url, s.Text, s.Origin, s.Kind)).ToList();
 }
 
 /// <summary>
@@ -79,7 +84,9 @@ public static class EnrichmentReviewGate
     {
         var domains = usedIndexes
             .Where(i => i >= 0 && i < snippets.Count)
-            .Select(i => Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
+            .Select(i => FamilyHub.Infrastructure.Enrichment.SnippetKinds.IsExpertUrl(snippets[i].Url)
+                ? FamilyHub.Infrastructure.Enrichment.SnippetKinds.ExpertSourceLabel
+                : Uri.TryCreate(snippets[i].Url, UriKind.Absolute, out var uri) ? uri.Host : null)
             .Where(host => host is not null)
             .Distinct()
             .ToList();

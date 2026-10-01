@@ -83,6 +83,30 @@ public static class LmStudioPayloadReader
         return value is { } v && !double.IsNaN(v) && v >= 0 && v <= 1 ? v : null;
     }
 
+    /// <summary>Атрибуция полей к источникам (ADR-0018): объект {"поле": [индексы сниппетов]}. Индексы вне
+    /// [0..snippetCount) и неверные формы отбрасываются, поле без валидных индексов не попадает в результат —
+    /// «у поля нет источника» очередь «Одобрение» подсвечивает как подозрительное.</summary>
+    public static Dictionary<string, List<int>> ReadFieldSources(
+        Dictionary<string, JsonElement> payload, int snippetCount, string key = "fieldSources")
+    {
+        var result = new Dictionary<string, List<int>>();
+        if (!TryGetValue(payload, key, out var el) || el.ValueKind != JsonValueKind.Object) return result;
+
+        foreach (var prop in el.EnumerateObject())
+        {
+            if (prop.Value.ValueKind != JsonValueKind.Array) continue;
+            var indexes = prop.Value.EnumerateArray()
+                .Where(e => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out _))
+                .Select(e => e.GetInt32())
+                .Where(i => i >= 0 && i < snippetCount)
+                .Distinct()
+                .ToList();
+            if (indexes.Count > 0) result[prop.Name] = indexes;
+        }
+
+        return result;
+    }
+
     /// <summary>true/false → значение; JSON null или отсутствие поля → null ("модель не уверена" —
     /// вызывающая сторона должна оставить прежний результат, не подставлять ни один флаг).</summary>
     public static bool? ReadBool(Dictionary<string, JsonElement> payload, string key)

@@ -405,24 +405,48 @@ public class GlobalSpecimenKbService(
         }
     }
 
-    /// <summary>Уникальный ключ (NormalizedName, SpecimenKbId) — свежий LastUpdatedAt побеждает
-    /// (та же эвристика, что LabAnalyteKbRebuildJob.RekeySearchCacheAsync).</summary>
+    /// <summary>Уникальный ключ кэша — (NormalizedName, SearchGroupKey, ADR-0018): строки проигравшего переезжают на
+    /// группу победителя; при коллизии свежий LastUpdatedAt побеждает (та же эвристика, что
+    /// LabAnalyteKbRebuildJob.RekeySearchCacheAsync). Строки, где проигравший был «представителем» общей группы,
+    /// получают представителем победителя — проигравшего сейчас удалят.</summary>
     private async Task MergeSearchCacheAsync(Guid loserId, Guid winnerId, CancellationToken ct)
     {
+        var groupKeys = await db.GlobalSpecimensKb.AsNoTracking()
+            .Where(sp => sp.Id == loserId || sp.Id == winnerId)
+            .Select(sp => new { sp.Id, sp.SearchGroupKey })
+            .ToListAsync(ct);
+        var loserKey = SearchGroupKeys.Effective(loserId, groupKeys.FirstOrDefault(g => g.Id == loserId)?.SearchGroupKey);
+        var winnerKey = SearchGroupKeys.Effective(winnerId, groupKeys.FirstOrDefault(g => g.Id == winnerId)?.SearchGroupKey);
+
         var rows = await db.LabAnalyteSearchCaches
-            .Where(c => c.SpecimenKbId == loserId || c.SpecimenKbId == winnerId)
+            .Where(c => c.SearchGroupKey == loserKey || c.SearchGroupKey == winnerKey || c.SpecimenKbId == loserId)
             .ToListAsync(ct);
 
         foreach (var group in rows.GroupBy(c => c.NormalizedName))
         {
-            var loserRow = group.FirstOrDefault(c => c.SpecimenKbId == loserId);
-            var winnerRow = group.FirstOrDefault(c => c.SpecimenKbId == winnerId);
-            if (loserRow is null) continue;
+            var loserRow = loserKey == winnerKey ? null : group.FirstOrDefault(c => c.SearchGroupKey == loserKey);
+            var winnerRow = group.FirstOrDefault(c => c.SearchGroupKey == winnerKey);
 
-            if (winnerRow is null) { loserRow.SpecimenKbId = winnerId; continue; }
+            if (loserRow is not null)
+            {
+                if (winnerRow is null)
+                {
+                    loserRow.SpecimenKbId = winnerId;
+                    loserRow.SearchGroupKey = winnerKey;
+                }
+                else
+                {
+                    db.LabAnalyteSearchCaches.Remove(loserRow.LastUpdatedAt > winnerRow.LastUpdatedAt ? winnerRow : loserRow);
+                    if (loserRow.LastUpdatedAt > winnerRow.LastUpdatedAt)
+                    {
+                        loserRow.SpecimenKbId = winnerId;
+                        loserRow.SearchGroupKey = winnerKey;
+                    }
+                }
+            }
 
-            db.LabAnalyteSearchCaches.Remove(loserRow.LastUpdatedAt > winnerRow.LastUpdatedAt ? winnerRow : loserRow);
-            if (loserRow.LastUpdatedAt > winnerRow.LastUpdatedAt) loserRow.SpecimenKbId = winnerId;
+            foreach (var row in group.Where(c => c.SpecimenKbId == loserId && c.SearchGroupKey == winnerKey && !ReferenceEquals(c, loserRow)))
+                row.SpecimenKbId = winnerId;
         }
 
         await db.SaveChangesAsync(ct);

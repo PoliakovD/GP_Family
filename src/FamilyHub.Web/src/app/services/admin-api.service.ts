@@ -245,7 +245,7 @@ export type PipelineJobType = 'lab-analyte' | 'medication' | 'visit-medication' 
  * приём, что PipelineJob.status). null — задача ни разу не падала. */
 export type EnrichmentFailureReasonValue =
   | 'Legitimacy' | 'Plausibility' | 'NoTrustedSnippets' | 'NoSourcesCited' | 'SummarizerFailed'
-  | 'IsolationViolation' | 'LmStudioUnavailable' | 'ProviderFailed' | 'Unknown';
+  | 'IsolationViolation' | 'LmStudioUnavailable' | 'ProviderFailed' | 'Unknown' | 'RejectedByAdmin';
 
 export interface PipelineJob {
   id: string; type: PipelineJobType; displayName: string; status: string; attempts: number;
@@ -306,9 +306,64 @@ export interface DroppedDomain { domain: string; topic: string; jobCount: number
 export interface WebSearchPausedBlock {
   isPaused: boolean; pausedAt: string | null; note: string | null; deferredTotal: number; byType: Record<string, number>;
 }
+/** Очередь «Одобрение» (ADR-0018) — сколько платных поисков/результатов ждут решения админа. */
+export interface ReviewQueueSummary { searches: number; results: number; total: number; }
 export interface AdminAttention {
   reasons: AttentionReason[]; droppedDomains: DroppedDomain[]; webSearchPaused: WebSearchPausedBlock;
+  reviewQueue: ReviewQueueSummary;
 }
+
+// --- Очередь «Одобрение» (ADR-0018) ---
+
+/** Вид задачи очереди — те же дискриминаторы, что у PipelineJobType (кроме extraction). */
+export type ReviewKind = 'lab-analyte' | 'medication' | 'visit-medication';
+
+/** Откуда пришла задача: показатели — extraction|manual|maintenance, препараты — medkit|visit. */
+export type ReviewOrigin = 'extraction' | 'manual' | 'maintenance' | 'medkit' | 'visit';
+
+export interface ReviewSearchItem {
+  id: string; kind: ReviewKind; name: string; specimen: string | null; queryText: string;
+  queryConfidence: number | null; queryConfidenceReason: string | null; threshold: number; belowThreshold: boolean;
+  origin: ReviewOrigin; createdAt: string;
+}
+export interface ReviewSearchList { rows: ReviewSearchItem[]; total: number; }
+
+export interface ReviewResultItem {
+  id: string; kind: ReviewKind; name: string; specimen: string | null;
+  resultConfidence: number | null; resultConfidenceReason: string | null; threshold: number; belowThreshold: boolean;
+  provider: string | null; createdAt: string;
+}
+export interface ReviewResultList { rows: ReviewResultItem[]; total: number; }
+
+export interface ReviewDraft { normalizedName: string; displayName: string; payloadJson: string; aliases: string[]; source: string; }
+export interface ReviewCurrentKb {
+  id: string; displayName: string; payloadJson: string; aliases: string[]; lockedFields: string[]; updatedAt: string;
+}
+export interface ReviewSnippet { index: number; title: string; url: string; text: string; used: boolean; }
+export interface ReviewResultDetail {
+  id: string; kind: ReviewKind; name: string; specimen: string | null;
+  resultConfidence: number | null; resultConfidenceReason: string | null; threshold: number; belowThreshold: boolean;
+  queryConfidence: number | null; queryConfidenceReason: string | null;
+  provider: string | null; createdAt: string;
+  draft: ReviewDraft; current: ReviewCurrentKb | null; snippets: ReviewSnippet[];
+}
+
+export interface ReviewItemRef { kind: ReviewKind; id: string; }
+export interface BulkApproveItem { kind: ReviewKind; id: string; queryText: string | null; }
+export interface BulkReviewResponse { processedCount: number; failedItems: ReviewItemRef[]; }
+export interface ApproveResultRequest { payloadJson: string | null; displayName: string | null; aliases: string[] | null; }
+
+export interface ReviewQueueCounts {
+  searches: number; results: number; searchesByKind: Record<string, number>; resultsByKind: Record<string, number>;
+}
+
+/** Четыре порога уверенности: (препараты | показатели) x (этап запроса | этап результата), 0..1. */
+export interface EnrichmentReviewConfig {
+  medicationQueryMinConfidence: number; analyteQueryMinConfidence: number;
+  medicationResultMinConfidence: number; analyteResultMinConfidence: number;
+  updatedAt: string | null;
+}
+export type EnrichmentReviewConfigRequest = Omit<EnrichmentReviewConfig, 'updatedAt'>;
 export interface TrustAndRetryResponse { retriedCount: number; }
 
 /** activeModel=null означает, что в БД ничего не выбрано и клиент шлёт fallbackModel
@@ -380,7 +435,8 @@ export class AdminApiService {
   private toApiError(e: unknown): ApiError {
     if (e instanceof HttpErrorResponse) {
       const msg = typeof e.error === 'string' ? e.error : (e.error?.code ?? e.statusText);
-      return new ApiError(e.status, msg);
+      const detail = typeof e.error?.message === 'string' ? e.error.message : undefined;
+      return new ApiError(e.status, msg, detail);
     }
     return new ApiError(0, 'Неизвестная ошибка');
   }
@@ -583,6 +639,45 @@ export class AdminApiService {
 
   trustDomainsAndRetry = (topic: WebSearchTopicValue, domains: string[]) =>
     this.post<TrustAndRetryResponse>('/api/admin/pipeline/attention/trust-and-retry', { topic, domains });
+
+  // Очередь «Одобрение» (ADR-0018) — ручное одобрение платных поисков и результатов обогащения.
+  // Ошибки: 409 wrong_status (задача уже обработана), 400 invalid (detail — причина), 502 upstream_failed.
+  getReviewCounts = () => this.get<ReviewQueueCounts>('/api/admin/review/counts');
+
+  getReviewSearches = (kind: ReviewKind | null, skip = 0, take = 200) =>
+    this.get<ReviewSearchList>(`/api/admin/review/searches?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}`);
+
+  approveReviewSearch = (kind: ReviewKind, id: string, queryText: string | null) =>
+    this.post<void>(`/api/admin/review/searches/${kind}/${id}/approve`, { queryText });
+
+  rejectReviewSearch = (kind: ReviewKind, id: string, reason: string | null = null) =>
+    this.post<void>(`/api/admin/review/searches/${kind}/${id}/reject`, { reason });
+
+  bulkApproveReviewSearches = (items: BulkApproveItem[]) =>
+    this.post<BulkReviewResponse>('/api/admin/review/searches/bulk-approve', { items });
+
+  bulkRejectReviewSearches = (items: ReviewItemRef[], reason: string | null = null) =>
+    this.post<BulkReviewResponse>('/api/admin/review/searches/bulk-reject', { items, reason });
+
+  getReviewResults = (kind: ReviewKind | null, skip = 0, take = 200) =>
+    this.get<ReviewResultList>(`/api/admin/review/results?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}`);
+
+  getReviewResult = (kind: ReviewKind, id: string) =>
+    this.get<ReviewResultDetail>(`/api/admin/review/results/${kind}/${id}`);
+
+  approveReviewResult = (kind: ReviewKind, id: string, request: ApproveResultRequest) =>
+    this.post<void>(`/api/admin/review/results/${kind}/${id}/approve`, request);
+
+  rejectReviewResult = (kind: ReviewKind, id: string, reason: string | null = null) =>
+    this.post<void>(`/api/admin/review/results/${kind}/${id}/reject`, { reason });
+
+  resummarizeReviewResult = (kind: ReviewKind, id: string) =>
+    this.post<void>(`/api/admin/review/results/${kind}/${id}/resummarize`);
+
+  getReviewConfig = () => this.get<EnrichmentReviewConfig>('/api/admin/review/config');
+
+  setReviewConfig = (request: EnrichmentReviewConfigRequest) =>
+    this.put<EnrichmentReviewConfig>('/api/admin/review/config', request);
 
   // Ручная правка справочников после ИИ (§3 плана) — показатели, медикаменты, источники.
   searchLabAnalytes = (q: string, skip: number, take: number) =>

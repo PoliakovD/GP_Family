@@ -48,7 +48,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
           "relatedAnalytes": ["показатель, который обычно смотрят вместе с этим", "..."],
           "usedSourceIndexes": [0, 2],
           "confidence": 0.85,
-          "confidenceReason": "краткая причина оценки уверенности"
+          "confidenceReason": "краткая причина оценки уверенности",
+          "fieldSources": { "plainExplanation": [0], "whyMeasured": [1], "highMeans": [1] }
         }
 
         Правила:
@@ -56,6 +57,10 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
           сниппетами (нормы, единицы, пол/возраст). Снижай, если сниппеты противоречат друг другу,
           неполны, нормы взяты не для того биоматериала или единицы неясны. "confidenceReason" —
           одна короткая фраза по-русски, почему такая оценка. Заполняй оба поля ВСЕГДА.
+        - "fieldSources" — для КАЖДОГО непустого текстового поля (loincCode, defaultUnit, plainExplanation,
+          whyMeasured, highMeans, lowMeans, calculationInstructions) индексы сниппетов, из которых оно
+          взято. Поле без опоры на сниппет оставь пустым (null). Для refRanges источник — "sourceIndex" в
+          самом диапазоне.
         - "plainExplanation" — коротко и просто, обычными словами, которыми говорят в быту, не
           медицинскими терминами.
         - "refRanges" — один или несколько референсных диапазонов, КАЖДЫЙ обязательно со своим
@@ -174,7 +179,8 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
 
         // Уверенность (ADR-0018): отсутствие/невалидность → null, гейт ревью трактует как "ниже порога".
         return LabAnalyteSummarizeResult.Ok(
-            summary, ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"));
+            summary, ReadConfidence(result.Payload), ReadString(result.Payload, "confidenceReason"),
+            ReadFieldSources(result.Payload, snippets.Count));
     }
 
     private static List<LabAnalyteReferenceRange> ReadRefRanges(

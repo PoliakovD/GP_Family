@@ -6,7 +6,12 @@
 
   <div class="seg mb-3">
     @for (s of sections; track s.path) {
-      <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active">{{ s.label }}</a>
+      <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active">
+        {{ s.label }}
+        @if (s.path === 'review' && reviewQueue.total() > 0) {
+          <span class="nav-badge" [attr.aria-label]="reviewQueue.total() + ' ждут решения'">{{ reviewQueue.total() }}</span>
+        }
+      </a>
     }
   </div>
 

@@ -32,7 +32,7 @@ public record CachedSearch(
 public class MedicationSearchCacheService(
     AppDbContext db, IOptions<EnrichmentOptions> options, ILogger<MedicationSearchCacheService> logger)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = SearchCacheSnippets.JsonOptions;
 
     /// <summary>Null — по этому названию ещё ни разу не искали платно.</summary>
     public async Task<CachedSearch?> GetCachedAsync(string normalizedName, CancellationToken ct = default)
@@ -41,7 +41,7 @@ public class MedicationSearchCacheService(
             .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
         if (cache?.SnippetsJson is null) return null;
 
-        var snippets = JsonSerializer.Deserialize<List<WebSnippet>>(cache.SnippetsJson, JsonOptions) ?? [];
+        var snippets = SearchCacheSnippets.Parse(cache.SnippetsJson);
         var overrides = ParseOverrides(cache.OverridesJson);
         return new CachedSearch(snippets, cache.Provider, cache.LastUpdatedAt, cache.CanBeUpdatedAfter, overrides);
     }
@@ -94,12 +94,15 @@ public class MedicationSearchCacheService(
         if (cache is null) return false;
 
         if (provider is not null) cache.Provider = provider;
-        cache.SnippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
+        // Ручные сниппеты (ADR-0018), которых нет в присланном списке, остаются — старый редактор
+        // кэша про них не знает; явно удалить ручной сниппет можно через очередь «Одобрение».
+        var merged = SearchCacheSnippets.MergeAfterReplace(SearchCacheSnippets.Parse(cache.SnippetsJson), snippets);
+        cache.SnippetsJson = SearchCacheSnippets.Serialize(merged);
 
         var overrides = ParseOverrides(cache.OverridesJson);
         if (overrides is not null)
         {
-            var urls = snippets.Select(s => s.Url).ToHashSet();
+            var urls = merged.Select(s => s.Url).ToHashSet();
             var pruned = overrides.Where(kv => urls.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
             cache.OverridesJson = pruned.Count == 0 ? null : JsonSerializer.Serialize(pruned, JsonOptions);
         }
@@ -110,6 +113,33 @@ public class MedicationSearchCacheService(
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default) =>
         await db.MedicationSearchCaches.Where(c => c.Id == id).ExecuteDeleteAsync(ct) > 0;
+
+    /// <summary>Строка кэша по ключу; если её нет — создаёт пустую «устаревшую» (CanBeUpdatedAfter = сейчас): очередь
+    /// «Одобрение» (ADR-0018) позволяет админу добавить ручные сниппеты ещё ДО первого платного поиска, а платный
+    /// поиск после этого по-прежнему разрешён (строка не свежая) и сохранит ручные сниппеты.</summary>
+    public async Task<MedicationSearchCache> GetOrCreateAsync(string normalizedName, CancellationToken ct = default)
+    {
+        var existing = await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
+        if (existing is not null) return existing;
+
+        var now = DateTime.UtcNow;
+        var cache = new MedicationSearchCache
+        {
+            Id = Guid.NewGuid(), NormalizedName = normalizedName, Provider = "manual",
+            LastUpdatedAt = now, CanBeUpdatedAfter = now, SnippetsJson = "[]",
+        };
+        db.MedicationSearchCaches.Add(cache);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return cache;
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(cache).State = EntityState.Detached;
+            return await db.MedicationSearchCaches.SingleAsync(c => c.NormalizedName == normalizedName, ct);
+        }
+    }
 
     private static Dictionary<string, bool>? ParseOverrides(string? overridesJson) =>
         overridesJson is null ? null : JsonSerializer.Deserialize<Dictionary<string, bool>>(overridesJson, JsonOptions);
@@ -128,7 +158,7 @@ public class MedicationSearchCacheService(
         var existing = await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
         if (existing is not null)
         {
-            ApplyRecord(existing, provider, now, canBeUpdatedAfter, snippetsJson);
+            ApplyRecord(existing, provider, now, canBeUpdatedAfter, MergeKeepingManual(existing.SnippetsJson, snippets));
             await db.SaveChangesAsync(ct);
             return;
         }
@@ -158,10 +188,14 @@ public class MedicationSearchCacheService(
             db.Entry(cache).State = EntityState.Detached;
 
             var existingAfterRace = await db.MedicationSearchCaches.SingleAsync(c => c.NormalizedName == normalizedName, ct);
-            ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, snippetsJson);
+            ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, MergeKeepingManual(existingAfterRace.SnippetsJson, snippets));
             await db.SaveChangesAsync(ct);
         }
     }
+
+    /// <summary>Свежая выдача заменяет авто-сниппеты, ручные и закреплённые остаются (ADR-0018).</summary>
+    private static string MergeKeepingManual(string? existingSnippetsJson, IReadOnlyList<WebSnippet> fresh) =>
+        SearchCacheSnippets.Serialize(SearchCacheSnippets.MergeAfterSearch(SearchCacheSnippets.Parse(existingSnippetsJson), fresh));
 
     private static void ApplyRecord(
         MedicationSearchCache cache, string provider, DateTime now, DateTime canBeUpdatedAfter, string snippetsJson)

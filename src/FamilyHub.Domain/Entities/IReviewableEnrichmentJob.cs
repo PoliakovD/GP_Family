@@ -37,4 +37,6 @@ public interface IReviewableEnrichmentJob : IPipelineJob
     Guid? ReviewedByUserId { get; set; }
 
     DateTime? ReviewedAt { get; set; }
+
+    string? ReviewNote { get; set; }
 }

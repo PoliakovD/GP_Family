@@ -1,4 +1,6 @@
 using System.Text.Json;
+using FamilyHub.Domain.Entities;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Search;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +13,7 @@ namespace FamilyHub.Modules.Medical.Kb;
 /// поле, присланное в PUT-запросе, автоматически попадает в LockedFields — следующий проход
 /// автообогащения (LabAnalyteKbWriter/KbWriter, см. их class doc) его не тронет.
 /// </summary>
-public class AdminCatalogService(AppDbContext db)
+public partial class AdminCatalogService(AppDbContext db, KbChangeLogService changeLog)
 {
     // --- Показатели ---
 
@@ -20,7 +22,7 @@ public class AdminCatalogService(AppDbContext db)
         var row = await db.Database.SqlQuery<AdminLabAnalyteRow>($"""
             SELECT a."Id", a."NormalizedName", a."SpecimenKbId", s."DisplayName" AS "SpecimenDisplayName",
                    a."DisplayName", a."PayloadJson", a."Source", a."Aliases", a."LockedFields", a."PayloadVersion",
-                   a."CreatedAt", a."UpdatedAt"
+                   a."CreatedAt", a."UpdatedAt", a."VerificationStatus", a."VerifiedAt", a."VerifiedPayloadHash"
             FROM kb.global_lab_analytes_kb a
             LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
             WHERE a."Id" = {id}
@@ -37,7 +39,7 @@ public class AdminCatalogService(AppDbContext db)
         var row = await db.Database.SqlQuery<AdminLabAnalyteRow>($"""
             SELECT a."Id", a."NormalizedName", a."SpecimenKbId", s."DisplayName" AS "SpecimenDisplayName",
                    a."DisplayName", a."PayloadJson", a."Source", a."Aliases", a."LockedFields", a."PayloadVersion",
-                   a."CreatedAt", a."UpdatedAt"
+                   a."CreatedAt", a."UpdatedAt", a."VerificationStatus", a."VerifiedAt", a."VerifiedPayloadHash"
             FROM kb.global_lab_analytes_kb a
             LEFT JOIN kb.global_specimens_kb s ON s."Id" = a."SpecimenKbId"
             WHERE a."NormalizedName" = {normalizedName} AND a."SpecimenKbId" = {specimenKbId}
@@ -60,7 +62,7 @@ public class AdminCatalogService(AppDbContext db)
     }
 
     public async Task<(AdminKbEditResult Result, AdminLabAnalyteDetail? Detail, string? Reason)> UpdateLabAnalyteAsync(
-        Guid id, AdminKbEditRequest request, CancellationToken ct = default)
+        Guid id, AdminKbEditRequest request, CancellationToken ct = default, string? logNote = null)
     {
         if (request.PayloadJson is not null && !IsValidJson(request.PayloadJson))
             return (AdminKbEditResult.InvalidPayloadJson, null, null);
@@ -77,7 +79,8 @@ public class AdminCatalogService(AppDbContext db)
 
         var existing = await db.Database.SqlQuery<AdminLabAnalyteRow>($"""
             SELECT "Id", "NormalizedName", "SpecimenKbId", NULL AS "SpecimenDisplayName", "DisplayName",
-                   "PayloadJson", "Source", "Aliases", "LockedFields", "PayloadVersion", "CreatedAt", "UpdatedAt"
+                   "PayloadJson", "Source", "Aliases", "LockedFields", "PayloadVersion", "CreatedAt", "UpdatedAt",
+                   "VerificationStatus", "VerifiedAt", "VerifiedPayloadHash"
             FROM kb.global_lab_analytes_kb WHERE "Id" = {id}
             """).FirstOrDefaultAsync(ct);
         if (existing is null) return (AdminKbEditResult.NotFound, null, null);
@@ -93,12 +96,23 @@ public class AdminCatalogService(AppDbContext db)
         if (request.PayloadJson is not null) ApplyPayloadLock(lockedFields, request.LockedPayloadKeys);
         if (request.Aliases is not null) lockedFields.Add("aliases");
 
+        // Правка человеком = «проверено с правками» (ADR-0018): хэш — от итогового payload.
+        var before = await KbRowStore.ReadLabAnalyteByIdAsync(db, id, ct);
+        var verificationStatus = (int)KbVerificationStatus.AdminEdited;
+        var verifiedAt = DateTime.UtcNow;
+        var payloadHash = KbPayloadHash.Compute(payloadJson);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE kb.global_lab_analytes_kb SET
                 "DisplayName" = {displayName}, "PayloadJson" = {payloadJson}::jsonb,
-                "Aliases" = {aliases}, "LockedFields" = {lockedFields.ToArray()}, "UpdatedAt" = {DateTime.UtcNow}
+                "Aliases" = {aliases}, "LockedFields" = {lockedFields.ToArray()}, "UpdatedAt" = {verifiedAt},
+                "VerificationStatus" = {verificationStatus}, "VerifiedAt" = {verifiedAt}, "VerifiedPayloadHash" = {payloadHash}
             WHERE "Id" = {id}
             """, ct);
+
+        var after = await KbRowStore.ReadLabAnalyteByIdAsync(db, id, ct);
+        await changeLog.RecordAsync(
+            KbChangeTarget.LabAnalyteKb, id, displayName, "admin-edit",
+            KbChangeLogService.ToJson(before), KbChangeLogService.ToJson(after), KbChangeLogService.ActorAdmin, logNote, ct: ct);
 
         return (AdminKbEditResult.Ok, await GetLabAnalyteAsync(id, ct), null);
     }
@@ -113,9 +127,17 @@ public class AdminCatalogService(AppDbContext db)
 
     public async Task<bool> DeleteLabAnalyteAsync(Guid id, CancellationToken ct = default)
     {
+        var before = await KbRowStore.ReadLabAnalyteByIdAsync(db, id, ct);
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM kb.global_lab_analytes_kb WHERE "Id" = {id}
             """, ct);
+        if (affected > 0 && before is not null)
+        {
+            await changeLog.RecordAsync(
+                KbChangeTarget.LabAnalyteKb, id, before.DisplayName, "admin-delete",
+                KbChangeLogService.ToJson(before), null, KbChangeLogService.ActorAdmin, ct: ct);
+        }
+
         return affected > 0;
     }
 
@@ -137,7 +159,8 @@ public class AdminCatalogService(AppDbContext db)
 
         var loser = await db.Database.SqlQuery<AdminLabAnalyteRow>($"""
             SELECT "Id", "NormalizedName", "SpecimenKbId", NULL AS "SpecimenDisplayName", "DisplayName",
-                   "PayloadJson", "Source", "Aliases", "LockedFields", "PayloadVersion", "CreatedAt", "UpdatedAt"
+                   "PayloadJson", "Source", "Aliases", "LockedFields", "PayloadVersion", "CreatedAt", "UpdatedAt",
+                   "VerificationStatus", "VerifiedAt", "VerifiedPayloadHash"
             FROM kb.global_lab_analytes_kb WHERE "Id" = {loserId}
             """).FirstOrDefaultAsync(ct);
         var winnerExists = await db.GlobalLabAnalytesKb.AnyAsync(k => k.Id == winnerId, ct);
@@ -159,7 +182,15 @@ public class AdminCatalogService(AppDbContext db)
             WHERE "Id" = {winnerId}
             """, ct);
 
+        var loserSnapshot = await KbRowStore.ReadLabAnalyteByIdAsync(db, loserId, ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM kb.global_lab_analytes_kb WHERE "Id" = {loserId}""", ct);
+        if (loserSnapshot is not null)
+        {
+            await changeLog.RecordAsync(
+                KbChangeTarget.LabAnalyteKb, loserId, loserSnapshot.DisplayName, "admin-merge",
+                KbChangeLogService.ToJson(loserSnapshot), null, KbChangeLogService.ActorAdmin,
+                $"Объединена в запись {winnerId}", ct: ct);
+        }
 
         if (tx is not null)
         {
@@ -219,7 +250,7 @@ public class AdminCatalogService(AppDbContext db)
     {
         var row = await db.Database.SqlQuery<AdminMedicationRow>($"""
             SELECT "Id", "NormalizedName", "DisplayName", "PayloadJson", "Source", "Aliases", "LockedFields",
-                   "PayloadVersion", "CreatedAt", "UpdatedAt"
+                   "PayloadVersion", "CreatedAt", "UpdatedAt", "VerificationStatus", "VerifiedAt", "VerifiedPayloadHash"
             FROM kb.global_medications_kb WHERE "Id" = {id}
             """).FirstOrDefaultAsync(ct);
 
@@ -227,7 +258,7 @@ public class AdminCatalogService(AppDbContext db)
     }
 
     public async Task<(AdminKbEditResult Result, AdminMedicationDetail? Detail, string? Reason)> UpdateMedicationAsync(
-        Guid id, AdminKbEditRequest request, CancellationToken ct = default)
+        Guid id, AdminKbEditRequest request, CancellationToken ct = default, string? logNote = null)
     {
         if (request.PayloadJson is not null && !IsValidJson(request.PayloadJson))
             return (AdminKbEditResult.InvalidPayloadJson, null, null);
@@ -240,7 +271,7 @@ public class AdminCatalogService(AppDbContext db)
 
         var existing = await db.Database.SqlQuery<AdminMedicationRow>($"""
             SELECT "Id", "NormalizedName", "DisplayName", "PayloadJson", "Source", "Aliases", "LockedFields",
-                   "PayloadVersion", "CreatedAt", "UpdatedAt"
+                   "PayloadVersion", "CreatedAt", "UpdatedAt", "VerificationStatus", "VerifiedAt", "VerifiedPayloadHash"
             FROM kb.global_medications_kb WHERE "Id" = {id}
             """).FirstOrDefaultAsync(ct);
         if (existing is null) return (AdminKbEditResult.NotFound, null, null);
@@ -256,12 +287,22 @@ public class AdminCatalogService(AppDbContext db)
         if (request.PayloadJson is not null) ApplyPayloadLock(lockedFields, request.LockedPayloadKeys);
         if (request.Aliases is not null) lockedFields.Add("aliases");
 
+        var before = await KbRowStore.ReadMedicationByIdAsync(db, id, ct);
+        var verificationStatus = (int)KbVerificationStatus.AdminEdited;
+        var verifiedAt = DateTime.UtcNow;
+        var payloadHash = KbPayloadHash.Compute(payloadJson);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE kb.global_medications_kb SET
                 "DisplayName" = {displayName}, "PayloadJson" = {payloadJson}::jsonb,
-                "Aliases" = {aliases}, "LockedFields" = {lockedFields.ToArray()}, "UpdatedAt" = {DateTime.UtcNow}
+                "Aliases" = {aliases}, "LockedFields" = {lockedFields.ToArray()}, "UpdatedAt" = {verifiedAt},
+                "VerificationStatus" = {verificationStatus}, "VerifiedAt" = {verifiedAt}, "VerifiedPayloadHash" = {payloadHash}
             WHERE "Id" = {id}
             """, ct);
+
+        var after = await KbRowStore.ReadMedicationByIdAsync(db, id, ct);
+        await changeLog.RecordAsync(
+            KbChangeTarget.MedicationKb, id, displayName, "admin-edit",
+            KbChangeLogService.ToJson(before), KbChangeLogService.ToJson(after), KbChangeLogService.ActorAdmin, logNote, ct: ct);
 
         return (AdminKbEditResult.Ok, await GetMedicationAsync(id, ct), null);
     }
@@ -276,9 +317,17 @@ public class AdminCatalogService(AppDbContext db)
 
     public async Task<bool> DeleteMedicationAsync(Guid id, CancellationToken ct = default)
     {
+        var before = await KbRowStore.ReadMedicationByIdAsync(db, id, ct);
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM kb.global_medications_kb WHERE "Id" = {id}
             """, ct);
+        if (affected > 0 && before is not null)
+        {
+            await changeLog.RecordAsync(
+                KbChangeTarget.MedicationKb, id, before.DisplayName, "admin-delete",
+                KbChangeLogService.ToJson(before), null, KbChangeLogService.ActorAdmin, ct: ct);
+        }
+
         return affected > 0;
     }
 
@@ -355,9 +404,16 @@ public class AdminCatalogService(AppDbContext db)
 
     private static AdminLabAnalyteDetail ToDetail(AdminLabAnalyteRow r) => new(
         r.Id, r.NormalizedName, r.SpecimenKbId, r.SpecimenDisplayName, r.DisplayName, r.PayloadJson, r.Source,
-        r.Aliases, r.LockedFields, r.PayloadVersion, r.CreatedAt, r.UpdatedAt);
+        r.Aliases, r.LockedFields, r.PayloadVersion, r.CreatedAt, r.UpdatedAt,
+        (KbVerificationStatus)r.VerificationStatus, r.VerifiedAt, IsStale(r.VerificationStatus, r.VerifiedPayloadHash, r.PayloadJson));
 
     private static AdminMedicationDetail ToDetail(AdminMedicationRow r) => new(
         r.Id, r.NormalizedName, r.DisplayName, r.PayloadJson, r.Source, r.Aliases, r.LockedFields,
-        r.PayloadVersion, r.CreatedAt, r.UpdatedAt);
+        r.PayloadVersion, r.CreatedAt, r.UpdatedAt,
+        (KbVerificationStatus)r.VerificationStatus, r.VerifiedAt, IsStale(r.VerificationStatus, r.VerifiedPayloadHash, r.PayloadJson));
+
+    /// <summary>Проверена, но payload с тех пор изменился (например, правка в обход журнала) — проверка устарела.</summary>
+    private static bool IsStale(int status, string? verifiedHash, string payloadJson) =>
+        status != (int)KbVerificationStatus.AiUnverified && verifiedHash is not null
+        && verifiedHash != KbPayloadHash.Compute(payloadJson);
 }

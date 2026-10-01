@@ -280,17 +280,17 @@ public class AdminEnrichmentReviewService(
     public async Task<ReviewActionOutcome> RejectSearchAsync(string kind, Guid id, string? reason, CancellationToken ct = default) =>
         await RejectAsync(kind, id, EnrichmentJobStatus.AwaitingSearchApproval, reason, "Платный поиск отклонён администратором.", ct);
 
-    public async Task<BulkReviewResponse> BulkApproveSearchesAsync(IEnumerable<ReviewItemRef> items, CancellationToken ct = default)
+    public async Task<BulkReviewResponse> BulkApproveSearchesAsync(IEnumerable<BulkApproveItem> items, CancellationToken ct = default)
     {
         var failed = new List<ReviewItemRef>();
         var processed = 0;
         foreach (var item in items.DistinctBy(i => (i.Kind, i.Id)))
         {
             var outcome = ReviewKinds.IsValid(item.Kind)
-                ? await ApproveSearchAsync(item.Kind, item.Id, null, ct)
+                ? await ApproveSearchAsync(item.Kind, item.Id, item.QueryText, ct)
                 : new ReviewActionOutcome(ReviewActionResult.Invalid);
             if (outcome.Result == ReviewActionResult.Ok) processed++;
-            else failed.Add(item);
+            else failed.Add(new ReviewItemRef(item.Kind, item.Id));
         }
         return new BulkReviewResponse(processed, failed);
     }

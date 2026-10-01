@@ -22,6 +22,10 @@ public class GlobalLabAnalyteKbConfiguration : IEntityTypeConfiguration<GlobalLa
 
         // Aliases/LockedFields — Postgres text[], заводится raw SQL в миграции (как у
         // GlobalMedicationKb.Aliases) — не единого кроссплатформенного маппинга для SQLite-юнит-тестов.
+        // Внутренний маркер проверки (ADR-0018): INSERT-ы писателей без этих колонок получают значение по умолчанию.
+        builder.Property(k => k.VerificationStatus).HasDefaultValue(FamilyHub.Domain.Enums.KbVerificationStatus.AiUnverified).IsRequired();
+        builder.Property(k => k.VerifiedPayloadHash).HasMaxLength(64);
+
         builder.Ignore(k => k.Aliases);
         builder.Ignore(k => k.LockedFields);
 

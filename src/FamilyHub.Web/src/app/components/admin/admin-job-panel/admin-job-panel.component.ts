@@ -24,6 +24,7 @@ const REASON_LABELS: Record<EnrichmentFailureReasonValue, string> = {
   LmStudioUnavailable: 'LM Studio недоступна',
   ProviderFailed: 'Сбой провайдера поиска',
   Unknown: 'Неизвестная ошибка',
+  RejectedByAdmin: 'Отклонено администратором',
 };
 
 /**

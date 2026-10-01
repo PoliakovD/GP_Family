@@ -15,6 +15,8 @@ const STATUS_LABELS: Record<string, string> = {
   Failed: 'Ошибка',
   Skipped: 'Пропущена',
   Deferred: 'Отложена',
+  AwaitingSearchApproval: 'Ждёт одобрения поиска',
+  AwaitingResultReview: 'Ждёт проверки результата',
   // Прогоны (перешифровка, пересборка, прогрев)
   Paused: 'На паузе',
   Cancelled: 'Остановлен',
@@ -38,6 +40,8 @@ export const JOB_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'Failed', label: statusLabel('Failed') },
   { value: 'Skipped', label: statusLabel('Skipped') },
   { value: 'Deferred', label: statusLabel('Deferred') },
+  { value: 'AwaitingSearchApproval', label: statusLabel('AwaitingSearchApproval') },
+  { value: 'AwaitingResultReview', label: statusLabel('AwaitingResultReview') },
 ];
 
 const OUTCOME_LABELS: Record<WebSearchCallOutcomeValue, string> = {

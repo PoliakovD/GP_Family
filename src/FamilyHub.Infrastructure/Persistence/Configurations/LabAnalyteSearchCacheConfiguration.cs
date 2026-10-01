@@ -16,9 +16,12 @@ public class LabAnalyteSearchCacheConfiguration : IEntityTypeConfiguration<LabAn
 
         builder.Property(c => c.NormalizedName).HasMaxLength(300).IsRequired();
         builder.Property(c => c.SpecimenKbId).IsRequired();
+        builder.Property(c => c.SearchGroupKey).HasMaxLength(150).IsRequired();
         builder.Property(c => c.Provider).HasMaxLength(50).IsRequired();
 
-        // Ключ — пара (показатель, источник), не одно имя (пересборка enrich-пайплайна).
-        builder.HasIndex(c => new { c.NormalizedName, c.SpecimenKbId }).IsUnique();
+        // Ключ — пара (показатель, группа поиска биоматериала): биоматериалы одной группы (кровь/венозная
+        // кровь/плазма) делят одну строку кэша и один платный поиск (ADR-0018), SearchGroupKey у одиночного
+        // биоматериала — "specimen:<id>", то есть прежнее поведение.
+        builder.HasIndex(c => new { c.NormalizedName, c.SearchGroupKey }).IsUnique();
     }
 }

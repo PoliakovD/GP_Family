@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Enums;
+using FamilyHub.Infrastructure.Enrichment;
 
 namespace FamilyHub.Api.Features.Admin;
 
@@ -21,7 +22,8 @@ public record SearchCacheListResponse(List<SearchCacheRowDto> Rows, int Total);
 /// <summary>Один сниппет с уже вычисленным итоговым решением (Enabled) — точно то, что реально
 /// уйдёт/не уйдёт суммаризатору при следующем прогоне обогащения с текущими настройками.</summary>
 public record SearchCacheSnippetDto(
-    string Title, string Url, string Text, string? Domain, bool IsTrustedByDomain, bool? Override, bool Enabled);
+    string Title, string Url, string Text, string? Domain, bool IsTrustedByDomain, bool? Override, bool Enabled,
+    SnippetOrigin Origin = SnippetOrigin.Auto, string? Kind = null, string? Note = null, bool Pinned = false);
 
 public record SearchCacheDetailDto(
     Guid Id, string NormalizedName, string? Specimen, string Provider,
@@ -31,7 +33,10 @@ public record SetSnippetOverrideRequest(WebSearchTopic Topic, string Url, bool? 
 
 /// <summary>Один сниппет на запись — форма ввода, без вычисленных Enabled/IsTrustedByDomain
 /// (это read-only проекция для отображения, см. SearchCacheSnippetDto).</summary>
-public record SearchCacheSnippetInput(string Title, string Url, string Text);
+/// <summary>Origin/Kind/Note/Pinned необязательны (старый редактор кэша их не шлёт): без Origin сниппет — Auto.</summary>
+public record SearchCacheSnippetInput(
+    string Title, string Url, string Text,
+    SnippetOrigin? Origin = null, string? Kind = null, string? Note = null, bool? Pinned = null);
 
 /// <summary>Полное редактирование строки кэша (§ полного CRUD кэша) — Snippets заменяет
 /// SnippetsJson целиком (тот же приём, что payload-редактор справочника — весь список разом,

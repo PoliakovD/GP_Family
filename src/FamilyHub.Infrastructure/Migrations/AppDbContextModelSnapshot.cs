@@ -729,6 +729,18 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("VerificationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VerifiedPayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName", "SpecimenKbId")
@@ -771,6 +783,18 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("VerificationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VerifiedPayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
@@ -795,6 +819,10 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<string>("NormalizedName")
                         .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SearchGroupKey")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -885,6 +913,57 @@ namespace FamilyHub.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_HealthShareGrants_NotSelf", "\"OwnerUserId\" <> \"ViewerUserId\"");
                         });
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.KbChangeLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RevertedLogId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Target")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetLabel")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("Target", "TargetId", "At");
+
+                    b.ToTable("change_log", "kb");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.KbRebuildRun", b =>
@@ -1011,6 +1090,9 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<string>("ResultConfidenceReason")
                         .HasColumnType("text");
 
+                    b.Property<string>("ReviewNote")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1072,6 +1154,11 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("SearchGroupKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<string>("SnippetsJson")
                         .HasColumnType("text");
 
@@ -1080,7 +1167,7 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NormalizedName", "SpecimenKbId")
+                    b.HasIndex("NormalizedName", "SearchGroupKey")
                         .IsUnique();
 
                     b.ToTable("lab_analyte_search_cache", "kb");
@@ -1681,6 +1768,9 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasColumnType("double precision");
 
                     b.Property<string>("ResultConfidenceReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReviewNote")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("ReviewedAt")
@@ -2519,6 +2609,9 @@ namespace FamilyHub.Infrastructure.Migrations
                         .HasColumnType("double precision");
 
                     b.Property<string>("ResultConfidenceReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReviewNote")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("ReviewedAt")

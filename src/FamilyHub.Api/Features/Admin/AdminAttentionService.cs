@@ -100,13 +100,13 @@ public class AdminAttentionService(
         }
 
         await AddAsync("lab-analyte", db.LabAnalyteEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason != EnrichmentFailureReason.RejectedByAdmin)
             .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, j.SpecimenKbId)));
         await AddAsync("medication", db.MedicationEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason != EnrichmentFailureReason.RejectedByAdmin)
             .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, null)));
         await AddAsync("visit-medication", db.VisitMedicationEnrichmentJobs
-            .Where(j => j.Status == EnrichmentJobStatus.Failed)
+            .Where(j => j.Status == EnrichmentJobStatus.Failed && j.FailureReason != EnrichmentFailureReason.RejectedByAdmin)
             .Select(j => new FailedJobKey(j.FailureReason, j.NormalizedName, null)));
         await AddAsync("extraction", db.MedicalDocumentExtractionJobs
             .Where(j => j.Status == EnrichmentJobStatus.Failed)
@@ -217,6 +217,7 @@ public class AdminAttentionService(
         nameof(EnrichmentFailureReason.LmStudioUnavailable) => "LM Studio недоступна",
         nameof(EnrichmentFailureReason.ProviderFailed) => "Сбой провайдера поиска",
         nameof(EnrichmentFailureReason.Unknown) => "Неизвестная ошибка",
+        nameof(EnrichmentFailureReason.RejectedByAdmin) => "Отклонено администратором",
         "Unclassified" => "Причина не определена (задача упала до этого обновления)",
         _ => reason,
     };

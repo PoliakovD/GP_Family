@@ -118,6 +118,12 @@ export class AdminPayloadEditorComponent implements OnChanges {
   @Input({ required: true }) schema!: PayloadEditorSchema;
   @Input() payloadJson = '{}';
   @Input() busy = false;
+  /** Верхнеуровневые ключи payload, отличающиеся от текущей записи справочника — их поля формы
+   * подсвечиваются (очередь «Одобрение», ADR-0018: админ сразу видит, что именно ИИ поменял). */
+  @Input() highlightKeys: readonly string[] = [];
+  /** Скрывает собственные кнопки «Сохранить…» — когда родитель сам управляет действиями (очередь
+   * «Одобрение»: «Одобрить с правками» читает значение через currentPayloadJson()). */
+  @Input() hideSave = false;
   /** Id текущей открытой статьи — исключается из результатов поиска пикера «Что смотрят
    * вместе» (показатель не может ссылаться сам на себя) и из состава её собственных чипов при
    * желании админа так поступить, но это уже его решение — здесь только фильтр поиска. */
@@ -256,6 +262,26 @@ export class AdminPayloadEditorComponent implements OnChanges {
 
   markChanged(key: string): void {
     this.changedKeys.add(key);
+  }
+
+  /** Подсветка поля, отличающегося от текущей записи справочника (см. highlightKeys). */
+  isDiff(key: string): boolean {
+    return this.highlightKeys.includes(key);
+  }
+
+  /** Текущее содержимое редактора для родителя, у которого свои кнопки действий (hideSave): режим
+   * формы — сериализация формы, режим JSON — введённый текст. null — JSON невалиден (ошибка уже
+   * показана в редакторе). */
+  currentPayloadJson(): string | null {
+    if (this.mode() === 'form') return JSON.stringify(this.buildObjectFromForm());
+    try {
+      JSON.parse(this.jsonDraft());
+    } catch (e) {
+      this.jsonError.set(`Невалидный JSON: ${(e as Error).message}`);
+      return null;
+    }
+    this.jsonError.set(null);
+    return this.jsonDraft();
   }
 
   // --- «Что смотрят вместе» — пикер по справочнику, не свободный текст ---

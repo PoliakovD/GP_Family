@@ -74,13 +74,18 @@ public record LabAnalyteSummary(
 /// её там, где отказ смысловой, а не технический (см. вызовы Failure ниже).</summary>
 public record LabAnalyteSummarizeResult(
     bool Success, LabAnalyteSummary? Summary, string? Error, EnrichmentFailureReason Reason = EnrichmentFailureReason.None,
-    double? Confidence = null, string? ConfidenceReason = null)
+    double? Confidence = null, string? ConfidenceReason = null,
+    IReadOnlyDictionary<string, List<int>>? FieldSources = null)
 {
     public static LabAnalyteSummarizeResult Failure(string error, EnrichmentFailureReason reason = EnrichmentFailureReason.SummarizerFailed) =>
         new(false, null, error, reason);
 
     /// <summary>Confidence/ConfidenceReason — самооценка модели 0..1 (ADR-0018, этап результата);
     /// null — не вернула/невалидна, гейт ревью трактует как «ниже порога».</summary>
-    public static LabAnalyteSummarizeResult Ok(LabAnalyteSummary summary, double? confidence = null, string? confidenceReason = null) =>
-        new(true, summary, null, EnrichmentFailureReason.None, confidence, confidenceReason);
+    /// <param name="fieldSources">Поле → индексы сниппетов (см. SummarizeResult.Ok); для refRanges источники
+    /// берутся из sourceIndex самих диапазонов, не отсюда.</param>
+    public static LabAnalyteSummarizeResult Ok(
+        LabAnalyteSummary summary, double? confidence = null, string? confidenceReason = null,
+        IReadOnlyDictionary<string, List<int>>? fieldSources = null) =>
+        new(true, summary, null, EnrichmentFailureReason.None, confidence, confidenceReason, fieldSources);
 }
