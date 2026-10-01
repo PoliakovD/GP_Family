@@ -12,4 +12,4 @@ EXPOSE 5173
 CMD ["/app/node_modules/.bin/ng", "serve", \
      "--host", "0.0.0.0", \
      "--port", "5173", \
-     "--disable-host-check"]
+     "--allowed-hosts", "true"]
