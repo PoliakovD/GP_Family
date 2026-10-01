@@ -114,4 +114,40 @@ public class LabAnalyteNameCleanerTests
         LabAnalyteNameCleaner.CleanPersonName("   ").Should().BeEmpty();
         LabAnalyteNameCleaner.CleanPersonName(null).Should().BeEmpty();
     }
+
+    [Theory]
+    [InlineData("MCV (ср. объем эритр.) 84.2", "84.2", "MCV (ср. объем эритр.)")]
+    [InlineData("Гематокрит 50.0*", "50.0", "Гематокрит")]
+    [InlineData("Гемоглобин", "17.3", "Гемоглобин")]
+    [InlineData("Лейкоциты 7.14", "", "Лейкоциты 7.14")]
+    [InlineData("Базофилы, % 0.3", "0.3", "Базофилы, %")]
+    [InlineData("Ген 5", "5", "Ген")]
+    [InlineData("Витамин B12", "12", "Витамин B12")] // цифры — часть названия, не слипшееся значение
+    public void BlankNameWithoutValue_CutsGluedValueOnlyWhenCellEndsWithIt(string cell, string value, string expected)
+    {
+        LabAnalyteNameCleaner.BlankNameWithoutValue(cell, value).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("MCV", "MCV (ср. объем эритр.)", "MCV (ср. объем эритр.)")]
+    [InlineData("MCH", "MCH (ср. содер. Hb в эр.)", "MCH (ср. содер. Hb в эр.)")]
+    [InlineData("Эозинофилы", "Эозинофилы, %", "Эозинофилы, %")]
+    [InlineData("Нейтрофилы", "Нейтрофилы (общ.число), %", "Нейтрофилы (общ.число), %")]
+    [InlineData("Гемоглобин", "1. Гемоглобин", "Гемоглобин")]
+    [InlineData("МСHС", "МСHС (ср. конц. Hb в эр.)", "МСНС (ср. конц. Hb в эр.)")] // смешанный алфавит в бланке чинится Clean
+    [InlineData("Гем", "Гемоглобин", "Гем")] // не граница слова — не подменяем
+    [InlineData("Глюкоза", "Гемоглобин", "Глюкоза")] // другое понятие — имя модели не перетираем
+    [InlineData("Гемоглобин", "Гемоглобин", "Гемоглобин")]
+    public void PreferFullBlankName_TakesLongerBlankNameOnlyWhenItStartsWithModelName(string candidate, string blank, string expected)
+    {
+        LabAnalyteNameCleaner.PreferFullBlankName(candidate, blank).Should().Be(expected);
+    }
+
+    [Fact]
+    public void PreferFullBlankName_TooLongBlankName_KeepsModelName()
+    {
+        var blank = "Показатель " + new string('я', 200);
+
+        LabAnalyteNameCleaner.PreferFullBlankName("Показатель", blank, maxLength: 160).Should().Be("Показатель");
+    }
 }

@@ -151,6 +151,9 @@ public static class LabTableRowDetector
         var noiseLines = 0;
         var inTable = false;
         var inFooter = false;
+        // Предыдущая обработанная строка была строкой-результатом: если следующая — перенос хвоста названия
+        // («MCH (ср. содер. Hb в» / «эр.)»), он приклеивается к этой строке, а не теряется.
+        var lastWasRow = false;
         DatedRecord? open = null;
 
         void Flush()
@@ -171,6 +174,9 @@ public static class LabTableRowDetector
 
             var cells = line.Split(" | ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             if (cells.Length == 0) continue;
+
+            var prevWasRow = lastWasRow;
+            lastWasRow = false;
 
             if (inFooter || FooterStartPattern.IsMatch(cells[0]))
             {
@@ -213,6 +219,17 @@ public static class LabTableRowDetector
                 continue;
             }
 
+            // Перенос хвоста названия сразу после строки-результата: «MCH (ср. содер. Hb в | 29.1 | …» + «эр.)»,
+            // «Нейтрофилы | 46.2* | …» + «(общ.число), % | …». Строка со значением во второй ячейке — это уже
+            // новая строка-результат, а не продолжение.
+            if (prevWasRow && inTable && rows.Count > 0 &&
+                !(cells.Length >= 2 && ValueCellPattern.IsMatch(cells[1])) &&
+                TryAppendNameContinuation(rows, cells, out var stillOpen))
+            {
+                lastWasRow = stillOpen;
+                continue;
+            }
+
             // Вторая ячейка — распознанная единица ("обнаружение в | ммоль/л") — это хвост
             // названия с единицей в узкой колонке, а не значение показателя.
             // До 5 ячеек: имя | значение | единица | референс | комментарий (колонка «Комментарий» есть в шапке многих бланков).
@@ -221,6 +238,7 @@ public static class LabTableRowDetector
                 LabUnitNormalizer.Canonicalize(cells[1]) is null)
             {
                 rows.Add(new LabTableRow($"R{rows.Count + 1}", cells, line));
+                lastWasRow = true;
                 continue;
             }
 
@@ -235,6 +253,34 @@ public static class LabTableRowDetector
 
         Flush();
         return new LabTableDetectionResult(rows, panelHeaderLines, noiseLines);
+    }
+
+    /// <summary>Приклеивает перенесённый хвост названия к последней строке-результату: либо он дописывает
+    /// незакрытую скобку («(ср. содер. Hb в» + «эр.)»), либо сам начинается со скобки («(общ.число), %»).
+    /// <paramref name="stillOpen"/> — скобка в имени всё ещё не закрыта (хвост может идти и на третью строку).
+    /// Строки с датой в первой колонке (NameCellIndex ≠ 0) собирает DatedRecord — их не трогаем.</summary>
+    private static bool TryAppendNameContinuation(List<LabTableRow> rows, IReadOnlyList<string> cells, out bool stillOpen)
+    {
+        stillOpen = false;
+        var prev = rows[^1];
+        if (prev.NameCellIndex != 0) return false;
+
+        var name = prev.Cells[0];
+        var tail = cells[0];
+        if (tail.Length is 0 or > 60) return false;
+
+        var unclosed = name.Count(c => c == '(') > name.Count(c => c == ')');
+        if (!((unclosed && tail.Contains(')')) || tail.StartsWith('('))) return false;
+
+        var newName = name + " " + tail;
+        if (newName.Length > MaxNameLength) return false;
+
+        var newCells = prev.Cells.ToList();
+        newCells[0] = newName;
+        var rawLine = prev.RawLine.StartsWith(name, StringComparison.Ordinal) ? newName + prev.RawLine[name.Length..] : prev.RawLine;
+        rows[^1] = prev with { Cells = newCells, RawLine = rawLine };
+        stillOpen = newName.Count(c => c == '(') > newName.Count(c => c == ')');
+        return true;
     }
 
     private static bool IsHeaderRow(IReadOnlyList<string> cells)
