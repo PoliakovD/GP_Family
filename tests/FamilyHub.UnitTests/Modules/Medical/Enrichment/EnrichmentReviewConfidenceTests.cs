@@ -137,6 +137,33 @@ public class EnrichmentReviewGateTests
     }
 
     [Theory]
+    [InlineData("мч", "MCH (среднее содержание Hb в эритроците)", "MCH (среднее содержание Hb в эритроците)")]
+    [InlineData("мкв", "MCV", "MCV")]
+    [InlineData("рдв", "1. RDW-CV", "RDW-CV")]
+    [InlineData("мсн", "МСН", "МСН")]
+    [InlineData("мч", "", "мч")]
+    public void DefaultQuery_ForAnalyte_IsReadableBlankName_NotFoldedKey(string key, string sourceName, string expected)
+    {
+        // Ключ показателя сворачивает латиницу в кириллицу фонетически ("MCV" → "мкв"): искать по нему бессмысленно.
+        var job = new LabAnalyteEnrichmentJob { NormalizedName = key, SourceDisplayName = sourceName };
+
+        EnrichmentReviewGate.DefaultQuery(job).Should().Be(expected);
+        EnrichmentReviewGate.EffectiveQuery(job).Should().Be(expected);
+
+        EnrichmentReviewGate.TryParkForSearchApproval(job, 0.9, null);
+        job.ProposedQueryText.Should().Be(expected, "в очередь «Одобрение» предлагается читаемый запрос, а не ключ");
+    }
+
+    [Fact]
+    public void DefaultQuery_ForMedication_StaysNormalizedName()
+    {
+        var job = NewJob();
+        job.SourceDisplayName = "Ибупрофен 400";
+
+        EnrichmentReviewGate.DefaultQuery(job).Should().Be("ибупрофен");
+    }
+
+    [Theory]
     [InlineData(null, 0.8, true)]
     [InlineData(0.79, 0.8, true)]
     [InlineData(0.8, 0.8, false)]

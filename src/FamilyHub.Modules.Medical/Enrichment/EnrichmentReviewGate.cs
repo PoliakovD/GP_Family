@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Extraction;
 
 namespace FamilyHub.Modules.Medical.Enrichment;
@@ -68,10 +69,10 @@ public static class EnrichmentReviewGate
 
         job.QueryConfidence = queryConfidence;
         job.QueryConfidenceReason = queryConfidenceReason;
-        // Предложенный запрос — нормализованное имя (именно оно уходит в провайдер и в шаблоны
-        // поисковых запросов, см. AnalyteSearchQueryBuilder/MedicationSearchQueryBuilder); админ
-        // может поправить его до одобрения. Уже заданное (повторная парковка после ретрая) не трём.
-        job.ProposedQueryText ??= job.NormalizedName;
+        // Предложенный запрос (именно он уходит в провайдер и в шаблоны поисковых запросов, см.
+        // AnalyteSearchQueryBuilder/MedicationSearchQueryBuilder); админ может поправить его до
+        // одобрения. Уже заданное (повторная парковка после ретрая) не трём.
+        job.ProposedQueryText ??= DefaultQuery(job);
         job.Status = EnrichmentJobStatus.AwaitingSearchApproval;
         job.Error = null;
         return true;
@@ -94,9 +95,24 @@ public static class EnrichmentReviewGate
         return domains.Count == 0 ? providerName : $"{providerName}: {string.Join(", ", domains)}";
     }
 
-    /// <summary>Текст запроса, который уйдёт в провайдер: правка админа, иначе нормализованное имя.</summary>
+    /// <summary>Текст запроса, который уйдёт в провайдер: правка админа, иначе <see cref="DefaultQuery"/>.</summary>
     public static string EffectiveQuery(IReviewableEnrichmentJob job) =>
-        string.IsNullOrWhiteSpace(job.ProposedQueryText) ? job.NormalizedName : job.ProposedQueryText.Trim();
+        string.IsNullOrWhiteSpace(job.ProposedQueryText) ? DefaultQuery(job) : job.ProposedQueryText.Trim();
+
+    /// <summary>Запрос по умолчанию. Для показателя — читаемое название из бланка («MCH (среднее содержание Hb в
+    /// эритроците)»), а НЕ нормализованное имя: ключ показателя (<see cref="LabAnalyteNormalizer.NormalizeAnalyteKey"/>)
+    /// сворачивает латиницу в кириллицу фонетически («MCV» → «мкв», «RDW» → «рдв»), и поиск по такому ключу
+    /// бессмыслен (платный запрос впустую). Для препаратов нормализованное имя остаётся как было.</summary>
+    public static string DefaultQuery(IReviewableEnrichmentJob job)
+    {
+        if (job is LabAnalyteEnrichmentJob)
+        {
+            var readable = LabAnalyteNameCleaner.Clean(job.SourceDisplayName);
+            if (readable.Length > 0) return readable;
+        }
+
+        return job.NormalizedName;
+    }
 
     /// <summary>Гейт 2 (результат): true — уверенность суммаризатора ниже порога ИЛИ отсутствует
     /// (null считается «ниже», безопасный дефолт) — результат нужно отправить на ревью, а не в kb.</summary>
