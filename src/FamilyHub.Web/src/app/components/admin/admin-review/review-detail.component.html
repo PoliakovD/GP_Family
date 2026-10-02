@@ -27,6 +27,16 @@
           [ensureRef]="{ kind: it.kind, id: it.id }"
           (changed)="onSourcesChanged()"
         />
+        <button type="button" class="btn btn-secondary btn-sm rd-from-cache" [disabled]="busy()" (click)="pickerOpen.set(true)">
+          Взять из готового кэша…
+        </button>
+        <app-review-cache-picker
+          [open]="pickerOpen()"
+          [kind]="it.kind"
+          [id]="it.id"
+          (closed)="pickerOpen.set(false)"
+          (imported)="onCacheImported()"
+        />
       </section>
 
       <!-- Колонка 2: запрос (стадия поиска) либо черновик/запись (стадия результата) -->
@@ -65,6 +75,14 @@
                   <span class="text-muted">{{ it.cache.snippetCount }} источников (ручных {{ it.cache.manualCount }})</span>
                 </span>
               </label>
+            }
+            @if (it.cache.snippetCount === 0) {
+              <button type="button" class="rd-choice rd-choice-action" [disabled]="busy()" (click)="pickerOpen.set(true)">
+                <span>
+                  <strong>Взять из готового кэша…</strong> <span class="tag tag-ok">бесплатно</span><br />
+                  <span class="text-muted">Выбрать источники из уже оплаченного поиска другого названия и при необходимости поправить</span>
+                </span>
+              </button>
             }
             <label class="rd-choice" [class.rd-choice-active]="isChoice('paid')">
               <input type="radio" name="rd-choice" [checked]="isChoice('paid')" (change)="pickChoice('paid')" />

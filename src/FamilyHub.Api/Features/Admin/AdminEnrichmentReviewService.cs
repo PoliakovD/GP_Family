@@ -535,6 +535,117 @@ public class AdminEnrichmentReviewService(
         WebSearchTopic topic, Guid cacheId, string url, bool pinned, CancellationToken ct = default) =>
         ToOutcome(await cacheEditor.SetPinnedAsync(topic, cacheId, url, pinned, ct));
 
+    public async Task<ReviewActionOutcome<WebSnippet>> EditSnippetAsync(
+        WebSearchTopic topic, Guid cacheId, EditSnippetRequest request, CancellationToken ct = default) =>
+        ToOutcome(await cacheEditor.EditAsync(topic, cacheId, request.Url, request.Title, request.Text, request.Note, ct));
+
+    // ------------------------------------------------------------------ «взять из готового кэша»
+
+    private const int MaxCandidates = 20;
+    private const int CandidatesPerVariant = 50;
+
+    /// <summary>Кандидаты «взять из готового кэша»: непустые строки кэша той же темы, чьё нормализованное имя содержит
+    /// запрос (в сыром виде и после нормализатора темы — у показателей ключ свёрнут транслитерацией). Без запроса —
+    /// имя задачи целиком и его отдельные слова (≥ 4 букв): так находятся «парацетамол» для «парацетамол экстра» и т.п.
+    /// Собственная строка задачи исключается; точные совпадения запроса — первыми, дальше — свежие раньше.</summary>
+    public async Task<List<ReviewCacheCandidateDto>?> FindCacheCandidatesAsync(
+        string kind, Guid id, string? query, CancellationToken ct = default)
+    {
+        var job = await LoadAsync(kind, id, ct, tracking: false);
+        if (job is null) return null;
+
+        var topic = ReviewKinds.TopicOf(kind);
+        var (ownRow, _, _) = await FindCacheAsync(job, ct);
+        Func<string, string> normalize = topic == WebSearchTopic.LabAnalyte
+            ? LabAnalyteNormalizer.NormalizeAnalyteKey
+            : MedicationNameNormalizer.Normalize;
+
+        var variants = new List<string>();
+        void AddVariant(string? v)
+        {
+            v = v?.Trim();
+            if (!string.IsNullOrEmpty(v) && !variants.Contains(v)) variants.Add(v);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            AddVariant(query.Trim().ToLowerInvariant().Replace('ё', 'е'));
+            AddVariant(normalize(query));
+        }
+        else
+        {
+            AddVariant(job.NormalizedName);
+            foreach (var word in job.NormalizedName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length >= 4))
+                AddVariant(word);
+        }
+
+        if (variants.Count == 0) return [];
+
+        var rows = new Dictionary<Guid, ISearchCacheRow>();
+        foreach (var v in variants.Take(6))
+        {
+            IEnumerable<ISearchCacheRow> found = topic == WebSearchTopic.LabAnalyte
+                ? await db.LabAnalyteSearchCaches.AsNoTracking()
+                    .Where(c => c.NormalizedName.Contains(v) && c.SnippetsJson != null && c.SnippetsJson != "[]")
+                    .OrderByDescending(c => c.LastUpdatedAt).Take(CandidatesPerVariant).ToListAsync(ct)
+                : await db.MedicationSearchCaches.AsNoTracking()
+                    .Where(c => c.NormalizedName.Contains(v) && c.SnippetsJson != null && c.SnippetsJson != "[]")
+                    .OrderByDescending(c => c.LastUpdatedAt).Take(CandidatesPerVariant).ToListAsync(ct);
+            foreach (var r in found) rows.TryAdd(r.Id, r);
+        }
+
+        if (ownRow is not null) rows.Remove(ownRow.Id);
+
+        var specimenNames = new Dictionary<Guid, string>();
+        if (topic == WebSearchTopic.LabAnalyte)
+        {
+            var specimenIds = rows.Values.OfType<LabAnalyteSearchCache>().Select(r => r.SpecimenKbId).Distinct().ToList();
+            specimenNames = await db.GlobalSpecimensKb.AsNoTracking()
+                .Where(s => specimenIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.DisplayName, ct);
+        }
+
+        var now = DateTime.UtcNow;
+        var primary = variants[0];
+        var topicCode = topic == WebSearchTopic.LabAnalyte ? "lab-analyte" : "medication";
+        return rows.Values
+            .Select(r => (Row: r, Snippets: SearchCacheSnippets.Parse(r.SnippetsJson)))
+            .Where(x => x.Snippets.Count > 0)
+            .OrderBy(x => x.Row.NormalizedName == primary ? 0 : x.Row.NormalizedName.Contains(primary) ? 1 : 2)
+            .ThenByDescending(x => x.Row.LastUpdatedAt)
+            .Take(MaxCandidates)
+            .Select(x => new ReviewCacheCandidateDto(
+                x.Row.Id, topicCode, x.Row.NormalizedName,
+                x.Row is LabAnalyteSearchCache lab ? specimenNames.GetValueOrDefault(lab.SpecimenKbId, lab.SpecimenKbId.ToString()) : null,
+                x.Row.Provider, x.Row.LastUpdatedAt, x.Row.CanBeUpdatedAfter > now,
+                x.Snippets.Count, x.Snippets.Count(s => s.Origin == SnippetOrigin.Manual)))
+            .ToList();
+    }
+
+    /// <summary>Импорт выбранных сниппетов из готового кэша в набор задачи (строка задачи создаётся при необходимости,
+    /// см. <see cref="EnsureCacheAsync"/>). Дальше админ правит набор и принимает его вместо платного поиска
+    /// (одобрение поиска с mode=use-cache) либо пересуммирует черновик на стадии результата.</summary>
+    public async Task<ReviewActionOutcome<ImportReviewCacheResponse>> ImportCacheAsync(
+        string kind, Guid id, ImportReviewCacheRequest request, CancellationToken ct = default)
+    {
+        var job = await LoadAsync(kind, id, ct, tracking: false);
+        if (job is null) return new ReviewActionOutcome<ImportReviewCacheResponse>(ReviewActionResult.NotFound);
+        if (!job.Status.IsAwaitingAdmin())
+            return new ReviewActionOutcome<ImportReviewCacheResponse>(ReviewActionResult.WrongStatus, null, "Задача уже обработана.");
+
+        var ensured = await EnsureCacheAsync(kind, id, ct);
+        if (ensured.Result != ReviewActionResult.Ok) return new ReviewActionOutcome<ImportReviewCacheResponse>(ensured.Result);
+
+        var outcome = await cacheEditor.ImportFromAsync(ReviewKinds.TopicOf(kind), ensured.Value, request.SourceCacheId, request.Urls, ct);
+        return outcome.Result switch
+        {
+            CacheEditResult.Ok => new ReviewActionOutcome<ImportReviewCacheResponse>(
+                ReviewActionResult.Ok, new ImportReviewCacheResponse(ensured.Value, outcome.ImportedCount)),
+            CacheEditResult.NotFound => new ReviewActionOutcome<ImportReviewCacheResponse>(ReviewActionResult.NotFound),
+            _ => new ReviewActionOutcome<ImportReviewCacheResponse>(ReviewActionResult.Invalid, null, outcome.Error),
+        };
+    }
+
     public async Task<ReviewActionOutcome> SetNoteAsync(string kind, Guid id, string? note, CancellationToken ct = default)
     {
         var job = await LoadAsync(kind, id, ct);

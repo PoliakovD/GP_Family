@@ -138,7 +138,7 @@ export class AdminReviewComponent implements OnInit {
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (isTypingTarget(event.target) || this.confirm.request()) return;
+    if (isTypingTarget(event.target) || this.confirm.request() || this.detail?.pickerOpen()) return;
 
     switch (event.key) {
       case 'j':

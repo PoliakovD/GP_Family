@@ -29,6 +29,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
 import { VerificationBadgeComponent } from '../shared/verification-badge.component';
 import { KbHistoryComponent } from './kb-history.component';
+import { ReviewCachePickerComponent } from './review-cache-picker.component';
 import { ReviewSourcesComponent } from './review-sources.component';
 import {
   PayloadFieldDiff,
@@ -61,7 +62,10 @@ type SearchChoice = { type: 'paid' } | { type: 'own' } | { type: 'twin'; cacheId
  */
 @Component({
   selector: 'app-review-detail',
-  imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, ReviewSourcesComponent, KbHistoryComponent, VerificationBadgeComponent],
+  imports: [
+    FormsModule, DatePipe, AdminPayloadEditorComponent, ReviewSourcesComponent, ReviewCachePickerComponent, KbHistoryComponent,
+    VerificationBadgeComponent,
+  ],
   templateUrl: './review-detail.component.html',
   styleUrl: './review-detail.component.scss',
 })
@@ -103,6 +107,8 @@ export class ReviewDetailComponent implements OnChanges {
   /** Редактор payload перечитывает значение при смене этой строки (применение предложения пересуммаризации). */
   readonly editorPayload = signal('{}');
   readonly showHistory = signal(false);
+  /** Открыт выбор «взять из готового кэша» — горячие клавиши очереди в это время не действуют. */
+  readonly pickerOpen = signal(false);
 
   readonly confidenceLabel = confidenceLabel;
   readonly kindLabel = reviewKindLabel;
@@ -148,6 +154,7 @@ export class ReviewDetailComponent implements OnChanges {
   }
 
   async load(keepNote = false): Promise<void> {
+    this.pickerOpen.set(false);
     this.loading.set(true);
     this.error.set(null);
     try {
@@ -225,6 +232,13 @@ export class ReviewDetailComponent implements OnChanges {
   onSourcesChanged(): void {
     this.sourcesDirty.set(true);
     void this.reloadKeepingEdits();
+  }
+
+  /** Импорт из готового кэша: набор задачи пополнился — на стадии поиска сразу выбираем «мой набор из кэша». */
+  async onCacheImported(): Promise<void> {
+    this.sourcesDirty.set(true);
+    await this.reloadKeepingEdits();
+    if (this.isSearch()) this.choice.set({ type: 'own' });
   }
 
   /** Перечитывает карточку после правки источников, не теряя набранные правки черновика. */

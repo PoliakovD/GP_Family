@@ -2,3 +2,7 @@
 :host {
   display: contents;
 }
+
+.overlay-card-wide {
+  max-width: min(760px, calc(100vw - 32px));
+}

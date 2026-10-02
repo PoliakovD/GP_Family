@@ -656,6 +656,85 @@ public class EnrichmentAdminReviewTests(ReviewWebFactory factory)
         history!.Items.Select(i => i.Action).Should().Contain("cache-add");
     }
 
+    [Fact]
+    public async Task ReadyCache_OfAnotherName_CanBeImportedEditedAndUsedInsteadOfPaidSearch()
+    {
+        var name = Name();
+        var jobId = await RunMedicationJobAsync(name);
+        var admin = await AdminClientAsync();
+        var suffix = name.Split(' ')[^1];
+        var donorName = $"{suffix} форте";
+
+        // Готовый кэш другого названия (например, торговое vs МНН) — по нему уже платили.
+        using (var scope = factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<MedicationSearchCacheService>().RecordSearchAsync(
+                donorName, "FakeProvider",
+            [
+                new WebSnippet("Видаль", "https://www.vidal.ru/drugs/donor", "Показания: боль, лихорадка."),
+                new WebSnippet("РЛС", "https://www.rlsnet.ru/donor", "Противопоказания: печёночная недостаточность."),
+                new WebSnippet("Форум", "https://forum.example/donor", "Мне помогло."),
+            ]);
+        }
+
+        // Без запроса ищется по словам имени задачи; с запросом — по подстроке.
+        var byDefault = await admin.GetFromJsonAsync<List<ReviewCacheCandidateDto>>(
+            $"/api/admin/review/items/medication/{jobId}/cache-candidates", JsonOpts);
+        byDefault!.Should().Contain(c => c.NormalizedName == donorName);
+        var candidates = await admin.GetFromJsonAsync<List<ReviewCacheCandidateDto>>(
+            $"/api/admin/review/items/medication/{jobId}/cache-candidates?query={Uri.EscapeDataString(suffix)}", JsonOpts);
+        var donor = candidates!.Single(c => c.NormalizedName == donorName);
+        donor.SnippetCount.Should().Be(3);
+
+        // Импорт двух из трёх сниппетов: строка задачи создаётся сама.
+        var import = await admin.PostAsJsonAsync($"/api/admin/review/items/medication/{jobId}/cache/import", new
+        {
+            sourceCacheId = donor.CacheId,
+            urls = new[] { "https://www.vidal.ru/drugs/donor", "https://www.rlsnet.ru/donor" },
+        });
+        import.StatusCode.Should().Be(HttpStatusCode.OK);
+        var imported = (await import.Content.ReadFromJsonAsync<ImportReviewCacheResponse>(JsonOpts))!;
+        imported.Imported.Should().Be(2);
+
+        (await admin.PostAsJsonAsync($"/api/admin/review/items/medication/{jobId}/cache/import",
+                new { sourceCacheId = donor.CacheId, urls = new[] { "https://www.vidal.ru/drugs/donor" } }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest, "повторный импорт того же источника — нечего добавлять");
+        (await admin.PostAsJsonAsync($"/api/admin/review/items/medication/{jobId}/cache/import",
+                new { sourceCacheId = imported.CacheId }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest, "сам в себя не импортируется");
+
+        // Своя строка задачи в кандидатах не показывается.
+        var after = await admin.GetFromJsonAsync<List<ReviewCacheCandidateDto>>(
+            $"/api/admin/review/items/medication/{jobId}/cache-candidates?query={Uri.EscapeDataString(suffix)}", JsonOpts);
+        after!.Should().NotContain(c => c.CacheId == imported.CacheId);
+
+        // Правка сниппета: авто-выдержка становится ручной цитатой.
+        var edit = await admin.PutAsJsonAsync($"/api/admin/review/cache/medication/{imported.CacheId}/snippets", new
+        {
+            url = "https://www.vidal.ru/drugs/donor", title = "Видаль (поправлено)", text = "Показания: боль, лихорадка у взрослых.",
+        });
+        edit.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await admin.PutAsJsonAsync($"/api/admin/review/cache/medication/{imported.CacheId}/snippets",
+                new { url = "https://www.vidal.ru/drugs/donor", text = " " }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/items/medication/{jobId}", JsonOpts);
+        detail!.Cache.SnippetCount.Should().Be(2);
+        var editedSource = detail.Sources.Single(x => x.Url == "https://www.vidal.ru/drugs/donor");
+        editedSource.Text.Should().Be("Показания: боль, лихорадка у взрослых.");
+        editedSource.Origin.Should().Be(SnippetOrigin.Manual);
+
+        // Принять набор вместо платного поиска.
+        (await admin.PostAsJsonAsync($"/api/admin/review/searches/medication/{jobId}/approve", new { mode = "use-cache" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        await WaitForStatusAsync(jobId, EnrichmentJobStatus.Completed, "задача строится на импортированном наборе");
+        factory.Provider.CallsFor(name).Should().Be(0, "набор взят из готового кэша — платного вызова нет");
+
+        var history = await admin.GetFromJsonAsync<KbChangeLogListDto>(
+            $"/api/admin/history?target=MedicationSearchCache&targetId={imported.CacheId}", JsonOpts);
+        history!.Items.Select(i => i.Action).Should().Contain(["cache-import", "cache-edit"]);
+    }
+
     // ------------------------------------------------------------------ статус проверки kb
 
     [Fact]

@@ -93,6 +93,24 @@
   cursor: pointer;
 }
 
+// Кнопка-действие в списке выбора («Взять из готового кэша…») — вид как у радио-варианта, сброс нативной кнопки.
+.rd-choice-action {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--color-paper);
+  border-style: dashed;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent);
+  }
+}
+
+.rd-from-cache {
+  margin-top: 10px;
+}
+
 .rd-choice-active {
   border-color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 8%, var(--color-paper));
