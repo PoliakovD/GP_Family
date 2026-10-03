@@ -1,5 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -11,6 +12,7 @@ import { ModalComponent } from '../../shared/modal/modal.component';
 import { PASSWORD_PATTERN } from '../settings/settings-task';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { safeReturnUrl } from '../../services/return-url';
+import { ResendCooldown } from '../../shared/util/resend-cooldown';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
 /** 'error' — проверка не удалась (сеть/лимит): не блокируем регистрацию, сервер всё равно проверит
@@ -32,7 +34,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 @Component({
     selector: 'app-login',
-    imports: [FormsModule, ModalComponent],
+    imports: [FormsModule, ModalComponent, NgTemplateOutlet],
     templateUrl: './login.component.html'
 })
 export class LoginComponent implements HasPendingCodeEntry {
@@ -194,6 +196,7 @@ export class LoginComponent implements HasPendingCodeEntry {
     await this.run(async () => {
       await this.auth.registerStart(this.email);
       this.step.set('register-code');
+      this.resend.start();
     });
   }
 
@@ -228,6 +231,25 @@ export class LoginComponent implements HasPendingCodeEntry {
     }
   }
 
+  /** Таймер кнопки «Отправить код ещё раз». */
+  readonly resend = new ResendCooldown();
+  /** Короткое «Новый код отправлен» после повторной отправки. */
+  readonly info = signal<string | null>(null);
+
+  /** Повторная отправка кода — тот же запрос, что и первый раз (регистрация или сброс пароля). */
+  async resendCode(): Promise<void> {
+    if (!this.resend.ready() || this.busy()) return;
+    const isReset = this.step() === 'reset-password-code';
+    this.info.set(null);
+    await this.run(async () => {
+      if (isReset) await this.auth.resetPasswordStart(this.email);
+      else await this.auth.registerStart(this.email);
+      this.code = '';
+      this.resend.start();
+      this.info.set(`Новый код отправлен на ${this.email}.`);
+    });
+  }
+
   /** С шага «код» — назад к деталям (например, поправить email), без потери введённого. */
   backToDetails(): void {
     this.error.set(null);
@@ -252,6 +274,7 @@ export class LoginComponent implements HasPendingCodeEntry {
   async sendResetCode(): Promise<void> {
     await this.run(async () => {
       await this.auth.resetPasswordStart(this.email);
+      this.resend.start();
       this.step.set('reset-password-code');
     });
   }
@@ -338,7 +361,7 @@ export class LoginComponent implements HasPendingCodeEntry {
         case 'username_taken': return 'Этот username уже занят — выберите другой.';
         case 'invalid_profile': return 'Проверьте ФИО и дату рождения.';
       }
-      if (e.status === 429) return 'Слишком много запросов — подождите немного.';
+      if (e.status === 429) return 'Слишком много запросов. Подождите и попробуйте снова — кодов из письма можно получить не больше трёх в час.';
     }
     return 'Что-то пошло не так. Попробуйте ещё раз.';
   }

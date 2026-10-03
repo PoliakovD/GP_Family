@@ -173,7 +173,10 @@
             [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
             autocomplete="one-time-code" placeholder="6 цифр" />
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Создать аккаунт</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">
+            {{ busy() ? 'Проверяем…' : 'Создать аккаунт' }}
+          </button>
+          <ng-container *ngTemplateOutlet="resendBlock" />
           @if (errorCode() === 'email_taken') {
             <button type="button" class="btn btn-secondary btn-block" (click)="useExistingAccount()">
               Войти в этот аккаунт
@@ -221,12 +224,24 @@
           }
 
           <button type="submit" class="btn btn-primary btn-block mt-3" [disabled]="!canSubmitNewPassword">Сохранить новый пароль</button>
+          <ng-container *ngTemplateOutlet="resendBlock" />
           <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
         </form>
       }
     }
   </div>
 </div>
+
+<!-- Повторная отправка кода: письмо может прийти не сразу или попасть в «Спам». -->
+<ng-template #resendBlock>
+  @if (info()) {
+    <div class="alert-info mt-2" role="status">{{ info() }}</div>
+  }
+  <p class="field-hint field-hint-muted mt-2 mb-1">Письма нет? Проверьте папку «Спам».</p>
+  <button type="button" class="btn btn-secondary btn-block" [disabled]="!resend.ready() || busy()" (click)="resendCode()">
+    @if (resend.ready()) { Отправить код ещё раз } @else { Отправить ещё раз через {{ resend.label() }} }
+  </button>
+</ng-template>
 
 <app-modal [title]="legalModalTitle()" [open]="legalModalOpen()" (closed)="closeLegalModal()">
   @if (legalModalHtml(); as html) {
