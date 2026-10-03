@@ -14,6 +14,16 @@ interface TelegramWebApp {
    * перехватывает сам Telegram, а не браузерная история. */
   enableClosingConfirmation: () => void;
   disableClosingConfirmation: () => void;
+  /** Системная кнопка «Назад» в шапке Mini App. Без неё аппаратный «назад» на Android закрывал
+   * всё приложение вместо возврата на предыдущий экран. */
+  BackButton?: {
+    show: () => void;
+    hide: () => void;
+    onClick: (cb: () => void) => void;
+    offClick: (cb: () => void) => void;
+  };
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
 }
 
 declare global {
@@ -37,6 +47,33 @@ export class TelegramService {
     this.log.log('tg', 'info', `init — inside=${inside}, colorScheme=${this.webApp?.colorScheme ?? 'n/a'}`);
     this.webApp?.ready();
     this.webApp?.expand();
+    if (inside) {
+      // Шапка и фон Telegram — в цвет приложения: иначе под тёмной/цветной шапкой Telegram
+      // «плавал» светлый лист без перехода.
+      try {
+        this.webApp?.setHeaderColor?.('#f3f2f2');
+        this.webApp?.setBackgroundColor?.('#f3f2f2');
+      } catch {
+        // старые клиенты Telegram без этих методов — не критично
+      }
+    }
+  }
+
+  private backHandler: (() => void) | null = null;
+
+  /** Показать/спрятать системную «Назад» Telegram; обработчик один на всё приложение. */
+  setBackButton(visible: boolean, onBack: () => void): void {
+    const button = this.webApp?.BackButton;
+    if (!button || !this.isInsideTelegram()) return;
+    if (this.backHandler) button.offClick(this.backHandler);
+    this.backHandler = null;
+    if (visible) {
+      this.backHandler = onBack;
+      button.onClick(onBack);
+      button.show();
+    } else {
+      button.hide();
+    }
   }
 
   getInitData(): string {

@@ -38,7 +38,16 @@
       // SRI (integrity=) сознательно не добавлен: у Telegram нет официально публикуемого хеша для
       // этого файла, а сам скрипт обновляется вместе с релизами Telegram — захардкоженный хеш
       // сломал бы Mini App при первом же обновлении без синхронного процесса его освежения.
-      if (location.hash.indexOf('tgWebAppData') !== -1) {
+      var insideTelegram = location.hash.indexOf('tgWebAppData') !== -1;
+      try {
+        // После навигации hash с tgWebAppData теряется, и при «Перезагрузить» в Telegram SDK не
+        // грузился — человек видел вход для браузера внутри Telegram. Запоминаем признак на вкладку;
+        // сам SDK хранит initData в sessionStorage (__telegram__initParams) и восстановит его.
+        if (insideTelegram) sessionStorage.setItem('familyhub.insideTelegram', '1');
+        else insideTelegram = sessionStorage.getItem('familyhub.insideTelegram') === '1'
+          || sessionStorage.getItem('__telegram__initParams') !== null;
+      } catch (e) { /* sessionStorage недоступен — остаёмся на признаке из hash */ }
+      if (insideTelegram) {
         document.write('<script src="https://telegram.org/js/telegram-web-app.js" crossorigin="anonymous"><\/script>');
       }
     </script>

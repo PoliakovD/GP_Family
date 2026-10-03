@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, NavigationError } from '@angular/router';
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
@@ -256,6 +256,14 @@ export class AppComponent implements OnInit {
     !this.onAuthRoute() && (this.auth.mode === 'telegram' || this.auth.me() !== null));
 
   constructor() {
+    // Telegram: «Назад» в шапке Mini App на всех экранах, кроме корней вкладок (там «назад»
+    // закрывает приложение — так и должно быть).
+    effect(() => {
+      const path = this.currentUrl().split('?')[0].split('#')[0];
+      const isTabRoot = ['/home', '/health', '/settings', '/families', '/login', '/telegram-bind', '/'].includes(path)
+        || /^\/families\/[^/]+$/.test(path);
+      untracked(() => this.tg.setBackButton(!isTabRoot, () => history.back()));
+    });
     // PWA: реагируем на КАЖДЫЙ переход auth.me() в непустое состояние, а не только на бутстрап
     // приложения. Раньше refresh() запускался один раз в ngOnInit — если в этот момент
     // пользователь ещё не был аутентифицирован (например, только что открыл /login), последующие
