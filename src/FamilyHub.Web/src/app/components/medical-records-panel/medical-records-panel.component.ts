@@ -13,7 +13,7 @@ import { PageActionService } from '../../services/page-action.service';
 import { AiStatusService } from '../../services/ai-status.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import {
-  ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
+  ExtractionJobStatus, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
 } from '../../models/types';
 import type {
   ExtractionStatusResponse,
@@ -54,11 +54,8 @@ import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
+import { EXTRACTION_TERMINAL_STATUSES, enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
 
-/** Терминальные статусы задачи распознавания — опрос останавливается. */
-const EXTRACTION_TERMINAL_STATUSES: number[] = [
-  ExtractionJobStatus.Completed, ExtractionJobStatus.Failed, ExtractionJobStatus.Skipped,
-];
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
 /** Опрос статуса задачи, пока она ждёт возвращения ИИ (LM Studio) — реже обычного. */
@@ -78,17 +75,6 @@ const ENRICHMENT_POLL_INTERVAL_MS = 5000;
 /** Опрос резюме после ручной правки: бэк ждёт 15 с дебаунса, потом идёт LLM — 4 с × 45 ≈ 3 мин. */
 const SUMMARY_POLL_INTERVAL_MS = 4000;
 const SUMMARY_POLL_MAX_ATTEMPTS = 45;
-
-// Информативнее прежних коротких подписей ("Распознаём"/"Извлекаем данные") — пользователь просил
-// видеть, что именно сейчас происходит на каждом шаге, а не общие слова.
-const STAGE_LABEL: Partial<Record<number, string>> = {
-  [ExtractionStage.Queued]: 'В очереди',
-  [ExtractionStage.Decoding]: 'Открываем файл',
-  [ExtractionStage.Ocr]: 'Распознаём текст',
-  [ExtractionStage.Structuring]: 'Считываем показатели',
-  [ExtractionStage.Linking]: 'Сверяем со справочником показателей',
-  [ExtractionStage.Summarizing]: 'Готовим резюме анализа',
-};
 
 /** Токен для GET /api/medical-records?kind=. */
 const LIST_KIND_TOKEN: Record<MedicalRecordKind, 'analysis' | 'visit'> = {
@@ -165,7 +151,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly ExtractionJobStatus = ExtractionJobStatus;
   readonly ExtractionStatus = ExtractionStatus;
   readonly IndicatorFlag = IndicatorFlag;
-  readonly stageLabel = STAGE_LABEL;
   readonly pluralizeRu = pluralizeRu;
 
   /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
@@ -980,89 +965,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.pollHandles.set(record.id, setInterval(() => void tick(), EXTRACTION_POLL_INTERVAL_MS));
   }
 
-  /** Живой список шагов (UX-редизайн) — растущий список «уже сделано» + текущий пульсирующий
-   * шаг, не статичная строка. Только выполненные + активный: будущие шаги не показываем, конвейер
-   * может их пропустить (текстовый путь не заходит в OCR). */
+  /** Живой список шагов — логика в extraction-pipeline.ts (nextPipelineSteps). */
   private updatePipelineSteps(recordId: string, status: ExtractionStatusResponse, prev: ExtractionStatusResponse | null): void {
-    const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
-    const markLastDone = () => {
-      const last = steps[steps.length - 1];
-      if (last && last.state === 'active') steps[steps.length - 1] = { ...last, state: 'done' };
-    };
-
-    if (status.status === ExtractionJobStatus.Failed || status.status === ExtractionJobStatus.Skipped) {
-      markLastDone();
-      steps.push({
-        id: `outcome-${steps.length}`,
-        label: `${friendlyExtractionError(status.error)} Можно нажать «Распознать» ещё раз или внести показатели вручную.`,
-        state: 'error',
-      });
-    } else if (status.status === ExtractionJobStatus.Completed) {
-      markLastDone();
-      steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
-    } else if (status.waitingForAi) {
-      // ИИ (LM Studio) недоступен — задача не потеряна, стоит в очереди и стартует сама, как только
-      // сервер вернётся (LmStudioRecoverySweepJob). Явно говорим об этом, чтобы «в процессе» не
-      // выглядело как зависание и пользователь не жал «Распознать» повторно.
-      if (!prev || !prev.waitingForAi || steps.length === 0) {
-        markLastDone();
-        steps.push({
-          id: `waiting-ai-${steps.length}`,
-          label: 'Ждём ИИ — документ сохранён и будет распознан автоматически, как только он станет доступен. Страницу можно закрыть.',
-          state: 'active',
-        });
-      }
-    } else if (status.queuePosition > 0) {
-      // Общая очередь к единственной локальной модели (баг с живого отчёта — под нагрузкой,
-      // когда параллельно идёт большой поток задач обогащения справочника, Status уже мог стать
-      // Running и Stage уже "Ocr"/"Decoding": Hangfire взял задачу в отдельный воркер очереди
-      // "extraction", но сама модель прямо сейчас занята задачей ДРУГОГО конвейера — см.
-      // ExtractionStatusResponse.QueuePosition/LlmQueuePositionService на бэкенде. Без этой
-      // проверки пользователь видел бы "Читаем текст" и думал, что идёт реальная работа, хотя
-      // задача просто ждёт своей очереди у общего семафора. Проверяется ДО branch по
-      // Pending/построчной логике по стадиям ниже.
-      if (!prev || prev.queuePosition !== status.queuePosition || steps.length === 0) {
-        markLastDone();
-        const label = `В очереди на распознавание — перед вами ${status.queuePosition} ` +
-          `${pluralizeRu(status.queuePosition, 'документ', 'документа', 'документов')}`;
-        steps.push({ id: `global-queue-${status.queuePosition}`, label, state: 'active' });
-      }
-    } else if (status.status === ExtractionJobStatus.Pending) {
-      // Никого нет впереди ни в одном из четырёх конвейеров (queuePosition===0) — просто ждём,
-      // пока воркер Hangfire реально возьмёт задачу в работу.
-      if (!prev || steps.length === 0 || prev.queuePosition > 0 || prev.waitingForAi) {
-        markLastDone();
-        steps.push({ id: 'queue-next', label: 'В очереди — следующая на распознавание', state: 'active' });
-      }
-    } else {
-      // Новый обработанный файл — отдельная строка с галочкой, до перехода к следующей стадии.
-      if (prev && status.processedFiles > prev.processedFiles) {
-        markLastDone();
-        steps.push({ id: `file-${status.processedFiles}`, label: `Файл ${status.processedFiles} распознан`, state: 'done' });
-      }
-      if (!prev || prev.stage !== status.stage || steps.length === 0) {
-        markLastDone();
-        const base = this.stageLabel[status.stage] ?? 'Обрабатываем…';
-        // "файл N из M" — только на ПОФАЙЛОВЫХ стадиях (Decoding/Ocr): Structuring/Linking/
-        // Summarizing идут ОДИН раз на всю запись, после того как ВСЕ файлы уже прочитаны —
-        // ProcessedFiles/TotalFiles к этому моменту заморожены (оба равны), и суффикс "файл 5 из 5"
-        // ошибочно читался как "всё ещё обрабатываем файл 5", хотя на деле файлы давно прочитаны, а
-        // конвейер уже сверяет показатели со справочником/считает резюме (баг, найденный на живом
-        // отчёте — это и создавало впечатление, что процесс "завис"/остановился именно в момент
-        // перехода от файлов к этим стадиям).
-        const isPerFileStage = status.stage === ExtractionStage.Decoding || status.stage === ExtractionStage.Ocr;
-        const label = isPerFileStage && status.totalFiles > 1
-          ? `${base} — файл ${this.currentFileNumber(status)} из ${status.totalFiles}`
-          : base;
-        steps.push({ id: `stage-${status.stage}-${steps.length}`, label, state: 'active' });
-      }
-    }
-
-    // Живой обрывок "мысли" модели (план "живой поток мыслей") — мутируем ПОСЛЕДНИЙ шаг НА МЕСТЕ
-    // (не push нового), если он ещё active: это не новый шаг конвейера, просто уточнение текста
-    // уже показанной строки на очередной тик поллинга — не должно переигрывать её entrance-
-    // анимацию (см. class doc PipelineStep.thought/pipeline-progress.component.ts про track по id).
-
+    const steps = nextPipelineSteps(this.pipelineStepsByRecord[recordId] ?? [], status, prev);
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
   }
 
@@ -1074,15 +979,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * строка — просто финальная сводка перед тем, как весь виджет исчезнет (schedulePipelineClear). */
   private appendEnrichmentFollowupStep(recordId: string): void {
     const pendingCount = (this.indicatorsByRecord[recordId] ?? []).filter((i) => i.enrichmentPending).length;
-    if (pendingCount === 0) return;
-
-    const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
-    steps.push({
-      id: 'enrichment-followup',
-      label: `Для ${pendingCount} ${pluralizeRu(pendingCount, 'показателя', 'показателей', 'показателей')} ещё уточняем норму — можно закрыть страницу, это продолжится само`,
-      state: 'done',
-    });
-    this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
+    const step = enrichmentFollowupStep(pendingCount);
+    if (!step) return;
+    this.pipelineStepsByRecord = {
+      ...this.pipelineStepsByRecord,
+      [recordId]: [...(this.pipelineStepsByRecord[recordId] ?? []), step],
+    };
   }
 
   private schedulePipelineClear(recordId: string): void {
@@ -1308,12 +1210,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   scaleValue(indicator: IndicatorDto): number | null {
     return indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null;
-  }
-
-  /** «Файл N из totalFiles» в процессе распознавания — processedFiles уже завершены, текущий —
-   * следующий по счёту (капнуто totalFiles на случай отставания статуса от факта). */
-  currentFileNumber(status: ExtractionStatusResponse): number {
-    return Math.min(status.processedFiles + 1, status.totalFiles);
   }
 
   /** Название показателя для строки таблицы — ПОЛНОЕ, как в бланке («MCH (среднее содержание Hb в эритроците)»).
@@ -1813,12 +1709,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-}
-
-/** Текст бэкенда про сбой распознавания — только если он по-русски и человеческий; иначе общий. */
-function friendlyExtractionError(raw: string | null | undefined): string {
-  if (raw && /[а-яё]/i.test(raw) && !raw.includes('<') && raw.length <= 300) return raw.endsWith('.') ? raw : raw + '.';
-  return 'Не удалось распознать документ.';
 }
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {
