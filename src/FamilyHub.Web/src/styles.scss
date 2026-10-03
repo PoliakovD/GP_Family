@@ -1,6 +1,6 @@
 // ============================================================================
 // Дизайн-токены — порт из «FamilyHub Redesign - standalone.html» (дизайн-дэк).
-// Бумажная печатная эстетика: serif в заголовках, системный sans в интерфейсе, cyan-акцент,
+// Бумажная печатная эстетика: Source Serif 4, спокойная бумажная палитра, cyan-акцент,
 // острые углы. Тема фиксированная (дэк свето-only) — --tg-theme-* больше не используется.
 // ============================================================================
 :root {
@@ -50,14 +50,9 @@
   --color-accent-2-800: #790e3d;
   --color-accent-2-900: #4b1528;
 
-  // Заголовки и названия — serif (характер «бумажной» темы). Source Serif 4 нигде не подключён как
-  // веб-шрифт — фактически работал системный Georgia/Noto Serif; стек оставлен честным.
-  --font-heading: "Source Serif 4", Georgia, "Noto Serif", "Times New Roman", serif;
+  --font-heading: "Source Serif 4", Georgia, serif;
   --font-heading-weight: 600;
-  // Интерфейс, текст и цифры — системный sans: мелкий кегль и числа читаются заметно лучше, чем
-  // serif (аудит P1-08, аудитория с пожилыми). Системный — без загрузки, работает офлайн, кириллица везде.
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
-  --font-body: var(--font-ui);
+  --font-body: "Source Serif 4", Georgia, serif;
 
   --space-1: 5px;
   --space-2: 10px;
@@ -206,7 +201,7 @@ a {
   gap: 6px;
   cursor: pointer;
   text-decoration: none;
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
   font-size: 0.8824rem; // редизайн v2: было 14px
   line-height: 1.2;
@@ -289,7 +284,7 @@ a {
   background: none;
   border: none;
   cursor: pointer;
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-size: 0.8824rem; // было 13px — «Назад», «Отмена», «Повторить» читались с трудом
   color: var(--color-accent);
   padding: var(--space-1) 0;
@@ -550,7 +545,7 @@ select.input {
 }
 
 .card-kicker {
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-size: 0.7647rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1111,7 +1106,7 @@ select.input {
   padding: 1px 6px;
   background: var(--color-accent-2);
   color: #fff;
-  font: 700 12px/1.5 var(--font-ui);
+  font: 700 12px/1.5 var(--font-heading);
   text-align: center;
   border-radius: var(--radius-sm);
 }
@@ -1128,7 +1123,7 @@ select.input {
 // но без отступа сверху (первая группа сразу под пунктом «Здоровье», не под футером).
 .app-sidebar-group-label {
   padding: 10px 12px 2px;
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-weight: 600;
   font-size: 0.7647rem;
   letter-spacing: 0.1em;
@@ -1196,7 +1191,7 @@ select.input {
 }
 
 .app-sidebar-kicker {
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-weight: 600;
   font-size: 0.7647rem;
   letter-spacing: 0.12em;
@@ -1530,7 +1525,7 @@ select.input {
   }
 
   span {
-    font-family: var(--font-ui);
+    font-family: var(--font-heading);
     font-size: 0.7647rem; // было 11px — подписи вкладок должны читаться без очков
   }
 
