@@ -475,7 +475,7 @@ public class ExtractionQueryService(
             if (await CheckManualEntryGatesAsync(displayName, specimenDisplayName, ct) is null)
                 await enrichmentRequest.RequestAsync(
                     analyteKey, indicator.SpecimenKbId, displayName, indicator.Id, userId,
-                    origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+                    origin: EnrichmentRequestOrigin.ManualEntry, ct: ct, unit: request.Unit);
         }
 
         return UpdateIndicatorResult.Success;
@@ -505,7 +505,7 @@ public class ExtractionQueryService(
 
         var indicators = await db.LabIndicators.AsNoTracking()
             .Where(i => i.MedicalRecordId == recordId)
-            .Select(i => new { i.Id, i.AnalyteKey, i.DisplayName })
+            .Select(i => new { i.Id, i.AnalyteKey, i.DisplayName, i.Unit })
             .ToListAsync(ct);
 
         record.SpecimenKbId = specimenKbId;
@@ -546,7 +546,7 @@ public class ExtractionQueryService(
             if (await CheckManualEntryGatesAsync(indicator.DisplayName, specimenDisplayName, ct) is null)
                 await enrichmentRequest.RequestAsync(
                     indicator.AnalyteKey, specimenKbId, indicator.DisplayName, indicator.Id, userId,
-                    origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+                    origin: EnrichmentRequestOrigin.ManualEntry, ct: ct, unit: indicator.Unit);
             else
                 rejectedNames.Add(indicator.DisplayName);
         }
@@ -660,7 +660,7 @@ public class ExtractionQueryService(
             await CheckManualEntryGatesAsync(displayName, specimenDisplayName, ct) is null)
             await enrichmentRequest.RequestAsync(
                 analyteKey, record.SpecimenKbId, displayName, indicator.Id, userId,
-                origin: EnrichmentRequestOrigin.ManualEntry, ct: ct);
+                origin: EnrichmentRequestOrigin.ManualEntry, ct: ct, unit: request.Unit);
 
         return (CreateIndicatorResult.Success, ToDto(indicator, specimenDisplayName));
     }

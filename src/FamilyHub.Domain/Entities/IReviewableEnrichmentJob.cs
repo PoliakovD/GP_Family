@@ -12,6 +12,9 @@ public interface IReviewableEnrichmentJob : IPipelineJob
 {
     string NormalizedName { get; }
     string SourceDisplayName { get; }
+
+    /// <summary>Единицы измерения через "; " (только у показателей, у препаратов null).</summary>
+    string? Units => null;
     string? Provider { get; set; }
     Guid? KbId { get; set; }
 

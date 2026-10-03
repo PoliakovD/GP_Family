@@ -152,6 +152,9 @@ public static class LabTableRowDetector
         var inTable = false;
         var inFooter = false;
         DatedRecord? open = null;
+        // Предыдущая обработанная строка — результат обычной таблицы: следующая строка из одной
+        // ячейки со строчной буквы — перенесённый хвост названия ("…гемоглобина в" / "эритроците").
+        var prevWasOrdinaryRow = false;
 
         void Flush()
         {
@@ -166,11 +169,15 @@ public static class LabTableRowDetector
             if (line.StartsWith("--- стр.", StringComparison.Ordinal))
             {
                 inFooter = false;
+                prevWasOrdinaryRow = false;
                 continue;
             }
 
             var cells = line.Split(" | ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             if (cells.Length == 0) continue;
+
+            var wasOrdinaryRow = prevWasOrdinaryRow;
+            prevWasOrdinaryRow = false;
 
             if (inFooter || FooterStartPattern.IsMatch(cells[0]))
             {
@@ -221,6 +228,17 @@ public static class LabTableRowDetector
                 LabUnitNormalizer.Canonicalize(cells[1]) is null)
             {
                 rows.Add(new LabTableRow($"R{rows.Count + 1}", cells, line));
+                prevWasOrdinaryRow = true;
+                continue;
+            }
+
+            if (cells.Length == 1 && wasOrdinaryRow && rows.Count > 0 && IsNameTail(cells[0]))
+            {
+                var last = rows[^1];
+                var merged = last.Cells.ToArray();
+                merged[last.NameCellIndex] = merged[last.NameCellIndex] + " " + cells[0];
+                rows[^1] = last with { Cells = merged, RawLine = string.Join(" | ", merged) };
+                prevWasOrdinaryRow = true; // хвост может занимать несколько строк
                 continue;
             }
 
@@ -236,6 +254,11 @@ public static class LabTableRowDetector
         Flush();
         return new LabTableDetectionResult(rows, panelHeaderLines, noiseLines);
     }
+
+    /// <summary>Хвост названия: короткая строка со строчной буквы без цифр (заголовки панелей
+    /// начинаются с заглавной, примечания — с "*").</summary>
+    private static bool IsNameTail(string text) =>
+        text.Length is > 0 and <= 40 && char.IsLower(text[0]) && !text.Any(char.IsDigit);
 
     private static bool IsHeaderRow(IReadOnlyList<string> cells)
     {

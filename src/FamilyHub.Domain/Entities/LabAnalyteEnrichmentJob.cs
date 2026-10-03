@@ -24,6 +24,12 @@ public class LabAnalyteEnrichmentJob : IReviewableEnrichmentJob
 
     public string SourceDisplayName { get; set; } = string.Empty;
 
+    /// <summary>Единицы измерения, в которых показатель встречался в бланках пользователей ("г/л; %"),
+    /// через "; ". Все они уходят в платный поисковый запрос и в промпт суммаризатора, чтобы одним
+    /// поиском получить нормы для каждой единицы (иначе норма в одной единице не находит пару в
+    /// справочнике для другой — IndicatorFlagCalculator.AdjustRangeForUnit). Null — единица не известна.</summary>
+    public string? Units { get; set; }
+
     /// <summary>true — принудительное переобогащение уже существующей KB-записи (см.
     /// LabAnalyteKbReenrichJob): LabAnalyteEnrichmentProcessor обычно считает Hit в справочнике
     /// поводом сразу завершить задачу Completed без внешнего запроса — Force это пропускает.</summary>

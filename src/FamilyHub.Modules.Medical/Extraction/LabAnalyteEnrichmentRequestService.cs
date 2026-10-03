@@ -33,9 +33,9 @@ public class LabAnalyteEnrichmentRequestService(
     public async Task RequestAsync(
         string normalizedName, Guid specimenKbId, string sourceDisplayName, Guid? labIndicatorId,
         Guid requestedByUserId, EnrichmentRequestOrigin origin = EnrichmentRequestOrigin.Extraction,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default, string? unit = null) =>
         await RequestAsync(
-            normalizedName, specimenKbId, sourceDisplayName, labIndicatorId, requestedByUserId, force: false, origin, ct);
+            normalizedName, specimenKbId, sourceDisplayName, labIndicatorId, requestedByUserId, force: false, origin, ct, unit);
 
     /// <summary>force=true — переобогащение уже существующей KB-записи (см. LabAnalyteKbReenrichJob),
     /// а не первичное обогащение промаха. Дедуп на уровне БД тот же — если для этой пары уже есть
@@ -46,8 +46,17 @@ public class LabAnalyteEnrichmentRequestService(
     public async Task RequestAsync(
         string normalizedName, Guid specimenKbId, string sourceDisplayName, Guid? labIndicatorId,
         Guid requestedByUserId, bool force, EnrichmentRequestOrigin origin = EnrichmentRequestOrigin.Extraction,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string? unit = null, bool unitGap = false)
     {
+        // До любых затрат: слово из шапки бланка или обрезанное название не должны доходить ни до
+        // LLM-стражей, ни до платного поиска (см. AnalyteNameQuality).
+        var badName = AnalyteNameQuality.RejectReason(sourceDisplayName);
+        if (badName is not null)
+        {
+            logger.LogInformation("Обогащение «{Name}» не поставлено в очередь: {Reason}", sourceDisplayName, badName);
+            return;
+        }
+
         // Жёсткий гейт (см. class doc) — источник не резолвлен/не уверен, во внешний поиск и в
         // справочник ничего не уходит. Тихий выход, не исключение: вызывающий код (Linking-этап
         // экстракции) не должен ронять основной конвейер из-за этого.
@@ -64,6 +73,16 @@ public class LabAnalyteEnrichmentRequestService(
         // reseed) намеренно проходит мимо этой проверки — там цель ИМЕННО повторить попытку.
         // Ручной путь всё равно остаётся: админ видит причину в «Требует внимания» и жмёт
         // «Перезапустить» — тот эндпоинт работает с уже существующей строкой, не создаёт новую.
+        var units = await CollectUnitsAsync(normalizedName, specimenKbId, unit, ct);
+
+        // Пробел по единице: справочник уже есть, но норм в нужной единице нет — повторяем обогащение
+        // (кэш поиска переиспользуется, платный запрос уходит только если кэш устарел). Один раз на
+        // единицу: если задача с этой единицей уже была в любом статусе, повтор ничего не изменит.
+        if (unitGap && unit is not null && await db.LabAnalyteEnrichmentJobs.AnyAsync(j =>
+                j.NormalizedName == normalizedName && j.SpecimenKbId == specimenKbId && j.Units != null &&
+                EF.Functions.ILike(j.Units, "%" + unit + "%"), ct))
+            return;
+
         if (!force)
         {
             var alreadyFailed = await db.LabAnalyteEnrichmentJobs.AnyAsync(j =>
@@ -83,6 +102,7 @@ public class LabAnalyteEnrichmentRequestService(
             NormalizedName = normalizedName,
             SpecimenKbId = specimenKbId,
             SourceDisplayName = sourceDisplayName,
+            Units = units,
             LabIndicatorId = labIndicatorId,
             RequestedByUserId = requestedByUserId,
             Force = force,
@@ -119,5 +139,20 @@ public class LabAnalyteEnrichmentRequestService(
 
         logger.LogInformation(
             "Обогащение справочника показателей поставлено в очередь: «{Name}» ({NormalizedName})", sourceDisplayName, normalizedName);
+    }
+
+    /// <summary>Все единицы, в которых этот показатель уже встречался (бланки всех пользователей), плюс
+    /// текущая, через "; " — в пределах длины колонки.</summary>
+    private async Task<string?> CollectUnitsAsync(string normalizedName, Guid specimenKbId, string? current, CancellationToken ct)
+    {
+        var known = await db.LabIndicators.AsNoTracking()
+            .Where(i => i.AnalyteKey == normalizedName && i.SpecimenKbId == specimenKbId && i.Unit != null && i.Unit != "")
+            .Select(i => i.Unit!).Distinct().Take(10).ToListAsync(ct);
+        if (!string.IsNullOrWhiteSpace(current)) known.Add(current.Trim());
+
+        var distinct = known.Select(u => u.Trim()).Where(u => u.Length is > 0 and <= 20)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var joined = string.Join("; ", distinct);
+        return joined.Length == 0 ? null : joined.Length <= 200 ? joined : joined[..200];
     }
 }

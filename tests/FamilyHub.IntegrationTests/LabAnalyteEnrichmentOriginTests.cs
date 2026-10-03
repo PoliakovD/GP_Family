@@ -103,7 +103,7 @@ public class LabAnalyteEnrichmentOriginTests(LabAnalyteEnrichmentOriginWebFactor
     };
 
     [Fact]
-    public async Task ExtractionOrigin_SkipsPlausibilityGate_OnlyLegitimacyChecked()
+    public async Task ExtractionOrigin_AlsoRunsPlausibilityGate_TwoCallsTotal()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -116,8 +116,8 @@ public class LabAnalyteEnrichmentOriginTests(LabAnalyteEnrichmentOriginWebFactor
         var processor = scope.ServiceProvider.GetRequiredService<LabAnalyteEnrichmentProcessor>();
         await processor.RunAsync(job.Id);
 
-        (factory.LmStudioClient.CallCount - callsBefore).Should().Be(1,
-            "Extraction-происхождение проходит только гейт легитимности, не правдоподобности");
+        (factory.LmStudioClient.CallCount - callsBefore).Should().Be(2,
+            "Extraction тоже проходит гейт правдоподобности: страж легитимности ставил 0.98 слову «Пациент»");
 
         var completed = await db.LabAnalyteEnrichmentJobs.AsNoTracking().SingleAsync(j => j.Id == job.Id);
         completed.Status.Should().Be(EnrichmentJobStatus.Completed, completed.Error);

@@ -43,6 +43,36 @@ public class LabAnalyteEnrichmentRequestServiceTests : SqliteTestBase
             Arg.Any<Hangfire.States.IState>());
     }
 
+    [Theory]
+    [InlineData("Пациент")]
+    [InlineData("Средняя концентрация гемоглобина в")]
+    public async Task RequestAsync_HeaderWordOrTruncatedName_NeverQueuesPaidSearch(string name)
+    {
+        await _sut.RequestAsync("ключ", SpecimenId, name, null, Guid.NewGuid());
+
+        Db.LabAnalyteEnrichmentJobs.Should().BeEmpty();
+        _backgroundJobs.ReceivedCalls().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RequestAsync_CollectsAllKnownUnits_AndTheyGoIntoTheSearchQuery()
+    {
+        var record = TestData.NewMedicalRecord(Guid.NewGuid(), MedicalRecordKind.Analysis);
+        Db.MedicalRecords.Add(record);
+        Db.LabIndicators.Add(new LabIndicator
+        {
+            Id = Guid.NewGuid(), MedicalRecordId = record.Id, OwnerUserId = record.OwnerUserId, AnalyteKey = "гемоглобин",
+            SpecimenKbId = SpecimenId, DisplayName = "Гемоглобин", ValueRaw = "13", Unit = "г/дл", CreatedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        await _sut.RequestAsync("гемоглобин", SpecimenId, "Гемоглобин", null, Guid.NewGuid(), unit: "г/л");
+
+        var job = Db.LabAnalyteEnrichmentJobs.Single();
+        job.Units.Should().Be("г/дл; г/л");
+        FamilyHub.Modules.Medical.Enrichment.EnrichmentReviewGate.DefaultQuery(job).Should().Be("Гемоглобин (единицы: г/дл, г/л)");
+    }
+
     [Fact]
     public async Task RequestAsync_SameKeyAlreadyFailed_DoesNotCreateDuplicateJob()
     {
