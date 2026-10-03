@@ -32,6 +32,19 @@ export class IntakeRemindersComponent implements OnInit {
   readonly closed = output<void>();
 
   protected readonly pluralizeRu = pluralizeRu;
+
+  /** «Москва, стандартное время (GMT+3)» вместо сырого IANA-идентификатора «Europe/Moscow». */
+  protected timeZoneLabel(id: string): string {
+    try {
+      const part = (style: 'long' | 'shortOffset') => new Intl.DateTimeFormat('ru-RU', { timeZone: id, timeZoneName: style })
+        .formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value;
+      const name = part('long');
+      const offset = part('shortOffset');
+      return name ? (offset ? `${name} (${offset})` : name) : id;
+    } catch {
+      return id;
+    }
+  }
   readonly settings = signal<ReminderSettings | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);

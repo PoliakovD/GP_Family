@@ -15,6 +15,22 @@ import { SearchFieldComponent } from '../../shared/search-field/search-field.com
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 
+/** Модель иногда отдаёт названия полей по-английски/в snake_case — показываем по-русски. */
+const FIELD_NAMES: Record<string, string> = {
+  dosage: 'Дозировка', dose: 'Дозировка', manufacturer: 'Производитель', form: 'Форма выпуска',
+  active_ingredient: 'Действующее вещество', activeingredient: 'Действующее вещество', batch: 'Серия',
+  storage: 'Условия хранения', contraindications: 'Противопоказания', volume: 'Объём', count: 'Количество в упаковке',
+};
+
+export function humanizeFieldName(key: string): string {
+  const k = key.trim();
+  if (/[а-яё]/i.test(k)) return k;
+  const known = FIELD_NAMES[k.toLowerCase().replace(/[\s-]/g, '_')] ?? FIELD_NAMES[k.toLowerCase().replace(/[\s_-]/g, '')];
+  if (known) return known;
+  const words = k.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 const MAX_PHOTOS = 5;
 const KNOWN_KEYS = ['instructions', 'quantity'];
 /** §5 плана «живой конвейер» — тот же интервал и тот же самоостанавливающийся принцип, что у
@@ -335,8 +351,9 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   }
 
   private mergeExtraRows(data: Record<string, string>): void {
-    for (const [key, value] of Object.entries(data)) {
+    for (const [rawKey, value] of Object.entries(data)) {
       if (!value) continue;
+      const key = humanizeFieldName(rawKey);
       const existing = this.extraRows.find((r) => r.key === key);
       if (existing) {
         existing.value = value;

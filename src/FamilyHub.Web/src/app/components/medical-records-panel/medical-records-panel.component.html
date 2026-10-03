@@ -220,7 +220,7 @@
         }
         @if (item.kind === Kind.Analysis && item.specimenHint && canDelete(item)) {
           <div class="alert-info mb-2" style="font-size:0.7647rem">
-            Уточните источник: «{{ item.specimenHint }}» — откуда именно?
+            Уточните биоматериал: «{{ item.specimenHint }}» — откуда именно?
             <button type="button" class="btn-link" (click)="openEditSheet(item, item.specimenHint)">Уточнить</button>
           </div>
         }
@@ -787,7 +787,7 @@
         @if (group.key === groupAccessPickerKey) {
           @for (r of group.records; track r.id) {
             <button type="button" class="btn btn-secondary btn-block mb-1 text-start" (click)="pickRecordForAccess(r)">
-              {{ r.recordDate }} · {{ shortName(r) }} — {{ accessSummary(r) }}
+              {{ formatDayMonthYear(r.recordDate) }} · {{ shortName(r) }} — {{ accessSummary(r) }}
             </button>
           }
         }

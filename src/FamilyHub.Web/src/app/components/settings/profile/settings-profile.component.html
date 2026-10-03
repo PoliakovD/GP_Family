@@ -62,7 +62,7 @@
         </div>
         <div class="settings-data-row">
           <span class="settings-data-label">Дата рождения</span>
-          <span class="flex-fill">{{ me.birthDate ?? '—' }}</span>
+          <span class="flex-fill">{{ me.birthDate ? formatDayMonthYear(me.birthDate) : '—' }}</span>
           <span class="muted" style="font-size:0.7647rem">нужна для норм в анализах</span>
         </div>
         <div class="settings-data-row">

@@ -98,12 +98,12 @@
             <label>до <input class="input" type="time" [value]="quietTo()" (change)="quietTo.set($any($event.target).value); saveQuiet()" /></label>
           </div>
         }
-        <p class="ir-note muted">Push приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
+        <p class="ir-note muted">Уведомления приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
       </div>
     </section>
 
     @if (s.timeZoneId) {
-      <p class="ir-note muted"><i class="ph ph-globe" aria-hidden="true"></i> Часовой пояс: {{ s.timeZoneId }} — время приёма считается в нём.</p>
+      <p class="ir-note muted"><i class="ph ph-globe" aria-hidden="true"></i> Часовой пояс: {{ timeZoneLabel(s.timeZoneId) }} — время приёма считается в нём.</p>
     }
 
     <button type="button" class="btn btn-secondary ir-done" (click)="closed.emit()">Готово</button>

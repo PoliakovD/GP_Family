@@ -2,7 +2,7 @@
   <!-- Название показателя показывает контейнер (шапка боковой панели / bottom-sheet / back-link
        на мобильном) — здесь оно больше не дублируется, только источник мелкой строкой. -->
   @if (specimenLabel(); as sl) {
-    <div class="kb-specimen">Источник: {{ sl }}</div>
+    <div class="kb-specimen">Биоматериал: {{ sl }}</div>
   }
 
   @if (reading(); as r) {
@@ -17,7 +17,9 @@
       </div>
       @if (scaleLow() !== null && scaleHigh() !== null) {
         <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" [labels]="true" />
-        <div class="kb-value-norm">норма {{ normText() }}</div>
+        <!-- Это справочная норма; в таблице записи — норма из бланка лаборатории. Подписываем, чтобы
+             расхождение не выглядело ошибкой. -->
+        <div class="kb-value-norm">справочная норма {{ normText() }} · в бланке лаборатории может отличаться</div>
         @if (deviationLabel(); as d) {
           <div class="kb-value-deviation">{{ d }}</div>
         }

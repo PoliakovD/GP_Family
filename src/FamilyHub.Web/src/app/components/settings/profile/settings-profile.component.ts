@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService, LinkTelegramStart } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { formatDayMonthYear } from '../../../shared/util/date-format';
 import { runBusy } from '../settings-task';
 import { PersonNameComponent } from '../../../shared/person-name/person-name.component';
 import { AvatarComponent } from '../../../shared/avatar/avatar.component';
@@ -21,6 +22,7 @@ const LINK_POLL_INTERVAL_MS = 4000;
     styleUrl: './settings-profile.component.scss'
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
+  protected readonly formatDayMonthYear = formatDayMonthYear;
   readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
 

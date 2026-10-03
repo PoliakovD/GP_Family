@@ -61,7 +61,7 @@
                 [shortLabel]="shortenDisplayName(item.patientName)"
                 [fullLabel]="item.patientName"
               />
-              <span>{{ specimenLabel(item) }} · {{ item.lastRecordDate }}</span>
+              <span>{{ specimenLabel(item) }} · {{ formatDayMonthYear(item.lastRecordDate) }}</span>
             </div>
           </div>
           <div class="text-end" style="white-space:nowrap">
@@ -101,7 +101,7 @@
         <tbody>
           @for (p of history; track p.recordDate + p.medicalRecordId) {
             <tr>
-              <td>{{ p.recordDate }}</td>
+              <td>{{ formatDayMonthYear(p.recordDate) }}</td>
               <td [class]="flagClass(p.flag)">{{ p.valueRaw }}</td>
             </tr>
           }

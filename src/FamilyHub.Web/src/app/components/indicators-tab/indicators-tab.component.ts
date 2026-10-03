@@ -2,6 +2,7 @@ import { Component, OnInit, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
+import { formatDayMonthYear } from '../../shared/util/date-format';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { IndicatorFlag } from '../../models/types';
 import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/types';
@@ -34,6 +35,7 @@ const ALL_PATIENTS_KEY = 'all';
     styleUrl: './indicators-tab.component.scss'
 })
 export class IndicatorsTabComponent implements OnInit {
+  protected readonly formatDayMonthYear = formatDayMonthYear;
   private readonly api = inject(ApiService);
   private readonly state = inject(FamilyStateService);
   private readonly auth = inject(AuthService);

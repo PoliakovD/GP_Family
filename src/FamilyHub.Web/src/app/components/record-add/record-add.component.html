@@ -43,7 +43,7 @@
     </div>
 
     <div class="mb-3">
-      <div class="form-label">Сканы и файлы</div>
+      <div class="form-label">Файлы</div>
       <div class="file-chip-grid">
         @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
           <!-- role=button на div, не вложенный <button> — .file-chip-remove внутри уже кнопка,
