@@ -42,7 +42,7 @@ export class BackgroundJobsDropdownComponent {
     return [
       { title: 'Распознаём документы', icon: 'ph-file-magnifying-glass', group: s.extraction },
       { title: 'Уточняем нормы показателей', icon: 'ph-flask', group: s.labAnalyte },
-      { title: 'Обогащаем справочник препаратов', icon: 'ph-pill', group: s.medication },
+      { title: 'Ищем описание препаратов', icon: 'ph-pill', group: s.medication },
       { title: 'Проверяем назначенные препараты', icon: 'ph-pill', group: s.visitMedication },
     ].filter((section) => section.group.total > 0);
   });
@@ -67,7 +67,8 @@ export class BackgroundJobsDropdownComponent {
    * анализов); null — вообще ничего показывать не нужно (задача Pending и никого нет впереди).*/
   itemStatusText(item: ActiveJobItem): string | null {
     if (item.waitingForAi) return 'ждём ИИ — начнём автоматически, как только он вернётся';
-    if (item.liveText) return item.liveText;
+    // item.liveText (сырой вывод модели) намеренно не показываем — см. pipeline-progress.
+    if (item.liveText) return 'обрабатываем…';
     if (item.queueAhead > 0) {
       return `в очереди — ещё ${item.queueAhead} ${pluralizeRu(item.queueAhead, 'задача', 'задачи', 'задач')} впереди`;
     }

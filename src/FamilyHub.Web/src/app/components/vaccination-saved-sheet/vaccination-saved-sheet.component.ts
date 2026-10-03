@@ -4,6 +4,8 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { HealthNoteCatalog, HealthNoteKind } from '../../models/types';
 import { HealthNoteFormComponent } from '../health-note-form/health-note-form.component';
 import type { VaccinationSavedInfo } from '../../services/vaccination-state.service';
+import { todayLocal } from '../../shared/util/intake-labels';
+import { formatDayMonthYear } from '../../shared/util/date-format';
 
 type QuickKind = 'symptom' | 'temperature';
 
@@ -29,8 +31,18 @@ export class VaccinationSavedSheetComponent implements OnInit {
   protected readonly Kind = HealthNoteKind;
   readonly quickKind = signal<QuickKind | null>(null);
   readonly catalog = signal<HealthNoteCatalog | null>(null);
-  readonly reminderOn = signal(true);
+  // Все места создания прививки шлют requestWellbeingCheck: false — значит, напоминание выключено.
+  // Раньше переключатель стартовал включённым, и человек ждал напоминания, которое не придёт.
+  readonly reminderOn = signal(false);
   readonly reminderBusy = signal(false);
+
+  /** «сегодня» — только если прививка и правда сегодняшняя; иначе реальная дата (раньше всегда
+   * писалось «сегодня», даже для прошлой даты — выглядело, будто дата не сохранилась). */
+  protected dateText(): string {
+    const date = this.info().item.date;
+    if (!date || date === todayLocal()) return 'сегодня';
+    return formatDayMonthYear(date);
+  }
 
   ngOnInit(): void {
     if (this.info().subject.isSelf) void this.loadCatalog();

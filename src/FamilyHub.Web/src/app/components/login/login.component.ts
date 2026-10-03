@@ -9,13 +9,18 @@ import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { PASSWORD_PATTERN } from '../settings/settings-task';
+import { todayLocal } from '../../shared/util/intake-labels';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
-type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
+/** 'error' — проверка не удалась (сеть/лимит): не блокируем регистрацию, сервер всё равно проверит
+ * занятость при подтверждении. Раньше сбой ставил 'idle', и кнопка молча оставалась неактивной. */
+type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid' | 'error';
 
 /** Формат видимого username — зеркалит UsernameRules на бэкенде (единый источник истины — сервер). */
 const USERNAME_PATTERN = /^[a-z][a-z0-9_]{4,31}$/;
 const USERNAME_CHECK_DEBOUNCE_MS = 400;
+/** Грубая проверка формата — только чтобы подсказать «укажите email» до запроса кода. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * PWA-вход (этап 2 п.2.4): email+пароль, регистрация степпером email/username/имя/пароль → код,
@@ -76,7 +81,11 @@ export class LoginComponent implements HasPendingCodeEntry {
   firstName = '';
   middleName = '';
   birthDate = '';
-  gender = 0;
+  /** null — пол не выбран. Раньше по умолчанию стоял «Мужской», и женщина, не тронувшая поле,
+   * получала мужские нормы анализов. */
+  gender: number | null = null;
+  /** max для даты рождения — нельзя выбрать будущую дату. */
+  readonly today = todayLocal();
   privacyAccepted = false;
   /** Согласие на обработку ПДн (общее) — отдельно от privacyAccepted выше: политика
    * конфиденциальности и согласие на обработку ПДн — разные документы (ст. 9 152-ФЗ). */
@@ -95,9 +104,35 @@ export class LoginComponent implements HasPendingCodeEntry {
   }
 
   get canSubmitDetails(): boolean {
-    return !this.busy() && this.privacyAccepted && this.pdnConsentAgreed && this.pdnSpecialCategoryAgreed
-      && this.usernameStatus() === 'free' && this.isPasswordValid
-      && !!this.lastName.trim() && !!this.firstName.trim() && !!this.birthDate;
+    return !this.busy() && this.missingDetails.length === 0;
+  }
+
+  /** Чего не хватает для «Отправить код» — показываем списком под кнопкой, чтобы неактивная
+   * кнопка не была загадкой (форма длинная, и на телефоне незаполненное поле не видно). */
+  get missingDetails(): string[] {
+    const missing: string[] = [];
+    if (!EMAIL_PATTERN.test(this.email.trim())) missing.push('email');
+    const u = this.usernameStatus();
+    if (u !== 'free' && u !== 'error') missing.push(u === 'taken' ? 'другое имя пользователя (это занято)' : 'имя пользователя');
+    if (!this.lastName.trim()) missing.push('фамилию');
+    if (!this.firstName.trim()) missing.push('имя');
+    if (!this.birthDate || this.birthDate > this.today) missing.push('дату рождения');
+    if (this.gender === null) missing.push('пол');
+    if (!this.isPasswordValid) missing.push('пароль по правилам');
+    if (!this.privacyAccepted || !this.pdnConsentAgreed || !this.pdnSpecialCategoryAgreed) missing.push('отметьте все три согласия');
+    return missing;
+  }
+
+  /** Код из письма: оставляем только цифры. maxlength="6" раньше обрезал вставку «123 456» до
+   * «123 45» — и человек получал «неверный код». */
+  onCodeInput(el: HTMLInputElement): void {
+    const digits = el.value.replace(/\D/g, '').slice(0, 6);
+    if (el.value !== digits) el.value = digits;
+    this.code = digits;
+  }
+
+  retryUsernameCheck(): void {
+    this.onUsernameInput(this.username);
   }
 
   get canSubmitNewPassword(): boolean {
@@ -139,7 +174,7 @@ export class LoginComponent implements HasPendingCodeEntry {
         if (token !== this.usernameCheckToken) return; // устарел — пользователь уже печатает дальше
         this.usernameStatus.set(available ? 'free' : 'taken');
       } catch {
-        if (token === this.usernameCheckToken) this.usernameStatus.set('idle');
+        if (token === this.usernameCheckToken) this.usernameStatus.set('error');
       }
     }, USERNAME_CHECK_DEBOUNCE_MS);
   }
@@ -160,7 +195,7 @@ export class LoginComponent implements HasPendingCodeEntry {
         firstName: this.firstName.trim(),
         middleName: this.middleName.trim() || null,
         birthDate: this.birthDate,
-        gender: this.gender,
+        gender: this.gender!,
       });
       this.completed.set(true);
       // Оба обязательных чекбокса ПДн-согласия отмечены на предыдущем шаге (register-details,

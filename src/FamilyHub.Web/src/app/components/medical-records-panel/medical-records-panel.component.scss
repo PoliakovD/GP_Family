@@ -367,6 +367,23 @@
 
 // Бэйдж «рассчитано ИИ» (RefSource.KbCalculated) — норма посчитана локальной LLM по методике из
 // справочника под возраст/пол пациента, не фиксированный диапазон и не напечатана в бланке.
+// Мобильная карточка показателя: пояснение к норме от ИИ словами (hover-подсказки на телефоне нет).
+.indicator-ai-ref {
+  margin-top: 2px;
+  font-size: 0.7647rem;
+  color: var(--color-accent-700);
+
+  .badge-ai { margin-left: 0; margin-right: 4px; }
+}
+
+.ai-summary-note {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 0.8235rem;
+  color: var(--color-neutral-800);
+}
+
 .badge-ai {
   display: inline-block;
   margin-left: 4px;

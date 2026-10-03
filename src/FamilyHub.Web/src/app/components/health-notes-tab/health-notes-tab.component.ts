@@ -12,6 +12,7 @@ import { SidePanelComponent } from '../../shared/side-panel/side-panel.component
 import { ToastService } from '../../shared/toast/toast.service';
 import { TrendLineComponent } from '../../shared/trend-line/trend-line.component';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { vitalsWarning } from '../../shared/util/vitals-thresholds';
 import {
   HealthMetricDefinition, HealthNote, HealthNoteCatalog, HealthNoteKind, HealthShareCategory, HealthSharedWithMeDto,
 } from '../../models/types';
@@ -51,6 +52,8 @@ interface MetricTile {
   values: number[];
   band: [number, number] | null;
   caption: string;
+  /** Значение вне общепринятых ориентиров (vitalsWarning) — подпись выделяется цветом. */
+  warn: boolean;
 }
 
 interface WellbeingTile {
@@ -287,9 +290,14 @@ export class HealthNotesTabComponent implements OnInit {
       ? [quantile(sortedMonth, 0.25), quantile(sortedMonth, 0.75)]
       : null;
     const latest = latestNote.metric.value;
+    // Фиксированные ориентиры важнее «вашего обычного»: иначе постоянно высокое давление
+    // называлось нормой для пользователя.
+    const warning = vitalsWarning(code, latest, latestNote.metric.value2);
 
     let caption: string;
-    if (code === 'weight') {
+    if (warning) {
+      caption = warning;
+    } else if (code === 'weight') {
       const first = month[0]?.v;
       const delta = first === undefined ? 0 : Math.round((latest - first) * 10) / 10;
       caption = month.length < 2 || delta === 0
@@ -302,7 +310,7 @@ export class HealthNotesTabComponent implements OnInit {
     } else if (latest < band[0]) {
       caption = `${windowDays} дней · ниже обычного`;
     } else {
-      caption = `${windowDays} дней · в вашем обычном диапазоне`;
+      caption = `${windowDays} дней · как обычно для вас`;
     }
 
     return {
@@ -315,6 +323,7 @@ export class HealthNotesTabComponent implements OnInit {
       values: window,
       band: code === 'weight' ? null : band,
       caption,
+      warn: warning !== null,
     };
   }
 

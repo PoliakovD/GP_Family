@@ -1,6 +1,8 @@
 import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
+import { todayLocal } from '../../shared/util/intake-labels';
+import { formatDayMonthYear } from '../../shared/util/date-format';
 import { FamilyStateService } from '../../services/family-state.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { FamilyRole, Gender } from '../../models/types';
@@ -14,6 +16,8 @@ import { PersonNameComponent } from '../../shared/person-name/person-name.compon
  * "Это питомец", раскрывающий поле "Вид животного". Create/Update — любой активный участник;
  * Delete — только Admin (сервер перепроверит роль, здесь только прячем кнопку).
  */
+let nextInstanceId = 0;
+
 @Component({
     selector: 'app-dependents-panel',
     imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent],
@@ -27,9 +31,16 @@ export class DependentsPanelComponent implements OnInit {
   private readonly state = inject(FamilyStateService);
   private readonly confirm = inject(ConfirmService);
 
+  readonly fieldId = `dependent-${nextInstanceId++}`;
+  readonly today = todayLocal();
+  readonly formatDayMonthYear = formatDayMonthYear;
+  /** Защита от двойного тапа «Добавить» — раньше второй тап создавал дубль. */
+  saving = false;
+
   items: FamilyDependent[] = [];
+  // gender: null — не выбран (раньше по умолчанию «Мужской» → неверные нормы анализов у девочек).
   form = {
-    firstName: '', lastName: '', middleName: '', gender: Gender.Male as number,
+    firstName: '', lastName: '', middleName: '', gender: null as number | null,
     birthDate: '', isPet: false, petSpecies: '',
   };
   editingId: string | null = null;
@@ -73,17 +84,22 @@ export class DependentsPanelComponent implements OnInit {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.firstName.trim()) return;
-    if (!this.form.isPet && !this.form.lastName.trim()) return;
+    if (this.saving) return;
+    // Раньше пустые поля молча ничего не делали — теперь говорим, чего не хватает.
+    if (!this.form.isPet && !this.form.lastName.trim()) { this.error = 'Укажите фамилию.'; return; }
+    if (!this.form.firstName.trim()) { this.error = this.form.isPet ? 'Укажите кличку.' : 'Укажите имя.'; return; }
+    if (this.form.gender === null) { this.error = 'Выберите пол.'; return; }
+    const gender: number = this.form.gender;
     const payload = {
       firstName: this.form.firstName.trim(),
       lastName: this.form.isPet ? null : this.form.lastName.trim() || null,
       middleName: this.form.isPet ? null : this.form.middleName.trim() || null,
-      gender: this.form.gender,
+      gender,
       birthDate: this.form.birthDate || null,
       isPet: this.form.isPet,
       petSpecies: this.form.isPet ? this.form.petSpecies.trim() || null : null,
     };
+    this.saving = true;
     try {
       if (this.editingId) {
         await this.api.updateDependent(this.editingId, payload);
@@ -95,8 +111,11 @@ export class DependentsPanelComponent implements OnInit {
       // Дропдаун "Кто пациент?" в медзаписях читает FamilySummary.dependents из общего состояния —
       // держим его в курсе, не дожидаясь (не блокирует UI этой панели).
       void this.state.refresh();
+      this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
+    } finally {
+      this.saving = false;
     }
   }
 
@@ -111,6 +130,12 @@ export class DependentsPanelComponent implements OnInit {
       isPet: item.isPet,
       petSpecies: item.petSpecies ?? '',
     };
+    // Форма — вверху панели: без прокрутки на длинном списке казалось, что «Изменить» не сработало.
+    queueMicrotask(() => {
+      const el = document.getElementById(this.fieldId + (item.isPet ? '-first' : '-last'));
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus({ preventScroll: true });
+    });
   }
 
   async handleDelete(id: string): Promise<void> {
@@ -133,7 +158,7 @@ export class DependentsPanelComponent implements OnInit {
 
   resetForm(): void {
     this.form = {
-      firstName: '', lastName: '', middleName: '', gender: Gender.Male as number,
+      firstName: '', lastName: '', middleName: '', gender: null,
       birthDate: '', isPet: false, petSpecies: '',
     };
     this.editingId = null;

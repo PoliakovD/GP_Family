@@ -231,7 +231,13 @@
           <!-- Метка «Резюме» появляется только после нажатия кнопки «Резюме» в шапке. Кнопки
                «Пересчитать» нет: после ручной правки показателей/источника бэк пересчитывает
                резюме сам (RecordSummaryRegenerationJob), а пока идёт пересчёт — «Обновляем…». -->
-          <div class="card-kicker mt-2">Резюме</div>
+          <div class="card-kicker mt-2">Резюме от ИИ</div>
+          <!-- Постоянная метка: раньше дисклеймер был, только если его прислал сервер, и 11px —
+               ИИ-трактовка читалась как медицинское заключение. -->
+          <p class="ai-summary-note mb-1">
+            <i class="ph ph-sparkle" aria-hidden="true"></i>
+            Составлено ИИ автоматически и может содержать ошибки. Это не диагноз — обсудите результаты с врачом.
+          </p>
           @if (summaryByRecord[item.id]; as summary) {
             @if (summary.pending) {
               <p class="muted mb-1" style="font-size:0.7647rem">
@@ -262,7 +268,7 @@
               </ul>
             }
             @if (summary.disclaimer) {
-              <p class="muted mb-0" style="font-size:0.6471rem">{{ summary.disclaimer }}</p>
+              <p class="muted mb-0" style="font-size:0.8235rem">{{ summary.disclaimer }}</p>
             }
           } @else if (summaryRegeneratingRecordId === item.id) {
             <p class="muted mb-1" style="font-size:0.7647rem">Составляем резюме…</p>
@@ -303,7 +309,7 @@
                   <td>
                     {{ indicatorLabel(ind) }}
                     @if (indicatorReference(ind); as ref) {
-                      <div class="muted" style="font-size:0.6471rem">
+                      <div class="muted" style="font-size:0.7647rem">
                         {{ ref }}
                         @if (isCalculatedRef(ind)) {
                           <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
@@ -396,7 +402,15 @@
                   <div class="flex-fill" style="min-width:0">
                     <div class="card-title" style="font-size:0.8824rem">{{ indicatorLabel(ind) }}</div>
                     @if (indicatorReference(ind); as ref) {
-                      <div class="muted" style="font-size:0.6471rem">{{ ref }}</div>
+                      <div class="muted" style="font-size:0.7647rem">{{ ref }}</div>
+                    }
+                    <!-- На мобиле бейдж «ИИ» раньше не показывался вовсе: придуманная моделью норма
+                         выглядела как напечатанная в бланке. Здесь — словами, без hover-подсказки. -->
+                    @if (isCalculatedRef(ind) || isInferredRef(ind)) {
+                      <div class="indicator-ai-ref">
+                        <span class="badge-ai" aria-hidden="true">ИИ</span>
+                        {{ isInferredRef(ind) ? 'норму предположил ИИ — сверьте с бланком' : 'норма рассчитана ИИ по возрасту и полу' }}
+                      </div>
                     }
                     @if (ind.enrichmentPending) {
                       <span

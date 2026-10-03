@@ -62,7 +62,12 @@
           @if (t.values.length > 1) {
             <app-trend-line [values]="t.values" [band]="t.band" [label]="'Динамика: ' + t.name" />
           }
-          <div class="dn-tile-caption">{{ t.caption }}</div>
+          <div class="dn-tile-caption" [class.dn-tile-caption-warn]="t.warn">
+            @if (t.warn) {
+              <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>
+            }
+            {{ t.caption }}
+          </div>
         </div>
       }
       @if (wellbeingTile(); as w) {

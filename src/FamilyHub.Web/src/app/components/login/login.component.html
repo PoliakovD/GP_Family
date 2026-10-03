@@ -63,7 +63,7 @@
             id="reg-email" class="input mb-2" type="email" name="email"
             [(ngModel)]="email" required autocomplete="email" />
 
-          <label class="form-label" for="reg-username">Username</label>
+          <label class="form-label" for="reg-username">Имя пользователя (логин)</label>
           <input
             id="reg-username" class="input" type="text" name="username"
             [ngModel]="username" (ngModelChange)="onUsernameInput($event)"
@@ -73,6 +73,12 @@
             @case ('checking') { <span class="field-hint field-hint-muted">Проверяем…</span> }
             @case ('free') { <span class="field-hint field-hint-ok">Свободен</span> }
             @case ('taken') { <span class="field-hint field-hint-error">Уже занят</span> }
+            @case ('error') {
+              <span class="field-hint field-hint-muted">
+                Не удалось проверить —
+                <button type="button" class="link-inline" (click)="retryUsernameCheck()">повторить</button>
+              </span>
+            }
             @case ('invalid') {
               <span class="field-hint field-hint-error">5–32 симв.: латиница, цифры, «_», с буквы</span>
             }
@@ -97,10 +103,11 @@
           <label class="form-label" for="reg-birth-date">Дата рождения</label>
           <input
             id="reg-birth-date" class="input mb-2" type="date" name="birthDate"
-            [(ngModel)]="birthDate" required autocomplete="bday" />
+            [(ngModel)]="birthDate" required autocomplete="bday" [max]="today" />
 
           <label class="form-label" for="reg-gender">Пол</label>
           <select id="reg-gender" class="input mb-2" name="gender" [(ngModel)]="gender" required>
+            <option [ngValue]="null" disabled>Выберите…</option>
             <option [ngValue]="0">Мужской</option>
             <option [ngValue]="1">Женский</option>
           </select>
@@ -121,7 +128,7 @@
           <label class="checkbox-row mb-2 mt-2">
             <input type="checkbox" name="privacyAccepted" [(ngModel)]="privacyAccepted" required />
             <span>
-              Согласен с <button type="button" class="link-inline" (click)="showLegalText('privacy')">политикой конфиденциальности</button>
+              Принимаю <button type="button" class="link-inline" (click)="showLegalText('privacy')">политику конфиденциальности</button>
             </span>
           </label>
 
@@ -143,8 +150,11 @@
           </label>
 
           <button type="submit" class="btn btn-primary btn-block" [disabled]="!canSubmitDetails">
-            Отправить код на email
+            {{ busy() ? 'Отправляем…' : 'Отправить код на email' }}
           </button>
+          @if (!busy() && missingDetails.length > 0) {
+            <p class="field-hint field-hint-muted mb-2">Чтобы продолжить, укажите: {{ missingDetails.join(', ') }}.</p>
+          }
           <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
         </form>
       }
@@ -157,7 +167,8 @@
           <label class="form-label" for="reg-code">Код из письма</label>
           <input
             id="reg-code" class="input mb-3" type="text" name="code"
-            [(ngModel)]="code" required inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+            [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
+            autocomplete="one-time-code" placeholder="6 цифр" />
 
           <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Создать аккаунт</button>
           @if (errorCode() === 'email_taken') {
@@ -190,7 +201,8 @@
           <label class="form-label" for="reset-code">Код из письма</label>
           <input
             id="reset-code" class="input mb-2" type="text" name="code"
-            [(ngModel)]="code" required inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+            [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
+            autocomplete="one-time-code" placeholder="6 цифр" />
 
           <label class="form-label" for="reset-new-password">Новый пароль</label>
           <input

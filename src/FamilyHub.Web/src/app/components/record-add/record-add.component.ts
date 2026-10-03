@@ -1,4 +1,5 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input } from '@angular/core';
+import { todayLocal } from '../../shared/util/intake-labels';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -25,7 +26,8 @@ interface StagedFile {
 /** Сегодняшняя дата в формате input[type=date] — дефолт формы, распознавание может позже
  * переопределить её датой, найденной в самом документе. */
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Локальная дата, не UTC: toISOString() с 00:00 до 03:00 МСК давал вчерашнее число.
+  return todayLocal();
 }
 
 let nextInstanceId = 0;
