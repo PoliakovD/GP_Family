@@ -34,7 +34,10 @@
     <div class="hh-group">
       <div class="hh-group-label">Каждый день</div>
       <div class="hh-everyday">
-        <a class="hh-tile hh-tile-big" routerLink="/health/intake" [queryParams]="{person: 'me'}">
+        <!-- Ссылка растянута на всю плитку, а кнопка «Отметить приём» — поверх неё, а не внутри
+             (кнопка внутри ссылки — невалидно и путает скринридер). -->
+        <div class="hh-tile hh-tile-big hh-tile-linked">
+          <a class="hh-tile-stretch" routerLink="/health/intake" [queryParams]="{person: 'me'}" aria-label="Приём лекарств"></a>
           <div class="hh-tile-head">
             <i class="ph-duotone ph-pill" aria-hidden="true"></i>
             <span class="hh-tile-title flex-fill">Приём лекарств</span>
@@ -70,7 +73,7 @@
           } @else {
             <div class="hh-tile-empty">Не удалось загрузить</div>
           }
-        </a>
+        </div>
 
         <a class="hh-tile hh-tile-big" routerLink="/health/notes">
           <div class="hh-tile-head">

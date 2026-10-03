@@ -9,7 +9,7 @@
     <!-- Отдельная рамка: крупное значение + статус, шкала с границами нормы, отклонение. -->
     <div class="kb-value-frame">
       <div class="kb-value-row">
-        <span class="kb-value" [class.kb-value-bad]="r.flag !== IndicatorFlag.Normal">{{ r.valueRaw }}</span>
+        <span class="kb-value" [class.kb-value-bad]="r.flag !== IndicatorFlag.Normal && r.flag !== IndicatorFlag.Unknown">{{ r.valueRaw }}</span>
         @if (r.unit) {
           <span class="kb-value-unit">{{ r.unit }}</span>
         }

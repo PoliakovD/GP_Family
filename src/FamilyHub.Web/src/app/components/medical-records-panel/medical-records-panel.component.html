@@ -314,7 +314,7 @@
                      Редизайн v2.2 — правка/удаление переехали в панель справки (см.
                      indicator-info.component), карандаш/корзина отсюда убраны; строка
                      подсвечена по статусу (rowStatusClass). -->
-                <tr class="indicator-row" [class]="rowStatusClass(ind)" (click)="openIndicatorInfo(ind)">
+                <tr class="indicator-row" [class]="rowStatusClass(ind)" appClickable (click)="openIndicatorInfo(ind)">
                   <td>
                     {{ indicatorLabel(ind) }}
                     @if (indicatorReference(ind); as ref) {

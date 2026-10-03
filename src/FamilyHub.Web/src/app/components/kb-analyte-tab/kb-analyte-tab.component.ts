@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { KbAnalyteCard, KbAnalyteListItem } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
@@ -24,7 +25,7 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
  */
 @Component({
     selector: 'app-kb-analyte-tab',
-    imports: [SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
+    imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
     templateUrl: './kb-analyte-tab.component.html'
 })
 export class KbAnalyteTabComponent implements OnInit, OnDestroy {

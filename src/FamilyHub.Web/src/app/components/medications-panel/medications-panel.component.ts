@@ -7,7 +7,7 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { formatDayMonthYear } from '../../shared/util/date-format';
 import { compressImage } from '../../shared/util/image-compression';
-import { expiryClass } from '../../shared/util/expiry';
+import { expiryClass, expiryLabel } from '../../shared/util/expiry';
 import { matchesQuery } from '../../shared/util/local-filter';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -238,6 +238,8 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   }
 
   /** Цветовая индикация по сроку годности — общая с плоским списком поиска Аптечки (MedicationsTabComponent). */
+  readonly expiryLabel = expiryLabel;
+
   expiryClassFor(item: Medication): string {
     return expiryClass(item.expiryDate);
   }

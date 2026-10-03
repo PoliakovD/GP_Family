@@ -51,7 +51,7 @@
     </div>
   } @else {
     @for (item of filteredItems; track item.analyteKey + ':' + item.specimenKbId + ':' + itemPatientKey(item)) {
-      <div class="card mb-2 card-clickable" (click)="openDetail(item)">
+      <div class="card mb-2 card-clickable" appClickable (click)="openDetail(item)">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>
             <strong class="card-title">{{ item.displayName }}</strong>
@@ -64,8 +64,12 @@
               <span>{{ specimenLabel(item) }} · {{ item.lastRecordDate }}</span>
             </div>
           </div>
-          <div [class]="flagClass(item.flag)" style="font-size:0.8824rem;font-weight:600;white-space:nowrap">
-            {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
+          <div class="text-end" style="white-space:nowrap">
+            <div [class]="flagClass(item.flag)" style="font-size:0.8824rem;font-weight:600">
+              {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
+            </div>
+            <!-- Раньше отклонение было видно только по цвету числа. -->
+            <app-status-chip [flag]="item.flag" />
           </div>
         </div>
       </div>

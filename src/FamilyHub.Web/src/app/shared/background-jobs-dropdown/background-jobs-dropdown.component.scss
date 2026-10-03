@@ -32,7 +32,7 @@
   overflow-y: auto;
   background: var(--color-paper);
   border-radius: var(--radius-md);
-  z-index: 20;
+  z-index: var(--z-dropdown);
   padding: 8px 0;
 }
 

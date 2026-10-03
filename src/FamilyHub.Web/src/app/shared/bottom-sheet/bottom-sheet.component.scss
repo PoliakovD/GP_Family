@@ -6,7 +6,7 @@
   position: fixed;
   inset: 0;
   background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent);
-  z-index: 500;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: flex-end;
   justify-content: center;

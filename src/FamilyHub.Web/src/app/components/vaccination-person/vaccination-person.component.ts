@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { ApiError, ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { VaccinationStateService } from '../../services/vaccination-state.service';
@@ -35,7 +36,7 @@ interface StageGroup {
  */
 @Component({
   selector: 'app-vaccination-person',
-  imports: [AvatarComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
+  imports: [ClickableDirective, AvatarComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './vaccination-person.component.html',
   styleUrl: './vaccination-person.component.scss',
 })

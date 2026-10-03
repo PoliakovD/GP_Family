@@ -34,6 +34,7 @@
             <input
               type="checkbox"
               [checked]="hasCategory(grant, Category.Intake)"
+              [attr.aria-label]="grant.name + ': приём лекарств'"
               [disabled]="shareBusyKey() !== null"
               (change)="toggleCategory(grant, Category.Intake)"
             />
@@ -43,6 +44,7 @@
             <input
               type="checkbox"
               [checked]="hasCategory(grant, Category.Vaccinations)"
+              [attr.aria-label]="grant.name + ': прививки'"
               [disabled]="shareBusyKey() !== null"
               (change)="toggleCategory(grant, Category.Vaccinations)"
             />
@@ -52,6 +54,7 @@
             <input
               type="checkbox"
               [checked]="hasCategory(grant, Category.Diary)"
+              [attr.aria-label]="grant.name + ': дневник'"
               [disabled]="shareBusyKey() !== null"
               (change)="toggleCategory(grant, Category.Diary)"
             />

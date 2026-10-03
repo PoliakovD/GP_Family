@@ -1,6 +1,8 @@
 import { Component, OnInit, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
+import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { IndicatorFlag } from '../../models/types';
 import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -27,7 +29,7 @@ const ALL_PATIENTS_KEY = 'all';
  */
 @Component({
     selector: 'app-indicators-tab',
-    imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent, RouterLink],
+    imports: [StatusChipComponent, ClickableDirective, LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent, RouterLink],
     templateUrl: './indicators-tab.component.html',
     styleUrl: './indicators-tab.component.scss'
 })

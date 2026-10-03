@@ -78,7 +78,7 @@
   left: 16px;
   right: 16px;
   bottom: calc(78px + env(safe-area-inset-bottom, 0px));
-  z-index: 90;
+  z-index: var(--z-fab);
   box-shadow: var(--shadow-md);
 }
 

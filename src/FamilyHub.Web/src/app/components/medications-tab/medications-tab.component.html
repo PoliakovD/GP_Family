@@ -10,7 +10,7 @@
       <app-loading-spinner text="Ищем…" />
     } @else {
       @for (item of search.items; track item.id) {
-        <div class="card mb-2 medication-card card-clickable" [class]="expiryClass(item.medication?.expiryDate)" (click)="openResult(item)">
+        <div class="card mb-2 medication-card card-clickable" [class]="expiryClass(item.medication?.expiryDate)" appClickable (click)="openResult(item)">
           <div class="name-with-tags mb-1">
             <strong class="card-title">{{ item.title }}</strong>
           </div>

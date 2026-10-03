@@ -35,7 +35,7 @@
   } @else {
     @for (item of items; track item.id) {
       <div class="card mb-2 medkit-card" [class.open]="expandedId === item.id">
-        <div class="medkit-header" (click)="onHeaderClick(item)">
+        <div class="medkit-header" appClickable [attr.aria-expanded]="expandedId === item.id" (click)="onHeaderClick(item)">
           <strong class="medkit-name">{{ item.name }}</strong>
           @if (linkMode() || expandedId !== item.id) {
             <span class="tag tag-neutral medkit-count">{{ medicationCountLabel(item.medicationCount) }}</span>

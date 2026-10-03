@@ -116,7 +116,8 @@ export class ReferenceScaleComponent {
    * "что такое норма", а не текущий статус значения). Ровно два состояния — см. докстринг класса. */
   readonly flag = input<number>(IndicatorFlag.Normal);
 
-  readonly isBad = computed(() => this.flag() !== IndicatorFlag.Normal);
+  // Unknown («нет нормы») — не отклонение: раньше рисовался красной палочкой и пугал зря.
+  readonly isBad = computed(() => this.flag() !== IndicatorFlag.Normal && this.flag() !== IndicatorFlag.Unknown);
 
   readonly stickClass = computed(() => (this.isBad() ? 'rs-stick-bad' : 'rs-stick-ok'));
 
@@ -180,6 +181,9 @@ export class ReferenceScaleComponent {
     const unit = this.unit() ?? '';
     const deviation = this.deviationLabel();
     if (v === null) return 'Шкала нормы';
-    return `Значение ${v}${unit ? ' ' + unit : ''}${deviation ? ', ' + deviation : ', в норме'}`;
+    // Итог — по flag (как у чипа), а не только по границам этой шкалы: раньше могло прозвучать
+    // «в норме» при High, если шкала строилась по другой норме.
+    const verdict = deviation ?? (this.isBad() ? 'вне нормы' : this.flag() === IndicatorFlag.Unknown ? 'норма не указана' : 'в норме');
+    return `Значение ${this.valueText()}${unit ? ' ' + unit : ''}, ${verdict}`;
   });
 }

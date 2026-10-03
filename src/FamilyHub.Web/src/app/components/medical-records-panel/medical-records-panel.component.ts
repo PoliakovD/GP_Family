@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ToastService } from '../../shared/toast/toast.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -119,7 +120,7 @@ let nextInstanceId = 0;
 @Component({
     selector: 'app-medical-records-panel',
     imports: [
-        NgTemplateOutlet,
+        ClickableDirective, NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent,
         PipelineProgressComponent, KbCardComponent, StatusChipComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,

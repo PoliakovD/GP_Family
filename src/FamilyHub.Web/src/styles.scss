@@ -112,6 +112,18 @@
   --font-size-meta: 0.8824rem;
   --font-size-record-title: 1.1176rem;
   --tap-min: 44px; // физическая величина (минимальная тач-цель) — не текст, не масштабируется.
+
+  // Слои — один порядок для всего приложения (раньше 1…9999 вразнобой, и confirm из окна просмотра
+  // файла оказывался ПОД ним). Локальные 0/1/5/10 внутри компонентов — не слои страницы.
+  --z-dropdown: 20;   // выпадающие меню, фильтры
+  --z-popover: 50;    // поиск, плавающие панели
+  --z-fab: 90;        // плавающая кнопка «Добавить»
+  --z-tabbar: 100;    // нижнее меню
+  --z-banner: 200;    // cookie-баннер
+  --z-overlay: 500;   // модалки, нижние листы, боковые панели
+  --z-viewer: 550;    // просмотр файла
+  --z-dialog: 600;    // подтверждение — всегда над любым окном
+  --z-toast: 1000;    // уведомления
 }
 
 // Редизайн v2.1 — единственный источник fluid-масштабирования: 17px на ≤390px (мобильный кегль
@@ -741,6 +753,7 @@ select.input {
 .text-decoration-none { text-decoration: none; }
 .text-danger { color: var(--color-status-danger-text); }
 .text-center { text-align: center; }
+.text-end { text-align: right; }
 .text-muted { color: var(--color-neutral-600); }
 .text-primary { color: var(--color-accent); }
 .fw-semibold { font-weight: 600; }
@@ -852,7 +865,7 @@ select.input {
   position: fixed;
   inset: 0;
   background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent);
-  z-index: 500;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1217,7 +1230,7 @@ select.input {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   overflow: hidden;
-  z-index: 20;
+  z-index: var(--z-dropdown);
 }
 
 .app-family-switch-item {
@@ -1337,7 +1350,7 @@ select.input {
   display: flex;
   background: var(--color-surface);
   border-top: 1px solid var(--color-divider);
-  z-index: 100;
+  z-index: var(--z-tabbar);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
@@ -1479,7 +1492,7 @@ select.input {
   left: var(--space-3);
   right: var(--space-3);
   bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-  z-index: 200;
+  z-index: var(--z-banner);
   box-shadow: var(--shadow-lg);
 
   @media (min-width: 1024px) {
@@ -1525,4 +1538,20 @@ select.input {
 .password-toggle {
   min-height: 36px;
   font-size: 0.8235rem;
+}
+
+// ============================================================================
+// Меньше движения — для тех, у кого в системе включено «Уменьшить движение» (раньше учитывалось
+// только в двух компонентах: тосты, листы и раскрытия всё равно выезжали). Индикаторы загрузки
+// (*spin*) не трогаем — замерший спиннер выглядит как зависание.
+// ============================================================================
+@media (prefers-reduced-motion: reduce) {
+  *:not([class*='spin']),
+  *:not([class*='spin'])::before,
+  *:not([class*='spin'])::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

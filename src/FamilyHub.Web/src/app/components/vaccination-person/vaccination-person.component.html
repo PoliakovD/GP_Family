@@ -54,7 +54,8 @@
                 @if (isOpen(group.stage)) {
                   <div class="vx-dose-list">
                     @for (item of group.items; track itemKey(item)) {
-                      <button type="button" class="vx-dose" [class.vx-dose-current]="item.status === Status.DueSoon" (click)="openSeries(item)">
+                      <!-- div, а не button: внутри есть своя кнопка «Отметить сделанной», а кнопка в кнопке — невалидный HTML. -->
+                      <div class="vx-dose" appClickable [class.vx-dose-current]="item.status === Status.DueSoon" (click)="openSeries(item)">
                         <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
                         <div class="flex-fill min-width-0">
                           <div class="vx-dose-name">{{ item.seriesName }}</div>
@@ -74,7 +75,7 @@
                         } @else {
                           <span class="vx-dose-when vx-dose-when-nodata">нет данных</span>
                         }
-                      </button>
+                      </div>
                     }
                   </div>
                 }

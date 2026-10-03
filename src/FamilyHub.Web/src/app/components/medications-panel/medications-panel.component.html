@@ -155,7 +155,14 @@
           <p class="muted mb-1">{{ instructionsOf(item) }}</p>
         }
         @if (item.expiryDate) {
-          <p class="muted mb-2">Срок годности: {{ formatDayMonthYear(item.expiryDate) }}</p>
+          <p class="muted mb-2">
+            Срок годности: {{ formatDayMonthYear(item.expiryDate) }}
+            @if (expiryLabel(item.expiryDate); as label) {
+              <span class="expiry-label" [class]="expiryClassFor(item)">
+                <i class="ph-fill ph-warning" aria-hidden="true"></i> {{ label }}
+              </span>
+            }
+          </p>
         } @else {
           <p class="muted mb-2">Срок годности не указан</p>
         }
