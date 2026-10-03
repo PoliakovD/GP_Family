@@ -34,8 +34,9 @@ test('аптечка: добавление аптечки и лекарства 
 
   await page.getByText('Дорожная').first().click();
   await page.locator('.seg-opt', { hasText: 'Добавить' }).click(); // вкладка «Добавить» внутри аптечки
-  await page.getByPlaceholder('Название препарата').fill('Ибупрофен 200');
-  await page.getByPlaceholder('Количество').fill('20');
+  // По подписи поля, а не по placeholder: placeholder — пример («Например, Нурофен») и меняется вместе с текстами.
+  await page.getByLabel('Название препарата').fill('Ибупрофен 200');
+  await page.getByLabel('Количество', { exact: true }).fill('20');
   await page.getByRole('button', { name: 'Добавить', exact: true }).last().click();
   await expect(page.getByText('Ибупрофен 200').first()).toBeVisible();
   await expect(page.getByText(/кол-во: 20/)).toBeVisible();

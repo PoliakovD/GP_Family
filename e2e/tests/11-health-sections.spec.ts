@@ -32,12 +32,14 @@ test('отчёты для врача: экран открывается, пуб�
   await expect(page.getByText(/недоступна|не найден|истёк|отозван/i).first()).toBeVisible();
 });
 
-test('посещения врачей, справочник и показатели: экраны открываются', async ({ page }) => {
+test('приёмы врача, справочник и показатели: экраны открываются', async ({ page }) => {
   const { tgId, api } = await newUser('Орлов', 'Олег');
   await createFamily(api, 'Семья Орловых');
 
   await openAs(page, tgId, '/health/visits');
-  await expect(page.getByText('Добавить посещение').first()).toBeVisible();
+  // Единый термин — «приём врача» (раньше «посещение»).
+  await expect(page.getByRole('heading', { name: 'Приёмов врача пока нет' })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('button', { name: 'Добавить приём' }).first()).toBeVisible();
 
   await openAs(page, tgId, '/health/kb');
   await expect(page.getByText('Справочник').first()).toBeVisible();

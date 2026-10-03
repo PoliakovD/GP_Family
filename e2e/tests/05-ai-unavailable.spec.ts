@@ -8,13 +8,20 @@ test('ИИ недоступен: глобальная плашка и докум
   const recordId = await createAnalysis(api, 'Анализ мочи');
   await attachFile(api, recordId);
 
+  // Пока у пользователя нет фоновых задач, плашку не показываем — новичку она выглядела бы как «приложение сломано».
+  const aiStatus = page.waitForResponse((r) => r.url().includes('/api/ai/status'));
   await openAs(page, tgId, '/home');
-  await expect(page.locator('.ai-banner')).toContainText('ИИ временно недоступен');
+  expect(await (await aiStatus).json()).toEqual({ available: false });
+  await expect(page.locator('.ai-banner')).toHaveCount(0);
 
   // Распознавание не отказывает, а ставит задачу в ожидание (202 waiting_for_ai).
   const res = await api.post(`/api/medical-records/${recordId}/extract`);
   expect(res.status()).toBe(202);
   expect(((await res.json()) as { code: string }).code).toBe('waiting_for_ai');
+
+  // Теперь задача есть и ждёт ИИ — глобальная плашка объясняет, почему «в процессе».
+  await page.reload();
+  await expect(page.locator('.ai-banner')).toContainText('ИИ временно недоступен');
 
   // На записи виден шаг «Ждём ИИ», а не ошибка.
   await page.goto(`/health/records/${recordId}`);
