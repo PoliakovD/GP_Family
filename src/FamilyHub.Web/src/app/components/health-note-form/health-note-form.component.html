@@ -101,6 +101,7 @@
                 <div class="dn-value">
                   <label class="dn-sublabel" for="dn-v2">Нижнее</label>
                   <input id="dn-v2" class="input dn-number" type="number" inputmode="decimal" step="any"
+                         [min]="m.min2" [max]="m.max2"
                          [ngModel]="value2()" (ngModelChange)="value2.set($event)" name="value2" />
                 </div>
               }
@@ -224,7 +225,7 @@
     <div class="dn-field">
       <label class="dn-label" for="dn-when">Когда</label>
       @if (kind() === Kind.Sleep) {
-        <input id="dn-when" class="input" type="date" [max]="when().slice(0, 10)"
+        <input id="dn-when" class="input" type="date" [max]="today"
                [ngModel]="when().slice(0, 10)" (ngModelChange)="onWhenDate($event)" name="whenDate" />
         <span class="dn-hint">День, когда проснулись.</span>
       } @else {
@@ -247,6 +248,9 @@
     }
   </div>
 
+  @if (!busy() && missingHint(); as hint) {
+    <p class="field-hint" [class.field-hint-error]="rangeError()" [class.field-hint-muted]="!rangeError()" role="status">{{ hint }}</p>
+  }
   <div class="dn-footer">
     <button type="submit" class="btn btn-primary dn-save" [disabled]="!canSave() || busy()">
       {{ busy() ? 'Сохраняем…' : 'Сохранить' }}

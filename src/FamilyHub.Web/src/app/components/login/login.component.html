@@ -16,7 +16,9 @@
   }
   <div class="card auth-card elev-md">
     <div class="auth-brand">
-      <div class="card-kicker">FamilyHub</div>
+      @if (step() !== 'login') {
+        <div class="card-kicker">FamilyHub</div>
+      }
       <h2 class="card-title mb-0">
         @switch (step()) {
           @case ('login') { Вход }
@@ -51,10 +53,12 @@
 
           <label class="form-label" for="login-password">Пароль</label>
           <input
-            id="login-password" class="input mb-3" type="password" name="password"
+            id="login-password" class="input" [type]="showPassword() ? 'text' : 'password'" name="password"
             [(ngModel)]="password" required autocomplete="current-password" />
+          <div class="mb-3"><button type="button" class="link-inline password-toggle" (click)="showPassword.set(!showPassword())"
+                  [attr.aria-pressed]="showPassword()">{{ showPassword() ? 'Скрыть пароль' : 'Показать пароль' }}</button></div>
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">{{ busy() ? 'Входим…' : 'Войти' }}</button>
           <button type="button" class="btn btn-secondary btn-block" (click)="startRegistration()">Создать аккаунт</button>
           <button type="button" class="btn-link btn-block" (click)="startResetPassword()">Забыли пароль?</button>
         </form>
@@ -117,9 +121,11 @@
 
           <label class="form-label" for="reg-password">Пароль</label>
           <input
-            id="reg-password" class="input" type="password" name="password"
+            id="reg-password" class="input" [type]="showPassword() ? 'text' : 'password'" name="password"
             [(ngModel)]="password" required minlength="8" maxlength="100"
             autocomplete="new-password" />
+          <button type="button" class="link-inline password-toggle" (click)="showPassword.set(!showPassword())"
+                  [attr.aria-pressed]="showPassword()">{{ showPassword() ? 'Скрыть пароль' : 'Показать пароль' }}</button>
           @if (password && !isPasswordValid) {
             <span class="field-hint field-hint-error">Минимум 8 симв., строчная и заглавная латинские буквы, цифра</span>
           } @else if (isPasswordValid) {
@@ -194,7 +200,7 @@
             id="reset-email" class="input mb-3" type="email" name="email"
             [(ngModel)]="email" required autocomplete="email" />
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Отправить код</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">{{ busy() ? 'Отправляем…' : 'Отправить код' }}</button>
           <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
         </form>
       }
@@ -212,9 +218,11 @@
 
           <label class="form-label" for="reset-new-password">Новый пароль</label>
           <input
-            id="reset-new-password" class="input" type="password" name="password"
+            id="reset-new-password" class="input" [type]="showPassword() ? 'text' : 'password'" name="password"
             [(ngModel)]="password" required minlength="8" maxlength="100"
             autocomplete="new-password" />
+          <button type="button" class="link-inline password-toggle" (click)="showPassword.set(!showPassword())"
+                  [attr.aria-pressed]="showPassword()">{{ showPassword() ? 'Скрыть пароль' : 'Показать пароль' }}</button>
           @if (password && !isPasswordValid) {
             <span class="field-hint field-hint-error">Минимум 8 симв., строчная и заглавная латинские буквы, цифра</span>
           } @else if (isPasswordValid) {

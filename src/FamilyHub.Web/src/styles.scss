@@ -1528,3 +1528,9 @@ select.input {
     color: var(--color-accent);
   }
 }
+
+// «Показать пароль» под полем — крупная тач-цель, не мелкая иконка внутри поля.
+.password-toggle {
+  min-height: 36px;
+  font-size: 0.8235rem;
+}

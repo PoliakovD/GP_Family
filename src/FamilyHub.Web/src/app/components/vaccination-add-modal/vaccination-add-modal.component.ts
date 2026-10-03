@@ -172,7 +172,12 @@ export class VaccinationAddModalComponent implements OnInit {
   }
 
   protected async submitOne(): Promise<void> {
-    if (this.busy() || !this.subjectId()) return;
+    if (this.busy()) return;
+    if (!this.subjectId()) {
+      // Раньше «Сохранить» при незагруженном списке людей молча ничего не делал.
+      this.error.set('Подождите, загружаем список людей…');
+      return;
+    }
     const series = this.selectedSeries();
     const customName = this.query().trim();
     if (!series && !customName) {
@@ -214,13 +219,23 @@ export class VaccinationAddModalComponent implements OnInit {
   // ---- По календарю ----
 
   protected async submitBulk(): Promise<void> {
-    if (this.busy() || !this.subjectId()) return;
+    if (this.busy()) return;
+    if (!this.subjectId()) {
+      this.error.set('Подождите, загружаем список людей…');
+      return;
+    }
+    // Год вида «98» или «20» раньше молча отбрасывался — прививка сохранялась без даты.
+    const badYear = this.rows().find((row) => this.choiceOf(row) === 'done' && this.yearOf(row).trim() !== '' && !/^\d{4}$/.test(this.yearOf(row).trim()));
+    if (badYear) {
+      this.error.set(`Год для «${badYear.seriesName ?? 'прививки'}» — четыре цифры, например 1998.`);
+      return;
+    }
     const items: BulkMarkVaccinationItem[] = [];
     for (const row of this.rows()) {
       const choice = this.choiceOf(row);
       if (!choice) continue;
       if (choice === 'done') {
-        const year = this.yearOf(row);
+        const year = this.yearOf(row).trim();
         const date = /^\d{4}$/.test(year) ? `${year}-01-01` : null;
         items.push({
           seriesCode: row.seriesCode, doseIndex: row.doseIndex, kind: VaccinationKind.Done,

@@ -74,7 +74,7 @@
   } @else {
     <label class="form-label" for="delete-confirm">Введите «УДАЛИТЬ» для подтверждения</label>
     <input id="delete-confirm" class="input mb-2" type="text" name="deleteConfirm" [(ngModel)]="deleteConfirmText" />
-    <button class="btn btn-danger" [disabled]="deleteConfirmText !== 'УДАЛИТЬ' || busy()" (click)="deleteAccount()">
+    <button class="btn btn-danger" [disabled]="!deleteConfirmed || busy()" (click)="deleteAccount()">
       Удалить навсегда
     </button>
     <button class="btn-link" (click)="deleteConfirmVisible.set(false)">Отмена</button>

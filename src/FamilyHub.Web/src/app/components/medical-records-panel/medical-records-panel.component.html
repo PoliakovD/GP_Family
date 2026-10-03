@@ -370,16 +370,16 @@
                 <tr class="indicator-edit-row">
                   <td colspan="4">
                     <div class="d-flex flex-column gap-1">
-                      <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+                      <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" aria-label="Название показателя (обязательно)" />
                       <div class="d-flex gap-1">
-                        <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                        <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+                        <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" aria-label="Значение" style="flex:1" />
+                        <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" aria-label="Единица измерения" style="flex:1" />
                       </div>
                       <div class="d-flex gap-1">
-                        <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                        <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+                        <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" aria-label="Норма от" style="flex:1" />
+                        <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" aria-label="Норма до" style="flex:1" />
                       </div>
-                      <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+                      <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" aria-label="Норма текстом, если не число" />
                       <div class="d-flex gap-2">
                         <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
                         <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>
@@ -891,16 +891,16 @@
   <!-- Форма ручного добавления показателя (узкая раскладка и запись без показателей). -->
   <ng-template #newIndicatorFormTpl>
             <div class="d-flex flex-column gap-1 mb-2">
-              <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" />
+              <input class="input" [(ngModel)]="newIndicatorForm.displayName" placeholder="Название показателя" aria-label="Название показателя (обязательно)" />
               <div class="d-flex gap-1">
-                <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" style="flex:1" />
-                <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" style="flex:1" />
+                <input class="input" [(ngModel)]="newIndicatorForm.valueRaw" placeholder="Значение" aria-label="Значение" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.unit" (ngModelChange)="newIndicatorForm.unit = $event" placeholder="Единица" aria-label="Единица измерения" style="flex:1" />
               </div>
               <div class="d-flex gap-1">
-                <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" style="flex:1" />
-                <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.refLowText" (ngModelChange)="newIndicatorForm.refLowText = $event" placeholder="Норма от" aria-label="Норма от" style="flex:1" />
+                <input class="input" [ngModel]="newIndicatorForm.refHighText" (ngModelChange)="newIndicatorForm.refHighText = $event" placeholder="Норма до" aria-label="Норма до" style="flex:1" />
               </div>
-              <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" />
+              <input class="input" [ngModel]="newIndicatorForm.refText" (ngModelChange)="newIndicatorForm.refText = $event" placeholder="Норма текстом (если не число)" aria-label="Норма текстом, если не число" />
               <div class="d-flex gap-2">
                 <button class="btn btn-primary btn-sm" [disabled]="savingNewIndicator" (click)="saveNewIndicator()">Добавить</button>
                 <button class="btn btn-ghost btn-sm" [disabled]="savingNewIndicator" (click)="cancelCreateIndicator()">Отмена</button>

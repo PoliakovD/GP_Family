@@ -1363,7 +1363,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async saveEditIndicator(recordId: string): Promise<void> {
-    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
+    if (!this.editingIndicatorId) return;
+    if (!this.editIndicatorForm.displayName.trim()) {
+      this.toast.error('Укажите название показателя.');
+      return;
+    }
     const savedId = this.editingIndicatorId;
     this.savingIndicator = true;
     try {
@@ -1421,7 +1425,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async saveNewIndicator(): Promise<void> {
-    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim()) return;
+    if (!this.creatingIndicatorRecordId) return;
+    if (!this.newIndicatorForm.displayName.trim()) {
+      this.toast.error('Укажите название показателя.');
+      return;
+    }
     const recordId = this.creatingIndicatorRecordId;
     this.savingNewIndicator = true;
     try {

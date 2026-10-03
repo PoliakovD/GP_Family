@@ -29,6 +29,11 @@ export class SettingsDataComponent implements OnInit {
   readonly deleteConfirmVisible = signal(false);
   deleteConfirmText = '';
 
+  /** «удалить», «Удалить », «УДАЛИТЬ» — всё подходит (раньше строчные буквы молча не принимались). */
+  get deleteConfirmed(): boolean {
+    return this.deleteConfirmText.trim().toUpperCase() === 'УДАЛИТЬ';
+  }
+
   /** «Кто видит моё здоровье» (ADR-0017) — гранты доступа per-категория к дневнику/приёму/
    * прививкам. Полная матрица кандидатов (активные члены моих семей), не только тех, кому уже
    * что-то открыто — тот же sparse-preference приём, что и у оповещений выше на этой вкладке. */
@@ -92,7 +97,7 @@ export class SettingsDataComponent implements OnInit {
   }
 
   async deleteAccount(): Promise<void> {
-    if (this.deleteConfirmText !== 'УДАЛИТЬ') return;
+    if (!this.deleteConfirmed) return;
     await runBusy(this.busy, this.toast, async () => {
       try {
         await this.auth.deleteAccount();

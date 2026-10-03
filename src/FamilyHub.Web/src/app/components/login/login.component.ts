@@ -9,6 +9,7 @@ import { AuthService } from '../../services/auth.service';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
+import { ToastService } from '../../shared/toast/toast.service';
 import { PASSWORD_PATTERN } from '../settings/settings-task';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { safeReturnUrl } from '../../services/return-url';
@@ -41,6 +42,7 @@ export class LoginComponent implements HasPendingCodeEntry {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly toast = inject(ToastService);
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly cookieConsent = inject(CookieConsentService);
@@ -210,6 +212,7 @@ export class LoginComponent implements HasPendingCodeEntry {
         gender: this.gender!,
       });
       this.completed.set(true);
+      this.toast.success('Добро пожаловать в FamilyHub!');
       // Оба обязательных чекбокса ПДн-согласия отмечены на предыдущем шаге (register-details,
       // см. canSubmitDetails) — записываем принятие сразу же, пока сессия свежая, той версией
       // текста, которая ДЕЙСТВИТЕЛЬНО актуальна на сервере (не кэшированной с момента открытия
@@ -284,6 +287,7 @@ export class LoginComponent implements HasPendingCodeEntry {
     await this.run(async () => {
       await this.auth.resetPasswordConfirm(this.email, this.code, this.password);
       this.completed.set(true);
+      this.toast.success('Пароль изменён — вы вошли в аккаунт.');
       await this.router.navigate([this.afterLoginUrl]);
     });
   }
@@ -335,6 +339,9 @@ export class LoginComponent implements HasPendingCodeEntry {
     this.cookieConsent.setChoice('accepted');
   }
 
+  /** «Показать пароль» — пожилым тяжело набирать вслепую. */
+  readonly showPassword = signal(false);
+
   private async run(action: () => Promise<void>): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
@@ -344,6 +351,9 @@ export class LoginComponent implements HasPendingCodeEntry {
     } catch (e) {
       this.errorCode.set(e instanceof HttpErrorResponse ? (e.error?.code ?? null) : null);
       this.error.set(this.describe(e));
+      // Форма регистрации — три экрана высотой: ошибка вверху раньше оставалась вне поля зрения,
+      // и казалось, что после нажатия кнопки ничего не произошло.
+      queueMicrotask(() => document.querySelector('.auth-card .alert-danger')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } finally {
       this.busy.set(false);
     }

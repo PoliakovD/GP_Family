@@ -1,4 +1,5 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import { Component, effect, inject, input, output, signal } from '@angular/core';
+import { formatDayMonthYear } from '../util/date-format';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import type { InviteCreated } from '../../models/types';
@@ -19,7 +20,9 @@ import { copyToClipboard } from '../util/clipboard';
     <app-modal title="Пригласить в семью" [open]="open()" (closed)="closed.emit()">
       @if (created(); as invite) {
         <p class="muted mb-2">
-          Код: <code>{{ invite.code }}</code>
+          Ссылка готова. Отправьте её одному человеку
+          @if (invite.maxUses > 1) { (сработает {{ invite.maxUses }} раз) } @else { — она сработает один раз }
+          @if (invite.expiresAt) {, действует до {{ formatDate(invite.expiresAt) }}}.
         </p>
         <div class="invite-link mb-2">{{ invite.webLink }}</div>
         <div class="d-flex gap-2 mb-2">
@@ -43,10 +46,6 @@ import { copyToClipboard } from '../util/clipboard';
             >
               <i class="ph-fill ph-telegram-logo" aria-hidden="true"></i>
             </button>
-          } @else {
-            <p class="muted mb-0 align-self-center">
-              Или боту: <code>/start {{ invite.code }}</code>
-            </p>
           }
         </div>
         <div class="d-flex justify-content-end gap-2">
@@ -92,13 +91,25 @@ export class InviteModalComponent {
   readonly created = signal<InviteCreated | null>(null);
   readonly creating = signal(false);
 
+  constructor() {
+    // При повторном открытии раньше показывалась старая одноразовая ссылка — человек мог отправить
+    // уже использованную. Каждое открытие начинается с чистого листа.
+    effect(() => {
+      if (!this.open()) this.created.set(null);
+    });
+  }
+
+  protected formatDate(iso: string): string {
+    return formatDayMonthYear(iso.slice(0, 10));
+  }
+
   async create(): Promise<void> {
     this.creating.set(true);
     try {
       this.created.set(await this.api.createInvite(this.familyId()));
-      this.toast.success('Инвайт создан.');
+      this.toast.success('Ссылка-приглашение готова.');
     } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать инвайт.');
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать приглашение.');
     } finally {
       this.creating.set(false);
     }

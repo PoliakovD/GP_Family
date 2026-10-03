@@ -2,6 +2,7 @@ import { Component, OnInit, WritableSignal, computed, inject, input, output, sig
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
 import { ToastService } from '../../shared/toast/toast.service';
+import { todayLocal } from '../../shared/util/intake-labels';
 import {
   HealthNote, HealthNoteCatalog, HealthNoteInput, HealthNoteKind,
 } from '../../models/types';
@@ -93,7 +94,57 @@ export class HealthNoteFormComponent implements OnInit {
 
   protected readonly sleepPreview = computed(() => formatDuration(this.sleepMinutes()));
 
+  /** Значение вне допустимых границ показателя (давление 1200 и т.п.) — такие данные потом уходят в
+   * отчёт врачу. Проверяем оба значения (раньше границы были только у первого поля, и без сообщения). */
+  protected readonly rangeError = computed<string | null>(() => {
+    if (this.kind() !== HealthNoteKind.Metric) return null;
+    const m = this.metric();
+    if (!m) return null;
+    const outOf = (v: number | null, min: number, max: number) => v !== null && (v < min || v > max);
+    const unit = m.unit ? ' ' + m.unit : '';
+    if (outOf(this.value(), m.min, m.max)) {
+      return `Проверьте значение: для «${m.name}» допустимо от ${m.min} до ${m.max}${unit}.`;
+    }
+    if (m.hasSecondValue && m.min2 !== null && m.max2 !== null && outOf(this.value2(), m.min2, m.max2)) {
+      return `Проверьте нижнее значение: допустимо от ${m.min2} до ${m.max2}${unit}.`;
+    }
+    if (m.hasSecondValue && this.value() !== null && this.value2() !== null && this.value2()! > this.value()!) {
+      return 'Нижнее значение больше верхнего — возможно, поля перепутаны.';
+    }
+    return null;
+  });
+
+  /** Почему «Сохранить» неактивна — раньше кнопка просто была серой, и было непонятно, чего не хватает. */
+  protected readonly missingHint = computed<string | null>(() => {
+    if (this.rangeError()) return this.rangeError();
+    switch (this.kind()) {
+      case HealthNoteKind.Symptom:
+        if (this.title().trim() === '') return 'Укажите, что беспокоит.';
+        if (this.severity() === null) return 'Отметьте, насколько сильно (от 1 до 10).';
+        return null;
+      case HealthNoteKind.Metric: {
+        const m = this.metric();
+        if (!m) return 'Выберите показатель.';
+        if (this.value() === null || (m.hasSecondValue && this.value2() === null)) return 'Введите значение.';
+        if (this.addPulse() && this.pulse() === null) return 'Введите пульс или уберите галочку «Пульс».';
+        return null;
+      }
+      case HealthNoteKind.Wellbeing:
+        return this.score() === null ? 'Отметьте, как вы себя чувствуете.' : null;
+      case HealthNoteKind.MedicationIntake:
+        return this.title().trim() === '' ? 'Укажите лекарство.' : null;
+      case HealthNoteKind.Sleep:
+        return this.sleepMinutes() > 0 ? null : 'Проверьте время: подъём должен быть позже отбоя.';
+      default:
+        return this.text().trim() === '' ? 'Напишите заметку.' : null;
+    }
+  });
+
+  /** Сон: дата — не позже сегодня (раньше max был равен выбранной дате и не давал вернуть её вперёд). */
+  protected readonly today = todayLocal();
+
   protected readonly canSave = computed(() => {
+    if (this.rangeError()) return false;
     switch (this.kind()) {
       case HealthNoteKind.Symptom:
         return this.title().trim() !== '' && this.severity() !== null;
