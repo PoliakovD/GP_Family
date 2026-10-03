@@ -253,11 +253,19 @@ export class HealthNoteFormComponent implements OnInit {
         await this.api.createHealthNote(input);
         // «Пульс добавляется к давлению одной строкой» — отдельной записью в то же время.
         if (this.kind() === HealthNoteKind.Metric && this.addPulse() && this.pulse() !== null) {
-          await this.api.createHealthNote({
-            kind: HealthNoteKind.Metric,
-            occurredAt: input.occurredAt,
-            metric: { code: 'pulse', value: this.pulse()!, value2: null },
-          });
+          try {
+            await this.api.createHealthNote({
+              kind: HealthNoteKind.Metric,
+              occurredAt: input.occurredAt,
+              metric: { code: 'pulse', value: this.pulse()!, value2: null },
+            });
+          } catch {
+            // Давление уже сохранено — НЕ оставляем форму с общей ошибкой: повторное «Сохранить»
+            // создавало дубль давления. Говорим точно, что не сохранилось.
+            this.toast.error('Давление сохранено, а пульс — нет. Добавьте пульс отдельной записью.');
+            this.saved.emit();
+            return;
+          }
         }
       }
       this.toast.success(existing ? 'Запись обновлена' : 'Запись сохранена');

@@ -59,10 +59,10 @@
                                 }
                             </span>
                             <span class="d-flex gap-1 flex-shrink-0">
-                                <button class="btn btn-primary btn-sm" (click)="handleApprove(p.userId)">
+                                <button class="btn btn-primary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleApprove(p.userId)">
                                     Принять
                                 </button>
-                                <button class="btn btn-secondary btn-sm" (click)="handleReject(p.userId)">
+                                <button class="btn btn-secondary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleReject(p.userId)">
                                     Отклонить
                                 </button>
                             </span>

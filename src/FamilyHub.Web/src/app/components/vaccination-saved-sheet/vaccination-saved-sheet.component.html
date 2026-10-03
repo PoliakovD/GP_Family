@@ -7,6 +7,24 @@
     </div>
   </div>
 
+  @if (info().quickMark && info().item.recordId) {
+    @if (!editingDate()) {
+      <button type="button" class="btn-link mb-2" (click)="editingDate.set(true)">
+        Сделана в другой день? Изменить дату
+      </button>
+    } @else {
+      <div class="mb-3">
+        <label class="form-label" for="vs-date">Дата прививки</label>
+        <div class="d-flex gap-2">
+          <input #dateInput id="vs-date" class="input" type="date" [max]="today" [value]="savedDate() ?? info().item.date ?? today" />
+          <button type="button" class="btn btn-primary" [disabled]="dateBusy()" (click)="saveDate(dateInput.value)">
+            {{ dateBusy() ? 'Сохраняем…' : 'Сохранить' }}
+          </button>
+        </div>
+      </div>
+    }
+  }
+
   @if (info().reactionHint) {
     <p class="vs-text">{{ info().reactionHint }}</p>
   }

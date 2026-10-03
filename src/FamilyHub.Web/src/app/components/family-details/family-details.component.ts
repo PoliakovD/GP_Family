@@ -159,7 +159,12 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
     }
 
 
+    /** Заявки, по которым уже идёт запрос — двойной тап слал два запроса, второй падал с ошибкой. */
+    readonly busyRequests = new Set<string>();
+
     async handleApprove(userId: string): Promise<void> {
+        if (this.busyRequests.has(userId)) return;
+        this.busyRequests.add(userId);
         try {
             await this.api.approveMember(this.id, userId);
             await this.loadPending();
@@ -167,10 +172,14 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
             this.toast.success('Заявка принята.');
         } catch (err) {
             this.toast.error(err instanceof ApiError ? err.message : 'Ошибка при подтверждении.');
+        } finally {
+            this.busyRequests.delete(userId);
         }
     }
 
     async handleReject(userId: string): Promise<void> {
+        if (this.busyRequests.has(userId)) return;
+        this.busyRequests.add(userId);
         try {
             await this.api.rejectMember(this.id, userId);
             await this.loadPending();
@@ -178,6 +187,8 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
             this.toast.success('Заявка отклонена.');
         } catch (err) {
             this.toast.error(err instanceof ApiError ? err.message : 'Ошибка при отклонении.');
+        } finally {
+            this.busyRequests.delete(userId);
         }
     }
 

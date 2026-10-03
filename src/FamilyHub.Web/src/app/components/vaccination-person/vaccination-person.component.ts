@@ -181,7 +181,7 @@ export class VaccinationPersonComponent {
       });
       this.vaccinations.showSaved({
         subject: this.schedule()!.subject, item: { ...item, status: VaccinationStatus.Done, date: todayLocal() },
-        reactionHint: this.vaccinations.reactionHintFor(item.seriesCode),
+        reactionHint: this.vaccinations.reactionHintFor(item.seriesCode), quickMark: true,
       });
       this.vaccinations.changed();
     } catch (e) {

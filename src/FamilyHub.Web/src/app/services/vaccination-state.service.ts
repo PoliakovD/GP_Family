@@ -15,6 +15,9 @@ export interface VaccinationSavedInfo {
   subject: VaccinationSubject;
   item: VaccinationScheduleItem;
   reactionHint: string | null;
+  /** Быстрая отметка «Сделана» (дата = сегодня, без названия вакцины) — в шторке можно поправить
+   * дату. Для записей из полной формы не предлагаем: PUT перезаписал бы название вакцины. */
+  quickMark?: boolean;
 }
 
 /**
