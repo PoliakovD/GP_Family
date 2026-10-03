@@ -622,9 +622,20 @@ public class MedicalDocumentExtractionProcessor(
             // Дедуп на уровне БД + жёсткий гейт на нерезолвленный источник — оба внутри
             // LabAnalyteEnrichmentRequestService.RequestAsync (единственная точка входа).
             if (lookup.Kind != Kb.KbLookupKind.Hit)
+            {
                 await enrichmentRequest.RequestAsync(
                     lookupKey, specimenKbId, entity.DisplayName, null, ownerUserId,
-                    origin: EnrichmentRequestOrigin.Extraction, ct: ct);
+                    origin: EnrichmentRequestOrigin.Extraction, ct: ct, unit: dto.Unit);
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.Unit) && kbRow is not null && HasUnitGap(kbRow.Value.PayloadJson, dto.Unit, lookupKey))
+            {
+                // Справочник знает показатель, но норм в единице этого бланка нет (и пересчитать нельзя) —
+                // повторное обогащение: единицы уйдут в запрос/суммаризатор, свежий кэш поиска
+                // переиспользуется без платного вызова (один раз на единицу, см. RequestAsync).
+                await enrichmentRequest.RequestAsync(
+                    lookupKey, specimenKbId, entity.DisplayName, null, ownerUserId, force: true,
+                    origin: EnrichmentRequestOrigin.Extraction, ct: ct, unit: dto.Unit, unitGap: true);
+            }
         }
 
         job.Stage = ExtractionStage.Summarizing;
@@ -742,6 +753,14 @@ public class MedicalDocumentExtractionProcessor(
         await tx.CommitAsync(ct);
 
         logger.LogInformation("MedicalDocumentExtractionJob {JobId}: заключение врача распознано.", job.Id);
+    }
+
+    /// <summary>true — в справочнике есть числовые нормы, но ни одну нельзя привести к единице бланка.</summary>
+    private static bool HasUnitGap(string payloadJson, string unit, string analyteKey)
+    {
+        var ranges = LabAnalyteKbPayload.ParseRefRanges(payloadJson)
+            .Where(r => r.NormKind == FamilyHub.Domain.Enums.LabNormKind.FixedRange && (r.Low is not null || r.High is not null)).ToList();
+        return ranges.Count > 0 && ranges.All(r => !IndicatorFlagCalculator.AdjustRangeForUnit(r, unit, analyteKey).Applicable);
     }
 
     /// <summary>Страховка от главной путаницы бланка (план "качество ИИ-распознавания анализов",

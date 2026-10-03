@@ -35,6 +35,7 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
 
   readonly recomputeBusy = signal(false);
   readonly reenrichBusy = signal(false);
+  readonly cacheUnitsBusy = signal(false);
 
   ngOnInit(): void {
     void this.loadRebuildStatus();
@@ -127,6 +128,29 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
       this.toast.error('Не удалось поставить перепрогон в очередь.');
     } finally {
       this.recomputeBusy.set(false);
+    }
+  }
+
+  // --- Единицы в старом кэше поиска ---
+
+  /** LabAnalyteCacheUnitsBackfillJob: 1 LLM-вызов на строку кэша, батчами по 20 (каждый ставит следующий). */
+  async backfillCacheUnits(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Определить единицы в кэше поиска?',
+      message: 'Для каждой строки накопленного кэша платного поиска локальная модель (один вызов на строку) определит, ' +
+        'в каких единицах измерения в сохранённой выдаче есть нормы. Платных запросов нет. Фоновая задача, батчами по 20.',
+      confirmText: 'Запустить',
+    });
+    if (!ok) return;
+
+    this.cacheUnitsBusy.set(true);
+    try {
+      await this.api.backfillSearchCacheUnits();
+      this.toast.success('Определение единиц поставлено в очередь.');
+    } catch {
+      this.toast.error('Не удалось поставить задачу в очередь.');
+    } finally {
+      this.cacheUnitsBusy.set(false);
     }
   }
 

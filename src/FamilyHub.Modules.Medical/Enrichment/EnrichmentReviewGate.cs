@@ -108,7 +108,10 @@ public static class EnrichmentReviewGate
         if (job is LabAnalyteEnrichmentJob)
         {
             var readable = LabAnalyteNameCleaner.Clean(job.SourceDisplayName);
-            if (readable.Length > 0) return readable;
+            // Все известные единицы уходят в запрос сразу: один платный поиск должен вернуть нормы для
+            // каждой единицы (г/л, %, ммоль/л…), а не только для той, что попалась первой.
+            if (readable.Length > 0)
+                return string.IsNullOrWhiteSpace(job.Units) ? readable : $"{readable} (единицы: {job.Units.Replace(";", ",")})";
         }
 
         return job.NormalizedName;

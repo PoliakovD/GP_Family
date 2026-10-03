@@ -15,6 +15,7 @@ public class LabAnalyteEnrichmentJobConfiguration : IEntityTypeConfiguration<Lab
         builder.Property(j => j.NormalizedName).HasMaxLength(200).IsRequired();
         builder.Property(j => j.SpecimenKbId).IsRequired();
         builder.Property(j => j.SourceDisplayName).HasMaxLength(200).IsRequired();
+        builder.Property(j => j.Units).HasMaxLength(200);
         builder.Property(j => j.Error).HasMaxLength(2000);
         builder.Property(j => j.Provider).HasMaxLength(50);
 

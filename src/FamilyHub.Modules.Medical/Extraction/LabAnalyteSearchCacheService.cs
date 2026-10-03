@@ -12,9 +12,19 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// свежести — зеркало MedicationEnrichment.Enrichment.CachedSearch.</summary>
 public record CachedAnalyteSearch(
     IReadOnlyList<WebSnippet> Snippets, string Provider, DateTime LastUpdatedAt, DateTime CanBeUpdatedAfter,
-    IReadOnlyDictionary<string, bool>? Overrides = null)
+    IReadOnlyDictionary<string, bool>? Overrides = null, string? Units = null)
 {
     public bool IsFresh => CanBeUpdatedAfter > DateTime.UtcNow;
+
+    /// <summary>true — выдача (даже устаревшая) уже содержит нормы в этой единице: платный повтор не нужен,
+    /// достаточно пересуммаризировать сохранённое. Сравнение по канонической форме (мг/дл = mg/dL).</summary>
+    public bool CoversUnit(string? unit)
+    {
+        if (string.IsNullOrWhiteSpace(unit) || string.IsNullOrWhiteSpace(Units)) return false;
+        static string Key(string u) => LabUnitNormalizer.Canonicalize(u)?.Canonical ?? u.Trim().ToLowerInvariant();
+        var wanted = Key(unit);
+        return Units.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Any(u => Key(u) == wanted);
+    }
 }
 
 /// <summary>Группа поиска биоматериала (ADR-0018): EffectiveKey — ключ строки кэша; QueryLabel — слово, которое
@@ -63,7 +73,7 @@ public class LabAnalyteSearchCacheService(
 
         var snippets = SearchCacheSnippets.Parse(cache.SnippetsJson);
         var overrides = ParseOverrides(cache.OverridesJson);
-        return new CachedAnalyteSearch(snippets, cache.Provider, cache.LastUpdatedAt, cache.CanBeUpdatedAfter, overrides);
+        return new CachedAnalyteSearch(snippets, cache.Provider, cache.LastUpdatedAt, cache.CanBeUpdatedAfter, overrides, cache.Units);
     }
 
     /// <summary>Точечное включение/выключение конкретного URL в уже закэшированной выдаче (админка) —
@@ -223,7 +233,7 @@ public class LabAnalyteSearchCacheService(
     /// MedicationSearchCacheService.RecordSearchAsync (см. её doc-комментарий).</summary>
     public async Task RecordSearchAsync(
         string normalizedName, Guid specimenKbId, string provider, IReadOnlyList<WebSnippet> snippets,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string? units = null)
     {
         var now = DateTime.UtcNow;
         var canBeUpdatedAfter = now.AddMonths(options.Value.MinRefreshIntervalMonths);
@@ -235,6 +245,7 @@ public class LabAnalyteSearchCacheService(
         if (existing is not null)
         {
             ApplyRecord(existing, provider, now, canBeUpdatedAfter, MergeKeepingManual(existing.SnippetsJson, snippets));
+            existing.Units = units;
             await db.SaveChangesAsync(ct);
             return;
         }
@@ -249,6 +260,7 @@ public class LabAnalyteSearchCacheService(
             LastUpdatedAt = now,
             CanBeUpdatedAfter = canBeUpdatedAfter,
             SnippetsJson = snippetsJson,
+            Units = units,
         };
         db.LabAnalyteSearchCaches.Add(cache);
 
@@ -268,6 +280,7 @@ public class LabAnalyteSearchCacheService(
             var existingAfterRace = await db.LabAnalyteSearchCaches
                 .SingleAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
             ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, MergeKeepingManual(existingAfterRace.SnippetsJson, snippets));
+            existingAfterRace.Units = units;
             await db.SaveChangesAsync(ct);
         }
     }

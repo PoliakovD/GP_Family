@@ -87,12 +87,22 @@ public class LabAnalyteEnrichmentProcessor(
                 return;
             }
 
-            // Гейт «на бред» — ТОЛЬКО для показателей, введённых вручную (см.
-            // EnrichmentRequestOrigin, class doc AnalytePlausibilityGuardService): документное
-            // извлечение уже прошло собственный антигаллюцинационный гейт (имя показателя обязано
-            // встречаться в тексте бланка), у ручного ввода такой перекрёстной проверки нет.
+            // Гейт «на бред» (class doc AnalytePlausibilityGuardService) — для всех происхождений.
             (double? Confidence, string? Reason)? plausibilityConfidence = null;
-            if (job.Origin == EnrichmentRequestOrigin.ManualEntry)
+            // Страж легитимности сам по себе не отличает "Пациент" от показателя (уверенность 0.98), поэтому
+            // правдоподобность проверяется для ВСЕХ происхождений: платный поиск не должен уходить по
+            // слову из шапки бланка или обрезанному названию. Плюс детерминированный фильтр до модели.
+            var badName = AnalyteNameQuality.RejectReason(job.SourceDisplayName);
+            if (badName is not null)
+            {
+                job.Status = EnrichmentJobStatus.Failed;
+                job.Error = badName;
+                job.FailureReason = EnrichmentFailureReason.Plausibility;
+                job.CompletedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+
             {
                 var specimenDisplayName = await db.GlobalSpecimensKb.AsNoTracking()
                     .Where(s => s.Id == job.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
@@ -145,7 +155,11 @@ public class LabAnalyteEnrichmentProcessor(
             // → один запрос «… (кровь)»), у биоматериала без группы — его собственное название.
             var specimenDisplayNameForLog = (await searchCache.GetSearchGroupAsync(job.SpecimenKbId, ct)).QueryLabel;
 
-            if (cached is not null && cached.IsFresh)
+            // «Пробел по единице» (Force из LabAnalyteEnrichmentRequestService): если сохранённая выдача —
+            // даже устаревшая — уже содержит нормы в нужной (последней в списке) единице, платный повтор
+            // не нужен: пересуммаризируем кэш (LabAnalyteCacheUnitsBackfillJob заполняет Units старым строкам).
+            var gapUnit = job.Units?.Split(';', StringSplitOptions.TrimEntries).LastOrDefault();
+            if (cached is not null && (cached.IsFresh || (job.Force && cached.CoversUnit(gapUnit))))
             {
                 rawSnippets = cached.Snippets;
                 overrides = cached.Overrides;
@@ -211,7 +225,7 @@ public class LabAnalyteEnrichmentProcessor(
                     // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
                     // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) сразу после
                     // запроса, а не после успешной записи в справочник.
-                    await searchCache.RecordSearchAsync(job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct, job.Units);
                 }
             }
 
@@ -240,7 +254,7 @@ public class LabAnalyteEnrichmentProcessor(
                 return;
             }
 
-            var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, sortedSnippets, ct);
+            var summarized = await summarizer.SummarizeAsync(job.SourceDisplayName, sortedSnippets, ct, job.Units);
             if (!summarized.Success || summarized.Summary is null)
             {
                 job.Status = EnrichmentJobStatus.Failed;

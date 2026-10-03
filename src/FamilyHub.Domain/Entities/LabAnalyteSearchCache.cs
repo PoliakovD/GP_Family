@@ -37,4 +37,9 @@ public class LabAnalyteSearchCache : ISearchCacheRow
     /// <summary>Точечные ручные исключения/включения конкретных сниппетов из админки — тот же
     /// формат и та же гарантия сохранности при обновлении, что MedicationSearchCache.OverridesJson.</summary>
     public string? OverridesJson { get; set; }
+
+    /// <summary>Единицы, для которых сохранённая выдача содержит нормы, через "; ". null — ещё не
+    /// определено (старый кэш — см. LabAnalyteCacheUnitsBackfillJob); "" — проверено, единиц нет.
+    /// У свежего платного поиска — единицы, ушедшие в запрос (LabAnalyteEnrichmentJob.Units).</summary>
+    public string? Units { get; set; }
 }

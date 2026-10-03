@@ -169,6 +169,7 @@ public static class LabTableRowDetector
             if (line.StartsWith("--- стр.", StringComparison.Ordinal))
             {
                 inFooter = false;
+                lastWasRow = false;
                 continue;
             }
 
@@ -242,6 +243,17 @@ public static class LabTableRowDetector
                 continue;
             }
 
+            // Строчный хвост названия отдельной строкой ("…гемоглобина в" / "эритроците").
+            if (cells.Length == 1 && prevWasRow && rows.Count > 0 && rows[^1].NameCellIndex == 0 && IsNameTail(cells[0]))
+            {
+                var last = rows[^1];
+                var merged = last.Cells.ToArray();
+                merged[0] = merged[0] + " " + cells[0];
+                rows[^1] = last with { Cells = merged, RawLine = string.Join(" | ", merged) };
+                lastWasRow = true; // хвост может занимать несколько строк
+                continue;
+            }
+
             if (cells.Length == 1)
             {
                 panelHeaderLines++;
@@ -254,6 +266,11 @@ public static class LabTableRowDetector
         Flush();
         return new LabTableDetectionResult(rows, panelHeaderLines, noiseLines);
     }
+
+    /// <summary>Хвост названия: короткая строка со строчной буквы без цифр (заголовки панелей
+    /// начинаются с заглавной, примечания — с "*").</summary>
+    private static bool IsNameTail(string text) =>
+        text.Length is > 0 and <= 40 && char.IsLower(text[0]) && !text.Any(char.IsDigit);
 
     /// <summary>Приклеивает перенесённый хвост названия к последней строке-результату: либо он дописывает
     /// незакрытую скобку («(ср. содер. Hb в» + «эр.)»), либо сам начинается со скобки («(общ.число), %»).

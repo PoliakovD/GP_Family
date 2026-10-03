@@ -285,6 +285,23 @@ public class LabTableRowDetectorTests
     }
 
     [Fact]
+    public void Detect_WrappedNameTailOnNextLine_IsMergedIntoTheRowName()
+    {
+        var text = string.Join('\n',
+            Header,
+            "Средняя концентрация гемоглобина в | 330 | г/л | 300 - 360",
+            "эритроците",
+            "Гематокрит | 40 | % | 35 - 45",
+            "МНО (+ПТВ и ПТИ)",
+            "Протромбиновое время | 13 | сек. | 9 - 12");
+
+        var rows = LabTableRowDetector.Detect(text).Rows;
+
+        rows.Select(r => r.Cells[0]).Should().Equal(
+            "Средняя концентрация гемоглобина в эритроците", "Гематокрит", "Протромбиновое время");
+    }
+
+    [Fact]
     public void Detect_EmptyInput_ReturnsEmptyResult()
     {
         var result = LabTableRowDetector.Detect(string.Empty);

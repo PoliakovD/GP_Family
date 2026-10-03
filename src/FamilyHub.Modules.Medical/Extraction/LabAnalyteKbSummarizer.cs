@@ -110,13 +110,13 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
         """;
 
     public async Task<LabAnalyteSummarizeResult> SummarizeAsync(
-        string displayName, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
+        string displayName, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default, string? units = null)
     {
         if (snippets.Count == 0)
             return LabAnalyteSummarizeResult.Failure(
                 "Нет сниппетов от доверенных источников — суммаризировать нечего.", EnrichmentFailureReason.NoTrustedSnippets);
 
-        var userText = BuildUserText(displayName, snippets);
+        var userText = BuildUserText(displayName, snippets, units);
         var prompt = await promptProvider.GetAsync("lab-analyte.summarize", SystemPrompt, ct);
         var result = await client.ExtractJsonAsync(prompt, userText, ct, shortTimeout: true);
         if (!result.Success || result.Payload is null)
@@ -248,10 +248,14 @@ public class LabAnalyteKbSummarizer(ILmStudioJsonClient client, IPromptProvider 
         _ => null,
     };
 
-    private static string BuildUserText(string displayName, IReadOnlyList<WebSnippet> snippets)
+    private static string BuildUserText(string displayName, IReadOnlyList<WebSnippet> snippets, string? units)
     {
         var sb = new StringBuilder();
-        sb.Append("Показатель: ").AppendLine(displayName).AppendLine();
+        sb.Append("Показатель: ").AppendLine(displayName);
+        if (!string.IsNullOrWhiteSpace(units))
+            sb.Append("Единицы измерения в бланках пользователей: ").Append(units)
+              .AppendLine(". Для КАЖДОЙ из них, если источники дают норму, верни отдельные записи refRanges со своим unit (не пересчитывай сам).");
+        sb.AppendLine();
         for (var i = 0; i < snippets.Count; i++)
         {
             var s = snippets[i];
