@@ -51,7 +51,8 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
   readonly shareDays = signal<number>(DEFAULT_SHARE_DAYS);
 
   readonly labs = signal(true);
-  readonly aiSummaries = signal(true);
+  // Выключено по умолчанию: врач получает ИИ-трактовку, только если человек сам этого захотел.
+  readonly aiSummaries = signal(false);
   readonly medications = signal(true);
   readonly visits = signal(true);
   readonly measurements = signal(true);

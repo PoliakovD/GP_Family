@@ -1,6 +1,9 @@
 <div>
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger mb-2" role="alert">
+      {{ error }}
+      <button type="button" class="btn-link" (click)="load()">Повторить</button>
+    </div>
   }
 
   <div class="mb-3">
@@ -35,13 +38,13 @@
         />
         <div class="d-flex justify-content-end gap-2">
           <button class="btn btn-secondary btn-sm" (click)="closeFormModal()">Отмена</button>
-          <button class="btn btn-primary btn-sm" (click)="saveEdit()">Сохранить</button>
+          <button class="btn btn-primary btn-sm" [disabled]="saving" (click)="saveEdit()">{{ saving ? 'Сохраняем…' : 'Сохранить' }}</button>
         </div>
       </div>
     </app-modal>
 
     <app-medications-panel [medkitId]="id()" (countChanged)="onCountChanged($event)" />
-  } @else {
-    <p class="muted">Аптечка не найдена.</p>
+  } @else if (!error) {
+    <p class="muted">Аптечка не найдена — возможно, её удалили.</p>
   }
 </div>

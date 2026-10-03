@@ -1,5 +1,8 @@
 @if (loadError(); as err) {
-  <div class="alert-danger" role="alert">{{ err }}</div>
+  <div class="alert-danger" role="alert">
+    {{ err }}
+    <button type="button" class="btn-link" (click)="load(courseId())">Повторить</button>
+  </div>
 } @else if (loading() && !detail()) {
   <p class="muted">Загружаем…</p>
 } @else if (detail(); as d) {
@@ -15,7 +18,7 @@
               · {{ src }}
             }
             @if (d.source; as source) {
-              <a class="cc-link" [routerLink]="['/health/visits', source.recordId]">открыть визит</a>
+              <a class="cc-link" [routerLink]="['/health/visits', source.recordId]">открыть приём врача</a>
             }
           </div>
           @if (s.status === Status.Paused) { <span class="tag tag-neutral">Приостановлен</span> }

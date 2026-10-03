@@ -1,5 +1,5 @@
 @if (auth.me(); as me) {
-  <h2 class="mb-4">Оповещения</h2>
+  <h2 class="mb-4">Уведомления</h2>
 
   <!-- Редизайн v3, PR8 — главный push-выключатель в отдельном акцентном блоке-баннере сверху
      (было — обычной строкой внутри списка ниже). -->
@@ -7,7 +7,7 @@
     <div class="settings-push-banner mb-4" [class.off]="!push.isSubscribed()">
       <i [class]="push.isSubscribed() ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash'" aria-hidden="true"></i>
       <div class="flex-fill">
-        <div style="font-weight:600">Push-уведомления {{ push.isSubscribed() ? 'включены' : 'выключены' }}</div>
+        <div style="font-weight:600">Уведомления на этом устройстве {{ push.isSubscribed() ? 'включены' : 'выключены' }}</div>
         <div class="muted" style="font-size:0.8235rem">
           @if (push.isSubscribed()) {
             Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
@@ -17,26 +17,39 @@
         </div>
       </div>
       <label class="switch">
-        <input type="checkbox" [checked]="push.isSubscribed()" [disabled]="pushBusy()" (change)="togglePush()" />
+        <input type="checkbox" [checked]="push.isSubscribed()" [disabled]="pushBusy()" (change)="togglePush()"
+               aria-label="Уведомления на этом устройстве" />
         <span class="switch-knob"></span>
       </label>
     </div>
+    @if (permissionDenied && !push.isSubscribed()) {
+      <div class="alert-info mb-4">
+        Уведомления запрещены в настройках браузера, и сам он больше не спросит. Нажмите на значок
+        замка слева от адреса сайта → «Уведомления» → «Разрешить», затем включите переключатель выше.
+      </div>
+    }
   } @else if (tg.isInsideTelegram()) {
-    <p class="muted mb-4">Push недоступен внутри Telegram — откройте FamilyHub в браузере.</p>
+    <p class="muted mb-4">Внутри Telegram уведомления приходят от бота. Чтобы получать их и на телефон напрямую, откройте FamilyHub в браузере.</p>
+  } @else if (iosNeedsInstall) {
+    <div class="alert-info mb-4">
+      <strong>На iPhone уведомления работают только из приложения на экране «Домой».</strong><br />
+      В Safari нажмите «Поделиться» <i class="ph ph-export" aria-hidden="true"></i> → «На экран «Домой»»,
+      откройте FamilyHub с появившегося значка и вернитесь сюда.
+    </div>
   } @else {
-    <p class="muted mb-4">Ваш браузер не поддерживает push-уведомления.</p>
+    <p class="muted mb-4">Этот браузер не умеет показывать уведомления. Попробуйте Chrome, Edge или Firefox.</p>
   }
 
   <!-- Редизайн v3, PR8 — строки сгруппированы по разделу (было — плоская таблица всех типов). -->
   @if (!push.isSupported && !me.hasTelegram) {
     <p class="muted mb-0">
-      Нет доступного канала доставки — включите push-уведомления или привяжите Telegram
+      Нет доступного канала доставки — включите уведомления на устройстве или привяжите Telegram
       на вкладке «Аккаунт», чтобы настроить оповещения по отдельным типам.
     </p>
   } @else if (preferences()) {
     <div class="settings-notification-header">
-      <span>Тип оповещения</span>
-      @if (push.isSupported) { <span class="text-center">Push</span> }
+      <span>Тип уведомления</span>
+      @if (push.isSupported) { <span class="text-center">Устройство</span> }
       @if (me.hasTelegram) { <span class="text-center">Telegram</span> }
     </div>
 
@@ -53,6 +66,7 @@
                     <input
                       type="checkbox"
                       [checked]="row.pushEnabled"
+                      [attr.aria-label]="label(row.type) + ': на устройство'"
                       [disabled]="prefsBusy()"
                       (change)="setPreference(row.type, 'pushEnabled', !row.pushEnabled)"
                     />
@@ -64,6 +78,7 @@
                     <input
                       type="checkbox"
                       [checked]="row.telegramEnabled"
+                      [attr.aria-label]="label(row.type) + ': в Telegram'"
                       [disabled]="prefsBusy()"
                       (change)="setPreference(row.type, 'telegramEnabled', !row.telegramEnabled)"
                     />
@@ -75,6 +90,11 @@
           </div>
         </section>
       }
+    </div>
+  } @else if (prefsLoadFailed()) {
+    <div class="alert-danger" role="alert">
+      Не удалось загрузить настройки.
+      <button type="button" class="btn-link" (click)="loadPreferences()">Повторить</button>
     </div>
   } @else {
     <p class="muted mb-0">Загрузка…</p>

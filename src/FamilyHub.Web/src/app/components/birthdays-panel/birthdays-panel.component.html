@@ -4,11 +4,13 @@
   }
 
   <div class="card mb-3">
-    <input class="input" [(ngModel)]="form.personName" placeholder="Имя" />
-    <input class="input" type="date" [(ngModel)]="form.date" />
+    <label class="form-label mb-0" [for]="fieldId + '-name'">Имя *</label>
+    <input class="input" [id]="fieldId + '-name'" [(ngModel)]="form.personName" placeholder="Например, бабушка Валя" />
+    <label class="form-label mb-0" [for]="fieldId + '-date'">Дата рождения *</label>
+    <input class="input" [id]="fieldId + '-date'" type="date" [(ngModel)]="form.date" />
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
-        {{ editingId ? 'Сохранить' : 'Добавить' }}
+      <button class="btn btn-primary btn-sm" (click)="handleSubmit()" [disabled]="saving">
+        {{ saving ? 'Сохраняем…' : editingId ? 'Сохранить' : 'Добавить' }}
       </button>
       @if (editingId) {
         <button class="btn btn-secondary btn-sm" (click)="resetForm()">Отмена</button>
@@ -42,7 +44,7 @@
           @if (isManual(item)) {
             <div class="d-flex gap-2">
               <button class="btn btn-ghost btn-sm" (click)="startEdit(item)">Изменить</button>
-              <button class="btn btn-ghost btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+              <button class="btn btn-ghost btn-sm" (click)="handleDelete(item)">Удалить</button>
             </div>
           }
         </div>
@@ -50,7 +52,10 @@
     }
 
     @if (items.length === 0) {
-      <p class="muted">Дни рождения не добавлены.</p>
+      <p class="muted">
+        Дни рождения участников семьи и близких из раздела «Семья» появятся здесь сами. Добавьте тех, у кого
+        нет аккаунта: бабушек, дедушек, друзей.
+      </p>
     } @else if (filteredItems.length === 0) {
       <p class="muted">Ничего не найдено.</p>
     }

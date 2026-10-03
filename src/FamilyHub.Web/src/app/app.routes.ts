@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, consentGuard, profileGuard } from './services/auth.guards';
+import { authGuard, consentGuard, profileGuard, guestGuard } from './services/auth.guards';
 import { adminGuard } from './services/admin.guards';
 import { pendingCodeGuard } from './services/pending-code.guard';
 
@@ -26,6 +26,8 @@ export const routes: Routes = [
   // Публичные / служебные маршруты (без гардов).
   {
     path: 'login',
+    title: 'Вход',
+    canActivate: [guestGuard],
     canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/login/login.component').then((m) => m.LoginComponent),
@@ -33,6 +35,7 @@ export const routes: Routes = [
   {
     // Первичная привязка Telegram Mini App к email-аккаунту (см. authGuard/TelegramBindComponent).
     path: 'telegram-bind',
+    title: 'Подтверждение почты',
     canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
@@ -41,6 +44,7 @@ export const routes: Routes = [
     // Публичный лендинг приглашения (веб-альтернатива Telegram-инвайту, см. FamilyDetailsComponent) —
     // намеренно БЕЗ гардов: гость должен увидеть превью и решить, создавать ли аккаунт, до входа.
     path: 'join/:code',
+    title: 'Приглашение в семью',
     loadComponent: () =>
       import('./components/join-invite/join-invite.component').then((m) => m.JoinInviteComponent),
   },
@@ -48,6 +52,7 @@ export const routes: Routes = [
     // Страница врача по публичной ссылке на отчёт — намеренно БЕЗ гардов и без оболочки приложения:
     // смотрит человек без аккаунта (доступ — токен в пути, см. DoctorReportEndpoints).
     path: 'r/:token',
+    title: 'Отчёт для врача',
     loadComponent: () =>
       import('./components/public-report/public-report.component').then((m) => m.PublicReportComponent),
   },
@@ -56,12 +61,14 @@ export const routes: Routes = [
     // роутах ниже, куда попадает свежепривязанный Telegram-аккаунт без профиля. authGuard, а не
     // profileGuard/consentGuard — экран сам и есть цель редиректа, требует только вход.
     path: 'profile-setup',
+    title: 'Заполните профиль',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./components/profile-setup/profile-setup.component').then((m) => m.ProfileSetupComponent),
   },
   {
     path: 'privacy',
+    title: 'Политика конфиденциальности',
     loadComponent: () =>
       import('./components/privacy/privacy.component').then((m) => m.PrivacyComponent),
   },
@@ -75,6 +82,7 @@ export const routes: Routes = [
   },
   {
     path: 'consent',
+    title: 'Согласие на обработку данных',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./components/consent-gate/consent-gate.component').then((m) => m.ConsentGateComponent),
@@ -93,6 +101,7 @@ export const routes: Routes = [
         // (заход через нижний лист «Ещё» → «Профиль») показывает корневой список разделов с
         // шевронами вместо мгновенного редиректа, см. settings-menu.component.ts.
         path: '',
+        title: 'Профиль',
         loadComponent: () =>
           import('./components/settings/settings-menu/settings-menu.component').then(
             (m) => m.SettingsMenuComponent,
@@ -100,6 +109,7 @@ export const routes: Routes = [
       },
       {
         path: 'profile',
+        title: 'Аккаунт',
         loadComponent: () =>
           import('./components/settings/profile/settings-profile.component').then(
             (m) => m.SettingsProfileComponent,
@@ -107,6 +117,7 @@ export const routes: Routes = [
       },
       {
         path: 'security',
+        title: 'Безопасность',
         loadComponent: () =>
           import('./components/settings/security/settings-security.component').then(
             (m) => m.SettingsSecurityComponent,
@@ -114,6 +125,7 @@ export const routes: Routes = [
       },
       {
         path: 'notifications',
+        title: 'Уведомления',
         loadComponent: () =>
           import('./components/settings/notifications/settings-notifications.component').then(
             (m) => m.SettingsNotificationsComponent,
@@ -121,6 +133,7 @@ export const routes: Routes = [
       },
       {
         path: 'data',
+        title: 'Данные и доступ',
         loadComponent: () =>
           import('./components/settings/data/settings-data.component').then(
             (m) => m.SettingsDataComponent,
@@ -134,6 +147,7 @@ export const routes: Routes = [
   {
     // Главная (редизайн навигации): глобальный поиск + вход в «Семьи» + виджет дней рождения.
     path: 'home',
+    title: 'Главная',
     canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/home/home.component').then((m) => m.HomeComponent),
@@ -143,6 +157,7 @@ export const routes: Routes = [
   { path: 'search', redirectTo: 'home' },
   {
     path: 'families',
+    title: 'Семьи',
     canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/families-tab/families-tab.component').then(
@@ -151,6 +166,7 @@ export const routes: Routes = [
   },
   {
     path: 'families/:id',
+    title: 'Семья',
     canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/family-details/family-details.component').then(
@@ -169,11 +185,13 @@ export const routes: Routes = [
         // Хаб «Здоровье» (редизайн навигации, макет «Screen - Health hub») — плитки трёх групп
         // со сводкой своих данных, заменил редирект на «Аптечку».
         path: '',
+        title: 'Моё здоровье',
         loadComponent: () =>
           import('./components/health-home/health-home.component').then((m) => m.HealthHomeComponent),
       },
       {
         path: 'medications',
+        title: 'Аптечка',
         loadComponent: () =>
           import('./components/medications-tab/medications-tab.component').then(
             (m) => m.MedicationsTabComponent,
@@ -185,6 +203,7 @@ export const routes: Routes = [
         // router-outlet, см. health-hub.component.html). 'medications/new' сегодня не
         // существует — конфликта порядка регистрации нет (см. комментарий у records/new ниже).
         path: 'medications/:id',
+        title: 'Аптечка',
         loadComponent: () =>
           import('./components/medkit-detail-page/medkit-detail-page.component').then(
             (m) => m.MedkitDetailPageComponent,
@@ -194,6 +213,7 @@ export const routes: Routes = [
         // Приём лекарств (ADR-0015): «Сегодня» и «Курсы» — вложенные роуты страницы-хаба, форма курса и
         // настройки напоминаний — общие панели хаба. dose/:doseId — цель клика по push-уведомлению.
         path: 'intake',
+        title: 'Приём лекарств',
         loadComponent: () =>
           import('./components/intake-page/intake-page.component').then((m) => m.IntakePageComponent),
         children: [
@@ -221,6 +241,7 @@ export const routes: Routes = [
       },
       {
         path: 'records',
+        title: 'Анализы',
         loadComponent: () =>
           import('./components/medical-records-tab/medical-records-tab.component').then(
             (m) => m.MedicalRecordsTabComponent,
@@ -232,6 +253,7 @@ export const routes: Routes = [
         // бы литеральный сегмент 'new' за :id (порядок регистрации важен для Angular Router,
         // в отличие от ASP.NET Core Minimal API, где специфичность важнее порядка).
         path: 'records/new',
+        title: 'Новый анализ',
         loadComponent: () =>
           import('./components/record-add-page/record-add-page.component').then(
             (m) => m.RecordAddPageComponent,
@@ -242,6 +264,7 @@ export const routes: Routes = [
         // ДО 'records/:id' по той же причине, что и 'records/new' выше (литеральный сегмент
         // должен победить :id).
         path: 'records/batch',
+        title: 'Загрузка анализов',
         loadComponent: () =>
           import('./components/record-batch-add-page/record-batch-add-page.component').then(
             (m) => m.RecordBatchAddPageComponent,
@@ -251,6 +274,7 @@ export const routes: Routes = [
         // Мобильный экран открытой записи (редизайн v3, PR6) — деслктоп продолжает раскрывать
         // запись инлайн в списке, см. record-detail-page.component.ts.
         path: 'records/:id',
+        title: 'Анализ',
         loadComponent: () =>
           import('./components/record-detail-page/record-detail-page.component').then(
             (m) => m.RecordDetailPageComponent,
@@ -258,6 +282,7 @@ export const routes: Routes = [
       },
       {
         path: 'visits',
+        title: 'Приёмы врача',
         loadComponent: () =>
           import('./components/doctor-visits-tab/doctor-visits-tab.component').then(
             (m) => m.DoctorVisitsTabComponent,
@@ -265,6 +290,7 @@ export const routes: Routes = [
       },
       {
         path: 'visits/new',
+        title: 'Новый приём врача',
         loadComponent: () =>
           import('./components/doctor-visit-add/doctor-visit-add.component').then(
             (m) => m.DoctorVisitAddComponent,
@@ -273,6 +299,7 @@ export const routes: Routes = [
       {
         // Батч-загрузка для «Врачи» — та же причина порядка, что records/batch выше.
         path: 'visits/batch',
+        title: 'Загрузка приёмов врача',
         loadComponent: () =>
           import('./components/doctor-visit-batch-add/doctor-visit-batch-add.component').then(
             (m) => m.DoctorVisitBatchAddComponent,
@@ -280,6 +307,7 @@ export const routes: Routes = [
       },
       {
         path: 'visits/:id',
+        title: 'Приём врача',
         loadComponent: () =>
           import('./components/doctor-visit-detail-page/doctor-visit-detail-page.component').then(
             (m) => m.DoctorVisitDetailPageComponent,
@@ -291,6 +319,7 @@ export const routes: Routes = [
         // деталь серии — на десктопе справа (сплит, как intake-courses/:id), на мобиле отдельным
         // экраном (тот же компонент, id/code — опциональные component-bound входы маршрута).
         path: 'vaccinations',
+        title: 'Прививки',
         loadComponent: () =>
           import('./components/vaccinations-page/vaccinations-page.component').then(
             (m) => m.VaccinationsPageComponent,
@@ -322,6 +351,7 @@ export const routes: Routes = [
       {
         // Личный дневник самочувствия — замеры, симптомы, самочувствие, лекарства, сон, заметки.
         path: 'notes',
+        title: 'Дневник',
         loadComponent: () =>
           import('./components/health-notes-tab/health-notes-tab.component').then(
             (m) => m.HealthNotesTabComponent,
@@ -331,6 +361,7 @@ export const routes: Routes = [
         // Отчёты для врача — PDF-снимок данных пациента + публичная ссылка. ?new=1&diary=1 открывает
         // создание сразу (кнопка «В отчёт для врача» в дневнике).
         path: 'reports',
+        title: 'Отчёты для врача',
         loadComponent: () =>
           import('./components/doctor-reports-tab/doctor-reports-tab.component').then(
             (m) => m.DoctorReportsTabComponent,
@@ -341,6 +372,7 @@ export const routes: Routes = [
         // самого. medications — прежний KbTabComponent без изменений содержимого, просто
         // перемонтирован под дочерний роут; indicators — новый справочник показателей.
         path: 'kb',
+        title: 'Справочник',
         loadComponent: () =>
           import('./components/kb-hub/kb-hub.component').then((m) => m.KbHubComponent),
         children: [
@@ -372,6 +404,7 @@ export const routes: Routes = [
         // Ветка medicalrecords (задачи 5.2/5.3): «мои показатели» — последнее значение по каждому
         // распознанному лабораторному показателю, история со спарклайном по клику.
         path: 'indicators',
+        title: 'Показатели',
         loadComponent: () =>
           import('./components/indicators-tab/indicators-tab.component').then(
             (m) => m.IndicatorsTabComponent,
@@ -384,6 +417,7 @@ export const routes: Routes = [
   { path: 'records', redirectTo: 'health/records' },
   {
     path: 'birthdays',
+    title: 'Дни рождения',
     canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/birthdays-tab/birthdays-tab.component').then(
@@ -392,11 +426,17 @@ export const routes: Routes = [
   },
   {
     path: 'notifications',
+    title: 'Уведомления',
     canActivate: [authGuard, consentGuard, profileGuard],
     loadComponent: () =>
       import('./components/notifications-tab/notifications-tab.component').then(
         (m) => m.NotificationsTabComponent,
       ),
   },
-  { path: '**', redirectTo: 'home' },
+  // Раньше любой неверный адрес молча уводил на Главную — человек не понимал, почему ссылка «не та».
+  {
+    path: '**',
+    title: 'Страница не найдена',
+    loadComponent: () => import('./components/not-found/not-found.component').then((m) => m.NotFoundComponent),
+  },
 ];

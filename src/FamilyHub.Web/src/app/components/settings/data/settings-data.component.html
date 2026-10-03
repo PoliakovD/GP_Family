@@ -13,7 +13,7 @@
   <p class="muted mb-2">
     Доступ на чтение к дневнику, приёму лекарств и прививкам — по одному переключателю на
     категорию, для взрослого ребёнка, который наблюдает за пожилым родителем, например. Анализы и
-    визиты настраиваются отдельно, в самом разделе «Анализы» («Доступ» → семья).
+    приёмы врача настраиваются отдельно, в самом разделе «Анализы» («Доступ» → семья).
   </p>
   @if (sharesLoading()) {
     <p class="muted">Загружаем…</p>
@@ -34,6 +34,7 @@
             <input
               type="checkbox"
               [checked]="hasCategory(grant, Category.Intake)"
+              [attr.aria-label]="grant.name + ': приём лекарств'"
               [disabled]="shareBusyKey() !== null"
               (change)="toggleCategory(grant, Category.Intake)"
             />
@@ -43,6 +44,7 @@
             <input
               type="checkbox"
               [checked]="hasCategory(grant, Category.Vaccinations)"
+              [attr.aria-label]="grant.name + ': прививки'"
               [disabled]="shareBusyKey() !== null"
               (change)="toggleCategory(grant, Category.Vaccinations)"
             />
@@ -52,6 +54,7 @@
             <input
               type="checkbox"
               [checked]="hasCategory(grant, Category.Diary)"
+              [attr.aria-label]="grant.name + ': дневник'"
               [disabled]="shareBusyKey() !== null"
               (change)="toggleCategory(grant, Category.Diary)"
             />
@@ -74,7 +77,7 @@
   } @else {
     <label class="form-label" for="delete-confirm">Введите «УДАЛИТЬ» для подтверждения</label>
     <input id="delete-confirm" class="input mb-2" type="text" name="deleteConfirm" [(ngModel)]="deleteConfirmText" />
-    <button class="btn btn-danger" [disabled]="deleteConfirmText !== 'УДАЛИТЬ' || busy()" (click)="deleteAccount()">
+    <button class="btn btn-danger" [disabled]="!deleteConfirmed || busy()" (click)="deleteAccount()">
       Удалить навсегда
     </button>
     <button class="btn-link" (click)="deleteConfirmVisible.set(false)">Отмена</button>

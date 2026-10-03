@@ -4,7 +4,8 @@ import { ApiError, ApiService } from '../../services/api.service';
 import { PublicReportMeta } from '../../models/types';
 import { PdfPreviewComponent } from '../../shared/file-viewer/renderers/pdf-preview.component';
 import { ZoomPanTransform } from '../../shared/file-viewer/zoom-pan';
-
+
+import { saveBlob } from '../../shared/util/save-blob';
 type State = 'loading' | 'ready' | 'gone' | 'error';
 
 const ZOOM_STEPS = [1, 1.25, 1.5, 2];
@@ -79,12 +80,7 @@ export class PublicReportComponent implements OnInit, OnDestroy {
   protected download(): void {
     const r = this.report();
     if (!this.blob || !r) return;
-    const url = URL.createObjectURL(this.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `otchet-dlya-vracha-${r.periodFrom}-${r.periodTo}.pdf`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    void saveBlob(this.blob, `otchet-dlya-vracha-${r.periodFrom}-${r.periodTo}.pdf`, false);
   }
 
   protected reload(): void {

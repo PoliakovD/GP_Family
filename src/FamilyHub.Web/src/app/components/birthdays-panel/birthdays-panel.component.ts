@@ -1,6 +1,7 @@
 import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { BirthdaySource, type Birthday } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
@@ -12,6 +13,8 @@ import {
   parseLocalBirthDate,
 } from '../../shared/util/birthday-date';
 
+let nextInstanceId = 0;
+
 @Component({
     selector: 'app-birthdays-panel',
     imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
@@ -21,6 +24,12 @@ export class BirthdaysPanelComponent implements OnInit {
   readonly familyId = input.required<string>();
 
   private readonly api = inject(ApiService);
+  private readonly confirm = inject(ConfirmService);
+
+  /** Уникальные id полей — панель может быть смонтирована в нескольких местах. */
+  readonly fieldId = `birthday-${nextInstanceId++}`;
+  /** Защита от двойного тапа «Добавить» — раньше второй тап создавал дубль. */
+  saving = false;
 
   items: Birthday[] = [];
   /** Локальный фильтр по имени — источника в SearchService для дней рождения нет (ADR-0003). */
@@ -67,18 +76,26 @@ export class BirthdaysPanelComponent implements OnInit {
   }
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.personName.trim() || !this.form.date) return;
+    if (this.saving) return;
+    if (!this.form.personName.trim() || !this.form.date) {
+      this.error = !this.form.personName.trim() ? 'Укажите имя.' : 'Укажите дату рождения.';
+      return;
+    }
     const payload = { personName: this.form.personName.trim(), date: this.form.date };
+    this.saving = true;
     try {
       if (this.editingId) {
         await this.api.updateBirthday(this.editingId, payload);
       } else {
         await this.api.createBirthday(this.familyId(), payload);
       }
+      this.error = null;
       this.resetForm();
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
+    } finally {
+      this.saving = false;
     }
   }
 
@@ -87,9 +104,16 @@ export class BirthdaysPanelComponent implements OnInit {
     this.form = { personName: item.personName, date: item.date };
   }
 
-  async handleDelete(id: string): Promise<void> {
+  async handleDelete(item: Birthday): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Удалить день рождения?',
+      message: `День рождения «${item.personName}» будет удалён. Это действие нельзя отменить.`,
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await this.api.deleteBirthday(id);
+      await this.api.deleteBirthday(item.id);
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';

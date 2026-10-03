@@ -1,7 +1,9 @@
 <div>
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Оповещения</h3>
-    <button class="btn btn-ghost" (click)="markAllRead()">Прочитать все</button>
+    <h3 class="mb-0">Уведомления</h3>
+    @if (hasUnread) {
+      <button class="btn btn-ghost" (click)="markAllRead()">Прочитать все</button>
+    }
   </div>
 
   @if (error) {
@@ -28,6 +30,7 @@
         <div
           class="card mb-2"
           [class.card-clickable]="isClickable(n)"
+          [appClickable]="isClickable(n)"
           (click)="isClickable(n) && openRelated(n)"
         >
           <div class="d-flex align-items-start gap-2">

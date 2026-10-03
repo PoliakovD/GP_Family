@@ -10,16 +10,34 @@
       <div>
         <h2 class="hh-title">Моё здоровье</h2>
         <div class="hh-subtitle">
-          {{ auth.me()?.firstName }}@if (ageLabel()) {, {{ ageLabel() }}} · данные семьи — внутри разделов
+          {{ auth.me()?.firstName }}@if (ageLabel()) {, {{ ageLabel() }}} · здесь ваши данные, данные близких — внутри разделов
         </div>
       </div>
     </div>
+
+    @if (jobs.summary().extraction.total > 0) {
+      <div class="alert-info mb-3" role="status">
+        <span class="pipeline-step-spinner" aria-hidden="true"></span>
+        Распознаём документы: {{ jobs.summary().extraction.total }}. Показатели появятся в записях сами — можно пользоваться приложением дальше.
+      </div>
+    }
+
+    <!-- Сводка не загрузилась — раньше половина плиток молча оставалась пустой. -->
+    @if (!summary()) {
+      <div class="alert-danger mb-3" role="alert">
+        Не удалось загрузить сводку.
+        <button type="button" class="btn-link" (click)="reload()">Повторить</button>
+      </div>
+    }
 
     <!-- Каждый день — то, что открывают ежедневно: две крупные плитки с действием внутри. -->
     <div class="hh-group">
       <div class="hh-group-label">Каждый день</div>
       <div class="hh-everyday">
-        <a class="hh-tile hh-tile-big" routerLink="/health/intake" [queryParams]="{person: 'me'}">
+        <!-- Ссылка растянута на всю плитку, а кнопка «Отметить приём» — поверх неё, а не внутри
+             (кнопка внутри ссылки — невалидно и путает скринридер). -->
+        <div class="hh-tile hh-tile-big hh-tile-linked">
+          <a class="hh-tile-stretch" routerLink="/health/intake" [queryParams]="{person: 'me'}" aria-label="Приём лекарств"></a>
           <div class="hh-tile-head">
             <i class="ph-duotone ph-pill" aria-hidden="true"></i>
             <span class="hh-tile-title flex-fill">Приём лекарств</span>
@@ -32,7 +50,7 @@
                   <div class="hh-tile-value">{{ ik.taken }} из {{ ik.total }}</div>
                   <div class="hh-tile-meta">принято сегодня</div>
                 </div>
-                <div class="hh-dose-squares">
+                <div class="hh-dose-squares" role="img" [attr.aria-label]="'Принято ' + ik.taken + ' из ' + ik.total">
                   @for (sq of doseSquares(ik); track $index) {
                     <span class="hh-dose-square" [class]="'hh-dose-square-' + sq"></span>
                   }
@@ -44,18 +62,18 @@
                   <span class="flex-fill">{{ next.drugName }}</span>
                   @if (next.canAct) {
                     <button type="button" class="hh-take" [disabled]="busyDose()" (click)="takeDose(next, $event)">
-                      Принял
+                      Отметить приём
                     </button>
                   }
                 </div>
               }
             } @else {
-              <div class="hh-tile-empty">Нет активных курсов приёма</div>
+              <div class="hh-tile-empty">Курсов пока нет — <span class="hh-tile-cta">добавить лекарство по расписанию</span></div>
             }
           } @else {
             <div class="hh-tile-empty">Не удалось загрузить</div>
           }
-        </a>
+        </div>
 
         <a class="hh-tile hh-tile-big" routerLink="/health/notes">
           <div class="hh-tile-head">
@@ -84,7 +102,7 @@
               </div>
             }
             @if (!d.latestBloodPressure && !d.latestSymptom) {
-              <div class="hh-tile-empty">Записей нет</div>
+              <div class="hh-tile-empty">Здесь — давление, симптомы, сон. <span class="hh-tile-cta">Сделать первую запись</span></div>
             }
           } @else {
             <div class="hh-tile-empty">Не удалось загрузить</div>
@@ -111,7 +129,7 @@
               <div class="hh-tile-meta">{{ formatDayMonth(r.recordDate) }}@if (r.indicatorCount) { · {{ r.indicatorCount }} {{ pluralizeRu(r.indicatorCount, 'показатель', 'показателя', 'показателей') }}}</div>
               <div class="hh-tile-total">всего {{ a.total }} {{ pluralizeRu(a.total, 'анализ', 'анализа', 'анализов') }}</div>
             } @else {
-              <div class="hh-tile-empty">Записей нет</div>
+              <div class="hh-tile-empty">Сфотографируйте бланк — показатели распознаются сами. <span class="hh-tile-cta">Добавить анализ</span></div>
             }
           }
         </a>
@@ -127,7 +145,7 @@
               <div class="hh-tile-meta">{{ formatDayMonth(r.recordDate) }}@if (r.prescriptionCount) { · {{ r.prescriptionCount }} {{ pluralizeRu(r.prescriptionCount, 'назначение', 'назначения', 'назначений') }}}</div>
               <div class="hh-tile-total">всего {{ v.total }} {{ pluralizeRu(v.total, 'приём', 'приёма', 'приёмов') }}</div>
             } @else {
-              <div class="hh-tile-empty">Записей нет</div>
+              <div class="hh-tile-empty">Заключения и назначения врачей. <span class="hh-tile-cta">Добавить приём</span></div>
             }
           }
         </a>
@@ -150,9 +168,9 @@
                   <app-trend-line class="hh-trend hh-trend-sm" [values]="h.recentValues" label="Динамика показателя" />
                 }
               </div>
-              <div class="hh-tile-total">{{ ind.trackedCount }} {{ pluralizeRu(ind.trackedCount, 'отслеживаемый', 'отслеживаемых', 'отслеживаемых') }}</div>
+              <div class="hh-tile-total">{{ ind.trackedCount }} {{ pluralizeRu(ind.trackedCount, 'показатель отслеживается', 'показателя отслеживаются', 'показателей отслеживаются') }}</div>
             } @else {
-              <div class="hh-tile-empty">Нет отслеживаемых показателей</div>
+              <div class="hh-tile-empty">Появятся сами после первых анализов — с динамикой по годам.</div>
             }
           }
         </a>
@@ -173,7 +191,7 @@
               <div class="hh-tile-value-sm">Всё по графику</div>
               <div class="hh-tile-meta">последняя: {{ last.label }}@if (last.date) {, {{ formatDayMonthYear(last.date) }}}</div>
             } @else {
-              <div class="hh-tile-empty">Нет данных</div>
+              <div class="hh-tile-empty">Отметьте сделанные прививки — покажем, какие пора сделать. <span class="hh-tile-cta">Заполнить</span></div>
             }
           }
         </a>
@@ -190,9 +208,9 @@
             <div class="hh-tool-title">Аптечка</div>
             @if (summary()?.medkits; as m) {
               @if (m.expired > 0) {
-                <div class="hh-tool-sub hh-tool-sub-warn">{{ m.expired }} просрочено</div>
+                <div class="hh-tool-sub hh-tool-sub-warn">просрочено: {{ m.expired }}</div>
               } @else if (m.expiring > 0) {
-                <div class="hh-tool-sub hh-tool-sub-warn">{{ m.expiring }} заканчивается</div>
+                <div class="hh-tool-sub hh-tool-sub-warn">скоро истекает срок: {{ m.expiring }}</div>
               }
             }
           </div>
@@ -205,7 +223,7 @@
             <div class="hh-tool-title">Отчёты для врача</div>
             <div class="hh-tool-sub">
               @if (summary()?.reports?.activeLinks; as n) {
-                {{ n }} {{ pluralizeRu(n, 'ссылка', 'ссылки', 'ссылок') }} активна
+                {{ n }} {{ pluralizeRu(n, 'ссылка активна', 'ссылки активны', 'ссылок активно') }}
               } @else {
                 Нет активных ссылок
               }

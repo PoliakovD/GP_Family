@@ -1,5 +1,7 @@
 import { Component, HostListener, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { OverlayStackService } from '../../shared/util/overlay-stack.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { ApiService, ApiError } from '../../services/api.service';
 import { SearchResultItem, SearchResultType } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
@@ -11,7 +13,7 @@ const TYPE_LABEL: Record<number, string> = {
   [SearchResultType.Kb]: 'Справочник',
   [SearchResultType.Record]: 'Анализ',
   [SearchResultType.Birthday]: 'День рождения',
-  [SearchResultType.Visit]: 'Приём у врача',
+  [SearchResultType.Visit]: 'Приём врача',
 };
 
 const TYPE_ICON: Record<number, string> = {
@@ -39,7 +41,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
   { value: SearchResultType.Medication, label: 'Лекарства' },
   { value: SearchResultType.Kb, label: 'Справочник' },
   { value: SearchResultType.Record, label: 'Анализы' },
-  { value: SearchResultType.Visit, label: 'Посещения врачей' },
+  { value: SearchResultType.Visit, label: 'Приёмы врача' },
   { value: SearchResultType.Birthday, label: 'Дни рождения' },
 ];
 
@@ -52,11 +54,12 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
  */
 @Component({
     selector: 'app-search',
-    imports: [LoadingSpinnerComponent, SearchFieldComponent],
+    imports: [ClickableDirective, LoadingSpinnerComponent, SearchFieldComponent],
     templateUrl: './app-search.component.html',
     styleUrl: './app-search.component.scss'
 })
 export class AppSearchComponent {
+  private readonly overlays = inject(OverlayStackService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
 
@@ -84,8 +87,10 @@ export class AppSearchComponent {
     this.search.rerun();
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: KeyboardEvent): void {
+    // Escape в открытом окне/листе — его, а не поиска (раньше заодно стирал запрос).
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     this.search.reset();
   }
 
@@ -118,9 +123,10 @@ export class AppSearchComponent {
         queryParams: { familyId: item.medication.familyId, medkitId: item.medication.medkitId },
       });
     } else if (item.type === SearchResultType.Record) {
-      void this.router.navigateByUrl('/health/records');
+      // Сразу найденная запись, а не общий список раздела (раньше её приходилось искать заново).
+      void this.router.navigate(['/health/records', item.id]);
     } else if (item.type === SearchResultType.Visit) {
-      void this.router.navigateByUrl('/health/visits');
+      void this.router.navigate(['/health/visits', item.id]);
     } else if (item.type === SearchResultType.Birthday) {
       void this.router.navigateByUrl('/birthdays');
     } else {

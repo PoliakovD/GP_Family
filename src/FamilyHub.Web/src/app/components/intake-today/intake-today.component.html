@@ -35,7 +35,7 @@
                 </div>
                 <div class="it-bar-legend">
                   <span>{{ d.counters.taken }} принято</span>
-                  @if (d.counters.missed > 0) { <span class="it-legend-miss">{{ d.counters.missed }} пропущен</span> }
+                  @if (d.counters.missed > 0) { <span class="it-legend-miss">{{ d.counters.missed }} пропущено</span> }
                   @if (d.counters.upcoming > 0) { <span>{{ d.counters.upcoming }} впереди</span> }
                 </div>
               </div>
@@ -71,7 +71,7 @@
                 </div>
                 <div class="it-now-actions">
                   <button type="button" class="btn it-take" [disabled]="isBusy(now.item)" (click)="act(now.item, Action.Taken)">
-                    <i class="ph-bold ph-check" aria-hidden="true"></i> Принял
+                    <i class="ph-bold ph-check" aria-hidden="true"></i> Принято
                   </button>
                   <button type="button" class="btn btn-secondary" [disabled]="isBusy(now.item)" (click)="act(now.item, Action.Snooze10)">Отложить</button>
                   <app-action-menu [actions]="now.actions" label="Действия с приёмом" />
@@ -115,7 +115,7 @@
                           <app-avatar class="it-avatar" [person]="person(r.item.subject)" size="sm" [attr.title]="subjectName(r.item.subject)" />
                         }
                         @if (r.item.outcome === Outcome.Due && r.item.canAct) {
-                          <button type="button" class="btn it-take it-take-sm" [disabled]="isBusy(r.item)" (click)="act(r.item, Action.Taken)">Принял</button>
+                          <button type="button" class="btn it-take it-take-sm" [disabled]="isBusy(r.item)" (click)="act(r.item, Action.Taken)">Принято</button>
                         }
                         @if (r.item.outcome === Outcome.Missed && !r.item.canAct) {
                           <a class="btn btn-secondary it-open" [routerLink]="['/health/intake/courses', r.item.courseId]">Открыть курс</a>

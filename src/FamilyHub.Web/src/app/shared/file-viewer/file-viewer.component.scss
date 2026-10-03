@@ -10,7 +10,7 @@
 .viewer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 550;
+  z-index: var(--z-viewer);
   background: var(--color-neutral-900);
   display: flex;
   align-items: center;
@@ -41,7 +41,7 @@
   position: fixed;
   top: 88px;
   right: 24px;
-  z-index: 550;
+  z-index: var(--z-viewer);
   display: flex;
   flex-direction: column;
   width: min(640px, 92vw);

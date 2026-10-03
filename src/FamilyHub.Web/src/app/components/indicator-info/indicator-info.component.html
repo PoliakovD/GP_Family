@@ -2,14 +2,14 @@
   <!-- Название показателя показывает контейнер (шапка боковой панели / bottom-sheet / back-link
        на мобильном) — здесь оно больше не дублируется, только источник мелкой строкой. -->
   @if (specimenLabel(); as sl) {
-    <div class="kb-specimen">Источник: {{ sl }}</div>
+    <div class="kb-specimen">Биоматериал: {{ sl }}</div>
   }
 
   @if (reading(); as r) {
     <!-- Отдельная рамка: крупное значение + статус, шкала с границами нормы, отклонение. -->
     <div class="kb-value-frame">
       <div class="kb-value-row">
-        <span class="kb-value" [class.kb-value-bad]="r.flag !== IndicatorFlag.Normal">{{ r.valueRaw }}</span>
+        <span class="kb-value" [class.kb-value-bad]="r.flag !== IndicatorFlag.Normal && r.flag !== IndicatorFlag.Unknown">{{ r.valueRaw }}</span>
         @if (r.unit) {
           <span class="kb-value-unit">{{ r.unit }}</span>
         }
@@ -17,7 +17,9 @@
       </div>
       @if (scaleLow() !== null && scaleHigh() !== null) {
         <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" [labels]="true" />
-        <div class="kb-value-norm">норма {{ normText() }}</div>
+        <!-- Это справочная норма; в таблице записи — норма из бланка лаборатории. Подписываем, чтобы
+             расхождение не выглядело ошибкой. -->
+        <div class="kb-value-norm">справочная норма {{ normText() }} · в бланке лаборатории может отличаться</div>
         @if (deviationLabel(); as d) {
           <div class="kb-value-deviation">{{ d }}</div>
         }
@@ -44,16 +46,16 @@
   }
   @if (editing() && editForm(); as f) {
     <div class="d-flex flex-column gap-1">
-      <input class="input" [(ngModel)]="f.displayName" placeholder="Название показателя" />
+      <input class="input" [(ngModel)]="f.displayName" placeholder="Название показателя" aria-label="Название показателя (обязательно)" />
       <div class="d-flex gap-1">
-        <input class="input" [ngModel]="f.valueRaw" (ngModelChange)="f.valueRaw = $event" placeholder="Значение" style="flex:1" />
-        <input class="input" [ngModel]="f.unit" (ngModelChange)="f.unit = $event" placeholder="Единица" style="flex:1" />
+        <input class="input" [ngModel]="f.valueRaw" (ngModelChange)="f.valueRaw = $event" placeholder="Значение" aria-label="Значение" style="flex:1" />
+        <input class="input" [ngModel]="f.unit" (ngModelChange)="f.unit = $event" placeholder="Единица" aria-label="Единица измерения" style="flex:1" />
       </div>
       <div class="d-flex gap-1">
-        <input class="input" [ngModel]="f.refLowText" (ngModelChange)="f.refLowText = $event" placeholder="Норма от" style="flex:1" />
-        <input class="input" [ngModel]="f.refHighText" (ngModelChange)="f.refHighText = $event" placeholder="Норма до" style="flex:1" />
+        <input class="input" [ngModel]="f.refLowText" (ngModelChange)="f.refLowText = $event" placeholder="Норма от" aria-label="Норма от" style="flex:1" />
+        <input class="input" [ngModel]="f.refHighText" (ngModelChange)="f.refHighText = $event" placeholder="Норма до" aria-label="Норма до" style="flex:1" />
       </div>
-      <input class="input" [ngModel]="f.refText" (ngModelChange)="f.refText = $event" placeholder="Норма текстом (если не число)" />
+      <input class="input" [ngModel]="f.refText" (ngModelChange)="f.refText = $event" placeholder="Норма текстом (если не число)" aria-label="Норма текстом, если не число" />
       <div class="d-flex gap-2">
         <button type="button" class="btn btn-primary btn-sm" [disabled]="saving()" (click)="saveEdit.emit()">Сохранить</button>
         <button type="button" class="btn btn-ghost btn-sm" [disabled]="saving()" (click)="cancelEdit.emit()">Отмена</button>

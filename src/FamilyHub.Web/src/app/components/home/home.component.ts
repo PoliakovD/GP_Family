@@ -64,6 +64,8 @@ export class HomeComponent implements OnInit {
   error: string | null = null;
 
   showInviteModal = false;
+  /** Заявки, по которым уже идёт запрос — двойной тап «Принять» слал два запроса, второй падал. */
+  private readonly busyRequests = new Set<string>();
 
   readonly pluralizeRu = pluralizeRu;
   readonly formatDayMonthYear = formatDayMonthYear;
@@ -111,7 +113,7 @@ export class HomeComponent implements OnInit {
     const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
     const familyPart = this.summary.primaryFamilyName ? ` · в семье «${this.summary.primaryFamilyName}»` : '';
     const count = this.summary.unreadNotifications;
-    const countPart = count > 0 ? ` ${count} ${pluralizeRu(count, 'уведомление', 'уведомления', 'уведомлений')}` : '';
+    const countPart = count > 0 ? ` · ${count} ${pluralizeRu(count, 'непрочитанное уведомление', 'непрочитанных уведомления', 'непрочитанных уведомлений')}` : '';
     return `${capitalized}, ${dateText}${familyPart}${countPart}`;
   }
 
@@ -163,7 +165,7 @@ export class HomeComponent implements OnInit {
     if (nearest.length === 1) {
       const turningAge = nearest[0].turningAge;
       title = nearestDays === 0
-        ? `Сегодня день рождения — ${names}, ${turningAge} лет`
+        ? `Сегодня день рождения — ${names}, ${this.ageLabel(turningAge)}`
         : `${names} — день рождения через ${nearestDays} ${daysWord}, исполнится ${turningAge}`;
     } else {
       title = nearestDays === 0
@@ -202,23 +204,39 @@ export class HomeComponent implements OnInit {
     });
   }
 
+  isBusy(req: HomeJoinRequest): boolean {
+    return this.busyRequests.has(req.userId + req.familyId);
+  }
+
+  ageLabel(age: number): string {
+    return `${age} ${pluralizeRu(age, 'год', 'года', 'лет')}`;
+  }
+
   async approve(req: HomeJoinRequest): Promise<void> {
+    if (this.isBusy(req)) return;
+    this.busyRequests.add(req.userId + req.familyId);
     try {
       await this.api.approveMember(req.familyId, req.userId);
       await Promise.all([this.refresh(), this.state.refresh()]);
       this.toast.success('Заявка принята.');
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Ошибка при подтверждении.');
+    } finally {
+      this.busyRequests.delete(req.userId + req.familyId);
     }
   }
 
   async reject(req: HomeJoinRequest): Promise<void> {
+    if (this.isBusy(req)) return;
+    this.busyRequests.add(req.userId + req.familyId);
     try {
       await this.api.rejectMember(req.familyId, req.userId);
       await this.refresh();
       this.toast.success('Заявка отклонена.');
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Ошибка при отклонении.');
+    } finally {
+      this.busyRequests.delete(req.userId + req.familyId);
     }
   }
 

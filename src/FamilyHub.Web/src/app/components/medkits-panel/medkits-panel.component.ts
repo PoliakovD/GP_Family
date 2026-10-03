@@ -2,6 +2,7 @@ import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { Medkit } from '../../models/types';
 import { MedicationsPanelComponent } from '../medications-panel/medications-panel.component';
 import { ToastService } from '../../shared/toast/toast.service';
@@ -12,7 +13,7 @@ import { pluralizeRu } from '../../shared/util/pluralize';
 
 @Component({
     selector: 'app-medkits-panel',
-    imports: [FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
+    imports: [ClickableDirective, FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
     templateUrl: './medkits-panel.component.html',
     styleUrl: './medkits-panel.component.scss'
 })
@@ -82,10 +83,18 @@ export class MedkitsPanelComponent implements OnInit {
     }
   }
 
+  /** Защита от двойного тапа/Enter — раньше создавались две одинаковые аптечки. */
+  saving = false;
+
   async handleSubmit(): Promise<void> {
-    if (!this.form.name.trim()) return;
+    if (this.saving) return;
+    if (!this.form.name.trim()) {
+      this.toast.error('Введите название аптечки.');
+      return;
+    }
     const payload = { name: this.form.name.trim() };
     const isEdit = !!this.editingId;
+    this.saving = true;
     try {
       if (this.editingId) {
         await this.api.updateMedkit(this.editingId, payload);
@@ -98,6 +107,8 @@ export class MedkitsPanelComponent implements OnInit {
       await this.refresh();
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить аптечку.');
+    } finally {
+      this.saving = false;
     }
   }
 

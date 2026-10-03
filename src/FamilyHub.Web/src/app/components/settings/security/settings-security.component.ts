@@ -108,7 +108,13 @@ export class SettingsSecurityComponent implements OnInit {
     });
     if (!confirmed) return;
 
-    await this.auth.logoutAll();
+    try {
+      await this.auth.logoutAll();
+    } catch {
+      // Раньше — необработанный промис без какой-либо реакции на экране.
+      this.toast.error('Не удалось завершить сеансы. Проверьте интернет и попробуйте ещё раз.');
+      return;
+    }
     await this.router.navigate(['/login']);
   }
 

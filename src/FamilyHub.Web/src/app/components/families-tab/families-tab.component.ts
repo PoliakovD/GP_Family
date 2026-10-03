@@ -1,12 +1,19 @@
 import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { FamilyRole, MemberStatus, MAX_FAMILIES_PER_USER } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+
+/** Людям приходит ссылка вида https://…/join/CODE, а не голый код — принимаем и то и другое. */
+export function extractInviteCode(raw: string): string {
+  const text = raw.trim();
+  const match = text.match(/\/join\/([^/?#\s]+)/);
+  return match ? decodeURIComponent(match[1]) : text;
+}
 
 @Component({
     selector: 'app-families-tab',
@@ -17,6 +24,12 @@ export class FamiliesTabComponent {
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
+  private readonly router = inject(Router);
+
+  constructor() {
+    // /families?create=1 — ссылка «Создать семью» с Главной сразу открывает форму.
+    if (inject(ActivatedRoute).snapshot.queryParamMap.get('create') === '1') this.openCreateModal();
+  }
 
   newFamilyName = '';
   inviteCode = '';
@@ -57,13 +70,21 @@ export class FamiliesTabComponent {
   }
 
   async handleCreateFamily(): Promise<void> {
-    if (!this.newFamilyName.trim()) return;
+    // busy-проверка нужна и здесь: Enter в поле не смотрит на [disabled] кнопки, и двойной Enter
+    // создавал две семьи.
+    if (this.busy) return;
+    if (!this.newFamilyName.trim()) {
+      this.toast.error('Введите название семьи.');
+      return;
+    }
     this.busy = true;
     try {
-      await this.api.createFamily(this.newFamilyName.trim());
+      const { id } = await this.api.createFamily(this.newFamilyName.trim());
       this.showCreateModal = false;
-      this.toast.success('Семья создана.');
       await this.state.refresh();
+      this.state.selectFamily(id);
+      this.toast.success('Семья создана. Теперь пригласите близких по ссылке.');
+      void this.router.navigate(['/families', id]);
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось создать семью.');
     } finally {
@@ -72,10 +93,15 @@ export class FamiliesTabComponent {
   }
 
   async handleRedeem(): Promise<void> {
-    if (!this.inviteCode.trim()) return;
+    if (this.busy) return;
+    const code = extractInviteCode(this.inviteCode);
+    if (!code) {
+      this.toast.error('Вставьте ссылку-приглашение или код из неё.');
+      return;
+    }
     this.busy = true;
     try {
-      const result = await this.api.redeemInvite(this.inviteCode.trim());
+      const result = await this.api.redeemInvite(code);
       this.toast.success(
         result.status === 'joined'
           ? 'Вы присоединились к семье.'
@@ -84,7 +110,7 @@ export class FamiliesTabComponent {
       this.inviteCode = '';
       await this.state.refresh();
     } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось погасить инвайт.');
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось присоединиться по приглашению.');
     } finally {
       this.busy = false;
     }

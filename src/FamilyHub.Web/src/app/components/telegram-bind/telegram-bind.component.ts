@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
+import { ResendCooldown } from '../../shared/util/resend-cooldown';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { TelegramService } from '../../services/telegram.service';
 
@@ -39,10 +40,33 @@ export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
   email = '';
   code = '';
 
+  /** Таймер «Отправить код ещё раз» (раньше единственный путь — «Изменить email», что тратило код). */
+  readonly resend = new ResendCooldown();
+  readonly info = signal<string | null>(null);
+
+  async resendCode(): Promise<void> {
+    if (!this.resend.ready() || this.busy()) return;
+    this.info.set(null);
+    await this.run(async () => {
+      await this.auth.telegramSendCode(this.email);
+      this.code = '';
+      this.resend.start();
+      this.info.set(`Новый код отправлен на ${this.email}.`);
+    });
+  }
+
+  /** Только цифры, не больше 6 — вставка «123 456» больше не обрезается до «123 45». */
+  onCodeInput(el: HTMLInputElement): void {
+    const digits = el.value.replace(/\D/g, '').slice(0, 6);
+    if (el.value !== digits) el.value = digits;
+    this.code = digits;
+  }
+
   async sendCode(): Promise<void> {
     await this.run(async () => {
       await this.auth.telegramSendCode(this.email);
       this.step.set('code');
+      this.resend.start();
       // Реальный Telegram Mini App: аппаратный «назад» на Android сворачивает/закрывает
       // приложение мимо Angular Router — popstate-guard (pendingCodeGuard) его не видит.
       // Нативный эквивалент — системное подтверждение Telegram.
@@ -64,6 +88,7 @@ export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
     this.code = '';
     this.step.set('email');
     this.tg.disableClosingConfirmation();
+    this.resend.stop();
   }
 
   /** pendingCodeGuard (CanDeactivate, браузер/PWA-доступ к /telegram-bind) — см. doc-комментарий там. */
@@ -83,6 +108,7 @@ export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
     // pendingCodeGuard пропустил уход после подтверждения диалога) — не оставляем Mini App
     // с навсегда включённым системным подтверждением закрытия.
     this.tg.disableClosingConfirmation();
+    this.resend.stop();
   }
 
   private async run(action: () => Promise<void>): Promise<void> {
@@ -105,7 +131,7 @@ export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {
         case 'email_linked_to_different_telegram': return 'Этот email уже привязан к другому Telegram-аккаунту.';
         case 'telegram_already_bound': return 'Этот Telegram-аккаунт уже привязан — попробуйте перезапустить приложение.';
       }
-      if (e.status === 429) return 'Слишком много запросов — подождите немного.';
+      if (e.status === 429) return 'Слишком много запросов. Подождите и попробуйте снова — кодов из письма можно получить не больше трёх в час.';
     }
     return 'Что-то пошло не так. Попробуйте ещё раз.';
   }

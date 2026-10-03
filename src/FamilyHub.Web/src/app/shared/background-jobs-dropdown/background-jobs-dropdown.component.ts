@@ -1,5 +1,6 @@
 import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BackgroundJobsStateService } from '../../services/background-jobs-state.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
@@ -30,6 +31,7 @@ interface JobSection {
     styleUrl: './background-jobs-dropdown.component.scss'
 })
 export class BackgroundJobsDropdownComponent {
+  private readonly overlays = inject(OverlayStackService);
   readonly jobs = inject(BackgroundJobsStateService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly router = inject(Router);
@@ -42,7 +44,7 @@ export class BackgroundJobsDropdownComponent {
     return [
       { title: 'Распознаём документы', icon: 'ph-file-magnifying-glass', group: s.extraction },
       { title: 'Уточняем нормы показателей', icon: 'ph-flask', group: s.labAnalyte },
-      { title: 'Обогащаем справочник препаратов', icon: 'ph-pill', group: s.medication },
+      { title: 'Ищем описание препаратов', icon: 'ph-pill', group: s.medication },
       { title: 'Проверяем назначенные препараты', icon: 'ph-pill', group: s.visitMedication },
     ].filter((section) => section.group.total > 0);
   });
@@ -67,7 +69,8 @@ export class BackgroundJobsDropdownComponent {
    * анализов); null — вообще ничего показывать не нужно (задача Pending и никого нет впереди).*/
   itemStatusText(item: ActiveJobItem): string | null {
     if (item.waitingForAi) return 'ждём ИИ — начнём автоматически, как только он вернётся';
-    if (item.liveText) return item.liveText;
+    // item.liveText (сырой вывод модели) намеренно не показываем — см. pipeline-progress.
+    if (item.liveText) return 'обрабатываем…';
     if (item.queueAhead > 0) {
       return `в очереди — ещё ${item.queueAhead} ${pluralizeRu(item.queueAhead, 'задача', 'задачи', 'задач')} впереди`;
     }
@@ -80,8 +83,9 @@ export class BackgroundJobsDropdownComponent {
     if (!this.host.nativeElement.contains(event.target as Node)) this.open.set(false);
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: KeyboardEvent): void {
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.open() && this.isWide) this.open.set(false);
   }
 }

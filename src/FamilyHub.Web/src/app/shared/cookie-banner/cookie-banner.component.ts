@@ -4,7 +4,7 @@ import { AuthService } from '../../services/auth.service';
 import { CookieConsentService } from './cookie-consent.service';
 
 /**
- * Информационный cookie-баннер (полный Принять/Отклонить). Показывается только в PWA-режиме
+ * Информационный cookie-баннер (одна кнопка «Понятно» — cookie строго необходимый). Показывается только в PWA-режиме
  * (Telegram Mini App не хранит выбор в cookie — сессия там неявная через initData, баннер
  * там не нужен и не показывается). Единственный cookie приложения — строго необходимая
  * сессия входа (familyhub.auth), трекинга/аналитики нет.
@@ -22,9 +22,5 @@ export class CookieBannerComponent {
 
   accept(): void {
     this.consent.setChoice('accepted');
-  }
-
-  decline(): void {
-    this.consent.setChoice('declined');
   }
 }

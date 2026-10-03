@@ -1,5 +1,7 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { pluralizeRu } from '../../shared/util/pluralize';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { ApiError, ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { VaccinationStateService } from '../../services/vaccination-state.service';
@@ -15,7 +17,9 @@ import {
 import { ageText } from '../../shared/util/age';
 import { preciseDateText, stageLabel, statusColor, statusIcon, statusLabel, windowToText } from '../../shared/util/vaccination-labels';
 import { todayLocal } from '../../shared/util/intake-labels';
-
+
+import { saveBlob } from '../../shared/util/save-blob';
+import { TelegramService } from '../../services/telegram.service';
 const STAGE_ORDER = ['0-1', '1-2', '2-6', '6-7', '14+', 'adult', 'epidemic', 'closed'];
 
 interface StageGroup {
@@ -32,7 +36,7 @@ interface StageGroup {
  */
 @Component({
   selector: 'app-vaccination-person',
-  imports: [AvatarComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
+  imports: [ClickableDirective, AvatarComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './vaccination-person.component.html',
   styleUrl: './vaccination-person.component.scss',
 })
@@ -40,6 +44,7 @@ export class VaccinationPersonComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly tg = inject(TelegramService);
   private readonly confirm = inject(ConfirmService);
   private readonly breakpoints = inject(BreakpointService);
   protected readonly vaccinations = inject(VaccinationStateService);
@@ -78,7 +83,8 @@ export class VaccinationPersonComponent {
   protected readonly ageDisplay = computed(() => {
     const s = this.schedule();
     if (!s || s.ageYears === null) return null;
-    return `${s.ageYears} ${s.ageYears === 1 ? 'год' : s.ageYears < 5 ? 'года' : 'лет'}${s.ageMonths ? ` ${s.ageMonths} мес` : ''}`;
+    // pluralizeRu, а не «1 → год, <5 → года»: было «21 лет», «22 лет».
+    return `${s.ageYears} ${pluralizeRu(s.ageYears, 'год', 'года', 'лет')}${s.ageMonths ? ` ${s.ageMonths} мес` : ''}`;
   });
 
   protected readonly stageGroups = computed<StageGroup[]>(() => {
@@ -181,7 +187,7 @@ export class VaccinationPersonComponent {
       });
       this.vaccinations.showSaved({
         subject: this.schedule()!.subject, item: { ...item, status: VaccinationStatus.Done, date: todayLocal() },
-        reactionHint: this.vaccinations.reactionHintFor(item.seriesCode),
+        reactionHint: this.vaccinations.reactionHintFor(item.seriesCode), quickMark: true,
       });
       this.vaccinations.changed();
     } catch (e) {
@@ -218,12 +224,8 @@ export class VaccinationPersonComponent {
     this.certificateBusy.set(true);
     try {
       const blob = await this.api.getVaccinationCertificatePdf(this.kind(), this.id());
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sertifikat-privivok-${todayLocal()}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      const hint = await saveBlob(blob, `sertifikat-privivok-${todayLocal()}.pdf`, this.tg.isInsideTelegram());
+      if (hint) this.toast.info(hint);
     } catch (e) {
       this.toast.error(e instanceof ApiError ? e.message : 'Не удалось сформировать сертификат.');
     } finally {

@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -6,12 +6,14 @@ import { BreakpointService } from '../../services/breakpoint.service';
 import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { TrackDirtyDirective, confirmDiscard } from '../../shared/util/track-dirty.directive';
 import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { SidePanelComponent } from '../../shared/side-panel/side-panel.component';
 import { ToastService } from '../../shared/toast/toast.service';
 import { TrendLineComponent } from '../../shared/trend-line/trend-line.component';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { vitalsWarning } from '../../shared/util/vitals-thresholds';
 import {
   HealthMetricDefinition, HealthNote, HealthNoteCatalog, HealthNoteKind, HealthShareCategory, HealthSharedWithMeDto,
 } from '../../models/types';
@@ -51,6 +53,8 @@ interface MetricTile {
   values: number[];
   band: [number, number] | null;
   caption: string;
+  /** Значение вне общепринятых ориентиров (vitalsWarning) — подпись выделяется цветом. */
+  warn: boolean;
 }
 
 interface WellbeingTile {
@@ -77,7 +81,7 @@ function quantile(sorted: number[], q: number): number {
   selector: 'app-health-notes-tab',
   imports: [
     ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, PersonChipComponent, RouterLink,
-    SearchFieldComponent, SidePanelComponent, TrendLineComponent,
+    SearchFieldComponent, SidePanelComponent, TrackDirtyDirective, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
   styleUrl: './health-notes-tab.component.scss',
@@ -190,6 +194,14 @@ export class HealthNotesTabComponent implements OnInit {
     this.formOpen.set(true);
   }
 
+  /** Обёртка формы (appTrackDirty) — знает, вводил ли пользователь что-то. */
+  private readonly formDirty = viewChild(TrackDirtyDirective);
+
+  /** Фон, крестик, Escape, «Отмена» — с вопросом, если в форме уже что-то введено. */
+  protected async requestCloseForm(): Promise<void> {
+    if (await confirmDiscard(this.confirm, this.formDirty()?.isDirty)) this.closeForm();
+  }
+
   protected closeForm(): void {
     this.formOpen.set(false);
     this.editing.set(null);
@@ -200,9 +212,15 @@ export class HealthNotesTabComponent implements OnInit {
     void this.load();
   }
 
-  protected showOlder(): void {
+  /** Расширили период, а записей не прибавилось — дальше показывать нечего (раньше кнопка
+   * «Показать ещё 30 дней» была бесконечной). */
+  readonly noMoreOlder = signal(false);
+
+  protected async showOlder(): Promise<void> {
+    const before = this.notes().length;
     this.days.update((d) => d + PAGE_DAYS);
-    void this.load();
+    await this.load();
+    if (!this.loadError() && this.notes().length === before) this.noMoreOlder.set(true);
   }
 
   protected async load(): Promise<void> {
@@ -287,9 +305,14 @@ export class HealthNotesTabComponent implements OnInit {
       ? [quantile(sortedMonth, 0.25), quantile(sortedMonth, 0.75)]
       : null;
     const latest = latestNote.metric.value;
+    // Фиксированные ориентиры важнее «вашего обычного»: иначе постоянно высокое давление
+    // называлось нормой для пользователя.
+    const warning = vitalsWarning(code, latest, latestNote.metric.value2);
 
     let caption: string;
-    if (code === 'weight') {
+    if (warning) {
+      caption = warning;
+    } else if (code === 'weight') {
       const first = month[0]?.v;
       const delta = first === undefined ? 0 : Math.round((latest - first) * 10) / 10;
       caption = month.length < 2 || delta === 0
@@ -302,7 +325,7 @@ export class HealthNotesTabComponent implements OnInit {
     } else if (latest < band[0]) {
       caption = `${windowDays} дней · ниже обычного`;
     } else {
-      caption = `${windowDays} дней · в вашем обычном диапазоне`;
+      caption = `${windowDays} дней · как обычно для вас`;
     }
 
     return {
@@ -315,6 +338,7 @@ export class HealthNotesTabComponent implements OnInit {
       values: window,
       band: code === 'weight' ? null : band,
       caption,
+      warn: warning !== null,
     };
   }
 

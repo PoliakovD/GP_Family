@@ -4,10 +4,10 @@
 
 .toast-stack {
   position: fixed;
-  top: 12px;
+  top: calc(12px + env(safe-area-inset-top, 0px)); // не под «чёлкой» iPhone
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -23,11 +23,10 @@
   padding: 10px 14px;
   border-radius: var(--radius-md);
   font-family: var(--font-heading);
-  font-size: 0.7647rem;
+  font-size: 0.8824rem; // было 13px
   font-weight: 600;
   color: var(--color-bg);
   box-shadow: var(--shadow-lg);
-  cursor: pointer;
   animation: toast-in 0.18s ease-out;
 
   &.toast-success {
@@ -53,9 +52,23 @@
   word-break: break-word;
 }
 
+.toast-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: -8px -8px -8px 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
 .toast-action {
   flex-shrink: 0;
-  padding: 2px 8px;
+  min-height: 36px;
+  padding: 4px 12px;
   border: 1px solid currentColor;
   border-radius: var(--radius-sm, 6px);
   background: transparent;

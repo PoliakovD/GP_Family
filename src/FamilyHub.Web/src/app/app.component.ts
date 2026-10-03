@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, NavigationError } from '@angular/router';
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
@@ -17,8 +17,8 @@ import { ToastService } from './shared/toast/toast.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 import { ToastContainerComponent } from './shared/toast/toast-container.component';
 import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.component';
-import { LoadingSpinnerComponent } from './shared/loading-spinner/loading-spinner.component';
 import { CookieBannerComponent } from './shared/cookie-banner/cookie-banner.component';
+import { AppNoticesComponent } from './shared/app-notices/app-notices.component';
 import { AvatarComponent } from './shared/avatar/avatar.component';
 import { AppSearchComponent } from './components/app-search/app-search.component';
 import { SearchFieldComponent } from './shared/search-field/search-field.component';
@@ -70,8 +70,8 @@ interface SidebarItem {
         DevPanelComponent,
         ToastContainerComponent,
         ConfirmDialogComponent,
-        LoadingSpinnerComponent,
         CookieBannerComponent,
+        AppNoticesComponent,
         AvatarComponent,
         AppSearchComponent,
         SearchFieldComponent,
@@ -113,13 +113,22 @@ export class AppComponent implements OnInit {
   // Публичный (не private) — читается из шаблона (strictTemplates не пропустит private-поле).
   readonly currentUrl = signal(this.router.url);
 
-  readonly isHomeActive = computed(() => this.currentUrl().startsWith('/home'));
+  // /notifications открывается колокольчиком с Главной — подсвечиваем «Главную», чтобы нижнее меню
+  // не оставалось без активной вкладки.
+  readonly isHomeActive = computed(() => this.currentUrl().startsWith('/home') || this.currentUrl().startsWith('/notifications'));
   readonly isHealthActive = computed(() => this.currentUrl().startsWith('/health'));
   /** Хаб «Здоровье» ровно на индексе (не на дочернем разделе) — там мобильная шапка рисует
    * аватар+«Моё здоровье» вместо обычного заголовка (см. mobileTitle ниже), а на дочернем разделе
    * появляется «‹ Здоровье» (health-hub.component.ts). */
   readonly isHealthHubIndex = computed(() => this.currentUrl() === '/health');
-  readonly isFamilyActive = computed(() => this.currentUrl().startsWith('/families'));
+  // Дни рождения — семейный раздел (ссылка из карточки на Главной и из поиска).
+  readonly isFamilyActive = computed(() => this.currentUrl().startsWith('/families') || this.currentUrl().startsWith('/birthdays'));
+  /** Активный подпункт «Семьи» в сайдбаре — раньше текущая вкладка семьи не подсвечивалась. */
+  isFamilySubActive(tab: string): boolean {
+    const url = this.currentUrl();
+    const current = new URLSearchParams(url.split('?')[1] ?? '').get('tab') ?? this.familySubItems[0]?.tab;
+    return url.startsWith('/families/') && current === tab;
+  }
   readonly isSettingsActive = computed(() => this.currentUrl().startsWith('/settings'));
 
   /** Группы подпунктов «Здоровье» (редизайн хаба, макет «Screen - Health hub») — те же названия и
@@ -207,6 +216,7 @@ export class AppComponent implements OnInit {
    * особый случай, там вместо заголовка аватар+«Моё здоровье» (см. шаблон). */
   readonly mobileTitle = computed(() => {
     const url = this.currentUrl();
+    if (url.startsWith('/birthdays')) return 'Дни рождения';
     if (this.isFamilyActive()) return 'Семья';
     if (url.startsWith('/notifications')) return 'Уведомления';
     if (this.isSettingsActive()) return 'Профиль';
@@ -246,6 +256,14 @@ export class AppComponent implements OnInit {
     !this.onAuthRoute() && (this.auth.mode === 'telegram' || this.auth.me() !== null));
 
   constructor() {
+    // Telegram: «Назад» в шапке Mini App на всех экранах, кроме корней вкладок (там «назад»
+    // закрывает приложение — так и должно быть).
+    effect(() => {
+      const path = this.currentUrl().split('?')[0].split('#')[0];
+      const isTabRoot = ['/home', '/health', '/settings', '/families', '/login', '/telegram-bind', '/'].includes(path)
+        || /^\/families\/[^/]+$/.test(path);
+      untracked(() => this.tg.setBackButton(!isTabRoot, () => history.back()));
+    });
     // PWA: реагируем на КАЖДЫЙ переход auth.me() в непустое состояние, а не только на бутстрап
     // приложения. Раньше refresh() запускался один раз в ngOnInit — если в этот момент
     // пользователь ещё не был аутентифицирован (например, только что открыл /login), последующие

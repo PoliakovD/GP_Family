@@ -64,7 +64,7 @@
           <span class="switch"><input type="checkbox" [checked]="labs()" (change)="labs.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
-          <i class="ph-duotone ph-sparkle" aria-hidden="true"></i><span>ИИ-резюме анализов</span>
+          <i class="ph-duotone ph-sparkle" aria-hidden="true"></i><span>ИИ-резюме анализов <span class="muted">(составлено ИИ, не врачом)</span></span>
           <span class="switch"><input type="checkbox" [checked]="aiSummaries()" (change)="aiSummaries.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
@@ -102,6 +102,11 @@
     }
   </div>
 
+  @if (!busy() && !canSubmit()) {
+    <p class="field-hint field-hint-muted" role="status" style="margin:0 16px 6px">
+      {{ !periodValid() ? 'Проверьте период: дата «с» должна быть не позже даты «по».' : 'Включите хотя бы один раздел отчёта.' }}
+    </p>
+  }
   <div class="dr-footer">
     <span class="dr-privacy">Отчёт увидит только тот, кому вы отправите ссылку или файл</span>
     <div class="dr-actions">

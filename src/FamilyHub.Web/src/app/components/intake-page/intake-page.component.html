@@ -21,9 +21,11 @@
 </div>
 
 @if (isWide()) {
-  <app-side-panel [open]="intake.form() !== null" [title]="formTitle()" width="min(600px, 100vw)" (closed)="intake.closeForm()">
+  <app-side-panel [open]="intake.form() !== null" [title]="formTitle()" width="min(600px, 100vw)" (closed)="requestCloseForm()">
     @if (intake.form(); as request) {
-      <app-intake-course-form [request]="request" (saved)="onFormSaved()" (cancelled)="intake.closeForm()" />
+      <div appTrackDirty>
+        <app-intake-course-form [request]="request" (saved)="onFormSaved()" (cancelled)="requestCloseForm()" />
+      </div>
     }
   </app-side-panel>
 
@@ -33,10 +35,10 @@
     }
   </app-side-panel>
 } @else {
-  <app-bottom-sheet [open]="intake.form() !== null" [title]="formTitle()" (closed)="intake.closeForm()">
+  <app-bottom-sheet [open]="intake.form() !== null" [title]="formTitle()" (closed)="requestCloseForm()">
     @if (intake.form(); as request) {
-      <div class="ip-sheet">
-        <app-intake-course-form [request]="request" (saved)="onFormSaved()" (cancelled)="intake.closeForm()" />
+      <div class="ip-sheet" appTrackDirty>
+        <app-intake-course-form [request]="request" (saved)="onFormSaved()" (cancelled)="requestCloseForm()" />
       </div>
     }
   </app-bottom-sheet>

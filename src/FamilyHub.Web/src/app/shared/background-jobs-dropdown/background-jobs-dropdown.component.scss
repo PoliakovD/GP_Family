@@ -17,7 +17,7 @@
   border-radius: 999px;
   background: var(--color-accent-2);
   color: #fff;
-  font-size: 0.6471rem;
+  font-size: 0.7059rem;
   line-height: 16px;
   text-align: center;
 }
@@ -32,7 +32,7 @@
   overflow-y: auto;
   background: var(--color-paper);
   border-radius: var(--radius-md);
-  z-index: 20;
+  z-index: var(--z-dropdown);
   padding: 8px 0;
 }
 

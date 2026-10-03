@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, inject, input, signal } from '@angular/core';
+import { todayLocal } from '../../shared/util/intake-labels';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -23,7 +24,8 @@ interface BatchItem {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Локальная дата, не UTC: toISOString() с 00:00 до 03:00 МСК давал вчерашнее число.
+  return todayLocal();
 }
 
 let nextInstanceId = 0;
@@ -249,7 +251,12 @@ export class RecordBatchAddComponent implements OnInit, OnDestroy {
   }
 
   get failedCount(): number {
-    return this.items().filter((i) => i.status === 'failed' || i.status === 'skipped').length;
+    return this.items().filter((i) => i.status === 'failed').length;
+  }
+
+  /** Отдельно от сбоев: пропущены из-за дневного лимита — это не «ошибка», их можно загрузить завтра. */
+  get skippedCount(): number {
+    return this.items().filter((i) => i.status === 'skipped').length;
   }
 
   finish(): void {

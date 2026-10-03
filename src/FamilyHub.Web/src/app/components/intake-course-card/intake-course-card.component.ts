@@ -130,7 +130,7 @@ export class IntakeCourseCardComponent {
     } else {
       lines.push({
         icon: 'ph ph-bell-ringing',
-        text: d.repeatAfterMinutes ? `Push в момент приёма, повтор через ${d.repeatAfterMinutes} минут` : 'Push в момент приёма',
+        text: d.repeatAfterMinutes ? `Уведомление в момент приёма, повтор через ${d.repeatAfterMinutes} мин` : 'Уведомление в момент приёма',
       });
       const watchers = d.watchers.filter((w) => w.notifyMissed || w.receiveReminders).map((w) => w.name);
       if (watchers.length > 0) {
@@ -179,7 +179,7 @@ export class IntakeCourseCardComponent {
           return {
             date,
             cls: cell ? outcomeClass(cell.outcome) : 'none',
-            label: cell ? `${date} ${time}: ${outcomeLabel(cell.outcome)}` : '',
+            label: cell ? `${formatDayMonth(date)}, ${time}: ${outcomeLabel(cell.outcome)}` : '',
             today: date === today,
           };
         }),

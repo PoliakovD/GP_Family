@@ -3,9 +3,27 @@
     <span class="vs-check"><i class="ph-fill ph-check" aria-hidden="true"></i></span>
     <div class="flex-fill min-width-0">
       <div class="vs-title">Прививка сохранена</div>
-      <div class="muted vs-sub">{{ info().item.seriesName }} · сегодня</div>
+      <div class="muted vs-sub">{{ info().item.seriesName }} · {{ dateText() }}</div>
     </div>
   </div>
+
+  @if (info().quickMark && info().item.recordId) {
+    @if (!editingDate()) {
+      <button type="button" class="btn-link mb-2" (click)="editingDate.set(true)">
+        Сделана в другой день? Изменить дату
+      </button>
+    } @else {
+      <div class="mb-3">
+        <label class="form-label" for="vs-date">Дата прививки</label>
+        <div class="d-flex gap-2">
+          <input #dateInput id="vs-date" class="input" type="date" [max]="today" [value]="savedDate() ?? info().item.date ?? today" />
+          <button type="button" class="btn btn-primary" [disabled]="dateBusy()" (click)="saveDate(dateInput.value)">
+            {{ dateBusy() ? 'Сохраняем…' : 'Сохранить' }}
+          </button>
+        </div>
+      </div>
+    }
+  }
 
   @if (info().reactionHint) {
     <p class="vs-text">{{ info().reactionHint }}</p>

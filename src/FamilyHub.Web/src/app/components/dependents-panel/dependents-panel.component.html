@@ -10,24 +10,32 @@
     </label>
 
     @if (form.isPet) {
-      <input class="input" [(ngModel)]="form.firstName" placeholder="Кличка" />
-      <input class="input" [(ngModel)]="form.petSpecies" placeholder="Вид животного (кот, собака…)" />
+      <label class="form-label mb-0" [for]="fieldId + '-first'">Кличка *</label>
+      <input class="input" [id]="fieldId + '-first'" [(ngModel)]="form.firstName" />
+      <label class="form-label mb-0" [for]="fieldId + '-species'">Вид животного</label>
+      <input class="input" [id]="fieldId + '-species'" [(ngModel)]="form.petSpecies" placeholder="кот, собака…" />
     } @else {
-      <input class="input" [(ngModel)]="form.lastName" placeholder="Фамилия" />
-      <input class="input" [(ngModel)]="form.firstName" placeholder="Имя" />
-      <input class="input" [(ngModel)]="form.middleName" placeholder="Отчество (необязательно)" />
+      <label class="form-label mb-0" [for]="fieldId + '-last'">Фамилия *</label>
+      <input class="input" [id]="fieldId + '-last'" [(ngModel)]="form.lastName" />
+      <label class="form-label mb-0" [for]="fieldId + '-first'">Имя *</label>
+      <input class="input" [id]="fieldId + '-first'" [(ngModel)]="form.firstName" />
+      <label class="form-label mb-0" [for]="fieldId + '-middle'">Отчество (необязательно)</label>
+      <input class="input" [id]="fieldId + '-middle'" [(ngModel)]="form.middleName" />
     }
 
-    <select class="input" [(ngModel)]="form.gender">
-      <option [ngValue]="Gender.Male">Мужской</option>
-      <option [ngValue]="Gender.Female">Женский</option>
+    <label class="form-label mb-0" [for]="fieldId + '-gender'">Пол *</label>
+    <select class="input" [id]="fieldId + '-gender'" [(ngModel)]="form.gender">
+      <option [ngValue]="null" disabled>Выберите…</option>
+      <option [ngValue]="Gender.Male">{{ form.isPet ? 'Самец' : 'Мужской' }}</option>
+      <option [ngValue]="Gender.Female">{{ form.isPet ? 'Самка' : 'Женский' }}</option>
     </select>
 
-    <input class="input" type="date" [(ngModel)]="form.birthDate" placeholder="Дата рождения" />
+    <label class="form-label mb-0" [for]="fieldId + '-birth'">Дата рождения</label>
+    <input class="input" [id]="fieldId + '-birth'" type="date" [(ngModel)]="form.birthDate" [max]="today" />
 
     <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
-        {{ editingId ? 'Сохранить' : 'Добавить' }}
+      <button class="btn btn-primary btn-sm" (click)="handleSubmit()" [disabled]="saving">
+        {{ saving ? 'Сохраняем…' : editingId ? 'Сохранить' : 'Добавить' }}
       </button>
       @if (editingId) {
         <button class="btn btn-secondary btn-sm" (click)="resetForm()">Отмена</button>
@@ -58,7 +66,7 @@
               @if (item.isPet) {
                 {{ item.petSpecies || 'Питомец' }}
               } @else if (item.birthDate) {
-                {{ item.birthDate }}
+                {{ formatDayMonthYear(item.birthDate) }}
               }
             </div>
           </div>
@@ -73,7 +81,10 @@
     }
 
     @if (items.length === 0) {
-      <p class="muted">Пока никого не добавили.</p>
+      <p class="muted">
+        Пока никого не добавили. Сюда — тех, у кого нет своего аккаунта: детей, пожилых родственников,
+        питомцев. Вы сможете вести их анализы, прививки и лекарства.
+      </p>
     }
   }
 </div>

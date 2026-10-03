@@ -1,4 +1,7 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input } from '@angular/core';
+import { todayLocal } from '../../shared/util/intake-labels';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { confirmDiscard } from '../../shared/util/track-dirty.directive';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -25,7 +28,8 @@ interface StagedFile {
 /** Сегодняшняя дата в формате input[type=date] — дефолт формы, распознавание может позже
  * переопределить её датой, найденной в самом документе. */
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Локальная дата, не UTC: toISOString() с 00:00 до 03:00 МСК давал вчерашнее число.
+  return todayLocal();
 }
 
 let nextInstanceId = 0;
@@ -53,6 +57,7 @@ export class RecordAddComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly breakpoints = inject(BreakpointService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly acceptedFileTypes = ACCEPTED_ATTACHMENT_TYPES;
   readonly fileInputId = `record-add-file-input-${nextInstanceId}`;
@@ -114,7 +119,14 @@ export class RecordAddComponent implements OnInit, OnDestroy {
     return medicalRecordKindBasePath(this.kind());
   }
 
-  cancel(): void {
+  /** Есть что терять: прикреплённые снимки или введённые врач/описание. */
+  private get isDirty(): boolean {
+    return this.pendingFiles.length > 0 || !!this.form.doctor.trim() || !!this.form.description.trim();
+  }
+
+  async cancel(): Promise<void> {
+    // Тап по фону/крестику раньше молча выбрасывал сфотографированные страницы.
+    if (this.saving || !(await confirmDiscard(this.confirm, this.isDirty))) return;
     void this.router.navigate([this.kindBasePath()]);
   }
 
@@ -194,7 +206,7 @@ export class RecordAddComponent implements OnInit, OnDestroy {
         }
       }
       if (uploadFailed > 0) {
-        this.toast.error(`Запись сохранена, но ${uploadFailed} файлов не загрузилось — прикрепите их к записи ниже.`);
+        this.toast.error(`Запись сохранена, но не загрузилось файлов: ${uploadFailed}. Откройте запись и прикрепите их ещё раз.`);
       }
 
       // Редизайн v3 (PR7) — автораспознавание при сохранении: не дожидаемся ЗАВЕРШЕНИЯ
@@ -209,7 +221,11 @@ export class RecordAddComponent implements OnInit, OnDestroy {
       // OCR — ждать его не задерживает навигацию заметно.
       const uploadedCount = this.pendingFiles.length - uploadFailed;
       if (this.autoRecognize && uploadedCount > 0) {
-        const extraction = await this.api.requestExtraction(created.id).catch(() => null);
+        // Раньше сбой постановки в очередь глотался молча — человек ждал распознавания, которого нет.
+        const extraction = await this.api.requestExtraction(created.id).catch(() => {
+          this.toast.error('Запись сохранена, но распознавание не запустилось. Откройте запись и нажмите «Распознать».');
+          return null;
+        });
         if (extraction?.code === 'waiting_for_ai') this.toast.info(extraction.message ?? 'ИИ недоступен — документ будет распознан позже.');
       }
 

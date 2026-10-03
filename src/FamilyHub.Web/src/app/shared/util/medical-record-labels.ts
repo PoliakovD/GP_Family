@@ -19,6 +19,10 @@ export interface MedicalRecordKindLabels {
   descriptionPlaceholder: string;
   searchPlaceholder: string;
   emptyLabel: string;
+  /** Пустой раздел у нового пользователя — что здесь будет и как начать (раньше — одна серая строка). */
+  emptyHint: string;
+  /** Подпись выбора человека на форме добавления («Чей анализ» был и на форме приёма врача). */
+  ownerLabel: string;
 }
 
 /** Подписи различаются по виду записи — тот же идиом, что TYPE_LABEL/TYPE_ICON в home.component.ts. */
@@ -29,26 +33,28 @@ export const MEDICAL_RECORD_KIND_LABELS: Record<MedicalRecordKind, MedicalRecord
     countNounFew: 'анализа',
     countNounMany: 'анализов',
     accessHintLabel: 'Ваши анализы видите только вы, пока сами не откроете доступ.',
-    addButtonLabel: 'Добавить запись',
+    addButtonLabel: 'Добавить анализ',
     doctorPlaceholder: 'Врач (необязательно)',
     descriptionPlaceholder: 'Описание (необязательно)',
     searchPlaceholder: 'Поиск по анализам…',
-    emptyLabel: 'Записей нет.',
+    emptyLabel: 'Анализов пока нет',
+    ownerLabel: 'Чей анализ',
+    emptyHint: 'Сфотографируйте бланк из лаборатории или загрузите PDF — показатели и нормы распознаются автоматически, а вы потом их проверите.',
   },
   [MedicalRecordKind.DoctorVisit]: {
-    // Заголовок раздела — «Приёмы врача» (та же подпись, что в сайдбаре/на плитке хаба, редизайн
-    // навигации), остальной словарь ("посещение") не трогаем — внутренне согласован сам с собой,
-    // менять его целиком не входит в эту фичу.
+    // Везде «приём врача» — раньше один и тот же объект назывался приёмом, посещением и визитом.
     title: 'Приёмы врача',
-    countNounOne: 'посещение',
-    countNounFew: 'посещения',
-    countNounMany: 'посещений',
-    accessHintLabel: 'Ваши посещения видят только вы, пока сами не откроете доступ.',
-    addButtonLabel: 'Добавить посещение',
+    countNounOne: 'приём',
+    countNounFew: 'приёма',
+    countNounMany: 'приёмов',
+    accessHintLabel: 'Ваши приёмы врача видите только вы, пока сами не откроете доступ.',
+    addButtonLabel: 'Добавить приём',
     doctorPlaceholder: 'Врач / специальность',
     descriptionPlaceholder: 'Заключение (необязательно)',
-    searchPlaceholder: 'Поиск по посещениям…',
-    emptyLabel: 'Посещений нет.',
+    searchPlaceholder: 'Поиск по приёмам врача…',
+    emptyLabel: 'Приёмов врача пока нет',
+    ownerLabel: 'Чей приём врача',
+    emptyHint: 'Сфотографируйте заключение врача — назначения распознаются, и по ним можно будет одним нажатием начать курс приёма лекарств.',
   },
 };
 

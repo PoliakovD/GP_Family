@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService, LinkTelegramStart } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { formatDayMonthYear } from '../../../shared/util/date-format';
 import { runBusy } from '../settings-task';
 import { PersonNameComponent } from '../../../shared/person-name/person-name.component';
 import { AvatarComponent } from '../../../shared/avatar/avatar.component';
@@ -21,12 +22,15 @@ const LINK_POLL_INTERVAL_MS = 4000;
     styleUrl: './settings-profile.component.scss'
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
+  protected readonly formatDayMonthYear = formatDayMonthYear;
   readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
 
   readonly busy = signal(false);
   readonly linkStep = signal<'idle' | 'code'>('idle');
   readonly telegramLink = signal<LinkTelegramStart | null>(null);
+  /** Код привязки истёк, не дождавшись подтверждения в боте. */
+  readonly linkExpired = signal(false);
   readonly editingProfile = signal(false);
 
   linkEmail = '';
@@ -92,6 +96,7 @@ export class SettingsProfileComponent implements OnInit, OnDestroy {
       try {
         const result = await this.auth.linkTelegramStart();
         this.telegramLink.set(result);
+        this.linkExpired.set(false);
         this.startPolling();
       } catch (e) {
         if (e instanceof HttpErrorResponse && e.status === 503) {
@@ -111,6 +116,14 @@ export class SettingsProfileComponent implements OnInit, OnDestroy {
   private startPolling(): void {
     clearInterval(this.pollHandle);
     this.pollHandle = setInterval(async () => {
+      // Код истёк — раньше «Ждём подтверждения…» висело бесконечно.
+      const link = this.telegramLink();
+      if (link?.expiresAt && Date.parse(link.expiresAt) < Date.now()) {
+        clearInterval(this.pollHandle);
+        this.telegramLink.set(null);
+        this.linkExpired.set(true);
+        return;
+      }
       const me = await this.auth.loadMe();
       if (me?.hasTelegram) {
         clearInterval(this.pollHandle);

@@ -37,7 +37,7 @@ interface SubjectOption {
 }
 
 const FREQUENCIES: { mode: DoseScheduleMode; label: string }[] = [
-  { mode: DoseScheduleMode.TimesPerDay, label: 'N раз в день' },
+  { mode: DoseScheduleMode.TimesPerDay, label: 'Несколько раз в день' },
   { mode: DoseScheduleMode.EveryNHours, label: 'Каждые N часов' },
   { mode: DoseScheduleMode.Weekdays, label: 'По дням недели' },
   { mode: DoseScheduleMode.Cycle, label: 'Через день / цикл' },
@@ -203,6 +203,31 @@ export class IntakeCourseFormComponent implements OnInit {
     const familyId = this.dependentId() ? dep?.familyId : null;
     return this.medOptions().filter((m) => !familyId || m.familyId === familyId);
   });
+
+  /** Почему «Начать курс» неактивна — раньше кнопка была просто серой (например, при двух
+   * одинаковых временах приёма), и человек не понимал, что исправить. */
+  protected readonly missingHint = computed<string | null>(() => {
+    if (this.drugName().trim() === '') return 'Укажите препарат.';
+    if (this.writeOff() && !this.medicationId()) return 'Выберите препарат в аптечке или выключите списание.';
+    if (!this.startDate()) return 'Укажите дату начала.';
+    if (this.durKind() !== 'forever' && !(Number(this.durValue()) >= 1)) return 'Укажите длительность курса.';
+    const rows = this.times();
+    const usesRows = this.freq() === DoseScheduleMode.TimesPerDay || this.freq() === DoseScheduleMode.Weekdays
+      || this.freq() === DoseScheduleMode.Cycle;
+    if (usesRows) {
+      if (rows.length === 0 || rows.some((r) => !r.at)) return 'Укажите время каждого приёма.';
+      if (rows.some((r) => !(Number(r.units) > 0))) return 'Укажите дозу для каждого приёма.';
+      if (new Set(rows.map((r) => r.at)).size !== rows.length) return 'Два приёма стоят на одно и то же время — измените одно из них.';
+    }
+    if (this.freq() === DoseScheduleMode.Weekdays && this.weekdays().length === 0) return 'Выберите дни недели.';
+    if (this.freq() === DoseScheduleMode.Cycle && !(Number(this.cycleOn()) >= 1 && Number(this.cycleOff()) >= 1)) return 'Укажите дни приёма и перерыва.';
+    if (this.freq() === DoseScheduleMode.EveryNHours && !this.everyStart()) return 'Укажите время первого приёма.';
+    return this.canSave() ? null : 'Проверьте дозу и частоту приёма.';
+  });
+
+  /** Напоминания/пропуски и заметка — за «Дополнительно»: форма из ~20 полей в мобильном листе
+   * пугала; основное — препарат, частота, время и длительность. */
+  protected readonly showAdvanced = signal(false);
 
   protected readonly canSave = computed(() => {
     if (this.drugName().trim() === '') return false;
