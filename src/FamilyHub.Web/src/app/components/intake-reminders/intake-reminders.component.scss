@@ -8,7 +8,7 @@
 
 .ir-kicker {
   margin-bottom: 8px;
-  font-size: 0.7059rem;
+  font-size: 0.7647rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -19,7 +19,7 @@
 .ir-row { display: flex; align-items: center; gap: 11px; padding: 10px 14px; & + .ir-row { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); } }
 .ir-row-col { flex-direction: column; align-items: stretch; gap: 8px; }
 .ir-line { display: flex; align-items: center; gap: 11px; > i { font-size: 1.15rem; color: var(--color-neutral-700); } }
-.ir-name { flex: 1; min-width: 0; font-size: 0.9412rem; small { display: block; font-size: 0.7353rem; color: var(--color-neutral-600); } }
+.ir-name { flex: 1; min-width: 0; font-size: 0.9412rem; small { display: block; font-size: 0.7647rem; color: var(--color-neutral-600); } }
 .ir-sub { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-left: 43px; font-size: 0.8529rem; color: var(--color-neutral-700); cursor: pointer; }
 
 .ir-quiet { padding: 12px 14px; background: var(--color-paper); border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); }

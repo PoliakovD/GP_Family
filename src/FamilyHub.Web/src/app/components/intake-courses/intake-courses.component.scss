@@ -73,7 +73,7 @@
 .ic-badge {
   flex: none;
   padding: 2px 8px;
-  font-size: 0.7353rem;
+  font-size: 0.7647rem;
   background: var(--color-neutral-200);
   color: var(--color-neutral-800);
 }
@@ -81,7 +81,7 @@
 .ic-badge-stock { background: color-mix(in srgb, var(--color-status-warning) 16%, var(--color-paper)); color: var(--color-status-warning-text); }
 
 .ic-progress { height: 5px; margin-top: 9px; background: var(--color-neutral-200); span { display: block; height: 100%; background: var(--color-accent); } }
-.ic-progress-text { margin-top: 4px; font-size: 0.7353rem; color: var(--color-neutral-600); }
+.ic-progress-text { margin-top: 4px; font-size: 0.7647rem; color: var(--color-neutral-600); }
 
 .ic-archive {
   display: flex;
