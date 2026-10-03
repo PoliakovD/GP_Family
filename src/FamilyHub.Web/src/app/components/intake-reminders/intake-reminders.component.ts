@@ -6,6 +6,7 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { ReminderSettings, WatchingEntry } from '../../models/types';
 import { fromTimeInput, toTimeInput } from '../../shared/util/intake-labels';
+import { pluralizeRu } from '../../shared/util/pluralize';
 
 const DEFAULT_QUIET_FROM = '23:00';
 const DEFAULT_QUIET_TO = '07:00';
@@ -30,6 +31,7 @@ export class IntakeRemindersComponent implements OnInit {
 
   readonly closed = output<void>();
 
+  protected readonly pluralizeRu = pluralizeRu;
   readonly settings = signal<ReminderSettings | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);

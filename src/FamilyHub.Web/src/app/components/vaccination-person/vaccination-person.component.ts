@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { pluralizeRu } from '../../shared/util/pluralize';
 import { ApiError, ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { VaccinationStateService } from '../../services/vaccination-state.service';
@@ -81,7 +82,8 @@ export class VaccinationPersonComponent {
   protected readonly ageDisplay = computed(() => {
     const s = this.schedule();
     if (!s || s.ageYears === null) return null;
-    return `${s.ageYears} ${s.ageYears === 1 ? 'год' : s.ageYears < 5 ? 'года' : 'лет'}${s.ageMonths ? ` ${s.ageMonths} мес` : ''}`;
+    // pluralizeRu, а не «1 → год, <5 → года»: было «21 лет», «22 лет».
+    return `${s.ageYears} ${pluralizeRu(s.ageYears, 'год', 'года', 'лет')}${s.ageMonths ? ` ${s.ageMonths} мес` : ''}`;
   });
 
   protected readonly stageGroups = computed<StageGroup[]>(() => {

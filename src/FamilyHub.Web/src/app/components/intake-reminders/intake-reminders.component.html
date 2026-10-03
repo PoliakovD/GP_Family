@@ -45,7 +45,7 @@
                 <app-avatar [person]="person(w.id, w.name)" size="sm" />
                 <div class="ir-name">
                   {{ w.name }}
-                  <small>{{ w.courseCount }} @if (w.courseCount === 1) { курс } @else { курсов }@if (w.kind === 'user') { · выбрал(а) вас наблюдателем}</small>
+                  <small>{{ w.courseCount }} {{ pluralizeRu(w.courseCount, 'курс', 'курса', 'курсов') }}@if (w.kind === 'user') { · выбрал(а) вас наблюдателем}</small>
                 </div>
                 @if (w.kind === 'dependent') {
                   <label class="switch">

@@ -2,7 +2,8 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { authGuard, consentGuard, profileGuard } from './auth.guards';
+import { authGuard, consentGuard, guestGuard, profileGuard } from './auth.guards';
+import { convertToParamMap } from '@angular/router';
 import { AuthService, type ConsentStatus, type Me } from './auth.service';
 import { TelegramService } from './telegram.service';
 import { ToastService } from '../shared/toast/toast.service';
@@ -50,7 +51,7 @@ describe('auth.guards', () => {
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: TelegramService, useValue: tg },
-        { provide: Router, useValue: { createUrlTree } },
+        { provide: Router, useValue: { createUrlTree, parseUrl: (u: string) => ({ __parsed: u }) } },
         { provide: ToastService, useValue: { error: toastError } },
       ],
     });
@@ -197,6 +198,26 @@ describe('auth.guards', () => {
 
       await expect(runGuard(profileGuard)).resolves.toBe(true);
       expect(toastError).toHaveBeenCalled();
+    });
+  });
+describe('guestGuard', () => {
+    const run = (query: Record<string, string> = {}) =>
+      TestBed.runInInjectionContext(() => guestGuard({ queryParamMap: convertToParamMap(query) } as never, {} as never));
+
+    it('shows the login form when nobody is cached (no network call)', () => {
+      expect(run()).toBe(true);
+      expect(auth.loadMe).not.toHaveBeenCalled();
+    });
+
+    it('sends an already signed-in user home', () => {
+      auth.me.set(fakeMe());
+      expect(run()).toEqual({ __parsed: '/home' });
+    });
+
+    it('honours a safe returnUrl and ignores an external one', () => {
+      auth.me.set(fakeMe());
+      expect(run({ returnUrl: '/health/notes' })).toEqual({ __parsed: '/health/notes' });
+      expect(run({ returnUrl: '//evil.example' })).toEqual({ __parsed: '/home' });
     });
   });
 });

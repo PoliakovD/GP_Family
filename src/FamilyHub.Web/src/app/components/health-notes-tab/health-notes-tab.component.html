@@ -111,7 +111,9 @@
         <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
         <h5>Пока нет записей</h5>
         <p class="muted">Записывайте давление, самочувствие, симптомы и приём лекарств — врачу будет проще увидеть картину за период.</p>
-        <button type="button" class="btn btn-primary" (click)="openForm()">Добавить первую запись</button>
+        @if (!isReadOnly()) {
+          <button type="button" class="btn btn-primary" (click)="openForm()">Добавить первую запись</button>
+        }
       } @else {
         <h5>Ничего не найдено</h5>
         <p class="muted">Измените фильтр или поисковый запрос.</p>
@@ -131,8 +133,10 @@
               <li class="dn-row" [style.--kind-color]="it.color">
                 <span class="dn-time">{{ it.time }}</span>
                 <i class="ph-duotone dn-icon" [class]="'ph-' + it.icon" aria-hidden="true"></i>
+                <!-- Чужой дневник — только чтение: строка не притворяется кнопкой «Изменить». -->
                 <button type="button" class="dn-row-main" (click)="openForm(it.note)"
-                        [attr.aria-label]="'Изменить запись: ' + it.desc.title">
+                        [attr.tabindex]="isReadOnly() ? -1 : null"
+                        [attr.aria-label]="isReadOnly() ? it.desc.title : 'Изменить запись: ' + it.desc.title">
                   <span class="dn-row-title">{{ it.desc.title }}</span>
                   @if (it.desc.subtitle) {
                     <span class="dn-row-sub dn-sub-inline"> · {{ it.desc.subtitle }}</span>
@@ -154,14 +158,18 @@
         </section>
       }
       @if (!query() && filter() === null) {
-        <button type="button" class="btn btn-secondary dn-older" [disabled]="loading()" (click)="showOlder()">
-          Показать ещё 30 дней
-        </button>
+        @if (noMoreOlder()) {
+          <p class="muted dn-older">Более ранних записей нет.</p>
+        } @else {
+          <button type="button" class="btn btn-secondary dn-older" [disabled]="loading()" (click)="showOlder()">
+            Показать ещё 30 дней
+          </button>
+        }
       }
     </div>
   }
 
-  @if (!isWide()) {
+  @if (!isWide() && !isReadOnly()) {
     <button type="button" class="btn btn-primary dn-fab" (click)="openForm()">
       <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
     </button>

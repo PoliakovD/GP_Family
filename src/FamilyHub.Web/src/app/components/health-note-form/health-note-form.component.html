@@ -180,12 +180,12 @@
       @case (Kind.Sleep) {
         <div class="dn-values">
           <div class="dn-value">
-            <label class="dn-sublabel" for="dn-bed">Лёг</label>
+            <label class="dn-sublabel" for="dn-bed">Отбой</label>
             <input id="dn-bed" class="input dn-time" type="time"
                    [ngModel]="bedTime()" (ngModelChange)="bedTime.set($event)" name="bed" />
           </div>
           <div class="dn-value">
-            <label class="dn-sublabel" for="dn-wake">Встал</label>
+            <label class="dn-sublabel" for="dn-wake">Подъём</label>
             <input id="dn-wake" class="input dn-time" type="time"
                    [ngModel]="wakeTime()" (ngModelChange)="wakeTime.set($event)" name="wake" />
           </div>

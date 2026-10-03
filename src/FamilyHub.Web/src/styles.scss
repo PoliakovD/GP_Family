@@ -993,18 +993,10 @@ select.input {
   }
 }
 
-// Скрывает нативный <input type="file"> визуально, но оставляет доступным для <label for>
-// и скринридеров (в отличие от display:none) — та же техника, что в medications-panel.scss.
+// Нативный <input type="file">, скрытый визуально, но доступный для <label for> — тот же приём,
+// что .visually-hidden выше (раньше здесь была его точная копия).
 .visually-hidden-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  @extend .visually-hidden;
 }
 
 // ============================================================================

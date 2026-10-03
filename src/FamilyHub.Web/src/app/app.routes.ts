@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, consentGuard, profileGuard } from './services/auth.guards';
+import { authGuard, consentGuard, profileGuard, guestGuard } from './services/auth.guards';
 import { adminGuard } from './services/admin.guards';
 import { pendingCodeGuard } from './services/pending-code.guard';
 
@@ -27,6 +27,7 @@ export const routes: Routes = [
   {
     path: 'login',
     title: 'Вход',
+    canActivate: [guestGuard],
     canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/login/login.component').then((m) => m.LoginComponent),

@@ -212,9 +212,15 @@ export class HealthNotesTabComponent implements OnInit {
     void this.load();
   }
 
-  protected showOlder(): void {
+  /** Расширили период, а записей не прибавилось — дальше показывать нечего (раньше кнопка
+   * «Показать ещё 30 дней» была бесконечной). */
+  readonly noMoreOlder = signal(false);
+
+  protected async showOlder(): Promise<void> {
+    const before = this.notes().length;
     this.days.update((d) => d + PAGE_DAYS);
-    void this.load();
+    await this.load();
+    if (!this.loadError() && this.notes().length === before) this.noMoreOlder.set(true);
   }
 
   protected async load(): Promise<void> {

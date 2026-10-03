@@ -51,6 +51,14 @@ export const authGuard: CanActivateFn = async (_route, state) => {
   return router.createUrlTree(['/login'], returnUrl ? { queryParams: { returnUrl } } : undefined);
 };
 
+/** /login для уже вошедшего (кэш me()) — сразу на Главную или на returnUrl, а не форма входа. */
+export const guestGuard: CanActivateFn = (route) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (auth.mode !== 'pwa' || auth.me() === null) return true;
+  return router.parseUrl(safeReturnUrl(route.queryParamMap.get('returnUrl')) ?? '/home');
+};
+
 /** Данные обрабатываются только после принятия актуального согласия ПДн (задача 2.3). */
 export const consentGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);

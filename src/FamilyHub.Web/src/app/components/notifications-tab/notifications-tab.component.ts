@@ -25,6 +25,10 @@ export class NotificationsTabComponent implements OnInit {
 
   items: AppNotification[] = [];
   unreadOnly = false;
+
+  get hasUnread(): boolean {
+    return this.items.some((n) => !n.isRead);
+  }
   error: string | null = null;
   loading = true;
 

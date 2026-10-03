@@ -21,6 +21,8 @@ export interface MedicalRecordKindLabels {
   emptyLabel: string;
   /** Пустой раздел у нового пользователя — что здесь будет и как начать (раньше — одна серая строка). */
   emptyHint: string;
+  /** Подпись выбора человека на форме добавления («Чей анализ» был и на форме приёма врача). */
+  ownerLabel: string;
 }
 
 /** Подписи различаются по виду записи — тот же идиом, что TYPE_LABEL/TYPE_ICON в home.component.ts. */
@@ -36,6 +38,7 @@ export const MEDICAL_RECORD_KIND_LABELS: Record<MedicalRecordKind, MedicalRecord
     descriptionPlaceholder: 'Описание (необязательно)',
     searchPlaceholder: 'Поиск по анализам…',
     emptyLabel: 'Анализов пока нет',
+    ownerLabel: 'Чей анализ',
     emptyHint: 'Сфотографируйте бланк из лаборатории или загрузите PDF — показатели и нормы распознаются автоматически, а вы потом их проверите.',
   },
   [MedicalRecordKind.DoctorVisit]: {
@@ -50,6 +53,7 @@ export const MEDICAL_RECORD_KIND_LABELS: Record<MedicalRecordKind, MedicalRecord
     descriptionPlaceholder: 'Заключение (необязательно)',
     searchPlaceholder: 'Поиск по приёмам врача…',
     emptyLabel: 'Приёмов врача пока нет',
+    ownerLabel: 'Чей приём врача',
     emptyHint: 'Сфотографируйте заключение врача — назначения распознаются, и по ним можно будет одним нажатием начать курс приёма лекарств.',
   },
 };

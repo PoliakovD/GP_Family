@@ -97,7 +97,7 @@
                 <div class="va-cal-actions">
                   <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'unknown'" (click)="setChoice(row, 'unknown')">не помню</button>
                   @if (row.closedByDisease) {
-                    <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'had'" (click)="setChoice(row, 'had')">болела</button>
+                    <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'had'" (click)="setChoice(row, 'had')">переболел(а)</button>
                   }
                 </div>
               }
