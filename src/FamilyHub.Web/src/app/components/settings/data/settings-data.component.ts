@@ -7,7 +7,9 @@ import { AuthService } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { HealthShareCategory, HealthShareGrantDto } from '../../../models/types';
 import { runBusy } from '../settings-task';
-
+
+import { saveBlob } from '../../../shared/util/save-blob';
+import { TelegramService } from '../../../services/telegram.service';
 /** Вкладка «Данные»: политика конфиденциальности, выгрузка данных, доступ к здоровью (ADR-0017),
  * удаление аккаунта (152-ФЗ). */
 @Component({
@@ -21,10 +23,16 @@ export class SettingsDataComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly tgForExport = inject(TelegramService);
 
   readonly busy = signal(false);
   readonly deleteConfirmVisible = signal(false);
   deleteConfirmText = '';
+
+  /** «удалить», «Удалить », «УДАЛИТЬ» — всё подходит (раньше строчные буквы молча не принимались). */
+  get deleteConfirmed(): boolean {
+    return this.deleteConfirmText.trim().toUpperCase() === 'УДАЛИТЬ';
+  }
 
   /** «Кто видит моё здоровье» (ADR-0017) — гранты доступа per-категория к дневнику/приёму/
    * прививкам. Полная матрица кандидатов (активные члены моих семей), не только тех, кому уже
@@ -83,17 +91,13 @@ export class SettingsDataComponent implements OnInit {
   async exportData(): Promise<void> {
     await runBusy(this.busy, this.toast, async () => {
       const blob = await this.auth.exportAccountData();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'familyhub-export.zip';
-      a.click();
-      URL.revokeObjectURL(url);
+      const hint = await saveBlob(blob, 'familyhub-export.zip', this.tgForExport.isInsideTelegram());
+      if (hint) this.toast.info(hint);
     });
   }
 
   async deleteAccount(): Promise<void> {
-    if (this.deleteConfirmText !== 'УДАЛИТЬ') return;
+    if (!this.deleteConfirmed) return;
     await runBusy(this.busy, this.toast, async () => {
       try {
         await this.auth.deleteAccount();
@@ -101,7 +105,7 @@ export class SettingsDataComponent implements OnInit {
         await this.router.navigate(['/login']);
       } catch (e) {
         if (e instanceof HttpErrorResponse && e.error?.code === 'last_admin') {
-          this.toast.error('Вы последний админ в семье с участниками — сначала передайте права или удалите семью');
+          this.toast.error('Вы единственный администратор семьи с участниками. Сначала исключите участников или удалите семью (раздел «Семья»).');
           return;
         }
         throw e;

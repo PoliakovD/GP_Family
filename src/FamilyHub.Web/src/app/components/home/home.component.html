@@ -1,6 +1,9 @@
 <div>
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger mb-2" role="alert">
+      {{ error }}
+      <button type="button" class="btn-link" (click)="refresh()">Повторить</button>
+    </div>
   }
   @if (loading) {
     <app-loading-spinner />
@@ -9,6 +12,29 @@
       <h2 class="mb-1">Здравствуйте{{ summary.greetingName ? ', ' + summary.greetingName : '' }}</h2>
       <div class="muted">{{ dateLine }}</div>
     </div>
+
+    @if (!state.loading() && state.activeFamilies().length === 0) {
+      <!-- Первый вход: без семьи Главной нечего показать — даём понятный первый шаг вместо пустоты. -->
+      <div class="card mb-3">
+        @if (state.families().length > 0) {
+          <h3 class="card-title mb-1">Заявка ждёт подтверждения</h3>
+          <p class="muted mb-0">
+            Администратор семьи ещё не подтвердил вашу заявку. Как только подтвердит — здесь появятся
+            аптечка, дни рождения и всё остальное.
+          </p>
+        } @else {
+          <h3 class="card-title mb-1">Начните с семьи</h3>
+          <p class="muted mb-2">
+            Создайте семью и пригласите близких по ссылке — или присоединитесь к семье, если вам уже
+            прислали приглашение.
+          </p>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-primary" routerLink="/families" [queryParams]="{ create: 1 }">Создать семью</a>
+            <a class="btn btn-secondary" routerLink="/families">У меня есть приглашение</a>
+          </div>
+        }
+      </div>
+    }
 
     <div class="home-grid">
       <!-- ЛЕВАЯ КОЛОНКА -->
@@ -40,8 +66,8 @@
               [subtitle]="requestSubtitle(req)"
             >
               <div actions>
-                <button class="btn btn-primary" (click)="approve(req)">Принять</button>
-                <button class="btn btn-secondary" (click)="reject(req)">Отклонить</button>
+                <button class="btn btn-primary" [disabled]="isBusy(req)" (click)="approve(req)">Принять</button>
+                <button class="btn btn-secondary" [disabled]="isBusy(req)" (click)="reject(req)">Отклонить</button>
               </div>
             </app-attention-card>
           }
@@ -65,34 +91,54 @@
           <span class="home-section-line"></span>
         </div>
         <div class="d-flex flex-wrap gap-2">
-          <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.medicationsExpired > 0">
-            <i [class]="summary.ok.medicationsExpired > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
-               [style.color]="summary.ok.medicationsExpired > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
-               aria-hidden="true"></i>
-            {{ medicationsOkLabel }}
-          </span>
-          <span class="home-ok-chip">
-            <i class="ph ph-check-circle" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-            Анализы: {{ summary.ok.analysesTotal }} {{ pluralizeRu(summary.ok.analysesTotal, 'запись', 'записи', 'записей') }}
-            @if (summary.ok.analysesAbnormal > 0) {
-              , {{ summary.ok.analysesAbnormal }} с отклонениями
-            }
-          </span>
-          <span class="home-ok-chip">
-            <i class="ph ph-stethoscope" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-            Посещения врачей: {{ summary.ok.visitsTotal }}
-            @if (summary.ok.visitsLastDate) {
-              · последнее {{ formatDayMonthYear(summary.ok.visitsLastDate) }}
-            }
-          </span>
+          <!-- Нулевые счётчики — нейтральный чип со ссылкой «добавить», а не зелёная галочка: у нового
+               пользователя «Анализы: 0 записей ✓» выглядело как «всё в порядке». -->
+          @if (summary.ok.medicationsTotal === 0) {
+            <a class="home-ok-chip home-ok-chip-empty" routerLink="/health/medications">
+              <i class="ph ph-first-aid-kit" aria-hidden="true"></i>
+              Аптечка пуста — добавить лекарства
+            </a>
+          } @else {
+            <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.medicationsExpired > 0">
+              <i [class]="summary.ok.medicationsExpired > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
+                 [style.color]="summary.ok.medicationsExpired > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
+                 aria-hidden="true"></i>
+              {{ medicationsOkLabel }}
+            </span>
+          }
+          @if (summary.ok.analysesTotal === 0) {
+            <a class="home-ok-chip home-ok-chip-empty" routerLink="/health/records/new">
+              <i class="ph ph-test-tube" aria-hidden="true"></i>
+              Анализов пока нет — добавить по фото бланка
+            </a>
+          } @else {
+            <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.analysesAbnormal > 0">
+              <i [class]="summary.ok.analysesAbnormal > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
+                 [style.color]="summary.ok.analysesAbnormal > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
+                 aria-hidden="true"></i>
+              Анализы: {{ summary.ok.analysesTotal }} {{ pluralizeRu(summary.ok.analysesTotal, 'запись', 'записи', 'записей') }}
+              @if (summary.ok.analysesAbnormal > 0) {
+                , {{ summary.ok.analysesAbnormal }} с отклонениями
+              }
+            </span>
+          }
+          @if (summary.ok.visitsTotal > 0) {
+            <span class="home-ok-chip">
+              <i class="ph ph-stethoscope" style="color:var(--color-status-ok)" aria-hidden="true"></i>
+              Приёмы врача: {{ summary.ok.visitsTotal }}
+              @if (summary.ok.visitsLastDate) {
+                · последний {{ formatDayMonthYear(summary.ok.visitsLastDate) }}
+              }
+            </span>
+          }
           <span class="home-ok-chip">
             <i [class]="summary.ok.pushEnabled ? 'ph ph-bell' : 'ph ph-bell-slash'"
                [style.color]="summary.ok.pushEnabled ? 'var(--color-status-ok)' : 'var(--color-neutral-600)'"
                aria-hidden="true"></i>
             @if (summary.ok.pushEnabled) {
-              Push включён
+              Уведомления включены
             } @else {
-              Push выключен — <a routerLink="/settings/notifications">включить</a>
+              Уведомления выключены — <a routerLink="/settings/notifications">включить</a>
             }
           </span>
         </div>
@@ -144,11 +190,11 @@
                   <div class="card-title" style="font-size:0.9412rem">{{ b.personName }}</div>
                   <div class="muted" style="font-size:0.7647rem">
                     @if (b.daysUntil === 0) {
-                      сегодня · {{ b.turningAge }} лет
+                      сегодня · {{ ageLabel(b.turningAge) }}
                     } @else if (b.daysUntil <= birthdayAttentionWindowDays) {
-                      через {{ b.daysUntil }} {{ pluralizeRu(b.daysUntil, 'день', 'дня', 'дней') }} · {{ b.turningAge }} лет
+                      через {{ b.daysUntil }} {{ pluralizeRu(b.daysUntil, 'день', 'дня', 'дней') }} · {{ ageLabel(b.turningAge) }}
                     } @else {
-                      {{ b.turningAge }} лет
+                      {{ ageLabel(b.turningAge) }}
                     }
                   </div>
                 </div>

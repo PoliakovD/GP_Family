@@ -16,7 +16,9 @@
   }
   <div class="card auth-card elev-md">
     <div class="auth-brand">
-      <div class="card-kicker">FamilyHub</div>
+      @if (step() !== 'login') {
+        <div class="card-kicker">FamilyHub</div>
+      }
       <h2 class="card-title mb-0">
         @switch (step()) {
           @case ('login') { Вход }
@@ -27,8 +29,11 @@
       </h2>
     </div>
 
+    @if (sessionExpired && step() === 'login' && !error()) {
+      <div class="alert-info" role="status">Сессия истекла — войдите снова, и мы вернём вас туда, где вы были.</div>
+    }
     @if (error()) {
-      <div class="alert-danger">{{ error() }}</div>
+      <div class="alert-danger" role="alert">{{ error() }}</div>
     }
 
     @if (showCookieNotice()) {
@@ -48,10 +53,12 @@
 
           <label class="form-label" for="login-password">Пароль</label>
           <input
-            id="login-password" class="input mb-3" type="password" name="password"
+            id="login-password" class="input" [type]="showPassword() ? 'text' : 'password'" name="password"
             [(ngModel)]="password" required autocomplete="current-password" />
+          <div class="mb-3"><button type="button" class="link-inline password-toggle" (click)="showPassword.set(!showPassword())"
+                  [attr.aria-pressed]="showPassword()">{{ showPassword() ? 'Скрыть пароль' : 'Показать пароль' }}</button></div>
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">{{ busy() ? 'Входим…' : 'Войти' }}</button>
           <button type="button" class="btn btn-secondary btn-block" (click)="startRegistration()">Создать аккаунт</button>
           <button type="button" class="btn-link btn-block" (click)="startResetPassword()">Забыли пароль?</button>
         </form>
@@ -63,7 +70,7 @@
             id="reg-email" class="input mb-2" type="email" name="email"
             [(ngModel)]="email" required autocomplete="email" />
 
-          <label class="form-label" for="reg-username">Username</label>
+          <label class="form-label" for="reg-username">Имя пользователя (логин)</label>
           <input
             id="reg-username" class="input" type="text" name="username"
             [ngModel]="username" (ngModelChange)="onUsernameInput($event)"
@@ -73,6 +80,12 @@
             @case ('checking') { <span class="field-hint field-hint-muted">Проверяем…</span> }
             @case ('free') { <span class="field-hint field-hint-ok">Свободен</span> }
             @case ('taken') { <span class="field-hint field-hint-error">Уже занят</span> }
+            @case ('error') {
+              <span class="field-hint field-hint-muted">
+                Не удалось проверить —
+                <button type="button" class="link-inline" (click)="retryUsernameCheck()">повторить</button>
+              </span>
+            }
             @case ('invalid') {
               <span class="field-hint field-hint-error">5–32 симв.: латиница, цифры, «_», с буквы</span>
             }
@@ -97,19 +110,22 @@
           <label class="form-label" for="reg-birth-date">Дата рождения</label>
           <input
             id="reg-birth-date" class="input mb-2" type="date" name="birthDate"
-            [(ngModel)]="birthDate" required autocomplete="bday" />
+            [(ngModel)]="birthDate" required autocomplete="bday" [max]="today" />
 
           <label class="form-label" for="reg-gender">Пол</label>
           <select id="reg-gender" class="input mb-2" name="gender" [(ngModel)]="gender" required>
+            <option [ngValue]="null" disabled>Выберите…</option>
             <option [ngValue]="0">Мужской</option>
             <option [ngValue]="1">Женский</option>
           </select>
 
           <label class="form-label" for="reg-password">Пароль</label>
           <input
-            id="reg-password" class="input" type="password" name="password"
+            id="reg-password" class="input" [type]="showPassword() ? 'text' : 'password'" name="password"
             [(ngModel)]="password" required minlength="8" maxlength="100"
             autocomplete="new-password" />
+          <button type="button" class="link-inline password-toggle" (click)="showPassword.set(!showPassword())"
+                  [attr.aria-pressed]="showPassword()">{{ showPassword() ? 'Скрыть пароль' : 'Показать пароль' }}</button>
           @if (password && !isPasswordValid) {
             <span class="field-hint field-hint-error">Минимум 8 симв., строчная и заглавная латинские буквы, цифра</span>
           } @else if (isPasswordValid) {
@@ -121,7 +137,7 @@
           <label class="checkbox-row mb-2 mt-2">
             <input type="checkbox" name="privacyAccepted" [(ngModel)]="privacyAccepted" required />
             <span>
-              Согласен с <button type="button" class="link-inline" (click)="showLegalText('privacy')">политикой конфиденциальности</button>
+              Принимаю <button type="button" class="link-inline" (click)="showLegalText('privacy')">политику конфиденциальности</button>
             </span>
           </label>
 
@@ -143,8 +159,11 @@
           </label>
 
           <button type="submit" class="btn btn-primary btn-block" [disabled]="!canSubmitDetails">
-            Отправить код на email
+            {{ busy() ? 'Отправляем…' : 'Отправить код на email' }}
           </button>
+          @if (!busy() && missingDetails.length > 0) {
+            <p class="field-hint field-hint-muted mb-2">Чтобы продолжить, укажите: {{ missingDetails.join(', ') }}.</p>
+          }
           <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
         </form>
       }
@@ -157,9 +176,13 @@
           <label class="form-label" for="reg-code">Код из письма</label>
           <input
             id="reg-code" class="input mb-3" type="text" name="code"
-            [(ngModel)]="code" required inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+            [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
+            autocomplete="one-time-code" placeholder="6 цифр" />
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Создать аккаунт</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">
+            {{ busy() ? 'Проверяем…' : 'Создать аккаунт' }}
+          </button>
+          <ng-container *ngTemplateOutlet="resendBlock" />
           @if (errorCode() === 'email_taken') {
             <button type="button" class="btn btn-secondary btn-block" (click)="useExistingAccount()">
               Войти в этот аккаунт
@@ -177,7 +200,7 @@
             id="reset-email" class="input mb-3" type="email" name="email"
             [(ngModel)]="email" required autocomplete="email" />
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Отправить код</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">{{ busy() ? 'Отправляем…' : 'Отправить код' }}</button>
           <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
         </form>
       }
@@ -190,13 +213,16 @@
           <label class="form-label" for="reset-code">Код из письма</label>
           <input
             id="reset-code" class="input mb-2" type="text" name="code"
-            [(ngModel)]="code" required inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+            [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
+            autocomplete="one-time-code" placeholder="6 цифр" />
 
           <label class="form-label" for="reset-new-password">Новый пароль</label>
           <input
-            id="reset-new-password" class="input" type="password" name="password"
+            id="reset-new-password" class="input" [type]="showPassword() ? 'text' : 'password'" name="password"
             [(ngModel)]="password" required minlength="8" maxlength="100"
             autocomplete="new-password" />
+          <button type="button" class="link-inline password-toggle" (click)="showPassword.set(!showPassword())"
+                  [attr.aria-pressed]="showPassword()">{{ showPassword() ? 'Скрыть пароль' : 'Показать пароль' }}</button>
           @if (password && !isPasswordValid) {
             <span class="field-hint field-hint-error">Минимум 8 симв., строчная и заглавная латинские буквы, цифра</span>
           } @else if (isPasswordValid) {
@@ -206,12 +232,24 @@
           }
 
           <button type="submit" class="btn btn-primary btn-block mt-3" [disabled]="!canSubmitNewPassword">Сохранить новый пароль</button>
+          <ng-container *ngTemplateOutlet="resendBlock" />
           <button type="button" class="btn-link" (click)="backToLogin()">Назад</button>
         </form>
       }
     }
   </div>
 </div>
+
+<!-- Повторная отправка кода: письмо может прийти не сразу или попасть в «Спам». -->
+<ng-template #resendBlock>
+  @if (info()) {
+    <div class="alert-info mt-2" role="status">{{ info() }}</div>
+  }
+  <p class="field-hint field-hint-muted mt-2 mb-1">Письма нет? Проверьте папку «Спам».</p>
+  <button type="button" class="btn btn-secondary btn-block" [disabled]="!resend.ready() || busy()" (click)="resendCode()">
+    @if (resend.ready()) { Отправить код ещё раз } @else { Отправить ещё раз через {{ resend.label() }} }
+  </button>
+</ng-template>
 
 <app-modal [title]="legalModalTitle()" [open]="legalModalOpen()" (closed)="closeLegalModal()">
   @if (legalModalHtml(); as html) {

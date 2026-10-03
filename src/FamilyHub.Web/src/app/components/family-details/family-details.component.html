@@ -21,9 +21,18 @@
                 <span class="tag tag-neutral">{{ statusLabel(family.myStatus) }}</span>
             </div>
         } @else {
-            <span class="muted">Семья не найдена.</span>
+            <span class="muted">Семья не найдена — возможно, её удалили или вас исключили.</span>
+            <a class="btn btn-secondary btn-sm mt-2" routerLink="/families">Все семьи</a>
         }
     </div>
+
+    <!-- Заявка ещё не подтверждена — раньше был только серый тег, и человек не понимал, почему пусто. -->
+    @if (family && family.myStatus !== MemberStatus.Active) {
+        <div class="alert-info mb-3" role="status">
+            Администратор семьи ещё не подтвердил вашу заявку. Аптечка, дни рождения и участники станут
+            доступны сразу после подтверждения.
+        </div>
+    }
 
     @if (family) {
         <div class="seg mb-3">
@@ -59,10 +68,10 @@
                                 }
                             </span>
                             <span class="d-flex gap-1 flex-shrink-0">
-                                <button class="btn btn-primary btn-sm" (click)="handleApprove(p.userId)">
+                                <button class="btn btn-primary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleApprove(p.userId)">
                                     Принять
                                 </button>
-                                <button class="btn btn-secondary btn-sm" (click)="handleReject(p.userId)">
+                                <button class="btn btn-secondary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleReject(p.userId)">
                                     Отклонить
                                 </button>
                             </span>
@@ -103,22 +112,29 @@
                                 </div>
                             }
                         </div>
-                        @if (family.myRole === FamilyRole.Admin) {
-                            <button class="btn btn-ghost btn-sm text-nowrap" (click)="removeMember(m.id)">Выгнать</button>
+                        <!-- Не на своей карточке: раньше админ мог «выгнать» себя и получал ошибку. -->
+                        @if (family.myRole === FamilyRole.Admin && m.id !== auth.me()?.userId) {
+                            <button class="btn btn-ghost btn-sm text-nowrap" (click)="removeMember(m.id)">Исключить</button>
                         }
                     </div>
                 }
 
-                <div class="card family-member-card family-invite-tile">
-                    <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
-                    <div class="flex-fill">
-                        <div class="card-title" style="font-size:1.0588rem">Пригласить в семью</div>
-                        <div class="muted" style="font-size:0.8235rem">
-                            Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
+                <!-- Ссылку создаёт только админ (модалка живёт в админ-блоке выше) — у участника кнопка
+                     раньше ничего не делала. -->
+                @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
+                    <div class="card family-member-card family-invite-tile">
+                        <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
+                        <div class="flex-fill">
+                            <div class="card-title" style="font-size:1.0588rem">Пригласить в семью</div>
+                            <div class="muted" style="font-size:0.8235rem">
+                                Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
+                            </div>
                         </div>
+                        <button class="btn btn-secondary text-nowrap" (click)="openInviteModal()">Создать ссылку</button>
                     </div>
-                    <button class="btn btn-secondary text-nowrap" (click)="openInviteModal()">Создать ссылку</button>
-                </div>
+                } @else {
+                    <p class="muted mb-0">Пригласить нового человека может администратор семьи — попросите его прислать ссылку.</p>
+                }
             </div>
         }
 

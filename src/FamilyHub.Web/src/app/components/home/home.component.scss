@@ -82,6 +82,13 @@
 
 // Аптечка с просроченными — тот же приём контраста, что чипы-метаданные записи (медалист "N вне
 // нормы"): "В порядке" в заголовке блока не значит "каждый чип обязан быть зелёным".
+// Пустой раздел — ссылка-приглашение «добавить», без галочки «всё в порядке».
+.home-ok-chip-empty {
+  color: var(--color-accent);
+  text-decoration: none;
+  border: 1px dashed var(--color-divider);
+}
+
 .home-ok-chip-danger {
   background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-surface));
   color: var(--color-status-danger-text);
@@ -101,7 +108,7 @@
 }
 
 .home-birthday-month {
-  font-size: 0.6471rem;
+  font-size: 0.7059rem;
   color: var(--color-neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.05em;

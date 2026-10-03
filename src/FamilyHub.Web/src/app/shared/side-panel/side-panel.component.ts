@@ -1,8 +1,10 @@
 import {
+  inject,
   Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output,
   SimpleChanges, ViewChild,
 } from '@angular/core';
 import { OverlayA11y } from '../util/overlay-a11y';
+import { OverlayStackService } from '../util/overlay-stack.service';
 
 /**
  * Обобщение `indicator-info-panel` (см. её docstring) на произвольную ширину — структурная
@@ -73,10 +75,12 @@ export class SidePanelComponent implements OnChanges, OnDestroy {
   @ViewChild('overlayRoot') private overlayRoot?: ElementRef<HTMLElement>;
 
   private readonly a11y = new OverlayA11y();
+  private readonly overlays = inject(OverlayStackService);
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!changes['open']) return;
 
+    if (this.open) this.overlays.open(this); else this.overlays.close(this);
     if (this.open) {
       queueMicrotask(() => this.overlayRoot && this.a11y.activate(this.overlayRoot.nativeElement));
     } else {
@@ -86,13 +90,14 @@ export class SidePanelComponent implements OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.a11y.deactivate();
+    this.overlays.close(this);
   }
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
     if (!this.open) return;
     if (event.key === 'Escape') {
-      this.closed.emit();
+      if (this.overlays.claimEscape(this, event)) this.closed.emit();
     } else if (event.key === 'Tab' && this.overlayRoot) {
       this.a11y.trapTab(event, this.overlayRoot.nativeElement);
     }

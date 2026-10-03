@@ -116,8 +116,16 @@
 
 .it-box {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  position: relative;
+
+  // Главное действие экрана — тач-зона ~44px (видимый квадрат был 28px).
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -188,7 +196,7 @@
 }
 
 .it-kicker {
-  font-size: 0.6471rem;
+  font-size: 0.7059rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;

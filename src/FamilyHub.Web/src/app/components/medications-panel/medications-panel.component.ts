@@ -4,14 +4,32 @@ import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication, MedicationKbResponse } from '../../models/types';
 import { MedicationKbStatus } from '../../models/types';
 import { ToastService } from '../../shared/toast/toast.service';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { formatDayMonthYear } from '../../shared/util/date-format';
 import { compressImage } from '../../shared/util/image-compression';
-import { expiryClass } from '../../shared/util/expiry';
+import { expiryClass, expiryLabel } from '../../shared/util/expiry';
 import { matchesQuery } from '../../shared/util/local-filter';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
+
+/** Модель иногда отдаёт названия полей по-английски/в snake_case — показываем по-русски. */
+const FIELD_NAMES: Record<string, string> = {
+  dosage: 'Дозировка', dose: 'Дозировка', manufacturer: 'Производитель', form: 'Форма выпуска',
+  active_ingredient: 'Действующее вещество', activeingredient: 'Действующее вещество', batch: 'Серия',
+  storage: 'Условия хранения', contraindications: 'Противопоказания', volume: 'Объём', count: 'Количество в упаковке',
+};
+
+export function humanizeFieldName(key: string): string {
+  const k = key.trim();
+  if (/[а-яё]/i.test(k)) return k;
+  const known = FIELD_NAMES[k.toLowerCase().replace(/[\s-]/g, '_')] ?? FIELD_NAMES[k.toLowerCase().replace(/[\s_-]/g, '')];
+  if (known) return known;
+  const words = k.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 const MAX_PHOTOS = 5;
 const KNOWN_KEYS = ['instructions', 'quantity'];
@@ -45,6 +63,14 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
 
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
+
+  readonly formatDayMonthYear = formatDayMonthYear;
+  /** Защита от двойного тапа «Добавить» — раньше второй тап создавал дубль. */
+  saving = false;
+  /** Поля заполнены распознаванием фото — держим заметную плашку «проверьте» до сохранения
+   * (раньше был только исчезающий toast, и ошибка ИИ в сроке годности принималась за факт). */
+  aiFilled = false;
 
   activeTab: 'list' | 'add' = 'list';
 
@@ -228,6 +254,8 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   }
 
   /** Цветовая индикация по сроку годности — общая с плоским списком поиска Аптечки (MedicationsTabComponent). */
+  readonly expiryLabel = expiryLabel;
+
   expiryClassFor(item: Medication): string {
     return expiryClass(item.expiryDate);
   }
@@ -313,6 +341,7 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
       }
       if (response.data) this.mergeExtraRows(response.data);
 
+      this.aiFilled = true;
       this.toast.success('Данные распознаны — проверьте перед сохранением.');
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось распознать препарат по фото.');
@@ -322,8 +351,9 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   }
 
   private mergeExtraRows(data: Record<string, string>): void {
-    for (const [key, value] of Object.entries(data)) {
+    for (const [rawKey, value] of Object.entries(data)) {
       if (!value) continue;
+      const key = humanizeFieldName(rawKey);
       const existing = this.extraRows.find((r) => r.key === key);
       if (existing) {
         existing.value = value;
@@ -344,7 +374,11 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   // --- CRUD ---
 
   async handleSubmit(): Promise<void> {
-    if (!this.form.name.trim()) return;
+    if (this.saving) return;
+    if (!this.form.name.trim()) {
+      this.error = 'Укажите название препарата.';
+      return;
+    }
 
     const data: Record<string, string> = {};
     if (this.form.instructions.trim()) data['instructions'] = this.form.instructions.trim();
@@ -359,17 +393,21 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
       data,
     };
 
+    this.saving = true;
     try {
       if (this.editingId) {
         await this.api.updateMedication(this.editingId, payload);
       } else {
         await this.api.createMedication(this.medkitId(), payload);
       }
+      this.error = null;
       this.resetForm();
       this.activeTab = 'list';
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить запись.';
+    } finally {
+      this.saving = false;
     }
   }
 
@@ -396,9 +434,16 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
     this.activeTab = 'list';
   }
 
-  async handleDelete(id: string): Promise<void> {
+  async handleDelete(item: Medication): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Удалить препарат?',
+      message: `«${item.name}» будет удалён из аптечки. Это действие нельзя отменить.`,
+      confirmText: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await this.api.deleteMedication(id);
+      await this.api.deleteMedication(item.id);
       await this.refresh();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';
@@ -406,6 +451,7 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   }
 
   resetForm(): void {
+    this.aiFilled = false;
     this.form = { name: '', expiryDate: '', instructions: '', quantity: '1' };
     this.extraRows = [];
     this.editingId = null;

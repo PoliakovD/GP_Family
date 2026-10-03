@@ -39,13 +39,19 @@
   @if (loading) {
     <app-loading-spinner />
   } @else if (items.length === 0) {
-    <p class="muted">
-      Показателей пока нет — добавьте анализ и нажмите «Распознать» на вкладке «Анализы»,
-      и они появятся здесь.
-    </p>
+    <!-- Раньше отсылали к кнопке «Распознать», которой при автораспознавании уже нет. -->
+    <div class="card">
+      <h3 class="card-title mb-1">Показателей пока нет</h3>
+      <p class="muted mb-2">
+        Они появятся сами, когда вы добавите анализ: каждый показатель будет здесь с динамикой по датам.
+      </p>
+      <a class="btn btn-primary align-self-start" routerLink="/health/records/new">
+        <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить анализ
+      </a>
+    </div>
   } @else {
     @for (item of filteredItems; track item.analyteKey + ':' + item.specimenKbId + ':' + itemPatientKey(item)) {
-      <div class="card mb-2 card-clickable" (click)="openDetail(item)">
+      <div class="card mb-2 card-clickable" appClickable (click)="openDetail(item)">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <div>
             <strong class="card-title">{{ item.displayName }}</strong>
@@ -55,11 +61,15 @@
                 [shortLabel]="shortenDisplayName(item.patientName)"
                 [fullLabel]="item.patientName"
               />
-              <span>{{ specimenLabel(item) }} · {{ item.lastRecordDate }}</span>
+              <span>{{ specimenLabel(item) }} · {{ formatDayMonthYear(item.lastRecordDate) }}</span>
             </div>
           </div>
-          <div [class]="flagClass(item.flag)" style="font-size:0.8824rem;font-weight:600;white-space:nowrap">
-            {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
+          <div class="text-end" style="white-space:nowrap">
+            <div [class]="flagClass(item.flag)" style="font-size:0.8824rem;font-weight:600">
+              {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
+            </div>
+            <!-- Раньше отклонение было видно только по цвету числа. -->
+            <app-status-chip [flag]="item.flag" />
           </div>
         </div>
       </div>
@@ -91,7 +101,7 @@
         <tbody>
           @for (p of history; track p.recordDate + p.medicalRecordId) {
             <tr>
-              <td>{{ p.recordDate }}</td>
+              <td>{{ formatDayMonthYear(p.recordDate) }}</td>
               <td [class]="flagClass(p.flag)">{{ p.valueRaw }}</td>
             </tr>
           }

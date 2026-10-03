@@ -234,13 +234,18 @@
       }
     </div>
 
-    @if (freq() !== Mode.AsNeeded) {
+    <button type="button" class="btn-link cf-advanced-toggle" [attr.aria-expanded]="showAdvanced() || isEdit()"
+            (click)="showAdvanced.set(!showAdvanced())">
+      {{ showAdvanced() || isEdit() ? 'Скрыть дополнительные настройки' : 'Дополнительно: напоминания, пропуски, заметка' }}
+    </button>
+
+    @if ((showAdvanced() || isEdit()) && freq() !== Mode.AsNeeded) {
       <div class="cf-card">
         <div class="cf-card-row">
           <i class="ph ph-users" aria-hidden="true"></i>
           <div class="cf-card-text">
             <div class="cf-card-title">Напоминания и пропуски</div>
-            <div class="cf-card-sub">Push в момент приёма; о пропуске узнают ваши наблюдатели</div>
+            <div class="cf-card-sub">Уведомление в момент приёма; о пропуске узнают близкие, которых вы выбрали</div>
           </div>
           <button type="button" class="btn-link" (click)="openReminders()">Настроить</button>
         </div>
@@ -263,22 +268,27 @@
       </div>
     }
 
-    <div class="cf-field">
-      <label class="cf-label" for="cf-notes">Заметка</label>
-      <textarea id="cf-notes" class="input" rows="2" maxlength="2000" placeholder="Необязательно"
-                [ngModel]="notes()" (ngModelChange)="notes.set($event)" name="notes"></textarea>
-    </div>
+    @if (showAdvanced() || isEdit() || notes()) {
+      <div class="cf-field">
+        <label class="cf-label" for="cf-notes">Заметка</label>
+        <textarea id="cf-notes" class="input" rows="2" maxlength="2000" placeholder="Необязательно"
+                  [ngModel]="notes()" (ngModelChange)="notes.set($event)" name="notes"></textarea>
+      </div>
+    }
 
     @if (error(); as err) {
       <div class="alert-danger" role="alert">{{ err }}</div>
     }
   </div>
 
+  @if (!busy() && missingHint(); as hint) {
+    <p class="field-hint field-hint-muted cf-missing" role="status">{{ hint }}</p>
+  }
   <div class="cf-foot">
     <div class="cf-summary"><i class="ph-fill ph-calendar-check" aria-hidden="true"></i> {{ summary() }}</div>
     <div class="cf-actions">
       <button type="submit" class="btn btn-primary cf-save" [disabled]="!canSave() || busy()">
-        {{ isEdit() ? 'Сохранить' : 'Начать курс' }}
+        {{ busy() ? 'Сохраняем…' : isEdit() ? 'Сохранить' : 'Начать курс' }}
       </button>
       <button type="button" class="btn btn-secondary" (click)="cancel()">Отмена</button>
     </div>

@@ -3,8 +3,10 @@ import { ApiError, ApiService } from '../../services/api.service';
 import { IntakeStateService } from '../../services/intake-state.service';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { ToastService } from '../../shared/toast/toast.service';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { ReminderSettings, WatchingEntry } from '../../models/types';
 import { fromTimeInput, toTimeInput } from '../../shared/util/intake-labels';
+import { pluralizeRu } from '../../shared/util/pluralize';
 
 const DEFAULT_QUIET_FROM = '23:00';
 const DEFAULT_QUIET_TO = '07:00';
@@ -24,10 +26,25 @@ const DEFAULT_QUIET_TO = '07:00';
 export class IntakeRemindersComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly intake = inject(IntakeStateService);
 
   readonly closed = output<void>();
 
+  protected readonly pluralizeRu = pluralizeRu;
+
+  /** «Москва, стандартное время (GMT+3)» вместо сырого IANA-идентификатора «Europe/Moscow». */
+  protected timeZoneLabel(id: string): string {
+    try {
+      const part = (style: 'long' | 'shortOffset') => new Intl.DateTimeFormat('ru-RU', { timeZone: id, timeZoneName: style })
+        .formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value;
+      const name = part('long');
+      const offset = part('shortOffset');
+      return name ? (offset ? `${name} (${offset})` : name) : id;
+    } catch {
+      return id;
+    }
+  }
   readonly settings = signal<ReminderSettings | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
@@ -59,9 +76,22 @@ export class IntakeRemindersComponent implements OnInit {
     }
   }
 
-  protected async toggleMyWatcher(userId: string, enabled: boolean): Promise<void> {
+  protected async toggleMyWatcher(userId: string, enabled: boolean, input?: HTMLInputElement): Promise<void> {
     const current = this.settings();
     if (!current) return;
+    // Включение заодно открывает человеку чтение ваших курсов — спрашиваем явно, а не мелким текстом.
+    if (enabled) {
+      const name = current.myWatchers.find((w) => w.userId === userId)?.name ?? 'этот человек';
+      const ok = await this.confirm.confirm({
+        title: 'Сообщать о пропусках?',
+        message: `${name} будет получать уведомление, если вы не отметили приём, и сможет видеть ваши курсы приёма лекарств.`,
+        confirmText: 'Да, сообщать',
+      });
+      if (!ok) {
+        if (input) input.checked = false;
+        return;
+      }
+    }
     const next = current.myWatchers.map((w) => (w.userId === userId ? { ...w, enabled } : w));
     this.settings.set({ ...current, myWatchers: next });
     await this.save(() => this.api.setMyWatchers(next.filter((w) => w.enabled).map((w) => w.userId)));

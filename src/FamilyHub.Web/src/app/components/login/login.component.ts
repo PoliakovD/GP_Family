@@ -1,5 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -8,14 +9,22 @@ import { AuthService } from '../../services/auth.service';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
+import { ToastService } from '../../shared/toast/toast.service';
 import { PASSWORD_PATTERN } from '../settings/settings-task';
+import { todayLocal } from '../../shared/util/intake-labels';
+import { safeReturnUrl } from '../../services/return-url';
+import { ResendCooldown } from '../../shared/util/resend-cooldown';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
-type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
+/** 'error' — проверка не удалась (сеть/лимит): не блокируем регистрацию, сервер всё равно проверит
+ * занятость при подтверждении. Раньше сбой ставил 'idle', и кнопка молча оставалась неактивной. */
+type UsernameStatus = 'idle' | 'checking' | 'free' | 'taken' | 'invalid' | 'error';
 
 /** Формат видимого username — зеркалит UsernameRules на бэкенде (единый источник истины — сервер). */
 const USERNAME_PATTERN = /^[a-z][a-z0-9_]{4,31}$/;
 const USERNAME_CHECK_DEBOUNCE_MS = 400;
+/** Грубая проверка формата — только чтобы подсказать «укажите email» до запроса кода. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * PWA-вход (этап 2 п.2.4): email+пароль, регистрация степпером email/username/имя/пароль → код,
@@ -26,13 +35,14 @@ const USERNAME_CHECK_DEBOUNCE_MS = 400;
  */
 @Component({
     selector: 'app-login',
-    imports: [FormsModule, ModalComponent],
+    imports: [FormsModule, ModalComponent, NgTemplateOutlet],
     templateUrl: './login.component.html'
 })
 export class LoginComponent implements HasPendingCodeEntry {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly toast = inject(ToastService);
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly cookieConsent = inject(CookieConsentService);
@@ -76,7 +86,11 @@ export class LoginComponent implements HasPendingCodeEntry {
   firstName = '';
   middleName = '';
   birthDate = '';
-  gender = 0;
+  /** null — пол не выбран. Раньше по умолчанию стоял «Мужской», и женщина, не тронувшая поле,
+   * получала мужские нормы анализов. */
+  gender: number | null = null;
+  /** max для даты рождения — нельзя выбрать будущую дату. */
+  readonly today = todayLocal();
   privacyAccepted = false;
   /** Согласие на обработку ПДн (общее) — отдельно от privacyAccepted выше: политика
    * конфиденциальности и согласие на обработку ПДн — разные документы (ст. 9 152-ФЗ). */
@@ -95,9 +109,35 @@ export class LoginComponent implements HasPendingCodeEntry {
   }
 
   get canSubmitDetails(): boolean {
-    return !this.busy() && this.privacyAccepted && this.pdnConsentAgreed && this.pdnSpecialCategoryAgreed
-      && this.usernameStatus() === 'free' && this.isPasswordValid
-      && !!this.lastName.trim() && !!this.firstName.trim() && !!this.birthDate;
+    return !this.busy() && this.missingDetails.length === 0;
+  }
+
+  /** Чего не хватает для «Отправить код» — показываем списком под кнопкой, чтобы неактивная
+   * кнопка не была загадкой (форма длинная, и на телефоне незаполненное поле не видно). */
+  get missingDetails(): string[] {
+    const missing: string[] = [];
+    if (!EMAIL_PATTERN.test(this.email.trim())) missing.push('email');
+    const u = this.usernameStatus();
+    if (u !== 'free' && u !== 'error') missing.push(u === 'taken' ? 'другое имя пользователя (это занято)' : 'имя пользователя');
+    if (!this.lastName.trim()) missing.push('фамилию');
+    if (!this.firstName.trim()) missing.push('имя');
+    if (!this.birthDate || this.birthDate > this.today) missing.push('дату рождения');
+    if (this.gender === null) missing.push('пол');
+    if (!this.isPasswordValid) missing.push('пароль по правилам');
+    if (!this.privacyAccepted || !this.pdnConsentAgreed || !this.pdnSpecialCategoryAgreed) missing.push('отметьте все три согласия');
+    return missing;
+  }
+
+  /** Код из письма: оставляем только цифры. maxlength="6" раньше обрезал вставку «123 456» до
+   * «123 45» — и человек получал «неверный код». */
+  onCodeInput(el: HTMLInputElement): void {
+    const digits = el.value.replace(/\D/g, '').slice(0, 6);
+    if (el.value !== digits) el.value = digits;
+    this.code = digits;
+  }
+
+  retryUsernameCheck(): void {
+    this.onUsernameInput(this.username);
   }
 
   get canSubmitNewPassword(): boolean {
@@ -107,7 +147,7 @@ export class LoginComponent implements HasPendingCodeEntry {
   async login(): Promise<void> {
     await this.run(async () => {
       await this.auth.login(this.email, this.password);
-      await this.router.navigate(['/']);
+      await this.router.navigate([this.afterLoginUrl]);
     });
   }
 
@@ -139,17 +179,26 @@ export class LoginComponent implements HasPendingCodeEntry {
         if (token !== this.usernameCheckToken) return; // устарел — пользователь уже печатает дальше
         this.usernameStatus.set(available ? 'free' : 'taken');
       } catch {
-        if (token === this.usernameCheckToken) this.usernameStatus.set('idle');
+        if (token === this.usernameCheckToken) this.usernameStatus.set('error');
       }
     }, USERNAME_CHECK_DEBOUNCE_MS);
   }
 
   /** Все поля заполнены и провалидированы — только теперь запрашиваем код (10-минутное окно). */
+  /** Куда вернуть после входа (см. return-url.ts); по умолчанию — Главная. */
+  private get afterLoginUrl(): string {
+    return safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl')) ?? '/';
+  }
+
+  /** ?expired=1 — сюда привёл интерцептор после истёкшей сессии: объясняем, а не молча выкидываем. */
+  readonly sessionExpired = this.route.snapshot.queryParamMap.get('expired') === '1';
+
   async submitDetails(): Promise<void> {
     if (!this.canSubmitDetails) return;
     await this.run(async () => {
       await this.auth.registerStart(this.email);
       this.step.set('register-code');
+      this.resend.start();
     });
   }
 
@@ -160,9 +209,10 @@ export class LoginComponent implements HasPendingCodeEntry {
         firstName: this.firstName.trim(),
         middleName: this.middleName.trim() || null,
         birthDate: this.birthDate,
-        gender: this.gender,
+        gender: this.gender!,
       });
       this.completed.set(true);
+      this.toast.success('Добро пожаловать в FamilyHub!');
       // Оба обязательных чекбокса ПДн-согласия отмечены на предыдущем шаге (register-details,
       // см. canSubmitDetails) — записываем принятие сразу же, пока сессия свежая, той версией
       // текста, которая ДЕЙСТВИТЕЛЬНО актуальна на сервере (не кэшированной с момента открытия
@@ -170,7 +220,7 @@ export class LoginComponent implements HasPendingCodeEntry {
       // Если запрос не удался (сеть) — не блокируем регистрацию: ConsentRequiredFilter и
       // consentGuard всё равно перехватят на защищённых роутах и покажут /consent как обычно.
       const accepted = await this.acceptPdnConsent();
-      await this.router.navigate([accepted ? '/' : '/consent']);
+      await this.router.navigate([accepted ? this.afterLoginUrl : '/consent']);
     });
   }
 
@@ -182,6 +232,25 @@ export class LoginComponent implements HasPendingCodeEntry {
     } catch {
       return false;
     }
+  }
+
+  /** Таймер кнопки «Отправить код ещё раз». */
+  readonly resend = new ResendCooldown();
+  /** Короткое «Новый код отправлен» после повторной отправки. */
+  readonly info = signal<string | null>(null);
+
+  /** Повторная отправка кода — тот же запрос, что и первый раз (регистрация или сброс пароля). */
+  async resendCode(): Promise<void> {
+    if (!this.resend.ready() || this.busy()) return;
+    const isReset = this.step() === 'reset-password-code';
+    this.info.set(null);
+    await this.run(async () => {
+      if (isReset) await this.auth.resetPasswordStart(this.email);
+      else await this.auth.registerStart(this.email);
+      this.code = '';
+      this.resend.start();
+      this.info.set(`Новый код отправлен на ${this.email}.`);
+    });
   }
 
   /** С шага «код» — назад к деталям (например, поправить email), без потери введённого. */
@@ -208,6 +277,7 @@ export class LoginComponent implements HasPendingCodeEntry {
   async sendResetCode(): Promise<void> {
     await this.run(async () => {
       await this.auth.resetPasswordStart(this.email);
+      this.resend.start();
       this.step.set('reset-password-code');
     });
   }
@@ -217,7 +287,8 @@ export class LoginComponent implements HasPendingCodeEntry {
     await this.run(async () => {
       await this.auth.resetPasswordConfirm(this.email, this.code, this.password);
       this.completed.set(true);
-      await this.router.navigate(['/']);
+      this.toast.success('Пароль изменён — вы вошли в аккаунт.');
+      await this.router.navigate([this.afterLoginUrl]);
     });
   }
 
@@ -268,6 +339,9 @@ export class LoginComponent implements HasPendingCodeEntry {
     this.cookieConsent.setChoice('accepted');
   }
 
+  /** «Показать пароль» — пожилым тяжело набирать вслепую. */
+  readonly showPassword = signal(false);
+
   private async run(action: () => Promise<void>): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
@@ -277,6 +351,9 @@ export class LoginComponent implements HasPendingCodeEntry {
     } catch (e) {
       this.errorCode.set(e instanceof HttpErrorResponse ? (e.error?.code ?? null) : null);
       this.error.set(this.describe(e));
+      // Форма регистрации — три экрана высотой: ошибка вверху раньше оставалась вне поля зрения,
+      // и казалось, что после нажатия кнопки ничего не произошло.
+      queueMicrotask(() => document.querySelector('.auth-card .alert-danger')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } finally {
       this.busy.set(false);
     }
@@ -294,7 +371,7 @@ export class LoginComponent implements HasPendingCodeEntry {
         case 'username_taken': return 'Этот username уже занят — выберите другой.';
         case 'invalid_profile': return 'Проверьте ФИО и дату рождения.';
       }
-      if (e.status === 429) return 'Слишком много запросов — подождите немного.';
+      if (e.status === 429) return 'Слишком много запросов. Подождите и попробуйте снова — кодов из письма можно получить не больше трёх в час.';
     }
     return 'Что-то пошло не так. Попробуйте ещё раз.';
   }

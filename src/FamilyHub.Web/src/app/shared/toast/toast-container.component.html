@@ -1,13 +1,26 @@
-<div class="toast-stack">
+<!-- aria-live: раньше скринридер не озвучивал ни одного сообщения, в том числе ошибки.
+     Закрытие — отдельным крестиком, а не тапом по всему тосту (случайное касание прятало текст). -->
+<div class="toast-stack" role="status" aria-live="polite">
   @for (t of toastService.toasts(); track t.id) {
-    <div class="toast-item" [class]="'toast-' + t.type" (click)="toastService.dismiss(t.id)">
-      <span class="toast-icon">{{ iconFor(t.type) }}</span>
+    <div
+      class="toast-item"
+      [class]="'toast-' + t.type"
+      [attr.role]="t.type === 'error' ? 'alert' : null"
+      (mouseenter)="toastService.pause(t.id)"
+      (mouseleave)="toastService.resume(t.id)"
+      (touchstart)="toastService.pause(t.id)"
+      (touchend)="toastService.resume(t.id)"
+      (focusin)="toastService.pause(t.id)"
+      (focusout)="toastService.resume(t.id)"
+    >
+      <span class="toast-icon" aria-hidden="true">{{ iconFor(t.type) }}</span>
       <span class="toast-text">{{ t.text }}</span>
       @if (t.action; as action) {
-        <button type="button" class="toast-action" (click)="$event.stopPropagation(); toastService.runAction(t)">
+        <button type="button" class="toast-action" (click)="toastService.runAction(t)">
           {{ action.label }}
         </button>
       }
+      <button type="button" class="toast-close" aria-label="Закрыть уведомление" (click)="toastService.dismiss(t.id)">✕</button>
     </div>
   }
 </div>

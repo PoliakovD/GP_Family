@@ -12,13 +12,14 @@
   </div>
 
   @if (push.isSupported && !push.isSubscribed()) {
-    <div class="settings-menu-push-banner mb-3">
+    <a class="settings-menu-push-banner mb-3" routerLink="/settings/notifications" style="text-decoration:none;color:inherit">
       <i class="ph-duotone ph-bell-slash" aria-hidden="true"></i>
       <div class="flex-fill">
-        <div style="font-weight:600">Push выключены</div>
-        <div class="muted" style="font-size:0.7647rem">Напоминания не приходят</div>
+        <div style="font-weight:600">Уведомления выключены</div>
+        <div class="muted">Напоминания о лекарствах не приходят. Нажмите, чтобы включить.</div>
       </div>
-    </div>
+      <i class="ph ph-caret-right" aria-hidden="true"></i>
+    </a>
   }
 }
 

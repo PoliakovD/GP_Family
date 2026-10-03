@@ -1,5 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { KbListItem, KbMedicationCard } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
@@ -16,7 +17,7 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
  */
 @Component({
     selector: 'app-kb-tab',
-    imports: [SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
+    imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
     templateUrl: './kb-tab.component.html'
 })
 export class KbTabComponent implements OnInit {

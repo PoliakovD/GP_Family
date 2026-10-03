@@ -3,3 +3,6 @@
 :host {
   display: contents;
 }
+
+// Подтверждение может открыться из окна просмотра файла (550) — оно должно быть сверху.
+.overlay-backdrop { z-index: var(--z-dialog); }

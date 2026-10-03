@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { NotificationStateService } from '../../services/notification-state.service';
 import { type AppNotification } from '../../models/types';
 import { relatedKindBasePath } from '../../shared/util/related-kind-route';
@@ -15,7 +16,7 @@ const MONTHS_GEN = [
 
 @Component({
     selector: 'app-notifications-tab',
-    imports: [FormsModule, LoadingSpinnerComponent],
+    imports: [ClickableDirective, FormsModule, LoadingSpinnerComponent],
     templateUrl: './notifications-tab.component.html'
 })
 export class NotificationsTabComponent implements OnInit {
@@ -25,6 +26,10 @@ export class NotificationsTabComponent implements OnInit {
 
   items: AppNotification[] = [];
   unreadOnly = false;
+
+  get hasUnread(): boolean {
+    return this.items.some((n) => !n.isRead);
+  }
   error: string | null = null;
   loading = true;
 

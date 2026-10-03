@@ -3,9 +3,10 @@
 
   @if (state.activeFamilies().length === 0 && !state.loading()) {
     <p class="muted">
-      Нет ни одной семьи, в которой вы состоите как активный участник.
-      Создайте семью или примите инвайт на странице «Семьи» (кнопка на Главной).
+      Аптечка и дни рождения живут внутри семьи — сначала создайте её или присоединитесь по
+      приглашению.
     </p>
+    <a class="btn btn-primary" routerLink="/families">Перейти к семьям</a>
   }
 
   @for (f of state.activeFamilies(); track f.id) {

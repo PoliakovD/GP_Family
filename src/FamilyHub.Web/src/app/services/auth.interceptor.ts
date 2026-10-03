@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { catchError, firstValueFrom, from, switchMap, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 import { TelegramService } from './telegram.service';
+import { safeReturnUrl } from './return-url';
 
 /**
  * PWA-эндпоинты, где 401 — легитимный бизнес-ответ (неверный пароль, код и т.п.) или сам refresh,
@@ -100,7 +101,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           switchMap((refreshed) =>
             refreshed ? next(req.clone({ headers, withCredentials: true })) : throwError(() => error)),
           catchError(() => {
-            void router.navigate(['/login']);
+            // Сессия истекла: раньше — молча на /login, без объяснения и с потерей текущей страницы.
+            // Теперь /login?expired=1&returnUrl=… (после входа вернём туда же). Несколько упавших
+            // параллельных запросов не должны навигировать повторно — проверяем, где мы уже.
+            if (!router.url.startsWith('/login')) {
+              const returnUrl = safeReturnUrl(router.url);
+              void router.navigate(['/login'], {
+                queryParams: returnUrl ? { expired: 1, returnUrl } : { expired: 1 },
+              });
+            }
             return throwError(() => error);
           }),
         );

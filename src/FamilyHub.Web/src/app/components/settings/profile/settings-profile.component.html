@@ -62,7 +62,7 @@
         </div>
         <div class="settings-data-row">
           <span class="settings-data-label">Дата рождения</span>
-          <span class="flex-fill">{{ me.birthDate ?? '—' }}</span>
+          <span class="flex-fill">{{ me.birthDate ? formatDayMonthYear(me.birthDate) : '—' }}</span>
           <span class="muted" style="font-size:0.7647rem">нужна для норм в анализах</span>
         </div>
         <div class="settings-data-row">
@@ -151,7 +151,9 @@
       }
     </div>
     @if (telegramLink(); as link) {
-      <p class="muted mt-1 mb-0" style="font-size:0.7647rem">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения…</p>
+      <p class="muted mt-1 mb-0">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения в Telegram…</p>
+    } @else if (linkExpired()) {
+      <p class="field-hint field-hint-error mt-1 mb-0">Время кода истекло. Нажмите «Привязать Telegram» ещё раз, чтобы получить новый.</p>
     }
   </section>
 } @else {

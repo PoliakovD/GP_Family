@@ -11,7 +11,7 @@
   background: var(--color-paper);
   border-radius: var(--radius-md);
   overflow: hidden;
-  z-index: 20;
+  z-index: var(--z-dropdown);
 }
 
 .action-menu-item {

@@ -93,8 +93,15 @@ export class MedkitDetailPageComponent implements OnInit, OnDestroy {
     this.showFormModal = false;
   }
 
+  saving = false;
+
   async saveEdit(): Promise<void> {
-    if (!this.form.name.trim()) return;
+    if (this.saving) return;
+    if (!this.form.name.trim()) {
+      this.toast.error('Введите название аптечки.');
+      return;
+    }
+    this.saving = true;
     try {
       await this.api.updateMedkit(this.id(), { name: this.form.name.trim() });
       this.showFormModal = false;
@@ -102,6 +109,8 @@ export class MedkitDetailPageComponent implements OnInit, OnDestroy {
       await this.load();
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить аптечку.');
+    } finally {
+      this.saving = false;
     }
   }
 

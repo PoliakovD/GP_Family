@@ -3,6 +3,9 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { ToastService } from '../../shared/toast/toast.service';
+import { ClickableDirective } from '../../shared/util/clickable.directive';
+import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
@@ -117,7 +120,7 @@ let nextInstanceId = 0;
 @Component({
     selector: 'app-medical-records-panel',
     imports: [
-        NgTemplateOutlet,
+        ClickableDirective, NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent,
         PipelineProgressComponent, KbCardComponent, StatusChipComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
@@ -145,11 +148,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly person = input<string | undefined>(undefined);
   personHintDismissed = false;
 
+  private readonly overlays = inject(OverlayStackService);
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   readonly ai = inject(AiStatusService);
   private readonly confirm = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
   private readonly pageAction = inject(PageActionService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -359,13 +364,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.pageAction.set({
         label: this.labels.addButtonLabel,
         icon: 'ph-bold ph-plus',
-        handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
+        handler: () => this.openCreate(),
       });
       // Батч-загрузка (несколько документов одного пациента, каждый — своя запись/свой прогон
       // пайплайна) — рядом с «+ Добавить», не заменяет его: тот сценарий (страницы одного бланка)
       // остаётся отдельным. См. class doc RecordBatchAddComponent.
       this.pageAction.setSecondaryAction({
-        label: 'Несколько',
+        label: 'Загрузить несколько',
         icon: 'ph-bold ph-stack',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
@@ -396,10 +401,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.pageAction.set({
         label: this.labels.addButtonLabel,
         icon: 'ph-bold ph-plus',
-        handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
+        handler: () => this.openCreate(),
       });
       this.pageAction.setSecondaryAction({
-        label: 'Несколько',
+        label: 'Загрузить несколько',
         icon: 'ph-bold ph-stack',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
@@ -675,8 +680,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  @HostListener('document:keydown.escape')
-  onEscapeForFilters(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscapeForFilters(event: KeyboardEvent): void {
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }
 
@@ -724,13 +730,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Полная перезагрузка с первой страницы — вызывается на смену фильтров/вида/после
    * создания-удаления записи. Подгрузку СЛЕДУЮЩИХ страниц при скролле делает loadMore(), которая
    * дозаписывает в items, а не заменяет их. */
-  async refresh(): Promise<void> {
+  /** silent — фоновое обновление (завершилось распознавание, переключили доступ, правка в панели):
+   * без спиннера на весь список — раньше список мигал после каждого такого события. */
+  async refresh(options?: { silent?: boolean }): Promise<void> {
     const kind = this.kind();
     const recordId = this.recordId();
     this.loadedKind = kind;
     this.loadedRecordId = recordId;
     this.page = 1;
-    this.loading = true;
+    if (!options?.silent) this.loading = true;
     try {
       if (recordId) {
         // Одиночный режим (PR6) — одна запись по id, без пагинации/фильтров/группировки.
@@ -824,7 +832,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.goToList();
         return;
       }
-      await this.refresh();
+      await this.refresh({ silent: true });
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';
     }
@@ -838,11 +846,29 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // распознанные вложения последовательно за один прогон, не по клику на каждый файл) ---
 
   /** Видимость кнопки «Распознать» — по счётчику из DTO, БЕЗ загрузки списка вложений. */
+  /** Форма добавления — отдельный роут (кнопка в шапке и в пустом состоянии ведут сюда же). */
+  openCreate(): void {
+    void this.router.navigate([this.kindBasePath(), 'new']);
+  }
+
   hasUnrecognizedAttachments(record: MedicalRecord): boolean {
     return record.unrecognizedAttachmentCount > 0;
   }
 
   async handleRecognize(record: MedicalRecord): Promise<void> {
+    // Повторное распознавание ЗАМЕНЯЕТ показатели записи целиком (см. комментарий у
+    // extractionStatusByRecord) — раньше ручные исправления молча пропадали после добавления ещё
+    // одной страницы и нажатия «Распознать».
+    if ((this.indicatorsByRecord[record.id]?.length ?? 0) > 0) {
+      const ok = await this.confirm.confirm({
+        title: 'Распознать заново?',
+        message: 'Показатели и резюме этой записи будут заменены результатом нового распознавания — '
+          + 'вместе с вашими ручными исправлениями.',
+        confirmText: 'Распознать заново',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     this.setRecognizing(record.id, true);
     this.clearPipelineTimer(record.id);
     this.pipelineStepsByRecord = {
@@ -925,11 +951,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           if (status.status === ExtractionJobStatus.Completed) {
             await this.loadExtractionResult(record);
             this.appendEnrichmentFollowupStep(record.id);
-            await this.refresh();
-          } else if (status.error) {
-            this.error = status.error;
+            await this.refresh({ silent: true });
+            // Прячем виджет только после успеха. Сбой остаётся на экране, пока человек не уйдёт со
+            // страницы: раньше сообщение об ошибке исчезало через 2,5 с, и его легко было не заметить.
+            this.schedulePipelineClear(record.id);
           }
-          this.schedulePipelineClear(record.id);
         }
       } catch (err) {
         // Сетевой блип/вкладка была в фоне — сама задача на бэкенде продолжает идти независимо
@@ -966,7 +992,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
     if (status.status === ExtractionJobStatus.Failed || status.status === ExtractionJobStatus.Skipped) {
       markLastDone();
-      steps.push({ id: `outcome-${steps.length}`, label: status.error ?? 'Не удалось распознать документ.', state: 'error' });
+      steps.push({
+        id: `outcome-${steps.length}`,
+        label: `${friendlyExtractionError(status.error)} Можно нажать «Распознать» ещё раз или внести показатели вручную.`,
+        state: 'error',
+      });
     } else if (status.status === ExtractionJobStatus.Completed) {
       markLastDone();
       steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
@@ -993,8 +1023,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // Pending/построчной логике по стадиям ниже.
       if (!prev || prev.queuePosition !== status.queuePosition || steps.length === 0) {
         markLastDone();
-        const label = `Общая очередь к модели — ещё ${status.queuePosition} ` +
-          `${pluralizeRu(status.queuePosition, 'задача', 'задачи', 'задач')} впереди (аптечка и другие анализы тоже её используют)`;
+        const label = `В очереди на распознавание — перед вами ${status.queuePosition} ` +
+          `${pluralizeRu(status.queuePosition, 'документ', 'документа', 'документов')}`;
         steps.push({ id: `global-queue-${status.queuePosition}`, label, state: 'active' });
       }
     } else if (status.status === ExtractionJobStatus.Pending) {
@@ -1032,10 +1062,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     // (не push нового), если он ещё active: это не новый шаг конвейера, просто уточнение текста
     // уже показанной строки на очередной тик поллинга — не должно переигрывать её entrance-
     // анимацию (см. class doc PipelineStep.thought/pipeline-progress.component.ts про track по id).
-    const lastStep = steps[steps.length - 1];
-    if (lastStep && lastStep.state === 'active' && lastStep.thought !== status.currentThought) {
-      steps[steps.length - 1] = { ...lastStep, thought: status.currentThought };
-    }
 
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
   }
@@ -1053,7 +1079,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
     steps.push({
       id: 'enrichment-followup',
-      label: `${pendingCount} ${pluralizeRu(pendingCount, 'показатель', 'показателя', 'показателей')} — уточняем норму в справочнике (можно закрыть страницу, продолжится в фоне)`,
+      label: `Для ${pendingCount} ${pluralizeRu(pendingCount, 'показателя', 'показателей', 'показателей')} ещё уточняем норму — можно закрыть страницу, это продолжится само`,
       state: 'done',
     });
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
@@ -1338,7 +1364,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async saveEditIndicator(recordId: string): Promise<void> {
-    if (!this.editingIndicatorId || !this.editIndicatorForm.displayName.trim()) return;
+    if (!this.editingIndicatorId) return;
+    if (!this.editIndicatorForm.displayName.trim()) {
+      this.toast.error('Укажите название показателя.');
+      return;
+    }
     const savedId = this.editingIndicatorId;
     this.savingIndicator = true;
     try {
@@ -1355,7 +1385,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated, false);
       void this.afterRecordDataChanged(recordId);
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.');
     } finally {
       this.savingIndicator = false;
     }
@@ -1378,7 +1408,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
       void this.afterRecordDataChanged(recordId);
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось удалить показатель.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось удалить показатель.');
     }
   }
 
@@ -1396,7 +1426,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async saveNewIndicator(): Promise<void> {
-    if (!this.creatingIndicatorRecordId || !this.newIndicatorForm.displayName.trim()) return;
+    if (!this.creatingIndicatorRecordId) return;
+    if (!this.newIndicatorForm.displayName.trim()) {
+      this.toast.error('Укажите название показателя.');
+      return;
+    }
     const recordId = this.creatingIndicatorRecordId;
     this.savingNewIndicator = true;
     try {
@@ -1404,11 +1438,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.syncEnrichmentPolling(recordId);
-      await this.refresh();
+      await this.refresh({ silent: true });
       this.cancelCreateIndicator();
       this.error = null;
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.');
     } finally {
       this.savingNewIndicator = false;
     }
@@ -1536,10 +1570,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.info = `ИИ сейчас недоступен — биоматериал «${query}» будет проверен и применён к записи автоматически, когда он вернётся.`;
       }
       this.closeEditSheet();
-      await this.refresh();
+      await this.refresh({ silent: true });
       this.error = null;
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.');
     } finally {
       this.savingRecord = false;
     }
@@ -1729,7 +1763,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * открывал записи. L1-шаринг общий на оба вида (единый шаринг «Анализы + Врачи»), поэтому это
    * затрагивает базовую видимость всех записей той же семье, а не только текущего вида — осознанно.
    */
-  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean): Promise<void> {
+  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean, input?: HTMLInputElement): Promise<void> {
+    // Первое включение семьи открывает ей ВСЕ анализы и приёмы (общий шаринг) — раньше это
+    // происходило молча. Спрашиваем явно; при отказе возвращаем тумблер в исходное положение.
+    if (visible && !this.shares.includes(familyId)) {
+      const name = this.state.families().find((f) => f.id === familyId)?.name ?? 'эта семья';
+      const ok = await this.confirm.confirm({
+        title: 'Открыть доступ семье?',
+        message: `Семья «${name}» увидит все ваши анализы и приёмы врача, кроме тех, что вы скроете от неё отдельно.`,
+        confirmText: 'Открыть доступ',
+      });
+      if (!ok) {
+        if (input) input.checked = false;
+        return;
+      }
+    }
     try {
       if (visible) {
         if (!this.shares.includes(familyId)) {
@@ -1739,27 +1787,38 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       } else {
         await this.api.hideMedicalRecord(record.id, [familyId]);
       }
-      await this.refresh();
+      await this.refresh({ silent: true });
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
     }
   }
 
   /** Сегмент «Только я / Все семьи» — bulk-скрытие/раскрытие записи для ВСЕХ уже расшаренных семей. */
-  async setAccessMode(record: MedicalRecord, onlyMe: boolean): Promise<void> {
-    if (this.shares.length === 0) return;
+  async setAccessMode(record: MedicalRecord, onlyMe: boolean, input?: HTMLInputElement): Promise<void> {
+    if (this.shares.length === 0) {
+      // Раньше радио «Все семьи» визуально включалось, а доступ оставался закрытым — UI врал.
+      if (input) input.checked = false;
+      this.toast.info('Пока ни одной семье доступ не открыт — включите нужную семью ниже.');
+      return;
+    }
     try {
       if (onlyMe) {
         await this.api.hideMedicalRecord(record.id, this.shares);
       } else {
         await this.api.unhideMedicalRecord(record.id, this.shares);
       }
-      await this.refresh();
+      await this.refresh({ silent: true });
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
     }
   }
 
+}
+
+/** Текст бэкенда про сбой распознавания — только если он по-русски и человеческий; иначе общий. */
+function friendlyExtractionError(raw: string | null | undefined): string {
+  if (raw && /[а-яё]/i.test(raw) && !raw.includes('<') && raw.length <= 300) return raw.endsWith('.') ? raw : raw + '.';
+  return 'Не удалось распознать документ.';
 }
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {

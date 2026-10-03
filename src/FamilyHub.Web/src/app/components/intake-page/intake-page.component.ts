@@ -1,10 +1,12 @@
-import { Component, OnInit, computed, effect, inject, input, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, input, untracked, viewChild } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { IntakeStateService } from '../../services/intake-state.service';
 import { PageActionService } from '../../services/page-action.service';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SidePanelComponent } from '../../shared/side-panel/side-panel.component';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { TrackDirtyDirective, confirmDiscard } from '../../shared/util/track-dirty.directive';
 import { IntakeCourseFormComponent } from '../intake-course-form/intake-course-form.component';
 import { IntakeRemindersComponent } from '../intake-reminders/intake-reminders.component';
 
@@ -20,7 +22,7 @@ import { IntakeRemindersComponent } from '../intake-reminders/intake-reminders.c
   selector: 'app-intake-page',
   imports: [
     BottomSheetComponent, IntakeCourseFormComponent, IntakeRemindersComponent, RouterLink, RouterLinkActive,
-    RouterOutlet, SidePanelComponent,
+    RouterOutlet, SidePanelComponent, TrackDirtyDirective,
   ],
   templateUrl: './intake-page.component.html',
   styleUrl: './intake-page.component.scss',
@@ -30,6 +32,13 @@ export class IntakePageComponent implements OnInit {
   private readonly breakpoints = inject(BreakpointService);
   protected readonly intake = inject(IntakeStateService);
   protected readonly pageAction = inject(PageActionService);
+  private readonly confirm = inject(ConfirmService);
+  /** Обёртка формы курса — знает, вводил ли пользователь что-то (форма длинная, ~20 полей). */
+  private readonly formDirty = viewChild(TrackDirtyDirective);
+
+  protected async requestCloseForm(): Promise<void> {
+    if (await confirmDiscard(this.confirm, this.formDirty()?.isDirty)) this.intake.closeForm();
+  }
 
   // Привязка query-параметров (withComponentInputBinding).
   readonly record = input<string | undefined>(undefined);

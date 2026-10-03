@@ -2,7 +2,7 @@
   <div class="card auth-card elev-md">
     <div class="auth-brand">
       <div class="card-kicker">FamilyHub</div>
-      <h2 class="card-title mb-0">Подтверждение Email</h2>
+      <h2 class="card-title mb-0">Подтверждение почты</h2>
     </div>
 
     <p class="text-muted mb-3">
@@ -12,7 +12,7 @@
     </p>
 
     @if (error()) {
-      <div class="alert-danger">{{ error() }}</div>
+      <div class="alert-danger" role="alert">{{ error() }}</div>
     }
 
     @switch (step()) {
@@ -28,13 +28,23 @@
       }
       @case ('code') {
         <form (ngSubmit)="confirmBind()">
+          <p class="text-muted mb-2">Код отправлен на {{ email }}. Он действует 10 минут.</p>
           <label class="form-label" for="tg-bind-code">Код из письма</label>
           <input
             id="tg-bind-code" class="input mb-3" type="text" name="code"
-            [(ngModel)]="code" required inputmode="numeric" minlength="6" maxlength="6"
-            autocomplete="one-time-code" />
+            [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
+            autocomplete="one-time-code" placeholder="6 цифр" />
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Подтвердить</button>
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">
+            {{ busy() ? 'Проверяем…' : 'Подтвердить' }}
+          </button>
+          @if (info()) {
+            <div class="alert-info mt-2" role="status">{{ info() }}</div>
+          }
+          <p class="field-hint field-hint-muted mt-2 mb-1">Письма нет? Проверьте папку «Спам».</p>
+          <button type="button" class="btn btn-secondary btn-block" [disabled]="!resend.ready() || busy()" (click)="resendCode()">
+            @if (resend.ready()) { Отправить код ещё раз } @else { Отправить ещё раз через {{ resend.label() }} }
+          </button>
           <button type="button" class="btn-link" (click)="backToEmail()">Изменить email</button>
         </form>
       }

@@ -24,7 +24,7 @@
               <app-avatar [person]="person(w.userId, w.name)" size="sm" />
               <span class="ir-name">{{ w.name }}</span>
               <label class="switch">
-                <input type="checkbox" [checked]="w.enabled" (change)="toggleMyWatcher(w.userId, $any($event.target).checked)" [attr.aria-label]="'Сообщать ' + w.name" />
+                <input type="checkbox" [checked]="w.enabled" (change)="toggleMyWatcher(w.userId, $any($event.target).checked, $any($event.target))" [attr.aria-label]="'Сообщать ' + w.name" />
                 <span class="switch-knob"></span>
               </label>
             </li>
@@ -45,7 +45,7 @@
                 <app-avatar [person]="person(w.id, w.name)" size="sm" />
                 <div class="ir-name">
                   {{ w.name }}
-                  <small>{{ w.courseCount }} @if (w.courseCount === 1) { курс } @else { курсов }@if (w.kind === 'user') { · выбрал(а) вас наблюдателем}</small>
+                  <small>{{ w.courseCount }} {{ pluralizeRu(w.courseCount, 'курс', 'курса', 'курсов') }}@if (w.kind === 'user') { · выбрал(а) вас наблюдателем}</small>
                 </div>
                 @if (w.kind === 'dependent') {
                   <label class="switch">
@@ -98,12 +98,12 @@
             <label>до <input class="input" type="time" [value]="quietTo()" (change)="quietTo.set($any($event.target).value); saveQuiet()" /></label>
           </div>
         }
-        <p class="ir-note muted">Push приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
+        <p class="ir-note muted">Уведомления приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
       </div>
     </section>
 
     @if (s.timeZoneId) {
-      <p class="ir-note muted"><i class="ph ph-globe" aria-hidden="true"></i> Часовой пояс: {{ s.timeZoneId }} — время приёма считается в нём.</p>
+      <p class="ir-note muted"><i class="ph ph-globe" aria-hidden="true"></i> Часовой пояс: {{ timeZoneLabel(s.timeZoneId) }} — время приёма считается в нём.</p>
     }
 
     <button type="button" class="btn btn-secondary ir-done" (click)="closed.emit()">Готово</button>

@@ -24,19 +24,26 @@
       @case ('rate_limited') {
         <div class="alert-danger">Слишком много попыток — попробуйте открыть ссылку через минуту.</div>
       }
+      @case ('network') {
+        <div class="alert-danger">Не удалось связаться с сервером. Проверьте интернет.</div>
+        <button type="button" class="btn btn-primary btn-block mt-2" (click)="retry()">Повторить</button>
+      }
       @case ('valid') {
-        <p class="text-muted mb-3">
+        <p class="text-muted mb-2">
           Вас зовут в семью «{{ preview()?.familyName }}» в FamilyHub
           @if (preview()?.inviterName) {
             — пригласил(а) {{ preview()?.inviterName }}
           }.
+        </p>
+        <p class="text-muted mb-3">
+          Иногда администратор семьи должен подтвердить заявку — тогда доступ появится после его одобрения.
         </p>
 
         @if (!authChecked()) {
           <p class="text-muted mb-0">Загрузка…</p>
         } @else if (auth.me() !== null) {
           <button type="button" class="btn btn-primary btn-block" [disabled]="busy()" (click)="joinNow()">
-            Присоединиться
+            {{ busy() ? 'Присоединяемся…' : 'Присоединиться' }}
           </button>
         } @else {
           <p class="text-muted mb-3">
@@ -50,6 +57,12 @@
           </button>
         }
       }
+    }
+
+    <!-- Любая «плохая» ссылка раньше была тупиком — теперь всегда есть куда идти дальше. -->
+    @if (isDeadEnd()) {
+      <p class="text-muted mt-3 mb-2">Попросите у близких новую ссылку — или создайте свою семью.</p>
+      <a class="btn btn-secondary btn-block" routerLink="/">Открыть FamilyHub</a>
     }
   </div>
 </div>

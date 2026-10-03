@@ -9,6 +9,7 @@ import { BreakpointService } from '../../services/breakpoint.service';
 import type { Attachment } from '../../models/types';
 import { HistoryDismissController } from '../util/history-dismiss';
 import { OverlayA11y } from '../util/overlay-a11y';
+import { OverlayStackService } from '../util/overlay-stack.service';
 import { ZoomPanController, type ZoomPanTransform } from './zoom-pan';
 import { buildLocalViewerItem, fromAttachmentPreview, pendingViewerItem, type ViewerItem } from './file-viewer.types';
 import { ImagePreviewComponent } from './renderers/image-preview.component';
@@ -67,6 +68,7 @@ export class FileViewerComponent implements OnChanges, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly tg = inject(TelegramService);
   private readonly breakpoints = inject(BreakpointService);
+  private readonly overlays = inject(OverlayStackService);
   private readonly history = new HistoryDismissController(() => this.closed.emit());
   private readonly a11y = new OverlayA11y();
   private readonly zoomPan = new ZoomPanController((t) => (this.transform = t));
@@ -100,6 +102,7 @@ export class FileViewerComponent implements OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['open']) {
       this.history.sync(this.open);
+      if (this.open) this.overlays.open(this); else this.overlays.close(this);
       if (this.open) {
         this.windowOffset = { x: 0, y: 0 };
         // Фокус-трап/блокировка скролла — только для модального fullscreen (narrow/medium).
@@ -121,6 +124,7 @@ export class FileViewerComponent implements OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.history.destroy();
+    this.overlays.close(this);
     this.a11y.deactivate();
     this.clearPoll();
     this.clearLocalObjectUrl();
@@ -146,7 +150,7 @@ export class FileViewerComponent implements OnChanges, OnDestroy {
 
     switch (event.key) {
       case 'Escape':
-        this.requestClose();
+        if (this.overlays.claimEscape(this, event)) this.requestClose();
         break;
       case 'ArrowLeft':
         this.prev();

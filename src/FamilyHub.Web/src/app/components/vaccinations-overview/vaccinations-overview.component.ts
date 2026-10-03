@@ -87,7 +87,7 @@ export class VaccinationsOverviewComponent implements OnInit {
         requestWellbeingCheck: false,
       });
       this.vaccinations.showSaved({
-        subject: card.subject, item, reactionHint: this.vaccinations.reactionHintFor(card.item.seriesCode),
+        subject: card.subject, item, reactionHint: this.vaccinations.reactionHintFor(card.item.seriesCode), quickMark: true,
       });
       this.vaccinations.changed();
     } catch (e) {

@@ -122,7 +122,10 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
+// Видимый квадрат небольшой, но тач-зона ~44px — в длинном списке легко промахнуться.
+.va-cal-check::after { content: ''; position: absolute; inset: -11px; }
 .va-cal-check {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -168,7 +171,8 @@
 
 .va-cert-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; }
 .va-cert-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px; background: var(--color-paper); border: 1px solid var(--color-divider); }
+.va-cert-review-note { font-size: 0.8235rem; font-weight: 600; color: var(--color-status-warning-text, #8a5a00); margin: 2px 0 4px; }
 .va-cert-row-review { border-color: var(--color-status-warning); background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-paper)); }
 .va-cert-name { font-size: 0.8235rem; margin-bottom: 4px; }
-.va-cert-select { font-size: 0.7941rem; padding: 5px 8px; }
+.va-cert-select { font-size: max(16px, 0.7941rem); padding: 5px 8px; } // <16px → iOS зумит при фокусе
 .va-cert-date { width: 140px; flex: none; padding: 5px 8px; }

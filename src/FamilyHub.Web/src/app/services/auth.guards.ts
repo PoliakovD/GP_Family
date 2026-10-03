@@ -3,6 +3,7 @@ import { CanActivateFn, Router } from '@angular/router';
 import { AuthService, Me } from './auth.service';
 import { TelegramService } from './telegram.service';
 import { ToastService } from '../shared/toast/toast.service';
+import { safeReturnUrl } from './return-url';
 
 /** Один короткий повтор при транзиентном сбое (429/сеть) — окно rate-limit'а обычно уже открыто
  * заново через секунду; лишний запрос дешевле, чем неверно принятое решение гарда. */
@@ -24,7 +25,7 @@ async function loadMeWithRetry(auth: AuthService): Promise<Me | null> {
  * TelegramMiniAppAuthenticationHandler теперь lookup-only и отклонит любой запрос (401),
  * пока пользователь не пройдёт email+OTP привязку (см. TelegramBindComponent).
  */
-export const authGuard: CanActivateFn = async () => {
+export const authGuard: CanActivateFn = async (_route, state) => {
   const auth = inject(AuthService);
   const tg = inject(TelegramService);
   const router = inject(Router);
@@ -45,7 +46,17 @@ export const authGuard: CanActivateFn = async () => {
   // страница откроется, а её собственные запросы либо пройдут (сессия жива), либо получат 401 и
   // authInterceptor обработает это сам (refresh, а при неудаче — уже он уведёт на /login).
   if (auth.meLoadError() === 'transient') return true;
-  return router.createUrlTree(['/login']);
+  // returnUrl — после входа вернуть туда, куда шли (диплинк из пуша, ссылка из чата).
+  const returnUrl = safeReturnUrl(state?.url);
+  return router.createUrlTree(['/login'], returnUrl ? { queryParams: { returnUrl } } : undefined);
+};
+
+/** /login для уже вошедшего (кэш me()) — сразу на Главную или на returnUrl, а не форма входа. */
+export const guestGuard: CanActivateFn = (route) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (auth.mode !== 'pwa' || auth.me() === null) return true;
+  return router.parseUrl(safeReturnUrl(route.queryParamMap.get('returnUrl')) ?? '/home');
 };
 
 /** Данные обрабатываются только после принятия актуального согласия ПДн (задача 2.3). */
