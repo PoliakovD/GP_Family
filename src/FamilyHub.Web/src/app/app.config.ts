@@ -1,4 +1,6 @@
-import { ApplicationConfig, isDevMode, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, LOCALE_ID, isDevMode, provideZoneChangeDetection } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeRu from '@angular/common/locales/ru';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -15,8 +17,12 @@ import { routes } from './app.routes';
  */
 const isInsideTelegram = (): boolean => !!window.Telegram?.WebApp?.initData;
 
+// Без русской локали DatePipe печатал английские месяцы («в семье с 03 October 2026»).
+registerLocaleData(localeRu);
+
 export const appConfig: ApplicationConfig = {
   providers: [
+    { provide: LOCALE_ID, useValue: 'ru' },
     provideZoneChangeDetection({ eventCoalescing: true }),
     // withXsrfConfiguration: CSRF-защита PWA-сессии сверх SameSite=Lax (см. аудит
     // module-review-2026-08-02/01-auth-identity.md, находка 4). Angular сам читает cookie

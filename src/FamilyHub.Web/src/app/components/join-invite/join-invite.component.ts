@@ -49,7 +49,7 @@ export class JoinInviteComponent implements OnInit {
       if (e instanceof ApiError) {
         if (e.status === 404) { this.state.set('not_found'); return; }
         if (e.status === 409) {
-          switch (e.message) {
+          switch (e.code) {
             case 'revoked': this.state.set('revoked'); return;
             case 'expired': this.state.set('expired'); return;
             default: this.state.set('exhausted'); return;

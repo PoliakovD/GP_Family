@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpErrorResponse, HttpEventType } from '@angular/common/http';
+import { HttpClient, HttpEventType } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { ApiError, toApiError } from './api-error';
 import {
   ActiveJobsSummaryResponse,
   CreateDoctorReportRequest,
@@ -96,17 +97,9 @@ function buildQuery(params: object): string {
   return parts.length > 0 ? `?${parts.join('&')}` : '';
 }
 
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-    /** Человекочитаемое сообщение бэкенда (поле `message` тела ошибки), если оно есть — `message`
-     * выше остаётся машинным кодом. Нужен там, где причина отказа важна пользователю (очередь «Одобрение»). */
-    public readonly detail?: string,
-  ) {
-    super(message);
-  }
-}
+// ApiError живёт в api-error.ts (там же перевод ответа в русский текст); реэкспорт — чтобы не
+// менять десятки импортов `ApiError` из api.service.
+export { ApiError } from './api-error';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -177,19 +170,9 @@ export class ApiService {
     }
   }
 
+  /** См. api-error.ts: message — всегда показываемый русский текст, машинный код — в `code`. */
   private toApiError(e: unknown): ApiError {
-    if (e instanceof HttpErrorResponse) {
-      // JSON-тело ошибки ({code, reason} — напр. UserSpecimenEndpoints) несёт человекочитаемую
-      // причину от LLM-гейта; раньше она терялась (msg падал на generic e.statusText, т.к.
-      // e.error — объект, не строка).
-      const body: unknown = e.error;
-      const reason = typeof body === 'object' && body !== null
-        ? ((body as { reason?: string; message?: string }).reason ?? (body as { message?: string }).message)
-        : undefined;
-      const msg = typeof body === 'string' ? body : (reason ?? e.statusText);
-      return new ApiError(e.status, msg);
-    }
-    return new ApiError(0, 'Неизвестная ошибка');
+    return toApiError(e);
   }
 
   // Редизайн v2 — агрегат Главной, одним запросом вместо 3-4 отдельных.
