@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ToastService } from '../../shared/toast/toast.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -13,59 +12,51 @@ import { PageActionService } from '../../services/page-action.service';
 import { AiStatusService } from '../../services/ai-status.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import {
-  ExtractionJobStatus, ExtractionStage, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
+  ExtractionJobStatus, ExtractionStatus, MedicalRecordKind,
 } from '../../models/types';
 import type {
   ExtractionStatusResponse,
-  GlobalSpecimenDto,
   IndicatorDto,
-  IndicatorHistoryPoint,
-  KbAnalyteCard,
   KbMedicationCard,
   MedicalRecord,
   MedicalRecordFilter,
-  PatientContextDto,
   RecordSummaryResponse,
-  UpdateIndicatorRequest,
-  UpdateMedicalRecordRequest,
-  UserSpecimen,
   VisitConclusion,
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
-import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
-import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
-import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
+import { IndicatorInfoComponent } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { indicatorLabel as indicatorLabelOf } from '../../shared/util/indicator-name';
-import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
-import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
+import { enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
+import { ExtractionPoller } from './extraction-poller';
+import { accessSummary } from './record-access';
+import { RecordAccessSheetComponent } from './record-access-sheet.component';
+import { RecordEditSheetComponent } from './record-edit-sheet.component';
+import { indicatorLabel, specimenLabelFor } from './indicator-display';
+import { IndicatorTableComponent } from './indicator-table.component';
+import { IndicatorInfoController } from './indicator-info.controller';
 
-/** Терминальные статусы задачи распознавания — опрос останавливается. */
-const EXTRACTION_TERMINAL_STATUSES: number[] = [
-  ExtractionJobStatus.Completed, ExtractionJobStatus.Failed, ExtractionJobStatus.Skipped,
-];
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
 /** Опрос статуса задачи, пока она ждёт возвращения ИИ (LM Studio) — реже обычного. */
 const WAITING_POLL_INTERVAL_MS = 10_000;
 /** Подряд неудачных опросов статуса, после которых поллинг реально останавливается — 5 × 1.5с ≈
  * 7.5с непрерывных сбоев переживает короткий блип сети/фоновую вкладку, не маскирует настоящий
- * обрыв связи навсегда. См. pollFailureCounts. */
+ * обрыв связи навсегда. См. extraction-poller.ts. */
 const MAX_CONSECUTIVE_POLL_FAILURES = 5;
 const SEARCH_DEBOUNCE_MS = 300;
 /** Сколько ждать после Completed, прежде чем убрать живой прогресс — успевает мигнуть галочка
@@ -78,17 +69,6 @@ const ENRICHMENT_POLL_INTERVAL_MS = 5000;
 /** Опрос резюме после ручной правки: бэк ждёт 15 с дебаунса, потом идёт LLM — 4 с × 45 ≈ 3 мин. */
 const SUMMARY_POLL_INTERVAL_MS = 4000;
 const SUMMARY_POLL_MAX_ATTEMPTS = 45;
-
-// Информативнее прежних коротких подписей ("Распознаём"/"Извлекаем данные") — пользователь просил
-// видеть, что именно сейчас происходит на каждом шаге, а не общие слова.
-const STAGE_LABEL: Partial<Record<number, string>> = {
-  [ExtractionStage.Queued]: 'В очереди',
-  [ExtractionStage.Decoding]: 'Открываем файл',
-  [ExtractionStage.Ocr]: 'Распознаём текст',
-  [ExtractionStage.Structuring]: 'Считываем показатели',
-  [ExtractionStage.Linking]: 'Сверяем со справочником показателей',
-  [ExtractionStage.Summarizing]: 'Готовим резюме анализа',
-};
 
 /** Токен для GET /api/medical-records?kind=. */
 const LIST_KIND_TOKEN: Record<MedicalRecordKind, 'analysis' | 'visit'> = {
@@ -120,12 +100,12 @@ let nextInstanceId = 0;
 @Component({
     selector: 'app-medical-records-panel',
     imports: [
-        ClickableDirective, NgTemplateOutlet,
+        NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent,
-        PipelineProgressComponent, KbCardComponent, StatusChipComponent,
+        PipelineProgressComponent, KbCardComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
-        ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
-        AttachmentListComponent, RouterLink,
+        IndicatorInfoComponent, IndicatorInfoPanelComponent,
+        AttachmentListComponent, RouterLink, RecordAccessSheetComponent, RecordEditSheetComponent, IndicatorTableComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
     styleUrl: './medical-records-panel.component.scss'
@@ -164,17 +144,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly Kind = MedicalRecordKind;
   readonly ExtractionJobStatus = ExtractionJobStatus;
   readonly ExtractionStatus = ExtractionStatus;
-  readonly IndicatorFlag = IndicatorFlag;
-  readonly stageLabel = STAGE_LABEL;
   readonly pluralizeRu = pluralizeRu;
 
   /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
    * задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
-  indicatorEnrichmentTitle(ind: IndicatorDto): string {
-    if (ind.enrichmentWaitingForAi) return 'ИИ недоступен — уточнение нормы продолжится автоматически, когда он вернётся';
-    return enrichmentStatusTitle(
-      ind.enrichmentLiveText, ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
-  }
   readonly shortenDisplayName = shortenDisplayName;
   readonly shortenDoctorName = shortenDoctorName;
   readonly formatDayMonth = formatDayMonth;
@@ -251,17 +224,37 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Живой список шагов на карточку (UX-редизайн) — история, не только текущая стадия, см.
    * shared/pipeline-progress. */
   pipelineStepsByRecord: Record<string, PipelineStep[]> = {};
-  private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
   private readonly pipelineClearHandles = new Map<string, ReturnType<typeof setTimeout>>();
-  /** Подряд неудачных опросов статуса на запись — сетевой сбой ОДНОГО тика (моргнула сеть, вкладка
-   * была в фоне) не должен останавливать живой прогресс и разблокировать кнопку «Распознать», пока
-   * задача на бэкенде продолжает идти независимо от этого (баг, найденный на живом отчёте: "процесс
-   * шёл дальше, а UI считал, что распознавание остановилось"). Останавливаем поллинг только после
-   * MAX_CONSECUTIVE_POLL_FAILURES подряд неудач — это уже похоже на настоящий обрыв связи, не блип. */
-  private readonly pollFailureCounts = new Map<string, number>();
-  /** Записи, чей поллинг статуса сейчас замедлен (задача ждёт ИИ) — см. WAITING_POLL_INTERVAL_MS. */
-  private readonly slowPolling = new Set<string>();
-  /** §5 плана «живой конвейер» — отдельный от pollHandles поллинг: тот следит за самой
+  /** Опрос статуса распознавания по записям — см. extraction-poller.ts (сбой одного запроса не
+   * останавливает опрос, медленный режим, пока задача ждёт ИИ). */
+  private readonly extractionPoller = new ExtractionPoller<MedicalRecord>({
+    fetchStatus: (record) => this.api.getExtractionStatus(record.id),
+    onStatus: (record, status) => {
+      const prev = this.extractionStatusByRecord[record.id] ?? null;
+      this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
+      this.updatePipelineSteps(record.id, status, prev);
+    },
+    onFinished: async (record, status) => {
+      this.setRecognizing(record.id, false);
+      if (status.status === ExtractionJobStatus.Completed) {
+        await this.loadExtractionResult(record);
+        this.appendEnrichmentFollowupStep(record.id);
+        await this.refresh({ silent: true });
+        // Прячем виджет только после успеха. Сбой остаётся на экране, пока человек не уйдёт со
+        // страницы: раньше сообщение об ошибке исчезало через 2,5 с, и его легко было не заметить.
+        this.schedulePipelineClear(record.id);
+      }
+    },
+    onGaveUp: (record, err) => {
+      this.setRecognizing(record.id, false);
+      this.error = err instanceof ApiError ? err.message : 'Не удалось получить статус распознавания.';
+    },
+  }, {
+    intervalMs: EXTRACTION_POLL_INTERVAL_MS,
+    waitingIntervalMs: WAITING_POLL_INTERVAL_MS,
+    maxFailures: MAX_CONSECUTIVE_POLL_FAILURES,
+  });
+  /** §5 плана «живой конвейер» — отдельный от extractionPoller поллинг: тот следит за самой
    * экстракцией (короче, до "Готово"), этот — за обогащением ОТДЕЛЬНЫХ показателей после неё
    * (может идти и после того, как экстракция давно завершилась). См. syncEnrichmentPolling. */
   private readonly enrichmentPollHandles = new Map<string, ReturnType<typeof setInterval>>();
@@ -274,31 +267,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly summaryAutoTried = new Set<string>();
 
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
-  readonly RefSource = RefSource;
-  editingIndicatorId: string | null = null;
-  editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
-  savingIndicator = false;
-  /** Id записи, для которой сейчас открыта строка «+ Добавить показатель» (null — закрыта). */
-  creatingIndicatorRecordId: string | null = null;
-  newIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
-  savingNewIndicator = false;
+  /** Стабильная пустая ссылка для [indicators], пока показатели записи не загружены. */
+  readonly noIndicators: readonly IndicatorDto[] = [];
 
-  // --- Источник ВСЕЙ записи (заметка 1) — свободный текстовый поиск по общему справочнику
-  // (GlobalSpecimenKb), меняется отдельно от показателей (PUT .../specimen, каскадится на все
-  // показатели записи). resolveSpecimenQuery находит-или-заводит строку справочника при потере
-  // фокуса (тот же find-or-register, что раньше был только у «своего» биоматериала — теперь
-  // единственный путь на все случаи).
-  // Редактируется в форме «Редактировать запись» (bottom-sheet), не инлайн в карточке.
-  recordSpecimenQuery = '';
-  recordSpecimenForm: { specimenKbId: string } = { specimenKbId: '' };
-  specimenSuggestions: GlobalSpecimenDto[] = [];
-  customSpecimens: UserSpecimen[] = [];
-  customSpecimenError: string | null = null;
-  savingCustomSpecimen = false;
-  /** Проверка введённого биоматериала не состоялась из-за недоступного ИИ (503) — при сохранении
-   * формы название уйдёт в «ожидает проверки» (PUT .../specimen-pending), а не потеряется. */
-  specimenCheckDeferred = false;
-  private specimenSearchTimer: ReturnType<typeof setTimeout> | null = null;
+  indicatorsOf(recordId: string): readonly IndicatorDto[] {
+    return this.indicatorsByRecord[recordId] ?? this.noIndicators;
+  }
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
@@ -314,8 +288,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // --- Правка даты/врача/описания записи (кнопка «Редактировать», UX-редизайн) ---
   editRecord: MedicalRecord | null = null;
-  editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '', title: '' };
-  savingRecord = false;
+  /** Подсказка модели для поля «Биоматериал» (из баннера «уточните»). */
+  editSpecimenHint: string | null = null;
 
   // --- Справка по назначенному лекарству (заключение врача, UX-редизайн) — та же карточка и
   // тот же bottom-sheet, что во вкладке «Справочник» (kb-tab.component.ts). ---
@@ -419,18 +393,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
     }
-    if (this.customSpecimens.length === 0) {
-      void this.api.getSpecimens().then((s) => (this.customSpecimens = s));
-    }
-    this.indicatorParamSub = this.route.queryParamMap.subscribe(() => this.syncIndicatorFromRoute());
+    this.indicatorParamSub = this.route.queryParamMap.subscribe(() => this.indicatorInfo.syncFromRoute());
   }
 
   /** Опрос статуса распознавания использует setInterval — без явной остановки таймеры
    * пережили бы размонтирование панели (переключение вкладки Health-хаба). */
   ngOnDestroy(): void {
-    for (const handle of this.pollHandles.values()) clearInterval(handle);
-    this.pollHandles.clear();
-    this.pollFailureCounts.clear();
+    this.extractionPoller.stopAll();
     for (const handle of this.enrichmentPollHandles.values()) clearInterval(handle);
     this.enrichmentPollHandles.clear();
     for (const handle of this.summaryPollHandles.values()) clearInterval(handle);
@@ -599,7 +568,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Есть ли что сворачивать/разворачивать кнопкой «Резюме» — тот же гейт, что раньше стоял
    * прямо над блоком резюме (единственное место, где он проверялся). */
   hasSummarySection(item: MedicalRecord): boolean {
-    return item.kind === MedicalRecordKind.Analysis && this.indicatorsFor(item.id).length > 0;
+    return item.kind === MedicalRecordKind.Analysis && this.indicatorsOf(item.id).length > 0;
   }
 
   /** Третья плитка статуса — «без нормы в бланке». abnormalIndicatorCount/normalIndicatorCount
@@ -775,7 +744,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // Редизайн v2.2 — ?indicator= в URL может прийти раньше, чем показатели этой записи
       // загрузятся (первый заход по ссылке/обновление страницы) — на момент первого срабатывания
       // подписки в ngOnInit indicatorsByRecord ещё пуст, повторяем попытку здесь.
-      if (recordId) this.syncIndicatorFromRoute();
+      if (recordId) this.indicatorInfo.syncFromRoute();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить данные.';
     } finally {
@@ -903,11 +872,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * вообще никакого признака, что распознавание всё ещё идёт, до следующего ручного клика
    * «Распознать» (баг). Опирается на item.extractionStatus === Pending — это поле теперь честно
    * проставляется бэкендом (ExtractionRequestService/MedicalDocumentExtractionProcessor), а не
-   * только None/Ready, как было раньше. pollHandles уже используется как «эта запись опрашивается
-   * прямо сейчас» — вызов идемпотентен при повторных refresh(). */
+   * только None/Ready, как было раньше. extractionPoller.isPolling — «эта запись опрашивается
+   * прямо сейчас», вызов идемпотентен при повторных refresh(). */
   private resumeLivePolling(items: MedicalRecord[]): void {
     for (const item of items) {
-      if (item.extractionStatus === ExtractionStatus.Pending && !this.pollHandles.has(item.id)) {
+      if (item.extractionStatus === ExtractionStatus.Pending && !this.extractionPoller.isPolling(item.id)) {
         this.setRecognizing(item.id, true);
         this.startPolling(item);
       }
@@ -924,145 +893,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   private startPolling(record: MedicalRecord): void {
-    const existing = this.pollHandles.get(record.id);
-    if (existing) clearInterval(existing);
-    this.pollFailureCounts.delete(record.id);
-
-    const tick = async () => {
-      try {
-        const prev = this.extractionStatusByRecord[record.id] ?? null;
-        const status = await this.api.getExtractionStatus(record.id);
-        this.pollFailureCounts.delete(record.id);
-        this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
-        this.updatePipelineSteps(record.id, status, prev);
-
-        // Пока задача ждёт ИИ (может быть часами), опрашиваем редко — 1,5 с на мёртвом сервере не нужны.
-        if (status.waitingForAi !== this.slowPolling.has(record.id) && !EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
-          if (status.waitingForAi) this.slowPolling.add(record.id); else this.slowPolling.delete(record.id);
-          const current = this.pollHandles.get(record.id);
-          if (current) clearInterval(current);
-          this.pollHandles.set(record.id, setInterval(
-            () => void tick(), status.waitingForAi ? WAITING_POLL_INTERVAL_MS : EXTRACTION_POLL_INTERVAL_MS));
-        }
-
-        if (EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
-          this.stopPolling(record.id);
-          this.setRecognizing(record.id, false);
-          if (status.status === ExtractionJobStatus.Completed) {
-            await this.loadExtractionResult(record);
-            this.appendEnrichmentFollowupStep(record.id);
-            await this.refresh({ silent: true });
-            // Прячем виджет только после успеха. Сбой остаётся на экране, пока человек не уйдёт со
-            // страницы: раньше сообщение об ошибке исчезало через 2,5 с, и его легко было не заметить.
-            this.schedulePipelineClear(record.id);
-          }
-        }
-      } catch (err) {
-        // Сетевой блип/вкладка была в фоне — сама задача на бэкенде продолжает идти независимо
-        // от того, долетел ли этот один запрос статуса. Останавливаем поллинг (и разблокируем
-        // кнопку) только после нескольких подряд неудач — раньше ЛЮБАЯ первая ошибка тут же
-        // прекращала опрос и снимала recognizing, хотя распознавание фактически продолжалось
-        // (баг, найденный на живом отчёте: "UI считает, что процесс остановился, а по факту
-        // шёл дальше"). Молча повторяем на следующем тике, ничего не показываем пользователю.
-        const failures = (this.pollFailureCounts.get(record.id) ?? 0) + 1;
-        if (failures < MAX_CONSECUTIVE_POLL_FAILURES) {
-          this.pollFailureCounts.set(record.id, failures);
-          return;
-        }
-        this.pollFailureCounts.delete(record.id);
-        this.stopPolling(record.id);
-        this.setRecognizing(record.id, false);
-        this.error = err instanceof ApiError ? err.message : 'Не удалось получить статус распознавания.';
-      }
-    };
-
-    void tick();
-    this.pollHandles.set(record.id, setInterval(() => void tick(), EXTRACTION_POLL_INTERVAL_MS));
+    this.extractionPoller.start(record);
   }
 
-  /** Живой список шагов (UX-редизайн) — растущий список «уже сделано» + текущий пульсирующий
-   * шаг, не статичная строка. Только выполненные + активный: будущие шаги не показываем, конвейер
-   * может их пропустить (текстовый путь не заходит в OCR). */
+  /** Живой список шагов — логика в extraction-pipeline.ts (nextPipelineSteps). */
   private updatePipelineSteps(recordId: string, status: ExtractionStatusResponse, prev: ExtractionStatusResponse | null): void {
-    const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
-    const markLastDone = () => {
-      const last = steps[steps.length - 1];
-      if (last && last.state === 'active') steps[steps.length - 1] = { ...last, state: 'done' };
-    };
-
-    if (status.status === ExtractionJobStatus.Failed || status.status === ExtractionJobStatus.Skipped) {
-      markLastDone();
-      steps.push({
-        id: `outcome-${steps.length}`,
-        label: `${friendlyExtractionError(status.error)} Можно нажать «Распознать» ещё раз или внести показатели вручную.`,
-        state: 'error',
-      });
-    } else if (status.status === ExtractionJobStatus.Completed) {
-      markLastDone();
-      steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
-    } else if (status.waitingForAi) {
-      // ИИ (LM Studio) недоступен — задача не потеряна, стоит в очереди и стартует сама, как только
-      // сервер вернётся (LmStudioRecoverySweepJob). Явно говорим об этом, чтобы «в процессе» не
-      // выглядело как зависание и пользователь не жал «Распознать» повторно.
-      if (!prev || !prev.waitingForAi || steps.length === 0) {
-        markLastDone();
-        steps.push({
-          id: `waiting-ai-${steps.length}`,
-          label: 'Ждём ИИ — документ сохранён и будет распознан автоматически, как только он станет доступен. Страницу можно закрыть.',
-          state: 'active',
-        });
-      }
-    } else if (status.queuePosition > 0) {
-      // Общая очередь к единственной локальной модели (баг с живого отчёта — под нагрузкой,
-      // когда параллельно идёт большой поток задач обогащения справочника, Status уже мог стать
-      // Running и Stage уже "Ocr"/"Decoding": Hangfire взял задачу в отдельный воркер очереди
-      // "extraction", но сама модель прямо сейчас занята задачей ДРУГОГО конвейера — см.
-      // ExtractionStatusResponse.QueuePosition/LlmQueuePositionService на бэкенде. Без этой
-      // проверки пользователь видел бы "Читаем текст" и думал, что идёт реальная работа, хотя
-      // задача просто ждёт своей очереди у общего семафора. Проверяется ДО branch по
-      // Pending/построчной логике по стадиям ниже.
-      if (!prev || prev.queuePosition !== status.queuePosition || steps.length === 0) {
-        markLastDone();
-        const label = `В очереди на распознавание — перед вами ${status.queuePosition} ` +
-          `${pluralizeRu(status.queuePosition, 'документ', 'документа', 'документов')}`;
-        steps.push({ id: `global-queue-${status.queuePosition}`, label, state: 'active' });
-      }
-    } else if (status.status === ExtractionJobStatus.Pending) {
-      // Никого нет впереди ни в одном из четырёх конвейеров (queuePosition===0) — просто ждём,
-      // пока воркер Hangfire реально возьмёт задачу в работу.
-      if (!prev || steps.length === 0 || prev.queuePosition > 0 || prev.waitingForAi) {
-        markLastDone();
-        steps.push({ id: 'queue-next', label: 'В очереди — следующая на распознавание', state: 'active' });
-      }
-    } else {
-      // Новый обработанный файл — отдельная строка с галочкой, до перехода к следующей стадии.
-      if (prev && status.processedFiles > prev.processedFiles) {
-        markLastDone();
-        steps.push({ id: `file-${status.processedFiles}`, label: `Файл ${status.processedFiles} распознан`, state: 'done' });
-      }
-      if (!prev || prev.stage !== status.stage || steps.length === 0) {
-        markLastDone();
-        const base = this.stageLabel[status.stage] ?? 'Обрабатываем…';
-        // "файл N из M" — только на ПОФАЙЛОВЫХ стадиях (Decoding/Ocr): Structuring/Linking/
-        // Summarizing идут ОДИН раз на всю запись, после того как ВСЕ файлы уже прочитаны —
-        // ProcessedFiles/TotalFiles к этому моменту заморожены (оба равны), и суффикс "файл 5 из 5"
-        // ошибочно читался как "всё ещё обрабатываем файл 5", хотя на деле файлы давно прочитаны, а
-        // конвейер уже сверяет показатели со справочником/считает резюме (баг, найденный на живом
-        // отчёте — это и создавало впечатление, что процесс "завис"/остановился именно в момент
-        // перехода от файлов к этим стадиям).
-        const isPerFileStage = status.stage === ExtractionStage.Decoding || status.stage === ExtractionStage.Ocr;
-        const label = isPerFileStage && status.totalFiles > 1
-          ? `${base} — файл ${this.currentFileNumber(status)} из ${status.totalFiles}`
-          : base;
-        steps.push({ id: `stage-${status.stage}-${steps.length}`, label, state: 'active' });
-      }
-    }
-
-    // Живой обрывок "мысли" модели (план "живой поток мыслей") — мутируем ПОСЛЕДНИЙ шаг НА МЕСТЕ
-    // (не push нового), если он ещё active: это не новый шаг конвейера, просто уточнение текста
-    // уже показанной строки на очередной тик поллинга — не должно переигрывать её entrance-
-    // анимацию (см. class doc PipelineStep.thought/pipeline-progress.component.ts про track по id).
-
+    const steps = nextPipelineSteps(this.pipelineStepsByRecord[recordId] ?? [], status, prev);
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
   }
 
@@ -1074,15 +910,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * строка — просто финальная сводка перед тем, как весь виджет исчезнет (schedulePipelineClear). */
   private appendEnrichmentFollowupStep(recordId: string): void {
     const pendingCount = (this.indicatorsByRecord[recordId] ?? []).filter((i) => i.enrichmentPending).length;
-    if (pendingCount === 0) return;
-
-    const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
-    steps.push({
-      id: 'enrichment-followup',
-      label: `Для ${pendingCount} ${pluralizeRu(pendingCount, 'показателя', 'показателей', 'показателей')} ещё уточняем норму — можно закрыть страницу, это продолжится само`,
-      state: 'done',
-    });
-    this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
+    const step = enrichmentFollowupStep(pendingCount);
+    if (!step) return;
+    this.pipelineStepsByRecord = {
+      ...this.pipelineStepsByRecord,
+      [recordId]: [...(this.pipelineStepsByRecord[recordId] ?? []), step],
+    };
   }
 
   private schedulePipelineClear(recordId: string): void {
@@ -1101,16 +934,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       clearTimeout(handle);
       this.pipelineClearHandles.delete(recordId);
     }
-  }
-
-  private stopPolling(recordId: string): void {
-    const handle = this.pollHandles.get(recordId);
-    if (handle) {
-      clearInterval(handle);
-      this.pollHandles.delete(recordId);
-    }
-    this.pollFailureCounts.delete(recordId);
-    this.slowPolling.delete(recordId);
   }
 
   private async loadExtractionResult(record: MedicalRecord): Promise<void> {
@@ -1233,273 +1056,22 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.summaryPollAttempts.delete(recordId);
   }
 
-  // --- Редизайн v2.2 — сортировка строк таблицы показателей (скрытие пустых строк убрано по
-  // отзыву — все показатели всегда видны, сортировка осталась). Индикаторы обычно от единиц до
-  // пары десятков на запись — сортируем по месту на каждый рендер без мемоизации, усложнять ради
-  // этого объёма не стоит. ---
-  indicatorSortMode: 'abnormal' | 'form' | 'alpha' = 'abnormal';
+  // Отображение показателей — IndicatorTableComponent; панели нужны только эти два хелпера
+  // (мета-строка записи и заголовок панели справки).
+  readonly indicatorLabel = indicatorLabel;
+  readonly specimenLabelFor = specimenLabelFor;
 
-  setIndicatorSort(mode: 'abnormal' | 'form' | 'alpha'): void {
-    this.indicatorSortMode = mode;
-  }
-
-  indicatorsFor(recordId: string): IndicatorDto[] {
-    const items = [...(this.indicatorsByRecord[recordId] ?? [])];
-    if (this.indicatorSortMode === 'alpha') {
-      items.sort((a, b) => this.indicatorLabel(a).localeCompare(this.indicatorLabel(b), 'ru'));
-    } else if (this.indicatorSortMode === 'abnormal') {
-      // Стабильная сортировка (гарантия спецификации Array.prototype.sort) — внутри каждой
-      // группы порядок из бланка сохраняется, меняется только относительный порядок двух групп.
-      items.sort((a, b) => Number(a.flag === IndicatorFlag.Normal) - Number(b.flag === IndicatorFlag.Normal));
-    }
-    // 'form' — как пришло с сервера (порядок из бланка), без изменений.
-    return items;
-  }
-
-  /** Подсветка строки по статусу — зелёная/красная, ровно два состояния (не по градации
-   * Low/High/Critical) по тому же принципу, что палочка на шкале (см. reference-scale). */
-  rowStatusClass(ind: IndicatorDto): string {
-    if (ind.flag === IndicatorFlag.Normal) return 'indicator-row-ok';
-    if (ind.flag === IndicatorFlag.Unknown) return '';
-    return 'indicator-row-bad';
-  }
-
-  /** Подпись под шкалой ("ниже нормы на 0,8") — formatDeviation уже экспортирован
-   * reference-scale.component.ts и переиспользуется indicator-info, здесь просто подставляем
-   * значение/границы этой строки. */
-  deviationFor(ind: IndicatorDto, bounds: { low: number; high: number }): string | null {
-    const v = this.scaleValue(ind);
-    return v === null ? null : formatDeviation(v, bounds.low, bounds.high);
-  }
-
-  /** Только для окраски ячейки "Значение" — статус-чип со стрелкой/текстом теперь рендерит
-   * <app-status-chip> (shared/status-chip, редизайн v2), эта функция больше не отвечает за
-   * подпись статуса. */
-  flagClass(flag: number): string {
-    switch (flag) {
-      case IndicatorFlag.Low:
-      case IndicatorFlag.High:
-        return 'indicator-flag-warning';
-      case IndicatorFlag.Critical:
-        return 'indicator-flag-danger';
-      case IndicatorFlag.Normal:
-        return 'indicator-flag-ok';
-      default:
-        return 'indicator-flag-unknown';
-    }
-  }
-
-  indicatorReference(indicator: IndicatorDto): string | null {
-    if (indicator.refText) return indicator.refText;
-    if (indicator.refLowText && indicator.refHighText) return `${indicator.refLowText}–${indicator.refHighText}`;
-    if (indicator.refHighText) return `< ${indicator.refHighText}`;
-    if (indicator.refLowText) return `> ${indicator.refLowText}`;
-    return null;
-  }
-
-  /** Числовые границы для <app-reference-scale> (редизайн v2) — только когда ОБЕ границы заданы
-   * числом; RefLowText/RefHighText гарантированно InvariantCulture double либо null (см. XML-доку
-   * на IndicatorDto), parseFloat без нормализации запятых. Односторонний диапазон/качественный
-   * RefText/RefSource.None — шкала не рендерится, вызывающая сторона показывает indicatorReference(). */
-  scaleBounds(indicator: IndicatorDto): { low: number; high: number } | null {
-    if (!indicator.refLowText || !indicator.refHighText) return null;
-    return { low: parseFloat(indicator.refLowText), high: parseFloat(indicator.refHighText) };
-  }
-
-  scaleValue(indicator: IndicatorDto): number | null {
-    return indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null;
-  }
-
-  /** «Файл N из totalFiles» в процессе распознавания — processedFiles уже завершены, текущий —
-   * следующий по счёту (капнуто totalFiles на случай отставания статуса от факта). */
-  currentFileNumber(status: ExtractionStatusResponse): number {
-    return Math.min(status.processedFiles + 1, status.totalFiles);
-  }
-
-  /** Название показателя для строки таблицы — ПОЛНОЕ, как в бланке («MCH (среднее содержание Hb в эритроците)»).
-   * НЕ из analyteKey: ключ сворачивает латиницу в кириллицу фонетически («MCV» → «мкв»), см. indicatorLabel. */
-  indicatorLabel(indicator: IndicatorDto): string {
-    return indicatorLabelOf(indicator.displayName, indicator.analyteKey);
-  }
-
-  specimenLabelFor(indicator: { specimenDisplayName: string | null }): string {
-    return specimenLabel(indicator.specimenDisplayName);
-  }
-
-  /** Бэйдж «рассчитано ИИ» — только для диапазона, посчитанного локальной LLM по методике из
-   * справочника (каскад п.1a, RefSource.KbCalculated), не для фиксированного диапазона/бланка. */
-  isCalculatedRef(indicator: IndicatorDto): boolean {
-    return indicator.refSource === RefSource.KbCalculated;
-  }
-
-  /** Бэйдж «норма от ИИ» — наименее надёжный шаг каскада (план "нормы из бланка"): ни бланк, ни
-   * справочник не дали ответа, модель САМА предположила ожидаемую норму по общемедицинским
-   * знаниям (RefSource.Inferred) — в отличие от KbCalculated, это не расчёт по методике
-   * справочника, а догадка, потому бейдж отдельный и текст title другой. */
-  isInferredRef(indicator: IndicatorDto): boolean {
-    return indicator.refSource === RefSource.Inferred;
-  }
-
-  // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
-  // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
-
-  // --- Правка показателя вручную (ошибка OCR, v2) ---
-
-  startEditIndicator(indicator: IndicatorDto): void {
-    this.creatingIndicatorRecordId = null;
-    this.editingIndicatorId = indicator.id;
-    this.editIndicatorForm = {
-      displayName: indicator.displayName,
-      valueRaw: indicator.valueRaw,
-      unit: indicator.unit,
-      refLowText: indicator.refLowText,
-      refHighText: indicator.refHighText,
-      refText: indicator.refText,
-    };
-  }
-
-  cancelEditIndicator(): void {
-    this.editingIndicatorId = null;
-    this.editIndicatorForm = emptyIndicatorEdit();
-  }
-
-  async saveEditIndicator(recordId: string): Promise<void> {
-    if (!this.editingIndicatorId) return;
-    if (!this.editIndicatorForm.displayName.trim()) {
-      this.toast.error('Укажите название показателя.');
-      return;
-    }
-    const savedId = this.editingIndicatorId;
-    this.savingIndicator = true;
+  /** Показатель добавлен в IndicatorTableComponent — перечитываем показатели и саму запись
+   * (счётчики «вне нормы / в норме»). */
+  async onIndicatorCreated(recordId: string): Promise<void> {
     try {
-      await this.api.updateIndicator(savedId, sanitizeIndicatorForm(this.editIndicatorForm));
-      const indicators = await this.api.getRecordIndicators(recordId);
-      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
-      this.syncEnrichmentPolling(recordId);
-      this.cancelEditIndicator();
-      this.error = null;
-      // Редизайн v2.2 — редактирование теперь открывается прямо из панели справки (не из
-      // таблицы): если правили именно тот показатель, чья статья сейчас открыта, панель должна
-      // сразу показать новое значение/статус/шкалу, а не то, что было до правки.
-      const updated = indicators.find((i) => i.id === savedId);
-      if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated, false);
-      void this.afterRecordDataChanged(recordId);
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.');
-    } finally {
-      this.savingIndicator = false;
-    }
-  }
-
-  async deleteIndicatorRow(recordId: string, indicator: IndicatorDto): Promise<void> {
-    const confirmed = await this.confirm.confirm({
-      title: 'Удалить показатель?',
-      message: `«${indicator.displayName}» будет удалён из записи безвозвратно.`,
-      confirmText: 'Удалить',
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    try {
-      await this.api.deleteIndicator(indicator.id);
-      const indicators = await this.api.getRecordIndicators(recordId);
-      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
-      this.syncEnrichmentPolling(recordId);
-      if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
-      void this.afterRecordDataChanged(recordId);
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось удалить показатель.');
-    }
-  }
-
-  // --- Ручное добавление показателя (UX-редизайн) ---
-
-  startCreateIndicator(recordId: string): void {
-    this.editingIndicatorId = null;
-    this.creatingIndicatorRecordId = recordId;
-    this.newIndicatorForm = emptyIndicatorEdit();
-  }
-
-  cancelCreateIndicator(): void {
-    this.creatingIndicatorRecordId = null;
-    this.newIndicatorForm = emptyIndicatorEdit();
-  }
-
-  async saveNewIndicator(): Promise<void> {
-    if (!this.creatingIndicatorRecordId) return;
-    if (!this.newIndicatorForm.displayName.trim()) {
-      this.toast.error('Укажите название показателя.');
-      return;
-    }
-    const recordId = this.creatingIndicatorRecordId;
-    this.savingNewIndicator = true;
-    try {
-      await this.api.createIndicator(recordId, sanitizeIndicatorForm(this.newIndicatorForm));
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.syncEnrichmentPolling(recordId);
       await this.refresh({ silent: true });
-      this.cancelCreateIndicator();
       this.error = null;
     } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.');
-    } finally {
-      this.savingNewIndicator = false;
-    }
-  }
-
-  // --- Источник показателя — поиск по общему справочнику + find-or-register на потере фокуса ---
-
-  /** Debounce поиска подсказок (GET /api/specimens/search) — вызывается на каждый ввод символа
-   * в любое из двух полей (правка/создание), общий список подсказок на оба. */
-  onSpecimenQueryInput(q: string): void {
-    if (this.specimenSearchTimer) clearTimeout(this.specimenSearchTimer);
-    this.specimenSearchTimer = setTimeout(() => void this.searchSpecimens(q), 200);
-  }
-
-  private async searchSpecimens(q: string): Promise<void> {
-    try {
-      this.specimenSuggestions = await this.api.searchSpecimens(q);
-    } catch {
-      // Подсказка необязательна для работы формы — молча оставляем прежний список при сбое сети.
-    }
-  }
-
-  /** Резолвит введённый текст в ссылку на справочник при потере фокуса поля — совпадение среди
-   * уже загруженных подсказок берётся без сети; новый текст проходит find-or-register
-   * (POST /api/specimens, та же LLM-валидация, что раньше была только у «своего» биоматериала —
-   * теперь единственный путь на все случаи, включая распространённые источники). form — общий
-   * shape { specimenKbId }, не завязан на конкретную форму (используется и записью, и раньше —
-   * показателем, до того как источник переехал на уровень записи, см. заметку 1). */
-  async resolveSpecimenQuery(query: string, form: { specimenKbId: string }): Promise<void> {
-    const trimmed = query.trim();
-    if (!trimmed || this.savingCustomSpecimen) return;
-
-    const existing = this.specimenSuggestions.find((s) => s.displayName.toLowerCase() === trimmed.toLowerCase());
-    if (existing) {
-      form.specimenKbId = existing.id;
-      this.customSpecimenError = null;
-      return;
-    }
-
-    this.savingCustomSpecimen = true;
-    this.customSpecimenError = null;
-    this.specimenCheckDeferred = false;
-    try {
-      const created = await this.api.createSpecimen(trimmed);
-      form.specimenKbId = created.specimenKbId;
-      if (!this.customSpecimens.some((s) => s.specimenKbId === created.specimenKbId)) {
-        this.customSpecimens = [...this.customSpecimens, created].sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
-      }
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 503) {
-        // ИИ недоступен — это не ошибка ввода: название сохранится как «ожидает проверки».
-        this.specimenCheckDeferred = true;
-      } else {
-        this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить источник показателя.';
-      }
-    } finally {
-      this.savingCustomSpecimen = false;
+      this.toast.error(err instanceof ApiError ? err.message : 'Показатель добавлен, но список не обновился — обновите страницу.');
     }
   }
 
@@ -1517,66 +1089,22 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // --- Правка записи (bottom-sheet «Редактировать») ---
 
-  /** hint — предзаполняет поле «Биоматериал» подсказкой модели ("мазок" без локализации,
-   * заметка 2), когда форма открывается из баннера «уточните источник» в карточке. */
+  /** Шторка «Редактировать запись» — см. record-edit-sheet.component.ts. hint предзаполняет
+   * «Биоматериал» подсказкой модели, когда форма открыта из баннера «уточните». */
   openEditSheet(record: MedicalRecord, specimenHint?: string): void {
     this.editRecord = record;
-    this.recordSpecimenQuery = specimenHint ?? record.specimenDisplayName ?? '';
-    this.recordSpecimenForm = { specimenKbId: record.specimenKbId };
-    this.customSpecimenError = null;
-    this.specimenCheckDeferred = false;
-    this.editRecordForm = {
-      recordDate: record.recordDate,
-      doctor: record.doctor ?? '',
-      description: record.description ?? '',
-      title: record.title ?? '',
-    };
+    this.editSpecimenHint = specimenHint ?? null;
   }
 
   closeEditSheet(): void {
     this.editRecord = null;
   }
 
-  async saveEditRecord(): Promise<void> {
-    if (!this.editRecord || !this.editRecordForm.recordDate || this.savingRecord || this.savingCustomSpecimen) return;
-    const record = this.editRecord;
-    this.savingRecord = true;
-    try {
-      // Биоматериал — только у анализов и только если его реально сменили: новый текст ещё мог не
-      // пройти find-or-register (уход фокуса с поля не дождался), добираем здесь.
-      const query = this.recordSpecimenQuery.trim();
-      const specimenChanged = record.kind === MedicalRecordKind.Analysis
-        && query !== '' && query !== (record.specimenDisplayName ?? '');
-      if (specimenChanged && this.recordSpecimenForm.specimenKbId === record.specimenKbId) {
-        await this.resolveSpecimenQuery(query, this.recordSpecimenForm);
-      }
-      if (this.customSpecimenError) return;
-
-      await this.api.updateMedicalRecord(record.id, {
-        recordDate: this.editRecordForm.recordDate,
-        doctor: this.editRecordForm.doctor?.trim() || null,
-        description: this.editRecordForm.description?.trim() || null,
-        title: this.editRecordForm.title?.trim() || null,
-      });
-      // Смена источника каскадится на все показатели записи и на бэке помечает резюме устаревшим
-      // (пересчёт — в фоне), отдельной кнопки «Пересчитать резюме» больше нет.
-      const newSpecimenId = this.recordSpecimenForm.specimenKbId;
-      if (specimenChanged && newSpecimenId && newSpecimenId !== record.specimenKbId) {
-        await this.api.setRecordSpecimen(record.id, newSpecimenId);
-      } else if (specimenChanged && this.specimenCheckDeferred) {
-        // ИИ недоступен — проверить название сейчас нечем; запоминаем его, и бэкенд применит
-        // биоматериал к записи автоматически, когда сервер вернётся.
-        await this.api.setPendingSpecimen(record.id, query);
-        this.info = `ИИ сейчас недоступен — биоматериал «${query}» будет проверен и применён к записи автоматически, когда он вернётся.`;
-      }
-      this.closeEditSheet();
-      await this.refresh({ silent: true });
-      this.error = null;
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.');
-    } finally {
-      this.savingRecord = false;
-    }
+  async onRecordEdited(info: string | null): Promise<void> {
+    if (info) this.info = info;
+    this.closeEditSheet();
+    await this.refresh({ silent: true });
+    this.error = null;
   }
 
   // --- Справка по назначенному лекарству ---
@@ -1603,241 +1131,27 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return this.breakpoints.tier() === 'wide';
   }
 
-  // --- Справка по показателю (редизайн v2, PR4) — два пути открытия делят одно состояние:
-  // клик по строке показателя записи (reading+history заданы, персонализировано под пациента
-  // записи) и клик по чипу "что смотрят вместе" внутри уже открытой статьи (только карточка,
-  // тот же путь, что каталог /health/kb/indicators).
+  /** Справка по показателю и его правка — см. indicator-info.controller.ts. */
+  readonly indicatorInfo = new IndicatorInfoController({
+    api: this.api,
+    router: this.router,
+    route: this.route,
+    toast: this.toast,
+    confirm: this.confirm,
+    isWide: () => this.isWide,
+    recordId: () => this.recordId(),
+    indicatorsOf: (recordId) => this.indicatorsOf(recordId),
+    onIndicatorsChanged: (recordId, indicators) => {
+      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      this.syncEnrichmentPolling(recordId);
+      this.error = null;
+      void this.afterRecordDataChanged(recordId);
+    },
+  });
 
-  infoOpen = false;
-  infoLoading = false;
-  infoError: string | null = null;
-  infoCard: KbAnalyteCard | null = null;
-  infoDisplayName = '';
-  infoReading: IndicatorInfoReading | null = null;
-  infoHistory: IndicatorHistoryPoint[] | null = null;
-  /** Редизайн v2.2 — возраст/пол пациента на дату записи, GET /api/indicators/{id}/article уже
-   * отдаёт (response.patient), раньше просто игнорировался. */
-  infoPatient: PatientContextDto | null = null;
-  /** Id показателя, чья статья сейчас открыта reading-веткой — null, когда панель открыта чипом
-   * "что смотрят вместе" (там нет конкретного показателя записи). Не путать с infoCard.id (это
-   * id статьи справочника, другое значение). Не private — редизайн v2.2, шаблону нужен для
-   * editing="editingIndicatorId === infoIndicatorId". */
-  infoIndicatorId: string | null = null;
-  /** Редизайн v2.2 — сам показатель (не только id), чтобы Редактировать/Удалить в панели справки
-   * могли вызвать startEditIndicator/deleteIndicatorRow, которые принимают IndicatorDto целиком. */
-  infoIndicator: IndicatorDto | null = null;
-
-  /** navigate=false — вызов из самой подписки на маршрут (syncIndicatorFromRoute) или
-   * переоткрытие после правки (saveEditIndicator): URL уже соответствует, повторная навигация
-   * лишняя. По умолчанию true — обычный клик по строке/карточке показателя. */
-  async openIndicatorInfo(indicator: IndicatorDto, navigate = true): Promise<void> {
-    this.infoOpen = true;
-    this.infoLoading = true;
-    this.infoError = null;
-    this.infoCard = null;
-    this.infoHistory = null;
-    this.infoPatient = null;
-    this.infoIndicatorId = indicator.id;
-    this.infoIndicator = indicator;
-    this.infoDisplayName = this.indicatorLabel(indicator);
-    // Редизайн v2.2 — на мобиле показатель открывается своим URL (?indicator=), не просто
-    // in-memory состоянием: apparatus «назад» должен закрыть именно его, не всю запись (тот же
-    // приём, что kb-analyte-tab уже применяет для ?id=). На wide экранах URL не трогаем — там
-    // панель справки остаётся чисто in-memory, как и раньше.
-    if (navigate && !this.isWide) {
-      void this.router.navigate([], {
-        relativeTo: this.route, queryParams: { indicator: indicator.id }, queryParamsHandling: 'merge',
-      });
-    }
-    this.infoReading = {
-      valueRaw: indicator.valueRaw,
-      valueNumeric: indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null,
-      unit: indicator.unit,
-      flag: indicator.flag,
-      matchedRefRangeIndex: null,
-    };
-    try {
-      const response = await this.api.getIndicatorArticle(indicator.id);
-      this.infoCard = response.article;
-      this.infoPatient = response.patient;
-      this.infoReading = { ...this.infoReading, matchedRefRangeIndex: response.matchedRefRangeIndex };
-      if (response.historyAvailable) {
-        this.infoHistory = await this.api.getRecordIndicatorHistory(indicator.medicalRecordId, indicator.id);
-      }
-    } catch (err) {
-      this.infoError = err instanceof ApiError ? err.message : 'Не удалось загрузить справку по показателю.';
-    } finally {
-      this.infoLoading = false;
-    }
-  }
-
-  /** Чип "что смотрят вместе" внутри уже открытой статьи — переоткрываем панель БЕЗ
-   * персонального контекста (это другой показатель, не тот, что открывал панель изначально). */
-  async openRelatedAnalyte(kbAnalyteId: string): Promise<void> {
-    this.infoOpen = true;
-    this.infoLoading = true;
-    this.infoError = null;
-    this.infoCard = null;
-    this.infoReading = null;
-    this.infoHistory = null;
-    this.infoPatient = null;
-    this.infoDisplayName = '';
-    this.infoIndicatorId = null;
-    this.infoIndicator = null;
-    try {
-      this.infoCard = await this.api.getKbAnalyte(kbAnalyteId);
-    } catch (err) {
-      this.infoError = err instanceof ApiError ? err.message : 'Не удалось загрузить статью справочника.';
-    } finally {
-      this.infoLoading = false;
-    }
-  }
-
-  /** navigate=false — вызов из syncIndicatorFromRoute (URL уже без ?indicator=) или там, где
-   * следом всё равно уходим на другой URL (openIndicatorInCatalog) — см. openIndicatorInfo. */
-  closeIndicatorInfo(navigate = true): void {
-    this.infoOpen = false;
-    this.infoIndicatorId = null;
-    this.infoIndicator = null;
-    this.cancelEditIndicator();
-    if (navigate && !this.isWide) {
-      void this.router.navigate([], {
-        relativeTo: this.route, queryParams: { indicator: null }, queryParamsHandling: 'merge',
-      });
-    }
-  }
-
-  /** Редизайн v2.2 — синхронизирует infoOpen/infoIndicator* с ?indicator= в URL (мобильный
-   * полноэкранный показатель). Вызывается из подписки на queryParamMap (ngOnInit) и из refresh()
-   * — на первом срабатывании подписки indicatorsByRecord может быть ещё не загружен. */
-  private syncIndicatorFromRoute(): void {
-    if (this.isWide) return;
-    const recordId = this.recordId();
-    if (!recordId) return;
-    const id = this.route.snapshot.queryParamMap.get('indicator');
-    if (id) {
-      if (this.infoIndicatorId === id) return;
-      const found = (this.indicatorsByRecord[recordId] ?? []).find((i) => i.id === id);
-      if (found) void this.openIndicatorInfo(found, false);
-    } else if (this.infoOpen) {
-      this.closeIndicatorInfo(false);
-    }
-  }
-
-  /** Футер "Открыть в справочнике" — уходит на мини-хаб /health/kb/indicators с ?id=, тот же
-   * экран сам откроет статью (см. KbAnalyteTabComponent.ngOnInit). */
-  openIndicatorInCatalog(): void {
-    if (!this.infoCard) return;
-    const id = this.infoCard.id;
-    this.closeIndicatorInfo(false); // уходим на другой роут ниже — чистить ?indicator= здесь незачем
-    void this.router.navigate(['/health/kb/indicators'], { queryParams: { id } });
-  }
-
-  /** Видна ли КОНКРЕТНАЯ запись данной семье: (L1 share есть) И (L2 hide нет). */
-  isVisibleToFamily(record: MedicalRecord, familyId: string): boolean {
-    return this.shares.includes(familyId) && !record.hiddenFamilyIds.includes(familyId);
-  }
-
-  /** Видна ли запись хотя бы одной расшаренной семье — определяет активную опцию сегмента. */
-  private visibleToAny(record: MedicalRecord): boolean {
-    return this.shares.some((fid) => !record.hiddenFamilyIds.includes(fid));
-  }
-
-  isOnlyMe(record: MedicalRecord): boolean {
-    return this.shares.length === 0 || !this.visibleToAny(record);
-  }
-
-  /** Сводка для карточки: «Только вы» / «Все семьи» / «Все семьи, кроме N». */
+  /** Сводка доступа для карточки и пикера группы — см. record-access.ts. */
   accessSummary(record: MedicalRecord): string {
-    const total = this.shares.length;
-    if (total === 0) return 'Только вы';
-    const hiddenCount = this.shares.filter((fid) => record.hiddenFamilyIds.includes(fid)).length;
-    if (hiddenCount === total) return 'Только вы';
-    if (hiddenCount === 0) return 'Все семьи';
-    return `Все семьи, кроме ${hiddenCount}`;
+    return accessSummary(record, this.shares);
   }
 
-  /**
-   * Тумблер одной семьи в шторке. Включение автоматически создаёт L1-шаринг, если его ещё не
-   * было — иначе тумблер не мог бы включить видимость семье, которой владелец никогда явно не
-   * открывал записи. L1-шаринг общий на оба вида (единый шаринг «Анализы + Врачи»), поэтому это
-   * затрагивает базовую видимость всех записей той же семье, а не только текущего вида — осознанно.
-   */
-  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean, input?: HTMLInputElement): Promise<void> {
-    // Первое включение семьи открывает ей ВСЕ анализы и приёмы (общий шаринг) — раньше это
-    // происходило молча. Спрашиваем явно; при отказе возвращаем тумблер в исходное положение.
-    if (visible && !this.shares.includes(familyId)) {
-      const name = this.state.families().find((f) => f.id === familyId)?.name ?? 'эта семья';
-      const ok = await this.confirm.confirm({
-        title: 'Открыть доступ семье?',
-        message: `Семья «${name}» увидит все ваши анализы и приёмы врача, кроме тех, что вы скроете от неё отдельно.`,
-        confirmText: 'Открыть доступ',
-      });
-      if (!ok) {
-        if (input) input.checked = false;
-        return;
-      }
-    }
-    try {
-      if (visible) {
-        if (!this.shares.includes(familyId)) {
-          await this.api.shareMedicalRecord(familyId);
-        }
-        await this.api.unhideMedicalRecord(record.id, [familyId]);
-      } else {
-        await this.api.hideMedicalRecord(record.id, [familyId]);
-      }
-      await this.refresh({ silent: true });
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
-    }
-  }
-
-  /** Сегмент «Только я / Все семьи» — bulk-скрытие/раскрытие записи для ВСЕХ уже расшаренных семей. */
-  async setAccessMode(record: MedicalRecord, onlyMe: boolean, input?: HTMLInputElement): Promise<void> {
-    if (this.shares.length === 0) {
-      // Раньше радио «Все семьи» визуально включалось, а доступ оставался закрытым — UI врал.
-      if (input) input.checked = false;
-      this.toast.info('Пока ни одной семье доступ не открыт — включите нужную семью ниже.');
-      return;
-    }
-    try {
-      if (onlyMe) {
-        await this.api.hideMedicalRecord(record.id, this.shares);
-      } else {
-        await this.api.unhideMedicalRecord(record.id, this.shares);
-      }
-      await this.refresh({ silent: true });
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
-    }
-  }
-
-}
-
-/** Текст бэкенда про сбой распознавания — только если он по-русски и человеческий; иначе общий. */
-function friendlyExtractionError(raw: string | null | undefined): string {
-  if (raw && /[а-яё]/i.test(raw) && !raw.includes('<') && raw.length <= 300) return raw.endsWith('.') ? raw : raw + '.';
-  return 'Не удалось распознать документ.';
-}
-
-function emptyIndicatorEdit(): UpdateIndicatorRequest {
-  return {
-    displayName: '', valueRaw: '', unit: null,
-    refLowText: null, refHighText: null, refText: null,
-  };
-}
-
-/** Обрезка пробелов + пустая строка → null — общий шаг перед отправкой формы показателя
- * (правка и создание используют одну и ту же форму). */
-function sanitizeIndicatorForm(form: UpdateIndicatorRequest): UpdateIndicatorRequest {
-  return {
-    ...form,
-    displayName: form.displayName.trim(),
-    valueRaw: form.valueRaw.trim(),
-    unit: form.unit?.trim() || null,
-    refLowText: form.refLowText?.trim() || null,
-    refHighText: form.refHighText?.trim() || null,
-    refText: form.refText?.trim() || null,
-  };
 }

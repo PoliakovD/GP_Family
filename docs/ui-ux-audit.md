@@ -168,7 +168,7 @@
 - [x] **P2-16** Сырые ISO-даты: `dependents-panel.html:61`, `settings-profile.html:65`, `indicators-tab.html:58,94`, `medications-panel.html:148`, `medical-records-panel.html:706,758`, `intake-course-card.ts:182`. — ✅ be66975
 - [x] **P2-17** Таймзона «Europe/Moscow» (`intake-reminders.html:106`); ключи модели как названия полей аптечки (`medications-panel.ts:324-334`). — ✅ be66975
 - [x] **P2-18** Telegram: нет `BackButton`, нет `themeParams`/`setHeaderColor`; перезагрузка может уронить в PWA-логин (`index.html`). — ✅ 021d8a0
-- [ ] **P2-19** `medical-records-panel` — god-компонент (1784+887 строк): разбить на список / деталь / таблицу показателей / шит доступа / сервис прогресса. — ⏭ отдельным PR: чистый рефакторинг без изменения поведения, рискованно без ручного прогона; план — вынести ExtractionProgressService (5 циклов опроса), RecordAccessSheetComponent, IndicatorTableComponent, затем разделить список и деталь
+- [ ] **P2-19** `medical-records-panel` — god-компонент (1784+887 строк): разбить на список / деталь / таблицу показателей / шит доступа / сервис прогресса. — 🟡 частично (PR #71): вынесены extraction-pipeline.ts, indicator-display.ts, ExtractionPoller, RecordAccessSheetComponent, RecordEditSheetComponent (1843→1423 строк TS, 925→841 шаблона, +34 теста); осталось — разделить список и экран записи, вынести таблицу показателей и панель справки
 
 ---
 
