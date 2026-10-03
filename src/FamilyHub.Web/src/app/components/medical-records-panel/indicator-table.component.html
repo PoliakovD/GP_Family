@@ -37,7 +37,7 @@
                 } @else if (isInferredRef(ind)) {
                   <!-- Качественная догадка ИИ («не обнаружено» и т.п.) — нормы для отображения нет,
                        но бейдж всё равно должен быть виден. -->
-                  <div class="muted" style="font-size:0.7059rem">
+                  <div class="muted" style="font-size:0.7647rem">
                     <span class="badge-ai" title="Норма предположена ИИ по общемедицинским знаниям — в бланке референс не был указан">ИИ</span>
                   </div>
                 }
@@ -61,10 +61,10 @@
                     [unit]="ind.unit" [flag]="ind.flag" variant="mini" [labels]="true"
                   />
                   @if (deviationFor(ind, b); as d) {
-                    <div class="muted" style="font-size:0.7059rem">{{ d }}</div>
+                    <div class="muted" style="font-size:0.7647rem">{{ d }}</div>
                   }
                 } @else {
-                  <span class="muted" style="font-size:0.7059rem">—</span>
+                  <span class="muted" style="font-size:0.7647rem">—</span>
                 }
               </td>
               <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
@@ -128,7 +128,7 @@
               [unit]="ind.unit" [flag]="ind.flag" variant="mini" [labels]="true"
             />
             @if (deviationFor(ind, b); as d) {
-              <div class="muted" style="font-size:0.7059rem">{{ d }}</div>
+              <div class="muted" style="font-size:0.7647rem">{{ d }}</div>
             }
           }
           <app-status-chip [flag]="ind.flag" />

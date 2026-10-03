@@ -114,7 +114,7 @@
             @if (med.kbMedicationId; as kbId) {
               <button type="button" class="btn-link" (click)="openKb.emit(kbId)">Справка</button>
             } @else {
-              <span class="muted" style="font-size:0.7059rem">— справка уточняется</span>
+              <span class="muted" style="font-size:0.7647rem">— справка уточняется</span>
             }
             <a class="btn-link" routerLink="/health/intake"
                [queryParams]="{ record: item.id, idx: $index, dep: item.familyDependentId }">Начать курс</a>

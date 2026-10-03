@@ -47,7 +47,7 @@
     />
 
     @if (limits; as l) {
-      <div class="muted" style="font-size:0.7059rem">
+      <div class="muted" style="font-size:0.7647rem">
         До {{ l.maxFilesPerRecord }} файлов, {{ (l.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
         @if (remainingSlots(); as room) {
           — осталось {{ room }}

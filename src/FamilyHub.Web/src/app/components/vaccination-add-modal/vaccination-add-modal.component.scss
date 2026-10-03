@@ -44,7 +44,7 @@
 }
 .va-mode-selected { background: var(--color-accent-100); border-color: var(--color-accent); > i { color: var(--color-accent); } }
 .va-mode-title { font-size: 0.8824rem; }
-.va-mode-sub { font-size: 0.7059rem; }
+.va-mode-sub { font-size: 0.7647rem; }
 
 .va-body { display: flex; flex-direction: column; gap: 14px; }
 
@@ -77,7 +77,7 @@
   &:hover { background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
 }
 .va-suggestion-name { font-size: 0.8824rem; }
-.va-suggestion-sub { font-size: 0.7059rem; }
+.va-suggestion-sub { font-size: 0.7647rem; }
 
 .va-file-input {
   display: flex;
@@ -146,7 +146,7 @@
 .va-cal-actions { display: flex; gap: 6px; flex: none; }
 .va-cal-tag {
   padding: 3px 9px;
-  font-size: 0.7353rem;
+  font-size: 0.7647rem;
   background: var(--color-paper);
   border: 1px solid var(--color-divider);
   cursor: pointer;
