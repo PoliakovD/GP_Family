@@ -12,12 +12,23 @@ public static class DoctorReportEndpoints
         group.MapGet("", async (DoctorReportService service, ICurrentUser currentUser, CancellationToken ct) =>
             Results.Ok(await service.ListAsync(currentUser.UserId, ct)));
 
+        // Для кого можно составить отчёт: я, взрослые члены моих семей, подопечные (люди и питомцы).
+        group.MapGet("/subjects", async (DoctorReportService service, ICurrentUser currentUser, CancellationToken ct) =>
+            Results.Ok(await service.ListSubjectsAsync(currentUser.UserId, ct)));
+
         // Счётчик под выбором периода в форме: «4 анализа, 2 приёма, 38 записей дневника».
         group.MapGet("/preview", async (
-            DateOnly from, DateOnly to, DoctorReportService service, ICurrentUser currentUser, CancellationToken ct) =>
+            DateOnly from, DateOnly to, DoctorReportSubjectKind? subjectKind, Guid? subjectId,
+            DoctorReportService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
-            var (result, counts, error) = await service.PreviewAsync(currentUser.UserId, from, to, ct);
-            return result == DoctorReportResult.Invalid ? Results.BadRequest(new { message = error }) : Results.Ok(counts);
+            var (result, counts, error) = await service.PreviewAsync(
+                currentUser.UserId, from, to, ct, subjectKind ?? DoctorReportSubjectKind.Self, subjectId);
+            return result switch
+            {
+                DoctorReportResult.Invalid => Results.BadRequest(new { message = error }),
+                DoctorReportResult.NotFound => Results.NotFound(),
+                _ => Results.Ok(counts),
+            };
         });
 
         // Сборка PDF — тяжёлая (Chromium в Gotenberg): тот же лимит на пользователя, что у записи медданных.
@@ -28,6 +39,7 @@ public static class DoctorReportEndpoints
             return result switch
             {
                 DoctorReportResult.Invalid => Results.BadRequest(new { message = error }),
+                DoctorReportResult.NotFound => Results.NotFound(new { message = "Нет доступа к данным этого человека." }),
                 DoctorReportResult.NoData => Results.UnprocessableEntity(new { message = error }),
                 DoctorReportResult.TooMany => Results.Conflict(new { message = error }),
                 DoctorReportResult.PdfUnavailable => Results.Json(new { message = error }, statusCode: StatusCodes.Status503ServiceUnavailable),

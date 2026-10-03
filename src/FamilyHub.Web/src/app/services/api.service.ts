@@ -7,6 +7,8 @@ import {
   CreateDoctorReportRequest,
   DoctorReport,
   DoctorReportCounts,
+  DoctorReportSubject,
+  DoctorReportSubjectKind,
   PublicReportMeta,
   AppNotification,
   Attachment,
@@ -559,8 +561,10 @@ export class ApiService {
   getDoctorReports = () => this.get<DoctorReport[]>('/api/doctor-reports');
 
   /** Счётчик под выбором периода: «4 анализа, 2 приёма, 38 записей дневника». */
-  previewDoctorReport = (from: string, to: string) =>
-    this.get<DoctorReportCounts>(`/api/doctor-reports/preview${buildQuery({ from, to })}`);
+  getDoctorReportSubjects = () => this.get<DoctorReportSubject[]>('/api/doctor-reports/subjects');
+
+  previewDoctorReport = (from: string, to: string, subjectKind: DoctorReportSubjectKind = 0, subjectId: string | null = null) =>
+    this.get<DoctorReportCounts>(`/api/doctor-reports/preview${buildQuery({ from, to, subjectKind, subjectId })}`);
 
   createDoctorReport = (request: CreateDoctorReportRequest) =>
     this.post<DoctorReport>('/api/doctor-reports', request);

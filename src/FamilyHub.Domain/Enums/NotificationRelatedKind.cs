@@ -32,4 +32,7 @@ public enum NotificationRelatedKind
 
     /// <summary>RelatedEntityId — Id подопечного-субъекта прививки → /health/vaccinations/people/dependent/:id.</summary>
     VaccinationPersonDependent = 6,
+
+    /// <summary>RelatedEntityId — Id отчёта для врача (DoctorReport) → /health/reports.</summary>
+    DoctorReport = 7,
 }

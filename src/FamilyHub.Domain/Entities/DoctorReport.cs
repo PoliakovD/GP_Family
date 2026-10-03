@@ -1,8 +1,10 @@
 namespace FamilyHub.Domain.Entities;
 
 /// <summary>
-/// Отчёт для врача — снимок данных пациента за период, отрендеренный в PDF. Строго персональный:
-/// принадлежит владельцу и описывает только его самого (не подопечных и не других членов семьи).
+/// Отчёт для врача — снимок данных пациента за период, отрендеренный в PDF. Принадлежит автору
+/// (<see cref="OwnerUserId"/>), а пациентом может быть сам автор, подопечный его семьи (человек или
+/// питомец) или взрослый член общей семьи — см. <see cref="SubjectUserId"/> / <see cref="SubjectFamilyDependentId"/>.
+/// Взрослый пациент видит отчёт о себе в своём списке и может отозвать ссылку.
 /// Сам PDF — блоб в хранилище под <see cref="FileAttachment"/> с <c>OwnerType = DoctorReport</c>
 /// (шифрование и ротация ключей — общим механизмом вложений); видимости через семью у него нет.
 /// Отдать врачу можно публичной ссылкой с токеном: в БД лежит только SHA-256 хеш для поиска
@@ -14,7 +16,16 @@ public class DoctorReport
 {
     public Guid Id { get; set; }
 
+    /// <summary>Автор отчёта — только он может выдать ссылку и удалить отчёт.</summary>
     public Guid OwnerUserId { get; set; }
+
+    /// <summary>Пациент — взрослый член общей семьи (не автор). Null у обоих Subject-полей — отчёт автора о себе.
+    /// Без FK: отчёты о пользователе чистит AccountService при удалении аккаунта.</summary>
+    public Guid? SubjectUserId { get; set; }
+
+    /// <summary>Пациент — подопечный семьи (человек или питомец). Без FK: отчёты чистит
+    /// FamilyDependentService при удалении подопечного вместе с PDF-блобами.</summary>
+    public Guid? SubjectFamilyDependentId { get; set; }
 
     public DateOnly PeriodFrom { get; set; }
 

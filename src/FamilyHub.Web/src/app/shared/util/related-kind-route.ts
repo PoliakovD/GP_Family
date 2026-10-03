@@ -22,5 +22,12 @@ export function relatedKindBasePath(kind: NotificationRelatedKind): string {
       return '/health/vaccinations/people/user';
     case NotificationRelatedKind.VaccinationPersonDependent:
       return '/health/vaccinations/people/dependent';
+    case NotificationRelatedKind.DoctorReport:
+      return '/health/reports';
   }
+}
+
+/** Маршрут к связанной сущности. У отчёта для врача своего экрана нет — ведём в общий список отчётов. */
+export function relatedEntityRoute(kind: NotificationRelatedKind, id: string): string[] {
+  return kind === NotificationRelatedKind.DoctorReport ? [relatedKindBasePath(kind)] : [relatedKindBasePath(kind), id];
 }

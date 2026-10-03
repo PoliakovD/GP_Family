@@ -1,11 +1,17 @@
 import { Component, OnDestroy, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
-import { CreateDoctorReportRequest, DoctorReport, DoctorReportCounts } from '../../models/types';
+import {
+  CreateDoctorReportRequest, DoctorReport, DoctorReportCounts, DoctorReportSubject, DoctorReportSubjectKind,
+} from '../../models/types';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { DEFAULT_SHARE_DAYS, SHARE_DAY_OPTIONS, expiryPreview } from '../../shared/util/report-labels';
 
 type PeriodPreset = 1 | 3 | 6 | 12 | 'custom';
+
+/** Ключ варианта в выпадающем списке «Чей отчёт». */
+const subjectKey = (s: Pick<DoctorReportSubject, 'kind' | 'id'>) => `${s.kind}:${s.id ?? ''}`;
+const SELF_KEY = subjectKey({ kind: DoctorReportSubjectKind.Self, id: null });
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDateInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -18,8 +24,9 @@ function monthsAgo(months: number, now: Date): Date {
 }
 
 /**
- * Форма «Сформировать отчёт для врача» (макет «Screen - Doctor report»): период, жалобы, «для кого»,
- * срок ссылки и блоки. Не владеет оверлеем — страница отчётов кладёт её в боковую панель (десктоп) или
+ * Форма «Сформировать отчёт для врача» (макет «Screen - Doctor report»): чей отчёт (я, член семьи,
+ * подопечный, питомец), период, жалобы, «для кого», срок ссылки и блоки. Разделы, к которым нет доступа
+ * (дневник подопечного или чужой без гранта, прививки питомца), выключены и подписаны. Не владеет оверлеем — страница отчётов кладёт её в боковую панель (десктоп) или
  * нижний лист (мобайл). Генерация синхронная (PDF в Gotenberg), поэтому кнопка блокируется и
  * показывает «Формируем…».
  */
@@ -41,6 +48,42 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
     { value: 1, label: '1 мес' }, { value: 3, label: '3 мес' }, { value: 6, label: '6 мес' }, { value: 12, label: '1 год' },
   ];
   protected readonly shareOptions = SHARE_DAY_OPTIONS;
+
+  /** Кандидаты в пациенты; пока не загружены или есть только «я» — выбора не показываем. */
+  readonly subjects = signal<DoctorReportSubject[]>([]);
+  readonly subjectKey = signal(SELF_KEY);
+  protected readonly subjectKeyOf = subjectKey;
+
+  protected readonly subject = computed(() => this.subjects().find((s) => subjectKey(s) === this.subjectKey()) ?? null);
+  protected readonly subjectKind = computed(() => this.subject()?.kind ?? DoctorReportSubjectKind.Self);
+  protected readonly isPet = computed(() => this.subject()?.isPet ?? false);
+  protected readonly diaryAvailable = computed(() => this.subject()?.diaryAvailable ?? true);
+  protected readonly vaccinationsAvailable = computed(() => this.subject()?.vaccinationsAvailable ?? true);
+
+  /** Что попадёт в отчёт о другом человеке и кто об этом узнает. */
+  protected readonly subjectHint = computed(() => {
+    const s = this.subject();
+    if (!s || s.kind === DoctorReportSubjectKind.Self) return '';
+    if (s.kind === DoctorReportSubjectKind.User) {
+      return `Войдут только записи, которые ${s.name} открыл(а) семье или вы загрузили для этого человека. ` +
+        `${s.name} увидит отчёт в своём списке и получит уведомление.`;
+    }
+    return s.isPet ? 'Отчёт для ветеринара: анализы и приёмы питомца.' : 'Войдут все анализы, приёмы и прививки подопечного.';
+  });
+
+  protected readonly diaryHint = computed(() => {
+    const s = this.subject();
+    if (!s || s.diaryAvailable) return '';
+    return s.kind === DoctorReportSubjectKind.User
+      ? `Дневник ${s.name} вам не открыт. Открыть его может сам человек: «Настройки → Мои данные → Кто видит моё здоровье».`
+      : 'Дневника у подопечных нет — этот раздел не войдёт.';
+  });
+
+  protected readonly vaccinationsHint = computed(() => {
+    const s = this.subject();
+    if (!s || s.vaccinationsAvailable) return '';
+    return s.isPet ? 'Прививки питомцев в приложении не ведутся.' : `Прививки ${s.name} вам не открыты.`;
+  });
 
   readonly preset = signal<PeriodPreset>(6);
   readonly from = signal('');
@@ -67,9 +110,14 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private previewSeq = 0;
 
+  // Разделы, к которым нет доступа, не уходят в запрос, даже если переключатель остался включённым.
+  protected readonly measurementsOn = computed(() => this.measurements() && this.diaryAvailable());
+  protected readonly symptomsNotesOn = computed(() => this.symptomsNotes() && this.diaryAvailable());
+  protected readonly vaccinationsOn = computed(() => this.vaccinations() && this.vaccinationsAvailable());
+
   protected readonly anyBlock = computed(() =>
-    this.labs() || this.aiSummaries() || this.medications() || this.visits() || this.measurements()
-    || this.symptomsNotes() || this.vaccinations());
+    this.labs() || this.aiSummaries() || this.medications() || this.visits() || this.measurementsOn()
+    || this.symptomsNotesOn() || this.vaccinationsOn());
 
   protected readonly periodValid = computed(() => !!this.from() && !!this.to() && this.from() <= this.to());
 
@@ -90,6 +138,25 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     if (this.fromDiary()) this.symptomsNotes.set(true);
     this.applyPreset(6);
+    void this.loadSubjects();
+  }
+
+  private async loadSubjects(): Promise<void> {
+    try {
+      this.subjects.set(await this.api.getDoctorReportSubjects());
+    } catch {
+      this.subjects.set([]); // без списка форма работает как раньше — отчёт о себе
+    }
+  }
+
+  protected subjectLabel(s: DoctorReportSubject): string {
+    if (s.kind === DoctorReportSubjectKind.Self) return `Я — ${s.name}`;
+    return s.isPet ? `${s.name} — питомец` : s.name;
+  }
+
+  protected selectSubject(key: string): void {
+    this.subjectKey.set(key);
+    this.schedulePreview();
   }
 
   ngOnDestroy(): void {
@@ -125,7 +192,7 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
     }
     const seq = ++this.previewSeq;
     try {
-      const counts = await this.api.previewDoctorReport(this.from(), this.to());
+      const counts = await this.api.previewDoctorReport(this.from(), this.to(), this.subjectKind(), this.subject()?.id ?? null);
       if (seq === this.previewSeq) this.counts.set(counts);
     } catch {
       if (seq === this.previewSeq) this.counts.set(null); // счётчик — подсказка, не блокирует создание
@@ -143,12 +210,14 @@ export class DoctorReportFormComponent implements OnInit, OnDestroy {
       includeAiSummaries: this.aiSummaries(),
       includeMedications: this.medications(),
       includeVisits: this.visits(),
-      includeMeasurements: this.measurements(),
-      includeSymptomsNotes: this.symptomsNotes(),
-      includeVaccinations: this.vaccinations(),
+      includeMeasurements: this.measurementsOn(),
+      includeSymptomsNotes: this.symptomsNotesOn(),
+      includeVaccinations: this.vaccinationsOn(),
       recipient: this.recipient().trim() || null,
       patientComment: this.comment().trim() || null,
       shareDays: this.shareDays() || null,
+      subjectKind: this.subjectKind(),
+      subjectId: this.subject()?.id ?? null,
     };
     try {
       this.created.emit(await this.api.createDoctorReport(request));

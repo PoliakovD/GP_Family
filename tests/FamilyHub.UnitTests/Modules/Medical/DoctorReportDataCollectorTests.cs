@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Domain.HealthNotes;
+using FamilyHub.Domain.Vaccinations;
 using FamilyHub.Modules.Medical.DoctorReports;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.TestUtils;
@@ -342,5 +343,112 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         var counts = await _sut.CountAsync(_me.Id, From, To);
 
         counts.Should().Be(new ReportCounts(2, 1, 2, 1));
+    }
+
+    // ---- Отчёт не о себе ----
+
+    private (Family Family, User Other) FamilyWithOther()
+    {
+        var family = TestData.NewFamily();
+        Db.Families.Add(family);
+        Db.FamilyMembers.Add(TestData.NewMember(family.Id, _me.Id, FamilyRole.Admin, MemberStatus.Active));
+        Db.SaveChanges();
+        var other = Db.AddMember(family.Id);
+        other.LastName = "Полякова";
+        other.FirstName = "Анна";
+        other.Gender = Gender.Female;
+        Db.SaveChanges();
+        return (family, other);
+    }
+
+    private FamilyDependent AddDependent(Guid familyId, string firstName, bool isPet = false, string? species = null)
+    {
+        var d = new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = familyId, FirstName = firstName, LastName = isPet ? null : "Поляков",
+            Gender = Gender.Male, BirthDate = new DateOnly(2020, 1, 2), IsPet = isPet, PetSpecies = species,
+            CreatedByUserId = _me.Id, CreatedAt = DateTime.UtcNow,
+        };
+        Db.FamilyDependents.Add(d);
+        Db.SaveChanges();
+        return d;
+    }
+
+    private HealthNote AddNoteFor(Guid ownerId, string text, DateTime at)
+    {
+        var content = new HealthNoteContent(HealthNoteKind.Note, null, text);
+        var n = new HealthNote
+        {
+            Id = Guid.NewGuid(), OwnerUserId = ownerId, Kind = content.Kind, OccurredAt = at, Text = text,
+            DataJson = HealthNoteRules.SerializePayload(content), IncludeInDoctorQuestions = true,
+            CreatedAt = at, UpdatedAt = at,
+        };
+        Db.HealthNotes.Add(n);
+        Db.SaveChanges();
+        return n;
+    }
+
+    [Fact]
+    public async Task Dependent_OnlyTheirRecords_AndVaccinations_NoDiary()
+    {
+        var (family, _) = FamilyWithOther();
+        var child = AddDependent(family.Id, "Миша");
+        var childRecord = AddRecord(_me.Id, new DateOnly(2026, 5, 1), title: "ОАК ребёнка");
+        childRecord.FamilyDependentId = child.Id;
+        AddRecord(_me.Id, new DateOnly(2026, 5, 2), title: "Мой анализ");
+        Db.Vaccinations.Add(new Vaccination
+        {
+            Id = Guid.NewGuid(), FamilyDependentId = child.Id, FamilyId = family.Id, CreatedByUserId = _me.Id,
+            CustomName = "Грипп", Kind = VaccinationKind.Done, Date = new DateOnly(2026, 4, 1),
+        });
+        Db.SaveChanges();
+        AddNoteFor(_me.Id, "моя заметка", Utc(5, 3));
+
+        var subject = new ReportSubject(_me.Id, null, child.Id, false, true);
+        var model = await _sut.CollectAsync(subject, From, To, All, null);
+        var counts = await _sut.CountAsync(subject, From, To);
+
+        model.Patient.FullName.Should().Be("Поляков Миша");
+        model.Patient.IsPet.Should().BeFalse();
+        model.Visits.Should().BeEmpty();
+        model.Summaries.Should().BeEmpty();
+        model.FlaggedNotes.Should().BeEmpty("у подопечного нет дневника — заметки автора не попадают");
+        model.Vaccinations.Should().ContainSingle(v => v.Name == "Грипп");
+        counts.Should().Be(new ReportCounts(1, 0, 0, 0));
+    }
+
+    [Fact]
+    public async Task Pet_HeaderUsesNameSpeciesAndAnimalSex()
+    {
+        var (family, _) = FamilyWithOther();
+        var cat = AddDependent(family.Id, "Барсик", isPet: true, species: "кот");
+
+        var model = await _sut.CollectAsync(new ReportSubject(_me.Id, null, cat.Id, false, false), From, To, All, null);
+
+        model.Patient.FullName.Should().Be("Барсик (кот)");
+        model.Patient.Sex.Should().Be("самец");
+        model.Patient.IsPet.Should().BeTrue();
+        model.Vaccinations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task FamilyMember_OnlyRecordsVisibleToAuthor_DiaryOnlyWithGrant()
+    {
+        var (family, other) = FamilyWithOther();
+        AddRecord(other.Id, new DateOnly(2026, 5, 1), title: "Скрытый анализ"); // не расшарен — автор не видит
+        AddRecord(_me.Id, new DateOnly(2026, 5, 2), target: other.Id, title: "Загрузил для неё");
+        AddNoteFor(other.Id, "её заметка", Utc(5, 3));
+
+        var noGrant = new ReportSubject(_me.Id, other.Id, null, false, false);
+        (await _sut.CountAsync(noGrant, From, To)).Should().Be(new ReportCounts(1, 0, 0, 0));
+        var model = await _sut.CollectAsync(noGrant, From, To, All, null);
+        model.Patient.FullName.Should().StartWith("Полякова Анна");
+        model.FlaggedNotes.Should().BeEmpty();
+
+        Db.FamilyMedicalShares.Add(new FamilyMedicalShare { Id = Guid.NewGuid(), OwnerUserId = other.Id, FamilyId = family.Id, SharedAt = DateTime.UtcNow });
+        Db.SaveChanges();
+        var withGrant = new ReportSubject(_me.Id, other.Id, null, true, false);
+        (await _sut.CountAsync(withGrant, From, To)).Should().Be(new ReportCounts(2, 0, 1, 1));
+        (await _sut.CollectAsync(withGrant, From, To, All, null)).FlaggedNotes.Should().ContainSingle(n => n.Text == "её заметка");
     }
 }

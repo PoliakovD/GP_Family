@@ -2,8 +2,10 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
+using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Infrastructure.Audit;
 using FamilyHub.Infrastructure.Documents;
+using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Previews;
 using FamilyHub.Infrastructure.Security;
@@ -15,13 +17,17 @@ namespace FamilyHub.Modules.Medical.DoctorReports;
 
 /// <summary>
 /// Отчёт для врача: сборка PDF из данных пациента, хранение снимка и выдача публичной ссылки.
-/// Все операции владельца скоупятся по OwnerUserId (чужой отчёт — NotFound). Публичный доступ — только
+/// Пациент — сам автор, подопечный или взрослый член семьи (DoctorReportSubjects). Выдать ссылку и удалить
+/// может только автор (OwnerUserId); взрослый пациент видит отчёт о себе, открывает PDF и может отозвать
+/// ссылку — данные его, и решать, кому они сейчас открыты, тоже ему. Чужой отчёт — NotFound. Публичный доступ — только
 /// по токену: в БД лежит хеш, ссылка живёт ограниченное время и отзывается; неверный, истёкший и
 /// отозванный токены неразличимы для вызывающего (один и тот же null).
 /// </summary>
 public class DoctorReportService(
     AppDbContext db,
     DoctorReportDataCollector collector,
+    DoctorReportSubjects subjects,
+    NotificationSendingService notifications,
     IGotenbergConverter gotenberg,
     IFileCipher fileCipher,
     IFileStorage storage,
@@ -39,22 +45,30 @@ public class DoctorReportService(
 
     // ---- Владелец ----
 
+    /// <summary>Мои отчёты и отчёты обо мне, составленные членами семьи.</summary>
     public async Task<List<DoctorReportDto>> ListAsync(Guid userId, CancellationToken ct = default)
     {
         var rows = await db.DoctorReports.AsNoTracking()
-            .Where(r => r.OwnerUserId == userId)
+            .Where(r => r.OwnerUserId == userId || r.SubjectUserId == userId)
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
+        var authors = await AuthorNamesAsync(rows.Where(r => r.OwnerUserId != userId).Select(r => r.OwnerUserId), ct);
         var now = DateTime.UtcNow;
-        return rows.Select(r => ToDto(r, now)).ToList();
+        return rows.Select(r => ToDto(r, now, userId, authors)).ToList();
     }
 
+    public Task<List<DoctorReportSubjectDto>> ListSubjectsAsync(Guid userId, CancellationToken ct = default) =>
+        subjects.ListAsync(userId, ct);
+
     public async Task<(DoctorReportResult Result, ReportCounts? Counts, string? Error)> PreviewAsync(
-        Guid userId, DateOnly from, DateOnly to, CancellationToken ct = default)
+        Guid userId, DateOnly from, DateOnly to, CancellationToken ct = default,
+        DoctorReportSubjectKind subjectKind = DoctorReportSubjectKind.Self, Guid? subjectId = null)
     {
         var error = ValidatePeriod(from, to);
         if (error is not null) return (DoctorReportResult.Invalid, null, error);
-        return (DoctorReportResult.Success, await collector.CountAsync(userId, from, to, ct), null);
+        var subject = await subjects.ResolveAsync(userId, subjectKind, subjectId, ct);
+        if (subject is null) return (DoctorReportResult.NotFound, null, null);
+        return (DoctorReportResult.Success, await collector.CountAsync(subject, from, to, ct), null);
     }
 
     public async Task<(DoctorReportResult Result, DoctorReportDto? Item, string? Error)> CreateAsync(
@@ -63,13 +77,22 @@ public class DoctorReportService(
         var error = Validate(request);
         if (error is not null) return (DoctorReportResult.Invalid, null, error);
 
+        var subject = await subjects.ResolveAsync(userId, request.SubjectKind, request.SubjectId, ct);
+        if (subject is null) return (DoctorReportResult.NotFound, null, null);
+
         if (await db.DoctorReports.CountAsync(r => r.OwnerUserId == userId, ct) >= MaxReportsPerUser)
             return (DoctorReportResult.TooMany, null, $"Достигнут лимит — {MaxReportsPerUser} отчётов. Удалите ненужные.");
 
         var blocks = new ReportBlocks(
             request.IncludeLabs, request.IncludeAiSummaries, request.IncludeMedications,
             request.IncludeVisits, request.IncludeMeasurements, request.IncludeSymptomsNotes, request.IncludeVaccinations);
-        var model = await collector.CollectAsync(userId, request.PeriodFrom, request.PeriodTo, blocks, request.PatientComment, ct);
+        var model = await collector.CollectAsync(subject, request.PeriodFrom, request.PeriodTo, blocks, request.PatientComment, ct);
+        string? authorName = null;
+        if (!subject.IsSelf)
+        {
+            authorName = (await AuthorNamesAsync([userId], ct)).GetValueOrDefault(userId);
+            model = model with { Patient = model.Patient with { CompiledBy = authorName } };
+        }
         if (!model.HasContent)
             return (DoctorReportResult.NoData, null, "За выбранный период нет данных для отчёта. Расширьте период или включите другие блоки.");
 
@@ -100,6 +123,8 @@ public class DoctorReportService(
         {
             Id = reportId,
             OwnerUserId = userId,
+            SubjectUserId = subject.IsSelf ? null : subject.UserId,
+            SubjectFamilyDependentId = subject.DependentId,
             PeriodFrom = request.PeriodFrom,
             PeriodTo = request.PeriodTo,
             CreatedAt = now,
@@ -114,7 +139,7 @@ public class DoctorReportService(
             Recipient = Normalize(request.Recipient),
             PatientComment = Normalize(request.PatientComment),
             PatientSnapshotJson = JsonSerializer.Serialize(
-                new ReportSnapshot(model.Patient.FullName, model.Patient.Sex, model.Patient.BirthDate, DoctorReportHtmlRenderer.Sections(model)), Json),
+                new ReportSnapshot(model.Patient.FullName, model.Patient.Sex, model.Patient.BirthDate, DoctorReportHtmlRenderer.Sections(model), model.Patient.IsPet), Json),
         };
         if (request.ShareDays is { } days) IssueLink(report, days, now);
 
@@ -134,8 +159,9 @@ public class DoctorReportService(
             // Превью не нужно: PDF открывается своим вьюером, а видимости через AttachmentService у отчёта нет.
             PreviewStatus = AttachmentPreviewStatus.Unsupported,
         });
-        audit.Enqueue(userId, MedicalAccessAction.DoctorReportCreated, ownerUserId: userId);
-        if (request.ShareDays is not null) audit.Enqueue(userId, MedicalAccessAction.DoctorReportLinkIssued, ownerUserId: userId);
+        var patientUserId = report.SubjectUserId ?? userId;
+        audit.Enqueue(userId, MedicalAccessAction.DoctorReportCreated, ownerUserId: patientUserId);
+        if (request.ShareDays is not null) audit.Enqueue(userId, MedicalAccessAction.DoctorReportLinkIssued, ownerUserId: patientUserId);
 
         try
         {
@@ -149,13 +175,15 @@ public class DoctorReportService(
         }
 
         logger.LogInformation("Отчёт для врача {ReportId} создан пользователем {UserId} ({Pages} стр.)", reportId, userId, report.PageCount);
-        return (DoctorReportResult.Success, ToDto(report, now), null);
+        if (report.SubjectUserId is { } subjectUserId) await NotifySubjectAsync(report, subjectUserId, authorName, ct);
+        return (DoctorReportResult.Success, ToDto(report, now, userId, new Dictionary<Guid, string>()), null);
     }
 
-    /// <summary>PDF для владельца (скачивание/просмотр в приложении).</summary>
+    /// <summary>PDF для автора или взрослого пациента (скачивание/просмотр в приложении).</summary>
     public async Task<(Stream Content, string FileName)?> OpenOwnerPdfAsync(Guid userId, Guid reportId, CancellationToken ct = default)
     {
-        var report = await db.DoctorReports.AsNoTracking().FirstOrDefaultAsync(r => r.Id == reportId && r.OwnerUserId == userId, ct);
+        var report = await db.DoctorReports.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == reportId && (r.OwnerUserId == userId || r.SubjectUserId == userId), ct);
         if (report is null) return null;
         var content = await OpenPdfAsync(report, ct);
         return content is null ? null : (content, FileNameFor(report));
@@ -178,16 +206,17 @@ public class DoctorReportService(
         else
             IssueLink(report, days, now);
 
-        audit.Enqueue(userId, MedicalAccessAction.DoctorReportLinkIssued, ownerUserId: userId);
+        audit.Enqueue(userId, MedicalAccessAction.DoctorReportLinkIssued, ownerUserId: report.SubjectUserId ?? userId);
         await db.SaveChangesAsync(ct);
-        return (DoctorReportResult.Success, ToDto(report, now), null);
+        return (DoctorReportResult.Success, ToDto(report, now, userId, new Dictionary<Guid, string>()), null);
     }
 
-    /// <summary>Отзывает ссылку. Идемпотентно: если ссылки уже нет — успех без изменений.</summary>
+    /// <summary>Отзывает ссылку — автор или взрослый пациент. Идемпотентно: если ссылки уже нет — успех без изменений.</summary>
     public async Task<(DoctorReportResult Result, DoctorReportDto? Item)> RevokeAsync(
         Guid userId, Guid reportId, CancellationToken ct = default)
     {
-        var report = await db.DoctorReports.FirstOrDefaultAsync(r => r.Id == reportId && r.OwnerUserId == userId, ct);
+        var report = await db.DoctorReports
+            .FirstOrDefaultAsync(r => r.Id == reportId && (r.OwnerUserId == userId || r.SubjectUserId == userId), ct);
         if (report is null) return (DoctorReportResult.NotFound, null);
 
         var now = DateTime.UtcNow;
@@ -197,10 +226,13 @@ public class DoctorReportService(
             report.ShareTokenHash = null;
             report.ShareToken = null;
             report.ShareRevokedAt = now;
-            audit.Enqueue(userId, MedicalAccessAction.DoctorReportLinkRevoked, ownerUserId: userId);
+            audit.Enqueue(userId, MedicalAccessAction.DoctorReportLinkRevoked, ownerUserId: report.SubjectUserId ?? userId);
             await db.SaveChangesAsync(ct);
         }
-        return (DoctorReportResult.Success, ToDto(report, now));
+        var authors = report.OwnerUserId == userId
+            ? new Dictionary<Guid, string>()
+            : await AuthorNamesAsync([report.OwnerUserId], ct);
+        return (DoctorReportResult.Success, ToDto(report, now, userId, authors));
     }
 
     public async Task<DoctorReportResult> DeleteAsync(Guid userId, Guid reportId, CancellationToken ct = default)
@@ -245,7 +277,7 @@ public class DoctorReportService(
         return new PublicReportMeta(
             snapshot.FullName, snapshot.Sex, age, snapshot.BirthDate,
             report.PeriodFrom, report.PeriodTo, report.CreatedAt, report.ShareExpiresAt!.Value,
-            report.PageCount, snapshot.Sections);
+            report.PageCount, snapshot.Sections, snapshot.IsPet);
     }
 
     /// <summary>Отдаёт PDF по токену и фиксирует открытие: счётчик, время и аудит (смотрящий анонимен).</summary>
@@ -313,7 +345,38 @@ public class DoctorReportService(
         return r.ShareExpiresAt is { } exp && exp > now ? DoctorReportLinkStatus.Active : DoctorReportLinkStatus.Expired;
     }
 
-    private static DoctorReportDto ToDto(DoctorReport r, DateTime now)
+    /// <summary>«Иванов И.И.» по Id авторов — подпись «Составил(а)» в списке пациента и в PDF.</summary>
+    private async Task<Dictionary<Guid, string>> AuthorNamesAsync(IEnumerable<Guid> userIds, CancellationToken ct)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        var users = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.LastName, u.FirstName, u.MiddleName }).ToListAsync(ct);
+        return users.ToDictionary(
+            u => u.Id,
+            u => PersonName.FormatOrDefault(u.LastName, u.FirstName, u.MiddleName, PersonNameStyle.Initials, "Член семьи"));
+    }
+
+    /// <summary>Пациенту — что о нём составили отчёт. Без медицинских подробностей: таблица уведомлений не
+    /// шифруется, а Telegram пересылает текст дословно. Сбой отправки не отменяет уже созданный отчёт.</summary>
+    private async Task NotifySubjectAsync(DoctorReport report, Guid subjectUserId, string? authorName, CancellationToken ct)
+    {
+        var who = authorName ?? "Член семьи";
+        try
+        {
+            await notifications.NotifyAsync(
+                [subjectUserId], null, NotificationType.DoctorReportAboutYou,
+                "Отчёт для врача о вас",
+                $"{who} составил(а) отчёт для врача с вашими данными. Он в разделе «Здоровье → Отчёты врачу»: там его можно открыть и отозвать ссылку.",
+                report.Id, _ => $"doctor-report-about-you:{report.Id}", ct, NotificationRelatedKind.DoctorReport);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось уведомить пациента {UserId} об отчёте {ReportId}", subjectUserId, report.Id);
+        }
+    }
+
+    private static DoctorReportDto ToDto(DoctorReport r, DateTime now, Guid viewerId, IReadOnlyDictionary<Guid, string> authorNames)
     {
         var status = LinkStatus(r, now);
         var blocks = new DoctorReportBlocksDto(
@@ -325,9 +388,36 @@ public class DoctorReportService(
                 r.IncludeSymptomsNotes, r.IncludeVaccinations,
             }
             .Count(x => x);
+        var snapshot = ReadSnapshot(r);
+        var kind = r.SubjectFamilyDependentId is not null ? DoctorReportSubjectKind.Dependent
+            : r.SubjectUserId is not null ? DoctorReportSubjectKind.User
+            : DoctorReportSubjectKind.Self;
+        var isOwner = r.OwnerUserId == viewerId;
         return new DoctorReportDto(
-            r.Id, r.PeriodFrom, r.PeriodTo, r.CreatedAt, r.PageCount, blockCount, r.Recipient, blocks,
-            new DoctorReportLinkDto(status, r.ShareToken, r.ShareExpiresAt, r.ShareRevokedAt, r.ShareViewCount, r.ShareLastViewedAt));
+            r.Id, r.PeriodFrom, r.PeriodTo, r.CreatedAt, r.PageCount, blockCount,
+            // Адресат — личная пометка автора («терапевт Смирнова»), пациенту её не показываем.
+            isOwner ? r.Recipient : null,
+            blocks,
+            new DoctorReportLinkDto(status, r.ShareToken, r.ShareExpiresAt, r.ShareRevokedAt, r.ShareViewCount, r.ShareLastViewedAt),
+            kind,
+            r.SubjectFamilyDependentId ?? r.SubjectUserId,
+            snapshot?.FullName,
+            snapshot?.IsPet ?? false,
+            isOwner ? null : authorNames.GetValueOrDefault(r.OwnerUserId, "Член семьи"),
+            isOwner);
+    }
+
+    private static ReportSnapshot? ReadSnapshot(DoctorReport r)
+    {
+        if (string.IsNullOrEmpty(r.PatientSnapshotJson)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<ReportSnapshot>(r.PatientSnapshotJson, Json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string? ValidatePeriod(DateOnly from, DateOnly to)

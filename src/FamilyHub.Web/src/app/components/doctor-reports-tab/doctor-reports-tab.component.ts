@@ -2,7 +2,7 @@ import { Component, Input, OnInit, computed, inject, signal } from '@angular/cor
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { TelegramService } from '../../services/telegram.service';
-import { DoctorReport, DoctorReportLinkStatus } from '../../models/types';
+import { DoctorReport, DoctorReportLinkStatus, DoctorReportSubjectKind } from '../../models/types';
 import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
@@ -16,12 +16,20 @@ import { DoctorReportFormComponent } from '../doctor-report-form/doctor-report-f
 import { DoctorReportLinkDialogComponent } from '../doctor-report-link-dialog/doctor-report-link-dialog.component';
 
 import { saveBlob } from '../../shared/util/save-blob';
+/** «Миша Поляков», «Барсик (кот) — питомец», «обо мне»; null — мой отчёт о себе. */
+function subjectLine(r: DoctorReport): string | null {
+  if (!r.canManage) return 'обо мне';
+  if (r.subjectKind === DoctorReportSubjectKind.Self || !r.subjectName) return null;
+  return r.subjectIsPet ? `${r.subjectName} — питомец` : r.subjectName;
+}
+
 interface ReportRow {
   report: DoctorReport;
   title: string;
   meta: string;
   link: LinkView;
-  primary: { label: string; icon: string; run: () => void };
+  /** null — основного действия нет (пациент не может выдать ссылку на чужой отчёт). */
+  primary: { label: string; icon: string; run: () => void } | null;
   actions: ActionMenuItem[];
 }
 
@@ -29,6 +37,8 @@ interface ReportRow {
  * Страница «Отчёты для врача» (вкладка хаба «Здоровье», макет «Screen - Doctor report»): список
  * PDF-отчётов, где главное в строке — статус публичной ссылки (отчёт — это медданные вне приложения,
  * пользователь должен видеть, у кого они открыты). Опасное («Отозвать», «Удалить») — только в меню «…».
+ * В списке и отчёты обо мне, составленные членами семьи: их можно открыть и отозвать ссылку, но не
+ * удалить и не выдать новую — это решает автор.
  */
 @Component({
   selector: 'app-doctor-reports-tab',
@@ -114,25 +124,30 @@ export class DoctorReportsTabComponent implements OnInit {
   private toRow(report: DoctorReport): ReportRow {
     const link = linkView(report);
     const meta = [
+      ...(subjectLine(report) ? [subjectLine(report)!] : []),
       `Создан ${dayMonthFromIso(report.createdAt)}`,
+      ...(report.createdByName ? [`составил(а) ${report.createdByName}`] : []),
       ...(report.recipient ? [`для ${report.recipient}`] : []),
       blocksLabel(report.blockCount),
     ].join(' · ');
 
     const active = report.link.status === DoctorReportLinkStatus.Active;
+    const manage = report.canManage;
     const primary = active
       ? { label: 'Копировать ссылку', icon: 'ph ph-copy', run: () => void this.copyLink(report) }
-      : {
-          label: report.link.status === DoctorReportLinkStatus.None ? 'Создать ссылку' : 'Новая ссылка',
-          icon: 'ph ph-link-simple',
-          run: () => this.openLinkDialog(report),
-        };
+      : manage
+        ? {
+            label: report.link.status === DoctorReportLinkStatus.None ? 'Создать ссылку' : 'Новая ссылка',
+            icon: 'ph ph-link-simple',
+            run: () => this.openLinkDialog(report),
+          }
+        : null;
 
     const actions: ActionMenuItem[] = [
       { label: 'Открыть PDF', icon: 'ph ph-eye', handler: () => void this.openPdf(report) },
-      ...(active ? [{ label: 'Продлить ссылку', icon: 'ph ph-clock-clockwise', handler: () => this.openLinkDialog(report) }] : []),
+      ...(active && manage ? [{ label: 'Продлить ссылку', icon: 'ph ph-clock-clockwise', handler: () => this.openLinkDialog(report) }] : []),
       ...(active ? [{ label: 'Отозвать доступ', icon: 'ph ph-link-break', danger: true, handler: () => void this.revoke(report) }] : []),
-      { label: 'Удалить отчёт', icon: 'ph ph-trash', danger: true, handler: () => void this.remove(report) },
+      ...(manage ? [{ label: 'Удалить отчёт', icon: 'ph ph-trash', danger: true, handler: () => void this.remove(report) }] : []),
     ];
 
     return { report, title: periodTitle(report.periodFrom, report.periodTo), meta, link, primary, actions };
@@ -149,7 +164,9 @@ export class DoctorReportsTabComponent implements OnInit {
   protected async shareLink(report: DoctorReport): Promise<void> {
     if (!report.link.token) return;
     const url = reportUrl(report.link.token);
-    const handled = await shareLink(this.tg, url, 'Отчёт для врача', 'Мой отчёт для врача (FamilyHub)');
+    const self = report.subjectKind === DoctorReportSubjectKind.Self && report.canManage;
+    const title = report.subjectIsPet ? 'Отчёт для ветеринара' : 'Отчёт для врача';
+    const handled = await shareLink(this.tg, url, title, self ? 'Мой отчёт для врача (FamilyHub)' : `${title} (FamilyHub)`);
     if (!handled) await this.copyLink(report);
   }
 

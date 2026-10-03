@@ -5,7 +5,7 @@ import { ApiService, ApiError } from '../../services/api.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { NotificationStateService } from '../../services/notification-state.service';
 import { type AppNotification } from '../../models/types';
-import { relatedKindBasePath } from '../../shared/util/related-kind-route';
+import { relatedEntityRoute } from '../../shared/util/related-kind-route';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { notificationTypeIcon, notificationTypeLabel } from '../../shared/util/notification-type-labels';
 
@@ -93,7 +93,7 @@ export class NotificationsTabComponent implements OnInit {
   async openRelated(n: AppNotification): Promise<void> {
     if (n.relatedEntityKind === null) return;
     if (!n.isRead) await this.handleMarkRead(n.id);
-    void this.router.navigate([relatedKindBasePath(n.relatedEntityKind), n.relatedEntityId]);
+    void this.router.navigate(relatedEntityRoute(n.relatedEntityKind, n.relatedEntityId));
   }
 
   /** "Сегодня" / "Вчера" / "18 июля" — кикер группы даты (см. дизайн-дэк). */
