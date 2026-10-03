@@ -63,6 +63,13 @@ test('приём лекарств: вкладка «Курсы» показыв�
   });
 
   await openAs(page, tgId, '/health/intake/courses');
-  await expect(page.getByText('Сорбифер Дурулес 100 мг').first()).toBeVisible();
-  await expect(page.getByText('8:00 и 20:00')).toBeVisible();
+  // Строка списка: название и расписание. На широком экране рядом сразу открывается карточка курса,
+  // где расписание повторяется плиткой, — поэтому ищем внутри ссылки списка, а не по всей странице.
+  const row = page.getByRole('link', { name: /Сорбифер Дурулес 100 мг/ });
+  await expect(row).toContainText('2 раза в день · 8:00 и 20:00 · постоянно');
+
+  await row.click();
+  const card = page.getByRole('article');
+  await expect(card.getByRole('heading', { name: 'Сорбифер Дурулес 100 мг' })).toBeVisible();
+  await expect(card.getByText('8:00 и 20:00', { exact: true })).toBeVisible();
 });
