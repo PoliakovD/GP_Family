@@ -1,5 +1,20 @@
 <form class="dr-form" (ngSubmit)="submit()">
   <div class="dr-body">
+    @if (subjects().length > 1) {
+      <div class="dr-field">
+        <label class="dr-label" for="dr-subject">Чей отчёт</label>
+        <select id="dr-subject" class="input" name="subject"
+                [ngModel]="subjectKey()" (ngModelChange)="selectSubject($event)">
+          @for (s of subjects(); track subjectKeyOf(s)) {
+            <option [value]="subjectKeyOf(s)">{{ subjectLabel(s) }}</option>
+          }
+        </select>
+        @if (subjectHint()) {
+          <span class="dr-hint">{{ subjectHint() }}</span>
+        }
+      </div>
+    }
+
     <div class="dr-field">
       <span class="dr-label" id="dr-period-label">Период</span>
       <div class="seg" role="radiogroup" aria-labelledby="dr-period-label">
@@ -21,7 +36,7 @@
     </div>
 
     <div class="dr-field">
-      <label class="dr-label" for="dr-comment">Жалобы и вопросы к врачу</label>
+      <label class="dr-label" for="dr-comment">Жалобы и вопросы к {{ isPet() ? 'ветеринару' : 'врачу' }}</label>
       <textarea id="dr-comment" class="input" rows="4" maxlength="4000"
                 placeholder="Что беспокоит, о чём хотите спросить"
                 [ngModel]="comment()" (ngModelChange)="comment.set($event)" name="comment"></textarea>
@@ -36,7 +51,7 @@
     <div class="dr-field">
       <label class="dr-label" for="dr-recipient">Для кого <span class="dr-optional">— необязательно</span></label>
       <input id="dr-recipient" class="input" type="text" maxlength="200" autocomplete="off"
-             placeholder="Например, терапевт Смирнова"
+             [placeholder]="isPet() ? 'Например, ветклиника на Лесной' : 'Например, терапевт Смирнова'"
              [ngModel]="recipient()" (ngModelChange)="recipient.set($event)" name="recipient" />
       <span class="dr-hint">Подпись только в вашем списке отчётов — в PDF и у врача её не будет.</span>
     </div>
@@ -77,21 +92,27 @@
         </label>
         <label class="dr-toggle">
           <i class="ph-duotone ph-syringe" aria-hidden="true"></i><span>Прививки</span>
-          <span class="switch"><input type="checkbox" [checked]="vaccinations()" (change)="vaccinations.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+          <span class="switch"><input type="checkbox" [checked]="vaccinationsOn()" [disabled]="!vaccinationsAvailable()" (change)="vaccinations.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
       </div>
+      @if (vaccinationsHint()) {
+        <span class="dr-hint">{{ vaccinationsHint() }}</span>
+      }
 
       <div class="dr-group-title">Из дневника</div>
       <div class="dr-toggles">
         <label class="dr-toggle">
           <i class="ph-duotone ph-heartbeat" aria-hidden="true"></i><span>Домашние замеры, самочувствие и сон</span>
-          <span class="switch"><input type="checkbox" [checked]="measurements()" (change)="measurements.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+          <span class="switch"><input type="checkbox" [checked]="measurementsOn()" [disabled]="!diaryAvailable()" (change)="measurements.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
           <i class="ph-duotone ph-lightning" aria-hidden="true"></i><span>Симптомы и заметки</span>
-          <span class="switch"><input type="checkbox" [checked]="symptomsNotes()" (change)="symptomsNotes.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
+          <span class="switch"><input type="checkbox" [checked]="symptomsNotesOn()" [disabled]="!diaryAvailable()" (change)="symptomsNotes.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
       </div>
+      @if (diaryHint()) {
+        <span class="dr-hint">{{ diaryHint() }}</span>
+      }
       @if (!anyBlock()) {
         <span class="dr-hint dr-hint-warn">Включите хотя бы один блок.</span>
       }

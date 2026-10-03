@@ -36,6 +36,7 @@ export const NotificationType = {
     VaccinationDue: 13,
     VaccinationOverdue: 14,
     VaccinationWellbeingCheck: 15,
+    DoctorReportAboutYou: 16,
 } as const;
 
 export interface FamilySummary {
@@ -459,6 +460,8 @@ export const NotificationRelatedKind = {
     MedicationCourse: 4,
     VaccinationPersonUser: 5,
     VaccinationPersonDependent: 6,
+    /** Отчёт для врача, составленный о пользователе членом семьи → /health/reports. */
+    DoctorReport: 7,
 } as const;
 export type NotificationRelatedKind = typeof NotificationRelatedKind[keyof typeof NotificationRelatedKind];
 
@@ -984,6 +987,22 @@ export interface DoctorReportLink {
     lastViewedAt: string | null;
 }
 
+/** Кто пациент отчёта (DoctorReportSubjectKind на бэкенде). */
+export const DoctorReportSubjectKind = {Self: 0, User: 1, Dependent: 2} as const;
+export type DoctorReportSubjectKind = typeof DoctorReportSubjectKind[keyof typeof DoctorReportSubjectKind];
+
+/** Для кого можно составить отчёт: я, взрослые члены моих семей, подопечные (люди и питомцы). */
+export interface DoctorReportSubject {
+    kind: DoctorReportSubjectKind;
+    /** null у «себя». */
+    id: string | null;
+    name: string;
+    isPet: boolean;
+    /** Дневник есть только у людей с аккаунтом; чужой — только если человек открыл его вам. */
+    diaryAvailable: boolean;
+    vaccinationsAvailable: boolean;
+}
+
 export interface DoctorReport {
     id: string;
     periodFrom: string;
@@ -994,6 +1013,15 @@ export interface DoctorReport {
     recipient: string | null;
     blocks: DoctorReportBlocks;
     link: DoctorReportLink;
+    subjectKind: DoctorReportSubjectKind;
+    subjectId: string | null;
+    /** Имя пациента на момент формирования. */
+    subjectName: string | null;
+    subjectIsPet: boolean;
+    /** Автор, если это не я (отчёт обо мне составил член семьи). */
+    createdByName: string | null;
+    /** Я автор: могу выдать ссылку и удалить. Пациент может только открыть PDF и отозвать ссылку. */
+    canManage: boolean;
 }
 
 export interface CreateDoctorReportRequest {
@@ -1010,6 +1038,8 @@ export interface CreateDoctorReportRequest {
     patientComment: string | null;
     /** 7, 14 или 30 — сразу выпустить ссылку; null — только PDF. */
     shareDays: number | null;
+    subjectKind: DoctorReportSubjectKind;
+    subjectId: string | null;
 }
 
 export interface DoctorReportCounts {
@@ -1032,6 +1062,8 @@ export interface PublicReportMeta {
     expiresAt: string;
     pageCount: number;
     sections: string[];
+    /** Отчёт о питомце — «для ветеринара». */
+    isPet: boolean;
 }
 
 // ============================================================================

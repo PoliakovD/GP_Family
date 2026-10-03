@@ -1,7 +1,7 @@
 <div class="pr-page">
   <header class="pr-bar">
     <span class="pr-brand">FamilyHub</span>
-    <span class="pr-sub">· отчёт пациента для врача</span>
+    <span class="pr-sub">· {{ report()?.isPet ? 'отчёт для ветеринара' : 'отчёт пациента для врача' }}</span>
     @if (state() === 'ready') {
       <button type="button" class="btn btn-primary pr-download-top" (click)="download()">
         <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Скачать PDF
@@ -15,7 +15,7 @@
         <main class="pr-main">
           <aside class="pr-side">
             <section class="pr-card">
-              <div class="pr-kicker">Пациент</div>
+              <div class="pr-kicker">{{ r.isPet ? 'Питомец' : 'Пациент' }}</div>
               <div class="pr-name">{{ r.patientName }}</div>
               @if (birthLine(r); as line) {
                 <div class="pr-muted">{{ line }}</div>
@@ -29,7 +29,7 @@
 
             <div class="pr-warning" role="note">
               <i class="ph-fill ph-warning" aria-hidden="true"></i>
-              <span>Сформировано пациентом в приложении. Не является официальным медицинским документом.</span>
+              <span>{{ r.isPet ? 'Сформировано владельцем' : 'Сформировано пациентом или его близкими' }} в приложении. Не является официальным медицинским документом.</span>
             </div>
 
             @if (r.sections.length > 0) {
