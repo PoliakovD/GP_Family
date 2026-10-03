@@ -77,7 +77,7 @@
   align-items: baseline;
   gap: 6px;
 
-  strong { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1; }
+  strong { font-family: var(--font-ui); font-size: 1.5rem; line-height: 1; }
   span { font-size: 0.7647rem; color: var(--color-neutral-600); white-space: nowrap; }
 }
 
@@ -186,7 +186,7 @@
 .dn-badge {
   flex: none;
   padding: 3px 10px;
-  font-family: var(--font-heading);
+  font-family: var(--font-ui);
   font-weight: 600;
   font-size: 0.7941rem;
   color: var(--color-kind-symptom-text);
