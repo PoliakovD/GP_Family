@@ -1,20 +1,39 @@
 name: Build
 
-# Сборка и публикация образов в GHCR — отдельно от деплоя (см. deploy.yml). Тесты здесь не
-# гоняются: ci.yml уже прогоняет их на каждый push (все ветки) и PR — дублировать незачем.
-# Не трогает VPS вообще, только пушит образы в реестр; go-live — отдельный ручной клик (deploy.yml).
+# Сборка и публикация образов в GHCR, затем (на push в master) автодеплой — job deploy ниже вызывает
+# deploy.yml. Тесты здесь не гоняются: ci.yml уже прогоняет их на каждый push и PR.
 #
-# api/telegrambot/wg-client собираются параллельно тремя job'ами матрицы (а не тремя шагами
-# одной job), чтобы GitHub Actions распределил их по трём раннерам одновременно — раньше они
-# шли последовательно в одной job и суммарное время сборки было ~суммой трёх образов.
+# Образ собирается ТОЛЬКО если изменились его входные файлы. Тег-«отпечаток» c-<hash> считается от
+# содержимого входов (git ls-files + sha256) и не зависит от того, какие коммиты были между
+# сборками: сравнение "что менялось в этом push" (paths-filter) ломается, когда предыдущая сборка
+# отменена или упала — её изменения тихо не попали бы в образ. Отпечаток такого не допускает:
+#   - образ с таким отпечатком уже есть в GHCR  -> сборка пропускается, ему только добавляются теги
+#     <git sha> и latest (docker buildx imagetools create, секунды, без пересборки);
+#   - нет -> обычная сборка (с кэшем слоёв GHA).
+# Входы: api — всё в src/ кроме TelegramBot + Directory.*.props; telegrambot — его проект и
+# Contracts (единственная ссылка) + Directory.*.props; wg-client — deploy/wg.
+# workflow_dispatch — тот же алгоритм (повторный запуск после сбоя безопасен и дёшев).
 on:
   push:
     branches: [master]
+    # Правки, не попадающие ни в один образ и не влияющие на деплой, сборку не запускают.
+    paths-ignore:
+      - 'tests/**'
+      - 'e2e/**'
+      - 'docs/**'
+      - '**.md'
+      - '.claude/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/e2e.yml'
+      - '.github/workflows/integration.yml'
+      - '.github/workflows/minio-image.yml'
   workflow_dispatch: {}
 
 concurrency:
+  # Без cancel-in-progress: отменённая сборка + отпечатки уже безопасны, но деплой не стоит обрывать
+  # на середине; следующий push встаёт в очередь.
   group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   meta:
@@ -42,33 +61,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # api — включает сборку Angular (FamilyHub.Web) как одну из стадий Dockerfile (см. её
-          # комментарий) — отдельного образа/job под "web" не заводим, SPA всегда едет вместе с api.
+          # api — включает сборку Angular (FamilyHub.Web) как стадию Dockerfile, отдельного образа
+          # под "web" нет. Исключение TelegramBot: правка бота не должна пересобирать api.
           - name: api
             image: gp_family-api
             context: .
             file: src/FamilyHub.Api/Dockerfile
             scope: api
-          # telegrambot (ADR-0008)
+            pathspecs: "src :(exclude)src/FamilyHub.TelegramBot Directory.Build.props Directory.Packages.props .dockerignore"
+          # telegrambot (ADR-0008) — зависит только от Contracts.
           - name: telegrambot
             image: gp_family-telegrambot
             context: .
             file: src/FamilyHub.TelegramBot/Dockerfile
             scope: bot
-          # AmneziaWG-сайдкар (ADR-0008) — собирается с нуля из исходников
-          # amneziawg-go/amneziawg-tools (deploy/wg/Dockerfile) — тегами
-          # AMNEZIAWG_GO_COMMIT/AWGTOOLS_COMMIT (по умолчанию master) можно закрепить конкретный
-          # коммит после проверки, см. комментарии в самом Dockerfile. Собирается ВСЕГДА (не под
-          # условием "bot" профиля) — так образ уже готов в GHCR к моменту, когда вы решите
-          # включить COMPOSE_PROFILES=bot; собирать редко меняющийся сайдкар из исходников
-          # безопаснее, чем полагаться на непроверенный community-образ.
+            pathspecs: "src/FamilyHub.TelegramBot src/FamilyHub.Contracts Directory.Build.props Directory.Packages.props .dockerignore"
+          # AmneziaWG-сайдкар (ADR-0008) — собирается из исходников amneziawg-go/amneziawg-tools
+          # (deploy/wg/Dockerfile); меняется редко — теперь и пересобирается только при правках deploy/wg.
           - name: wg-client
             image: gp_family-wg-client
             context: deploy/wg
             file: deploy/wg/Dockerfile
             scope: wg
+            pathspecs: "deploy/wg"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Отпечаток входов образа
+        id: fp
+        env:
+          PATHSPECS: ${{ matrix.pathspecs }}
+          DOCKERFILE: ${{ matrix.file }}
+        run: |
+          read -ra specs <<< "$PATHSPECS"
+          hash=$( { git ls-files -z -- "${specs[@]}" "$DOCKERFILE" | sort -z | xargs -0 sha256sum; } | sha256sum | cut -c1-16)
+          echo "hash=c-${hash}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -78,14 +105,44 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Образ с таким отпечатком уже в GHCR?
+        id: exists
+        run: |
+          ref="ghcr.io/${{ needs.meta.outputs.owner }}/${{ matrix.image }}:${{ steps.fp.outputs.hash }}"
+          if docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.name }}: входы не менялись (${{ steps.fp.outputs.hash }}) — сборка пропущена."
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Входы не менялись — только перетегировать (sha, latest)
+        if: steps.exists.outputs.found == 'true'
+        run: |
+          base="ghcr.io/${{ needs.meta.outputs.owner }}/${{ matrix.image }}"
+          docker buildx imagetools create \
+            -t "${base}:${{ needs.meta.outputs.tag }}" -t "${base}:latest" \
+            "${base}:${{ steps.fp.outputs.hash }}"
+
       - name: Собрать и запушить образ ${{ matrix.name }}
+        if: steps.exists.outputs.found != 'true'
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           push: true
           tags: |
+            ghcr.io/${{ needs.meta.outputs.owner }}/${{ matrix.image }}:${{ steps.fp.outputs.hash }}
             ghcr.io/${{ needs.meta.outputs.owner }}/${{ matrix.image }}:${{ needs.meta.outputs.tag }}
             ghcr.io/${{ needs.meta.outputs.owner }}/${{ matrix.image }}:latest
           cache-from: type=gha,scope=${{ matrix.scope }}
           cache-to: type=gha,scope=${{ matrix.scope }},mode=max
+
+  # Автодеплой после успешной сборки ВСЕХ образов — только на push в master (ручной запуск Build
+  # деплой не делает: для него есть Deploy → Run workflow). Gate "production" environment (required
+  # reviewers в Settings → Environments) остаётся рабочим выключателем автодеплоя.
+  deploy:
+    needs: build-push
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

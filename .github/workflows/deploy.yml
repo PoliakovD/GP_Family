@@ -1,14 +1,17 @@
 name: Deploy
 
-# Только вручную (workflow_dispatch) — деплой-план фиксирует это как решение: контур дев по
-# защите (Hangfire/Debug-логи), но никакой автомерж не должен уезжать на VPS без явного клика.
-# Ветка/тег/SHA выбирается на самом экране запуска (селектор "Use workflow from" в Actions UI) —
-# от неё берутся только файлы deploy/ (Caddyfile, docker-compose.prod.yml), само приложение
-# ВСЕГДА разворачивается образом :latest, собранным build.yml (см. его — push в master).
-# Тестов и сборки образов здесь больше нет: build.yml публикует образы отдельно и заранее,
-# ci.yml прогоняет тесты на каждый push — дублировать оба на каждый деплой было незачем.
+# Запускается двумя путями:
+#  1. Автоматически — job deploy в build.yml после успешной сборки образов на push в master
+#     (workflow_call). Рубильник — "production" environment: required reviewers в Settings →
+#     Environments превращают автодеплой обратно в деплой "по кнопке".
+#  2. Вручную (workflow_dispatch) — повторный деплой без пересборки / откат файлов deploy/.
+# Ветка/тег/SHA выбирается на экране ручного запуска ("Use workflow from"); от неё берутся только
+# файлы deploy/ (Caddyfile, docker-compose.prod.yml), само приложение ВСЕГДА разворачивается образом
+# :latest, собранным build.yml. Тестов и сборки образов здесь нет: build.yml публикует образы,
+# ci.yml гоняет тесты на каждый push.
 on:
   workflow_dispatch: {}
+  workflow_call: {}
 
 concurrency:
   # Один деплой за раз — второй запуск ждёт, не отменяет первый (cancel-in-progress: false),
@@ -132,10 +135,18 @@ jobs:
             chmod 600 wg/awg0.conf
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
-            # wg-client и telegrambot ВСЕГДА вместе (network_mode: service:wg-client) — пересоздание
-            # одного без другого осиротит бота ("cannot join network of a non running container").
-            docker compose up -d --remove-orphans --force-recreate wg-client telegrambot
+            # up -d сам пересоздаёт только сервисы, у которых сменился образ/конфиг — неизменившиеся
+            # (wg-client, бот) не трогаются. Единственная связка: telegrambot живёт в сети wg-client
+            # (network_mode: service:wg-client) — пересоздание wg-client без бота осиротит его
+            # ("cannot join network of a non running container"), поэтому если контейнер wg-client
+            # сменился, бот пересоздаётся принудительно.
+            wg_before=\$(docker compose ps -q wg-client 2>/dev/null || true)
             docker compose up -d --remove-orphans
+            wg_after=\$(docker compose ps -q wg-client 2>/dev/null || true)
+            if [ -n "\$wg_before" ] && [ "\$wg_before" != "\$wg_after" ]; then
+              echo "wg-client пересоздан — пересоздаю telegrambot."
+              docker compose up -d --force-recreate telegrambot
+            fi
 
             echo "Жду /health/ready (api)..."
             for i in \$(seq 1 18); do
