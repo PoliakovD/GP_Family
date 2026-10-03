@@ -52,7 +52,8 @@ import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text'
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
-import { EXTRACTION_TERMINAL_STATUSES, enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
+import { enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
+import { ExtractionPoller } from './extraction-poller';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import {
@@ -66,7 +67,7 @@ const EXTRACTION_POLL_INTERVAL_MS = 1500;
 const WAITING_POLL_INTERVAL_MS = 10_000;
 /** Подряд неудачных опросов статуса, после которых поллинг реально останавливается — 5 × 1.5с ≈
  * 7.5с непрерывных сбоев переживает короткий блип сети/фоновую вкладку, не маскирует настоящий
- * обрыв связи навсегда. См. pollFailureCounts. */
+ * обрыв связи навсегда. См. extraction-poller.ts. */
 const MAX_CONSECUTIVE_POLL_FAILURES = 5;
 const SEARCH_DEBOUNCE_MS = 300;
 /** Сколько ждать после Completed, прежде чем убрать живой прогресс — успевает мигнуть галочка
@@ -240,17 +241,37 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Живой список шагов на карточку (UX-редизайн) — история, не только текущая стадия, см.
    * shared/pipeline-progress. */
   pipelineStepsByRecord: Record<string, PipelineStep[]> = {};
-  private readonly pollHandles = new Map<string, ReturnType<typeof setInterval>>();
   private readonly pipelineClearHandles = new Map<string, ReturnType<typeof setTimeout>>();
-  /** Подряд неудачных опросов статуса на запись — сетевой сбой ОДНОГО тика (моргнула сеть, вкладка
-   * была в фоне) не должен останавливать живой прогресс и разблокировать кнопку «Распознать», пока
-   * задача на бэкенде продолжает идти независимо от этого (баг, найденный на живом отчёте: "процесс
-   * шёл дальше, а UI считал, что распознавание остановилось"). Останавливаем поллинг только после
-   * MAX_CONSECUTIVE_POLL_FAILURES подряд неудач — это уже похоже на настоящий обрыв связи, не блип. */
-  private readonly pollFailureCounts = new Map<string, number>();
-  /** Записи, чей поллинг статуса сейчас замедлен (задача ждёт ИИ) — см. WAITING_POLL_INTERVAL_MS. */
-  private readonly slowPolling = new Set<string>();
-  /** §5 плана «живой конвейер» — отдельный от pollHandles поллинг: тот следит за самой
+  /** Опрос статуса распознавания по записям — см. extraction-poller.ts (сбой одного запроса не
+   * останавливает опрос, медленный режим, пока задача ждёт ИИ). */
+  private readonly extractionPoller = new ExtractionPoller<MedicalRecord>({
+    fetchStatus: (record) => this.api.getExtractionStatus(record.id),
+    onStatus: (record, status) => {
+      const prev = this.extractionStatusByRecord[record.id] ?? null;
+      this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
+      this.updatePipelineSteps(record.id, status, prev);
+    },
+    onFinished: async (record, status) => {
+      this.setRecognizing(record.id, false);
+      if (status.status === ExtractionJobStatus.Completed) {
+        await this.loadExtractionResult(record);
+        this.appendEnrichmentFollowupStep(record.id);
+        await this.refresh({ silent: true });
+        // Прячем виджет только после успеха. Сбой остаётся на экране, пока человек не уйдёт со
+        // страницы: раньше сообщение об ошибке исчезало через 2,5 с, и его легко было не заметить.
+        this.schedulePipelineClear(record.id);
+      }
+    },
+    onGaveUp: (record, err) => {
+      this.setRecognizing(record.id, false);
+      this.error = err instanceof ApiError ? err.message : 'Не удалось получить статус распознавания.';
+    },
+  }, {
+    intervalMs: EXTRACTION_POLL_INTERVAL_MS,
+    waitingIntervalMs: WAITING_POLL_INTERVAL_MS,
+    maxFailures: MAX_CONSECUTIVE_POLL_FAILURES,
+  });
+  /** §5 плана «живой конвейер» — отдельный от extractionPoller поллинг: тот следит за самой
    * экстракцией (короче, до "Готово"), этот — за обогащением ОТДЕЛЬНЫХ показателей после неё
    * (может идти и после того, как экстракция давно завершилась). См. syncEnrichmentPolling. */
   private readonly enrichmentPollHandles = new Map<string, ReturnType<typeof setInterval>>();
@@ -417,9 +438,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Опрос статуса распознавания использует setInterval — без явной остановки таймеры
    * пережили бы размонтирование панели (переключение вкладки Health-хаба). */
   ngOnDestroy(): void {
-    for (const handle of this.pollHandles.values()) clearInterval(handle);
-    this.pollHandles.clear();
-    this.pollFailureCounts.clear();
+    this.extractionPoller.stopAll();
     for (const handle of this.enrichmentPollHandles.values()) clearInterval(handle);
     this.enrichmentPollHandles.clear();
     for (const handle of this.summaryPollHandles.values()) clearInterval(handle);
@@ -892,11 +911,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * вообще никакого признака, что распознавание всё ещё идёт, до следующего ручного клика
    * «Распознать» (баг). Опирается на item.extractionStatus === Pending — это поле теперь честно
    * проставляется бэкендом (ExtractionRequestService/MedicalDocumentExtractionProcessor), а не
-   * только None/Ready, как было раньше. pollHandles уже используется как «эта запись опрашивается
-   * прямо сейчас» — вызов идемпотентен при повторных refresh(). */
+   * только None/Ready, как было раньше. extractionPoller.isPolling — «эта запись опрашивается
+   * прямо сейчас», вызов идемпотентен при повторных refresh(). */
   private resumeLivePolling(items: MedicalRecord[]): void {
     for (const item of items) {
-      if (item.extractionStatus === ExtractionStatus.Pending && !this.pollHandles.has(item.id)) {
+      if (item.extractionStatus === ExtractionStatus.Pending && !this.extractionPoller.isPolling(item.id)) {
         this.setRecognizing(item.id, true);
         this.startPolling(item);
       }
@@ -913,60 +932,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   private startPolling(record: MedicalRecord): void {
-    const existing = this.pollHandles.get(record.id);
-    if (existing) clearInterval(existing);
-    this.pollFailureCounts.delete(record.id);
-
-    const tick = async () => {
-      try {
-        const prev = this.extractionStatusByRecord[record.id] ?? null;
-        const status = await this.api.getExtractionStatus(record.id);
-        this.pollFailureCounts.delete(record.id);
-        this.extractionStatusByRecord = { ...this.extractionStatusByRecord, [record.id]: status };
-        this.updatePipelineSteps(record.id, status, prev);
-
-        // Пока задача ждёт ИИ (может быть часами), опрашиваем редко — 1,5 с на мёртвом сервере не нужны.
-        if (status.waitingForAi !== this.slowPolling.has(record.id) && !EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
-          if (status.waitingForAi) this.slowPolling.add(record.id); else this.slowPolling.delete(record.id);
-          const current = this.pollHandles.get(record.id);
-          if (current) clearInterval(current);
-          this.pollHandles.set(record.id, setInterval(
-            () => void tick(), status.waitingForAi ? WAITING_POLL_INTERVAL_MS : EXTRACTION_POLL_INTERVAL_MS));
-        }
-
-        if (EXTRACTION_TERMINAL_STATUSES.includes(status.status)) {
-          this.stopPolling(record.id);
-          this.setRecognizing(record.id, false);
-          if (status.status === ExtractionJobStatus.Completed) {
-            await this.loadExtractionResult(record);
-            this.appendEnrichmentFollowupStep(record.id);
-            await this.refresh({ silent: true });
-            // Прячем виджет только после успеха. Сбой остаётся на экране, пока человек не уйдёт со
-            // страницы: раньше сообщение об ошибке исчезало через 2,5 с, и его легко было не заметить.
-            this.schedulePipelineClear(record.id);
-          }
-        }
-      } catch (err) {
-        // Сетевой блип/вкладка была в фоне — сама задача на бэкенде продолжает идти независимо
-        // от того, долетел ли этот один запрос статуса. Останавливаем поллинг (и разблокируем
-        // кнопку) только после нескольких подряд неудач — раньше ЛЮБАЯ первая ошибка тут же
-        // прекращала опрос и снимала recognizing, хотя распознавание фактически продолжалось
-        // (баг, найденный на живом отчёте: "UI считает, что процесс остановился, а по факту
-        // шёл дальше"). Молча повторяем на следующем тике, ничего не показываем пользователю.
-        const failures = (this.pollFailureCounts.get(record.id) ?? 0) + 1;
-        if (failures < MAX_CONSECUTIVE_POLL_FAILURES) {
-          this.pollFailureCounts.set(record.id, failures);
-          return;
-        }
-        this.pollFailureCounts.delete(record.id);
-        this.stopPolling(record.id);
-        this.setRecognizing(record.id, false);
-        this.error = err instanceof ApiError ? err.message : 'Не удалось получить статус распознавания.';
-      }
-    };
-
-    void tick();
-    this.pollHandles.set(record.id, setInterval(() => void tick(), EXTRACTION_POLL_INTERVAL_MS));
+    this.extractionPoller.start(record);
   }
 
   /** Живой список шагов — логика в extraction-pipeline.ts (nextPipelineSteps). */
@@ -1007,16 +973,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       clearTimeout(handle);
       this.pipelineClearHandles.delete(recordId);
     }
-  }
-
-  private stopPolling(recordId: string): void {
-    const handle = this.pollHandles.get(recordId);
-    if (handle) {
-      clearInterval(handle);
-      this.pollHandles.delete(recordId);
-    }
-    this.pollFailureCounts.delete(recordId);
-    this.slowPolling.delete(recordId);
   }
 
   private async loadExtractionResult(record: MedicalRecord): Promise<void> {
