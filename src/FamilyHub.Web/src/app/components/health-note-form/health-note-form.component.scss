@@ -87,7 +87,7 @@
 }
 
 .dn-label {
-  font-family: var(--font-heading);
+  font-family: var(--font-ui);
   font-weight: 600;
   font-size: 0.7059rem;
   letter-spacing: 0.1em;
@@ -167,7 +167,7 @@
 }
 
 .dn-sev-word {
-  font-family: var(--font-heading);
+  font-family: var(--font-ui);
   font-weight: 600;
   color: var(--color-kind-symptom-text);
 }
@@ -235,7 +235,7 @@
 .dn-sleep-total {
   flex: 1;
   padding-bottom: 12px;
-  font-family: var(--font-heading);
+  font-family: var(--font-ui);
   font-weight: 600;
   color: var(--color-kind-sleep);
   white-space: nowrap;

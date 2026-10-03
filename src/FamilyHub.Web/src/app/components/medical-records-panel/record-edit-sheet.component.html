@@ -1,0 +1,50 @@
+<app-bottom-sheet title="Редактировать запись" [open]="true" (closed)="closed.emit()">
+  <!-- «Название» редактируемо: раньше выставлялось только распознаванием. -->
+  <label class="form-label">Название</label>
+  <input class="input mb-2" [(ngModel)]="form.title" [placeholder]="shortName()" />
+
+  <label class="form-label">Дата</label>
+  <input class="input mb-2" type="date" [(ngModel)]="form.recordDate" />
+
+  <label class="form-label">Врач</label>
+  <input class="input mb-2" [attr.list]="doctorsDatalistId()" [(ngModel)]="form.doctor" [placeholder]="labels().doctorPlaceholder" />
+
+  @if (record().kind === Kind.Analysis) {
+    <!-- Биоматериал ВСЕЙ записи: смена каскадится на все показатели и запускает пересчёт резюме.
+         Поле резолвится по уходу фокуса (find-or-register). -->
+    <label class="form-label">Биоматериал</label>
+    <input class="input mb-1" list="specimen-suggestions" placeholder="Кровь, моча, ЭКГ…"
+      [(ngModel)]="specimenQuery"
+      (ngModelChange)="onSpecimenQueryInput($event)"
+      (blur)="resolveSpecimen()" />
+    @if (checkingSpecimen) {
+      <div class="muted mb-2" style="font-size:0.7647rem">Проверяем источник…</div>
+    } @else if (specimenError) {
+      <div class="alert-danger mb-2" style="font-size:0.7647rem">{{ specimenError }}</div>
+    } @else if (specimenCheckDeferred) {
+      <div class="muted mb-2" style="font-size:0.7647rem">
+        ИИ недоступен — название сохранится и будет проверено автоматически, когда он вернётся.
+      </div>
+    } @else {
+      <div class="mb-2"></div>
+    }
+    <datalist id="specimen-suggestions">
+      @for (s of specimenSuggestions; track s.id) {
+        <option [value]="s.displayName"></option>
+      }
+      @for (c of customSpecimens; track c.specimenKbId) {
+        <option [value]="c.displayName"></option>
+      }
+    </datalist>
+  }
+
+  <label class="form-label">Описание</label>
+  <textarea class="input mb-2" [(ngModel)]="form.description" [placeholder]="labels().descriptionPlaceholder" rows="2"></textarea>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary btn-sm" [disabled]="saving || checkingSpecimen || !form.recordDate" (click)="save()">
+      {{ saving ? 'Сохраняем…' : 'Сохранить' }}
+    </button>
+    <button class="btn btn-ghost btn-sm" [disabled]="saving" (click)="closed.emit()">Отмена</button>
+  </div>
+</app-bottom-sheet>

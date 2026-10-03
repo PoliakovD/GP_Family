@@ -23,8 +23,8 @@
 | Приоритет | Всего | Закрыто |
 |---|---|---|
 | P0 | 32 | 32 |
-| P1 | 52 | 46 |
-| P2 | 19 | 18 |
+| P1 | 52 | 47 |
+| P2 | 19 | 19 |
 | P3 | 12 | 12 |
 
 ---
@@ -88,7 +88,7 @@
 - [ ] **P1-05** Ещё ~55 размеров <0.75rem в стилях компонентов + инлайн `font-size:0.7647rem` (`home.component.html:107-153`). → привести к шкале. — 🟡 частично: всё мельче 12px поднято до 12px (7972af9); инлайн 13px на Главной и в карточках остался
 - [x] **P1-06** Тап-таргеты <44px: `.btn-sm` 36px (обе кнопки confirm-диалога), `.btn-link` ≈25px («Назад/Отмена»), `back-link` ≈23px. → `min-height: var(--tap-min)`. — ✅ 7972af9
 - [x] **P1-07** Крошечные кнопки 20–28px: `.file-chip-remove`/`.photo-remove` 20px, `.it-box` «Принял» 28px (`intake-today.scss:117`), `.va-cal-check` 22px, действие в toast ≈22px. — ✅ 7972af9
-- [ ] **P1-08** Serif (Source Serif 4) на всём UI, включая цифры и 11–13px. → sans для интерфейса и чисел. — ❓ нужно решение по бренду: serif — часть дизайна из дэка; предлагаю sans для интерфейса и цифр, serif для заголовков
+- [x] **P1-08** Serif (Source Serif 4) на всём UI, включая цифры и 11–13px. → sans для интерфейса и чисел. — ✅ c423e23 (системный sans для интерфейса и цифр, serif для заголовков)
 - [x] **P1-09** Тосты: 6 с независимо от длины, без паузы, тап где угодно закрывает, нет `aria-live`, `top:12px` без safe-area (`shared/toast/*`). → дольше для ошибок, пауза, `role="status"/"alert"`, safe-area. — ✅ 7972af9
 
 ### Пустые состояния и первый шаг
@@ -168,7 +168,7 @@
 - [x] **P2-16** Сырые ISO-даты: `dependents-panel.html:61`, `settings-profile.html:65`, `indicators-tab.html:58,94`, `medications-panel.html:148`, `medical-records-panel.html:706,758`, `intake-course-card.ts:182`. — ✅ be66975
 - [x] **P2-17** Таймзона «Europe/Moscow» (`intake-reminders.html:106`); ключи модели как названия полей аптечки (`medications-panel.ts:324-334`). — ✅ be66975
 - [x] **P2-18** Telegram: нет `BackButton`, нет `themeParams`/`setHeaderColor`; перезагрузка может уронить в PWA-логин (`index.html`). — ✅ 021d8a0
-- [ ] **P2-19** `medical-records-panel` — god-компонент (1784+887 строк): разбить на список / деталь / таблицу показателей / шит доступа / сервис прогресса. — ⏭ отдельным PR: чистый рефакторинг без изменения поведения, рискованно без ручного прогона; план — вынести ExtractionProgressService (5 циклов опроса), RecordAccessSheetComponent, IndicatorTableComponent, затем разделить список и деталь
+- [x] **P2-19** `medical-records-panel` — god-компонент (1784+887 строк): разбить на список / деталь / таблицу показателей / шит доступа / сервис прогресса. — ✅ 44061ec…bae563b (PR #71 + PR feat/ui-ux-audit-followup): extraction-pipeline, indicator-display, ExtractionPoller, RecordAccessSheet, RecordEditSheet, IndicatorTable, IndicatorInfoController, RecordListCard/RecordDetailHeader/RecordDetailBody/RecordRecognitionStatus; код панели 1263 → 757 строк, шаблон 925 → 357, +50 тестов
 
 ---
 

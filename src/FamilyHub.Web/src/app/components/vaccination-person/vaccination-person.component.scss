@@ -79,7 +79,7 @@
 .vx-dose-sub { font-size: 0.7647rem; }
 .vx-dose-date { font-size: 0.7941rem; flex: none; }
 
-.vx-dose-when { font: 600 0.7647rem var(--font-heading); flex: none; }
+.vx-dose-when { font: 600 0.7647rem var(--font-ui); flex: none; }
 .vx-dose-when-soon { color: var(--color-accent-800); }
 .vx-dose-when-can { color: var(--color-status-warning-text); }
 .vx-dose-when-nodata { color: var(--color-neutral-500); }
@@ -94,7 +94,7 @@
 }
 
 .vx-series-kicker {
-  font: 600 0.6471rem/1 var(--font-heading);
+  font: 600 0.6471rem/1 var(--font-ui);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-accent);
@@ -116,7 +116,7 @@
 
 .vx-timeline-body { flex: 1; min-width: 0; padding-bottom: 16px; }
 .vx-timeline-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.vx-timeline-label { font-family: var(--font-heading); font-weight: 600; font-size: 0.9412rem; }
+.vx-timeline-label { font-family: var(--font-ui); font-weight: 600; font-size: 0.9412rem; }
 
 .vx-timeline-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .vx-file-chip {
