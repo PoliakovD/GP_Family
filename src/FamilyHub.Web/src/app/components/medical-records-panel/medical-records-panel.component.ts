@@ -688,6 +688,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   async refresh(options?: { silent?: boolean }): Promise<void> {
     const kind = this.kind();
     const recordId = this.recordId();
+    // Тихое обновление списка сохраняет уже подгруженные страницы: раньше после любого фонового
+    // события список обрезался до первых 50 записей, и человек терял место, до которого долистал.
+    const pagesToReload = options?.silent && !recordId && !this.usingTextFilter ? Math.max(1, this.page) : 1;
     this.loadedKind = kind;
     this.loadedRecordId = recordId;
     this.page = 1;
@@ -703,12 +706,16 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.totalCount = 1;
         this.shares = shares;
       } else {
-        const [page, shares] = await Promise.all([
-          this.api.getMedicalRecords(this.buildFilter()),
+        const filter = this.buildFilter();
+        const [pages, shares] = await Promise.all([
+          Promise.all(Array.from({ length: pagesToReload }, (_, i) => this.api.getMedicalRecords({ ...filter, page: i + 1 }))),
           this.api.getMedicalRecordShares(),
         ]);
-        this.items = page.items;
-        this.totalCount = page.totalCount;
+        // Записи могли сдвинуться между страницами (новая/удалённая запись) — убираем дубли по id.
+        const seen = new Set<string>();
+        this.items = pages.flatMap((p) => p.items).filter((r) => !seen.has(r.id) && seen.add(r.id));
+        this.totalCount = pages[pages.length - 1].totalCount;
+        this.page = pagesToReload;
         this.shares = shares;
       }
       // Открытая шторка должна остаться синхронной с перезагруженным состоянием записи.
