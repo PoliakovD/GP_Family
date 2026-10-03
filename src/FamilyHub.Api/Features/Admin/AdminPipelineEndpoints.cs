@@ -641,6 +641,14 @@ public static class AdminPipelineEndpoints
         // Одноразовый перепрогон (план "нормы из бланка: односторонние референсы и качественные
         // результаты") — чинит показатели, застрявшие на Flag.Unknown ДО фикса каскада
         // IndicatorFlagCalculator (RecomputeIndicatorFlagsBackfillJob), не часть обычного конвейера.
+        // Разовая ручная операция: определить, для каких единиц измерения старый кэш платного поиска
+        // содержит нормы (1 LLM-вызов на строку, батчами; LabAnalyteCacheUnitsBackfillJob).
+        group.MapPost("/search-cache/backfill-units", (IBackgroundJobClient backgroundJobs) =>
+        {
+            backgroundJobs.Enqueue<LabAnalyteCacheUnitsBackfillJob>(j => j.RunAsync(CancellationToken.None));
+            return Results.Accepted();
+        });
+
         group.MapPost("/recompute-indicator-flags", (IBackgroundJobClient backgroundJobs) =>
         {
             backgroundJobs.Enqueue<RecomputeIndicatorFlagsBackfillJob>(j => j.RunAsync(CancellationToken.None));

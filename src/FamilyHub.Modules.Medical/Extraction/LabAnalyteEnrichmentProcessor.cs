@@ -155,7 +155,11 @@ public class LabAnalyteEnrichmentProcessor(
             // → один запрос «… (кровь)»), у биоматериала без группы — его собственное название.
             var specimenDisplayNameForLog = (await searchCache.GetSearchGroupAsync(job.SpecimenKbId, ct)).QueryLabel;
 
-            if (cached is not null && cached.IsFresh)
+            // «Пробел по единице» (Force из LabAnalyteEnrichmentRequestService): если сохранённая выдача —
+            // даже устаревшая — уже содержит нормы в нужной (последней в списке) единице, платный повтор
+            // не нужен: пересуммаризируем кэш (LabAnalyteCacheUnitsBackfillJob заполняет Units старым строкам).
+            var gapUnit = job.Units?.Split(';', StringSplitOptions.TrimEntries).LastOrDefault();
+            if (cached is not null && (cached.IsFresh || (job.Force && cached.CoversUnit(gapUnit))))
             {
                 rawSnippets = cached.Snippets;
                 overrides = cached.Overrides;
@@ -221,7 +225,7 @@ public class LabAnalyteEnrichmentProcessor(
                     // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
                     // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) сразу после
                     // запроса, а не после успешной записи в справочник.
-                    await searchCache.RecordSearchAsync(job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct, job.Units);
                 }
             }
 

@@ -55,6 +55,21 @@
   </div>
 </div>
 
+<div class="card mb-3">
+  <div class="card-title">Единицы измерения в кэше поиска</div>
+  <div class="card-body">
+    <p class="text-muted mb-2">
+      Кэш платного поиска, накопленный до того, как в запрос стали добавляться единицы, не знает, для каких
+      единиц в сохранённой выдаче есть нормы. Один вызов локальной модели на строку кэша определяет это;
+      дальше показатель с новой единицей берёт нормы из кэша без платного запроса. Платных вызовов нет;
+      фоновая задача, батчами по 20 — запускайте один раз.
+    </p>
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="cacheUnitsBusy()" (click)="backfillCacheUnits()">
+      Определить единицы в кэше
+    </button>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-title">Переобогащение показателей со старой схемой</div>
   <div class="card-body">

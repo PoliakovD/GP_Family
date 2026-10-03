@@ -18,6 +18,7 @@ public class LabAnalyteSearchCacheConfiguration : IEntityTypeConfiguration<LabAn
         builder.Property(c => c.SpecimenKbId).IsRequired();
         builder.Property(c => c.SearchGroupKey).HasMaxLength(150).IsRequired();
         builder.Property(c => c.Provider).HasMaxLength(50).IsRequired();
+        builder.Property(c => c.Units).HasMaxLength(200);
 
         // Ключ — пара (показатель, группа поиска биоматериала): биоматериалы одной группы (кровь/венозная
         // кровь/плазма) делят одну строку кэша и один платный поиск (ADR-0018), SearchGroupKey у одиночного

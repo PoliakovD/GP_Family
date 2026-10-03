@@ -705,6 +705,7 @@ export class AdminApiService {
    * IndicatorFlagCalculator (односторонние референсы "<47"/">47", качественные результаты вида
    * "не обнаружено") — RecomputeIndicatorFlagsBackfillJob, ставится в Hangfire-очередь и работает
    * в фоне, эндпоинт сразу отвечает 202. */
+  backfillSearchCacheUnits = () => this.post<void>('/api/admin/pipeline/search-cache/backfill-units');
   recomputeIndicatorFlags = () => this.post<void>('/api/admin/pipeline/recompute-indicator-flags');
 
   // Инбокс «Требует внимания» — точка входа админки в разбор падений конвейера (см. план, Context).
