@@ -413,3 +413,14 @@
 
 // .file-chip*/.visually-hidden-input (модалка «Файлы») переехали в глобальный styles.scss
 // (редизайн v3, PR7) — переиспользуются и record-add.component.ts.
+
+// Пустой раздел у нового пользователя: что здесь будет и одна кнопка «начать».
+.records-empty {
+  align-items: flex-start;
+  gap: var(--space-1);
+
+  > i {
+    font-size: 2rem;
+    color: var(--color-accent);
+  }
+}

@@ -17,7 +17,6 @@ import { ToastService } from './shared/toast/toast.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 import { ToastContainerComponent } from './shared/toast/toast-container.component';
 import { ConfirmDialogComponent } from './shared/confirm/confirm-dialog.component';
-import { LoadingSpinnerComponent } from './shared/loading-spinner/loading-spinner.component';
 import { CookieBannerComponent } from './shared/cookie-banner/cookie-banner.component';
 import { AvatarComponent } from './shared/avatar/avatar.component';
 import { AppSearchComponent } from './components/app-search/app-search.component';
@@ -70,7 +69,6 @@ interface SidebarItem {
         DevPanelComponent,
         ToastContainerComponent,
         ConfirmDialogComponent,
-        LoadingSpinnerComponent,
         CookieBannerComponent,
         AvatarComponent,
         AppSearchComponent,

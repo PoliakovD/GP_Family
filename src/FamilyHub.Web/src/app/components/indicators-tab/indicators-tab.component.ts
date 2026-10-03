@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { IndicatorFlag } from '../../models/types';
 import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/types';
@@ -26,7 +27,7 @@ const ALL_PATIENTS_KEY = 'all';
  */
 @Component({
     selector: 'app-indicators-tab',
-    imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent],
+    imports: [LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent, RouterLink],
     templateUrl: './indicators-tab.component.html',
     styleUrl: './indicators-tab.component.scss'
 })

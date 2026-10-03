@@ -178,11 +178,13 @@
 
     <main class="app-content">
       @if (showTabs() && state.error()) {
-        <div class="alert-danger mb-2">{{ state.error() }}</div>
+        <div class="alert-danger mb-2" role="alert">
+          {{ state.error() }}
+          <button type="button" class="btn-link" (click)="state.refresh()">Повторить</button>
+        </div>
       }
-      @if (showTabs() && state.loading()) {
-        <app-loading-spinner />
-      }
+      <!-- Глобального спиннера больше нет: он стоял над спиннером каждой страницы (два спиннера и
+           прыжок вёрстки при старте). Страницы сами показывают загрузку и ждут state.loading(). -->
       @if (showTabs() && ai.unavailable()) {
         <!-- Локальный ИИ (LM Studio) недоступен: задачи не теряются, а ждут в очереди — говорим об
              этом сразу, чтобы «в процессе» на записях не выглядело как зависание. -->

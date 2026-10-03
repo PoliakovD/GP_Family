@@ -363,13 +363,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.pageAction.set({
         label: this.labels.addButtonLabel,
         icon: 'ph-bold ph-plus',
-        handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
+        handler: () => this.openCreate(),
       });
       // Батч-загрузка (несколько документов одного пациента, каждый — своя запись/свой прогон
       // пайплайна) — рядом с «+ Добавить», не заменяет его: тот сценарий (страницы одного бланка)
       // остаётся отдельным. См. class doc RecordBatchAddComponent.
       this.pageAction.setSecondaryAction({
-        label: 'Несколько',
+        label: 'Загрузить несколько',
         icon: 'ph-bold ph-stack',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
@@ -400,10 +400,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       this.pageAction.set({
         label: this.labels.addButtonLabel,
         icon: 'ph-bold ph-plus',
-        handler: () => { void this.router.navigate([this.kindBasePath(), 'new']); },
+        handler: () => this.openCreate(),
       });
       this.pageAction.setSecondaryAction({
-        label: 'Несколько',
+        label: 'Загрузить несколько',
         icon: 'ph-bold ph-stack',
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
@@ -843,6 +843,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // распознанные вложения последовательно за один прогон, не по клику на каждый файл) ---
 
   /** Видимость кнопки «Распознать» — по счётчику из DTO, БЕЗ загрузки списка вложений. */
+  /** Форма добавления — отдельный роут (кнопка в шапке и в пустом состоянии ведут сюда же). */
+  openCreate(): void {
+    void this.router.navigate([this.kindBasePath(), 'new']);
+  }
+
   hasUnrecognizedAttachments(record: MedicalRecord): boolean {
     return record.unrecognizedAttachmentCount > 0;
   }

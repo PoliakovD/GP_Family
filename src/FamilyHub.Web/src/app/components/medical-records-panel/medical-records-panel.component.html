@@ -694,7 +694,14 @@
     }
 
     @if (items.length === 0 && totalCount === 0) {
-      <p class="muted">{{ labels.emptyLabel }}</p>
+      <div class="card records-empty">
+        <i class="ph-duotone ph-camera" aria-hidden="true"></i>
+        <h3 class="card-title mb-1">{{ labels.emptyLabel }}</h3>
+        <p class="muted mb-2">{{ labels.emptyHint }}</p>
+        <button type="button" class="btn btn-primary" (click)="openCreate()">
+          <i class="ph-bold ph-plus" aria-hidden="true"></i> {{ labels.addButtonLabel }}
+        </button>
+      </div>
     }
 
     <!-- Редизайн v2 — бесконечная прокрутка вместо нумерованных страниц: группировка по

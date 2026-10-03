@@ -17,6 +17,15 @@ const ALL_TYPES = Object.values(NotificationType);
  * (push/Telegram раздельно). Запись в ленте /notifications создаётся всегда — здесь только про
  * канал доставки, см. FamilyHub.Domain.Entities.UserNotificationPreference.
  */
+function isIos(): boolean {
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isStandalone(): boolean {
+  return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
 @Component({
     selector: 'app-settings-notifications',
     imports: [FormsModule],
@@ -33,13 +42,29 @@ export class SettingsNotificationsComponent implements OnInit {
   readonly pushBusy = signal(false);
   readonly prefsBusy = signal(false);
   readonly preferences = signal<NotificationPreference[] | null>(null);
+  /** Не загрузились настройки — показываем «Повторить» вместо вечного «Загрузка…». */
+  readonly prefsLoadFailed = signal(false);
+
+  /** iPhone/iPad вне установленного на «Домой» приложения: Safari не даёт веб-уведомлений вовсе,
+   * и раньше человек видел «браузер не поддерживает» без подсказки, что делать. */
+  readonly iosNeedsInstall = isIos() && !isStandalone();
+  /** Пользователь однажды нажал «Запретить» — браузер больше не спросит, нужна инструкция. */
+  get permissionDenied(): boolean {
+    return typeof Notification !== 'undefined' && Notification.permission === 'denied';
+  }
 
   async ngOnInit(): Promise<void> {
     await this.auth.loadMe();
     void this.push.refreshStatus();
+    await this.loadPreferences();
+  }
+
+  async loadPreferences(): Promise<void> {
+    this.prefsLoadFailed.set(false);
     try {
       this.preferences.set(await this.api.getNotificationPreferences());
     } catch (e) {
+      this.prefsLoadFailed.set(true);
       this.toast.error(e instanceof ApiError ? e.message : 'Не удалось загрузить настройки уведомлений.');
     }
   }
@@ -71,19 +96,20 @@ export class SettingsNotificationsComponent implements OnInit {
     try {
       if (this.push.isSubscribed()) {
         await this.push.unsubscribe();
-        this.toast.success('Push-уведомления отключены.');
+        this.toast.success('Уведомления на этом устройстве выключены.');
       } else {
         await this.push.subscribe();
-        this.toast.success('Push-уведомления включены.');
+        this.toast.success('Уведомления на этом устройстве включены.');
       }
     } catch (e) {
-      this.toast.error(e instanceof ApiError ? e.message : 'Не удалось изменить push-уведомления.');
+      this.toast.error(e instanceof ApiError ? e.message : 'Не удалось изменить уведомления.');
     } finally {
       this.pushBusy.set(false);
     }
   }
 
   async setPreference(type: number, field: 'pushEnabled' | 'telegramEnabled', value: boolean): Promise<void> {
+    const previous = this.preferences();
     const next = this.rows.map((r) => (r.type === type ? { ...r, [field]: value } : r));
     this.preferences.set(next);
 
@@ -91,6 +117,8 @@ export class SettingsNotificationsComponent implements OnInit {
     try {
       await this.api.saveNotificationPreferences(next);
     } catch (e) {
+      // Откат: иначе тумблер показывал состояние, которое не сохранилось.
+      this.preferences.set(previous);
       this.toast.error(e instanceof ApiError ? e.message : 'Не удалось сохранить настройки уведомлений.');
     } finally {
       this.prefsBusy.set(false);

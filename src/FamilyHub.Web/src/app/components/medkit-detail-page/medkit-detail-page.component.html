@@ -1,6 +1,9 @@
 <div>
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger mb-2" role="alert">
+      {{ error }}
+      <button type="button" class="btn-link" (click)="load()">Повторить</button>
+    </div>
   }
 
   <div class="mb-3">
@@ -41,7 +44,7 @@
     </app-modal>
 
     <app-medications-panel [medkitId]="id()" (countChanged)="onCountChanged($event)" />
-  } @else {
-    <p class="muted">Аптечка не найдена.</p>
+  } @else if (!error) {
+    <p class="muted">Аптечка не найдена — возможно, её удалили.</p>
   }
 </div>

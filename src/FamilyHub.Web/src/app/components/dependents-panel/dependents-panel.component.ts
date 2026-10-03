@@ -141,7 +141,7 @@ export class DependentsPanelComponent implements OnInit {
   async handleDelete(id: string): Promise<void> {
     const confirmed = await this.confirm.confirm({
       title: 'Удалить профиль?',
-      message: 'Профиль и все связанные с ним анализы/посещения врачей будут удалены безвозвратно.',
+      message: 'Профиль и все связанные с ним анализы и приёмы врача будут удалены безвозвратно.',
       confirmText: 'Удалить',
       danger: true,
     });

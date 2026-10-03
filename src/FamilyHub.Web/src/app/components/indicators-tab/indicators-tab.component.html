@@ -39,10 +39,16 @@
   @if (loading) {
     <app-loading-spinner />
   } @else if (items.length === 0) {
-    <p class="muted">
-      Показателей пока нет — добавьте анализ и нажмите «Распознать» на вкладке «Анализы»,
-      и они появятся здесь.
-    </p>
+    <!-- Раньше отсылали к кнопке «Распознать», которой при автораспознавании уже нет. -->
+    <div class="card">
+      <h3 class="card-title mb-1">Показателей пока нет</h3>
+      <p class="muted mb-2">
+        Они появятся сами, когда вы добавите анализ: каждый показатель будет здесь с динамикой по датам.
+      </p>
+      <a class="btn btn-primary align-self-start" routerLink="/health/records/new">
+        <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить анализ
+      </a>
+    </div>
   } @else {
     @for (item of filteredItems; track item.analyteKey + ':' + item.specimenKbId + ':' + itemPatientKey(item)) {
       <div class="card mb-2 card-clickable" (click)="openDetail(item)">

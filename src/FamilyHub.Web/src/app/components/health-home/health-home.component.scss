@@ -295,3 +295,11 @@
 .hh-tool-sub-warn {
   color: var(--color-status-warning-text);
 }
+
+// Пустая плитка — не тупик: короткое «что здесь будет» и действие (вся плитка — ссылка в раздел).
+.hh-tile-cta {
+  color: var(--color-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

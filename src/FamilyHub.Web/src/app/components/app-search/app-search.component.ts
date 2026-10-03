@@ -12,7 +12,7 @@ const TYPE_LABEL: Record<number, string> = {
   [SearchResultType.Kb]: 'Справочник',
   [SearchResultType.Record]: 'Анализ',
   [SearchResultType.Birthday]: 'День рождения',
-  [SearchResultType.Visit]: 'Приём у врача',
+  [SearchResultType.Visit]: 'Приём врача',
 };
 
 const TYPE_ICON: Record<number, string> = {
@@ -40,7 +40,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
   { value: SearchResultType.Medication, label: 'Лекарства' },
   { value: SearchResultType.Kb, label: 'Справочник' },
   { value: SearchResultType.Record, label: 'Анализы' },
-  { value: SearchResultType.Visit, label: 'Посещения врачей' },
+  { value: SearchResultType.Visit, label: 'Приёмы врача' },
   { value: SearchResultType.Birthday, label: 'Дни рождения' },
 ];
 

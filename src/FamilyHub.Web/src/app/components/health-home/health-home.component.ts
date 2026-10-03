@@ -63,6 +63,10 @@ export class HealthHomeComponent implements OnInit {
     void this.load();
   }
 
+  protected reload(): void {
+    void this.load();
+  }
+
   private async load(): Promise<void> {
     this.loading.set(true);
     try {

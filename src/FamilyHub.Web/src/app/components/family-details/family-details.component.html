@@ -21,9 +21,18 @@
                 <span class="tag tag-neutral">{{ statusLabel(family.myStatus) }}</span>
             </div>
         } @else {
-            <span class="muted">Семья не найдена.</span>
+            <span class="muted">Семья не найдена — возможно, её удалили или вас исключили.</span>
+            <a class="btn btn-secondary btn-sm mt-2" routerLink="/families">Все семьи</a>
         }
     </div>
+
+    <!-- Заявка ещё не подтверждена — раньше был только серый тег, и человек не понимал, почему пусто. -->
+    @if (family && family.myStatus !== MemberStatus.Active) {
+        <div class="alert-info mb-3" role="status">
+            Администратор семьи ещё не подтвердил вашу заявку. Аптечка, дни рождения и участники станут
+            доступны сразу после подтверждения.
+        </div>
+    }
 
     @if (family) {
         <div class="seg mb-3">
