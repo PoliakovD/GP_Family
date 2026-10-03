@@ -149,6 +149,39 @@ public class FamilyDependentServiceTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task DeleteAsync_RemovesDoctorReportsAboutDependent_WithPdfBlobs()
+    {
+        var (family, admin) = Db.SeedFamilyWithAdmin();
+        var (_, dependent) = await _sut.CreateAsync(
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Миша", "Поляков", null, Gender.Male, null, false, null));
+        var report = new DoctorReport
+        {
+            Id = Guid.NewGuid(), OwnerUserId = admin.Id, SubjectFamilyDependentId = dependent!.Id,
+            PeriodFrom = new DateOnly(2026, 1, 1), PeriodTo = new DateOnly(2026, 2, 1), CreatedAt = DateTime.UtcNow,
+            PatientSnapshotJson = "{}",
+        };
+        var ownReport = new DoctorReport
+        {
+            Id = Guid.NewGuid(), OwnerUserId = admin.Id,
+            PeriodFrom = new DateOnly(2026, 1, 1), PeriodTo = new DateOnly(2026, 2, 1), CreatedAt = DateTime.UtcNow,
+            PatientSnapshotJson = "{}",
+        };
+        Db.DoctorReports.AddRange(report, ownReport);
+        Db.FileAttachments.Add(new FileAttachment
+        {
+            Id = Guid.NewGuid(), OwnerType = FileOwnerType.DoctorReport, OwnerId = report.Id, StorageKey = "blobs/re/po/report-key",
+            FileName = "doctor-report.pdf", ContentType = "application/pdf", SizeBytes = 10, IsEncrypted = true, UploadedAt = DateTime.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+
+        (await _sut.DeleteAsync(dependent.Id, admin.Id)).Should().Be(FamilyDependentAccessResult.Success);
+
+        (await Db.DoctorReports.AsNoTracking().Select(r => r.Id).ToListAsync()).Should().Equal(ownReport.Id);
+        (await Db.FileAttachments.AsNoTracking().AnyAsync(a => a.OwnerId == report.Id)).Should().BeFalse();
+        await _storage.Received(1).DeleteAsync("blobs/re/po/report-key", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task DeleteAsync_UnknownDependent_NotFound()
     {
         var admin = Db.AddUser();

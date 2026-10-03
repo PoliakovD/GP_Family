@@ -130,10 +130,13 @@ public class FamilyDependentService(
         // FileAttachment-строки/блобы — без FK, чистим явно, как у MedicalRecord.
         var vaccinationIds = await db.Vaccinations.Where(v => v.FamilyDependentId == dependentId).Select(v => v.Id).ToListAsync(ct);
         var certificateIds = await db.VaccinationCertificates.Where(c => c.FamilyDependentId == dependentId).Select(c => c.Id).ToListAsync(ct);
+        // Отчёты для врача о подопечном — без FK, PDF-блобы и публичные ссылки уходят вместе с ними.
+        var reportIds = await db.DoctorReports.Where(r => r.SubjectFamilyDependentId == dependentId).Select(r => r.Id).ToListAsync(ct);
         var storageKeys = await db.FileAttachments
             .Where(a => (a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
                      || (a.OwnerType == FileOwnerType.Vaccination && vaccinationIds.Contains(a.OwnerId))
-                     || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId)))
+                     || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId))
+                     || (a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId)))
             .Select(a => a.StorageKey)
             .ToListAsync(ct);
 
@@ -142,8 +145,10 @@ public class FamilyDependentService(
             await db.FileAttachments
                 .Where(a => (a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
                          || (a.OwnerType == FileOwnerType.Vaccination && vaccinationIds.Contains(a.OwnerId))
-                         || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId)))
+                         || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId))
+                         || (a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId)))
                 .ExecuteDeleteAsync(ct);
+            await db.DoctorReports.Where(r => r.SubjectFamilyDependentId == dependentId).ExecuteDeleteAsync(ct);
             // Задачи распознавания этих записей — без FK на запись, чистим явно (иначе висят в трее).
             await db.MedicalDocumentExtractionJobs.Where(j => recordIds.Contains(j.MedicalRecordId)).ExecuteDeleteAsync(ct);
             // MedicalRecordHidden по этим записям — каскадом FK (MedicalRecordHiddenConfiguration).

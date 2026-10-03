@@ -10,6 +10,19 @@ public enum DoctorReportLinkStatus
     Revoked = 3,
 }
 
+/// <summary>Кто пациент в отчёте. Числа — часть контракта с фронтом.</summary>
+public enum DoctorReportSubjectKind
+{
+    /// <summary>Автор сам.</summary>
+    Self = 0,
+
+    /// <summary>Взрослый член общей активной семьи с аккаунтом.</summary>
+    User = 1,
+
+    /// <summary>Подопечный семьи без аккаунта — человек или питомец.</summary>
+    Dependent = 2,
+}
+
 public enum DoctorReportResult
 {
     Success,
@@ -39,7 +52,22 @@ public record CreateDoctorReportRequest(
     string? Recipient,
     string? PatientComment,
     /// <summary>7, 14 или 30 — сразу выпустить ссылку на столько дней; null — без ссылки.</summary>
-    int? ShareDays);
+    int? ShareDays,
+    /// <summary>Для кого отчёт; без поля — о себе (старые клиенты).</summary>
+    DoctorReportSubjectKind SubjectKind = DoctorReportSubjectKind.Self,
+    /// <summary>Id пользователя или подопечного; для Self не нужен.</summary>
+    Guid? SubjectId = null);
+
+/// <summary>Кандидат в пациенты для формы. DiaryAvailable/VaccinationsAvailable — какие блоки вообще
+/// можно собрать: дневник есть только у людей с аккаунтом и чужой — только по гранту «Дневник»,
+/// прививки чужого взрослого — по гранту «Прививки», у питомцев прививок в приложении нет.</summary>
+public record DoctorReportSubjectDto(
+    DoctorReportSubjectKind Kind,
+    Guid? Id,
+    string Name,
+    bool IsPet,
+    bool DiaryAvailable,
+    bool VaccinationsAvailable);
 
 public record ShareDoctorReportRequest(int Days);
 
@@ -64,7 +92,16 @@ public record DoctorReportDto(
     int BlockCount,
     string? Recipient,
     DoctorReportBlocksDto Blocks,
-    DoctorReportLinkDto Link);
+    DoctorReportLinkDto Link,
+    DoctorReportSubjectKind SubjectKind = DoctorReportSubjectKind.Self,
+    Guid? SubjectId = null,
+    /// <summary>Имя пациента из снимка на момент формирования.</summary>
+    string? SubjectName = null,
+    bool SubjectIsPet = false,
+    /// <summary>Автор, если это не текущий пользователь (отчёт о нём составил член семьи).</summary>
+    string? CreatedByName = null,
+    /// <summary>Текущий пользователь — автор: может выдать ссылку и удалить. Пациент может только открыть и отозвать.</summary>
+    bool CanManage = true);
 
 /// <summary>Что видит врач на публичной странице до открытия PDF. Ничего лишнего: без email, без адресата.</summary>
 public record PublicReportMeta(
@@ -77,7 +114,8 @@ public record PublicReportMeta(
     DateTime CreatedAt,
     DateTime ExpiresAt,
     int PageCount,
-    IReadOnlyList<string> Sections);
+    IReadOnlyList<string> Sections,
+    bool IsPet = false);
 
 /// <summary>Снимок пациента и состава отчёта на момент формирования (DoctorReport.PatientSnapshotJson).</summary>
-public record ReportSnapshot(string FullName, string? Sex, DateOnly? BirthDate, IReadOnlyList<string> Sections);
+public record ReportSnapshot(string FullName, string? Sex, DateOnly? BirthDate, IReadOnlyList<string> Sections, bool IsPet = false);

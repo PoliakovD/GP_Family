@@ -41,7 +41,7 @@ public static class DoctorReportHtmlRenderer
     public static string Render(ReportModel m)
     {
         var sb = new StringBuilder(16 * 1024);
-        sb.Append("<!DOCTYPE html><html lang=\"ru\"><head><meta charset=\"utf-8\"><title>Отчёт для врача</title><style>")
+        sb.Append("<!DOCTYPE html><html lang=\"ru\"><head><meta charset=\"utf-8\"><title>").Append(Title(m)).Append("</title><style>")
           .Append(Css)
           .Append("</style></head><body>");
 
@@ -66,7 +66,7 @@ public static class DoctorReportHtmlRenderer
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" +
         "body{margin:0;font-family:'Liberation Sans',Arial,sans-serif;font-size:8px;color:#777}" +
         ".f{display:flex;justify-content:space-between;width:100%;padding:0 0.6in;box-sizing:border-box}" +
-        "</style></head><body><div class=\"f\"><span>FamilyHub · отчёт пациента для врача · " +
+        "</style></head><body><div class=\"f\"><span>FamilyHub · " + (m.Patient.IsPet ? "отчёт для ветеринара" : "отчёт пациента для врача") + " · " +
         E(m.Patient.ShortName) + " · " + Period(m) +
         "</span><span>стр. <span class=\"pageNumber\"></span> из <span class=\"totalPages\"></span></span></div></body></html>";
 
@@ -75,20 +75,26 @@ public static class DoctorReportHtmlRenderer
     private static void AppendHeader(StringBuilder sb, ReportModel m)
     {
         var age = Age(m.Patient.BirthDate, m.To);
-        sb.Append("<header><div class=\"title\">Отчёт для врача</div><div class=\"sub\">")
+        sb.Append("<header><div class=\"title\">").Append(Title(m)).Append("</div><div class=\"sub\">")
           .Append(E(m.Patient.FullName)).Append("</div></header>");
 
-        sb.Append("<table class=\"meta\"><tr><td class=\"k\">Пациент</td><td>").Append(E(m.Patient.FullName)).Append("</td>")
+        sb.Append("<table class=\"meta\"><tr><td class=\"k\">").Append(m.Patient.IsPet ? "Питомец" : "Пациент").Append("</td><td>").Append(E(m.Patient.FullName)).Append("</td>")
           .Append("<td class=\"k\">Период</td><td>").Append(Period(m)).Append("</td></tr>")
           .Append("<tr><td class=\"k\">Пол, возраст</td><td>")
           .Append(E(string.Join(", ", new[] { m.Patient.Sex, age is null ? null : $"{age} {Years(age.Value)}" }.Where(x => x is not null))))
           .Append(m.Patient.Sex is null && age is null ? "—" : "").Append("</td>")
           .Append("<td class=\"k\">Дата рождения</td><td>")
           .Append(m.Patient.BirthDate is { } b ? Date(b) : "—").Append("</td></tr>")
-          .Append("<tr><td class=\"k\">Сформирован</td><td colspan=\"3\">").Append(Date(DateOnly.FromDateTime(m.GeneratedAt))).Append("</td></tr></table>");
+          .Append("<tr><td class=\"k\">Сформирован</td><td colspan=\"3\">").Append(Date(DateOnly.FromDateTime(m.GeneratedAt))).Append("</td></tr>");
+        // Со слов кого данные: отчёт о ребёнке/родителе/питомце составляет член семьи.
+        if (!string.IsNullOrWhiteSpace(m.Patient.CompiledBy))
+            sb.Append("<tr><td class=\"k\">Составил(а)</td><td colspan=\"3\">").Append(E(m.Patient.CompiledBy!)).Append("</td></tr>");
+        sb.Append("</table>");
 
         sb.Append("<div class=\"notice\">").Append(E(Disclaimer)).Append("</div>");
     }
+
+    private static string Title(ReportModel m) => m.Patient.IsPet ? "Отчёт для ветеринара" : "Отчёт для врача";
 
     private static void AppendComplaints(StringBuilder sb, ReportModel m, int n)
     {

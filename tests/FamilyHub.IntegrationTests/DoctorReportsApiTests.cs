@@ -3,8 +3,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using FamilyHub.Api.Features.Dependents;
+using FamilyHub.Api.Features.Invites;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Modules.Medical.MedicalRecords;
 using FamilyHub.Modules.Medical.DoctorReports;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -210,5 +213,92 @@ public class DoctorReportsApiTests(FamilyHubWebFactory factory) : IntegrationTes
         var json = await reader.ReadToEndAsync();
         json.Should().Contain(report.Id.ToString()).And.Contain("Слабость и головные боли");
         json.Should().NotContain(report.Link.Token!, "токен публичной ссылки в экспорт не попадает");
+    }
+
+    // ---- Отчёт для члена семьи и подопечного ----
+
+    private record CreateFamilyResponseDto(Guid Id);
+    private record CreateInviteResponseDto(Guid Id, string Code);
+    private record PendingMemberDto(Guid UserId);
+
+    private async Task<(Guid FamilyId, HttpClient Admin, HttpClient Member)> FamilyWithMemberAsync()
+    {
+        var admin = ClientAs(FreshTelegramId());
+        var family = await (await admin.PostAsJsonAsync("/api/families", new { Name = $"Семья {Guid.NewGuid():N}" }))
+            .Content.ReadFromJsonAsync<CreateFamilyResponseDto>(JsonOpts);
+        var invite = await (await admin.PostAsJsonAsync($"/api/families/{family!.Id}/invites",
+                new CreateInviteRequest(TargetUserId: null, AssignedRole: FamilyRole.Member, MaxUses: 1, ExpiresAt: null)))
+            .Content.ReadFromJsonAsync<CreateInviteResponseDto>(JsonOpts);
+        var member = ClientAs(FreshTelegramId());
+        await member.PostAsync($"/api/invites/{invite!.Code}/redeem", null);
+        var pending = await (await admin.GetAsync($"/api/families/{family.Id}/pending"))
+            .Content.ReadFromJsonAsync<List<PendingMemberDto>>(JsonOpts);
+        await admin.PostAsync($"/api/families/{family.Id}/members/{pending!.Single().UserId}/approve", null);
+        return (family.Id, admin, member);
+    }
+
+    private static object BodyFor(DoctorReportSubjectKind kind, Guid id, int? shareDays = 14) => new
+    {
+        periodFrom = DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-6).ToString("yyyy-MM-dd"),
+        periodTo = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"),
+        includeLabs = true,
+        includeVisits = true,
+        recipient = "кардиолог",
+        shareDays,
+        subjectKind = (int)kind,
+        subjectId = id,
+    };
+
+    [Fact]
+    public async Task ReportAboutFamilyMember_TheySeeIt_CanRevoke_CannotDelete_AndAccountErasureRemovesIt()
+    {
+        var (familyId, admin, member) = await FamilyWithMemberAsync();
+        (await member.PostAsJsonAsync("/api/medical-records",
+                new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), "Кардиолог", "ЭКГ", null, MedicalRecordKind.DoctorVisit)))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
+        (await member.PostAsJsonAsync("/api/medical-records/share", new ShareFamilyRequest(familyId)))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var subjects = await admin.GetFromJsonAsync<List<DoctorReportSubjectDto>>("/api/doctor-reports/subjects", JsonOpts);
+        var target = subjects!.Single(s => s.Kind == DoctorReportSubjectKind.User);
+
+        var created = await admin.PostAsJsonAsync("/api/doctor-reports", BodyFor(DoctorReportSubjectKind.User, target.Id!.Value));
+        created.StatusCode.Should().Be(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var report = (await created.Content.ReadFromJsonAsync<DoctorReportDto>(JsonOpts))!;
+
+        var theirs = (await member.GetFromJsonAsync<List<DoctorReportDto>>("/api/doctor-reports", JsonOpts))!.Single();
+        theirs.Id.Should().Be(report.Id);
+        theirs.CanManage.Should().BeFalse();
+        theirs.Recipient.Should().BeNull();
+        (await member.GetAsync($"/api/doctor-reports/{report.Id}/pdf")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await member.DeleteAsync($"/api/doctor-reports/{report.Id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await member.PostAsync($"/api/doctor-reports/{report.Id}/revoke", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await Anonymous().GetAsync($"/api/public/doctor-reports/{report.Link.Token}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        (await member.PostAsJsonAsync("/api/account/delete", new { confirm = "DELETE" })).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.DoctorReports.AnyAsync(r => r.Id == report.Id)).Should().BeFalse("снимок данных пациента не переживает его аккаунт");
+    }
+
+    [Fact]
+    public async Task ReportAboutDependent_AndStrangerCannotTarget()
+    {
+        var (familyId, admin, _) = await FamilyWithMemberAsync();
+        var depResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/dependents",
+            new CreateFamilyDependentRequest("Миша", "Поляков", null, Gender.Male, null, false, null));
+        var dependentId = (await depResponse.Content.ReadFromJsonAsync<FamilyDependentDto>(JsonOpts))!.Id;
+        (await admin.PostAsJsonAsync("/api/medical-records",
+                new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), "Педиатр", "Осмотр", null,
+                    MedicalRecordKind.DoctorVisit, FamilyDependentId: dependentId)))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var created = await admin.PostAsJsonAsync("/api/doctor-reports", BodyFor(DoctorReportSubjectKind.Dependent, dependentId));
+        created.StatusCode.Should().Be(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        (await created.Content.ReadFromJsonAsync<DoctorReportDto>(JsonOpts))!.SubjectName.Should().Be("Поляков Миша");
+
+        var stranger = ClientAs(FreshTelegramId());
+        (await stranger.PostAsJsonAsync("/api/doctor-reports", BodyFor(DoctorReportSubjectKind.Dependent, dependentId)))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

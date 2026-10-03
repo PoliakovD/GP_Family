@@ -6,15 +6,21 @@ using FamilyHub.Domain.ValueObjects;
 using FamilyHub.Domain.Vaccinations;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Modules.Medical.Extraction;
+using FamilyHub.Modules.Medical.MedicalRecords;
 using Microsoft.EntityFrameworkCore;
 
 namespace FamilyHub.Modules.Medical.DoctorReports;
 
 /// <summary>
-/// Собирает данные пациента за период для отчёта врачу. «Пациент» здесь — только сам пользователь:
-/// записи, где он и владелец, и адресат (без подопечных и без загруженных им за других), плюс записи,
-/// которые другие загрузили лично для него (TargetUserId). Шаринг семье на отчёт не влияет —
-/// отчёт строит владелец про себя. Дневник — строго личный, берётся целиком по OwnerUserId.
+/// Собирает данные пациента за период для отчёта врачу (<see cref="ReportSubject"/>):
+/// <list type="bullet">
+/// <item>сам автор — записи, где он и владелец, и адресат (без подопечных и без загруженных им за других),
+/// плюс загруженные другими лично для него (TargetUserId); дневник целиком;</item>
+/// <item>взрослый член семьи — те же записи этого человека, но только видимые автору (шаринг семье,
+/// загруженные автором для него); дневник и прививки — только если человек дал автору грант;</item>
+/// <item>подопечный — все его записи (их видит любой активный член семьи) и прививки; дневника у подопечных нет.</item>
+/// </list>
+/// Доступ к самому пациенту проверяет вызывающий (DoctorReportSubjects).
 /// </summary>
 public class DoctorReportDataCollector(AppDbContext db)
 {
@@ -23,12 +29,26 @@ public class DoctorReportDataCollector(AppDbContext db)
     private const int MaxNotes = 30;
     private const int MaxSeriesPoints = 60;
 
-    /// <summary>Записи, где пациент — сам пользователь (см. класс).</summary>
-    private IQueryable<MedicalRecord> PatientRecords(Guid userId, DateOnly from, DateOnly to) =>
-        db.MedicalRecords.AsNoTracking().Where(r =>
-            r.RecordDate >= from && r.RecordDate <= to
-            && ((r.OwnerUserId == userId && r.FamilyDependentId == null && r.TargetUserId == null)
-                || r.TargetUserId == userId));
+    /// <summary>Записи пациента за период (см. класс).</summary>
+    private IQueryable<MedicalRecord> PatientRecords(ReportSubject subject, DateOnly from, DateOnly to)
+    {
+        IQueryable<MedicalRecord> query;
+        if (subject.DependentId is { } dependentId)
+        {
+            query = db.MedicalRecords.AsNoTracking().Where(r => r.FamilyDependentId == dependentId);
+        }
+        else
+        {
+            var userId = subject.UserId!.Value;
+            var source = subject.IsSelf ? db.MedicalRecords.AsNoTracking() : MedicalRecordVisibility.Visible(db, subject.ViewerId);
+            query = source.Where(r =>
+                (r.OwnerUserId == userId && r.FamilyDependentId == null && r.TargetUserId == null) || r.TargetUserId == userId);
+        }
+        return query.Where(r => r.RecordDate >= from && r.RecordDate <= to);
+    }
+
+    /// <summary>Чей дневник читать: null — дневник в отчёт не попадает (подопечный или нет гранта).</summary>
+    private static Guid? DiaryOwner(ReportSubject subject) => subject.IncludeDiary ? subject.UserId : null;
 
     /// <summary>Границы дневника в UTC: [from 00:00, to+1 00:00). Часовой пояс пользователя серверу
     /// неизвестен — сутки считаются по UTC, расхождение не больше смещения пояса на краях периода.</summary>
@@ -36,11 +56,16 @@ public class DoctorReportDataCollector(AppDbContext db)
         (new DateTime(from.Year, from.Month, from.Day, 0, 0, 0, DateTimeKind.Utc),
          new DateTime(to.Year, to.Month, to.Day, 0, 0, 0, DateTimeKind.Utc).AddDays(1));
 
-    public async Task<ReportCounts> CountAsync(Guid userId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    public Task<ReportCounts> CountAsync(Guid userId, DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        CountAsync(ReportSubject.Self(userId), from, to, ct);
+
+    public async Task<ReportCounts> CountAsync(ReportSubject subject, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var records = PatientRecords(userId, from, to);
+        var records = PatientRecords(subject, from, to);
         var analyses = await records.CountAsync(r => r.Kind == MedicalRecordKind.Analysis, ct);
         var visits = await records.CountAsync(r => r.Kind == MedicalRecordKind.DoctorVisit, ct);
+        if (DiaryOwner(subject) is not { } userId) return new ReportCounts(analyses, visits, 0, 0);
+
         var (fromUtc, toUtc) = DiaryBounds(from, to);
         var diary = await db.HealthNotes.AsNoTracking()
             .CountAsync(n => n.OwnerUserId == userId && n.OccurredAt >= fromUtc && n.OccurredAt < toUtc, ct);
@@ -50,16 +75,21 @@ public class DoctorReportDataCollector(AppDbContext db)
         return new ReportCounts(analyses, visits, diary, flagged);
     }
 
-    public async Task<ReportModel> CollectAsync(
+    public Task<ReportModel> CollectAsync(
         Guid userId, DateOnly from, DateOnly to, ReportBlocks blocks, string? patientComment,
+        CancellationToken ct = default) =>
+        CollectAsync(ReportSubject.Self(userId), from, to, blocks, patientComment, ct);
+
+    public async Task<ReportModel> CollectAsync(
+        ReportSubject subject, DateOnly from, DateOnly to, ReportBlocks blocks, string? patientComment,
         CancellationToken ct = default)
     {
-        var patient = await LoadPatientAsync(userId, ct);
-        var records = await PatientRecords(userId, from, to).OrderBy(r => r.RecordDate).ToListAsync(ct);
+        var patient = await LoadPatientAsync(subject, ct);
+        var records = await PatientRecords(subject, from, to).OrderBy(r => r.RecordDate).ToListAsync(ct);
         var analyses = records.Where(r => r.Kind == MedicalRecordKind.Analysis).ToList();
         var visitRecords = records.Where(r => r.Kind == MedicalRecordKind.DoctorVisit).ToList();
 
-        var diary = await LoadDiaryAsync(userId, from, to, ct);
+        var diary = DiaryOwner(subject) is { } diaryOwner ? await LoadDiaryAsync(diaryOwner, from, to, ct) : [];
 
         var flagged = diary
             .Where(d => d.Note.Kind == HealthNoteKind.Note && d.Note.IncludeInDoctorQuestions && !string.IsNullOrWhiteSpace(d.Content.Text))
@@ -101,7 +131,9 @@ public class DoctorReportDataCollector(AppDbContext db)
                 .ToList();
         }
 
-        List<ReportVaccination>? vaccinations = blocks.Vaccinations ? await BuildVaccinationsAsync(userId, from, to, ct) : null;
+        List<ReportVaccination>? vaccinations = blocks.Vaccinations
+            ? (subject.IncludeVaccinations ? await BuildVaccinationsAsync(subject, from, to, ct) : [])
+            : null;
 
         return new ReportModel(
             patient, from, to, DateTime.UtcNow, blocks,
@@ -109,14 +141,15 @@ public class DoctorReportDataCollector(AppDbContext db)
             flagged, labs, summaries, skipped, meds, visits, metrics, wellbeing, sleep, symptoms, notes, vaccinations);
     }
 
-    /// <summary>Сделанные прививки и перенесённые болезни за период — только сам пользователь
-    /// (отчёт строго персональный, как весь остальной сбор данных этого класса). Название и доза —
+    /// <summary>Сделанные прививки и перенесённые болезни пациента за период. Название и доза —
     /// уже разрешены через VaccineCatalog по SeriesCode/DoseIndex, не сырые коды.</summary>
-    private async Task<List<ReportVaccination>> BuildVaccinationsAsync(Guid userId, DateOnly from, DateOnly to, CancellationToken ct)
+    private async Task<List<ReportVaccination>> BuildVaccinationsAsync(ReportSubject subject, DateOnly from, DateOnly to, CancellationToken ct)
     {
-        var rows = await db.Vaccinations.AsNoTracking()
-            .Where(v => v.SubjectUserId == userId
-                        && (v.Kind == VaccinationKind.Done || v.Kind == VaccinationKind.HadDisease)
+        var bySubject = subject.DependentId is { } dependentId
+            ? db.Vaccinations.AsNoTracking().Where(v => v.FamilyDependentId == dependentId)
+            : db.Vaccinations.AsNoTracking().Where(v => v.SubjectUserId == subject.UserId);
+        var rows = await bySubject
+            .Where(v => (v.Kind == VaccinationKind.Done || v.Kind == VaccinationKind.HadDisease)
                         && v.Date != null && v.Date >= from && v.Date <= to)
             .OrderBy(v => v.Date)
             .ToListAsync(ct);
@@ -132,13 +165,30 @@ public class DoctorReportDataCollector(AppDbContext db)
         }).ToList();
     }
 
-    private async Task<ReportPatient> LoadPatientAsync(Guid userId, CancellationToken ct)
+    private async Task<ReportPatient> LoadPatientAsync(ReportSubject subject, CancellationToken ct)
     {
-        var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId, ct);
-        var full = PersonName.Format(user.LastName, user.FirstName, user.MiddleName, PersonNameStyle.Full).Trim();
-        var shortName = PersonName.Format(user.LastName, user.FirstName, user.MiddleName, PersonNameStyle.Initials).Trim();
-        var sex = user.Gender switch { Gender.Male => "м", Gender.Female => "ж", _ => null };
-        return new ReportPatient(string.IsNullOrEmpty(full) ? "Пациент" : full, string.IsNullOrEmpty(shortName) ? "Пациент" : shortName, sex, user.BirthDate);
+        if (subject.DependentId is { } dependentId)
+        {
+            var dep = await db.FamilyDependents.AsNoTracking().SingleAsync(d => d.Id == dependentId, ct);
+            if (dep.IsPet)
+            {
+                var petName = string.IsNullOrWhiteSpace(dep.PetSpecies) ? dep.FirstName.Trim() : $"{dep.FirstName.Trim()} ({dep.PetSpecies.Trim()})";
+                var petSex = dep.Gender switch { Gender.Male => "самец", Gender.Female => "самка", _ => null };
+                return new ReportPatient(petName, dep.FirstName.Trim(), petSex, dep.BirthDate, IsPet: true);
+            }
+            return BuildPatient(dep.LastName, dep.FirstName, dep.MiddleName, dep.Gender, dep.BirthDate);
+        }
+
+        var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == subject.UserId, ct);
+        return BuildPatient(user.LastName, user.FirstName, user.MiddleName, user.Gender, user.BirthDate);
+    }
+
+    private static ReportPatient BuildPatient(string? lastName, string? firstName, string? middleName, Gender? gender, DateOnly? birthDate)
+    {
+        var full = PersonName.Format(lastName, firstName, middleName, PersonNameStyle.Full).Trim();
+        var shortName = PersonName.Format(lastName, firstName, middleName, PersonNameStyle.Initials).Trim();
+        var sex = gender switch { Gender.Male => "м", Gender.Female => "ж", _ => null };
+        return new ReportPatient(string.IsNullOrEmpty(full) ? "Пациент" : full, string.IsNullOrEmpty(shortName) ? "Пациент" : shortName, sex, birthDate);
     }
 
     private sealed record DiaryEntry(HealthNote Note, HealthNoteContent Content);

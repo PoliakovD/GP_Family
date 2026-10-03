@@ -2,6 +2,8 @@ using System.Text;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Audit;
+using FamilyHub.Infrastructure.Authorization;
+using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Previews;
 using FamilyHub.Infrastructure.Security;
@@ -46,7 +48,10 @@ public class DoctorReportServiceTests : SqliteTestBase
             .Returns(Task.FromResult<byte[]?>(TwoPagePdf()));
 
         _sut = new DoctorReportService(
-            Db, new DoctorReportDataCollector(Db), _gotenberg, new AesGcmFileCipher(_keyRing), _storage, _keyRing,
+            Db, new DoctorReportDataCollector(Db),
+            new DoctorReportSubjects(Db, new FamilyAccessService(Db, NullLogger<FamilyAccessService>.Instance)),
+            new NotificationSendingService(Db, [], NullLogger<NotificationSendingService>.Instance),
+            _gotenberg, new AesGcmFileCipher(_keyRing), _storage, _keyRing,
             new MedicalAuditWriter(Db), NullLogger<DoctorReportService>.Instance);
 
         _me = Db.AddUser();
@@ -406,5 +411,162 @@ public class DoctorReportServiceTests : SqliteTestBase
         ok.Result.Should().Be(DoctorReportResult.Success);
         ok.Counts.Should().Be(new ReportCounts(0, 0, 0, 0));
         bad.Result.Should().Be(DoctorReportResult.Invalid);
+    }
+
+    // ---- Отчёт не о себе ----
+
+    private (Family Family, User Other) FamilyWithOther()
+    {
+        var family = TestData.NewFamily();
+        Db.Families.Add(family);
+        Db.FamilyMembers.Add(TestData.NewMember(family.Id, _me.Id, FamilyRole.Admin, MemberStatus.Active));
+        Db.SaveChanges();
+        var other = Db.AddMember(family.Id);
+        other.LastName = "Полякова";
+        other.FirstName = "Анна";
+        Db.SaveChanges();
+        return (family, other);
+    }
+
+    private FamilyDependent AddDependent(Guid familyId, bool isPet = false)
+    {
+        var d = new FamilyDependent
+        {
+            Id = Guid.NewGuid(), FamilyId = familyId, FirstName = isPet ? "Барсик" : "Миша", LastName = isPet ? null : "Поляков",
+            Gender = Gender.Male, IsPet = isPet, PetSpecies = isPet ? "кот" : null, CreatedByUserId = _me.Id, CreatedAt = DateTime.UtcNow,
+        };
+        Db.FamilyDependents.Add(d);
+        Db.SaveChanges();
+        return d;
+    }
+
+    private void AddRecordFor(Guid ownerId, Guid? dependentId = null, Guid? target = null)
+    {
+        var r = TestData.NewMedicalRecord(ownerId, MedicalRecordKind.DoctorVisit);
+        r.RecordDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-10);
+        r.FamilyDependentId = dependentId;
+        r.TargetUserId = target;
+        r.Title = "Приём";
+        Db.MedicalRecords.Add(r);
+        Db.SaveChanges();
+    }
+
+    private static CreateDoctorReportRequest RequestFor(DoctorReportSubjectKind kind, Guid id, int? shareDays = null) =>
+        Request(shareDays, recipient: "педиатр") with { SubjectKind = kind, SubjectId = id };
+
+    [Fact]
+    public async Task Create_ForDependent_StoresSubject_AndSnapshotName()
+    {
+        var (family, _) = FamilyWithOther();
+        var child = AddDependent(family.Id);
+        AddRecordFor(_me.Id, dependentId: child.Id);
+
+        var (result, item, error) = await _sut.CreateAsync(_me.Id, RequestFor(DoctorReportSubjectKind.Dependent, child.Id));
+
+        result.Should().Be(DoctorReportResult.Success, error);
+        item!.SubjectKind.Should().Be(DoctorReportSubjectKind.Dependent);
+        item.SubjectId.Should().Be(child.Id);
+        item.SubjectName.Should().Be("Поляков Миша");
+        item.CanManage.Should().BeTrue();
+        Row(item.Id).SubjectFamilyDependentId.Should().Be(child.Id);
+        Db.Notifications.AsNoTracking().Should().BeEmpty("у подопечного нет аккаунта — уведомлять некого");
+    }
+
+    [Fact]
+    public async Task Create_ForPet_PublicPageKnowsItIsAPet()
+    {
+        var (family, _) = FamilyWithOther();
+        var cat = AddDependent(family.Id, isPet: true);
+        AddRecordFor(_me.Id, dependentId: cat.Id);
+
+        var (_, item, error) = await _sut.CreateAsync(_me.Id, RequestFor(DoctorReportSubjectKind.Dependent, cat.Id, shareDays: 7));
+
+        item.Should().NotBeNull(error);
+        item!.SubjectIsPet.Should().BeTrue();
+        var meta = await _sut.GetPublicMetaAsync(item.Link.Token!);
+        meta!.IsPet.Should().BeTrue();
+        meta.PatientName.Should().Be("Барсик (кот)");
+    }
+
+    [Fact]
+    public async Task Create_ForSomeoneOutsideMyFamilies_IsNotFound()
+    {
+        var (family, _) = FamilyWithOther();
+        var (strangerFamily, strangerAdmin) = Db.SeedFamilyWithAdmin();
+        var strangerChild = AddDependent(strangerFamily.Id);
+        AddRecordFor(strangerAdmin.Id);
+
+        (await _sut.CreateAsync(_me.Id, RequestFor(DoctorReportSubjectKind.User, strangerAdmin.Id))).Result
+            .Should().Be(DoctorReportResult.NotFound);
+        (await _sut.CreateAsync(_me.Id, RequestFor(DoctorReportSubjectKind.Dependent, strangerChild.Id))).Result
+            .Should().Be(DoctorReportResult.NotFound);
+        (await _sut.PreviewAsync(_me.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddMonths(-1), DateOnly.FromDateTime(DateTime.UtcNow),
+            default, DoctorReportSubjectKind.Dependent, strangerChild.Id)).Result.Should().Be(DoctorReportResult.NotFound);
+        Db.DoctorReports.Should().BeEmpty();
+        _ = family;
+    }
+
+    [Fact]
+    public async Task Create_ForFamilyMember_NotifiesThem_WithoutMedicalDetails()
+    {
+        var (_, other) = FamilyWithOther();
+        AddRecordFor(_me.Id, target: other.Id);
+
+        var (result, item, error) = await _sut.CreateAsync(_me.Id, RequestFor(DoctorReportSubjectKind.User, other.Id));
+
+        result.Should().Be(DoctorReportResult.Success, error);
+        Row(item!.Id).SubjectUserId.Should().Be(other.Id);
+        var notification = Db.Notifications.AsNoTracking().Single();
+        notification.UserId.Should().Be(other.Id);
+        notification.Type.Should().Be(NotificationType.DoctorReportAboutYou);
+        notification.RelatedEntityId.Should().Be(item.Id);
+        notification.RelatedEntityKind.Should().Be(NotificationRelatedKind.DoctorReport);
+        notification.Body.Should().NotContain("Приём").And.NotContain("педиатр");
+    }
+
+    [Fact]
+    public async Task FamilyMember_SeesReportAboutThem_CanOpenAndRevoke_ButNotShareOrDelete()
+    {
+        var (_, other) = FamilyWithOther();
+        AddRecordFor(_me.Id, target: other.Id);
+        var (_, created, error) = await _sut.CreateAsync(_me.Id, RequestFor(DoctorReportSubjectKind.User, other.Id, shareDays: 7));
+        created.Should().NotBeNull(error);
+
+        var theirs = (await _sut.ListAsync(other.Id)).Should().ContainSingle().Subject;
+        theirs.Id.Should().Be(created!.Id);
+        theirs.CanManage.Should().BeFalse();
+        theirs.CreatedByName.Should().NotBeNullOrEmpty();
+        theirs.Recipient.Should().BeNull("адресат — личная пометка автора");
+
+        (await _sut.OpenOwnerPdfAsync(other.Id, created.Id)).Should().NotBeNull();
+        (await _sut.ShareAsync(other.Id, created.Id, 14)).Result.Should().Be(DoctorReportResult.NotFound);
+        (await _sut.DeleteAsync(other.Id, created.Id)).Should().Be(DoctorReportResult.NotFound);
+
+        var (revoked, dto) = await _sut.RevokeAsync(other.Id, created.Id);
+        revoked.Should().Be(DoctorReportResult.Success);
+        dto!.Link.Status.Should().Be(DoctorReportLinkStatus.Revoked);
+        (await _sut.ListAsync(_me.Id)).Single().CanManage.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Subjects_ListMeFamilyMembersAndDependents_WithGrantFlags()
+    {
+        var (family, other) = FamilyWithOther();
+        AddDependent(family.Id);
+        AddDependent(family.Id, isPet: true);
+        Db.HealthShareGrants.Add(new HealthShareGrant
+        {
+            Id = Guid.NewGuid(), OwnerUserId = other.Id, ViewerUserId = _me.Id, Categories = HealthShareCategory.Diary,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        });
+        Db.SaveChanges();
+
+        var list = await _sut.ListSubjectsAsync(_me.Id);
+
+        list.Select(s => s.Kind).Should().Equal(
+            DoctorReportSubjectKind.Self, DoctorReportSubjectKind.User, DoctorReportSubjectKind.Dependent, DoctorReportSubjectKind.Dependent);
+        list[1].Should().BeEquivalentTo(new { Id = (Guid?)other.Id, DiaryAvailable = true, VaccinationsAvailable = false });
+        list[2].Should().BeEquivalentTo(new { Name = "Поляков Миша", IsPet = false, DiaryAvailable = false, VaccinationsAvailable = true });
+        list[3].Should().BeEquivalentTo(new { Name = "Барсик (кот)", IsPet = true, VaccinationsAvailable = false });
     }
 }

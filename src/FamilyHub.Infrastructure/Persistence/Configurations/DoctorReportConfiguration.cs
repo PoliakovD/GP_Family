@@ -15,6 +15,10 @@ public class DoctorReportConfiguration : IEntityTypeConfiguration<DoctorReport>
         // Список «мои отчёты» — по владельцу, свежие сверху. Без FK на User (как MedicalRecord).
         builder.HasIndex(r => new { r.OwnerUserId, r.CreatedAt });
 
+        // Отчёты о человеке/подопечном: список пациента и зачистка при удалении аккаунта/подопечного.
+        builder.HasIndex(r => r.SubjectUserId);
+        builder.HasIndex(r => r.SubjectFamilyDependentId);
+
         // Публичная ссылка ищется по хешу токена. NULL-ы (нет ссылки) уникальность не нарушают.
         builder.Property(r => r.ShareTokenHash).HasMaxLength(64);
         builder.HasIndex(r => r.ShareTokenHash).IsUnique();

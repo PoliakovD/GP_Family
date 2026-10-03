@@ -14,8 +14,18 @@ public record ReportBlocks(
 /// FlaggedNotes — заметки дневника с пометкой «в вопросы к врачу»: они попадут в блок жалоб.</summary>
 public record ReportCounts(int Analyses, int Visits, int DiaryEntries, int FlaggedNotes);
 
-/// <summary>Пациент на момент формирования. Sex — «м»/«ж»/null.</summary>
-public record ReportPatient(string FullName, string ShortName, string? Sex, DateOnly? BirthDate);
+/// <summary>Пациент на момент формирования. Sex — «м»/«ж»/null (у питомца — «самец»/«самка»).
+/// CompiledBy — кто составил, если не сам пациент (родитель, член семьи): врачу важно, со слов кого данные.</summary>
+public record ReportPatient(string FullName, string ShortName, string? Sex, DateOnly? BirthDate, bool IsPet = false, string? CompiledBy = null);
+
+/// <summary>Чьи данные собирать. ViewerId — автор отчёта: чужие записи берутся только из тех, что он видит.
+/// IncludeDiary/IncludeVaccinations — есть ли у автора доступ к этим данным пациента (см. DoctorReportSubjects).</summary>
+public sealed record ReportSubject(Guid ViewerId, Guid? UserId, Guid? DependentId, bool IncludeDiary, bool IncludeVaccinations)
+{
+    public static ReportSubject Self(Guid userId) => new(userId, userId, null, true, true);
+
+    public bool IsSelf => DependentId is null && UserId == ViewerId;
+}
 
 public record ReportLabCell(DateOnly Date, string Text, IndicatorFlag Flag);
 

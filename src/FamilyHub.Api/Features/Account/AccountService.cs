@@ -71,7 +71,9 @@ public class AccountService(
 
         // Ключи хранилища собираем до удаления строк; сами объекты удаляем после коммита.
         var recordIds = await db.MedicalRecords.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToListAsync(ct);
-        var reportIds = await db.DoctorReports.Where(r => r.OwnerUserId == userId).Select(r => r.Id).ToListAsync(ct);
+        // Отчёты, которые составил пользователь, и отчёты о нём, составленные членами семьи: снимок его
+        // медданных не должен пережить удаление аккаунта.
+        var reportIds = await db.DoctorReports.Where(r => r.OwnerUserId == userId || r.SubjectUserId == userId).Select(r => r.Id).ToListAsync(ct);
         // Свои прививки и сертификаты (не то, что этот пользователь загрузил ДЛЯ подопечного — то
         // остаётся с подопечным). FileAttachment без FK на Vaccination/VaccinationCertificate —
         // ключи блобов собираем здесь же, как для остальных владельцев.
@@ -132,7 +134,7 @@ public class AccountService(
         await db.FileAttachments
             .Where(a => a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId))
             .ExecuteDeleteAsync(ct);
-        await db.DoctorReports.Where(r => r.OwnerUserId == userId).ExecuteDeleteAsync(ct);
+        await db.DoctorReports.Where(r => reportIds.Contains(r.Id)).ExecuteDeleteAsync(ct);
         // Курсы приёма лекарств: свои курсы (приёмы и токены кнопок — каскадом), наблюдатели в обе
         // стороны и токены push-кнопок, выданные этому пользователю (FK на User нет).
         await db.DoseActionTokens.Where(t => t.RecipientUserId == userId).ExecuteDeleteAsync(ct);

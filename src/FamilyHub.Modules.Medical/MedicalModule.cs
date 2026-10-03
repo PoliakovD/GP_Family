@@ -46,6 +46,7 @@ public static class MedicalModule
         services.AddScoped<MedkitService>();
         services.AddScoped<HealthNoteService>();
         services.AddScoped<DoctorReportDataCollector>();
+        services.AddScoped<DoctorReportSubjects>();
         services.AddScoped<DoctorReportService>();
         // Общий скоуп «свой/подопечный семьи/наблюдаемый взрослый» — курсы приёма и прививки (ADR-0016).
         services.AddScoped<FamilyHub.Modules.Medical.Access.SubjectScopeService>();

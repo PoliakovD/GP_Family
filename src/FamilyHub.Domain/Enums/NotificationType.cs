@@ -56,4 +56,7 @@ public enum NotificationType
 
     /// <summary>Напоминание о самочувствии через N дней после прививки (только для своих).</summary>
     VaccinationWellbeingCheck = 15,
+
+    /// <summary>Член семьи составил отчёт для врача о пользователе. Текст без медицинских подробностей.</summary>
+    DoctorReportAboutYou = 16,
 }
