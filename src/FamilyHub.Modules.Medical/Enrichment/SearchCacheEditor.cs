@@ -11,6 +11,9 @@ public enum CacheEditResult { Ok, NotFound, Invalid }
 
 public record CacheEditOutcome(CacheEditResult Result, string? Error = null, WebSnippet? Snippet = null)
 {
+    /// <summary>Сколько сниппетов добавлено импортом (<see cref="SearchCacheEditor.ImportFromAsync"/>).</summary>
+    public int ImportedCount { get; init; }
+
     public static CacheEditOutcome Ok(WebSnippet? snippet = null) => new(CacheEditResult.Ok, null, snippet);
     public static CacheEditOutcome NotFound { get; } = new(CacheEditResult.NotFound);
     public static CacheEditOutcome Invalid(string error) => new(CacheEditResult.Invalid, error);
@@ -151,6 +154,65 @@ public class SearchCacheEditor(AppDbContext db, KbChangeLogService changeLog)
         await SaveAndLogAsync(WebSearchTopic.LabAnalyte, target, before, "cache-replace",
             $"Скопирован кэш двойника {sourceId}", ct);
         return CacheEditOutcome.Ok();
+    }
+
+    /// <summary>Правка заголовка/текста/заметки сниппета (<see cref="SearchCacheSnippets.ApplyEdit"/>): правленый
+    /// авто-сниппет становится ручной цитатой и переживает автообновление кэша.</summary>
+    public async Task<CacheEditOutcome> EditAsync(
+        WebSearchTopic topic, Guid cacheId, string url, string? title, string? text, string? note, CancellationToken ct = default)
+    {
+        var row = await LoadAsync(topic, cacheId, ct);
+        if (row is null) return CacheEditOutcome.NotFound;
+
+        var snippets = SearchCacheSnippets.Parse(row.SnippetsJson);
+        var index = snippets.FindIndex(s => string.Equals(s.Url, url, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return CacheEditOutcome.NotFound;
+
+        var (edited, error) = SearchCacheSnippets.ApplyEdit(snippets[index], title, text, note);
+        if (edited is null) return CacheEditOutcome.Invalid(error!);
+
+        var before = SearchCacheSnapshots.From(row);
+        snippets[index] = edited;
+        row.SnippetsJson = SearchCacheSnippets.Serialize(snippets);
+        await SaveAndLogAsync(topic, row, before, "cache-edit", $"Правка сниппета: {edited.Title}", ct);
+        return CacheEditOutcome.Ok(edited);
+    }
+
+    /// <summary>Импорт из любой другой строки кэша той же темы («взять из готового кэша» в очереди «Одобрение»):
+    /// в отличие от <see cref="CopyFromAsync"/> имя источника может отличаться (торговое название/МНН, другое
+    /// написание показателя). Выбранные сниппеты (urls=null — все) дописываются к своему набору без дублей,
+    /// override'ы источника переносятся только для импортированных URL и не перетирают свои. Свежесть строки
+    /// не трогается — её ставит <see cref="MarkFreshAsync"/>, когда админ принимает набор вместо платного поиска.</summary>
+    public async Task<CacheEditOutcome> ImportFromAsync(
+        WebSearchTopic topic, Guid targetId, Guid sourceId, IReadOnlyCollection<string>? urls, CancellationToken ct = default)
+    {
+        if (targetId == sourceId) return CacheEditOutcome.Invalid("Нельзя импортировать набор сам в себя.");
+
+        var target = await LoadAsync(topic, targetId, ct);
+        var source = topic == WebSearchTopic.Medication
+            ? (ISearchCacheRow?)await db.MedicationSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.Id == sourceId, ct)
+            : await db.LabAnalyteSearchCaches.AsNoTracking().FirstOrDefaultAsync(c => c.Id == sourceId, ct);
+        if (target is null || source is null) return CacheEditOutcome.NotFound;
+
+        var (merged, imported) = SearchCacheSnippets.Import(
+            SearchCacheSnippets.Parse(target.SnippetsJson), SearchCacheSnippets.Parse(source.SnippetsJson), urls);
+        if (imported.Count == 0)
+            return CacheEditOutcome.Invalid("Нечего добавить: выбранные источники уже есть в наборе (или ничего не выбрано).");
+
+        var before = SearchCacheSnapshots.From(target);
+        target.SnippetsJson = SearchCacheSnippets.Serialize(merged);
+
+        var overrides = SearchCacheSnippets.ParseOverrides(target.OverridesJson);
+        var importedUrls = imported.Select(s => s.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var (url, flag) in SearchCacheSnippets.ParseOverrides(source.OverridesJson))
+            if (importedUrls.Contains(url) && !overrides.ContainsKey(url)) overrides[url] = flag;
+        target.OverridesJson = SearchCacheSnippets.SerializeOverrides(overrides);
+        // Строка, созданная «ensure» до первого платного поиска, подписана "manual" — набор теперь из чужой выдачи.
+        if (string.IsNullOrEmpty(target.Provider) || target.Provider == "manual") target.Provider = source.Provider;
+
+        await SaveAndLogAsync(topic, target, before, "cache-import",
+            $"Импортировано {imported.Count} из кэша «{source.NormalizedName}» ({sourceId})", ct);
+        return new CacheEditOutcome(CacheEditResult.Ok, null, null) { ImportedCount = imported.Count };
     }
 
     private async Task<ISearchCacheRow?> LoadAsync(WebSearchTopic topic, Guid id, CancellationToken ct) =>

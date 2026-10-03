@@ -414,9 +414,12 @@ public class LmStudioMedicalDocumentExtractor(
                     // бы обработанной и не попадала бы в повторный проход ниже.
                     if (!RowContainsValue(row.RawLine, indicator.Value)) continue;
                     matchedInBatch.Add(rowId);
-                    // Модель по промпту "литературный регистр" портит аббревиатуры ("АЧТВ" → "Ачтв") —
-                    // возвращаем написание из СВОЕЙ строки, если имя то же с точностью до регистра.
-                    indicators.Add(indicator with { Name = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.RestoreAbbreviations(indicator.Name, row.Cells[row.NameCellIndex]) });
+                    // Модель сокращает название ("MCV (ср. объем эритр.)" → "MCV") и по промпту "литературный регистр"
+                    // портит аббревиатуры ("АЧТВ" → "Ачтв") — возвращаем полное название и написание из СВОЕЙ строки.
+                    var blankName = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.BlankNameWithoutValue(
+                        row.Cells[row.NameCellIndex], indicator.Value);
+                    var fullName = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.PreferFullBlankName(indicator.Name, blankName, MaxIndicatorNameLength);
+                    indicators.Add(indicator with { Name = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.RestoreAbbreviations(fullName, blankName) });
                 }
 
                 stillMissing.AddRange(batch.Where(r => !matchedInBatch.Contains(r.RowId)));

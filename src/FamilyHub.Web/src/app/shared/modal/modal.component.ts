@@ -9,6 +9,8 @@ import { Component, EventEmitter, HostListener, Input, Output } from '@angular/c
 export class ModalComponent {
   @Input() title = '';
   @Input() open = false;
+  /** Широкая карточка (списки с превью текста) — по умолчанию оверлей узкий (400px), под формы. */
+  @Input() wide = false;
   @Output() closed = new EventEmitter<void>();
 
   @HostListener('document:keydown.escape')

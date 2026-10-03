@@ -60,6 +60,29 @@ public static class AdminEnrichmentReviewEndpoints
             return outcome.Result == ReviewActionResult.Ok ? Results.Ok(new { cacheId = outcome.Value }) : Results.NotFound();
         });
 
+        // «Взять из готового кэша»: кандидаты (любая непустая строка кэша той же темы) и импорт выбранных сниппетов.
+        group.MapGet("/items/{kind}/{id:guid}/cache-candidates", async (
+            string kind, Guid id, string? query, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            var candidates = await review.FindCacheCandidatesAsync(kind, id, query, ct);
+            return candidates is null ? Results.NotFound() : Results.Ok(candidates);
+        });
+
+        group.MapPost("/items/{kind}/{id:guid}/cache/import", async (
+            string kind, Guid id, ImportReviewCacheRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!ReviewKinds.IsValid(kind)) return BadKind();
+            return Respond(await review.ImportCacheAsync(kind, id, request, ct));
+        });
+
+        group.MapPut("/cache/{topic}/{cacheId:guid}/snippets", async (
+            string topic, Guid cacheId, EditSnippetRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
+        {
+            if (!TryTopic(topic, out var t)) return BadTopic();
+            return Respond(await review.EditSnippetAsync(t, cacheId, request, ct));
+        });
+
         group.MapPost("/cache/{topic}/{cacheId:guid}/snippets", async (
             string topic, Guid cacheId, AddManualSnippetRequest request, AdminEnrichmentReviewService review, CancellationToken ct) =>
         {
