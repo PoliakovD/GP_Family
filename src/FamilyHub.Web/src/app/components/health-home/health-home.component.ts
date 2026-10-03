@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { IntakeStateService } from '../../services/intake-state.service';
+import { BackgroundJobsStateService } from '../../services/background-jobs-state.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { TrendLineComponent } from '../../shared/trend-line/trend-line.component';
@@ -38,6 +39,8 @@ export class HealthHomeComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   protected readonly intake = inject(IntakeStateService);
   private readonly toast = inject(ToastService);
+  /** На телефоне фоновые задачи были видны только точкой на вкладке — здесь показываем словами. */
+  protected readonly jobs = inject(BackgroundJobsStateService);
 
   protected readonly summary = signal<HealthSummary | null>(null);
   protected readonly loading = signal(true);

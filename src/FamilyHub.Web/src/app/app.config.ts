@@ -2,7 +2,8 @@ import { ApplicationConfig, LOCALE_ID, isDevMode, provideZoneChangeDetection } f
 import { registerLocaleData } from '@angular/common';
 import localeRu from '@angular/common/locales/ru';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
-import { provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
+import { TitleStrategy, provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
+import { AppTitleStrategy } from './services/app-title.strategy';
 import { provideServiceWorker } from '@angular/service-worker';
 import { authInterceptor } from './services/auth.interceptor';
 import { routes } from './app.routes';
@@ -23,6 +24,7 @@ registerLocaleData(localeRu);
 export const appConfig: ApplicationConfig = {
   providers: [
     { provide: LOCALE_ID, useValue: 'ru' },
+    { provide: TitleStrategy, useClass: AppTitleStrategy },
     provideZoneChangeDetection({ eventCoalescing: true }),
     // withXsrfConfiguration: CSRF-защита PWA-сессии сверх SameSite=Lax (см. аудит
     // module-review-2026-08-02/01-auth-identity.md, находка 4). Angular сам читает cookie

@@ -15,6 +15,13 @@
       </div>
     </div>
 
+    @if (jobs.summary().extraction.total > 0) {
+      <div class="alert-info mb-3" role="status">
+        <span class="pipeline-step-spinner" aria-hidden="true"></span>
+        Распознаём документы: {{ jobs.summary().extraction.total }}. Показатели появятся в записях сами — можно пользоваться приложением дальше.
+      </div>
+    }
+
     <!-- Сводка не загрузилась — раньше половина плиток молча оставалась пустой. -->
     @if (!summary()) {
       <div class="alert-danger mb-3" role="alert">

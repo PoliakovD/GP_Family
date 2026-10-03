@@ -44,7 +44,7 @@
           @if (item.id === 'family' && isFamilyActive()) {
             <div class="app-sidebar-children">
               @for (sub of familySubItems; track sub.tab) {
-                <a class="app-sidebar-child" [routerLink]="familyHref()" [queryParams]="{tab: sub.tab}">
+                <a class="app-sidebar-child" [routerLink]="familyHref()" [queryParams]="{tab: sub.tab}" [class.active]="isFamilySubActive(sub.tab)">
                   {{ sub.label }}
                 </a>
               }
@@ -137,7 +137,7 @@
           <!-- Редизайн хаба «Здоровье» — «Уведомления» ушли из сайдбара сюда, рядом с аватаром,
                как в привычных приложениях (макет «Screen - Health hub»). -->
           <app-notification-bell />
-          <a routerLink="/settings" class="text-decoration-none" title="Профиль">
+          <a routerLink="/settings" class="text-decoration-none" title="Профиль" aria-label="Профиль и настройки">
             <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="sm" />
           </a>
         </header>
@@ -177,6 +177,7 @@
     }
 
     <main class="app-content">
+      <app-notices />
       @if (showTabs() && state.error()) {
         <div class="alert-danger mb-2" role="alert">
           {{ state.error() }}
@@ -207,25 +208,26 @@
   <!-- Редизайн хаба «Здоровье» — ровно 4 таба (Профиль вместо «Ещё»/«Уведомления»): лист «Ещё»
        упразднён, «Профиль» ведёт прямо в /settings, «Уведомления» — колокольчик в мобильной шапке. -->
   @if (showTabs() && !isWide()) {
-    <nav class="tab-bar">
-      <button type="button" [routerLink]="'/home'" [class.active]="isHomeActive()">
+    <nav class="tab-bar" aria-label="Основные разделы">
+      <button type="button" [routerLink]="'/home'" [class.active]="isHomeActive()" [attr.aria-current]="isHomeActive() ? 'page' : null">
         <i [class]="(isHomeActive() ? 'ph-fill ' : 'ph ') + 'ph-house'" aria-hidden="true"></i>
         <span>Главная</span>
       </button>
-      <button type="button" [routerLink]="'/health'" [class.active]="isHealthActive()">
+      <button type="button" [routerLink]="'/health'" [class.active]="isHealthActive()" [attr.aria-current]="isHealthActive() ? 'page' : null">
         <span class="tab-bar-more-icon">
           <i [class]="(isHealthActive() ? 'ph-fill ' : 'ph ') + 'ph-heartbeat'" aria-hidden="true"></i>
           @if (backgroundJobs.totalActive() > 0) {
-            <span class="tab-bar-dot" title="Идёт распознавание/обогащение в фоне"></span>
+            <span class="tab-bar-dot" aria-hidden="true"></span>
+            <span class="visually-hidden">— идёт распознавание документов</span>
           }
         </span>
         <span>Здоровье</span>
       </button>
-      <button type="button" [routerLink]="familyHref()" [class.active]="isFamilyActive()">
+      <button type="button" [routerLink]="familyHref()" [class.active]="isFamilyActive()" [attr.aria-current]="isFamilyActive() ? 'page' : null">
         <i [class]="(isFamilyActive() ? 'ph-fill ' : 'ph ') + 'ph-users-three'" aria-hidden="true"></i>
         <span>Семья</span>
       </button>
-      <button type="button" [routerLink]="'/settings'" [class.active]="isSettingsActive()">
+      <button type="button" [routerLink]="'/settings'" [class.active]="isSettingsActive()" [attr.aria-current]="isSettingsActive() ? 'page' : null">
         <i [class]="(isSettingsActive() ? 'ph-fill ' : 'ph ') + 'ph-user'" aria-hidden="true"></i>
         <span>Профиль</span>
       </button>

@@ -122,9 +122,10 @@ export class AppSearchComponent {
         queryParams: { familyId: item.medication.familyId, medkitId: item.medication.medkitId },
       });
     } else if (item.type === SearchResultType.Record) {
-      void this.router.navigateByUrl('/health/records');
+      // Сразу найденная запись, а не общий список раздела (раньше её приходилось искать заново).
+      void this.router.navigate(['/health/records', item.id]);
     } else if (item.type === SearchResultType.Visit) {
-      void this.router.navigateByUrl('/health/visits');
+      void this.router.navigate(['/health/visits', item.id]);
     } else if (item.type === SearchResultType.Birthday) {
       void this.router.navigateByUrl('/birthdays');
     } else {
