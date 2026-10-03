@@ -53,6 +53,8 @@ import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/uti
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { EXTRACTION_TERMINAL_STATUSES, enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
+import { accessSummary } from './record-access';
+import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import {
   type IndicatorSortMode, deviationFor, flagClass, indicatorLabel, indicatorReference, isCalculatedRef, isInferredRef,
   rowStatusClass, scaleBounds, scaleValue, sortIndicators, specimenLabelFor,
@@ -113,7 +115,7 @@ let nextInstanceId = 0;
         PipelineProgressComponent, KbCardComponent, StatusChipComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
         ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
-        AttachmentListComponent, RouterLink,
+        AttachmentListComponent, RouterLink, RecordAccessSheetComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
     styleUrl: './medical-records-panel.component.scss'
@@ -1557,84 +1559,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     void this.router.navigate(['/health/kb/indicators'], { queryParams: { id } });
   }
 
-  /** Видна ли КОНКРЕТНАЯ запись данной семье: (L1 share есть) И (L2 hide нет). */
-  isVisibleToFamily(record: MedicalRecord, familyId: string): boolean {
-    return this.shares.includes(familyId) && !record.hiddenFamilyIds.includes(familyId);
-  }
-
-  /** Видна ли запись хотя бы одной расшаренной семье — определяет активную опцию сегмента. */
-  private visibleToAny(record: MedicalRecord): boolean {
-    return this.shares.some((fid) => !record.hiddenFamilyIds.includes(fid));
-  }
-
-  isOnlyMe(record: MedicalRecord): boolean {
-    return this.shares.length === 0 || !this.visibleToAny(record);
-  }
-
-  /** Сводка для карточки: «Только вы» / «Все семьи» / «Все семьи, кроме N». */
+  /** Сводка доступа для карточки и пикера группы — см. record-access.ts. */
   accessSummary(record: MedicalRecord): string {
-    const total = this.shares.length;
-    if (total === 0) return 'Только вы';
-    const hiddenCount = this.shares.filter((fid) => record.hiddenFamilyIds.includes(fid)).length;
-    if (hiddenCount === total) return 'Только вы';
-    if (hiddenCount === 0) return 'Все семьи';
-    return `Все семьи, кроме ${hiddenCount}`;
-  }
-
-  /**
-   * Тумблер одной семьи в шторке. Включение автоматически создаёт L1-шаринг, если его ещё не
-   * было — иначе тумблер не мог бы включить видимость семье, которой владелец никогда явно не
-   * открывал записи. L1-шаринг общий на оба вида (единый шаринг «Анализы + Врачи»), поэтому это
-   * затрагивает базовую видимость всех записей той же семье, а не только текущего вида — осознанно.
-   */
-  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean, input?: HTMLInputElement): Promise<void> {
-    // Первое включение семьи открывает ей ВСЕ анализы и приёмы (общий шаринг) — раньше это
-    // происходило молча. Спрашиваем явно; при отказе возвращаем тумблер в исходное положение.
-    if (visible && !this.shares.includes(familyId)) {
-      const name = this.state.families().find((f) => f.id === familyId)?.name ?? 'эта семья';
-      const ok = await this.confirm.confirm({
-        title: 'Открыть доступ семье?',
-        message: `Семья «${name}» увидит все ваши анализы и приёмы врача, кроме тех, что вы скроете от неё отдельно.`,
-        confirmText: 'Открыть доступ',
-      });
-      if (!ok) {
-        if (input) input.checked = false;
-        return;
-      }
-    }
-    try {
-      if (visible) {
-        if (!this.shares.includes(familyId)) {
-          await this.api.shareMedicalRecord(familyId);
-        }
-        await this.api.unhideMedicalRecord(record.id, [familyId]);
-      } else {
-        await this.api.hideMedicalRecord(record.id, [familyId]);
-      }
-      await this.refresh({ silent: true });
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
-    }
-  }
-
-  /** Сегмент «Только я / Все семьи» — bulk-скрытие/раскрытие записи для ВСЕХ уже расшаренных семей. */
-  async setAccessMode(record: MedicalRecord, onlyMe: boolean, input?: HTMLInputElement): Promise<void> {
-    if (this.shares.length === 0) {
-      // Раньше радио «Все семьи» визуально включалось, а доступ оставался закрытым — UI врал.
-      if (input) input.checked = false;
-      this.toast.info('Пока ни одной семье доступ не открыт — включите нужную семью ниже.');
-      return;
-    }
-    try {
-      if (onlyMe) {
-        await this.api.hideMedicalRecord(record.id, this.shares);
-      } else {
-        await this.api.unhideMedicalRecord(record.id, this.shares);
-      }
-      await this.refresh({ silent: true });
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
-    }
+    return accessSummary(record, this.shares);
   }
 
 }
