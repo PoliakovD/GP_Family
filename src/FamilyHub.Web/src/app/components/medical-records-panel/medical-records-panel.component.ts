@@ -41,20 +41,22 @@ import { PersonChipComponent } from '../../shared/person-chip/person-chip.compon
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
-import { ReferenceScaleComponent, formatDeviation } from '../../shared/reference-scale/reference-scale.component';
+import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
 import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { indicatorLabel as indicatorLabelOf } from '../../shared/util/indicator-name';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
-import { specimenLabel } from '../../shared/util/specimen';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { EXTRACTION_TERMINAL_STATUSES, enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
+import {
+  type IndicatorSortMode, deviationFor, flagClass, indicatorLabel, indicatorReference, isCalculatedRef, isInferredRef,
+  rowStatusClass, scaleBounds, scaleValue, sortIndicators, specimenLabelFor,
+} from './indicator-display';
 
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
@@ -1139,102 +1141,28 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // отзыву — все показатели всегда видны, сортировка осталась). Индикаторы обычно от единиц до
   // пары десятков на запись — сортируем по месту на каждый рендер без мемоизации, усложнять ради
   // этого объёма не стоит. ---
-  indicatorSortMode: 'abnormal' | 'form' | 'alpha' = 'abnormal';
+  indicatorSortMode: IndicatorSortMode = 'abnormal';
 
-  setIndicatorSort(mode: 'abnormal' | 'form' | 'alpha'): void {
+  setIndicatorSort(mode: IndicatorSortMode): void {
     this.indicatorSortMode = mode;
   }
 
   indicatorsFor(recordId: string): IndicatorDto[] {
-    const items = [...(this.indicatorsByRecord[recordId] ?? [])];
-    if (this.indicatorSortMode === 'alpha') {
-      items.sort((a, b) => this.indicatorLabel(a).localeCompare(this.indicatorLabel(b), 'ru'));
-    } else if (this.indicatorSortMode === 'abnormal') {
-      // Стабильная сортировка (гарантия спецификации Array.prototype.sort) — внутри каждой
-      // группы порядок из бланка сохраняется, меняется только относительный порядок двух групп.
-      items.sort((a, b) => Number(a.flag === IndicatorFlag.Normal) - Number(b.flag === IndicatorFlag.Normal));
-    }
-    // 'form' — как пришло с сервера (порядок из бланка), без изменений.
-    return items;
+    return sortIndicators(this.indicatorsByRecord[recordId] ?? [], this.indicatorSortMode);
   }
 
-  /** Подсветка строки по статусу — зелёная/красная, ровно два состояния (не по градации
-   * Low/High/Critical) по тому же принципу, что палочка на шкале (см. reference-scale). */
-  rowStatusClass(ind: IndicatorDto): string {
-    if (ind.flag === IndicatorFlag.Normal) return 'indicator-row-ok';
-    if (ind.flag === IndicatorFlag.Unknown) return '';
-    return 'indicator-row-bad';
-  }
-
-  /** Подпись под шкалой ("ниже нормы на 0,8") — formatDeviation уже экспортирован
-   * reference-scale.component.ts и переиспользуется indicator-info, здесь просто подставляем
-   * значение/границы этой строки. */
-  deviationFor(ind: IndicatorDto, bounds: { low: number; high: number }): string | null {
-    const v = this.scaleValue(ind);
-    return v === null ? null : formatDeviation(v, bounds.low, bounds.high);
-  }
-
-  /** Только для окраски ячейки "Значение" — статус-чип со стрелкой/текстом теперь рендерит
-   * <app-status-chip> (shared/status-chip, редизайн v2), эта функция больше не отвечает за
-   * подпись статуса. */
-  flagClass(flag: number): string {
-    switch (flag) {
-      case IndicatorFlag.Low:
-      case IndicatorFlag.High:
-        return 'indicator-flag-warning';
-      case IndicatorFlag.Critical:
-        return 'indicator-flag-danger';
-      case IndicatorFlag.Normal:
-        return 'indicator-flag-ok';
-      default:
-        return 'indicator-flag-unknown';
-    }
-  }
-
-  indicatorReference(indicator: IndicatorDto): string | null {
-    if (indicator.refText) return indicator.refText;
-    if (indicator.refLowText && indicator.refHighText) return `${indicator.refLowText}–${indicator.refHighText}`;
-    if (indicator.refHighText) return `< ${indicator.refHighText}`;
-    if (indicator.refLowText) return `> ${indicator.refLowText}`;
-    return null;
-  }
-
-  /** Числовые границы для <app-reference-scale> (редизайн v2) — только когда ОБЕ границы заданы
-   * числом; RefLowText/RefHighText гарантированно InvariantCulture double либо null (см. XML-доку
-   * на IndicatorDto), parseFloat без нормализации запятых. Односторонний диапазон/качественный
-   * RefText/RefSource.None — шкала не рендерится, вызывающая сторона показывает indicatorReference(). */
-  scaleBounds(indicator: IndicatorDto): { low: number; high: number } | null {
-    if (!indicator.refLowText || !indicator.refHighText) return null;
-    return { low: parseFloat(indicator.refLowText), high: parseFloat(indicator.refHighText) };
-  }
-
-  scaleValue(indicator: IndicatorDto): number | null {
-    return indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null;
-  }
-
-  /** Название показателя для строки таблицы — ПОЛНОЕ, как в бланке («MCH (среднее содержание Hb в эритроците)»).
-   * НЕ из analyteKey: ключ сворачивает латиницу в кириллицу фонетически («MCV» → «мкв»), см. indicatorLabel. */
-  indicatorLabel(indicator: IndicatorDto): string {
-    return indicatorLabelOf(indicator.displayName, indicator.analyteKey);
-  }
-
-  specimenLabelFor(indicator: { specimenDisplayName: string | null }): string {
-    return specimenLabel(indicator.specimenDisplayName);
-  }
-
-  /** Бэйдж «рассчитано ИИ» — только для диапазона, посчитанного локальной LLM по методике из
-   * справочника (каскад п.1a, RefSource.KbCalculated), не для фиксированного диапазона/бланка. */
-  isCalculatedRef(indicator: IndicatorDto): boolean {
-    return indicator.refSource === RefSource.KbCalculated;
-  }
-
-  /** Бэйдж «норма от ИИ» — наименее надёжный шаг каскада (план "нормы из бланка"): ни бланк, ни
-   * справочник не дали ответа, модель САМА предположила ожидаемую норму по общемедицинским
-   * знаниям (RefSource.Inferred) — в отличие от KbCalculated, это не расчёт по методике
-   * справочника, а догадка, потому бейдж отдельный и текст title другой. */
-  isInferredRef(indicator: IndicatorDto): boolean {
-    return indicator.refSource === RefSource.Inferred;
-  }
+  // Отображение строки показателя — чистые функции из indicator-display.ts (шаблон вызывает их
+  // по прежним именам).
+  readonly rowStatusClass = rowStatusClass;
+  readonly deviationFor = deviationFor;
+  readonly flagClass = flagClass;
+  readonly indicatorReference = indicatorReference;
+  readonly scaleBounds = scaleBounds;
+  readonly scaleValue = scaleValue;
+  readonly indicatorLabel = indicatorLabel;
+  readonly specimenLabelFor = specimenLabelFor;
+  readonly isCalculatedRef = isCalculatedRef;
+  readonly isInferredRef = isInferredRef;
 
   // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
   // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
