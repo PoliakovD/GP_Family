@@ -15,7 +15,9 @@ import {
 import { ageText } from '../../shared/util/age';
 import { preciseDateText, stageLabel, statusColor, statusIcon, statusLabel, windowToText } from '../../shared/util/vaccination-labels';
 import { todayLocal } from '../../shared/util/intake-labels';
-
+
+import { saveBlob } from '../../shared/util/save-blob';
+import { TelegramService } from '../../services/telegram.service';
 const STAGE_ORDER = ['0-1', '1-2', '2-6', '6-7', '14+', 'adult', 'epidemic', 'closed'];
 
 interface StageGroup {
@@ -40,6 +42,7 @@ export class VaccinationPersonComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly tg = inject(TelegramService);
   private readonly confirm = inject(ConfirmService);
   private readonly breakpoints = inject(BreakpointService);
   protected readonly vaccinations = inject(VaccinationStateService);
@@ -218,12 +221,8 @@ export class VaccinationPersonComponent {
     this.certificateBusy.set(true);
     try {
       const blob = await this.api.getVaccinationCertificatePdf(this.kind(), this.id());
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sertifikat-privivok-${todayLocal()}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      const hint = await saveBlob(blob, `sertifikat-privivok-${todayLocal()}.pdf`, this.tg.isInsideTelegram());
+      if (hint) this.toast.info(hint);
     } catch (e) {
       this.toast.error(e instanceof ApiError ? e.message : 'Не удалось сформировать сертификат.');
     } finally {

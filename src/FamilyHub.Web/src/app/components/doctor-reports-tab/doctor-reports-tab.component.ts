@@ -14,7 +14,8 @@ import { dayMonthFromIso, blocksLabel, linkView, LinkView, periodTitle, reportUr
 import { shareLink } from '../../shared/util/share-link';
 import { DoctorReportFormComponent } from '../doctor-report-form/doctor-report-form.component';
 import { DoctorReportLinkDialogComponent } from '../doctor-report-link-dialog/doctor-report-link-dialog.component';
-
+
+import { saveBlob } from '../../shared/util/save-blob';
 interface ReportRow {
   report: DoctorReport;
   title: string;
@@ -156,12 +157,8 @@ export class DoctorReportsTabComponent implements OnInit {
   protected async download(report: DoctorReport): Promise<void> {
     try {
       const blob = await this.api.downloadDoctorReportPdf(report.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `otchet-dlya-vracha-${report.periodFrom}-${report.periodTo}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      const hint = await saveBlob(blob, `otchet-dlya-vracha-${report.periodFrom}-${report.periodTo}.pdf`, this.tg.isInsideTelegram());
+      if (hint) this.toast.info(hint);
     } catch {
       this.toast.error('Не удалось скачать PDF');
     }

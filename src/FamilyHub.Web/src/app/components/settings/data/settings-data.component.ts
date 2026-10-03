@@ -7,7 +7,9 @@ import { AuthService } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { HealthShareCategory, HealthShareGrantDto } from '../../../models/types';
 import { runBusy } from '../settings-task';
-
+
+import { saveBlob } from '../../../shared/util/save-blob';
+import { TelegramService } from '../../../services/telegram.service';
 /** Вкладка «Данные»: политика конфиденциальности, выгрузка данных, доступ к здоровью (ADR-0017),
  * удаление аккаунта (152-ФЗ). */
 @Component({
@@ -21,6 +23,7 @@ export class SettingsDataComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly tgForExport = inject(TelegramService);
 
   readonly busy = signal(false);
   readonly deleteConfirmVisible = signal(false);
@@ -83,12 +86,8 @@ export class SettingsDataComponent implements OnInit {
   async exportData(): Promise<void> {
     await runBusy(this.busy, this.toast, async () => {
       const blob = await this.auth.exportAccountData();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'familyhub-export.zip';
-      a.click();
-      URL.revokeObjectURL(url);
+      const hint = await saveBlob(blob, 'familyhub-export.zip', this.tgForExport.isInsideTelegram());
+      if (hint) this.toast.info(hint);
     });
   }
 
