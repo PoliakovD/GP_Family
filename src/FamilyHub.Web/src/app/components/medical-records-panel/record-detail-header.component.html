@@ -1,0 +1,79 @@
+<!-- Верхняя строка: «‹ Анализы» слева, действия справа (на узком экране — только иконки).
+     Файлы/Резюме — переключатели, сворачивают/разворачивают свои секции ниже. -->
+<div class="record-detail-topbar mb-3">
+  <app-back-link [label]="backLabel()" (activated)="back.emit()" />
+  @if (record(); as only) {
+    <div class="record-detail-actions">
+      <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen()" title="Файлы" aria-label="Файлы" (click)="toggleFiles.emit()">
+        <i class="ph ph-paperclip" aria-hidden="true"></i>
+        <span class="record-action-label">Файлы ({{ only.attachmentCount }})</span>
+      </button>
+      @if (hasSummary()) {
+        <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen()" title="Резюме" aria-label="Резюме" (click)="toggleSummary.emit()">
+          <i class="ph ph-file-text" aria-hidden="true"></i>
+          <span class="record-action-label">Резюме</span>
+        </button>
+      }
+      @if (canEdit()) {
+        <button type="button" class="btn btn-secondary btn-sm" title="Редактировать" aria-label="Редактировать" (click)="edit.emit()">
+          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+          <span class="record-action-label">Редактировать</span>
+        </button>
+      }
+      <button type="button" class="btn btn-secondary btn-sm" title="Доступ" aria-label="Доступ" (click)="access.emit()">
+        <i class="ph ph-share-network" aria-hidden="true"></i>
+        <span class="record-action-label">Доступ</span>
+      </button>
+      @if (canEdit()) {
+        <button type="button" class="btn btn-secondary btn-sm record-action-danger" title="Удалить" aria-label="Удалить" (click)="remove.emit()">
+          <i class="ph ph-trash" aria-hidden="true"></i>
+          <span class="record-action-label">Удалить</span>
+        </button>
+      }
+    </div>
+  }
+</div>
+
+@if (record(); as only) {
+  <h2 class="record-detail-title">{{ shortName(only) }}</h2>
+
+  <!-- Мета-строка: человек (мини-аватар + имя, без рамки) · врач · дата · биоматериал · доступ. -->
+  <div class="record-detail-meta mb-3">
+    <span class="record-meta-item">
+      <app-avatar size="sm" [person]="avatarPerson(only)" />
+      <span [title]="only.personName">{{ shortenDisplayName(only.personName) }}</span>
+    </span>
+    @if (only.doctor) {
+      <span class="record-meta-item">
+        <i class="ph ph-stethoscope" aria-hidden="true"></i>
+        {{ shortenDoctorName(only.doctor) }}
+      </span>
+    }
+    <span class="record-meta-item">{{ formatDayMonthYear(only.recordDate) }}</span>
+    @if (only.kind === Kind.Analysis) {
+      <span class="record-meta-item">{{ specimenLabelFor(only) }}</span>
+    }
+    <span class="record-meta-item record-meta-access">
+      <i class="ph-fill ph-eye" aria-hidden="true"></i>
+      {{ accessLabel() }}
+    </span>
+  </div>
+
+  <!-- Плитки статуса — те же счётчики, что у чипа в списке. -->
+  @if (only.kind === Kind.Analysis && only.indicatorCount > 0) {
+    <div class="record-status-tiles mb-3">
+      <div class="record-status-tile record-status-tile-bad">
+        <div class="record-status-tile-value">{{ only.abnormalIndicatorCount }}</div>
+        <div class="record-status-tile-label">вне нормы</div>
+      </div>
+      <div class="record-status-tile record-status-tile-ok">
+        <div class="record-status-tile-value">{{ only.normalIndicatorCount }}</div>
+        <div class="record-status-tile-label">в норме</div>
+      </div>
+      <div class="record-status-tile record-status-tile-none">
+        <div class="record-status-tile-value">{{ unknownIndicatorCount(only) }}</div>
+        <div class="record-status-tile-label">без нормы в бланке</div>
+      </div>
+    </div>
+  }
+}

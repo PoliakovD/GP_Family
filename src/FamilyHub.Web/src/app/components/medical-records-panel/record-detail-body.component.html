@@ -1,0 +1,126 @@
+@let item = record();
+<div class="card record-card flex-fill">
+  <app-record-recognition-status
+    [record]="item"
+    [steps]="steps()"
+    [recognizing]="recognizing()"
+    [status]="status()"
+    (recognize)="recognize.emit()"
+  />
+
+  @if (item.description) {
+    <p class="mb-1">{{ item.description }}</p>
+  }
+
+  <!-- Биоматериал — атрибут ВСЕЙ записи: показан в мета-строке шапки, меняется в «Редактировать»;
+       здесь — только баннеры «ждёт проверки» и «уточните». -->
+  @if (item.kind === Kind.Analysis && item.pendingSpecimenText) {
+    <div class="alert-info mb-2" style="font-size:0.7647rem">
+      <i class="ph ph-hourglass" aria-hidden="true"></i>
+      Биоматериал «{{ item.pendingSpecimenText }}» ждёт проверки: ИИ сейчас недоступен, название
+      будет проверено и применено автоматически, как только он вернётся.
+    </div>
+  }
+  @if (item.kind === Kind.Analysis && item.specimenHint && canEdit()) {
+    <div class="alert-info mb-2" style="font-size:0.7647rem">
+      Уточните биоматериал: «{{ item.specimenHint }}» — откуда именно?
+      <button type="button" class="btn-link" (click)="clarifySpecimen.emit(item.specimenHint)">Уточнить</button>
+    </div>
+  }
+
+  <!-- «Файлы» — разворачивается кнопкой в шапке; список сам грузит вложения, только когда открыт. -->
+  @if (filesOpen()) {
+    <app-attachment-list [recordId]="item.id" (changed)="filesChanged.emit()" />
+  }
+
+  <!-- Резюме от ИИ — выше таблицы (короче и важнее), разворачивается кнопкой «Резюме». Кнопки
+       «Пересчитать» нет: после ручной правки бэк пересчитывает резюме сам. -->
+  @if (hasSummary() && summaryOpen()) {
+    <div class="card-kicker mt-2">Резюме от ИИ</div>
+    <!-- Постоянная метка: ИИ-трактовка не должна читаться как медицинское заключение. -->
+    <p class="ai-summary-note mb-1">
+      <i class="ph ph-sparkle" aria-hidden="true"></i>
+      Составлено ИИ автоматически и может содержать ошибки. Это не диагноз — обсудите результаты с врачом.
+    </p>
+    @if (summary(); as summary) {
+      @if (summary.pending) {
+        <p class="muted mb-1" style="font-size:0.7647rem">
+          @if (aiUnavailable()) {
+            <i class="ph ph-hourglass" aria-hidden="true"></i>
+            Ждём ИИ — резюме обновится автоматически, как только он станет доступен.
+          } @else {
+            <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновляем резюме по вашим правкам…
+          }
+        </p>
+      }
+      @if (summary.plainSummary) {
+        <p class="mb-1" [style.opacity]="summary.pending ? 0.55 : 1">{{ summary.plainSummary }}</p>
+      }
+      @if (summary.deviations.length > 0) {
+        <ul class="mb-1" style="font-size:0.7647rem" [style.opacity]="summary.pending ? 0.55 : 1">
+          @for (d of summary.deviations; track d.name) {
+            <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
+          }
+        </ul>
+      }
+      @if (summary.questionsForDoctor.length > 0) {
+        <div class="card-kicker mt-2">Вопросы врачу</div>
+        <ul class="mb-1" style="font-size:0.7647rem" [style.opacity]="summary.pending ? 0.55 : 1">
+          @for (q of summary.questionsForDoctor; track q) {
+            <li>{{ q }}</li>
+          }
+        </ul>
+      }
+      @if (summary.disclaimer) {
+        <p class="muted mb-0" style="font-size:0.8235rem">{{ summary.disclaimer }}</p>
+      }
+    } @else if (summaryRegenerating()) {
+      <p class="muted mb-1" style="font-size:0.7647rem">Составляем резюме…</p>
+    } @else {
+      <p class="muted mb-1" style="font-size:0.7647rem">Резюме пока не составлено.</p>
+    }
+  }
+
+  @if (item.kind === Kind.Analysis) {
+    <app-indicator-table
+      [recordId]="item.id"
+      [indicators]="indicators()"
+      [wide]="wide()"
+      (open)="openIndicator.emit($event)"
+      (created)="indicatorCreated.emit()"
+    />
+  }
+
+  @if (item.kind === Kind.DoctorVisit && conclusion(); as conclusion) {
+    @if (conclusion.diagnosis) {
+      <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
+    }
+    @if (conclusion.anamnesis) {
+      <p class="mb-1"><strong>Анамнез:</strong> {{ conclusion.anamnesis }}</p>
+    }
+    @if (conclusion.proceduresPerformed) {
+      <p class="mb-1"><strong>Проведено на приёме:</strong> {{ conclusion.proceduresPerformed }}</p>
+    }
+    @if (conclusion.recommendations) {
+      <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
+    }
+    @if (conclusion.prescribedMedications.length > 0) {
+      <div class="card-kicker mt-2">Назначенные лекарства</div>
+      <ul class="list-unstyled mb-0">
+        @for (med of conclusion.prescribedMedications; track med.name) {
+          <li class="mb-1">
+            <strong>{{ med.name }}</strong>
+            @if (med.dosageInstructions) { — {{ med.dosageInstructions }} }
+            @if (med.kbMedicationId; as kbId) {
+              <button type="button" class="btn-link" (click)="openKb.emit(kbId)">Справка</button>
+            } @else {
+              <span class="muted" style="font-size:0.7059rem">— справка уточняется</span>
+            }
+            <a class="btn-link" routerLink="/health/intake"
+               [queryParams]="{ record: item.id, idx: $index, dep: item.familyDependentId }">Начать курс</a>
+          </li>
+        }
+      </ul>
+    }
+  }
+</div>

@@ -23,7 +23,7 @@
     <!-- Редизайн v2.1 — заголовок экрана + краткая сводка переехали сюда из Page-обёртки
          (medical-records-tab/doctor-visits-tab печатали голый <h3>): экран сам знает счётчики,
          обёртке незачем их дублировать отдельным запросом. Только в списочном режиме — в
-         singleMode (открытая запись) заголовок уже даёт back-хедер ниже. -->
+         экране записи заголовок даёт его шапка. -->
     <h3 class="mb-1">{{ labels.title }}</h3>
     @if (!loading && totalCount > 0) {
       <p class="muted mb-3" style="font-size:var(--font-size-meta)">
@@ -86,252 +86,6 @@
     </ng-template>
   }
 
-  <!-- Редизайн v3 — карточка записи как переиспользуемый шаблон (PR6 плана): список и отдельный
-       экран открытой записи показывают одно и то же содержимое, разница — только в singleMode
-       (детали всегда развёрнуты, «Открыть» не нужна). -->
-  <ng-template #recordCard let-item let-singleMode="singleMode">
-    <div class="card record-card flex-fill">
-      <!-- Редизайн v2.2 — в singleMode заголовок+чипы+действия теперь рисует не эта строка, а
-           back-link/шапка вне ng-template (см. @if (recordId()) в шаблоне ниже) — своя мета-строка
-           (человек/дата/источник/доступ) и плитки статуса читаются лучше, чем чипы списка. Список
-           (не singleMode) — без изменений. -->
-      @if (!singleMode) {
-        <!-- Редизайн v3 — «Открыть»+«…» переехали в правую часть той же строки, что заголовок
-             (см. PR5.1 плана). Редизайн v2.1 — строка кликабельна на любой ширине (не только на
-             мобильном): клик по самой записи, а не только по кнопке «Открыть», должен открывать её
-             и на десктопе — до кнопки не всегда удобно дотягиваться мышью. -->
-        <div
-          class="record-card-row clickable"
-          (click)="onRecordCardClick(item, singleMode)"
-        >
-          <div class="record-card-main">
-            <div class="card-title" style="font-size:var(--font-size-record-title)">{{ shortName(item) }}</div>
-
-            <!-- Редизайн v2 — чипы-метаданные вместо 4 безымянных иконок; редизайн v2.1 — у самих
-                 чипов раньше не было иконок и мало контраста (14% color-mix), врач был бледной
-                 подписью, а не чипом. -->
-            <div class="record-chips">
-              @if (item.kindIsAutoDetected) {
-                <!-- Батч-загрузка — вид ещё не определён пайплайном (см. class doc
-                     RecordBatchAddComponent); снимается автоматически после распознавания. -->
-                <span class="tag tag-neutral" title="Вид записи будет уточнён после распознавания">
-                  <i class="ph ph-magic-wand" aria-hidden="true"></i>Вид определяется автоматически
-                </span>
-              }
-              @if (item.attachmentCount > 0) {
-                <span class="tag tag-neutral"><i class="ph ph-paperclip" aria-hidden="true"></i>{{ attachmentCountLabel(item) }}</span>
-              }
-              @if (item.indicatorCount > 0) {
-                <span class="tag tag-neutral"><i class="ph ph-list-checks" aria-hidden="true"></i>{{ indicatorCountLabel(item) }}</span>
-              }
-              @if (item.abnormalIndicatorCount > 0) {
-                <span class="tag" style="background:color-mix(in srgb, var(--color-status-danger) 22%, var(--color-paper));color:var(--color-status-danger-text)">
-                  <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>{{ item.abnormalIndicatorCount }} вне нормы
-                </span>
-              } @else if (item.normalIndicatorCount > 0) {
-                <span class="tag" style="background:color-mix(in srgb, var(--color-status-ok) 22%, var(--color-paper));color:var(--color-status-ok-text)">
-                  <i class="ph-fill ph-check-circle" aria-hidden="true"></i>{{ item.normalIndicatorCount }} в норме
-                </span>
-              }
-              @if (item.doctor) {
-                <span class="tag tag-neutral">
-                  <i class="ph ph-stethoscope" aria-hidden="true"></i>Врач: {{ item.doctor }}
-                </span>
-              }
-            </div>
-          </div>
-
-          @if (isWide) {
-            <!-- stopPropagation — строка тоже кликабельна (см. выше), без этого клик по
-                 кнопке/меню дополнительно всплывал бы до onRecordCardClick на самой строке. -->
-            <div class="record-card-actions" (click)="$event.stopPropagation()">
-              <button class="btn btn-secondary text-nowrap" (click)="onRecordCardClick(item, false)">
-                Открыть
-              </button>
-              <app-action-menu [actions]="recordMenuActions(item)" label="Действия с записью" />
-            </div>
-          }
-        </div>
-      }
-
-      @if (hasUnrecognizedAttachments(item)) {
-        <button
-          class="btn btn-primary btn-sm align-self-start mt-1"
-          [disabled]="recognizingRecordIds.has(item.id)"
-          (click)="handleRecognize(item)"
-        >
-          @if (recognizingRecordIds.has(item.id)) {
-            <span class="recognize-spinner" aria-hidden="true"></span>
-          } @else {
-            <i class="ph ph-magic-wand" aria-hidden="true"></i>
-          }
-          Распознать
-        </button>
-      }
-
-      @if (pipelineStepsByRecord[item.id]; as steps) {
-        <app-pipeline-progress [steps]="steps" />
-        @if (recognizingRecordIds.has(item.id)) {
-          <p class="muted mb-1">
-            Обычно это занимает 1–3 минуты. Страницу можно закрыть — распознавание продолжится, а
-            показатели появятся в этой записи.
-          </p>
-        }
-      }
-
-      @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
-        <div class="alert-info mt-1" role="status">
-          <i class="ph ph-warning" aria-hidden="true"></i>
-          Распознано не всё. Сверьте показатели с бланком и добавьте недостающие вручную.
-        </div>
-      }
-
-      <!-- Живой прогресс (pipelineStepsByRecord) уже сам показывает исход "Не удалось распознать"
-           на несколько секунд после сбоя (см. schedulePipelineClear), но это временное окно — на
-           свежем монтировании (ушли со страницы/обновили её) этой истории уже нет. Отдельная
-           постоянная плашка по item.extractionStatus (честно проставляется бэкендом) — единственный
-           способ узнать о сбое, не нажимая «Распознать» вслепую ещё раз. -->
-      @if (item.extractionStatus === ExtractionStatus.Failed && !pipelineStepsByRecord[item.id]) {
-        <div class="alert-danger" style="margin-top:4px;">
-          Не удалось распознать документ в прошлый раз.
-          @if (hasUnrecognizedAttachments(item)) { Нажмите «Распознать» ещё раз. }
-        </div>
-      }
-
-      <!-- Редизайн v3 — «Подробнее» больше не отдельная свёртка со своим заголовком/шевроном
-           (см. PR5.2 плана). Редизайн v2.1 — инлайн-раскрытие в списке убрано целиком: «Открыть»
-           теперь всегда переходит на отдельную страницу записи (см. onRecordCardClick), детали
-           видны только там, где singleMode=true. -->
-      @if (singleMode) {
-        @if (item.description) {
-          <p class="mb-1">{{ item.description }}</p>
-        }
-
-        <!-- Источник анализа (заметка 1) — атрибут ВСЕЙ записи, не отдельного показателя. Сам
-             источник показан в мета-строке шапки, а меняется в форме «Редактировать» (поле
-             «Биоматериал», каскадится на все показатели записи); здесь остаётся только баннер
-             «уточните источник», когда модель не смогла определить локализацию. -->
-        @if (item.kind === Kind.Analysis && item.pendingSpecimenText) {
-          <div class="alert-info mb-2" style="font-size:0.7647rem">
-            <i class="ph ph-hourglass" aria-hidden="true"></i>
-            Биоматериал «{{ item.pendingSpecimenText }}» ждёт проверки: ИИ сейчас недоступен, название
-            будет проверено и применено автоматически, как только он вернётся.
-          </div>
-        }
-        @if (item.kind === Kind.Analysis && item.specimenHint && canDelete(item)) {
-          <div class="alert-info mb-2" style="font-size:0.7647rem">
-            Уточните биоматериал: «{{ item.specimenHint }}» — откуда именно?
-            <button type="button" class="btn-link" (click)="openEditSheet(item, item.specimenHint)">Уточнить</button>
-          </div>
-        }
-
-        <!-- Секция «Файлы» — редизайн v2.2: сворачивается по умолчанию, разворачивается кнопкой
-             «Файлы» в шапке (см. @if (recordId()) выше); shared/attachment-list владеет своим
-             fetch — грузится ровно тогда, когда открыта, а не всегда. -->
-        @if (filesOpen) {
-          <app-attachment-list [recordId]="item.id" (changed)="refresh()" />
-        }
-
-        <!-- Редизайн v2 — резюме ИИ перемещено выше таблицы показателей (важнее и короче,
-             читается первым; сама таблица — для тех, кто хочет разобраться в цифрах). Редизайн
-             v2.2 — сама секция сворачивается по умолчанию (кнопка «Резюме» в шапке), заголовок с
-             «Составить/Пересчитать» остаётся якорем, тело — только когда summaryOpen. -->
-        @if (hasSummarySection(item) && summaryOpen) {
-          <!-- Метка «Резюме» появляется только после нажатия кнопки «Резюме» в шапке. Кнопки
-               «Пересчитать» нет: после ручной правки показателей/источника бэк пересчитывает
-               резюме сам (RecordSummaryRegenerationJob), а пока идёт пересчёт — «Обновляем…». -->
-          <div class="card-kicker mt-2">Резюме от ИИ</div>
-          <!-- Постоянная метка: раньше дисклеймер был, только если его прислал сервер, и 11px —
-               ИИ-трактовка читалась как медицинское заключение. -->
-          <p class="ai-summary-note mb-1">
-            <i class="ph ph-sparkle" aria-hidden="true"></i>
-            Составлено ИИ автоматически и может содержать ошибки. Это не диагноз — обсудите результаты с врачом.
-          </p>
-          @if (summaryByRecord[item.id]; as summary) {
-            @if (summary.pending) {
-              <p class="muted mb-1" style="font-size:0.7647rem">
-                @if (ai.unavailable()) {
-                  <i class="ph ph-hourglass" aria-hidden="true"></i>
-                  Ждём ИИ — резюме обновится автоматически, как только он станет доступен.
-                } @else {
-                  <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновляем резюме по вашим правкам…
-                }
-              </p>
-            }
-            @if (summary.plainSummary) {
-              <p class="mb-1" [style.opacity]="summary.pending ? 0.55 : 1">{{ summary.plainSummary }}</p>
-            }
-            @if (summary.deviations.length > 0) {
-              <ul class="mb-1" style="font-size:0.7647rem" [style.opacity]="summary.pending ? 0.55 : 1">
-                @for (d of summary.deviations; track d.name) {
-                  <li><strong>{{ d.name }}</strong>: {{ d.meaning }}</li>
-                }
-              </ul>
-            }
-            @if (summary.questionsForDoctor.length > 0) {
-              <div class="card-kicker mt-2">Вопросы врачу</div>
-              <ul class="mb-1" style="font-size:0.7647rem" [style.opacity]="summary.pending ? 0.55 : 1">
-                @for (q of summary.questionsForDoctor; track q) {
-                  <li>{{ q }}</li>
-                }
-              </ul>
-            }
-            @if (summary.disclaimer) {
-              <p class="muted mb-0" style="font-size:0.8235rem">{{ summary.disclaimer }}</p>
-            }
-          } @else if (summaryRegeneratingRecordId === item.id) {
-            <p class="muted mb-1" style="font-size:0.7647rem">Составляем резюме…</p>
-          } @else {
-            <p class="muted mb-1" style="font-size:0.7647rem">Резюме пока не составлено.</p>
-          }
-        }
-
-        @if (item.kind === Kind.Analysis) {
-          <app-indicator-table
-            [recordId]="item.id"
-            [indicators]="indicatorsOf(item.id)"
-            [wide]="isWide"
-            (open)="indicatorInfo.openIndicator($event)"
-            (created)="onIndicatorCreated(item.id)"
-          />
-        }
-
-        @if (item.kind === Kind.DoctorVisit && conclusionByRecord[item.id]; as conclusion) {
-          @if (conclusion.diagnosis) {
-            <p class="mb-1"><strong>Диагноз:</strong> {{ conclusion.diagnosis }}</p>
-          }
-          @if (conclusion.anamnesis) {
-            <p class="mb-1"><strong>Анамнез:</strong> {{ conclusion.anamnesis }}</p>
-          }
-          @if (conclusion.proceduresPerformed) {
-            <p class="mb-1"><strong>Проведено на приёме:</strong> {{ conclusion.proceduresPerformed }}</p>
-          }
-          @if (conclusion.recommendations) {
-            <p class="mb-1"><strong>Рекомендации:</strong> {{ conclusion.recommendations }}</p>
-          }
-          @if (conclusion.prescribedMedications.length > 0) {
-            <div class="card-kicker mt-2">Назначенные лекарства</div>
-            <ul class="list-unstyled mb-0">
-              @for (med of conclusion.prescribedMedications; track med.name) {
-                <li class="mb-1">
-                  <strong>{{ med.name }}</strong>
-                  @if (med.dosageInstructions) { — {{ med.dosageInstructions }} }
-                  @if (med.kbMedicationId; as kbId) {
-                    <button type="button" class="btn-link" (click)="openKbCard(kbId)">Справка</button>
-                  } @else {
-                    <span class="muted" style="font-size:0.7059rem">— справка уточняется</span>
-                  }
-                  <a class="btn-link" routerLink="/health/intake"
-                     [queryParams]="{ record: item.id, idx: $index, dep: item.familyDependentId }">Начать курс</a>
-                </li>
-              }
-            </ul>
-          }
-        }
-      }
-    </div>
-  </ng-template>
-
   @if (recordId()) {
     @if (!isWide && indicatorInfo.open) {
       <!-- Редизайн v2.2 — на мобиле показатель открывается ПОЛНОЭКРАННО (не нижним листом) —
@@ -344,90 +98,22 @@
       </div>
       <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     } @else {
-    <!-- Редизайн v3/v2.1 — отдельный экран открытой записи, теперь на любой ширине (было —
-         только мобильный, десктоп раскрывал запись инлайн в списке): та же карточка, что в
-         списке, всегда развёрнута, вместо таймлайна — заголовок с «Назад». Редизайн v2.2 —
-         «Назад» стилизована как ссылка (синяя стрелочка + название раздела), не голая иконка. -->
-    <!-- Верхняя строка: «‹ Анализы» слева, действия справа (на узком экране — только иконки).
-         Файлы/Резюме — переключатели, сворачивают/разворачивают свои секции ниже. -->
-    <div class="record-detail-topbar mb-3">
-      <app-back-link [label]="labels.title" (activated)="goToList()" />
-      @if (items[0]; as only) {
-        <div class="record-detail-actions">
-          <button type="button" class="btn btn-secondary btn-sm" [class.active]="filesOpen" title="Файлы" aria-label="Файлы" (click)="toggleFiles()">
-            <i class="ph ph-paperclip" aria-hidden="true"></i>
-            <span class="record-action-label">Файлы ({{ only.attachmentCount }})</span>
-          </button>
-          @if (hasSummarySection(only)) {
-            <button type="button" class="btn btn-secondary btn-sm" [class.active]="summaryOpen" title="Резюме" aria-label="Резюме" (click)="toggleSummary()">
-              <i class="ph ph-file-text" aria-hidden="true"></i>
-              <span class="record-action-label">Резюме</span>
-            </button>
-          }
-          @if (canDelete(only)) {
-            <button type="button" class="btn btn-secondary btn-sm" title="Редактировать" aria-label="Редактировать" (click)="openEditSheet(only)">
-              <i class="ph ph-pencil-simple" aria-hidden="true"></i>
-              <span class="record-action-label">Редактировать</span>
-            </button>
-          }
-          <button type="button" class="btn btn-secondary btn-sm" title="Доступ" aria-label="Доступ" (click)="openAccessSheet(only)">
-            <i class="ph ph-share-network" aria-hidden="true"></i>
-            <span class="record-action-label">Доступ</span>
-          </button>
-          @if (canDelete(only)) {
-            <button type="button" class="btn btn-secondary btn-sm record-action-danger" title="Удалить" aria-label="Удалить" (click)="handleDelete(only)">
-              <i class="ph ph-trash" aria-hidden="true"></i>
-              <span class="record-action-label">Удалить</span>
-            </button>
-          }
-        </div>
-      }
-    </div>
-
-    @if (items[0]; as only) {
-      <h2 class="record-detail-title">{{ shortName(only) }}</h2>
-
-      <!-- Мета-строка: человек (мини-аватар + имя, без рамки) · врач · дата · источник · доступ. -->
-      <div class="record-detail-meta mb-3">
-        <span class="record-meta-item">
-          <app-avatar size="sm" [person]="{key: personKey(only), firstName: personAvatarParts(only.personName).firstName, lastName: personAvatarParts(only.personName).lastName}" />
-          <span [title]="only.personName">{{ shortenDisplayName(only.personName) }}</span>
-        </span>
-        @if (only.doctor) {
-          <span class="record-meta-item">
-            <i class="ph ph-stethoscope" aria-hidden="true"></i>
-            {{ shortenDoctorName(only.doctor) }}
-          </span>
-        }
-        <span class="record-meta-item">{{ formatDayMonthYear(only.recordDate) }}</span>
-        @if (only.kind === Kind.Analysis) {
-          <span class="record-meta-item">{{ specimenLabelFor(only) }}</span>
-        }
-        <span class="record-meta-item record-meta-access">
-          <i class="ph-fill ph-eye" aria-hidden="true"></i>
-          {{ groupAccessLabel({key: personKey(only), personName: only.personName, records: [only]}) }}
-        </span>
-      </div>
-
-      <!-- Плитки статуса — N вне нормы / N в норме / N без нормы в бланке (счётчики те же, что у
-           чипа в списке). -->
-      @if (only.kind === Kind.Analysis && only.indicatorCount > 0) {
-        <div class="record-status-tiles mb-3">
-          <div class="record-status-tile record-status-tile-bad">
-            <div class="record-status-tile-value">{{ only.abnormalIndicatorCount }}</div>
-            <div class="record-status-tile-label">вне нормы</div>
-          </div>
-          <div class="record-status-tile record-status-tile-ok">
-            <div class="record-status-tile-value">{{ only.normalIndicatorCount }}</div>
-            <div class="record-status-tile-label">в норме</div>
-          </div>
-          <div class="record-status-tile record-status-tile-none">
-            <div class="record-status-tile-value">{{ unknownIndicatorCount(only) }}</div>
-            <div class="record-status-tile-label">без нормы в бланке</div>
-          </div>
-        </div>
-      }
-    }
+    <!-- Экран одной записи: шапка (назад, действия, заголовок, мета-строка, плитки) и тело. -->
+    <app-record-detail-header
+      [record]="items[0]"
+      [backLabel]="labels.title"
+      [filesOpen]="filesOpen"
+      [summaryOpen]="summaryOpen"
+      [hasSummary]="items[0] ? hasSummarySection(items[0]) : false"
+      [canEdit]="items[0] ? canDelete(items[0]) : false"
+      [accessLabel]="items[0] ? recordAccessLabel(items[0]) : ''"
+      (back)="goToList()"
+      (toggleFiles)="toggleFiles()"
+      (toggleSummary)="toggleSummary()"
+      (edit)="openEditSheet(items[0])"
+      (access)="openAccessSheet(items[0])"
+      (remove)="handleDelete(items[0])"
+    />
 
     <!-- Редизайн v3 (PR7) — одноразовый баннер сразу после сохранения из record-add.component.ts:
          показатели ещё могут распознаваться (см. живой прогресс на карточке ниже). -->
@@ -443,7 +129,28 @@
       <app-loading-spinner />
     } @else {
       @if (items[0]; as only) {
-        <ng-container *ngTemplateOutlet="recordCard; context: {$implicit: only, singleMode: true}" />
+        <app-record-detail-body
+          [record]="only"
+          [steps]="pipelineStepsByRecord[only.id]"
+          [recognizing]="recognizingRecordIds.has(only.id)"
+          [status]="extractionStatusByRecord[only.id]"
+          [canEdit]="canDelete(only)"
+          [filesOpen]="filesOpen"
+          [summaryOpen]="summaryOpen"
+          [hasSummary]="hasSummarySection(only)"
+          [summary]="summaryByRecord[only.id]"
+          [summaryRegenerating]="summaryRegeneratingRecordId === only.id"
+          [aiUnavailable]="ai.unavailable()"
+          [indicators]="indicatorsOf(only.id)"
+          [conclusion]="conclusionByRecord[only.id]"
+          [wide]="isWide"
+          (recognize)="handleRecognize(only)"
+          (clarifySpecimen)="openEditSheet(only, $event)"
+          (filesChanged)="refresh()"
+          (openIndicator)="indicatorInfo.openIndicator($event)"
+          (indicatorCreated)="onIndicatorCreated(only.id)"
+          (openKb)="openKbCard($event)"
+        />
       }
     }
     }
@@ -520,7 +227,16 @@
               </div>
               <div class="record-timeline-rail"><span class="record-timeline-dot"></span></div>
 
-              <ng-container *ngTemplateOutlet="recordCard; context: {$implicit: item, singleMode: false}" />
+              <app-record-list-card
+                [record]="item"
+                [wide]="isWide"
+                [actions]="recordMenuActions(item)"
+                [steps]="pipelineStepsByRecord[item.id]"
+                [recognizing]="recognizingRecordIds.has(item.id)"
+                [status]="extractionStatusByRecord[item.id]"
+                (open)="openRecord(item)"
+                (recognize)="handleRecognize(item)"
+              />
             </div>
           }
         </div>
@@ -623,8 +339,7 @@
 
   <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель. Редизайн v2.2 —
        на узких экранах справка больше не открывается нижним листом здесь: indicatorInfo.open возможен
-       только когда recordId() задан (единственные точки входа — клик по строке таблицы в
-       singleMode и чип "что смотрят вместе" внутри уже открытой справки), а для этого случая на
+       только когда recordId() задан (единственные точки входа — клик по показателю на экране записи и чип "что смотрят вместе" внутри уже открытой справки), а для этого случая на
        narrow теперь есть отдельный полноэкранный блок прямо в @if (recordId()) выше — второй
        рендер тут был бы дублирующим нижним листом поверх уже полноэкранного показателя. -->
   @if (indicatorInfo.open && isWide) {

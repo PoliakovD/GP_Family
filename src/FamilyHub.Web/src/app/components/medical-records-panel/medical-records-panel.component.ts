@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ToastService } from '../../shared/toast/toast.service';
 import { OverlayStackService } from '../../shared/util/overlay-stack.service';
@@ -25,18 +25,17 @@ import type {
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
-import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
+import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
-import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
+import type { ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
 import { IndicatorInfoComponent } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
-import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
-import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
+import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
@@ -46,9 +45,11 @@ import { ExtractionPoller } from './extraction-poller';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import { RecordEditSheetComponent } from './record-edit-sheet.component';
-import { indicatorLabel, specimenLabelFor } from './indicator-display';
-import { IndicatorTableComponent } from './indicator-table.component';
 import { IndicatorInfoController } from './indicator-info.controller';
+import { recordPersonKey, recordShortName } from './record-display';
+import { RecordDetailBodyComponent } from './record-detail-body.component';
+import { RecordDetailHeaderComponent } from './record-detail-header.component';
+import { RecordListCardComponent } from './record-list-card.component';
 
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
@@ -101,11 +102,11 @@ let nextInstanceId = 0;
     selector: 'app-medical-records-panel',
     imports: [
         NgTemplateOutlet,
-        FormsModule, LoadingSpinnerComponent, BottomSheetComponent,
-        PipelineProgressComponent, KbCardComponent,
-        AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
+        FormsModule, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent,
+        AvatarComponent, PersonChipComponent, BackLinkComponent, InfiniteScrollSentinelComponent,
         IndicatorInfoComponent, IndicatorInfoPanelComponent,
-        AttachmentListComponent, RouterLink, RecordAccessSheetComponent, RecordEditSheetComponent, IndicatorTableComponent,
+        RecordAccessSheetComponent, RecordEditSheetComponent, RecordDetailBodyComponent, RecordDetailHeaderComponent,
+        RecordListCardComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
     styleUrl: './medical-records-panel.component.scss'
@@ -141,15 +142,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly breakpoints = inject(BreakpointService);
 
   /** Доступен в шаблоне для сравнения с this.kind(). */
-  readonly Kind = MedicalRecordKind;
-  readonly ExtractionJobStatus = ExtractionJobStatus;
-  readonly ExtractionStatus = ExtractionStatus;
   readonly pluralizeRu = pluralizeRu;
 
   /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
    * задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
   readonly shortenDisplayName = shortenDisplayName;
-  readonly shortenDoctorName = shortenDoctorName;
   readonly formatDayMonth = formatDayMonth;
   readonly formatDayMonthYear = formatDayMonthYear;
   readonly formatYear = formatYear;
@@ -418,7 +415,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Короткое название для заголовка карточки «Дата · Название · Пациент» (UX-редизайн) —
    * item.title, если уже распознан/введён, иначе нейтральная подпись по виду записи. */
   shortName(item: MedicalRecord): string {
-    return item.title ?? (item.kind === MedicalRecordKind.Analysis ? 'Анализ' : 'Приём врача');
+    return recordShortName(item);
   }
 
   /** Базовый роут вида записи — используется и «Добавить»-навигацией (PR7), и мобильной
@@ -432,9 +429,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * кнопкой «Открыть», до которой мышью не всегда удобно дотягиваться, см. жалобу «клик по самой
    * строке анализа на десктопе также должен раскрывать анализ»). В singleMode (сама страница
    * записи) — no-op, там навигация не нужна. */
-  onRecordCardClick(item: MedicalRecord, singleMode: boolean): void {
-    if (singleMode) return;
+  openRecord(item: MedicalRecord): void {
     void this.router.navigate([this.kindBasePath(), item.id]);
+  }
+
+  /** Доступ словами в мета-строке экрана записи (та же логика, что у шапки группы в списке). */
+  recordAccessLabel(record: MedicalRecord): string {
+    return this.groupAccessLabel({ key: this.personKey(record), personName: record.personName, records: [record] });
   }
 
   goToList(): void {
@@ -446,8 +447,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Тот же ключ, что уже использует фильтр «Пациент» (patientOptions) — группа-человек и
    * чип-фильтр относятся к одному и тому же понятию "человек", не два независимых. */
   personKey(item: MedicalRecord): string {
-    if (item.familyDependentId) return `dep:${item.familyDependentId}`;
-    return `user:${item.targetUserId ?? item.ownerUserId}`;
+    return recordPersonKey(item);
   }
 
   /** items уже отсортированы сервером по RecordDate DESC — группировка Map'ом сохраняет порядок
@@ -569,22 +569,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * прямо над блоком резюме (единственное место, где он проверялся). */
   hasSummarySection(item: MedicalRecord): boolean {
     return item.kind === MedicalRecordKind.Analysis && this.indicatorsOf(item.id).length > 0;
-  }
-
-  /** Третья плитка статуса — «без нормы в бланке». abnormalIndicatorCount/normalIndicatorCount
-   * уже приходят с сервера (см. чип списка) — без нормы просто остаток, отдельно не считаем. */
-  unknownIndicatorCount(item: MedicalRecord): number {
-    return Math.max(0, item.indicatorCount - item.abnormalIndicatorCount - item.normalIndicatorCount);
-  }
-
-  /** Редизайн v2.1 — «скан» переименовано в «файл»: вложение не обязательно скан (PDF, фото с
-   * телефона), «скан» вводил в заблуждение. */
-  attachmentCountLabel(item: MedicalRecord): string {
-    return `${item.attachmentCount} ${pluralizeRu(item.attachmentCount, 'файл', 'файла', 'файлов')}`;
-  }
-
-  indicatorCountLabel(item: MedicalRecord): string {
-    return `${item.indicatorCount} ${pluralizeRu(item.indicatorCount, 'показатель', 'показателя', 'показателей')}`;
   }
 
   /** «Я» + все подопечные и все другие активные участники из моих активных семей — общая
@@ -1055,11 +1039,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.summaryPollHandles.delete(recordId);
     this.summaryPollAttempts.delete(recordId);
   }
-
-  // Отображение показателей — IndicatorTableComponent; панели нужны только эти два хелпера
-  // (мета-строка записи и заголовок панели справки).
-  readonly indicatorLabel = indicatorLabel;
-  readonly specimenLabelFor = specimenLabelFor;
 
   /** Показатель добавлен в IndicatorTableComponent — перечитываем показатели и саму запись
    * (счётчики «вне нормы / в норме»). */
