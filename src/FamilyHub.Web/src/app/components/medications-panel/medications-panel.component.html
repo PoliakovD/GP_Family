@@ -77,20 +77,24 @@
     </div>
 
     <div class="card mb-3">
-      <input class="input" [(ngModel)]="form.name" placeholder="Название препарата" />
-      <input class="input" type="date" [(ngModel)]="form.expiryDate" />
+      <label class="form-label mb-0" [for]="photoInputId + '-name'">Название препарата *</label>
+      <input class="input" [id]="photoInputId + '-name'" [(ngModel)]="form.name" placeholder="Например, Нурофен" />
+      <label class="form-label mb-0" [for]="photoInputId + '-expiry'">Срок годности</label>
+      <input class="input" [id]="photoInputId + '-expiry'" type="date" [(ngModel)]="form.expiryDate" />
+      <label class="form-label mb-0" [for]="photoInputId + '-instructions'">Инструкция (необязательно)</label>
       <textarea
         class="input"
+        [id]="photoInputId + '-instructions'"
         [(ngModel)]="form.instructions"
-        placeholder="Инструкция (необязательно)"
         rows="2"
       ></textarea>
+      <label class="form-label mb-0" [for]="photoInputId + '-quantity'">Количество</label>
       <input
         class="input"
+        [id]="photoInputId + '-quantity'"
         type="text"
         inputmode="numeric"
         [(ngModel)]="form.quantity"
-        placeholder="Количество"
       />
 
       @if (extraRows.length > 0) {
@@ -99,7 +103,7 @@
           <div class="d-flex gap-2">
             <input class="input" [(ngModel)]="row.key" placeholder="Поле" />
             <input class="input" [(ngModel)]="row.value" placeholder="Значение" />
-            <button class="btn btn-icon btn-danger" (click)="removeExtraRow(i)">
+            <button type="button" class="btn btn-icon btn-danger" (click)="removeExtraRow(i)" aria-label="Удалить поле">
               <i class="ph-bold ph-x" aria-hidden="true"></i>
             </button>
           </div>
@@ -110,8 +114,8 @@
       </button>
 
       <div class="d-flex gap-2 mt-1">
-        <button class="btn btn-primary btn-sm" (click)="handleSubmit()">
-          {{ editingId ? 'Сохранить' : 'Добавить' }}
+        <button class="btn btn-primary btn-sm" (click)="handleSubmit()" [disabled]="saving">
+          {{ saving ? 'Сохраняем…' : editingId ? 'Сохранить' : 'Добавить' }}
         </button>
         @if (editingId) {
           <button class="btn btn-secondary btn-sm" (click)="cancelEdit()">Отмена</button>
@@ -145,7 +149,7 @@
           <p class="muted mb-1">{{ instructionsOf(item) }}</p>
         }
         @if (item.expiryDate) {
-          <p class="muted mb-2">Срок годности: {{ item.expiryDate }}</p>
+          <p class="muted mb-2">Срок годности: {{ formatDayMonthYear(item.expiryDate) }}</p>
         } @else {
           <p class="muted mb-2">Срок годности не указан</p>
         }
@@ -163,12 +167,14 @@
             </table>
           </div>
         }
-        <div class="d-flex gap-2">
+        <!-- «Удалить» — отдельно справа и ghost-стилем: раньше красная кнопка стояла вплотную к
+             «Изменить» и на телефоне легко нажималась по ошибке (теперь ещё и с подтверждением). -->
+        <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
           <button class="btn btn-secondary btn-sm" (click)="openKb(item)">
             <i class="ph ph-book-open-text" aria-hidden="true"></i> Справка
           </button>
-          <button class="btn btn-danger btn-sm" (click)="handleDelete(item.id)">Удалить</button>
+          <button class="btn btn-ghost btn-sm text-danger ms-auto" (click)="handleDelete(item)">Удалить</button>
         </div>
       </div>
     }

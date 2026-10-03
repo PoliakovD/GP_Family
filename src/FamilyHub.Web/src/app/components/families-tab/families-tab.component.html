@@ -20,27 +20,55 @@
 
   <app-modal title="Новая семья" [open]="showCreateModal" (closed)="closeCreateModal()">
     <div class="d-flex flex-column gap-2">
+      <label class="form-label mb-0" for="new-family-name">Название семьи</label>
       <input
+        id="new-family-name"
         class="input"
         [(ngModel)]="newFamilyName"
-        placeholder="Название семьи"
+        placeholder="Например, Ивановы"
         (keydown.enter)="handleCreateFamily()"
       />
+      <p class="muted mb-0">После создания вы сможете пригласить близких по ссылке.</p>
       <div class="d-flex justify-content-end gap-2">
         <button class="btn btn-secondary btn-sm" (click)="closeCreateModal()">Отмена</button>
         <button class="btn btn-primary btn-sm" [disabled]="busy" (click)="handleCreateFamily()">
-          Создать
+          {{ busy ? 'Создаём…' : 'Создать' }}
         </button>
       </div>
     </div>
   </app-modal>
 
+  @if (!state.loading() && state.families().length === 0) {
+    <!-- Первый вход: объясняем, зачем семья, и даём оба пути — создать свою или войти по приглашению. -->
+    <div class="card mb-3">
+      <h4 class="card-title mb-1">Начните с семьи</h4>
+      <p class="muted mb-2">
+        Семья — это закрытое пространство для близких: общая аптечка, дни рождения и доступ к
+        анализам только тем, кому вы разрешите.
+      </p>
+      <ul class="muted mb-2">
+        <li>Создайте семью и пригласите родных по ссылке.</li>
+        <li>Или вставьте ниже ссылку-приглашение, которую вам прислали.</li>
+      </ul>
+      <button class="btn btn-primary align-self-start" [disabled]="atFamilyLimit()" (click)="openCreateModal()">
+        <i class="ph-bold ph-plus" aria-hidden="true"></i> Создать семью
+      </button>
+    </div>
+  }
+
   <div class="card mb-3">
-    <label class="form-label fw-semibold mb-2">Есть код инвайта?</label>
+    <label class="form-label fw-semibold mb-2" for="invite-code">Есть приглашение?</label>
     <div class="d-flex gap-2">
-      <input class="input" [(ngModel)]="inviteCode" placeholder="Код инвайта" />
+      <input
+        id="invite-code"
+        class="input"
+        [(ngModel)]="inviteCode"
+        placeholder="Вставьте ссылку или код"
+        autocomplete="off"
+        (keydown.enter)="handleRedeem()"
+      />
       <button class="btn btn-primary btn-sm text-nowrap" [disabled]="busy" (click)="handleRedeem()">
-        Войти
+        Присоединиться
       </button>
     </div>
   </div>
@@ -67,8 +95,5 @@
       </a>
     }
 
-    @if (state.families().length === 0) {
-      <p class="muted">Вы пока не состоите ни в одной семье.</p>
-    }
   }
 </div>

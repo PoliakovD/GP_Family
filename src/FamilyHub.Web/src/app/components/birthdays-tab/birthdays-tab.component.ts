@@ -1,10 +1,11 @@
 import { Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FamilyStateService } from '../../services/family-state.service';
 import { BirthdaysPanelComponent } from '../birthdays-panel/birthdays-panel.component';
 
 @Component({
     selector: 'app-birthdays-tab',
-    imports: [BirthdaysPanelComponent],
+    imports: [BirthdaysPanelComponent, RouterLink],
     templateUrl: './birthdays-tab.component.html'
 })
 export class BirthdaysTabComponent {

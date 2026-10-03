@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -12,7 +12,7 @@ import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component'
 
 @Component({
     selector: 'app-medications-tab',
-    imports: [MedkitsPanelComponent, LoadingSpinnerComponent],
+    imports: [MedkitsPanelComponent, LoadingSpinnerComponent, RouterLink],
     templateUrl: './medications-tab.component.html'
 })
 export class MedicationsTabComponent implements OnInit, OnDestroy {
