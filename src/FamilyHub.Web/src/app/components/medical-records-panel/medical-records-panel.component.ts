@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ToastService } from '../../shared/toast/toast.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -32,20 +31,17 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { PipelineProgressComponent, PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
-import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
-import { ReferenceScaleComponent } from '../../shared/reference-scale/reference-scale.component';
 import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { shortenDisplayName, shortenDoctorName, personAvatarPartsFromName } from '../../shared/util/person-name';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { formatDayMonth, formatDayMonthYear, formatYear } from '../../shared/util/date-format';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
@@ -54,10 +50,9 @@ import { ExtractionPoller } from './extraction-poller';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import { RecordEditSheetComponent } from './record-edit-sheet.component';
-import {
-  type IndicatorSortMode, deviationFor, flagClass, indicatorLabel, indicatorReference, isCalculatedRef, isInferredRef,
-  rowStatusClass, scaleBounds, scaleValue, sortIndicators, specimenLabelFor,
-} from './indicator-display';
+import { indicatorLabel, specimenLabelFor } from './indicator-display';
+import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
+import { IndicatorTableComponent } from './indicator-table.component';
 
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
@@ -109,12 +104,12 @@ let nextInstanceId = 0;
 @Component({
     selector: 'app-medical-records-panel',
     imports: [
-        ClickableDirective, NgTemplateOutlet,
+        NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent,
-        PipelineProgressComponent, KbCardComponent, StatusChipComponent,
+        PipelineProgressComponent, KbCardComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
-        ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
-        AttachmentListComponent, RouterLink, RecordAccessSheetComponent, RecordEditSheetComponent,
+        IndicatorInfoComponent, IndicatorInfoPanelComponent,
+        AttachmentListComponent, RouterLink, RecordAccessSheetComponent, RecordEditSheetComponent, IndicatorTableComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
     styleUrl: './medical-records-panel.component.scss'
@@ -158,11 +153,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
    * задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
-  indicatorEnrichmentTitle(ind: IndicatorDto): string {
-    if (ind.enrichmentWaitingForAi) return 'ИИ недоступен — уточнение нормы продолжится автоматически, когда он вернётся';
-    return enrichmentStatusTitle(
-      ind.enrichmentLiveText, ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
-  }
   readonly shortenDisplayName = shortenDisplayName;
   readonly shortenDoctorName = shortenDoctorName;
   readonly formatDayMonth = formatDayMonth;
@@ -284,12 +274,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
   readonly RefSource = RefSource;
   editingIndicatorId: string | null = null;
-  editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
+  editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorForm();
+  /** Стабильная пустая ссылка для [indicators], пока показатели записи не загружены. */
+  readonly noIndicators: readonly IndicatorDto[] = [];
+
+  indicatorsOf(recordId: string): readonly IndicatorDto[] {
+    return this.indicatorsByRecord[recordId] ?? this.noIndicators;
+  }
   savingIndicator = false;
   /** Id записи, для которой сейчас открыта строка «+ Добавить показатель» (null — закрыта). */
-  creatingIndicatorRecordId: string | null = null;
-  newIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
-  savingNewIndicator = false;
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
@@ -585,7 +578,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Есть ли что сворачивать/разворачивать кнопкой «Резюме» — тот же гейт, что раньше стоял
    * прямо над блоком резюме (единственное место, где он проверялся). */
   hasSummarySection(item: MedicalRecord): boolean {
-    return item.kind === MedicalRecordKind.Analysis && this.indicatorsFor(item.id).length > 0;
+    return item.kind === MedicalRecordKind.Analysis && this.indicatorsOf(item.id).length > 0;
   }
 
   /** Третья плитка статуса — «без нормы в бланке». abnormalIndicatorCount/normalIndicatorCount
@@ -1073,32 +1066,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     this.summaryPollAttempts.delete(recordId);
   }
 
-  // --- Редизайн v2.2 — сортировка строк таблицы показателей (скрытие пустых строк убрано по
-  // отзыву — все показатели всегда видны, сортировка осталась). Индикаторы обычно от единиц до
-  // пары десятков на запись — сортируем по месту на каждый рендер без мемоизации, усложнять ради
-  // этого объёма не стоит. ---
-  indicatorSortMode: IndicatorSortMode = 'abnormal';
-
-  setIndicatorSort(mode: IndicatorSortMode): void {
-    this.indicatorSortMode = mode;
-  }
-
-  indicatorsFor(recordId: string): IndicatorDto[] {
-    return sortIndicators(this.indicatorsByRecord[recordId] ?? [], this.indicatorSortMode);
-  }
-
-  // Отображение строки показателя — чистые функции из indicator-display.ts (шаблон вызывает их
-  // по прежним именам).
-  readonly rowStatusClass = rowStatusClass;
-  readonly deviationFor = deviationFor;
-  readonly flagClass = flagClass;
-  readonly indicatorReference = indicatorReference;
-  readonly scaleBounds = scaleBounds;
-  readonly scaleValue = scaleValue;
+  // Отображение показателей — IndicatorTableComponent; панели нужны только эти два хелпера
+  // (мета-строка записи и заголовок панели справки).
   readonly indicatorLabel = indicatorLabel;
   readonly specimenLabelFor = specimenLabelFor;
-  readonly isCalculatedRef = isCalculatedRef;
-  readonly isInferredRef = isInferredRef;
 
   // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
   // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
@@ -1106,7 +1077,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // --- Правка показателя вручную (ошибка OCR, v2) ---
 
   startEditIndicator(indicator: IndicatorDto): void {
-    this.creatingIndicatorRecordId = null;
     this.editingIndicatorId = indicator.id;
     this.editIndicatorForm = {
       displayName: indicator.displayName,
@@ -1120,7 +1090,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   cancelEditIndicator(): void {
     this.editingIndicatorId = null;
-    this.editIndicatorForm = emptyIndicatorEdit();
+    this.editIndicatorForm = emptyIndicatorForm();
   }
 
   async saveEditIndicator(recordId: string): Promise<void> {
@@ -1172,39 +1142,17 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Ручное добавление показателя (UX-редизайн) ---
-
-  startCreateIndicator(recordId: string): void {
-    this.editingIndicatorId = null;
-    this.creatingIndicatorRecordId = recordId;
-    this.newIndicatorForm = emptyIndicatorEdit();
-  }
-
-  cancelCreateIndicator(): void {
-    this.creatingIndicatorRecordId = null;
-    this.newIndicatorForm = emptyIndicatorEdit();
-  }
-
-  async saveNewIndicator(): Promise<void> {
-    if (!this.creatingIndicatorRecordId) return;
-    if (!this.newIndicatorForm.displayName.trim()) {
-      this.toast.error('Укажите название показателя.');
-      return;
-    }
-    const recordId = this.creatingIndicatorRecordId;
-    this.savingNewIndicator = true;
+  /** Показатель добавлен в IndicatorTableComponent — перечитываем показатели и саму запись
+   * (счётчики «вне нормы / в норме»). */
+  async onIndicatorCreated(recordId: string): Promise<void> {
     try {
-      await this.api.createIndicator(recordId, sanitizeIndicatorForm(this.newIndicatorForm));
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.syncEnrichmentPolling(recordId);
       await this.refresh({ silent: true });
-      this.cancelCreateIndicator();
       this.error = null;
     } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.');
-    } finally {
-      this.savingNewIndicator = false;
+      this.toast.error(err instanceof ApiError ? err.message : 'Показатель добавлен, но список не обновился — обновите страницу.');
     }
   }
 
@@ -1399,25 +1347,4 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return accessSummary(record, this.shares);
   }
 
-}
-
-function emptyIndicatorEdit(): UpdateIndicatorRequest {
-  return {
-    displayName: '', valueRaw: '', unit: null,
-    refLowText: null, refHighText: null, refText: null,
-  };
-}
-
-/** Обрезка пробелов + пустая строка → null — общий шаг перед отправкой формы показателя
- * (правка и создание используют одну и ту же форму). */
-function sanitizeIndicatorForm(form: UpdateIndicatorRequest): UpdateIndicatorRequest {
-  return {
-    ...form,
-    displayName: form.displayName.trim(),
-    valueRaw: form.valueRaw.trim(),
-    unit: form.unit?.trim() || null,
-    refLowText: form.refLowText?.trim() || null,
-    refHighText: form.refHighText?.trim() || null,
-    refText: form.refText?.trim() || null,
-  };
 }
