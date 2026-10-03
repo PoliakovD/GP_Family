@@ -7,7 +7,7 @@
 
 .cf-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .cf-label {
-  font-size: 0.7059rem;
+  font-size: 0.7647rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -46,7 +46,7 @@
 
   i { font-size: 1.25rem; color: var(--color-neutral-700); }
   span { display: flex; flex-direction: column; }
-  small { font-size: 0.7353rem; color: var(--color-neutral-600); }
+  small { font-size: 0.7647rem; color: var(--color-neutral-600); }
   &.active { background: var(--color-accent-100); border-color: var(--color-accent); i, strong { color: var(--color-accent-800); } small { color: var(--color-accent-700); } }
 }
 

@@ -23,7 +23,7 @@
 .it-bar { height: 8px; display: flex; background: var(--color-neutral-200); }
 .it-bar-ok { background: var(--color-status-ok); }
 .it-bar-miss { background: var(--color-status-danger); }
-.it-bar-legend { margin-top: 5px; display: flex; gap: 4px 10px; flex-wrap: wrap; font-size: 0.7353rem; color: var(--color-neutral-600); }
+.it-bar-legend { margin-top: 5px; display: flex; gap: 4px 10px; flex-wrap: wrap; font-size: 0.7647rem; color: var(--color-neutral-600); }
 .it-legend-miss { color: var(--color-status-danger-text); }
 
 // ---- Люди ----
@@ -196,7 +196,7 @@
 }
 
 .it-kicker {
-  font-size: 0.7059rem;
+  font-size: 0.7647rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -206,10 +206,10 @@
 .it-stock { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 .it-stock-line { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8824rem; strong { color: var(--color-status-warning-text); } }
 .it-stock-bar { height: 5px; background: var(--color-neutral-200); span { display: block; height: 100%; background: var(--color-status-warning); } }
-.it-stock-cap { font-size: 0.7353rem; color: var(--color-neutral-600); }
+.it-stock-cap { font-size: 0.7647rem; color: var(--color-neutral-600); }
 
 .it-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; text-align: center; }
-.it-week-day { display: flex; flex-direction: column; gap: 4px; font-size: 0.7059rem; color: var(--color-neutral-600); &.today .it-week-name { color: var(--color-accent); font-weight: 600; } }
+.it-week-day { display: flex; flex-direction: column; gap: 4px; font-size: 0.7647rem; color: var(--color-neutral-600); &.today .it-week-name { color: var(--color-accent); font-weight: 600; } }
 .it-week-col {
   display: flex;
   flex-direction: column;
