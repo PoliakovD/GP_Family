@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -7,7 +7,7 @@ import { PendingInviteService } from '../../services/pending-invite.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import type { InvitePreview } from '../../models/types';
 
-type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 'exhausted' | 'rate_limited';
+type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 'exhausted' | 'rate_limited' | 'network';
 
 /**
  * Публичный лендинг приглашения (/join/:code, без гардов) — веб-альтернатива Telegram-инвайту
@@ -19,6 +19,7 @@ type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 
 @Component({
   selector: 'app-join-invite',
   standalone: true,
+  imports: [RouterLink],
   templateUrl: './join-invite.component.html',
 })
 export class JoinInviteComponent implements OnInit {
@@ -35,6 +36,16 @@ export class JoinInviteComponent implements OnInit {
   readonly preview = signal<InvitePreview | null>(null);
   readonly authChecked = signal(false);
   readonly busy = signal(false);
+
+  isDeadEnd(): boolean {
+    const s = this.state();
+    return s === 'not_found' || s === 'revoked' || s === 'expired' || s === 'exhausted';
+  }
+
+  retry(): void {
+    this.state.set('loading');
+    void this.loadPreview();
+  }
 
   async ngOnInit(): Promise<void> {
     await Promise.all([this.loadPreview(), this.resolveAuth()]);
@@ -58,6 +69,8 @@ export class JoinInviteComponent implements OnInit {
         // Рейт-лимит "invite-redeem" (InviteEndpoints.GetPreview) — транзиентная ошибка, не
         // повод сообщать «ссылка недействительна» (см. заметку по /join/:code).
         if (e.status === 429) { this.state.set('rate_limited'); return; }
+        // Офлайн/5xx — это не «битая ссылка»: раньше человек думал, что ему прислали неверную ссылку.
+        if (e.status === 0 || e.status >= 500) { this.state.set('network'); return; }
       }
       this.state.set('not_found');
     }
@@ -90,6 +103,7 @@ export class JoinInviteComponent implements OnInit {
   }
 
   async joinNow(): Promise<void> {
+    if (this.busy()) return;
     this.busy.set(true);
     try {
       const result = await this.api.redeemInvite(this.code);
@@ -100,7 +114,7 @@ export class JoinInviteComponent implements OnInit {
       );
       await this.router.navigate(result.familyId ? ['/families', result.familyId] : ['/home']);
     } catch (e) {
-      this.toast.error(e instanceof ApiError ? e.message : 'Не удалось погасить приглашение.');
+      this.toast.error(e instanceof ApiError ? e.message : 'Не удалось присоединиться по приглашению.');
     } finally {
       this.busy.set(false);
     }

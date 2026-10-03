@@ -27,8 +27,11 @@
       </h2>
     </div>
 
+    @if (sessionExpired && step() === 'login' && !error()) {
+      <div class="alert-info" role="status">Сессия истекла — войдите снова, и мы вернём вас туда, где вы были.</div>
+    }
     @if (error()) {
-      <div class="alert-danger">{{ error() }}</div>
+      <div class="alert-danger" role="alert">{{ error() }}</div>
     }
 
     @if (showCookieNotice()) {

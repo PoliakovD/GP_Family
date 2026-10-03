@@ -101,7 +101,7 @@ export class SettingsDataComponent implements OnInit {
         await this.router.navigate(['/login']);
       } catch (e) {
         if (e instanceof HttpErrorResponse && e.error?.code === 'last_admin') {
-          this.toast.error('Вы последний админ в семье с участниками — сначала передайте права или удалите семью');
+          this.toast.error('Вы единственный администратор семьи с участниками. Сначала исключите участников или удалите семью (раздел «Семья»).');
           return;
         }
         throw e;

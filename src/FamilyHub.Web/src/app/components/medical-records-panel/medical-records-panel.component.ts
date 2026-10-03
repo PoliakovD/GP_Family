@@ -843,6 +843,19 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   async handleRecognize(record: MedicalRecord): Promise<void> {
+    // Повторное распознавание ЗАМЕНЯЕТ показатели записи целиком (см. комментарий у
+    // extractionStatusByRecord) — раньше ручные исправления молча пропадали после добавления ещё
+    // одной страницы и нажатия «Распознать».
+    if ((this.indicatorsByRecord[record.id]?.length ?? 0) > 0) {
+      const ok = await this.confirm.confirm({
+        title: 'Распознать заново?',
+        message: 'Показатели и резюме этой записи будут заменены результатом нового распознавания — '
+          + 'вместе с вашими ручными исправлениями.',
+        confirmText: 'Распознать заново',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     this.setRecognizing(record.id, true);
     this.clearPipelineTimer(record.id);
     this.pipelineStepsByRecord = {

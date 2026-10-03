@@ -202,7 +202,7 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
             const result = await this.api.removeMember(this.id, memberId);
             switch (result) {
                 case RemoveMemberResult.Removed:
-                    this.toast.success('Пользователь успешно удален из семьи');
+                    this.toast.success('Участник исключён из семьи.');
                     this.state.refresh();
                     break;
 

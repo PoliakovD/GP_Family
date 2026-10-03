@@ -10,6 +10,7 @@ import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { PASSWORD_PATTERN } from '../settings/settings-task';
 import { todayLocal } from '../../shared/util/intake-labels';
+import { safeReturnUrl } from '../../services/return-url';
 
 type Step = 'login' | 'register-details' | 'register-code' | 'reset-password-email' | 'reset-password-code';
 /** 'error' — проверка не удалась (сеть/лимит): не блокируем регистрацию, сервер всё равно проверит
@@ -142,7 +143,7 @@ export class LoginComponent implements HasPendingCodeEntry {
   async login(): Promise<void> {
     await this.run(async () => {
       await this.auth.login(this.email, this.password);
-      await this.router.navigate(['/']);
+      await this.router.navigate([this.afterLoginUrl]);
     });
   }
 
@@ -180,6 +181,14 @@ export class LoginComponent implements HasPendingCodeEntry {
   }
 
   /** Все поля заполнены и провалидированы — только теперь запрашиваем код (10-минутное окно). */
+  /** Куда вернуть после входа (см. return-url.ts); по умолчанию — Главная. */
+  private get afterLoginUrl(): string {
+    return safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl')) ?? '/';
+  }
+
+  /** ?expired=1 — сюда привёл интерцептор после истёкшей сессии: объясняем, а не молча выкидываем. */
+  readonly sessionExpired = this.route.snapshot.queryParamMap.get('expired') === '1';
+
   async submitDetails(): Promise<void> {
     if (!this.canSubmitDetails) return;
     await this.run(async () => {
@@ -205,7 +214,7 @@ export class LoginComponent implements HasPendingCodeEntry {
       // Если запрос не удался (сеть) — не блокируем регистрацию: ConsentRequiredFilter и
       // consentGuard всё равно перехватят на защищённых роутах и покажут /consent как обычно.
       const accepted = await this.acceptPdnConsent();
-      await this.router.navigate([accepted ? '/' : '/consent']);
+      await this.router.navigate([accepted ? this.afterLoginUrl : '/consent']);
     });
   }
 
@@ -252,7 +261,7 @@ export class LoginComponent implements HasPendingCodeEntry {
     await this.run(async () => {
       await this.auth.resetPasswordConfirm(this.email, this.code, this.password);
       this.completed.set(true);
-      await this.router.navigate(['/']);
+      await this.router.navigate([this.afterLoginUrl]);
     });
   }
 

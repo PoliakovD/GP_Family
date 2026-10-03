@@ -103,22 +103,29 @@
                                 </div>
                             }
                         </div>
-                        @if (family.myRole === FamilyRole.Admin) {
-                            <button class="btn btn-ghost btn-sm text-nowrap" (click)="removeMember(m.id)">Выгнать</button>
+                        <!-- Не на своей карточке: раньше админ мог «выгнать» себя и получал ошибку. -->
+                        @if (family.myRole === FamilyRole.Admin && m.id !== auth.me()?.userId) {
+                            <button class="btn btn-ghost btn-sm text-nowrap" (click)="removeMember(m.id)">Исключить</button>
                         }
                     </div>
                 }
 
-                <div class="card family-member-card family-invite-tile">
-                    <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
-                    <div class="flex-fill">
-                        <div class="card-title" style="font-size:1.0588rem">Пригласить в семью</div>
-                        <div class="muted" style="font-size:0.8235rem">
-                            Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
+                <!-- Ссылку создаёт только админ (модалка живёт в админ-блоке выше) — у участника кнопка
+                     раньше ничего не делала. -->
+                @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
+                    <div class="card family-member-card family-invite-tile">
+                        <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
+                        <div class="flex-fill">
+                            <div class="card-title" style="font-size:1.0588rem">Пригласить в семью</div>
+                            <div class="muted" style="font-size:0.8235rem">
+                                Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
+                            </div>
                         </div>
+                        <button class="btn btn-secondary text-nowrap" (click)="openInviteModal()">Создать ссылку</button>
                     </div>
-                    <button class="btn btn-secondary text-nowrap" (click)="openInviteModal()">Создать ссылку</button>
-                </div>
+                } @else {
+                    <p class="muted mb-0">Пригласить нового человека может администратор семьи — попросите его прислать ссылку.</p>
+                }
             </div>
         }
 
