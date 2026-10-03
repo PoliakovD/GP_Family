@@ -24,8 +24,8 @@
 |---|---|---|
 | P0 | 32 | 32 |
 | P1 | 52 | 46 |
-| P2 | 19 | 5 |
-| P3 | 12 | 5 |
+| P2 | 19 | 18 |
+| P3 | 12 | 12 |
 
 ---
 
@@ -151,41 +151,41 @@
 ## P2 — доступность, консистентность, Telegram
 
 - [x] **P2-01** Модалка/confirm без `role="dialog"`, `aria-modal`, фокуса и scroll-lock — применить `shared/util/overlay-a11y.ts`. — ✅ ae9381d
-- [ ] **P2-02** Кликабельные div/tr без клавиатуры: `app-search.html:33`, `notifications-tab.html:28`, `indicators-tab.html:48`, `kb-tab.html:29`, `kb-analyte-tab.html:29`, `medications-tab.html:13`, `medkits-panel.html:38`, `medical-records-panel.html:302`.
-- [ ] **P2-03** Вложенные интерактивы: кнопка в ссылке (`health-home.html:46`), кнопка в кнопке (`vaccination-person.html:57/67`).
-- [ ] **P2-04** Тумблеры без доступного имени: `settings-notifications.html`, `settings-data`, `intake-reminders.html:66,73`; иконка-кнопка без `aria-label` — `medications-panel.html:102`. — 🟡 частично: aria-label: крестик доп. поля аптечки, тумблеры доступа к анализам, уведомлений, напоминаний, переключатель распознавания (1b1f449, 50af081, 2c1c1b6, 71c6e0f); остались тумблеры в «Данные и доступ»
+- [x] **P2-02** Кликабельные div/tr без клавиатуры: `app-search.html:33`, `notifications-tab.html:28`, `indicators-tab.html:48`, `kb-tab.html:29`, `kb-analyte-tab.html:29`, `medications-tab.html:13`, `medkits-panel.html:38`, `medical-records-panel.html:302`. — ✅ a7f53a9
+- [x] **P2-03** Вложенные интерактивы: кнопка в ссылке (`health-home.html:46`), кнопка в кнопке (`vaccination-person.html:57/67`). — ✅ a7f53a9
+- [x] **P2-04** Тумблеры без доступного имени: `settings-notifications.html`, `settings-data`, `intake-reminders.html:66,73`; иконка-кнопка без `aria-label` — `medications-panel.html:102`. — ✅ a7f53a9
 - [x] **P2-05** Таб-бар `<button routerLink>` без `aria-current`, `<nav>` без `aria-label`; аватар-ссылка без `aria-label`. — ✅ 5e47554
-- [ ] **P2-06** Статус только цветом: «Показатели» (`indicators-tab.html:61-63`), срок годности (`medications-panel.html:129`), приверженность (`intake-today.html:184`), самочувствие.
-- [ ] **P2-07** `Unknown` (нет нормы) рисуется красным (`indicator-info.html:12`, `reference-scale.ts:119`); aria-label шкалы может сказать «в норме» при High.
-- [ ] **P2-08** Разные нормы для одного значения: таблица — норма бланка, инфо-панель — справочная. → подписать источник.
-- [ ] **P2-09** `prefers-reduced-motion` учтён только в 2 файлах.
+- [x] **P2-06** Статус только цветом: «Показатели» (`indicators-tab.html:61-63`), срок годности (`medications-panel.html:129`), приверженность (`intake-today.html:184`), самочувствие. — ✅ a7f53a9
+- [x] **P2-07** `Unknown` (нет нормы) рисуется красным (`indicator-info.html:12`, `reference-scale.ts:119`); aria-label шкалы может сказать «в норме» при High. — ✅ a7f53a9
+- [x] **P2-08** Разные нормы для одного значения: таблица — норма бланка, инфо-панель — справочная. → подписать источник. — ✅ be66975
+- [x] **P2-09** `prefers-reduced-motion` учтён только в 2 файлах. — ✅ a7f53a9
 - [x] **P2-10** Несуществующие утилиты: `mb-4`, `gap-4`, `mt-4`, `flex-grow-1`, `text-truncate`, `text-decoration-none`, `mx-auto`, `text-danger`. — ✅ 1b1f449
-- [ ] **P2-11** z-index без токенов; file-viewer (550) над confirm (500).
+- [x] **P2-11** z-index без токенов; file-viewer (550) над confirm (500). — ✅ a7f53a9
 - [x] **P2-12** Термины: приём врача / посещение / визит → «приём врача»; «Приём лекарств» рядом с «Приёмы врача». — ✅ 2c1c1b6
-- [ ] **P2-13** Термины: Уведомления / Оповещения; Push → «уведомления». — 🟡 частично: «Уведомления» вместо «Push»/«Оповещения» в настройках, на Главной и в курсе (2c1c1b6, 08e7218); «Push» ещё встречается в intake-reminders и intake-course-card
-- [ ] **P2-14** Термины: Сканы и файлы / Файлы / Документы; источник / биоматериал; инвайт → приглашение; «обогащаем справочник», «модель». — 🟡 частично: «Ищем описание препаратов» (4033a8f), «приглашение» вместо «инвайт» (1b1f449, 08e7218); «Сканы и файлы / Документы» и «источник/биоматериал» ещё не сведены
+- [x] **P2-13** Термины: Уведомления / Оповещения; Push → «уведомления». — ✅ be66975
+- [x] **P2-14** Термины: Сканы и файлы / Файлы / Документы; источник / биоматериал; инвайт → приглашение; «обогащаем справочник», «модель». — ✅ be66975
 - [x] **P2-15** Подписи кнопок: «Добавить запись» на Анализах → «Добавить анализ»; «Несколько» → «Загрузить несколько»; «N раз в день» (буква N) → «Несколько раз в день». — ✅ 2c1c1b6
-- [ ] **P2-16** Сырые ISO-даты: `dependents-panel.html:61`, `settings-profile.html:65`, `indicators-tab.html:58,94`, `medications-panel.html:148`, `medical-records-panel.html:706,758`, `intake-course-card.ts:182`. — 🟡 частично: срок годности, близкие, лист доступа (1b1f449, 4033a8f, 50af081); остались indicators-tab, settings-profile, intake-course-card
-- [ ] **P2-17** Таймзона «Europe/Moscow» (`intake-reminders.html:106`); ключи модели как названия полей аптечки (`medications-panel.ts:324-334`).
-- [ ] **P2-18** Telegram: нет `BackButton`, нет `themeParams`/`setHeaderColor`; перезагрузка может уронить в PWA-логин (`index.html`).
-- [ ] **P2-19** `medical-records-panel` — god-компонент (1784+887 строк): разбить на список / деталь / таблицу показателей / шит доступа / сервис прогресса.
+- [x] **P2-16** Сырые ISO-даты: `dependents-panel.html:61`, `settings-profile.html:65`, `indicators-tab.html:58,94`, `medications-panel.html:148`, `medical-records-panel.html:706,758`, `intake-course-card.ts:182`. — ✅ be66975
+- [x] **P2-17** Таймзона «Europe/Moscow» (`intake-reminders.html:106`); ключи модели как названия полей аптечки (`medications-panel.ts:324-334`). — ✅ be66975
+- [x] **P2-18** Telegram: нет `BackButton`, нет `themeParams`/`setHeaderColor`; перезагрузка может уронить в PWA-логин (`index.html`). — ✅ 021d8a0
+- [ ] **P2-19** `medical-records-panel` — god-компонент (1784+887 строк): разбить на список / деталь / таблицу показателей / шит доступа / сервис прогресса. — ⏭ отдельным PR: чистый рефакторинг без изменения поведения, рискованно без ручного прогона; план — вынести ExtractionProgressService (5 циклов опроса), RecordAccessSheetComponent, IndicatorTableComponent, затем разделить список и деталь
 
 ---
 
 ## P3 — копирайт и мелочи
 
-- [ ] **P3-01** «21 лет / 22 лет» — `home.component.html:147,151`, `home.component.ts:166`, `vaccination-person.ts:81`. — 🟡 частично: Главная (1b1f449); осталось vaccination-person.ts
-- [ ] **P3-02** Род: «Согласен» (`login.html:124`), «Принял» (`intake-today.html`, `health-home.html:47`), «Лёг/Встал» (`health-note-form.html:182,188`), «болела» (`vaccination-add-modal.html:100`). — 🟡 частично: «Принимаю» вместо «Согласен» (4033a8f)
-- [ ] **P3-03** Без склонения: «3 пропущен» (`intake-today.html:38`), «3 ссылки активна» (`health-home.html:208`), «N просрочено/заканчивается», «2 курсов» (`intake-reminders.html:48`). — 🟡 частично: «3 ссылки активны», «просрочено: N», «N показателей отслеживаются» (2c1c1b6); остались intake-today «пропущен» и intake-reminders «курсов»
-- [ ] **P3-04** «Чей это документы» (`record-batch-add.html:20`); «Чей анализ» на форме приёма (`record-add.html:18`).
+- [x] **P3-01** «21 лет / 22 лет» — `home.component.html:147,151`, `home.component.ts:166`, `vaccination-person.ts:81`. — ✅ b4f02aa
+- [x] **P3-02** Род: «Согласен» (`login.html:124`), «Принял» (`intake-today.html`, `health-home.html:47`), «Лёг/Встал» (`health-note-form.html:182,188`), «болела» (`vaccination-add-modal.html:100`). — ✅ b4f02aa
+- [x] **P3-03** Без склонения: «3 пропущен» (`intake-today.html:38`), «3 ссылки активна» (`health-home.html:208`), «N просрочено/заканчивается», «2 курсов» (`intake-reminders.html:48`). — ✅ b4f02aa
+- [x] **P3-04** «Чей это документы» (`record-batch-add.html:20`); «Чей анализ» на форме приёма (`record-add.html:18`). — ✅ b4f02aa
 - [x] **P3-05** «Username» (`login.html:66`), «Подтверждение Email» (`telegram-bind.html:5`). — ✅ 2920e77
 - [x] **P3-06** «Выгнать» → «Исключить», кнопка на собственной карточке админа (`family-details.html:106-107`); «удален»/«Пользователь» (`family-details.ts:205`). — ✅ 708e086
 - [x] **P3-07** «Push включён / выключен» на Главной (`home.component.html:93-95`). — ✅ 1b1f449
 - [x] **P3-08** Строка даты на Главной «в семье «X» 3 уведомления» без разделителя (`home.component.ts:112-115`). — ✅ 1b1f449
 - [x] **P3-09** Дублирующийся «FamilyHub» на логине. — ✅ 08e7218
-- [ ] **P3-10** «Показать ещё 30 дней» без конца; FAB и «Изменить» в чужом дневнике (`health-notes-tab.html`).
-- [ ] **P3-11** Дубли `.visually-hidden` / `.visually-hidden-input`.
-- [ ] **P3-12** `/login` без guest-guard; «Прочитать все» видна без непрочитанных.
+- [x] **P3-10** «Показать ещё 30 дней» без конца; FAB и «Изменить» в чужом дневнике (`health-notes-tab.html`). — ✅ b4f02aa
+- [x] **P3-11** Дубли `.visually-hidden` / `.visually-hidden-input`. — ✅ b4f02aa
+- [x] **P3-12** `/login` без guest-guard; «Прочитать все» видна без непрочитанных. — ✅ b4f02aa
 
 ---
 
