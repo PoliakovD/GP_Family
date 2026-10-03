@@ -163,15 +163,25 @@
           <p class="muted">Загружаем и распознаём фото…</p>
         </div>
       } @else if (certStage() === 'review' || certStage() === 'saving') {
-        <p class="muted">Нашли {{ certItems().length }} записей · проверьте жёлтые</p>
+        <p class="muted">
+          Нашли {{ certItems().length }} записей. Распознано автоматически — сверьте с сертификатом,
+          особенно строки с пометкой «проверьте».
+        </p>
         <div class="va-cert-list">
           @for (item of certItems(); track $index) {
             <div class="va-cert-row" [class.va-cert-row-review]="item.needsReview">
-              <button type="button" class="va-cal-check" [class.checked]="item.checked" (click)="toggleCertItem($index)">
+              <button type="button" class="va-cal-check" [class.checked]="item.checked" (click)="toggleCertItem($index)"
+                      [attr.aria-pressed]="item.checked" [attr.aria-label]="'Добавить: ' + item.rawName">
                 @if (item.checked) { <i class="ph-bold ph-check" aria-hidden="true"></i> }
               </button>
               <div class="flex-fill min-width-0">
                 <div class="va-cert-name">{{ item.rawName }}</div>
+                <!-- Раньше «проверьте жёлтые» — только цветом, незаметно при плохом цветовосприятии. -->
+                @if (item.needsReview) {
+                  <div class="va-cert-review-note">
+                    <i class="ph-fill ph-warning" aria-hidden="true"></i> проверьте серию и дату
+                  </div>
+                }
                 <select class="input va-cert-select" [ngModel]="item.seriesCodeEdit" (ngModelChange)="setCertSeries($index, $event)">
                   <option [ngValue]="null">— выберите серию из календаря —</option>
                   @for (c of vaccinations.catalog(); track c.code) {

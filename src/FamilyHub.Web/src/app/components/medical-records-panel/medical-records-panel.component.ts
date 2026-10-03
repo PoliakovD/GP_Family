@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { ToastService } from '../../shared/toast/toast.service';
 import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -152,6 +153,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   readonly ai = inject(AiStatusService);
   private readonly confirm = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
   private readonly pageAction = inject(PageActionService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -1745,7 +1747,21 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
    * открывал записи. L1-шаринг общий на оба вида (единый шаринг «Анализы + Врачи»), поэтому это
    * затрагивает базовую видимость всех записей той же семье, а не только текущего вида — осознанно.
    */
-  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean): Promise<void> {
+  async setFamilyAccess(record: MedicalRecord, familyId: string, visible: boolean, input?: HTMLInputElement): Promise<void> {
+    // Первое включение семьи открывает ей ВСЕ анализы и приёмы (общий шаринг) — раньше это
+    // происходило молча. Спрашиваем явно; при отказе возвращаем тумблер в исходное положение.
+    if (visible && !this.shares.includes(familyId)) {
+      const name = this.state.families().find((f) => f.id === familyId)?.name ?? 'эта семья';
+      const ok = await this.confirm.confirm({
+        title: 'Открыть доступ семье?',
+        message: `Семья «${name}» увидит все ваши анализы и приёмы врача, кроме тех, что вы скроете от неё отдельно.`,
+        confirmText: 'Открыть доступ',
+      });
+      if (!ok) {
+        if (input) input.checked = false;
+        return;
+      }
+    }
     try {
       if (visible) {
         if (!this.shares.includes(familyId)) {
@@ -1762,8 +1778,13 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   /** Сегмент «Только я / Все семьи» — bulk-скрытие/раскрытие записи для ВСЕХ уже расшаренных семей. */
-  async setAccessMode(record: MedicalRecord, onlyMe: boolean): Promise<void> {
-    if (this.shares.length === 0) return;
+  async setAccessMode(record: MedicalRecord, onlyMe: boolean, input?: HTMLInputElement): Promise<void> {
+    if (this.shares.length === 0) {
+      // Раньше радио «Все семьи» визуально включалось, а доступ оставался закрытым — UI врал.
+      if (input) input.checked = false;
+      this.toast.info('Пока ни одной семье доступ не открыт — включите нужную семью ниже.');
+      return;
+    }
     try {
       if (onlyMe) {
         await this.api.hideMedicalRecord(record.id, this.shares);

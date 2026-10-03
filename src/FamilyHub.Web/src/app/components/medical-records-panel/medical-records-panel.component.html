@@ -717,15 +717,15 @@
 
   @if (accessRecord; as record) {
     <app-bottom-sheet title="Настройки доступа" [open]="true" (closed)="closeAccessSheet()">
-      <p class="muted mb-3">{{ record.title ?? record.personName }} · {{ record.recordDate }}</p>
+      <p class="muted mb-3">{{ record.title ?? record.personName }} · {{ formatDayMonthYear(record.recordDate) }}</p>
 
       <div class="seg w-100 mb-3">
         <label class="seg-opt" style="flex:1;justify-content:center">
-          <input type="radio" name="accessMode" [checked]="isOnlyMe(record)" (change)="setAccessMode(record, true)" />
+          <input type="radio" name="accessMode" [checked]="isOnlyMe(record)" (change)="setAccessMode(record, true, $any($event.target))" />
           <i class="ph ph-lock-simple" aria-hidden="true"></i> Только я
         </label>
         <label class="seg-opt" style="flex:1;justify-content:center">
-          <input type="radio" name="accessMode" [checked]="!isOnlyMe(record)" (change)="setAccessMode(record, false)" />
+          <input type="radio" name="accessMode" [checked]="!isOnlyMe(record)" (change)="setAccessMode(record, false, $any($event.target))" />
           <i class="ph ph-users-three" aria-hidden="true"></i> Все семьи
         </label>
       </div>
@@ -746,7 +746,8 @@
                 <input
                   type="checkbox"
                   [checked]="isVisibleToFamily(record, f.id)"
-                  (change)="setFamilyAccess(record, f.id, $any($event.target).checked)"
+                  [attr.aria-label]="'Доступ семье «' + f.name + '»'"
+                  (change)="setFamilyAccess(record, f.id, $any($event.target).checked, $any($event.target))"
                 />
                 <span class="switch-knob"></span>
               </label>

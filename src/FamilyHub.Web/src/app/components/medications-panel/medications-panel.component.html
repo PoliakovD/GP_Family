@@ -77,6 +77,12 @@
     </div>
 
     <div class="card mb-3">
+      @if (aiFilled) {
+        <div class="alert-info" role="status">
+          <i class="ph ph-sparkle" aria-hidden="true"></i>
+          Поля заполнены автоматически по фото — сверьте название и срок годности с упаковкой.
+        </div>
+      }
       <label class="form-label mb-0" [for]="photoInputId + '-name'">Название препарата *</label>
       <input class="input" [id]="photoInputId + '-name'" [(ngModel)]="form.name" placeholder="Например, Нурофен" />
       <label class="form-label mb-0" [for]="photoInputId + '-expiry'">Срок годности</label>

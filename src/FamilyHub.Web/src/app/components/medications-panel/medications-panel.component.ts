@@ -52,6 +52,9 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   readonly formatDayMonthYear = formatDayMonthYear;
   /** Защита от двойного тапа «Добавить» — раньше второй тап создавал дубль. */
   saving = false;
+  /** Поля заполнены распознаванием фото — держим заметную плашку «проверьте» до сохранения
+   * (раньше был только исчезающий toast, и ошибка ИИ в сроке годности принималась за факт). */
+  aiFilled = false;
 
   activeTab: 'list' | 'add' = 'list';
 
@@ -320,6 +323,7 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
       }
       if (response.data) this.mergeExtraRows(response.data);
 
+      this.aiFilled = true;
       this.toast.success('Данные распознаны — проверьте перед сохранением.');
     } catch (err) {
       this.toast.error(err instanceof ApiError ? err.message : 'Не удалось распознать препарат по фото.');
@@ -428,6 +432,7 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   }
 
   resetForm(): void {
+    this.aiFilled = false;
     this.form = { name: '', expiryDate: '', instructions: '', quantity: '1' };
     this.extraRows = [];
     this.editingId = null;

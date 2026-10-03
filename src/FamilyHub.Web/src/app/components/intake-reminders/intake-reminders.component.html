@@ -24,7 +24,7 @@
               <app-avatar [person]="person(w.userId, w.name)" size="sm" />
               <span class="ir-name">{{ w.name }}</span>
               <label class="switch">
-                <input type="checkbox" [checked]="w.enabled" (change)="toggleMyWatcher(w.userId, $any($event.target).checked)" [attr.aria-label]="'Сообщать ' + w.name" />
+                <input type="checkbox" [checked]="w.enabled" (change)="toggleMyWatcher(w.userId, $any($event.target).checked, $any($event.target))" [attr.aria-label]="'Сообщать ' + w.name" />
                 <span class="switch-knob"></span>
               </label>
             </li>
