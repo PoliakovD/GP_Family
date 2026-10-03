@@ -859,6 +859,9 @@ select.input {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
+
+  // Карточка получает фокус программно (OverlayA11y) — рамка вокруг всего окна не нужна.
+  &:focus { outline: none; }
 }
 
 // ============================================================================

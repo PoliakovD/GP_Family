@@ -1,4 +1,5 @@
 import { Component, ElementRef, HostListener, inject, input, signal } from '@angular/core';
+import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
 
@@ -26,6 +27,7 @@ export interface ActionMenuItem {
     styleUrl: './action-menu.component.scss'
 })
 export class ActionMenuComponent {
+  private readonly overlays = inject(OverlayStackService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
@@ -54,8 +56,9 @@ export class ActionMenuComponent {
     if (!this.host.nativeElement.contains(event.target as Node)) this.open.set(false);
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: KeyboardEvent): void {
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.open() && this.isWide) this.open.set(false);
   }
 }

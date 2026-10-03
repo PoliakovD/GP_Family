@@ -1,5 +1,6 @@
 import { Component, HostListener, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { SearchResultItem, SearchResultType } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
@@ -57,6 +58,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
     styleUrl: './app-search.component.scss'
 })
 export class AppSearchComponent {
+  private readonly overlays = inject(OverlayStackService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
 
@@ -84,8 +86,10 @@ export class AppSearchComponent {
     this.search.rerun();
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: KeyboardEvent): void {
+    // Escape в открытом окне/листе — его, а не поиска (раньше заодно стирал запрос).
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     this.search.reset();
   }
 

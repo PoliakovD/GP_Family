@@ -1,5 +1,7 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input } from '@angular/core';
 import { todayLocal } from '../../shared/util/intake-labels';
+import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { confirmDiscard } from '../../shared/util/track-dirty.directive';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -55,6 +57,7 @@ export class RecordAddComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly breakpoints = inject(BreakpointService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly acceptedFileTypes = ACCEPTED_ATTACHMENT_TYPES;
   readonly fileInputId = `record-add-file-input-${nextInstanceId}`;
@@ -116,7 +119,14 @@ export class RecordAddComponent implements OnInit, OnDestroy {
     return medicalRecordKindBasePath(this.kind());
   }
 
-  cancel(): void {
+  /** Есть что терять: прикреплённые снимки или введённые врач/описание. */
+  private get isDirty(): boolean {
+    return this.pendingFiles.length > 0 || !!this.form.doctor.trim() || !!this.form.description.trim();
+  }
+
+  async cancel(): Promise<void> {
+    // Тап по фону/крестику раньше молча выбрасывал сфотографированные страницы.
+    if (this.saving || !(await confirmDiscard(this.confirm, this.isDirty))) return;
     void this.router.navigate([this.kindBasePath()]);
   }
 

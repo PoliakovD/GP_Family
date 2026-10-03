@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -6,6 +6,7 @@ import { BreakpointService } from '../../services/breakpoint.service';
 import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
+import { TrackDirtyDirective, confirmDiscard } from '../../shared/util/track-dirty.directive';
 import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { SidePanelComponent } from '../../shared/side-panel/side-panel.component';
@@ -80,7 +81,7 @@ function quantile(sorted: number[], q: number): number {
   selector: 'app-health-notes-tab',
   imports: [
     ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, PersonChipComponent, RouterLink,
-    SearchFieldComponent, SidePanelComponent, TrendLineComponent,
+    SearchFieldComponent, SidePanelComponent, TrackDirtyDirective, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
   styleUrl: './health-notes-tab.component.scss',
@@ -191,6 +192,14 @@ export class HealthNotesTabComponent implements OnInit {
     if (note && this.isReadOnly()) return;
     this.editing.set(note);
     this.formOpen.set(true);
+  }
+
+  /** Обёртка формы (appTrackDirty) — знает, вводил ли пользователь что-то. */
+  private readonly formDirty = viewChild(TrackDirtyDirective);
+
+  /** Фон, крестик, Escape, «Отмена» — с вопросом, если в форме уже что-то введено. */
+  protected async requestCloseForm(): Promise<void> {
+    if (await confirmDiscard(this.confirm, this.formDirty()?.isDirty)) this.closeForm();
   }
 
   protected closeForm(): void {

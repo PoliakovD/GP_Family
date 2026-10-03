@@ -18,7 +18,7 @@
     </p>
   }
 
-  <app-modal title="Новая семья" [open]="showCreateModal" (closed)="closeCreateModal()">
+  <app-modal title="Новая семья" [open]="showCreateModal" [dirty]="!!newFamilyName.trim()" (closed)="closeCreateModal()">
     <div class="d-flex flex-column gap-2">
       <label class="form-label mb-0" for="new-family-name">Название семьи</label>
       <input

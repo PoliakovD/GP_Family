@@ -170,16 +170,18 @@
 
 @if (isWide()) {
   <app-side-panel [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'"
-                  width="min(560px, 100vw)" (closed)="closeForm()">
+                  width="min(560px, 100vw)" (closed)="requestCloseForm()">
     @if (formOpen()) {
-      <app-health-note-form [catalog]="catalog()" [note]="editing()" (saved)="onSaved()" (cancelled)="closeForm()" />
+      <div appTrackDirty>
+        <app-health-note-form [catalog]="catalog()" [note]="editing()" (saved)="onSaved()" (cancelled)="requestCloseForm()" />
+      </div>
     }
   </app-side-panel>
 } @else {
-  <app-bottom-sheet [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'" (closed)="closeForm()">
+  <app-bottom-sheet [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'" (closed)="requestCloseForm()">
     @if (formOpen()) {
-      <div class="dn-sheet">
-        <app-health-note-form [catalog]="catalog()" [note]="editing()" (saved)="onSaved()" (cancelled)="closeForm()" />
+      <div class="dn-sheet" appTrackDirty>
+        <app-health-note-form [catalog]="catalog()" [note]="editing()" (saved)="onSaved()" (cancelled)="requestCloseForm()" />
       </div>
     }
   </app-bottom-sheet>

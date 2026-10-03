@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
@@ -145,6 +146,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly person = input<string | undefined>(undefined);
   personHintDismissed = false;
 
+  private readonly overlays = inject(OverlayStackService);
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
@@ -675,8 +677,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  @HostListener('document:keydown.escape')
-  onEscapeForFilters(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscapeForFilters(event: KeyboardEvent): void {
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }
 

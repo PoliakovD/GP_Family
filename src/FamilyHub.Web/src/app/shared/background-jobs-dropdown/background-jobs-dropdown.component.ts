@@ -1,5 +1,6 @@
 import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BackgroundJobsStateService } from '../../services/background-jobs-state.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
@@ -30,6 +31,7 @@ interface JobSection {
     styleUrl: './background-jobs-dropdown.component.scss'
 })
 export class BackgroundJobsDropdownComponent {
+  private readonly overlays = inject(OverlayStackService);
   readonly jobs = inject(BackgroundJobsStateService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly router = inject(Router);
@@ -81,8 +83,9 @@ export class BackgroundJobsDropdownComponent {
     if (!this.host.nativeElement.contains(event.target as Node)) this.open.set(false);
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: KeyboardEvent): void {
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.open() && this.isWide) this.open.set(false);
   }
 }
