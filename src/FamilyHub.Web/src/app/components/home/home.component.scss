@@ -18,7 +18,7 @@
   border-top: 1px solid var(--color-divider);
   background: transparent;
   color: var(--color-accent);
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-size: 0.8824rem;
   font-weight: 600;
   cursor: pointer;
@@ -54,7 +54,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-weight: 600;
   font-size: 0.8235rem;
   letter-spacing: 0.12em;
@@ -101,7 +101,7 @@
 }
 
 .home-birthday-day {
-  font-family: var(--font-ui);
+  font-family: var(--font-heading);
   font-weight: 600;
   font-size: 1.0588rem;
   line-height: 1;

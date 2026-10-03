@@ -5,7 +5,7 @@
 .vo { display: flex; flex-direction: column; gap: var(--space-5); }
 
 .vo-kicker {
-  font: 600 0.6471rem/1 var(--font-ui);
+  font: 600 0.6471rem/1 var(--font-heading);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-neutral-600);
@@ -32,7 +32,7 @@
 
 .vo-card-top { display: flex; align-items: center; gap: 10px; }
 .vo-card-person { font-size: 0.7941rem; color: var(--color-neutral-600); }
-.vo-card-when { font: 600 0.7647rem var(--font-ui); flex: none; }
+.vo-card-when { font: 600 0.7647rem var(--font-heading); flex: none; }
 .vo-card-when-soon { color: var(--color-accent-800); }
 .vo-card-when-can { color: var(--color-status-warning-text); }
 
