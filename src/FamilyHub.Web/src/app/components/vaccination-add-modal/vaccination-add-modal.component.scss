@@ -122,7 +122,10 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
+// Видимый квадрат небольшой, но тач-зона ~44px — в длинном списке легко промахнуться.
+.va-cal-check::after { content: ''; position: absolute; inset: -11px; }
 .va-cal-check {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
