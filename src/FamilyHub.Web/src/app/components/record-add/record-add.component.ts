@@ -206,7 +206,7 @@ export class RecordAddComponent implements OnInit, OnDestroy {
         }
       }
       if (uploadFailed > 0) {
-        this.toast.error(`Запись сохранена, но ${uploadFailed} файлов не загрузилось — прикрепите их к записи ниже.`);
+        this.toast.error(`Запись сохранена, но не загрузилось файлов: ${uploadFailed}. Откройте запись и прикрепите их ещё раз.`);
       }
 
       // Редизайн v3 (PR7) — автораспознавание при сохранении: не дожидаемся ЗАВЕРШЕНИЯ
@@ -221,7 +221,11 @@ export class RecordAddComponent implements OnInit, OnDestroy {
       // OCR — ждать его не задерживает навигацию заметно.
       const uploadedCount = this.pendingFiles.length - uploadFailed;
       if (this.autoRecognize && uploadedCount > 0) {
-        const extraction = await this.api.requestExtraction(created.id).catch(() => null);
+        // Раньше сбой постановки в очередь глотался молча — человек ждал распознавания, которого нет.
+        const extraction = await this.api.requestExtraction(created.id).catch(() => {
+          this.toast.error('Запись сохранена, но распознавание не запустилось. Откройте запись и нажмите «Распознать».');
+          return null;
+        });
         if (extraction?.code === 'waiting_for_ai') this.toast.info(extraction.message ?? 'ИИ недоступен — документ будет распознан позже.');
       }
 

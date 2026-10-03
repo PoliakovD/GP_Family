@@ -729,13 +729,15 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Полная перезагрузка с первой страницы — вызывается на смену фильтров/вида/после
    * создания-удаления записи. Подгрузку СЛЕДУЮЩИХ страниц при скролле делает loadMore(), которая
    * дозаписывает в items, а не заменяет их. */
-  async refresh(): Promise<void> {
+  /** silent — фоновое обновление (завершилось распознавание, переключили доступ, правка в панели):
+   * без спиннера на весь список — раньше список мигал после каждого такого события. */
+  async refresh(options?: { silent?: boolean }): Promise<void> {
     const kind = this.kind();
     const recordId = this.recordId();
     this.loadedKind = kind;
     this.loadedRecordId = recordId;
     this.page = 1;
-    this.loading = true;
+    if (!options?.silent) this.loading = true;
     try {
       if (recordId) {
         // Одиночный режим (PR6) — одна запись по id, без пагинации/фильтров/группировки.
@@ -829,7 +831,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.goToList();
         return;
       }
-      await this.refresh();
+      await this.refresh({ silent: true });
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось удалить запись.';
     }
@@ -948,11 +950,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
           if (status.status === ExtractionJobStatus.Completed) {
             await this.loadExtractionResult(record);
             this.appendEnrichmentFollowupStep(record.id);
-            await this.refresh();
-          } else if (status.error) {
-            this.error = status.error;
+            await this.refresh({ silent: true });
+            // Прячем виджет только после успеха. Сбой остаётся на экране, пока человек не уйдёт со
+            // страницы: раньше сообщение об ошибке исчезало через 2,5 с, и его легко было не заметить.
+            this.schedulePipelineClear(record.id);
           }
-          this.schedulePipelineClear(record.id);
         }
       } catch (err) {
         // Сетевой блип/вкладка была в фоне — сама задача на бэкенде продолжает идти независимо
@@ -989,7 +991,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
     if (status.status === ExtractionJobStatus.Failed || status.status === ExtractionJobStatus.Skipped) {
       markLastDone();
-      steps.push({ id: `outcome-${steps.length}`, label: status.error ?? 'Не удалось распознать документ.', state: 'error' });
+      steps.push({
+        id: `outcome-${steps.length}`,
+        label: `${friendlyExtractionError(status.error)} Можно нажать «Распознать» ещё раз или внести показатели вручную.`,
+        state: 'error',
+      });
     } else if (status.status === ExtractionJobStatus.Completed) {
       markLastDone();
       steps.push({ id: `outcome-${steps.length}`, label: 'Готово', state: 'done' });
@@ -1016,8 +1022,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // Pending/построчной логике по стадиям ниже.
       if (!prev || prev.queuePosition !== status.queuePosition || steps.length === 0) {
         markLastDone();
-        const label = `Общая очередь к модели — ещё ${status.queuePosition} ` +
-          `${pluralizeRu(status.queuePosition, 'задача', 'задачи', 'задач')} впереди (аптечка и другие анализы тоже её используют)`;
+        const label = `В очереди на распознавание — перед вами ${status.queuePosition} ` +
+          `${pluralizeRu(status.queuePosition, 'документ', 'документа', 'документов')}`;
         steps.push({ id: `global-queue-${status.queuePosition}`, label, state: 'active' });
       }
     } else if (status.status === ExtractionJobStatus.Pending) {
@@ -1055,10 +1061,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     // (не push нового), если он ещё active: это не новый шаг конвейера, просто уточнение текста
     // уже показанной строки на очередной тик поллинга — не должно переигрывать её entrance-
     // анимацию (см. class doc PipelineStep.thought/pipeline-progress.component.ts про track по id).
-    const lastStep = steps[steps.length - 1];
-    if (lastStep && lastStep.state === 'active' && lastStep.thought !== status.currentThought) {
-      steps[steps.length - 1] = { ...lastStep, thought: status.currentThought };
-    }
 
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
   }
@@ -1076,7 +1078,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     const steps = [...(this.pipelineStepsByRecord[recordId] ?? [])];
     steps.push({
       id: 'enrichment-followup',
-      label: `${pendingCount} ${pluralizeRu(pendingCount, 'показатель', 'показателя', 'показателей')} — уточняем норму в справочнике (можно закрыть страницу, продолжится в фоне)`,
+      label: `Для ${pendingCount} ${pluralizeRu(pendingCount, 'показателя', 'показателей', 'показателей')} ещё уточняем норму — можно закрыть страницу, это продолжится само`,
       state: 'done',
     });
     this.pipelineStepsByRecord = { ...this.pipelineStepsByRecord, [recordId]: steps };
@@ -1378,7 +1380,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated, false);
       void this.afterRecordDataChanged(recordId);
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.');
     } finally {
       this.savingIndicator = false;
     }
@@ -1401,7 +1403,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
       void this.afterRecordDataChanged(recordId);
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось удалить показатель.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось удалить показатель.');
     }
   }
 
@@ -1427,11 +1429,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       const indicators = await this.api.getRecordIndicators(recordId);
       this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
       this.syncEnrichmentPolling(recordId);
-      await this.refresh();
+      await this.refresh({ silent: true });
       this.cancelCreateIndicator();
       this.error = null;
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось добавить показатель — возможно, такой уже есть в записи.');
     } finally {
       this.savingNewIndicator = false;
     }
@@ -1559,10 +1561,10 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.info = `ИИ сейчас недоступен — биоматериал «${query}» будет проверен и применён к записи автоматически, когда он вернётся.`;
       }
       this.closeEditSheet();
-      await this.refresh();
+      await this.refresh({ silent: true });
       this.error = null;
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.');
     } finally {
       this.savingRecord = false;
     }
@@ -1776,9 +1778,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       } else {
         await this.api.hideMedicalRecord(record.id, [familyId]);
       }
-      await this.refresh();
+      await this.refresh({ silent: true });
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
     }
   }
 
@@ -1796,12 +1798,18 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       } else {
         await this.api.unhideMedicalRecord(record.id, this.shares);
       }
-      await this.refresh();
+      await this.refresh({ silent: true });
     } catch (err) {
-      this.error = err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.';
+      this.toast.error(err instanceof ApiError ? err.message : 'Действие доступно только владельцу записи.');
     }
   }
 
+}
+
+/** Текст бэкенда про сбой распознавания — только если он по-русски и человеческий; иначе общий. */
+function friendlyExtractionError(raw: string | null | undefined): string {
+  if (raw && /[а-яё]/i.test(raw) && !raw.includes('<') && raw.length <= 300) return raw.endsWith('.') ? raw : raw + '.';
+  return 'Не удалось распознать документ.';
 }
 
 function emptyIndicatorEdit(): UpdateIndicatorRequest {

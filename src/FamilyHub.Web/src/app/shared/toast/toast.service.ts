@@ -60,6 +60,11 @@ export class ToastService {
     this.show('success', text, { action: { label: 'Отменить', run: undo }, durationMs: UNDO_DURATION_MS });
   }
 
+  /** Успех с произвольным действием (например, «Открыть» только что загруженный файл). */
+  successWithAction(text: string, label: string, run: () => void | Promise<void>): void {
+    this.show('success', text, { action: { label, run } });
+  }
+
   dismiss(id: number): void {
     const t = this.timers.get(id);
     if (t) clearTimeout(t.handle);

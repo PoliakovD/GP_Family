@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
+import { ToastService } from '../toast/toast.service';
 import { AttachmentPreviewStatus, type Attachment, type AttachmentLimits } from '../../models/types';
 import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '../util/attachment-upload';
 import { describeFile } from '../util/file-type';
@@ -30,6 +31,7 @@ export class AttachmentListComponent implements OnChanges {
   @Output() changed = new EventEmitter<void>();
 
   private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
 
   readonly acceptedFileTypes = ACCEPTED_ATTACHMENT_TYPES;
   readonly PreviewStatus = AttachmentPreviewStatus;
@@ -110,9 +112,12 @@ export class AttachmentListComponent implements OnChanges {
 
     this.changed.emit();
 
-    // «Сразу после загрузки файла» (см. план) — открываем вьюер на последнем успешно загруженном
-    // файле; превью там ещё Pending, вьюер сам покажет спиннер и дождётся готовности опросом.
-    if (uploadedIndex >= 0) this.openViewer(uploadedIndex);
+    // Раньше вьюер открывался сам после каждой загрузки — на телефоне это полноэкранное окно, которое
+    // человек не просил. Теперь — предложение «Открыть» в уведомлении.
+    if (uploadedIndex >= 0) {
+      const index = uploadedIndex;
+      this.toast.successWithAction('Файл прикреплён.', 'Открыть', () => this.openViewer(index));
+    }
   }
 
   private async load(): Promise<void> {

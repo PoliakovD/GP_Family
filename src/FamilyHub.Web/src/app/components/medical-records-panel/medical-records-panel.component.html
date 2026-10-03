@@ -171,10 +171,19 @@
 
       @if (pipelineStepsByRecord[item.id]; as steps) {
         <app-pipeline-progress [steps]="steps" />
+        @if (recognizingRecordIds.has(item.id)) {
+          <p class="muted mb-1">
+            Обычно это занимает 1–3 минуты. Страницу можно закрыть — распознавание продолжится, а
+            показатели появятся в этой записи.
+          </p>
+        }
       }
 
       @if (extractionStatusByRecord[item.id]?.status === ExtractionJobStatus.Completed && extractionStatusByRecord[item.id]?.error) {
-        <div class="muted" style="font-size:0.7059rem">Частично: {{ extractionStatusByRecord[item.id]?.error }}</div>
+        <div class="alert-info mt-1" role="status">
+          <i class="ph ph-warning" aria-hidden="true"></i>
+          Распознано не всё. Сверьте показатели с бланком и добавьте недостающие вручную.
+        </div>
       }
 
       <!-- Живой прогресс (pipelineStepsByRecord) уже сам показывает исход "Не удалось распознать"
@@ -183,7 +192,7 @@
            постоянная плашка по item.extractionStatus (честно проставляется бэкендом) — единственный
            способ узнать о сбое, не нажимая «Распознать» вслепую ещё раз. -->
       @if (item.extractionStatus === ExtractionStatus.Failed && !pipelineStepsByRecord[item.id]) {
-        <div class="alert-danger" style="font-size:0.7059rem; margin-top:4px;">
+        <div class="alert-danger" style="margin-top:4px;">
           Не удалось распознать документ в прошлый раз.
           @if (hasUnrecognizedAttachments(item)) { Нажмите «Распознать» ещё раз. }
         </div>
@@ -601,7 +610,8 @@
     @if (firstReview() === '1') {
       <div class="alert-info mb-3">
         <i class="ph-duotone ph-magic-wand" aria-hidden="true"></i>
-        Разобрали бланк. Поправьте, если что-то не так — или просто сохраните.
+        Запись сохранена. Когда распознавание закончится, сверьте показатели и нормы с бланком —
+        ИИ может ошибиться; любое значение можно исправить.
       </div>
     }
 
@@ -898,7 +908,13 @@
             </div>
   </ng-template>
 
-  <datalist id="specimen-suggestions">
+  <!-- Подсказки врачей для фильтра и формы правки (раньше [attr.list] ссылался на несуществующий datalist). -->
+<datalist [id]="doctorsDatalistId">
+  @for (d of doctorSuggestions; track d) {
+    <option [value]="d"></option>
+  }
+</datalist>
+<datalist id="specimen-suggestions">
     @for (s of specimenSuggestions; track s.id) {
       <option [value]="s.displayName"></option>
     }

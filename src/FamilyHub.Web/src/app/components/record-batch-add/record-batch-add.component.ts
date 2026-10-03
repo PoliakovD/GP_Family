@@ -251,7 +251,12 @@ export class RecordBatchAddComponent implements OnInit, OnDestroy {
   }
 
   get failedCount(): number {
-    return this.items().filter((i) => i.status === 'failed' || i.status === 'skipped').length;
+    return this.items().filter((i) => i.status === 'failed').length;
+  }
+
+  /** Отдельно от сбоев: пропущены из-за дневного лимита — это не «ошибка», их можно загрузить завтра. */
+  get skippedCount(): number {
+    return this.items().filter((i) => i.status === 'skipped').length;
   }
 
   finish(): void {

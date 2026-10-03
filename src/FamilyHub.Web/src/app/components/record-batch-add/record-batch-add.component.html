@@ -99,8 +99,9 @@
         (change)="onFilesSelected($event)"
       />
       @if (extractionLimits; as limits) {
-        <div class="muted mb-2" style="font-size:0.7059rem">
-          До {{ limits.maxBatchDocuments }} документов за раз, до {{ limits.dailyQuota - limits.usedToday }} осталось сегодня из {{ limits.dailyQuota }}.
+        <div class="muted mb-2">
+          Фото, PDF, Word или Excel — до {{ limits.maxBatchDocuments }} документов за раз. Сегодня можно ещё
+          {{ limits.dailyQuota - limits.usedToday }} из {{ limits.dailyQuota }}.
         </div>
       }
       @if (stoppedByLimit) {
@@ -116,10 +117,22 @@
     </div>
 
     @if (done()) {
-      <div [class]="failedCount > 0 ? 'alert-danger mb-2' : 'alert-info mb-2'">
+      <div [class]="failedCount > 0 ? 'alert-danger mb-2' : 'alert-info mb-2'" role="status">
         Загружено и поставлено в очередь: {{ succeededCount }} из {{ items().length }}.
         @if (failedCount > 0) { Не удалось: {{ failedCount }}. }
+        @if (skippedCount > 0) { Пропущено из-за дневного лимита: {{ skippedCount }}. }
       </div>
+      <!-- Причина у каждого файла — текстом: раньше она была только во всплывающей подсказке
+           (title), которой на телефоне нет. -->
+      @if (failedCount > 0 || skippedCount > 0) {
+        <ul class="muted mb-2">
+          @for (item of items(); track $index) {
+            @if (item.status === 'failed' || item.status === 'skipped') {
+              <li><strong>{{ item.file.name }}</strong>: {{ item.error || (item.status === 'skipped' ? 'пропущен' : 'не загрузился') }}</li>
+            }
+          }
+        </ul>
+      }
     }
   </div>
 
