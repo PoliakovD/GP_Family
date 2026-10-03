@@ -291,7 +291,7 @@
             [recordId]="item.id"
             [indicators]="indicatorsOf(item.id)"
             [wide]="isWide"
-            (open)="openIndicatorInfo($event)"
+            (open)="indicatorInfo.openIndicator($event)"
             (created)="onIndicatorCreated(item.id)"
           />
         }
@@ -333,14 +333,14 @@
   </ng-template>
 
   @if (recordId()) {
-    @if (!isWide && infoOpen) {
+    @if (!isWide && indicatorInfo.open) {
       <!-- Редизайн v2.2 — на мобиле показатель открывается ПОЛНОЭКРАННО (не нижним листом) —
            заменяет содержимое записи целиком, а не накладывается на него. Своя back-link,
            закрытие — на список показателей записи (не на список записей). URL уже синхронизирован
            (?indicator=, см. openIndicatorInfo/closeIndicatorInfo) — общий топбар/шапка «Здоровье»
            всё равно скрыты (immersive), лишней навигации тут не остаётся. -->
       <div class="mb-3">
-        <app-back-link [label]="infoDisplayName || 'Показатель'" (activated)="closeIndicatorInfo()" />
+        <app-back-link [label]="indicatorInfo.displayName || 'Показатель'" (activated)="indicatorInfo.close()" />
       </div>
       <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     } @else {
@@ -603,32 +603,32 @@
        мобильная шторка не дублировали одинаковый набор пропсов на app-indicator-info по два раза
        (раньше так и было — легко забыть один из двух при добавлении нового input/output). -->
   <ng-template #indicatorInfoBody>
-    @if (infoLoading) {
+    @if (indicatorInfo.loading) {
       <app-loading-spinner />
-    } @else if (infoError) {
-      <div class="alert-danger mb-0">{{ infoError }}</div>
+    } @else if (indicatorInfo.error) {
+      <div class="alert-danger mb-0">{{ indicatorInfo.error }}</div>
     } @else {
       <app-indicator-info
-        [article]="infoCard" [displayName]="infoDisplayName" [reading]="infoReading" [history]="infoHistory"
-        [patient]="infoPatient" [patientName]="items[0] ? shortenDisplayName(items[0].personName) : ''"
-        [canEdit]="!!infoIndicator" [editing]="editingIndicatorId === infoIndicatorId"
-        [editForm]="editIndicatorForm" [saving]="savingIndicator"
-        (openRelated)="openRelatedAnalyte($event)" (openInCatalog)="openIndicatorInCatalog()"
-        (startEdit)="startEditIndicator(infoIndicator!)" (cancelEdit)="cancelEditIndicator()"
-        (saveEdit)="saveEditIndicator(infoIndicator!.medicalRecordId)"
-        (requestDelete)="deleteIndicatorRow(infoIndicator!.medicalRecordId, infoIndicator!)"
+        [article]="indicatorInfo.card" [displayName]="indicatorInfo.displayName" [reading]="indicatorInfo.reading" [history]="indicatorInfo.history"
+        [patient]="indicatorInfo.patient" [patientName]="items[0] ? shortenDisplayName(items[0].personName) : ''"
+        [canEdit]="!!indicatorInfo.indicator" [editing]="indicatorInfo.editingId === indicatorInfo.indicatorId"
+        [editForm]="indicatorInfo.editForm" [saving]="indicatorInfo.saving"
+        (openRelated)="indicatorInfo.openRelated($event)" (openInCatalog)="indicatorInfo.openInCatalog()"
+        (startEdit)="indicatorInfo.startEdit(indicatorInfo.indicator!)" (cancelEdit)="indicatorInfo.cancelEdit()"
+        (saveEdit)="indicatorInfo.saveEdit(indicatorInfo.indicator!.medicalRecordId)"
+        (requestDelete)="indicatorInfo.delete(indicatorInfo.indicator!.medicalRecordId, indicatorInfo.indicator!)"
       />
     }
   </ng-template>
 
   <!-- Панель справки по показателю (редизайн v2, PR4) — десктоп: боковая панель. Редизайн v2.2 —
-       на узких экранах справка больше не открывается нижним листом здесь: infoOpen возможен
+       на узких экранах справка больше не открывается нижним листом здесь: indicatorInfo.open возможен
        только когда recordId() задан (единственные точки входа — клик по строке таблицы в
        singleMode и чип "что смотрят вместе" внутри уже открытой справки), а для этого случая на
        narrow теперь есть отдельный полноэкранный блок прямо в @if (recordId()) выше — второй
        рендер тут был бы дублирующим нижним листом поверх уже полноэкранного показателя. -->
-  @if (infoOpen && isWide) {
-    <app-indicator-info-panel [title]="infoDisplayName || 'Показатель'" (closed)="closeIndicatorInfo()">
+  @if (indicatorInfo.open && isWide) {
+    <app-indicator-info-panel [title]="indicatorInfo.displayName || 'Показатель'" (closed)="indicatorInfo.close()">
       <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     </app-indicator-info-panel>
   }

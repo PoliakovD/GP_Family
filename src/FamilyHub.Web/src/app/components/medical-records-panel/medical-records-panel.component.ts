@@ -12,19 +12,15 @@ import { PageActionService } from '../../services/page-action.service';
 import { AiStatusService } from '../../services/ai-status.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import {
-  ExtractionJobStatus, ExtractionStatus, IndicatorFlag, MedicalRecordKind, RefSource,
+  ExtractionJobStatus, ExtractionStatus, MedicalRecordKind,
 } from '../../models/types';
 import type {
   ExtractionStatusResponse,
   IndicatorDto,
-  IndicatorHistoryPoint,
-  KbAnalyteCard,
   KbMedicationCard,
   MedicalRecord,
   MedicalRecordFilter,
-  PatientContextDto,
   RecordSummaryResponse,
-  UpdateIndicatorRequest,
   VisitConclusion,
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -36,7 +32,7 @@ import { PersonChipComponent } from '../../shared/person-chip/person-chip.compon
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
-import { IndicatorInfoComponent, type IndicatorInfoReading } from '../indicator-info/indicator-info.component';
+import { IndicatorInfoComponent } from '../indicator-info/indicator-info.component';
 import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 import { AttachmentListComponent } from '../../shared/attachment-list/attachment-list.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
@@ -51,8 +47,8 @@ import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import { RecordEditSheetComponent } from './record-edit-sheet.component';
 import { indicatorLabel, specimenLabelFor } from './indicator-display';
-import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
 import { IndicatorTableComponent } from './indicator-table.component';
+import { IndicatorInfoController } from './indicator-info.controller';
 
 
 const EXTRACTION_POLL_INTERVAL_MS = 1500;
@@ -148,7 +144,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly Kind = MedicalRecordKind;
   readonly ExtractionJobStatus = ExtractionJobStatus;
   readonly ExtractionStatus = ExtractionStatus;
-  readonly IndicatorFlag = IndicatorFlag;
   readonly pluralizeRu = pluralizeRu;
 
   /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
@@ -272,17 +267,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   private readonly summaryAutoTried = new Set<string>();
 
   // --- Правка/добавление показателя вручную (ошибка OCR, v2 + UX-редизайн) ---
-  readonly RefSource = RefSource;
-  editingIndicatorId: string | null = null;
-  editIndicatorForm: UpdateIndicatorRequest = emptyIndicatorForm();
   /** Стабильная пустая ссылка для [indicators], пока показатели записи не загружены. */
   readonly noIndicators: readonly IndicatorDto[] = [];
 
   indicatorsOf(recordId: string): readonly IndicatorDto[] {
     return this.indicatorsByRecord[recordId] ?? this.noIndicators;
   }
-  savingIndicator = false;
-  /** Id записи, для которой сейчас открыта строка «+ Добавить показатель» (null — закрыта). */
 
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
@@ -403,7 +393,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
     }
-    this.indicatorParamSub = this.route.queryParamMap.subscribe(() => this.syncIndicatorFromRoute());
+    this.indicatorParamSub = this.route.queryParamMap.subscribe(() => this.indicatorInfo.syncFromRoute());
   }
 
   /** Опрос статуса распознавания использует setInterval — без явной остановки таймеры
@@ -754,7 +744,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // Редизайн v2.2 — ?indicator= в URL может прийти раньше, чем показатели этой записи
       // загрузятся (первый заход по ссылке/обновление страницы) — на момент первого срабатывания
       // подписки в ngOnInit indicatorsByRecord ещё пуст, повторяем попытку здесь.
-      if (recordId) this.syncIndicatorFromRoute();
+      if (recordId) this.indicatorInfo.syncFromRoute();
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить данные.';
     } finally {
@@ -1071,77 +1061,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   readonly indicatorLabel = indicatorLabel;
   readonly specimenLabelFor = specimenLabelFor;
 
-  // Раскрытие строки показателя (полное имя из бланка) — редизайн v2 заменил его на клик →
-  // openIndicatorInfo(), полная информация теперь в панели справки, а не в самой строке.
-
-  // --- Правка показателя вручную (ошибка OCR, v2) ---
-
-  startEditIndicator(indicator: IndicatorDto): void {
-    this.editingIndicatorId = indicator.id;
-    this.editIndicatorForm = {
-      displayName: indicator.displayName,
-      valueRaw: indicator.valueRaw,
-      unit: indicator.unit,
-      refLowText: indicator.refLowText,
-      refHighText: indicator.refHighText,
-      refText: indicator.refText,
-    };
-  }
-
-  cancelEditIndicator(): void {
-    this.editingIndicatorId = null;
-    this.editIndicatorForm = emptyIndicatorForm();
-  }
-
-  async saveEditIndicator(recordId: string): Promise<void> {
-    if (!this.editingIndicatorId) return;
-    if (!this.editIndicatorForm.displayName.trim()) {
-      this.toast.error('Укажите название показателя.');
-      return;
-    }
-    const savedId = this.editingIndicatorId;
-    this.savingIndicator = true;
-    try {
-      await this.api.updateIndicator(savedId, sanitizeIndicatorForm(this.editIndicatorForm));
-      const indicators = await this.api.getRecordIndicators(recordId);
-      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
-      this.syncEnrichmentPolling(recordId);
-      this.cancelEditIndicator();
-      this.error = null;
-      // Редизайн v2.2 — редактирование теперь открывается прямо из панели справки (не из
-      // таблицы): если правили именно тот показатель, чья статья сейчас открыта, панель должна
-      // сразу показать новое значение/статус/шкалу, а не то, что было до правки.
-      const updated = indicators.find((i) => i.id === savedId);
-      if (updated && this.infoIndicatorId === savedId) void this.openIndicatorInfo(updated, false);
-      void this.afterRecordDataChanged(recordId);
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить правку — возможно, такой показатель уже есть в записи.');
-    } finally {
-      this.savingIndicator = false;
-    }
-  }
-
-  async deleteIndicatorRow(recordId: string, indicator: IndicatorDto): Promise<void> {
-    const confirmed = await this.confirm.confirm({
-      title: 'Удалить показатель?',
-      message: `«${indicator.displayName}» будет удалён из записи безвозвратно.`,
-      confirmText: 'Удалить',
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    try {
-      await this.api.deleteIndicator(indicator.id);
-      const indicators = await this.api.getRecordIndicators(recordId);
-      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
-      this.syncEnrichmentPolling(recordId);
-      if (this.infoIndicatorId === indicator.id) this.closeIndicatorInfo();
-      void this.afterRecordDataChanged(recordId);
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось удалить показатель.');
-    }
-  }
-
   /** Показатель добавлен в IndicatorTableComponent — перечитываем показатели и саму запись
    * (счётчики «вне нормы / в норме»). */
   async onIndicatorCreated(recordId: string): Promise<void> {
@@ -1212,135 +1131,23 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     return this.breakpoints.tier() === 'wide';
   }
 
-  // --- Справка по показателю (редизайн v2, PR4) — два пути открытия делят одно состояние:
-  // клик по строке показателя записи (reading+history заданы, персонализировано под пациента
-  // записи) и клик по чипу "что смотрят вместе" внутри уже открытой статьи (только карточка,
-  // тот же путь, что каталог /health/kb/indicators).
-
-  infoOpen = false;
-  infoLoading = false;
-  infoError: string | null = null;
-  infoCard: KbAnalyteCard | null = null;
-  infoDisplayName = '';
-  infoReading: IndicatorInfoReading | null = null;
-  infoHistory: IndicatorHistoryPoint[] | null = null;
-  /** Редизайн v2.2 — возраст/пол пациента на дату записи, GET /api/indicators/{id}/article уже
-   * отдаёт (response.patient), раньше просто игнорировался. */
-  infoPatient: PatientContextDto | null = null;
-  /** Id показателя, чья статья сейчас открыта reading-веткой — null, когда панель открыта чипом
-   * "что смотрят вместе" (там нет конкретного показателя записи). Не путать с infoCard.id (это
-   * id статьи справочника, другое значение). Не private — редизайн v2.2, шаблону нужен для
-   * editing="editingIndicatorId === infoIndicatorId". */
-  infoIndicatorId: string | null = null;
-  /** Редизайн v2.2 — сам показатель (не только id), чтобы Редактировать/Удалить в панели справки
-   * могли вызвать startEditIndicator/deleteIndicatorRow, которые принимают IndicatorDto целиком. */
-  infoIndicator: IndicatorDto | null = null;
-
-  /** navigate=false — вызов из самой подписки на маршрут (syncIndicatorFromRoute) или
-   * переоткрытие после правки (saveEditIndicator): URL уже соответствует, повторная навигация
-   * лишняя. По умолчанию true — обычный клик по строке/карточке показателя. */
-  async openIndicatorInfo(indicator: IndicatorDto, navigate = true): Promise<void> {
-    this.infoOpen = true;
-    this.infoLoading = true;
-    this.infoError = null;
-    this.infoCard = null;
-    this.infoHistory = null;
-    this.infoPatient = null;
-    this.infoIndicatorId = indicator.id;
-    this.infoIndicator = indicator;
-    this.infoDisplayName = this.indicatorLabel(indicator);
-    // Редизайн v2.2 — на мобиле показатель открывается своим URL (?indicator=), не просто
-    // in-memory состоянием: apparatus «назад» должен закрыть именно его, не всю запись (тот же
-    // приём, что kb-analyte-tab уже применяет для ?id=). На wide экранах URL не трогаем — там
-    // панель справки остаётся чисто in-memory, как и раньше.
-    if (navigate && !this.isWide) {
-      void this.router.navigate([], {
-        relativeTo: this.route, queryParams: { indicator: indicator.id }, queryParamsHandling: 'merge',
-      });
-    }
-    this.infoReading = {
-      valueRaw: indicator.valueRaw,
-      valueNumeric: indicator.valueNumericText !== null ? parseFloat(indicator.valueNumericText) : null,
-      unit: indicator.unit,
-      flag: indicator.flag,
-      matchedRefRangeIndex: null,
-    };
-    try {
-      const response = await this.api.getIndicatorArticle(indicator.id);
-      this.infoCard = response.article;
-      this.infoPatient = response.patient;
-      this.infoReading = { ...this.infoReading, matchedRefRangeIndex: response.matchedRefRangeIndex };
-      if (response.historyAvailable) {
-        this.infoHistory = await this.api.getRecordIndicatorHistory(indicator.medicalRecordId, indicator.id);
-      }
-    } catch (err) {
-      this.infoError = err instanceof ApiError ? err.message : 'Не удалось загрузить справку по показателю.';
-    } finally {
-      this.infoLoading = false;
-    }
-  }
-
-  /** Чип "что смотрят вместе" внутри уже открытой статьи — переоткрываем панель БЕЗ
-   * персонального контекста (это другой показатель, не тот, что открывал панель изначально). */
-  async openRelatedAnalyte(kbAnalyteId: string): Promise<void> {
-    this.infoOpen = true;
-    this.infoLoading = true;
-    this.infoError = null;
-    this.infoCard = null;
-    this.infoReading = null;
-    this.infoHistory = null;
-    this.infoPatient = null;
-    this.infoDisplayName = '';
-    this.infoIndicatorId = null;
-    this.infoIndicator = null;
-    try {
-      this.infoCard = await this.api.getKbAnalyte(kbAnalyteId);
-    } catch (err) {
-      this.infoError = err instanceof ApiError ? err.message : 'Не удалось загрузить статью справочника.';
-    } finally {
-      this.infoLoading = false;
-    }
-  }
-
-  /** navigate=false — вызов из syncIndicatorFromRoute (URL уже без ?indicator=) или там, где
-   * следом всё равно уходим на другой URL (openIndicatorInCatalog) — см. openIndicatorInfo. */
-  closeIndicatorInfo(navigate = true): void {
-    this.infoOpen = false;
-    this.infoIndicatorId = null;
-    this.infoIndicator = null;
-    this.cancelEditIndicator();
-    if (navigate && !this.isWide) {
-      void this.router.navigate([], {
-        relativeTo: this.route, queryParams: { indicator: null }, queryParamsHandling: 'merge',
-      });
-    }
-  }
-
-  /** Редизайн v2.2 — синхронизирует infoOpen/infoIndicator* с ?indicator= в URL (мобильный
-   * полноэкранный показатель). Вызывается из подписки на queryParamMap (ngOnInit) и из refresh()
-   * — на первом срабатывании подписки indicatorsByRecord может быть ещё не загружен. */
-  private syncIndicatorFromRoute(): void {
-    if (this.isWide) return;
-    const recordId = this.recordId();
-    if (!recordId) return;
-    const id = this.route.snapshot.queryParamMap.get('indicator');
-    if (id) {
-      if (this.infoIndicatorId === id) return;
-      const found = (this.indicatorsByRecord[recordId] ?? []).find((i) => i.id === id);
-      if (found) void this.openIndicatorInfo(found, false);
-    } else if (this.infoOpen) {
-      this.closeIndicatorInfo(false);
-    }
-  }
-
-  /** Футер "Открыть в справочнике" — уходит на мини-хаб /health/kb/indicators с ?id=, тот же
-   * экран сам откроет статью (см. KbAnalyteTabComponent.ngOnInit). */
-  openIndicatorInCatalog(): void {
-    if (!this.infoCard) return;
-    const id = this.infoCard.id;
-    this.closeIndicatorInfo(false); // уходим на другой роут ниже — чистить ?indicator= здесь незачем
-    void this.router.navigate(['/health/kb/indicators'], { queryParams: { id } });
-  }
+  /** Справка по показателю и его правка — см. indicator-info.controller.ts. */
+  readonly indicatorInfo = new IndicatorInfoController({
+    api: this.api,
+    router: this.router,
+    route: this.route,
+    toast: this.toast,
+    confirm: this.confirm,
+    isWide: () => this.isWide,
+    recordId: () => this.recordId(),
+    indicatorsOf: (recordId) => this.indicatorsOf(recordId),
+    onIndicatorsChanged: (recordId, indicators) => {
+      this.indicatorsByRecord = { ...this.indicatorsByRecord, [recordId]: indicators };
+      this.syncEnrichmentPolling(recordId);
+      this.error = null;
+      void this.afterRecordDataChanged(recordId);
+    },
+  });
 
   /** Сводка доступа для карточки и пикера группы — см. record-access.ts. */
   accessSummary(record: MedicalRecord): string {
