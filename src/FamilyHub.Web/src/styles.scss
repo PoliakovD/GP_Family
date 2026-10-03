@@ -230,10 +230,29 @@ a {
   &:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
 }
 
+// Сброс нативного вида — .btn-icon часто ставят БЕЗ .btn (шапка, панели), и тогда браузер рисовал
+// свою серую кнопку с рамкой.
 .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: var(--tap-min); // редизайн v2: было 36px
   height: var(--tap-min);
   padding: 0;
+
+  // Только без .btn — иначе сброс перебил бы фон .btn-danger/.btn-secondary у «btn btn-icon …».
+  &:not(.btn) {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    &:not(.btn):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+  }
 }
 
 // Текстовая ссылка-кнопка (вторичное действие форм: "Назад", "Отмена" и т.п.) — без фона и
@@ -307,7 +326,9 @@ a {
   min-height: var(--tap-min); // редизайн v2: было 36px
   padding: 6px 10px;
   font: inherit;
-  font-size: 0.8824rem; // редизайн v2: было 14px
+  // Не меньше 16px: iOS Safari/PWA при фокусе на поле с шрифтом < 16px увеличивает страницу и не
+  // возвращает масштаб (было 0.8824rem = 15px).
+  font-size: max(16px, 0.9412rem);
   color: var(--color-text);
   caret-color: var(--color-accent);
   background: var(--color-surface);
@@ -375,8 +396,13 @@ select.input {
 
   // :not(.active) — иначе hover перебивает фон активной кнопки-сегмента (у неё нет input:checked),
   // а светлый текст .active остаётся и становится нечитаемым.
-  &:not(:has(input:checked)):not(.active):hover {
-    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  // (hover: hover) — на тач-экранах hover «залипает» после тапа. Второе правило
+  // `&:not(.active):hover` (без проверки input:checked) убрано: оно перебивало фон выбранного
+  // radio-сегмента, и светлый текст пропадал на светлом фоне.
+  @media (hover: hover) {
+    &:not(:has(input:checked)):not(.active):hover {
+      background: color-mix(in srgb, var(--color-text) 7%, transparent);
+    }
   }
 
   &:has(input:focus-visible) {
@@ -397,10 +423,6 @@ select.input {
   &.active {
     background: var(--color-accent);
     color: var(--color-bg);
-  }
-
-  &:not(.active):hover {
-    background: color-mix(in srgb, var(--color-text) 7%, transparent);
   }
 }
 
@@ -823,6 +845,7 @@ select.input {
   width: 100%;
   max-width: 400px;
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
 }
@@ -961,6 +984,7 @@ select.input {
 .app-shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 // ----------------------------------------------------------------------------
@@ -973,6 +997,7 @@ select.input {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   position: sticky;
   top: 0;
   background: var(--color-surface);
@@ -1263,7 +1288,9 @@ select.input {
 
 .app-content {
   flex: 1;
-  padding: var(--space-3) var(--space-4) 88px;
+  // 88px — высота таб-бара с запасом; плюс home indicator iPhone, иначе таб-бар (у которого свой
+  // safe-area padding) перекрывает последний блок контента.
+  padding: var(--space-3) var(--space-4) calc(88px + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
 }
 
@@ -1309,6 +1336,7 @@ select.input {
 // ============================================================================
 .auth-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1419,13 +1447,19 @@ select.input {
 // ============================================================================
 // Cookie-баннер (используется только пользователями, а не Telegram Mini App).
 // ============================================================================
+// На телефоне баннер стоит НАД таб-баром (~58px + home indicator), а не поверх него: раньше
+// у нового пользователя он закрывал нижнюю навигацию, пока тот не нажмёт кнопку.
 .cookie-banner {
   position: fixed;
   left: var(--space-3);
   right: var(--space-3);
-  bottom: var(--space-3);
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 200;
   box-shadow: var(--shadow-lg);
+
+  @media (min-width: 1024px) {
+    bottom: var(--space-3);
+  }
 }
 
 .cookie-banner-actions {

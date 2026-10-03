@@ -9,6 +9,7 @@
   grid-template-rows: auto 1fr;
   width: min(392px, 100vw);
   height: 100vh;
+  height: 100dvh;
   background: var(--color-paper);
   box-shadow: var(--shadow-lg);
 }
