@@ -17,7 +17,6 @@ import {
 } from '../../models/types';
 import type {
   ExtractionStatusResponse,
-  GlobalSpecimenDto,
   IndicatorDto,
   IndicatorHistoryPoint,
   KbAnalyteCard,
@@ -27,8 +26,6 @@ import type {
   PatientContextDto,
   RecordSummaryResponse,
   UpdateIndicatorRequest,
-  UpdateMedicalRecordRequest,
-  UserSpecimen,
   VisitConclusion,
 } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -56,6 +53,7 @@ import { enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline
 import { ExtractionPoller } from './extraction-poller';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
+import { RecordEditSheetComponent } from './record-edit-sheet.component';
 import {
   type IndicatorSortMode, deviationFor, flagClass, indicatorLabel, indicatorReference, isCalculatedRef, isInferredRef,
   rowStatusClass, scaleBounds, scaleValue, sortIndicators, specimenLabelFor,
@@ -116,7 +114,7 @@ let nextInstanceId = 0;
         PipelineProgressComponent, KbCardComponent, StatusChipComponent,
         AvatarComponent, PersonChipComponent, BackLinkComponent, ActionMenuComponent, InfiniteScrollSentinelComponent,
         ReferenceScaleComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent,
-        AttachmentListComponent, RouterLink, RecordAccessSheetComponent,
+        AttachmentListComponent, RouterLink, RecordAccessSheetComponent, RecordEditSheetComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
     styleUrl: './medical-records-panel.component.scss'
@@ -293,23 +291,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   newIndicatorForm: UpdateIndicatorRequest = emptyIndicatorEdit();
   savingNewIndicator = false;
 
-  // --- Источник ВСЕЙ записи (заметка 1) — свободный текстовый поиск по общему справочнику
-  // (GlobalSpecimenKb), меняется отдельно от показателей (PUT .../specimen, каскадится на все
-  // показатели записи). resolveSpecimenQuery находит-или-заводит строку справочника при потере
-  // фокуса (тот же find-or-register, что раньше был только у «своего» биоматериала — теперь
-  // единственный путь на все случаи).
-  // Редактируется в форме «Редактировать запись» (bottom-sheet), не инлайн в карточке.
-  recordSpecimenQuery = '';
-  recordSpecimenForm: { specimenKbId: string } = { specimenKbId: '' };
-  specimenSuggestions: GlobalSpecimenDto[] = [];
-  customSpecimens: UserSpecimen[] = [];
-  customSpecimenError: string | null = null;
-  savingCustomSpecimen = false;
-  /** Проверка введённого биоматериала не состоялась из-за недоступного ИИ (503) — при сохранении
-   * формы название уйдёт в «ожидает проверки» (PUT .../specimen-pending), а не потеряется. */
-  specimenCheckDeferred = false;
-  private specimenSearchTimer: ReturnType<typeof setTimeout> | null = null;
-
   // L1: семьи, которым владелец глобально расшарил записи (общее для обоих видов — единый шаринг).
   shares: string[] = [];
 
@@ -324,8 +305,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // --- Правка даты/врача/описания записи (кнопка «Редактировать», UX-редизайн) ---
   editRecord: MedicalRecord | null = null;
-  editRecordForm: UpdateMedicalRecordRequest = { recordDate: '', doctor: '', description: '', title: '' };
-  savingRecord = false;
+  /** Подсказка модели для поля «Биоматериал» (из баннера «уточните»). */
+  editSpecimenHint: string | null = null;
 
   // --- Справка по назначенному лекарству (заключение врача, UX-редизайн) — та же карточка и
   // тот же bottom-sheet, что во вкладке «Справочник» (kb-tab.component.ts). ---
@@ -428,9 +409,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
     if (this.doctorSuggestions.length === 0) {
       void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
-    }
-    if (this.customSpecimens.length === 0) {
-      void this.api.getSpecimens().then((s) => (this.customSpecimens = s));
     }
     this.indicatorParamSub = this.route.queryParamMap.subscribe(() => this.syncIndicatorFromRoute());
   }
@@ -1230,61 +1208,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Источник показателя — поиск по общему справочнику + find-or-register на потере фокуса ---
-
-  /** Debounce поиска подсказок (GET /api/specimens/search) — вызывается на каждый ввод символа
-   * в любое из двух полей (правка/создание), общий список подсказок на оба. */
-  onSpecimenQueryInput(q: string): void {
-    if (this.specimenSearchTimer) clearTimeout(this.specimenSearchTimer);
-    this.specimenSearchTimer = setTimeout(() => void this.searchSpecimens(q), 200);
-  }
-
-  private async searchSpecimens(q: string): Promise<void> {
-    try {
-      this.specimenSuggestions = await this.api.searchSpecimens(q);
-    } catch {
-      // Подсказка необязательна для работы формы — молча оставляем прежний список при сбое сети.
-    }
-  }
-
-  /** Резолвит введённый текст в ссылку на справочник при потере фокуса поля — совпадение среди
-   * уже загруженных подсказок берётся без сети; новый текст проходит find-or-register
-   * (POST /api/specimens, та же LLM-валидация, что раньше была только у «своего» биоматериала —
-   * теперь единственный путь на все случаи, включая распространённые источники). form — общий
-   * shape { specimenKbId }, не завязан на конкретную форму (используется и записью, и раньше —
-   * показателем, до того как источник переехал на уровень записи, см. заметку 1). */
-  async resolveSpecimenQuery(query: string, form: { specimenKbId: string }): Promise<void> {
-    const trimmed = query.trim();
-    if (!trimmed || this.savingCustomSpecimen) return;
-
-    const existing = this.specimenSuggestions.find((s) => s.displayName.toLowerCase() === trimmed.toLowerCase());
-    if (existing) {
-      form.specimenKbId = existing.id;
-      this.customSpecimenError = null;
-      return;
-    }
-
-    this.savingCustomSpecimen = true;
-    this.customSpecimenError = null;
-    this.specimenCheckDeferred = false;
-    try {
-      const created = await this.api.createSpecimen(trimmed);
-      form.specimenKbId = created.specimenKbId;
-      if (!this.customSpecimens.some((s) => s.specimenKbId === created.specimenKbId)) {
-        this.customSpecimens = [...this.customSpecimens, created].sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
-      }
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 503) {
-        // ИИ недоступен — это не ошибка ввода: название сохранится как «ожидает проверки».
-        this.specimenCheckDeferred = true;
-      } else {
-        this.customSpecimenError = err instanceof ApiError ? err.message : 'Не удалось проверить источник показателя.';
-      }
-    } finally {
-      this.savingCustomSpecimen = false;
-    }
-  }
-
   // Открытие/скачивание вложения теперь целиком внутри app-file-viewer/attachment-list.
 
   // --- Доступ (bottom-sheet «Доступ») ---
@@ -1299,66 +1222,22 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   // --- Правка записи (bottom-sheet «Редактировать») ---
 
-  /** hint — предзаполняет поле «Биоматериал» подсказкой модели ("мазок" без локализации,
-   * заметка 2), когда форма открывается из баннера «уточните источник» в карточке. */
+  /** Шторка «Редактировать запись» — см. record-edit-sheet.component.ts. hint предзаполняет
+   * «Биоматериал» подсказкой модели, когда форма открыта из баннера «уточните». */
   openEditSheet(record: MedicalRecord, specimenHint?: string): void {
     this.editRecord = record;
-    this.recordSpecimenQuery = specimenHint ?? record.specimenDisplayName ?? '';
-    this.recordSpecimenForm = { specimenKbId: record.specimenKbId };
-    this.customSpecimenError = null;
-    this.specimenCheckDeferred = false;
-    this.editRecordForm = {
-      recordDate: record.recordDate,
-      doctor: record.doctor ?? '',
-      description: record.description ?? '',
-      title: record.title ?? '',
-    };
+    this.editSpecimenHint = specimenHint ?? null;
   }
 
   closeEditSheet(): void {
     this.editRecord = null;
   }
 
-  async saveEditRecord(): Promise<void> {
-    if (!this.editRecord || !this.editRecordForm.recordDate || this.savingRecord || this.savingCustomSpecimen) return;
-    const record = this.editRecord;
-    this.savingRecord = true;
-    try {
-      // Биоматериал — только у анализов и только если его реально сменили: новый текст ещё мог не
-      // пройти find-or-register (уход фокуса с поля не дождался), добираем здесь.
-      const query = this.recordSpecimenQuery.trim();
-      const specimenChanged = record.kind === MedicalRecordKind.Analysis
-        && query !== '' && query !== (record.specimenDisplayName ?? '');
-      if (specimenChanged && this.recordSpecimenForm.specimenKbId === record.specimenKbId) {
-        await this.resolveSpecimenQuery(query, this.recordSpecimenForm);
-      }
-      if (this.customSpecimenError) return;
-
-      await this.api.updateMedicalRecord(record.id, {
-        recordDate: this.editRecordForm.recordDate,
-        doctor: this.editRecordForm.doctor?.trim() || null,
-        description: this.editRecordForm.description?.trim() || null,
-        title: this.editRecordForm.title?.trim() || null,
-      });
-      // Смена источника каскадится на все показатели записи и на бэке помечает резюме устаревшим
-      // (пересчёт — в фоне), отдельной кнопки «Пересчитать резюме» больше нет.
-      const newSpecimenId = this.recordSpecimenForm.specimenKbId;
-      if (specimenChanged && newSpecimenId && newSpecimenId !== record.specimenKbId) {
-        await this.api.setRecordSpecimen(record.id, newSpecimenId);
-      } else if (specimenChanged && this.specimenCheckDeferred) {
-        // ИИ недоступен — проверить название сейчас нечем; запоминаем его, и бэкенд применит
-        // биоматериал к записи автоматически, когда сервер вернётся.
-        await this.api.setPendingSpecimen(record.id, query);
-        this.info = `ИИ сейчас недоступен — биоматериал «${query}» будет проверен и применён к записи автоматически, когда он вернётся.`;
-      }
-      this.closeEditSheet();
-      await this.refresh({ silent: true });
-      this.error = null;
-    } catch (err) {
-      this.toast.error(err instanceof ApiError ? err.message : 'Не удалось сохранить изменения.');
-    } finally {
-      this.savingRecord = false;
-    }
+  async onRecordEdited(info: string | null): Promise<void> {
+    if (info) this.info = info;
+    this.closeEditSheet();
+    await this.refresh({ silent: true });
+    this.error = null;
   }
 
   // --- Справка по назначенному лекарству ---

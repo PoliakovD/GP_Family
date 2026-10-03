@@ -755,49 +755,14 @@
   }
 
   @if (editRecord; as record) {
-    <app-bottom-sheet title="Редактировать запись" [open]="true" (closed)="closeEditSheet()">
-      <!-- Редизайн v3 (PR7) — «Название» редактируемо: раньше выставлялось только распознаванием,
-           поле «Изменить» на экране проверки распознанного правит его через ту же форму. -->
-      <label class="form-label">Название</label>
-      <input class="input mb-2" [(ngModel)]="editRecordForm.title" [placeholder]="shortName(record)" />
-
-      <label class="form-label">Дата</label>
-      <input class="input mb-2" type="date" [(ngModel)]="editRecordForm.recordDate" />
-
-      <label class="form-label">Врач</label>
-      <input class="input mb-2" [attr.list]="doctorsDatalistId" [(ngModel)]="editRecordForm.doctor" [placeholder]="labels.doctorPlaceholder" />
-
-      @if (record.kind === Kind.Analysis) {
-        <!-- Источник ВСЕЙ записи (заметка 1): смена каскадится на все показатели и запускает
-             автоматический пересчёт резюме. Поле резолвится по уходу фокуса (find-or-register). -->
-        <label class="form-label">Биоматериал</label>
-        <input class="input mb-1" list="specimen-suggestions" placeholder="Кровь, моча, ЭКГ…"
-          [(ngModel)]="recordSpecimenQuery"
-          (ngModelChange)="onSpecimenQueryInput($event)"
-          (blur)="resolveSpecimenQuery(recordSpecimenQuery, recordSpecimenForm)" />
-        @if (savingCustomSpecimen) {
-          <div class="muted mb-2" style="font-size:0.7647rem">Проверяем источник…</div>
-        } @else if (customSpecimenError) {
-          <div class="alert-danger mb-2" style="font-size:0.7647rem">{{ customSpecimenError }}</div>
-        } @else if (specimenCheckDeferred) {
-          <div class="muted mb-2" style="font-size:0.7647rem">
-            ИИ недоступен — название сохранится и будет проверено автоматически, когда он вернётся.
-          </div>
-        } @else {
-          <div class="mb-2"></div>
-        }
-      }
-
-      <label class="form-label">Описание</label>
-      <textarea class="input mb-2" [(ngModel)]="editRecordForm.description" [placeholder]="labels.descriptionPlaceholder" rows="2"></textarea>
-
-      <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm" [disabled]="savingRecord || savingCustomSpecimen || !editRecordForm.recordDate" (click)="saveEditRecord()">
-          {{ savingRecord ? 'Сохраняем…' : 'Сохранить' }}
-        </button>
-        <button class="btn btn-ghost btn-sm" [disabled]="savingRecord" (click)="closeEditSheet()">Отмена</button>
-      </div>
-    </app-bottom-sheet>
+    <app-record-edit-sheet
+      [record]="record"
+      [specimenHint]="editSpecimenHint"
+      [labels]="labels"
+      [doctorsDatalistId]="doctorsDatalistId"
+      (closed)="closeEditSheet()"
+      (saved)="onRecordEdited($event)"
+    />
   }
 
   <app-bottom-sheet title="Справка о препарате" [open]="kbCardOpen" (closed)="closeKbCard()">
@@ -873,12 +838,4 @@
     <option [value]="d"></option>
   }
 </datalist>
-<datalist id="specimen-suggestions">
-    @for (s of specimenSuggestions; track s.id) {
-      <option [value]="s.displayName"></option>
-    }
-    @for (c of customSpecimens; track c.specimenKbId) {
-      <option [value]="c.displayName"></option>
-    }
-  </datalist>
 </div>
