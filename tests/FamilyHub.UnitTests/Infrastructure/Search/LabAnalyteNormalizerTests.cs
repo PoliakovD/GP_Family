@@ -143,4 +143,39 @@ public class LabAnalyteNormalizerTests
         // Никакой латиницы — свёртка не должна ничего менять сверх обычного Normalize.
         LabAnalyteNormalizer.NormalizeAnalyteKey("Гемоглобин (HGB), г/л").Should().Be("гемоглобин");
     }
+
+    /// <summary>TECH_DEBT #19: абсолютная форма показателя, у которой маркер вырезала нормализация
+    /// (скобки, "#"), получает тот же ключ, что и бланк с явным "абс." вне скобок — и отличный от процентной.</summary>
+    [Theory]
+    [InlineData("Нейтрофилы (абс.)")]
+    [InlineData("Нейтрофилы (абс. кол-во), ×10^9/л")]
+    [InlineData("Нейтрофилы, абс.")]
+    [InlineData("Нейтрофилы #")]
+    [InlineData("НЕЙТРОФИЛЫ (АБС)")]
+    public void NormalizeAnalyteKey_AbsoluteForm_GetsAbsWord(string raw)
+    {
+        LabAnalyteNormalizer.NormalizeAnalyteKey(raw).Should().Be(LabAnalyteNormalizer.NormalizeAnalyteKey("нейтрофилы абс"))
+            .And.NotBe(LabAnalyteNormalizer.NormalizeAnalyteKey("Нейтрофилы"));
+    }
+
+    [Theory]
+    [InlineData("Нейтрофилы (общ.число), %")]
+    [InlineData("Нейтрофилы, %")]
+    [InlineData("Нейтрофилы (NEU%)")]
+    [InlineData("Нейтрофилы")]
+    public void NormalizeAnalyteKey_PercentForm_KeyUnchanged(string raw)
+    {
+        // Процентная форма — прежний ключ: существующие строки справочника и кэша поиска остаются валидными.
+        LabAnalyteNormalizer.NormalizeAnalyteKey(raw).Should().Be(LabAnalyteNormalizer.NormalizeAnalyteKey("нейтрофилы"));
+    }
+
+    [Fact]
+    public void NormalizeAnalyteKey_AbsoluteMarker_IsIdempotent_AndNotDuplicated()
+    {
+        var key = LabAnalyteNormalizer.NormalizeAnalyteKey("Нейтрофилы (абс.)");
+        LabAnalyteNormalizer.NormalizeAnalyteKey(key).Should().Be(key);
+        LabAnalyteNormalizer.NormalizeAnalyteKey("Абсолютное количество нейтрофилов")
+            .Should().NotEndWith(" абс", "слово «абсолютное» уже в ключе — «абс» не дописывается");
+    }
 }
+
