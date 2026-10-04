@@ -37,4 +37,18 @@ public class WebSearchValveService(AppDbContext db) : IWebSearchValveService
         row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task SetNoteAsync(string? note, CancellationToken ct = default)
+    {
+        var row = await db.WebSearchConfigs.FirstOrDefaultAsync(ct);
+        if (row is null)
+        {
+            row = new WebSearchConfig { Id = Guid.NewGuid() };
+            db.WebSearchConfigs.Add(row);
+        }
+
+        row.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
 }

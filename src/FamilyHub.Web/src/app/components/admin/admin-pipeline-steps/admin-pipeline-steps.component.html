@@ -14,7 +14,7 @@
     } @else {
       <div class="table-responsive">
         <table class="table">
-          <thead><tr><th>Пайплайн</th><th>Шаг</th><th>Описание</th><th>Промпт</th><th>Включён</th></tr></thead>
+          <thead><tr><th>Пайплайн</th><th>Шаг</th><th>Описание</th><th>Промпт</th><th>Включён</th><th>Изменён</th></tr></thead>
           <tbody>
             @for (s of steps(); track s.pipelineKey + s.stepKey) {
               <tr [class.text-muted]="!s.isEnabled">
@@ -33,6 +33,7 @@
                     </label>
                   }
                 </td>
+                <td class="text-muted text-nowrap">{{ s.updatedAt ? (s.updatedAt | date: 'dd.MM.yyyy HH:mm') : '—' }}</td>
               </tr>
             }
           </tbody>

@@ -15,9 +15,12 @@ public record KbRecordSnapshot(
     DateTime? VerifiedAt, string? VerifiedPayloadHash, DateTime CreatedAt);
 
 /// <summary>Снимок строки кэша поиска (подмножество, которое меняет админ: сниппеты и override'ы).</summary>
+/// <summary>DisplayName/Units/SearchGroupKey — с 2026-10-04; в старых записях журнала null (откат строки, удалённой
+/// до этого, восстанавливает ключ группы из биоматериала).</summary>
 public record SearchCacheSnapshot(
     Guid Id, string NormalizedName, Guid? SpecimenKbId, string Provider, DateTime LastUpdatedAt,
-    DateTime CanBeUpdatedAfter, string? SnippetsJson, string? OverridesJson);
+    DateTime CanBeUpdatedAfter, string? SnippetsJson, string? OverridesJson,
+    string? DisplayName = null, string? Units = null, string? SearchGroupKey = null);
 
 public record KbChangeLogItemDto(
     Guid Id, DateTime At, string Actor, KbChangeTarget Target, Guid TargetId, string TargetLabel, string Action,

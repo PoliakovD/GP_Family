@@ -225,38 +225,6 @@ public class AdminEnrichmentReviewService(
         return result;
     }
 
-    /// <summary>Список поисков (GET /searches) — тот же Inbox, отфильтрованный по стадии.</summary>
-    public async Task<ReviewSearchListResponse> ListSearchesAsync(string? kind, int skip, int take, CancellationToken ct = default)
-    {
-        var inbox = await ListInboxAsync(kind, ReviewStages.Search, skip, take, ct);
-        return new ReviewSearchListResponse(
-            inbox.Rows.Select(i => new ReviewSearchItemDto(
-                i.Id, i.Kind, i.Name, i.Specimen, i.QueryText ?? string.Empty, i.Confidence, i.ConfidenceReason, i.Threshold,
-                i.BelowThreshold, i.Origin, i.CreatedAt)).ToList(),
-            inbox.Total);
-    }
-
-    /// <summary>Список результатов (GET /results) — тот же Inbox, отфильтрованный по стадии.</summary>
-    public async Task<ReviewResultListResponse> ListResultsAsync(string? kind, int skip, int take, CancellationToken ct = default)
-    {
-        var inbox = await ListInboxAsync(kind, ReviewStages.Result, skip, take, ct);
-        var providers = new Dictionary<Guid, string?>();
-        foreach (var p in await db.MedicationEnrichmentJobs.AsNoTracking()
-                     .Where(j => j.Status == EnrichmentJobStatus.AwaitingResultReview).Select(j => new { j.Id, j.Provider }).ToListAsync(ct))
-            providers[p.Id] = p.Provider;
-        foreach (var p in await db.VisitMedicationEnrichmentJobs.AsNoTracking()
-                     .Where(j => j.Status == EnrichmentJobStatus.AwaitingResultReview).Select(j => new { j.Id, j.Provider }).ToListAsync(ct))
-            providers[p.Id] = p.Provider;
-        foreach (var p in await db.LabAnalyteEnrichmentJobs.AsNoTracking()
-                     .Where(j => j.Status == EnrichmentJobStatus.AwaitingResultReview).Select(j => new { j.Id, j.Provider }).ToListAsync(ct))
-            providers[p.Id] = p.Provider;
-        return new ReviewResultListResponse(
-            inbox.Rows.Select(i => new ReviewResultItemDto(
-                i.Id, i.Kind, i.Name, i.Specimen, i.Confidence, i.ConfidenceReason, i.Threshold, i.BelowThreshold,
-                providers.GetValueOrDefault(i.Id), i.CreatedAt)).ToList(),
-            inbox.Total);
-    }
-
     private static EnrichmentReviewDomain DomainOf(string kind) =>
         kind == ReviewKinds.LabAnalyte ? EnrichmentReviewDomain.Analyte : EnrichmentReviewDomain.Medication;
 

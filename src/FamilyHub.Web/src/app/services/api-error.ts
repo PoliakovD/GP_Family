@@ -15,6 +15,8 @@ export class ApiError extends Error {
     public readonly detail?: string,
     /** Машинный код ошибки бэкенда (`{code: "last_admin"}`, `{reason: "expired"}`), если есть. */
     public readonly code?: string,
+    /** Тело ответа целиком — когда кроме сообщения нужны данные (например, id конфликтующей записи). */
+    public readonly body?: Record<string, unknown>,
   ) {
     super(message);
   }

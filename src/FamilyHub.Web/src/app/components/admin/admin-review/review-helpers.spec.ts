@@ -162,6 +162,18 @@ describe('diffSnapshots', () => {
     expect(diffSnapshots(cache([a, b]), cache([a])).map((l) => l.label)).toEqual(['Источник удалён']);
   });
 
+  it('treats a cache snapshot with displayName as cache and diffs name, units and titles', () => {
+    const cache = (over: Record<string, unknown>) => JSON.stringify({
+      snippetsJson: JSON.stringify([{ url: 'https://a.ru', title: 'A', pinned: false, origin: 'Auto' }]),
+      overridesJson: null, displayName: 'СРБ', units: null, provider: 'brave', ...over,
+    });
+    const after = cache({
+      displayName: 'С-реактивный белок', units: 'мг/л',
+      snippetsJson: JSON.stringify([{ url: 'https://a.ru', title: 'A2', pinned: false, origin: 'Auto' }]),
+    });
+    expect(diffSnapshots(cache({}), after).map((l) => l.label)).toEqual(['Заголовок источника', 'Название', 'Единицы']);
+  });
+
   it('returns nothing for invalid or empty snapshots', () => {
     expect(diffSnapshots(null, null)).toEqual([]);
     expect(diffSnapshots('not json', '{{')).toEqual([]);

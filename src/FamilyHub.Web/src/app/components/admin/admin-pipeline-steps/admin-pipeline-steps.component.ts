@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { AdminApiService, PipelineStep } from '../../../services/admin-api.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
@@ -16,6 +17,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
 @Component({
   selector: 'app-admin-pipeline-steps',
   standalone: true,
+  imports: [DatePipe],
   templateUrl: './admin-pipeline-steps.component.html',
 })
 export class AdminPipelineStepsComponent implements OnInit {

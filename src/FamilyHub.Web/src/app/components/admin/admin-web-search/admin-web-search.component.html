@@ -1,7 +1,7 @@
 @let valve = valveStore.valve();
 
 <div class="card mb-3">
-  <div class="card-title d-flex justify-content-between" style="align-items: center;">
+  <div class="card-title d-flex justify-content-between align-items-center">
     <span>Вентиль платного поиска</span>
     @if (valve) {
       <button type="button" class="btn btn-sm" [class.btn-danger]="!valve.isPaused" [class.btn-primary]="valve.isPaused"
@@ -16,8 +16,18 @@
         {{ valve.isPaused
           ? 'На паузе' + (valve.pausedAt ? ' с ' + (valve.pausedAt | date: 'dd.MM.yyyy HH:mm') : '') + ' — новые платные вызовы откладываются, задачи обогащения ждут включения.'
           : 'Открыт — обогащение и прогрев могут делать платные вызовы как обычно.' }}
-        @if (valve.note) { <br />Заметка: {{ valve.note }} }
       </p>
+      <div class="d-flex gap-2 align-items-center flex-wrap mt-1">
+        <label class="form-label mb-0" for="valve-note">Заметка</label>
+        <input id="valve-note" class="input flex-fill" maxlength="500"
+               placeholder="зачем остановлен, до какого числа…"
+               [ngModel]="noteDraft() ?? valve.note ?? ''" (ngModelChange)="noteDraft.set($event)" />
+        <button type="button" class="btn btn-secondary btn-sm"
+                [disabled]="valveStore.busy() || noteDraft() === null || (noteDraft() ?? '').trim() === (valve.note ?? '')"
+                (click)="saveNote()">
+          Сохранить заметку
+        </button>
+      </div>
     } @else if (valveStore.loadFailed()) {
       <div class="alert-danger">Не удалось загрузить состояние вентиля поиска.</div>
     } @else {
@@ -26,7 +36,7 @@
   </div>
 </div>
 
-<div class="d-flex mb-3" style="justify-content: flex-end;">
+<div class="d-flex mb-3 justify-content-end">
   <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
 </div>
 

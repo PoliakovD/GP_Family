@@ -57,6 +57,12 @@ public enum AdminRevertResult { Ok, NotFound, AlreadyReverted, NothingToRevert, 
 /// прислали одну и ту же строку и победителем, и проигравшим.</summary>
 public enum AdminKbMergeResult { Ok, NotFound, SameId }
 
+/// <summary>Conflict — у нового биоматериала уже есть статья с тем же названием: вместо дубля админу
+/// предлагается объединить статьи (решение владельца, 2026-10-04).</summary>
+public enum AdminSpecimenChangeResult { Ok, NotFound, SpecimenNotFound, Conflict }
+
+public record AdminSpecimenChangeConflict(Guid ExistingId, string ExistingDisplayName);
+
 /// <summary>Итог резолва одного related-имени — Id/DisplayName/SpecimenDisplayName все null,
 /// если по точному NormalizedName ничего не нашлось (оборванная ссылка/опечатка, не ошибка).</summary>
 public record AdminRelatedAnalyteMatch(string Name, Guid? Id, string? DisplayName, string? SpecimenDisplayName);

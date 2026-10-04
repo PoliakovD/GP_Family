@@ -1,12 +1,20 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { AdminApiService, KbRebuildStatus, WebSearchTopic } from '../../../services/admin-api.service';
+import {
+  AdminApiService,
+  BatchJobStatus,
+  BatchJobsStatus,
+  KbRebuildStatus,
+  WebSearchTopic,
+} from '../../../services/admin-api.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
 
 const REBUILD_POLL_INTERVAL_MS = 2000;
+/** Пакетные операции идут минутами — опрашиваем реже, только пока какая-то активна. */
+const BATCH_POLL_INTERVAL_MS = 5000;
 
 /**
  * «Операции → Пересборки»: разовые тяжёлые действия над справочником показателей. Раньше они были
@@ -40,12 +48,47 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
   readonly reenrichBusy = signal(false);
   readonly cacheUnitsBusy = signal(false);
 
+  /** Прогресс пакетных операций (единицы кэша, перепрогон норм, переобогащение). */
+  readonly batch = signal<BatchJobsStatus | null>(null);
+  private batchTimer?: ReturnType<typeof setTimeout>;
+
+  readonly history = signal<KbRebuildStatus[]>([]);
+  readonly showHistory = signal(false);
+
   ngOnInit(): void {
     void this.loadRebuildStatus();
+    void this.loadBatchStatus();
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.pollTimer);
+    clearTimeout(this.batchTimer);
+  }
+
+  batchJob(key: BatchJobStatus['key']): BatchJobStatus | null {
+    return this.batch()?.jobs.find((j) => j.key === key) ?? null;
+  }
+
+  async loadBatchStatus(): Promise<void> {
+    clearTimeout(this.batchTimer);
+    try {
+      this.batch.set(await this.api.getBatchJobsStatus());
+    } catch {
+      // Статус — подсказка, не блокер: при ошибке карточки просто без строки прогресса.
+    }
+    if (this.batch()?.jobs.some((j) => j.active)) {
+      this.batchTimer = setTimeout(() => void this.loadBatchStatus(), BATCH_POLL_INTERVAL_MS);
+    }
+  }
+
+  async toggleHistory(): Promise<void> {
+    this.showHistory.update((v) => !v);
+    if (!this.showHistory()) return;
+    try {
+      this.history.set(await this.api.getKbRebuildHistory());
+    } catch {
+      this.toast.error('Не удалось загрузить историю пересборок.');
+    }
   }
 
   // --- Полная пересборка справочника (§4.2 плана) — поллинг статуса, пока прогон Running ---
@@ -112,9 +155,7 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
 
   /** Одноразовый перепрогон показателей, застрявших на Flag.Unknown ДО фикса каскада
    * IndicatorFlagCalculator (план "нормы из бланка") — RecomputeIndicatorFlagsBackfillJob, фон,
-   * без прогресс-бара: задача разовая и не привязана ни к одной из четырёх таблиц задач конвейера,
-   * поэтому статус не отслеживается — только тост "поставлено в очередь", результат смотреть в
-   * логах Hangfire либо по факту позеленевших строк. */
+   * прогресс — число показателей, всё ещё без нормы (см. loadBatchStatus). */
   async recomputeIndicatorFlags(): Promise<void> {
     const ok = await this.confirm.confirm({
       title: 'Перепрогнать нормы показателей?',
@@ -127,6 +168,7 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
     try {
       await this.api.recomputeIndicatorFlags();
       this.toast.success('Перепрогон поставлен в очередь.');
+      void this.loadBatchStatus();
     } catch {
       this.toast.error('Не удалось поставить перепрогон в очередь.');
     } finally {
@@ -150,6 +192,7 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
     try {
       await this.api.backfillSearchCacheUnits();
       this.toast.success('Определение единиц поставлено в очередь.');
+      void this.loadBatchStatus();
     } catch {
       this.toast.error('Не удалось поставить задачу в очередь.');
     } finally {
@@ -174,6 +217,7 @@ export class AdminRebuildsComponent implements OnInit, OnDestroy {
     try {
       await this.api.reenrichLabAnalytesBatch();
       this.toast.success('Переобогащение поставлено в очередь.');
+      void this.loadBatchStatus();
     } catch {
       this.toast.error('Не удалось поставить переобогащение в очередь.');
     } finally {

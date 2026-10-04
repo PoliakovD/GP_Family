@@ -1,4 +1,4 @@
-<div class="d-flex mb-3" style="justify-content: flex-end;">
+<div class="d-flex mb-3 justify-content-end">
   <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
 </div>
 
@@ -10,7 +10,7 @@
       список доменов или точечно включить/выключить отдельный URL без нового платного запроса.
     </p>
 
-    <form class="d-flex gap-2 mb-3" style="flex-wrap: wrap;" (ngSubmit)="load(true)">
+    <form class="d-flex gap-2 mb-3 flex-wrap" (ngSubmit)="load(true)">
       <input class="input" placeholder="название или ключ…" aria-label="Поиск по названию или ключу"
              [ngModel]="query()" (ngModelChange)="query.set($event)" name="cacheQuery" />
       <button type="submit" class="btn btn-secondary btn-sm" [disabled]="loading()">Найти</button>
@@ -67,7 +67,12 @@
                 </td>
               }
               <td>{{ row.provider }}</td>
-              <td>{{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+              <td>
+                {{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}
+                @if (isStale(row)) {
+                  <span class="tag tag-neutral text-nowrap" title="Срок свежести вышел — следующая задача может оплатить новый поиск">устарел</span>
+                }
+              </td>
               <td>{{ row.snippetCount }}</td>
               <td>
                 <button type="button" class="btn btn-secondary btn-sm" (click)="openRow(row)">Открыть</button>

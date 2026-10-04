@@ -10,4 +10,7 @@ public interface IWebSearchValveService
     Task<bool> IsPausedAsync(CancellationToken ct = default);
 
     Task SetPausedAsync(bool paused, string? note, CancellationToken ct = default);
+
+    /// <summary>Только заметка — состояние вентиля и время паузы не трогаются.</summary>
+    Task SetNoteAsync(string? note, CancellationToken ct = default);
 }

@@ -14,7 +14,7 @@
               <tr [class.text-muted]="selectedPromptKey() !== p.key">
                 <td>{{ p.key }}</td>
                 <td>{{ p.description }}</td>
-                <td>{{ p.activeVersion ?? 'код (фолбэк)' }}</td>
+                <td>{{ p.activeVersion ?? 'из кода' }}</td>
                 <td>
                   <button type="button" class="btn btn-secondary btn-sm" (click)="selectPrompt(p.key)">Открыть</button>
                 </td>
@@ -37,10 +37,10 @@
         <textarea class="input mb-2" rows="14" style="width: 100%; font-family: monospace;"
                   [ngModel]="editorBody()" (ngModelChange)="editorBody.set($event)"></textarea>
 
-        <input class="input mb-2" placeholder="что изменилось (необязательно)…" style="width: 100%;"
+        <input class="input mb-2 w-100" placeholder="что изменилось (необязательно)…"
                [ngModel]="editorNote()" (ngModelChange)="editorNote.set($event)" />
 
-        <div class="d-flex gap-2 mb-3" style="align-items: center; flex-wrap: wrap;">
+        <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
           <button type="button" class="btn btn-primary btn-sm" [disabled]="editorBusy() || !editorBody().trim() || !dirty()" (click)="saveNewVersion()">
             Сохранить и активировать
           </button>
@@ -61,13 +61,31 @@
                   <td>{{ v.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
                   <td>{{ v.note }}</td>
                   <td>
-                    @if (!v.isActive) {
-                      <button type="button" class="btn btn-secondary btn-sm" [disabled]="editorBusy()" (click)="activateVersion(v)">
-                        Активировать (откат)
-                      </button>
-                    }
+                    <div class="d-flex gap-1 flex-wrap">
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="viewVersion(v, 'text')">Текст</button>
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="viewVersion(v, 'diff')"
+                              title="Сравнить с текстом в редакторе">Сравнить</button>
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="loadIntoEditor(v)">В редактор</button>
+                      @if (!v.isActive) {
+                        <button type="button" class="btn btn-secondary btn-sm" [disabled]="editorBusy()" (click)="activateVersion(v)">
+                          Активировать (откат)
+                        </button>
+                      }
+                    </div>
                   </td>
                 </tr>
+                @if (viewedVersionId() === v.id) {
+                  <tr>
+                    <td colspan="5">
+                      @if (viewMode() === 'text') {
+                        <pre class="prompt-diff">{{ v.body }}</pre>
+                      } @else {
+                        <p class="text-muted mb-1">Версия {{ v.version }} → текст в редакторе.</p>
+                        <pre class="prompt-diff">@for (line of versionDiff(v); track $index) {<div [class.prompt-diff-added]="line.kind === 'added'" [class.prompt-diff-removed]="line.kind === 'removed'">{{ line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  ' }}{{ line.text }}</div>}</pre>
+                      }
+                    </td>
+                  </tr>
+                }
               }
             </tbody>
           </table>
@@ -83,7 +101,7 @@
         Прогоняет текущий текст из редактора выше по образцу текста ниже через локальную LLM —
         без веб-поиска, без записи в справочник. Проверить промпт перед сохранением.
       </p>
-      <textarea class="input mb-2" rows="6" style="width: 100%;" placeholder="вставьте пример текста (кусок бланка, сниппеты и т.п.)…"
+      <textarea class="input mb-2 w-100" rows="6" placeholder="вставьте пример текста (кусок бланка, сниппеты и т.п.)…"
                 [ngModel]="dryRunUserText()" (ngModelChange)="dryRunUserText.set($event)"></textarea>
       <button type="button" class="btn btn-secondary btn-sm mb-3" [disabled]="dryRunBusy() || !dryRunUserText().trim()" (click)="runDryRun()">
         Прогнать

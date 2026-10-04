@@ -30,11 +30,15 @@ export function inboxKey(item: { kind: ReviewKind; stage: ReviewStage; id: strin
   return `${item.kind}:${item.stage}:${item.id}`;
 }
 
+const INBOX_PAGE_SIZE = 100;
+/** Предел take на бэкенде (AdminEnrichmentReviewEndpoints.MaxPageSize). */
+const INBOX_MAX_TAKE = 500;
+
 /**
  * «Одобрение» (ADR-0018) — единый Inbox: очередь слева (платные поиски и результаты с низкой уверенностью вперемешку,
  * «ниже порога» красным и первыми), карточка справа. Работа с клавиатуры: J/K или стрелки — навигация, A — одобрить,
  * R — отклонить, E — править, после действия автопереход к следующей задаче. Клик по названию открывает карточку записи
- * справочника вне очереди. Пакетные действия — для платных поисков (отметить чекбоксами). Внизу — «Настройки confidence».
+ * справочника вне очереди. Пакетные действия — для платных поисков (отметить чекбоксами). Внизу — «Пороги уверенности».
  */
 @Component({
   selector: 'app-admin-review',
@@ -51,6 +55,8 @@ export class AdminReviewComponent implements OnInit {
   @ViewChild(ReviewDetailComponent) private detail?: ReviewDetailComponent;
 
   readonly rows = signal<ReviewInboxItem[]>([]);
+  /** Всего строк в очереди с текущими фильтрами — для «Показать ещё». */
+  readonly total = signal(0);
   readonly searchesTotal = signal(0);
   readonly resultsTotal = signal(0);
   readonly loading = signal(true);
@@ -91,8 +97,11 @@ export class AdminReviewComponent implements OnInit {
     try {
       const kind = this.kindFilter() || null;
       const stage = this.stageFilter() === 'all' ? null : this.stageFilter() as ReviewStage;
-      const inbox = await this.api.getReviewInbox(kind, stage);
+      // Перечитываем столько строк, сколько уже показано (после одобрения/отклонения подгрузка не сбрасывается).
+      const take = Math.min(INBOX_MAX_TAKE, Math.max(INBOX_PAGE_SIZE, this.rows().length));
+      const inbox = await this.api.getReviewInbox(kind, stage, 0, take);
       this.rows.set(inbox.rows);
+      this.total.set(inbox.total);
       this.searchesTotal.set(inbox.searches);
       this.resultsTotal.set(inbox.results);
       this.checked.set(new Set([...this.checked()].filter((k) => inbox.rows.some((r) => inboxKey(r) === k))));
@@ -108,13 +117,32 @@ export class AdminReviewComponent implements OnInit {
     }
   }
 
+  /** Следующая страница очереди (раньше очередь молча обрезалась на 500). */
+  async loadMore(): Promise<void> {
+    this.loading.set(true);
+    try {
+      const kind = this.kindFilter() || null;
+      const stage = this.stageFilter() === 'all' ? null : this.stageFilter() as ReviewStage;
+      const page = await this.api.getReviewInbox(kind, stage, this.rows().length, INBOX_PAGE_SIZE);
+      const known = new Set(this.rows().map(inboxKey));
+      this.rows.update((rows) => [...rows, ...page.rows.filter((r) => !known.has(inboxKey(r)))]);
+      this.total.set(page.total);
+    } catch {
+      this.toast.error('Не удалось загрузить ещё.');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
   setKind(kind: ReviewKind | ''): void {
     this.kindFilter.set(kind);
+    this.rows.set([]);
     void this.load();
   }
 
   setStage(stage: StageFilter): void {
     this.stageFilter.set(stage);
+    this.rows.set([]);
     void this.load();
   }
 

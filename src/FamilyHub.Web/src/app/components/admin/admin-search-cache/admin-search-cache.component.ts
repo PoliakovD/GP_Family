@@ -130,6 +130,11 @@ export class AdminSearchCacheComponent implements OnInit {
     this.total.update((t) => Math.max(0, t - 1));
   }
 
+  /** Прошёл минимальный интервал обновления — следующая задача по этому названию может сделать платный поиск. */
+  isStale(row: SearchCacheRow): boolean {
+    return new Date(row.canBeUpdatedAfter).getTime() <= Date.now();
+  }
+
   openRow(row: SearchCacheRow): void {
     this.openRowId.set(row.id);
     this.topicState.select(this.topicState.topic(), this.route, { row: row.id });

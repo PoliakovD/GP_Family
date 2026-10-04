@@ -36,6 +36,20 @@ public enum SpecimenMergeResult { Ok, NotFound, SameId, Sentinel }
 /// значениям SpecimenType (пересборка enrich-пайплайна).</summary>
 public record GlobalSpecimenDto(Guid Id, string DisplayName);
 
+/// <summary>Источник в админке («Справочник → Биоматериалы»): ключ, откуда взялся, когда заведён и синонимы —
+/// нормализованные названия, по которым FindAsync находит этот источник (в т.ч. старые имена после объединения).</summary>
+public record AdminSpecimenDto(
+    Guid Id, string DisplayName, string NormalizedName, string Source, DateTime CreatedAt, List<string> Aliases);
+
+/// <summary>Conflict — синоним уже занят другим источником (его название или синоним); ConflictWith — его DisplayName.</summary>
+public enum SpecimenAliasesResult { Ok, NotFound, Conflict, Sentinel }
+
+file sealed class SpecimenAliasesRow
+{
+    public Guid Id { get; set; }
+    public string[] Aliases { get; set; } = [];
+}
+
 file sealed class GlobalSpecimenSearchRow
 {
     public Guid Id { get; set; }
@@ -142,6 +156,77 @@ public class GlobalSpecimenKbService(
             """).ToListAsync(ct);
         return rows.Select(r => new GlobalSpecimenDto(r.Id, r.DisplayName)).ToList();
     }
+
+    /// <summary>Те же строки, что SearchAsync, но с полями для админки. Aliases — колонка вне EF-модели
+    /// (Postgres text[]), читается отдельным запросом; на других провайдерах (тесты на SQLite) — пусто.</summary>
+    public async Task<List<AdminSpecimenDto>> SearchAdminAsync(string? q, int take = 20, CancellationToken ct = default)
+    {
+        var ids = (await SearchAsync(q, take, ct)).Select(s => s.Id).ToList();
+        if (ids.Count == 0) return [];
+
+        var rows = await db.GlobalSpecimensKb.AsNoTracking().Where(s => ids.Contains(s.Id))
+            .Select(s => new { s.Id, s.DisplayName, s.NormalizedName, s.Source, s.CreatedAt })
+            .ToDictionaryAsync(s => s.Id, ct);
+        var aliases = await ReadAliasesAsync(ids, ct);
+
+        return ids.Where(rows.ContainsKey).Select(id =>
+        {
+            var r = rows[id];
+            return new AdminSpecimenDto(r.Id, r.DisplayName, r.NormalizedName, r.Source, r.CreatedAt,
+                aliases.GetValueOrDefault(id)?.ToList() ?? []);
+        }).ToList();
+    }
+
+    private async Task<Dictionary<Guid, string[]>> ReadAliasesAsync(List<Guid> ids, CancellationToken ct)
+    {
+        if (!db.Database.IsNpgsql()) return [];
+        var rows = await db.Database.SqlQuery<SpecimenAliasesRow>($"""
+            SELECT "Id", "Aliases" FROM kb.global_specimens_kb WHERE "Id" = ANY({ids.ToArray()})
+            """).ToListAsync(ct);
+        return rows.ToDictionary(r => r.Id, r => r.Aliases);
+    }
+
+    /// <summary>Синонимы из админки — заменяют список целиком. Каждый нормализуется так же, как название
+    /// (LabAnalyteNormalizer.Normalize — тем же ключом его ищет FindAsync); пустые, повторы и совпадающие с
+    /// собственным названием отбрасываются. Синоним, совпадающий с названием или синонимом ДРУГОГО источника,
+    /// отклоняется: иначе FindAsync находил бы то один, то другой.</summary>
+    public async Task<(SpecimenAliasesResult Result, string? ConflictWith)> SetAliasesAsync(
+        Guid id, IReadOnlyList<string> raw, CancellationToken ct = default)
+    {
+        if (id == SpecimenContextIds.Unresolved) return (SpecimenAliasesResult.Sentinel, null);
+        var entity = await db.GlobalSpecimensKb.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (entity is null) return (SpecimenAliasesResult.NotFound, null);
+
+        var aliases = NormalizeAliases(raw, entity.NormalizedName);
+        if (aliases.Length > 0)
+        {
+            var byName = await db.GlobalSpecimensKb.AsNoTracking()
+                .Where(s => s.Id != id && aliases.Contains(s.NormalizedName))
+                .Select(s => s.DisplayName).FirstOrDefaultAsync(ct);
+            if (byName is not null) return (SpecimenAliasesResult.Conflict, byName);
+
+            if (db.Database.IsNpgsql())
+            {
+                var byAlias = await db.Database.SqlQuery<string>($"""
+                    SELECT "DisplayName" AS "Value" FROM kb.global_specimens_kb
+                    WHERE "Id" <> {id} AND "Aliases" && {aliases} LIMIT 1
+                    """).FirstOrDefaultAsync(ct);
+                if (byAlias is not null) return (SpecimenAliasesResult.Conflict, byAlias);
+            }
+        }
+
+        if (db.Database.IsNpgsql())
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"""UPDATE kb.global_specimens_kb SET "Aliases" = {aliases} WHERE "Id" = {id}""", ct);
+        return (SpecimenAliasesResult.Ok, null);
+    }
+
+    /// <summary>Нормализация списка синонимов — см. SetAliasesAsync.</summary>
+    public static string[] NormalizeAliases(IEnumerable<string> raw, string ownNormalizedName) =>
+        raw.Select(LabAnalyteNormalizer.Normalize)
+            .Where(a => a.Length > 0 && a != ownNormalizedName)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     /// <summary>LLM-гейт (приём "модель предлагает, детерминированный код ветирует") + запись в
     /// общий справочник при успехе — путь РУЧНОГО ввода (UserSpecimenService): нет документа, из

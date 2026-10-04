@@ -6,7 +6,7 @@
       <kbd>J</kbd>/<kbd>K</kbd> — навигация, <kbd>A</kbd> — одобрить, <kbd>R</kbd> — отклонить, <kbd>E</kbd> — править.
     </p>
   </div>
-  <div class="d-flex gap-2" style="flex-wrap: wrap; align-items: center;">
+  <div class="d-flex gap-2 flex-wrap align-items-center">
     <div class="seg">
       <button type="button" class="seg-opt" [class.active]="stageFilter() === 'all'" (click)="setStage('all')">
         Все ({{ searchesTotal() + resultsTotal() }})
@@ -84,12 +84,17 @@
           </li>
         }
       </ul>
+      @if (rows().length < total()) {
+        <button type="button" class="btn btn-secondary btn-sm mt-1" [disabled]="loading()" (click)="loadMore()">
+          Показать ещё ({{ rows().length }} / {{ total() }})
+        </button>
+      }
     }
   </aside>
 
   <section class="inbox-detail">
     @if (entityRef(); as ref) {
-      <div class="d-flex justify-content-between mb-2" style="align-items: center;">
+      <div class="d-flex justify-content-between mb-2 align-items-center">
         <button type="button" class="btn btn-secondary btn-sm" (click)="closeEntity()">← К задаче</button>
         <span class="text-muted">Карточка записи справочника</span>
       </div>

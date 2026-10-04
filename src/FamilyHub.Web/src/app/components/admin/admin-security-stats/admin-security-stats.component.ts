@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api.service';
 
@@ -9,6 +10,7 @@ import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api
  */
 @Component({
   selector: 'app-admin-security-stats',
+  imports: [DatePipe],
   standalone: true,
   template: `
     @if (loading()) {
@@ -43,7 +45,12 @@ import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api
               <div><strong>{{ s.crossUserMedicalAccessLast30Days }}</strong><div class="text-muted">обращений к чужим медданным за 30д</div></div>
               <div><strong>{{ s.usersWithoutCurrentConsent }}</strong><div class="text-muted">без актуального согласия</div></div>
               <div><strong>{{ s.activeSessions }}</strong><div class="text-muted">активных сессий PWA</div></div>
-              <div><strong>{{ s.dataProtectionKeyCount }}</strong><div class="text-muted">ключей DataProtection</div></div>
+              <div>
+                <strong>{{ s.dataProtectionKeyCount }}</strong><div class="text-muted">ключей защиты сессий (DataProtection)</div>
+                @if (s.oldestDataProtectionKeyCreatedAt) {
+                  <div class="text-muted">самый старый — с {{ s.oldestDataProtectionKeyCreatedAt | date: 'dd.MM.yyyy' }}</div>
+                }
+              </div>
             </div>
           </div>
         </div>

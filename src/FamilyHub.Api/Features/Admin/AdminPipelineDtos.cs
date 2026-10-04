@@ -4,9 +4,11 @@ namespace FamilyHub.Api.Features.Admin;
 
 /// <summary>Один шаг одного пайплайна с текущим состоянием (управление enrich-пайплайном из
 /// админки, §2 плана) — зеркало PipelineCatalog.Steps + PipelineStepConfig. IsMandatory=true
-/// шаги нельзя выключить (см. PUT ниже — вернёт 409).</summary>
+/// шаги нельзя выключить (см. PUT ниже — вернёт 409). UpdatedAt — когда админ последний раз
+/// переключал шаг (null — ни разу, действует значение по умолчанию «включён»).</summary>
 public record PipelineStepDto(
-    string PipelineKey, string StepKey, string Description, bool IsMandatory, bool IsEnabled, string? PromptKey);
+    string PipelineKey, string StepKey, string Description, bool IsMandatory, bool IsEnabled, string? PromptKey,
+    DateTime? UpdatedAt = null);
 
 public record SetStepEnabledRequest(bool IsEnabled);
 

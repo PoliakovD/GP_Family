@@ -38,6 +38,7 @@ import { HistoryDiffLine, diffSnapshots, historyActionLabel, historyTargetLabel 
                   {{ h.actor === 'admin' ? 'админ' : 'система' }}
                 </span>
                 <strong>{{ actionLabel(h.action) }}</strong>
+                @if (showRecord) { «{{ h.targetLabel }}» }
                 <span class="text-muted"> · {{ targetLabel(h.target) }} · {{ h.at | date: 'dd.MM.yyyy HH:mm' }}</span>
                 @if (h.revertedLogId) { <span class="tag tag-neutral">откат</span> }
               </div>
@@ -100,6 +101,8 @@ export class KbHistoryComponent implements OnChanges {
   @Input() target: KbChangeTargetValue | null = null;
   /** Id строки справочника/кэша (null — вся история по типу). */
   @Input() targetId: string | null = null;
+  /** Показывать название записи в каждой строке — для общего журнала, где записи разные. */
+  @Input() showRecord = false;
   /** Родитель перечитывает свою запись после успешного отката. */
   @Output() readonly reverted = new EventEmitter<void>();
 

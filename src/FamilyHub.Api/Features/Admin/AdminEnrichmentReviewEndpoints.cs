@@ -113,13 +113,6 @@ public static class AdminEnrichmentReviewEndpoints
 
         // --- Поиски (гейт 1) ---
 
-        group.MapGet("/searches", async (
-            string? kind, int? skip, int? take, AdminEnrichmentReviewService review, CancellationToken ct) =>
-        {
-            if (kind is not null && !ReviewKinds.IsValid(kind)) return BadKind();
-            return Results.Ok(await review.ListSearchesAsync(kind, Math.Max(skip ?? 0, 0), PageSize(take), ct));
-        });
-
         group.MapPost("/searches/{kind}/{id:guid}/approve", async (
             string kind, Guid id, ApproveSearchRequest? request, AdminEnrichmentReviewService review,
             IMemoryCache cache, CancellationToken ct) =>
@@ -159,21 +152,6 @@ public static class AdminEnrichmentReviewEndpoints
         });
 
         // --- Результаты (гейт 2) ---
-
-        group.MapGet("/results", async (
-            string? kind, int? skip, int? take, AdminEnrichmentReviewService review, CancellationToken ct) =>
-        {
-            if (kind is not null && !ReviewKinds.IsValid(kind)) return BadKind();
-            return Results.Ok(await review.ListResultsAsync(kind, Math.Max(skip ?? 0, 0), PageSize(take), ct));
-        });
-
-        group.MapGet("/results/{kind}/{id:guid}", async (
-            string kind, Guid id, AdminEnrichmentReviewService review, CancellationToken ct) =>
-        {
-            if (!ReviewKinds.IsValid(kind)) return BadKind();
-            var detail = await review.GetItemAsync(kind, id, ct);
-            return detail is null || detail.Stage != ReviewStages.Result ? Results.NotFound() : Results.Ok(detail);
-        });
 
         group.MapPost("/results/{kind}/{id:guid}/approve", async (
             string kind, Guid id, ApproveResultRequest? request, AdminEnrichmentReviewService review,

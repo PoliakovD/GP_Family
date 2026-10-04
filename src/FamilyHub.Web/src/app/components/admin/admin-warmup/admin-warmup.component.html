@@ -1,6 +1,6 @@
 <app-web-search-banner />
 
-<div class="d-flex mb-3" style="justify-content: flex-end;">
+<div class="d-flex mb-3 justify-content-end">
   <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
 </div>
 
@@ -38,7 +38,7 @@
                 [ngModel]="names()" (ngModelChange)="names.set($event)" name="warmupNames"></textarea>
     </div>
 
-    <div class="mb-3 d-flex gap-2" style="align-items: center; flex-wrap: wrap;">
+    <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
       <label class="form-label mb-0" for="warmup-max-paid">Максимум платных вызовов за прогон</label>
       <input id="warmup-max-paid" class="input" type="number" min="1" style="width: 120px;" placeholder="без ограничения"
              [ngModel]="maxPaidCalls()" (ngModelChange)="maxPaidCalls.set($event === '' || $event === null ? null : +$event)"
@@ -84,6 +84,44 @@
         }
       } @else {
         <p class="text-muted">Прогрев ещё ни разу не запускался.</p>
+      }
+
+      @if (w?.status) {
+        <button type="button" class="btn btn-secondary btn-sm mt-1" (click)="toggleHistory()">
+          {{ showHistory() ? 'Скрыть историю' : 'История прогревов' }}
+        </button>
+      }
+      @if (showHistory()) {
+        <div class="table-responsive mt-1">
+          <table class="table">
+            <thead><tr><th>Запущен</th><th>Тема</th><th>Статус</th><th>Итог</th><th>Названия</th></tr></thead>
+            <tbody>
+              @for (h of history(); track h.runId) {
+                <tr>
+                  <td class="text-nowrap">{{ h.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                  <td>{{ h.topic === WebSearchTopic.LabAnalyte ? 'Анализы' : 'Медикаменты' }}{{ h.specimenDisplayName ? ' — ' + h.specimenDisplayName : '' }}</td>
+                  <td>{{ h.status | adminStatus }}</td>
+                  <td>
+                    {{ h.cursor }}/{{ h.totalNames }}, платных {{ h.paidCalls }}, ошибок {{ h.failures }}
+                    @if (h.lastError) { <div class="text-danger">{{ h.lastError }}</div> }
+                  </td>
+                  <td>
+                    <button type="button" class="link-inline"
+                            (click)="expandedRunId.set(expandedRunId() === h.runId ? null : h.runId)">
+                      {{ expandedRunId() === h.runId ? 'скрыть' : (h.names?.length ?? 0) + ' шт.' }}
+                    </button>
+                    @if (expandedRunId() === h.runId) {
+                      <div class="text-muted" style="white-space: pre-wrap;">{{ (h.names ?? []).join('\n') }}</div>
+                      <button type="button" class="btn btn-secondary btn-sm mt-1" (click)="reuseNames(h)">Повторить с этим списком</button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="text-muted">Прогонов нет.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
       }
     }
   </div>

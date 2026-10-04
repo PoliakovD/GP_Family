@@ -1,11 +1,30 @@
 <app-web-search-banner />
 
-<div class="d-flex mb-3" style="justify-content: flex-end;">
+<div class="d-flex mb-3 justify-content-end">
   <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
 </div>
 
+<form class="card mb-3" (ngSubmit)="applyFilters()">
+  <div class="card-body d-flex gap-2 align-items-center flex-wrap">
+    <label class="form-label mb-0" for="calls-from">Период с</label>
+    <input id="calls-from" class="input" type="date" [ngModel]="fromDate()" (ngModelChange)="fromDate.set($event)" name="callsFrom" />
+    <label class="form-label mb-0" for="calls-to">по</label>
+    <input id="calls-to" class="input" type="date" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" name="callsTo" />
+    <select class="input" aria-label="Провайдер" [ngModel]="providerFilter()" (ngModelChange)="providerFilter.set($event)" name="callsProvider">
+      <option value="">Любой провайдер</option>
+      @for (p of stats()?.byProvider ?? []; track p.key) {
+        <option [value]="p.key">{{ p.key }}</option>
+      }
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm" [disabled]="loading()">Применить</button>
+    @if (fromDate() || toDate()) {
+      <button type="button" class="btn btn-secondary btn-sm" (click)="resetPeriod()">Сбросить период</button>
+    }
+  </div>
+</form>
+
 <div class="card mb-3">
-  <div class="card-title">Платный поиск за 30 дней</div>
+  <div class="card-title">Платный поиск {{ fromDate() || toDate() ? 'за выбранный период' : 'за 30 дней' }}</div>
   <div class="card-body">
     @if (statsLoading() && !stats()) {
       <p class="text-muted">Загрузка…</p>
@@ -27,7 +46,7 @@
             </tbody>
           </table>
         </div>
-        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+        <div class="d-flex gap-3 flex-wrap">
           <div>
             <strong>По провайдеру:</strong>
             @for (row of s.byProvider; track row.key) { <div>{{ row.key }}: {{ row.count }}</div> }
@@ -37,6 +56,23 @@
             @for (row of s.byOutcome; track row.key) { <div>{{ outcomeKeyLabel(row.key) }}: {{ row.count }}</div> }
           </div>
         </div>
+        @if (s.byDay.length > 0) {
+          <button type="button" class="btn btn-secondary btn-sm mt-1" (click)="showByDay.set(!showByDay())">
+            {{ showByDay() ? 'Скрыть по дням' : 'По дням' }}
+          </button>
+          @if (showByDay()) {
+            <div class="table-responsive mt-1">
+              <table class="table">
+                <thead><tr><th>День</th><th>Платных</th><th>Кэш-хитов</th></tr></thead>
+                <tbody>
+                  @for (d of s.byDay; track d.day) {
+                    <tr><td>{{ d.day | date: 'dd.MM.yyyy' }}</td><td>{{ d.paidCalls }}</td><td>{{ d.cacheHits }}</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
       }
     }
   </div>
@@ -50,7 +86,7 @@
       платные, но видны здесь же — так можно проверить, что кэш реально работает).
     </p>
 
-    <form class="d-flex gap-2 mb-3" style="flex-wrap: wrap;" (ngSubmit)="load(1)">
+    <form class="d-flex gap-2 mb-3 flex-wrap" (ngSubmit)="load(1)">
       <input class="input" placeholder="поиск по названию…"
              [ngModel]="query()" (ngModelChange)="query.set($event)" name="callQuery" />
       <select class="input" [ngModel]="outcomeFilter()" (ngModelChange)="setOutcomeFilter($event)" name="callOutcome">
@@ -95,7 +131,7 @@
       </div>
 
       @if (totalPages() > 1) {
-        <div class="d-flex gap-2" style="align-items: center;">
+        <div class="d-flex gap-2 align-items-center">
           <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading() || page() <= 1"
                   (click)="load(page() - 1)">← Назад</button>
           <span class="text-muted">{{ page() }} / {{ totalPages() }} ({{ total() }})</span>
@@ -126,7 +162,18 @@
             <tr><td>Длительность</td><td>{{ d.durationMs }} мс</td></tr>
             <tr><td>Сниппетов</td><td>{{ d.snippetCount }}</td></tr>
             @if (d.error) { <tr><td>Ошибка</td><td class="text-danger">{{ d.error }}</td></tr> }
-            @if (d.jobKind && d.jobId) { <tr><td>Задача</td><td>{{ d.jobKind }} / {{ d.jobId }}</td></tr> }
+            @if (d.jobKind && d.jobId) {
+              <tr>
+                <td>Задача</td>
+                <td>
+                  @if (jobLink(d); as link) {
+                    <a [routerLink]="link.path" [queryParams]="link.query">открыть задачу</a>
+                  } @else {
+                    {{ d.jobKind }} / {{ d.jobId }}
+                  }
+                </td>
+              </tr>
+            }
           </tbody>
         </table>
       </div>

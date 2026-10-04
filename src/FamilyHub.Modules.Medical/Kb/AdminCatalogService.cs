@@ -117,6 +117,41 @@ public partial class AdminCatalogService(AppDbContext db, KbChangeLogService cha
         return (AdminKbEditResult.Ok, await GetLabAnalyteAsync(id, ct), null);
     }
 
+    /// <summary>Смена биоматериала у статьи справочника (например, ИИ отнёс «белок» к крови, а это моча).
+    /// Биоматериал — часть ключа (NormalizedName, SpecimenKbId): если под новым уже есть статья с тем же
+    /// названием, смена не выполняется — возвращается она, чтобы админ объединил статьи, а не плодил дубль.
+    /// Показатели пользователей, ссылающиеся на статью (KbAnalyteId), остаются со своим SpecimenKbId — как и
+    /// при объединении (см. MergeLabAnalytesAsync).</summary>
+    public async Task<(AdminSpecimenChangeResult Result, AdminLabAnalyteDetail? Detail, AdminSpecimenChangeConflict? Conflict)>
+        ChangeLabAnalyteSpecimenAsync(Guid id, Guid specimenKbId, CancellationToken ct = default)
+    {
+        var current = await db.GlobalLabAnalytesKb.AsNoTracking()
+            .Where(k => k.Id == id).Select(k => new { k.NormalizedName, k.SpecimenKbId }).FirstOrDefaultAsync(ct);
+        if (current is null) return (AdminSpecimenChangeResult.NotFound, null, null);
+        if (current.SpecimenKbId == specimenKbId) return (AdminSpecimenChangeResult.Ok, await GetLabAnalyteAsync(id, ct), null);
+        if (!await db.GlobalSpecimensKb.AnyAsync(s => s.Id == specimenKbId, ct))
+            return (AdminSpecimenChangeResult.SpecimenNotFound, null, null);
+
+        var existing = await db.GlobalLabAnalytesKb.AsNoTracking()
+            .Where(k => k.Id != id && k.NormalizedName == current.NormalizedName && k.SpecimenKbId == specimenKbId)
+            .Select(k => new { k.Id, k.DisplayName }).FirstOrDefaultAsync(ct);
+        if (existing is not null)
+            return (AdminSpecimenChangeResult.Conflict, null, new AdminSpecimenChangeConflict(existing.Id, existing.DisplayName));
+
+        var before = await KbRowStore.ReadLabAnalyteByIdAsync(db, id, ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE kb.global_lab_analytes_kb SET "SpecimenKbId" = {specimenKbId}, "UpdatedAt" = {DateTime.UtcNow}
+            WHERE "Id" = {id}
+            """, ct);
+        var after = await KbRowStore.ReadLabAnalyteByIdAsync(db, id, ct);
+        await changeLog.RecordAsync(
+            KbChangeTarget.LabAnalyteKb, id, before?.DisplayName ?? current.NormalizedName, "admin-edit",
+            KbChangeLogService.ToJson(before), KbChangeLogService.ToJson(after), KbChangeLogService.ActorAdmin,
+            "Смена биоматериала", ct: ct);
+
+        return (AdminSpecimenChangeResult.Ok, await GetLabAnalyteAsync(id, ct), null);
+    }
+
     public async Task<bool> UnlockLabAnalyteFieldAsync(Guid id, string field, CancellationToken ct = default)
     {
         var affected = await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -329,6 +364,50 @@ public partial class AdminCatalogService(AppDbContext db, KbChangeLogService cha
         }
 
         return affected > 0;
+    }
+
+    /// <summary>Объединение дублей справочника медикаментов («Парацетамол» / «Парацетамол-Акрихин»). Препараты
+    /// пользователей ссылаются на справочник не по Id, а живым поиском по названию и синонимам (KbLookupService),
+    /// поэтому достаточно перенести название и синонимы проигравшего победителю и удалить проигравшего; KbId у
+    /// задач обогащения (справочное поле) перенаправляется на победителя.</summary>
+    public async Task<AdminKbMergeResult> MergeMedicationsAsync(Guid loserId, Guid winnerId, CancellationToken ct = default)
+    {
+        if (loserId == winnerId) return AdminKbMergeResult.SameId;
+
+        var loser = await db.Database.SqlQuery<AdminMedicationRow>($"""
+            SELECT "Id", "NormalizedName", "DisplayName", "PayloadJson", "Source", "Aliases", "LockedFields",
+                   "PayloadVersion", "CreatedAt", "UpdatedAt", "VerificationStatus", "VerifiedAt", "VerifiedPayloadHash"
+            FROM kb.global_medications_kb WHERE "Id" = {loserId}
+            """).FirstOrDefaultAsync(ct);
+        var winnerExists = await db.GlobalMedicationsKb.AnyAsync(k => k.Id == winnerId, ct);
+        if (loser is null || !winnerExists) return AdminKbMergeResult.NotFound;
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        await db.MedicationEnrichmentJobs.Where(j => j.KbId == loserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.KbId, winnerId), ct);
+        await db.VisitMedicationEnrichmentJobs.Where(j => j.KbId == loserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.KbId, winnerId), ct);
+
+        var loserAliases = loser.Aliases.Append(loser.NormalizedName).ToArray();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE kb.global_medications_kb
+            SET "Aliases" = ARRAY(SELECT DISTINCT unnest("Aliases" || {loserAliases})), "UpdatedAt" = {DateTime.UtcNow}
+            WHERE "Id" = {winnerId}
+            """, ct);
+
+        var loserSnapshot = await KbRowStore.ReadMedicationByIdAsync(db, loserId, ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM kb.global_medications_kb WHERE "Id" = {loserId}""", ct);
+        if (loserSnapshot is not null)
+        {
+            await changeLog.RecordAsync(
+                KbChangeTarget.MedicationKb, loserId, loserSnapshot.DisplayName, "admin-merge",
+                KbChangeLogService.ToJson(loserSnapshot), null, KbChangeLogService.ActorAdmin,
+                $"Объединена в запись {winnerId}", ct: ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return AdminKbMergeResult.Ok;
     }
 
     /// <summary>Все строковые листья JSON (рекурсивно, объекты/массивы) — для сверки с

@@ -7,7 +7,7 @@ import {
   AdminKbEditRequest,
   AdminLabAnalyteDetail,
   AdminMedicationDetail,
-  GlobalSpecimen,
+  AdminSpecimen,
   KbAnalyteListItem,
   KbChangeTarget,
   KbListItem,
@@ -17,6 +17,7 @@ import {
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
+import { ApiError } from '../../../services/api-error';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
 import { KbHistoryComponent } from '../admin-review/kb-history.component';
@@ -81,6 +82,10 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   /** Мердж дублей (§ ручной мердж): id строки, отмеченной как "проигравшая" — следующий клик
    * "Слить сюда" на другой строке того же списка довершает мердж. null — режим мерджа не начат. */
   readonly analyteMergeSourceId = signal<string | null>(null);
+  /** Выбранный в карточке новый биоматериал статьи; null — не меняли. */
+  readonly analyteSpecimenDraft = signal<string | null>(null);
+  /** Список биоматериалов для выбора — грузится при первом открытии выпадающего списка. */
+  readonly specimenOptions = signal<AdminSpecimen[]>([]);
   /** Имя «проигравшего» запоминаем при выборе: после поиска/подгрузки его строки может не быть в списке,
    * и подтверждение показало бы GUID. */
   private analyteMergeSourceName: string | null = null;
@@ -98,14 +103,19 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
 
   // --- Источники ---
   readonly specimenQuery = signal('');
-  readonly specimens = signal<GlobalSpecimen[]>([]);
+  readonly specimens = signal<AdminSpecimen[]>([]);
+  /** Черновики синонимов источника (через запятую); нет ключа — поле не трогали. */
+  readonly specimenAliasDrafts = signal<Record<string, string>>({});
   readonly specimensLoading = signal(false);
   readonly specimenRenameDrafts = signal<Record<string, string>>({});
   readonly specimenBusy = signal(false);
   /** Мердж дублей (реальный кейс: "Эякулят"/"Физические свойства Эякулят" — три строки вместо
-   * одной, см. class doc GlobalSpecimenKbService.MergeAsync на бэкенде) — та же двухкликовая
+   * одной, см. class doc AdminSpecimenKbService.MergeAsync на бэкенде) — та же двухкликовая
    * схема, что у показателей: отметить проигравшего, затем кликнуть "Слить сюда" на победителе. */
   readonly specimenMergeSourceId = signal<string | null>(null);
+  /** Объединение дублей медикаментов — тот же режим «проигравший → победитель», что у показателей. */
+  readonly medicationMergeSourceId = signal<string | null>(null);
+  private medicationMergeSourceName: string | null = null;
   private specimenMergeSourceName: string | null = null;
   /** Группы поиска (ADR-0018): биоматериалы с одинаковой группой делят кэш и запрос платного поиска. */
   readonly specimenGroups = signal<Record<string, SpecimenSearchGroupItem>>({});
@@ -114,12 +124,32 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   /** Несохранённые правки названия/синонимов/данных справочника или черновики источников — уход со
    * страницы спросит подтверждение (unsavedChangesGuard), закрытие вкладки — beforeunload. */
   hasUnsavedChanges(): boolean {
+    if (this.openArticleDirty()) return true;
+    return this.specimens().some((sp) =>
+      this.specimenDraft(sp).trim() !== sp.displayName || this.specimenGroupChanged(sp) || this.specimenAliasesChanged(sp));
+  }
+
+  /** Несохранённые правки открытой статьи (показателя или медикамента). */
+  private openArticleDirty(): boolean {
     const a = this.analyteDetail();
+    if (a && this.analyteSpecimenDraft() && this.analyteSpecimenDraft() !== a.specimenKbId) return true;
     if (a && (this.analyteEditorDisplayName() !== a.displayName || this.analyteEditorAliases() !== a.aliases.join(', '))) return true;
     const m = this.medicationDetail();
     if (m && (this.medicationEditorDisplayName() !== m.displayName || this.medicationEditorAliases() !== m.aliases.join(', '))) return true;
-    if (this.specimens().some((sp) => this.specimenDraft(sp).trim() !== sp.displayName || this.specimenGroupChanged(sp))) return true;
     return this.payloadEditors().some((e) => e.hasUnsavedChanges());
+  }
+
+  /** Переход к другой статье при несохранённых правках текущей — только после подтверждения
+   * (решение владельца: раньше правки молча пропадали). */
+  private async confirmLeaveArticle(): Promise<boolean> {
+    if (!this.openArticleDirty()) return true;
+    return this.confirm.confirm({
+      title: 'Есть несохранённые изменения',
+      message: 'Если открыть другую статью, правки текущей пропадут.',
+      confirmText: 'Открыть другую',
+      cancelText: 'Остаться',
+      danger: true,
+    });
   }
 
   @HostListener('window:beforeunload', ['$event'])
@@ -130,9 +160,13 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   ngOnInit(): void {
     void this.loadVerificationSummary();
     const tab = this.tab();
+    // ?open=<id> — переход к статье из карточки задачи и других мест админки.
+    const openId = this.route.snapshot.queryParamMap.get('open');
     if (tab === 'analytes') void this.searchAnalytes();
     else if (tab === 'medications') void this.searchMedications();
     else void this.searchSpecimens();
+    if (openId && tab === 'analytes') void this.openAnalyteById(openId);
+    else if (openId && tab === 'medications') void this.openMedication({ id: openId } as KbListItem);
   }
 
   async loadVerificationSummary(): Promise<void> {
@@ -226,13 +260,21 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   }
 
   async openAnalyte(item: KbAnalyteListItem): Promise<void> {
+    if (item.id === this.analyteDetail()?.id || !(await this.confirmLeaveArticle())) return;
     await this.openAnalyteById(item.id);
+  }
+
+  /** Клик по чипу «Что смотрят вместе» в редакторе данных — переход к связанной статье. */
+  async openRelatedAnalyte(id: string): Promise<void> {
+    if (!(await this.confirmLeaveArticle())) return;
+    await this.openAnalyteById(id);
   }
 
   /** Переход по ссылке «Что смотрят вместе» из редактора payload — та же загрузка, что
    * openAnalyte, но по одному id, без строки списка (клик мог прийти из статьи, которой сейчас
    * нет в текущей выдаче поиска). */
   async openAnalyteById(id: string): Promise<void> {
+    this.analyteSpecimenDraft.set(null);
     try {
       const detail = await this.api.getLabAnalyte(id);
       this.analyteDetail.set(detail);
@@ -240,6 +282,65 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
       this.analyteEditorAliases.set(detail.aliases.join(', '));
     } catch {
       this.toast.error('Не удалось загрузить показатель.');
+    }
+  }
+
+  async loadSpecimenOptions(): Promise<void> {
+    if (this.specimenOptions().length > 0) return;
+    try {
+      this.specimenOptions.set(await this.api.searchSpecimens('', 50));
+    } catch {
+      this.toast.error('Не удалось загрузить список биоматериалов.');
+    }
+  }
+
+  specimenOptionsHave(id: string): boolean {
+    return this.specimenOptions().some((s) => s.id === id);
+  }
+
+  /** Смена биоматериала статьи. Если у нового биоматериала уже есть статья с тем же названием — предлагаем
+   * объединить текущую в неё (решение владельца), а не заводить дубль. */
+  async changeAnalyteSpecimen(): Promise<void> {
+    const detail = this.analyteDetail();
+    const target = this.analyteSpecimenDraft();
+    if (!detail || !target) return;
+
+    this.analyteBusy.set(true);
+    try {
+      const updated = await this.api.changeLabAnalyteSpecimen(detail.id, target);
+      this.analyteDetail.set(updated);
+      this.analyteSpecimenDraft.set(null);
+      this.toast.success(`Биоматериал изменён на «${updated.specimenDisplayName ?? '—'}».`);
+      await this.searchAnalytes();
+    } catch (e) {
+      const existingId = e instanceof ApiError && e.status === 409 ? e.body?.['existingId'] : undefined;
+      if (typeof existingId === 'string') {
+        const name = e instanceof ApiError ? String(e.body?.['existingDisplayName'] ?? '') : '';
+        await this.offerMergeIntoExisting(detail, existingId, name);
+      } else {
+        this.toast.error((e instanceof ApiError && e.detail) || 'Не удалось сменить биоматериал.');
+      }
+    } finally {
+      this.analyteBusy.set(false);
+    }
+  }
+
+  private async offerMergeIntoExisting(detail: AdminLabAnalyteDetail, existingId: string, existingName: string): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Такая статья уже есть',
+      message: `Для этого биоматериала уже есть статья «${existingName}». Объединить текущую «${detail.displayName}» в неё? `
+        + 'Текущая будет удалена, показатели пользователей и синонимы переедут.',
+      confirmText: 'Объединить',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await this.api.mergeLabAnalytes(detail.id, existingId);
+      this.toast.success('Статьи объединены.');
+      await this.openAnalyteById(existingId);
+      await this.searchAnalytes();
+    } catch {
+      this.toast.error('Не удалось объединить статьи.');
     }
   }
 
@@ -352,6 +453,42 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     }
   }
 
+  async onMedicationMergeClick(item: KbListItem): Promise<void> {
+    const sourceId = this.medicationMergeSourceId();
+    if (sourceId === null) {
+      this.medicationMergeSourceId.set(item.id);
+      this.medicationMergeSourceName = item.displayName;
+      return;
+    }
+    if (sourceId === item.id) {
+      this.medicationMergeSourceId.set(null);
+      return;
+    }
+
+    const loserName = this.medications().find((m) => m.id === sourceId)?.displayName ?? this.medicationMergeSourceName;
+    const ok = await this.confirm.confirm({
+      title: 'Объединить медикаменты?',
+      message: `«${loserName ?? 'выбранный медикамент'}» будет удалён, его название и синонимы перейдут к «${item.displayName}» — `
+        + 'препараты пользователей с этим названием будут находить объединённую статью.',
+      confirmText: 'Объединить',
+      danger: true,
+    });
+    if (!ok) return;
+
+    this.medicationBusy.set(true);
+    try {
+      await this.api.mergeMedications(sourceId, item.id);
+      this.toast.success('Медикаменты объединены.');
+      this.medicationMergeSourceId.set(null);
+      if (this.medicationDetail()?.id === sourceId) this.medicationDetail.set(null);
+      await this.searchMedications();
+    } catch {
+      this.toast.error('Не удалось объединить медикаменты.');
+    } finally {
+      this.medicationBusy.set(false);
+    }
+  }
+
   async deleteAnalyte(): Promise<void> {
     const detail = this.analyteDetail();
     if (!detail) return;
@@ -393,6 +530,12 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     } finally {
       this.medicationsLoading.set(false);
     }
+  }
+
+  /** Клик «Открыть» в списке медикаментов — с подтверждением, если у открытой статьи есть несохранённые правки. */
+  async selectMedication(item: KbListItem): Promise<void> {
+    if (item.id === this.medicationDetail()?.id || !(await this.confirmLeaveArticle())) return;
+    await this.openMedication(item);
   }
 
   async openMedication(item: KbListItem): Promise<void> {
@@ -505,7 +648,7 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   }
 
   /** Текущая группа поиска биоматериала (ADR-0018) — пусто, если биоматериал сам по себе. */
-  specimenGroup(s: GlobalSpecimen): string {
+  specimenGroup(s: AdminSpecimen): string {
     return this.specimenGroupDrafts()[s.id] ?? this.specimenGroups()[s.id]?.searchGroupKey ?? '';
   }
 
@@ -513,14 +656,14 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     this.specimenGroupDrafts.update((d) => ({ ...d, [id]: value }));
   }
 
-  specimenGroupChanged(s: GlobalSpecimen): boolean {
+  specimenGroupChanged(s: AdminSpecimen): boolean {
     const saved = this.specimenGroups()[s.id]?.searchGroupKey ?? '';
     return this.specimenGroup(s).trim().toLowerCase() !== saved;
   }
 
   /** Присваивает группу поиска. Биоматериалы с одинаковой группой делят платный поиск; уже накопленные строки кэша
    * внутри группы сливаются (свежая побеждает), при выходе из группы биоматериал получает копию кэша. */
-  async saveSpecimenGroup(s: GlobalSpecimen): Promise<void> {
+  async saveSpecimenGroup(s: AdminSpecimen): Promise<void> {
     const group = this.specimenGroup(s).trim();
     this.specimenBusy.set(true);
     try {
@@ -538,7 +681,37 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     }
   }
 
-  specimenDraft(s: GlobalSpecimen): string {
+  specimenAliases(s: AdminSpecimen): string {
+    return this.specimenAliasDrafts()[s.id] ?? s.aliases.join(', ');
+  }
+
+  setSpecimenAliasesDraft(id: string, value: string): void {
+    this.specimenAliasDrafts.update((d) => ({ ...d, [id]: value }));
+  }
+
+  specimenAliasesChanged(s: AdminSpecimen): boolean {
+    return this.specimenAliases(s) !== s.aliases.join(', ');
+  }
+
+  async saveSpecimenAliases(s: AdminSpecimen): Promise<void> {
+    this.specimenBusy.set(true);
+    try {
+      await this.api.setSpecimenAliases(s.id, this.splitAliases(this.specimenAliases(s)));
+      this.toast.success('Синонимы сохранены.');
+      this.specimenAliasDrafts.update((d) => {
+        const next = { ...d };
+        delete next[s.id];
+        return next;
+      });
+      await this.searchSpecimens();
+    } catch (e) {
+      this.toast.error((e instanceof ApiError && e.detail) || 'Не удалось сохранить синонимы.');
+    } finally {
+      this.specimenBusy.set(false);
+    }
+  }
+
+  specimenDraft(s: AdminSpecimen): string {
     return this.specimenRenameDrafts()[s.id] ?? s.displayName;
   }
 
@@ -546,7 +719,7 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     this.specimenRenameDrafts.update((d) => ({ ...d, [id]: value }));
   }
 
-  async renameSpecimen(s: GlobalSpecimen): Promise<void> {
+  async renameSpecimen(s: AdminSpecimen): Promise<void> {
     const draft = this.specimenDraft(s).trim();
     if (!draft || draft === s.displayName) return;
 
@@ -563,7 +736,7 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   }
 
   /** Клик "Начать мердж"/"Отмена"/"Слить сюда" на строке списка (см. specimenMergeSourceId). */
-  async onSpecimenMergeClick(item: GlobalSpecimen): Promise<void> {
+  async onSpecimenMergeClick(item: AdminSpecimen): Promise<void> {
     const sourceId = this.specimenMergeSourceId();
     if (sourceId === null) {
       this.specimenMergeSourceId.set(item.id);
@@ -597,7 +770,7 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     }
   }
 
-  async deleteSpecimen(s: GlobalSpecimen): Promise<void> {
+  async deleteSpecimen(s: AdminSpecimen): Promise<void> {
     const ok = await this.confirm.confirm({
       title: 'Удалить источник?',
       message: `«${s.displayName}» будет удалён из справочника источников. Заблокировано, если источник ещё используется.`,

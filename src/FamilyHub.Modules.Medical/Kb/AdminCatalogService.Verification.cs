@@ -357,11 +357,13 @@ public partial class AdminCatalogService
 }
 
 /// <summary>Преобразования строки кэша поиска ↔ снимок для журнала/отката (ADR-0018).</summary>
-internal static class SearchCacheSnapshots
+public static class SearchCacheSnapshots
 {
     public static SearchCacheSnapshot From(ISearchCacheRow row) => new(
         row.Id, row.NormalizedName, row is LabAnalyteSearchCache lab ? lab.SpecimenKbId : null, row.Provider,
-        row.LastUpdatedAt, row.CanBeUpdatedAfter, row.SnippetsJson, row.OverridesJson);
+        row.LastUpdatedAt, row.CanBeUpdatedAfter, row.SnippetsJson, row.OverridesJson, row.DisplayName,
+        row is LabAnalyteSearchCache withUnits ? withUnits.Units : null,
+        row is LabAnalyteSearchCache withGroup ? withGroup.SearchGroupKey : null);
 
     public static void Apply(SearchCacheSnapshot snap, ISearchCacheRow row)
     {
@@ -370,18 +372,28 @@ internal static class SearchCacheSnapshots
         row.CanBeUpdatedAfter = snap.CanBeUpdatedAfter;
         row.SnippetsJson = snap.SnippetsJson;
         row.OverridesJson = snap.OverridesJson;
+        row.DisplayName = snap.DisplayName;
+        if (row is LabAnalyteSearchCache lab) lab.Units = snap.Units;
     }
 
-    public static LabAnalyteSearchCache ToLabEntity(SearchCacheSnapshot s) => new()
+    public static LabAnalyteSearchCache ToLabEntity(SearchCacheSnapshot s)
     {
-        Id = s.Id, NormalizedName = s.NormalizedName, SpecimenKbId = s.SpecimenKbId ?? SpecimenContextIds.Unresolved,
-        Provider = s.Provider, LastUpdatedAt = s.LastUpdatedAt, CanBeUpdatedAfter = s.CanBeUpdatedAfter,
-        SnippetsJson = s.SnippetsJson, OverridesJson = s.OverridesJson,
-    };
+        var specimen = s.SpecimenKbId ?? SpecimenContextIds.Unresolved;
+        return new LabAnalyteSearchCache
+        {
+            Id = s.Id, NormalizedName = s.NormalizedName, SpecimenKbId = specimen,
+            // Старые снимки без ключа группы: строка биоматериала-одиночки (как до групп поиска).
+            SearchGroupKey = s.SearchGroupKey ?? SearchGroupKeys.Effective(specimen, null),
+            DisplayName = s.DisplayName, Units = s.Units,
+            Provider = s.Provider, LastUpdatedAt = s.LastUpdatedAt, CanBeUpdatedAfter = s.CanBeUpdatedAfter,
+            SnippetsJson = s.SnippetsJson, OverridesJson = s.OverridesJson,
+        };
+    }
 
     public static MedicationSearchCache ToMedicationEntity(SearchCacheSnapshot s) => new()
     {
-        Id = s.Id, NormalizedName = s.NormalizedName, Provider = s.Provider, LastUpdatedAt = s.LastUpdatedAt,
-        CanBeUpdatedAfter = s.CanBeUpdatedAfter, SnippetsJson = s.SnippetsJson, OverridesJson = s.OverridesJson,
+        Id = s.Id, NormalizedName = s.NormalizedName, DisplayName = s.DisplayName, Provider = s.Provider,
+        LastUpdatedAt = s.LastUpdatedAt, CanBeUpdatedAfter = s.CanBeUpdatedAfter,
+        SnippetsJson = s.SnippetsJson, OverridesJson = s.OverridesJson,
     };
 }

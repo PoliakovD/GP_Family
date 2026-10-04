@@ -180,11 +180,18 @@ export interface WebSearchValve { isPaused: boolean; pausedAt: string | null; no
 
 /** Прогон пересборки справочника показателей (пересборка enrich-пайплайна, §4.2 плана) — зеркало
  * RotationStatus на LabAnalyteKbRebuildJob. status: "Running" | "Completed" | "Failed" | null. */
+/** Ручная пакетная операция «Пересборок»: remaining — сколько ещё не обработано (по данным), active — задача
+ * в очереди/выполняется/ждёт повтора. key: 'cache-units' | 'indicator-flags' | 'reenrich'. */
+export interface BatchJobStatus { key: 'cache-units' | 'indicator-flags' | 'reenrich'; remaining: number; total: number; active: boolean; }
+export interface BatchJobsStatus { jobs: BatchJobStatus[]; checkedAt: string; }
+
 export interface KbRebuildStatus {
   runId: string | null; status: string | null; startedAt: string | null; finishedAt: string | null;
   lastError: string | null; stageIndex: number;
   cacheMerged: number; indicatorsUpdated: number; indicatorsMerged: number;
   catalogDeleted: number; reseedRequested: number;
+  /** Сколько раз Hangfire запускал прогон (повторы после сбоев). */
+  attempts: number;
 }
 
 /** Прогон прогрева кэша веб-поиска из админки (грантовый лимит облака) — зеркало KbRebuildStatus
@@ -195,6 +202,8 @@ export interface WarmupStatus {
   specimenDisplayName: string | null; totalNames: number; cursor: number; paidCalls: number;
   skippedKbHit: number; skippedFreshCache: number; failures: number; maxPaidCalls: number | null;
   startedAt: string | null; finishedAt: string | null; lastError: string | null;
+  /** Исходный список названий — только в истории прогонов. */
+  names?: string[] | null;
 }
 
 export interface StartWarmupRequest {
@@ -207,6 +216,8 @@ export interface StartWarmupRequest {
 export interface PipelineStep {
   pipelineKey: string; stepKey: string; description: string;
   isMandatory: boolean; isEnabled: boolean; promptKey: string | null;
+  /** Когда админ последний раз переключал шаг; null — ни разу (включён по умолчанию). */
+  updatedAt: string | null;
 }
 
 /** Слот промпта — activeVersion=null означает, что в БД нет активной версии и конвейер использует
@@ -254,6 +265,12 @@ export interface AdminKbEditRequest {
 }
 
 export interface GlobalSpecimen { id: string; displayName: string; }
+
+/** Источник в админке: ключ дедупликации, откуда взялся, синонимы (нормализованные названия, по которым
+ * распознавание находит этот источник — в т.ч. старые имена после объединения). */
+export interface AdminSpecimen extends GlobalSpecimen {
+  normalizedName: string; source: string; createdAt: string; aliases: string[];
+}
 
 /** Итог резолва одного related-имени по точному NormalizedName — id/displayName/specimenDisplayName
  * все null, если статьи с таким именем в справочнике ещё нет (оборванная ссылка/опечатка, не ошибка). */
@@ -523,7 +540,9 @@ export class AdminApiService {
     if (e instanceof HttpErrorResponse) {
       const msg = typeof e.error === 'string' ? e.error : (e.error?.code ?? e.statusText);
       const detail = typeof e.error?.message === 'string' ? e.error.message : undefined;
-      return new ApiError(e.status, msg, detail);
+      const code = typeof e.error?.code === 'string' ? e.error.code : undefined;
+      const body = e.error && typeof e.error === 'object' ? e.error as Record<string, unknown> : undefined;
+      return new ApiError(e.status, msg, detail, code, body);
     }
     return new ApiError(0, 'Неизвестная ошибка');
   }
@@ -635,6 +654,10 @@ export class AdminApiService {
    * reenrichLabAnalyte ниже (один показатель по id) и с полной пересборкой выше. */
   reenrichLabAnalytesBatch = () => this.post<void>('/api/admin/kb/lab-analytes/reenrich');
   getKbRebuildStatus = () => this.get<KbRebuildStatus>('/api/admin/kb/lab-analytes/rebuild/status');
+  getKbRebuildHistory = (take = 20) => this.get<KbRebuildStatus[]>(`/api/admin/kb/lab-analytes/rebuild/history?take=${take}`);
+
+  /** Прогресс ручных пакетных операций «Пересборок» — см. AdminBatchStatusService. */
+  getBatchJobsStatus = () => this.get<BatchJobsStatus>('/api/admin/pipeline/batch-status');
 
   // Прогрев кэша веб-поиска из админки (грантовый лимит облака) — см. AdminWarmupEndpoints.
   // Ошибки 400/409 приходят с ApiError.message = code ("specimen_required" | "nothing_to_do" |
@@ -642,10 +665,15 @@ export class AdminApiService {
   startWarmup = (request: StartWarmupRequest) => this.post<WarmupStatus>('/api/admin/enrichment/warmup', request);
   cancelWarmup = () => this.post<void>('/api/admin/enrichment/warmup/cancel');
   getWarmupStatus = () => this.get<WarmupStatus>('/api/admin/enrichment/warmup/status');
+  getWarmupHistory = (take = 20) => this.get<WarmupStatus[]>(`/api/admin/enrichment/warmup/history?take=${take}`);
 
   getWebSearchValve = () => this.get<WebSearchValve>('/api/admin/enrichment/web-search');
   setWebSearchValve = (isPaused: boolean, note: string | null) =>
     this.put<void>('/api/admin/enrichment/web-search', { isPaused, note });
+
+  /** Только заметка вентиля — состояние и время паузы не меняются. */
+  setWebSearchNote = (note: string | null) =>
+    this.put<void>('/api/admin/enrichment/web-search/note', { note });
 
   // Управление enrich-пайплайном из админки (§2 плана) — вкл/выкл необязательных шагов,
   // версионирование промптов, dry-run без записи, листинг задач всех четырёх конвейеров.
@@ -724,7 +752,9 @@ export class AdminApiService {
   recomputeIndicatorFlags = () => this.post<void>('/api/admin/pipeline/recompute-indicator-flags');
 
   // Инбокс «Требует внимания» — точка входа админки в разбор падений конвейера (см. план, Context).
-  getAttention = () => this.get<AdminAttention>('/api/admin/pipeline/attention');
+  /** fresh — мимо минутного кэша сводки на бэкенде (кнопка «Обновить»). */
+  getAttention = (fresh = false) =>
+    this.get<AdminAttention>(`/api/admin/pipeline/attention${fresh ? '?fresh=true' : ''}`);
 
   trustDomainsAndRetry = (topic: WebSearchTopicValue, domains: string[]) =>
     this.post<TrustAndRetryResponse>('/api/admin/pipeline/attention/trust-and-retry', { topic, domains });
@@ -733,7 +763,7 @@ export class AdminApiService {
   // Ошибки: 409 wrong_status (задача уже обработана), 400 invalid (ApiError.detail — причина), 502 upstream_failed.
   getReviewCounts = () => this.get<ReviewQueueCounts>('/api/admin/review/counts');
 
-  getReviewInbox = (kind: ReviewKind | null, stage: ReviewStage | null, skip = 0, take = 500) =>
+  getReviewInbox = (kind: ReviewKind | null, stage: ReviewStage | null, skip = 0, take = 100) =>
     this.get<ReviewInbox>(
       `/api/admin/review/inbox?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}${stage ? `&stage=${stage}` : ''}`);
 
@@ -847,6 +877,14 @@ export class AdminApiService {
 
   deleteLabAnalyte = (id: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}`);
 
+  /** Смена биоматериала статьи; 409 { code: 'exists', existingId, existingDisplayName } — у нового
+   * биоматериала уже есть статья с тем же названием (предлагаем объединить). */
+  mergeMedications = (loserId: string, winnerId: string) =>
+    this.post<void>(`/api/admin/kb/medications/${loserId}/merge-into/${winnerId}`);
+
+  changeLabAnalyteSpecimen = (id: string, specimenKbId: string) =>
+    this.put<AdminLabAnalyteDetail>(`/api/admin/kb/lab-analytes/${id}/specimen`, { specimenKbId });
+
   mergeLabAnalytes = (loserId: string, winnerId: string) =>
     this.post<void>(`/api/admin/kb/lab-analytes/${loserId}/merge-into/${winnerId}`);
 
@@ -864,7 +902,11 @@ export class AdminApiService {
   deleteMedication = (id: string) => this.del<void>(`/api/admin/kb/medications/${id}`);
 
   searchSpecimens = (q: string, take = 20) =>
-    this.get<GlobalSpecimen[]>(`/api/admin/kb/specimens?q=${encodeURIComponent(q)}&take=${take}`);
+    this.get<AdminSpecimen[]>(`/api/admin/kb/specimens?q=${encodeURIComponent(q)}&take=${take}`);
+
+  /** Синонимы источника целиком; 409 alias_conflict — синоним занят другим источником. */
+  setSpecimenAliases = (id: string, aliases: string[]) =>
+    this.put<void>(`/api/admin/kb/specimens/${id}/aliases`, { aliases });
 
   renameSpecimen = (id: string, displayName: string) =>
     this.put<void>(`/api/admin/kb/specimens/${id}`, { displayName });

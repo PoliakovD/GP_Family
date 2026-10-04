@@ -32,6 +32,22 @@ export class WebSearchValveStore {
     }
   }
 
+  /** Сохраняет заметку вентиля (зачем остановлен, до какого числа и т.п.). */
+  async saveNote(note: string): Promise<boolean> {
+    this.busy.set(true);
+    try {
+      await this.api.setWebSearchNote(note.trim() || null);
+      await this.load();
+      this.toast.success('Заметка сохранена.');
+      return true;
+    } catch {
+      this.toast.error('Не удалось сохранить заметку.');
+      return false;
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   /** Переключает вентиль после подтверждения (в обе стороны: остановка откладывает задачи,
    * включение запускает накопленное — оба действия глобальные и стоят денег). Возвращает true,
    * если состояние действительно изменилось. */

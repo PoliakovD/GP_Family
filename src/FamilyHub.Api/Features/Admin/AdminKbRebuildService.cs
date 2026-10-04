@@ -19,7 +19,8 @@ public enum StartKbRebuildResult
 
 public record KbRebuildStatusDto(
     Guid? RunId, string? Status, DateTime? StartedAt, DateTime? FinishedAt, string? LastError, int StageIndex,
-    int CacheMerged, int IndicatorsUpdated, int IndicatorsMerged, int CatalogDeleted, int ReseedRequested);
+    int CacheMerged, int IndicatorsUpdated, int IndicatorsMerged, int CatalogDeleted, int ReseedRequested,
+    int Attempts = 0);
 
 /// <summary>
 /// Управление пересборкой справочника показателей из админ-панели (пересборка enrich-пайплайна,
@@ -44,6 +45,15 @@ public class AdminKbRebuildService(AppDbContext db, IBackgroundJobClient backgro
         return isNew ? StartKbRebuildResult.Started : StartKbRebuildResult.AlreadyRunning;
     }
 
+    /// <summary>Последние прогоны пересборки (новые сверху) — история в админке.</summary>
+    public async Task<List<KbRebuildStatusDto>> GetHistoryAsync(int take = 20, CancellationToken ct = default) =>
+        (await db.KbRebuildRuns.AsNoTracking().OrderByDescending(r => r.StartedAt).Take(Math.Clamp(take, 1, 100)).ToListAsync(ct))
+            .Select(run => new KbRebuildStatusDto(
+                run.Id, run.Status.ToString(), run.StartedAt, run.FinishedAt, run.LastError, run.StageIndex,
+                run.CacheMerged, run.IndicatorsUpdated, run.IndicatorsMerged, run.CatalogDeleted, run.ReseedRequested,
+                run.Attempts))
+            .ToList();
+
     public async Task<KbRebuildStatusDto> GetStatusAsync(CancellationToken ct = default)
     {
         // Последний по StartedAt — покрывает и текущий Running, и только что завершившийся, чтобы
@@ -54,6 +64,7 @@ public class AdminKbRebuildService(AppDbContext db, IBackgroundJobClient backgro
 
         return new KbRebuildStatusDto(
             run.Id, run.Status.ToString(), run.StartedAt, run.FinishedAt, run.LastError, run.StageIndex,
-            run.CacheMerged, run.IndicatorsUpdated, run.IndicatorsMerged, run.CatalogDeleted, run.ReseedRequested);
+            run.CacheMerged, run.IndicatorsUpdated, run.IndicatorsMerged, run.CatalogDeleted, run.ReseedRequested,
+            run.Attempts);
     }
 }

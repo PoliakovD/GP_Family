@@ -7,7 +7,7 @@
     <div class="card mb-3">
       <div class="card-title">Здоровье сервисов</div>
       <div class="card-body">
-        <div class="d-flex gap-2" style="flex-wrap: wrap;">
+        <div class="d-flex gap-2 flex-wrap">
           <span class="tag" [class.tag-accent]="d.postgresHealthy" [class.tag-neutral]="!d.postgresHealthy">Postgres</span>
           <span class="tag" [class.tag-accent]="d.minioHealthy" [class.tag-neutral]="!d.minioHealthy">MinIO</span>
           <span class="tag" [class.tag-accent]="d.kafkaHealthy" [class.tag-neutral]="!d.kafkaHealthy">Kafka</span>

@@ -9,3 +9,13 @@
     outline-offset: 2px;
   }
 }
+
+// Служебная строка под названием источника: ключ, происхождение, дата, строки кэша.
+.specimen-meta {
+  font-size: 0.8235rem;
+  margin-top: 2px;
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+}

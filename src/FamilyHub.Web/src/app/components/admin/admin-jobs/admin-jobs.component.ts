@@ -12,7 +12,7 @@ import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { SidePanelComponent } from '../../../shared/side-panel/side-panel.component';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminJobPanelComponent } from '../admin-job-panel/admin-job-panel.component';
-import { JOB_STATUS_OPTIONS } from '../shared/admin-labels';
+import { FAILURE_REASON_OPTIONS, JOB_STATUS_OPTIONS, failureReasonLabel } from '../shared/admin-labels';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
 
@@ -51,6 +51,8 @@ export class AdminJobsComponent implements OnInit, OnDestroy {
 
   readonly jobTypes = JOB_TYPES;
   readonly statusOptions = JOB_STATUS_OPTIONS;
+  readonly reasonOptions = FAILURE_REASON_OPTIONS;
+  readonly failureReasonLabel = failureReasonLabel;
 
   readonly jobType = signal<PipelineJobType>('lab-analyte');
   readonly jobStatus = signal<string>('');
@@ -166,9 +168,10 @@ export class AdminJobsComponent implements OnInit, OnDestroy {
     await this.loadJobs();
   }
 
-  clearJobReason(): void {
-    this.jobReason.set(null);
-    this.updateQueryParams({ reason: null });
+  /** Фильтр по причине отказа — тот же ?reason=, что приходит из «Требует внимания». */
+  selectJobReason(reason: EnrichmentFailureReasonValue | ''): void {
+    this.jobReason.set(reason || null);
+    this.updateQueryParams({ reason: reason || null });
     void this.loadJobs();
   }
 

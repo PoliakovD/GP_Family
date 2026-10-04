@@ -25,6 +25,7 @@
             <tr><td>Показателей обновлено</td><td>{{ r.indicatorsUpdated }} (слито {{ r.indicatorsMerged }})</td></tr>
             <tr><td>Справочник очищен</td><td>{{ r.catalogDeleted }} строк</td></tr>
             <tr><td>Пересеяно задач</td><td>{{ r.reseedRequested }}</td></tr>
+            @if (r.attempts > 1) { <tr><td>Попыток</td><td>{{ r.attempts }}</td></tr> }
             @if (r.lastError) { <tr><td>Ошибка</td><td class="text-danger">{{ r.lastError }}</td></tr> }
           </tbody>
         </table>
@@ -32,9 +33,40 @@
         <p class="text-muted mb-3">Пересборка ещё ни разу не запускалась.</p>
       }
 
-      <button type="button" class="btn btn-danger btn-sm" [disabled]="rebuildBusy() || r?.status === 'Running'" (click)="startRebuild()">
-        {{ r?.status === 'Running' ? 'Пересборка идёт…' : 'Пересобрать справочник' }}
-      </button>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button type="button" class="btn btn-danger btn-sm" [disabled]="rebuildBusy() || r?.status === 'Running'" (click)="startRebuild()">
+          {{ r?.status === 'Running' ? 'Пересборка идёт…' : 'Пересобрать справочник' }}
+        </button>
+        @if (r?.status) {
+          <button type="button" class="btn btn-secondary btn-sm" (click)="toggleHistory()">
+            {{ showHistory() ? 'Скрыть историю' : 'История запусков' }}
+          </button>
+        }
+      </div>
+
+      @if (showHistory()) {
+        <div class="table-responsive mt-1">
+          <table class="table">
+            <thead><tr><th>Запущена</th><th>Статус</th><th>Попыток</th><th>Итог</th></tr></thead>
+            <tbody>
+              @for (h of history(); track h.runId) {
+                <tr>
+                  <td class="text-nowrap">{{ h.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                  <td>{{ h.status | adminStatus }}</td>
+                  <td>{{ h.attempts }}</td>
+                  <td>
+                    кэш −{{ h.cacheMerged }}, показателей {{ h.indicatorsUpdated }}, справочник −{{ h.catalogDeleted }},
+                    пересеяно {{ h.reseedRequested }}
+                    @if (h.lastError) { <div class="text-danger">{{ h.lastError }}</div> }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="text-muted">Запусков нет.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     }
   </div>
 </div>
@@ -47,8 +79,14 @@
       тексте бланка, качественный результат вида "не обнаружено" без сравнения по смыслу) застряли
       на "нет данных" навсегда — обычная дозапись справочника их не подхватывает. Перепрогон
       пересчитывает такие показатели заново по уже сохранённым данным, без повторного
-      распознавания документа.
+      распознавания документа. Часть показателей останется без нормы законно — если в бланке её нет.
     </p>
+    @if (batchJob('indicator-flags'); as b) {
+      <p class="mb-2" [class.text-muted]="!b.active">
+        Показателей без нормы сейчас: {{ b.remaining }} из {{ b.total }}.
+        @if (b.active) { <span class="tag tag-accent">идёт обработка</span> }
+      </p>
+    }
     <button type="button" class="btn btn-secondary btn-sm" [disabled]="recomputeBusy()" (click)="recomputeIndicatorFlags()">
       Перепрогнать нормы показателей
     </button>
@@ -64,6 +102,12 @@
       дальше показатель с новой единицей берёт нормы из кэша без платного запроса. Платных вызовов нет;
       фоновая задача, батчами по 20 — запускайте один раз.
     </p>
+    @if (batchJob('cache-units'); as b) {
+      <p class="mb-2" [class.text-muted]="!b.active">
+        Строк кэша без единиц: {{ b.remaining }} из {{ b.total }}.
+        @if (b.active) { <span class="tag tag-accent">идёт обработка</span> }
+      </p>
+    }
     <div class="d-flex gap-2 align-items-center flex-wrap">
       <button type="button" class="btn btn-secondary btn-sm" [disabled]="cacheUnitsBusy()" (click)="backfillCacheUnits()">
         Определить единицы в кэше
@@ -85,6 +129,12 @@
       схемы — повторяйте отсюда, пока строк со старой схемой не останется. Если таких строк нет,
       задача завершается сразу.
     </p>
+    @if (batchJob('reenrich'); as b) {
+      <p class="mb-2" [class.text-muted]="!b.active">
+        Статей со старой схемой: {{ b.remaining }} из {{ b.total }}.
+        @if (b.active) { <span class="tag tag-accent">идёт обработка</span> }
+      </p>
+    }
     <button type="button" class="btn btn-secondary btn-sm" [disabled]="reenrichBusy()" (click)="reenrichLabAnalytes()">
       Переобогатить показатели
     </button>

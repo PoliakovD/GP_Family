@@ -18,9 +18,5 @@ public class PipelineStepConfig
 
     public bool IsEnabled { get; set; } = true;
 
-    /// <summary>Параметры шага (например, порог confidence у резолвинга источника) — свободный
-    /// JSON, конкретный шаг сам знает, какие ключи ему нужны.</summary>
-    public string? ParamsJson { get; set; }
-
     public DateTime UpdatedAt { get; set; }
 }

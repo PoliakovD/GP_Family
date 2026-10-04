@@ -3,7 +3,7 @@
 <div class="card">
   <div class="card-title">Задачи конвейеров</div>
   <div class="card-body">
-    <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+    <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
       <div class="seg">
         @for (t of jobTypes; track t.value) {
           <button type="button" class="seg-opt" [class.active]="jobType() === t.value" (click)="selectJobType(t.value)">
@@ -17,14 +17,12 @@
           <option [value]="o.value">{{ o.label }}</option>
         }
       </select>
-      @if (jobReason()) {
-        <span class="tag tag-accent-2">
-          причина: {{ jobReason() }}
-          <button type="button" class="btn-icon" style="padding: 0 4px;" aria-label="Снять фильтр по причине" (click)="clearJobReason()">
-            <i class="ph ph-x" aria-hidden="true"></i>
-          </button>
-        </span>
-      }
+      <select class="input" aria-label="Причина отказа" [ngModel]="jobReason() ?? ''" (ngModelChange)="selectJobReason($event)">
+        <option value="">Любая причина</option>
+        @for (o of reasonOptions; track o.value) {
+          <option [value]="o.value">{{ o.label }}</option>
+        }
+      </select>
       <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsLoading()" (click)="loadJobs()">
         <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновить
       </button>
@@ -53,7 +51,7 @@
                        [checked]="allFailedSelected()" (change)="toggleSelectAllFailed()" />
               }
             </th>
-            <th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th>
+            <th>Название</th><th>Статус</th><th>Причина</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -69,6 +67,7 @@
                 <button type="button" class="link-inline" (click)="openJob(j)">{{ j.displayName }}</button>
               </td>
               <td>{{ j.status | adminStatus }}</td>
+              <td>{{ failureReasonLabel(j.failureReason) }}</td>
               <td>{{ j.attempts }}</td>
               <td class="text-muted">{{ j.error }}</td>
               <td>{{ j.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
@@ -86,7 +85,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="7" class="text-muted">Задач нет.</td></tr>
+            <tr><td colspan="8" class="text-muted">Задач нет.</td></tr>
           }
         </tbody>
       </table>
