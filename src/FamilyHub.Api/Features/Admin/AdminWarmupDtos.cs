@@ -14,4 +14,4 @@ public record StartWarmupRequest(WebSearchTopic Topic, Guid? SpecimenKbId, strin
 public record WarmupStatusDto(
     Guid? RunId, string? Status, WebSearchTopic? Topic, string? SpecimenDisplayName,
     int TotalNames, int Cursor, int PaidCalls, int SkippedKbHit, int SkippedFreshCache, int Failures,
-    int? MaxPaidCalls, DateTime? StartedAt, DateTime? FinishedAt, string? LastError);
+    int? MaxPaidCalls, DateTime? StartedAt, DateTime? FinishedAt, string? LastError, List<string>? Names = null);

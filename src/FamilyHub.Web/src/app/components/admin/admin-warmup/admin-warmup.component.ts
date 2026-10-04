@@ -50,6 +50,26 @@ export class AdminWarmupComponent implements OnInit, OnDestroy {
   readonly status = signal<WarmupStatus | null>(null);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  readonly history = signal<WarmupStatus[]>([]);
+  readonly showHistory = signal(false);
+  /** runId прогона, у которого раскрыт список названий. */
+  readonly expandedRunId = signal<string | null>(null);
+
+  async toggleHistory(): Promise<void> {
+    this.showHistory.update((v) => !v);
+    if (!this.showHistory()) return;
+    try {
+      this.history.set(await this.api.getWarmupHistory());
+    } catch {
+      this.toast.error('Не удалось загрузить историю прогревов.');
+    }
+  }
+
+  /** Вставить названия прошлого прогона в форму — повторить прогрев по тому же списку. */
+  reuseNames(run: WarmupStatus): void {
+    this.names.set((run.names ?? []).join('\n'));
+    this.toast.info('Список названий подставлен в форму.');
+  }
   private pollTimer?: ReturnType<typeof setTimeout>;
 
   ngOnInit(): void {

@@ -24,6 +24,7 @@ public static class AdminServicesRegistration
         builder.Services.AddHttpClient<IMinioCredentialAdmin, MinioAdminClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
         builder.Services.AddScoped<AdminCredentialsService>();
         builder.Services.AddScoped<AdminKbRebuildService>();
+        builder.Services.AddScoped<AdminBatchStatusService>();
         builder.Services.AddScoped<AdminAttentionService>();
         builder.Services.AddScoped<AdminEnrichmentReviewService>();
         builder.Services.AddScoped<AdminSearchWarmupService>();

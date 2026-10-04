@@ -47,6 +47,9 @@ public static class AdminWarmupEndpoints
         group.MapPost("/warmup/cancel", async (AdminSearchWarmupService warmup, CancellationToken ct) =>
             await warmup.CancelAsync(ct) ? Results.NoContent() : Results.NotFound());
 
+        group.MapGet("/warmup/history", async (int? take, AdminSearchWarmupService warmup, CancellationToken ct) =>
+            Results.Ok(await warmup.GetHistoryAsync(take ?? 20, ct)));
+
         group.MapGet("/warmup/status", async (AdminSearchWarmupService warmup, CancellationToken ct) =>
             Results.Ok(await warmup.GetStatusAsync(ct)));
 

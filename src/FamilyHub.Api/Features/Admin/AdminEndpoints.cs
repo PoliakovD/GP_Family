@@ -83,6 +83,9 @@ public static class AdminEndpoints
                 : Results.Accepted();
         });
 
+        group.MapGet("/kb/lab-analytes/rebuild/history", async (int? take, AdminKbRebuildService rebuild, CancellationToken ct) =>
+            Results.Ok(await rebuild.GetHistoryAsync(take ?? 20, ct)));
+
         group.MapGet("/kb/lab-analytes/rebuild/status", async (AdminKbRebuildService rebuild, CancellationToken ct) =>
             Results.Ok(await rebuild.GetStatusAsync(ct)));
     }

@@ -180,11 +180,18 @@ export interface WebSearchValve { isPaused: boolean; pausedAt: string | null; no
 
 /** Прогон пересборки справочника показателей (пересборка enrich-пайплайна, §4.2 плана) — зеркало
  * RotationStatus на LabAnalyteKbRebuildJob. status: "Running" | "Completed" | "Failed" | null. */
+/** Ручная пакетная операция «Пересборок»: remaining — сколько ещё не обработано (по данным), active — задача
+ * в очереди/выполняется/ждёт повтора. key: 'cache-units' | 'indicator-flags' | 'reenrich'. */
+export interface BatchJobStatus { key: 'cache-units' | 'indicator-flags' | 'reenrich'; remaining: number; total: number; active: boolean; }
+export interface BatchJobsStatus { jobs: BatchJobStatus[]; checkedAt: string; }
+
 export interface KbRebuildStatus {
   runId: string | null; status: string | null; startedAt: string | null; finishedAt: string | null;
   lastError: string | null; stageIndex: number;
   cacheMerged: number; indicatorsUpdated: number; indicatorsMerged: number;
   catalogDeleted: number; reseedRequested: number;
+  /** Сколько раз Hangfire запускал прогон (повторы после сбоев). */
+  attempts: number;
 }
 
 /** Прогон прогрева кэша веб-поиска из админки (грантовый лимит облака) — зеркало KbRebuildStatus
@@ -195,6 +202,8 @@ export interface WarmupStatus {
   specimenDisplayName: string | null; totalNames: number; cursor: number; paidCalls: number;
   skippedKbHit: number; skippedFreshCache: number; failures: number; maxPaidCalls: number | null;
   startedAt: string | null; finishedAt: string | null; lastError: string | null;
+  /** Исходный список названий — только в истории прогонов. */
+  names?: string[] | null;
 }
 
 export interface StartWarmupRequest {
@@ -645,6 +654,10 @@ export class AdminApiService {
    * reenrichLabAnalyte ниже (один показатель по id) и с полной пересборкой выше. */
   reenrichLabAnalytesBatch = () => this.post<void>('/api/admin/kb/lab-analytes/reenrich');
   getKbRebuildStatus = () => this.get<KbRebuildStatus>('/api/admin/kb/lab-analytes/rebuild/status');
+  getKbRebuildHistory = (take = 20) => this.get<KbRebuildStatus[]>(`/api/admin/kb/lab-analytes/rebuild/history?take=${take}`);
+
+  /** Прогресс ручных пакетных операций «Пересборок» — см. AdminBatchStatusService. */
+  getBatchJobsStatus = () => this.get<BatchJobsStatus>('/api/admin/pipeline/batch-status');
 
   // Прогрев кэша веб-поиска из админки (грантовый лимит облака) — см. AdminWarmupEndpoints.
   // Ошибки 400/409 приходят с ApiError.message = code ("specimen_required" | "nothing_to_do" |
@@ -652,6 +665,7 @@ export class AdminApiService {
   startWarmup = (request: StartWarmupRequest) => this.post<WarmupStatus>('/api/admin/enrichment/warmup', request);
   cancelWarmup = () => this.post<void>('/api/admin/enrichment/warmup/cancel');
   getWarmupStatus = () => this.get<WarmupStatus>('/api/admin/enrichment/warmup/status');
+  getWarmupHistory = (take = 20) => this.get<WarmupStatus[]>(`/api/admin/enrichment/warmup/history?take=${take}`);
 
   getWebSearchValve = () => this.get<WebSearchValve>('/api/admin/enrichment/web-search');
   setWebSearchValve = (isPaused: boolean, note: string | null) =>

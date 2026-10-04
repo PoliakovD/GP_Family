@@ -115,6 +115,34 @@ public class AdminSearchWarmupService(AppDbContext db, IBackgroundJobClient back
         return true;
     }
 
+    /// <summary>Последние прогоны (новые сверху) с исходным списком названий — история прогрева в админке.</summary>
+    public async Task<List<WarmupStatusDto>> GetHistoryAsync(int take = 20, CancellationToken ct = default)
+    {
+        var runs = await db.SearchWarmupRuns.AsNoTracking()
+            .OrderByDescending(r => r.StartedAt).Take(Math.Clamp(take, 1, 100)).ToListAsync(ct);
+        var specimenIds = runs.Where(r => r.SpecimenKbId is not null).Select(r => r.SpecimenKbId!.Value).Distinct().ToList();
+        var specimens = await db.GlobalSpecimensKb.AsNoTracking().Where(s => specimenIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.DisplayName, ct);
+
+        return runs.Select(run => new WarmupStatusDto(
+            run.Id, run.Status.ToString(), run.Topic,
+            run.SpecimenKbId is { } sid ? specimens.GetValueOrDefault(sid) : null,
+            run.TotalNames, run.Cursor, run.PaidCalls, run.SkippedKbHit, run.SkippedFreshCache, run.Failures,
+            run.MaxPaidCalls, run.StartedAt, run.FinishedAt, run.LastError, ParseNames(run.NamesJson))).ToList();
+    }
+
+    private static List<string> ParseNames(string namesJson)
+    {
+        try
+        {
+            return (JsonSerializer.Deserialize<List<WarmupName>>(namesJson, JsonOptions) ?? []).Select(n => n.Raw).ToList();
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
     public async Task<WarmupStatusDto> GetStatusAsync(CancellationToken ct = default)
     {
         // Последний по StartedAt — покрывает и активный, и только что завершившийся прогон, чтобы

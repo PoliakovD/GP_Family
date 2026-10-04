@@ -653,6 +653,10 @@ public static class AdminPipelineEndpoints
             return Results.Accepted();
         });
 
+        // Прогресс ручных пакетных операций «Пересборок» (единицы кэша, перепрогон норм, переобогащение).
+        group.MapGet("/batch-status", async (AdminBatchStatusService status, CancellationToken ct) =>
+            Results.Ok(await status.GetAsync(ct)));
+
         group.MapPost("/recompute-indicator-flags", (IBackgroundJobClient backgroundJobs) =>
         {
             backgroundJobs.Enqueue<RecomputeIndicatorFlagsBackfillJob>(j => j.RunAsync(CancellationToken.None));
