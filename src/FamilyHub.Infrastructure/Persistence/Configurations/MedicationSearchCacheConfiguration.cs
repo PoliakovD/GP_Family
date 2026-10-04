@@ -15,6 +15,7 @@ public class MedicationSearchCacheConfiguration : IEntityTypeConfiguration<Medic
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.NormalizedName).HasMaxLength(300).IsRequired();
+        builder.Property(c => c.DisplayName).HasMaxLength(300);
         builder.Property(c => c.Provider).HasMaxLength(50).IsRequired();
 
         builder.HasIndex(c => c.NormalizedName).IsUnique();

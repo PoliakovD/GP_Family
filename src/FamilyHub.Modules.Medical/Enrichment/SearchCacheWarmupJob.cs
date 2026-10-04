@@ -170,9 +170,10 @@ public class SearchCacheWarmupJob(
             var snippets = await provider.SearchAsync(name.Normalized, run.Topic, specimenDisplayName, ct, callContext);
 
             if (run.Topic == WebSearchTopic.LabAnalyte)
-                await analyteCache.RecordSearchAsync(name.Normalized, run.SpecimenKbId!.Value, provider.Name, snippets, ct);
+                await analyteCache.RecordSearchAsync(
+                    name.Normalized, run.SpecimenKbId!.Value, provider.Name, snippets, ct, displayName: name.Raw);
             else
-                await medicationCache.RecordSearchAsync(name.Normalized, provider.Name, snippets, ct);
+                await medicationCache.RecordSearchAsync(name.Normalized, provider.Name, snippets, ct, name.Raw);
 
             run.PaidCalls++;
         }

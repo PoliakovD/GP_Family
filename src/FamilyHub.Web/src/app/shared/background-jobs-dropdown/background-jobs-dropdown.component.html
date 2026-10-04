@@ -28,7 +28,7 @@
               >
                 <span class="background-jobs-item-label">{{ item.label }}</span>
                 @if (itemStatusText(item); as statusText) {
-                  <span class="background-jobs-item-thought" [title]="statusText">{{ statusText }}</span>
+                  <span class="background-jobs-item-status" [title]="statusText">{{ statusText }}</span>
                 }
               </button>
             }
@@ -58,7 +58,7 @@
             >
               <span class="background-jobs-item-label">{{ item.label }}</span>
               @if (itemStatusText(item); as statusText) {
-                <span class="background-jobs-item-thought" [title]="statusText">{{ statusText }}</span>
+                <span class="background-jobs-item-status" [title]="statusText">{{ statusText }}</span>
               }
             </button>
           }

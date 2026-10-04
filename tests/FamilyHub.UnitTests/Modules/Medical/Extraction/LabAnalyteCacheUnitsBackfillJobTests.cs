@@ -31,7 +31,7 @@ public class LabAnalyteCacheUnitsBackfillJobTests : SqliteTestBase
     });
 
     private void ModelReturns(params string[] units) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, new Dictionary<string, JsonElement> { ["units"] = JsonSerializer.SerializeToElement(units) }, null));
 
     [Fact]
@@ -63,7 +63,7 @@ public class LabAnalyteCacheUnitsBackfillJobTests : SqliteTestBase
     {
         AddCache("белок", "текст 5 г/л");
         await Db.SaveChangesAsync();
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен", isTransient: true));
 
         var act = () => Job().RunAsync();

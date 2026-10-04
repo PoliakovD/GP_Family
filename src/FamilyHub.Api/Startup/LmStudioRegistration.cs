@@ -20,10 +20,6 @@ public static class LmStudioRegistration
         // прежде мог прийти в обход дисциплины WorkerCount=1 фоновых Hangfire-очередей через синхронный
         // OCR-эндпоинт (POST /api/medications/ocr).
         builder.Services.AddSingleton<LmStudioConcurrencyGate>();
-        // Живой поток "мыслей" модели (план) — throttled-запись CurrentThought на нужную из четырёх
-        // таблиц задач, см. class doc. Scoped (берёт AppDbContext) — безопасно как зависимость типизированного
-        // HttpClient ниже (тот резолвится внутри того же DI-скоупа, что и вызывающий Hangfire-job/HTTP-запрос).
-        builder.Services.AddScoped<LlmThinkingReportService>();
         // Реальная позиция в ОБЩЕЙ очереди к единственному локальному LLM (не только своей таблицы задач)
         // — "extraction" и "enrichment" — разные Hangfire-серверы, задача может дойти до Running в обеих
         // одновременно, и только LmStudioConcurrencyGate решает, кто говорит с моделью прямо сейчас.

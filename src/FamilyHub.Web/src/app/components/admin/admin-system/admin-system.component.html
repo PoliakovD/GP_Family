@@ -36,14 +36,16 @@
         @if (d.hangfireQueues.length === 0) {
           <p class="text-muted mb-0">Очереди пусты.</p>
         } @else {
-          <table class="table">
-            <thead><tr><th>Очередь</th><th>В очереди</th></tr></thead>
-            <tbody>
-              @for (q of d.hangfireQueues; track q.name) {
-                <tr><td>{{ q.name }}</td><td>{{ q.enqueuedCount }}</td></tr>
-              }
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Очередь</th><th>В очереди</th></tr></thead>
+              <tbody>
+                @for (q of d.hangfireQueues; track q.name) {
+                  <tr><td>{{ q.name }}</td><td>{{ q.enqueuedCount }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
       </div>
     </div>

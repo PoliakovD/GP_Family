@@ -46,7 +46,7 @@
 
 - [x] **P0-09** На мобиле нет пометки «норма предположена ИИ» — бейдж `isInferredRef` только в desktop-таблице (`medical-records-panel.component.html:311,315`), мобильная карточка (:398-400) без него. → бейдж + «сверьте с бланком». — ✅ 4033a8f
 - [x] **P0-10** ИИ-резюме без постоянной метки; дисклеймер только если пришёл с сервера и ~11px — html:246-266. → фиксированная метка «ИИ-резюме, не диагноз», дисклеймер ≥14px. — ✅ 4033a8f
-- [x] **P0-11** Сырые «мысли» модели показываются пользователю — `shared/pipeline-progress/pipeline-progress.component.html:20-21` (`step.thought`), `background-jobs-dropdown.component.ts:70` (`liveText`). → убрать. — ✅ 4033a8f
+- [x] **P0-11** Сырые «мысли» модели показываются пользователю — `shared/pipeline-progress/pipeline-progress.component.html:20-21` (`step.thought`), `background-jobs-dropdown.component.ts:70` (`liveText`). → убрать. — ✅ 4033a8f; сам механизм (стриминг, `CurrentThought`, поля API) удалён целиком — ✅ e5e1616
 - [x] **P0-12** Давление «в вашем обычном диапазоне» считается по своим же квартилям — стабильные 160/100 называются нормой (`health-notes-tab.component.ts:286-306`). → сравнение с порогами (≥140/90 — «выше рекомендуемого»). — ✅ 4033a8f
 - [x] **P0-13** «Напомнить о самочувствии через 7 дней» показан включённым, а напоминание выключено — `vaccination-saved-sheet.component.ts:32` `signal(true)` при `requestWellbeingCheck: false` у всех трёх создателей. → начальное состояние = реальное. — ✅ 4033a8f
 - [x] **P0-14** «Отметить сделанной» ставит прививку сегодняшней датой без выбора — `vaccinations-overview.ts:72-88`, `vaccination-person.ts:164-181`; saved-sheet всегда пишет «сегодня» (`vaccination-saved-sheet.component.html:6`). → показывать реальную дату + возможность её поменять. — ✅ a9e3490

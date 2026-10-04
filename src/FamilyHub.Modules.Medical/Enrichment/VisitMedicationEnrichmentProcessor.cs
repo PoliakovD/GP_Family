@@ -49,9 +49,6 @@ public class VisitMedicationEnrichmentProcessor(
             return;
         }
 
-        // Ambient-контекст для живого потока "мыслей" (план) — см. class doc LmStudioThinkingContext.
-        using var _ = LmStudioThinkingContext.Begin(LlmJobKind.VisitMedicationEnrichment, job.Id);
-
         job.Attempts++;
         job.Status = EnrichmentJobStatus.Running;
         job.StartedAt ??= DateTime.UtcNow;
@@ -86,7 +83,7 @@ public class VisitMedicationEnrichmentProcessor(
                 await callLogger.LogAsync(new WebSearchCallLogEntry(
                     cached.Provider, WebSearchTopic.Medication, job.NormalizedName, null, string.Empty, null, null, 0,
                     WebSearchCallOutcome.CacheHit, cached.Snippets.Count, null, null,
-                    nameof(LlmJobKind.VisitMedicationEnrichment), job.Id), ct);
+                    "VisitMedicationEnrichment", job.Id), ct);
             }
             else
             {
@@ -125,7 +122,7 @@ public class VisitMedicationEnrichmentProcessor(
                     }
                 }
 
-                var callContext = new WebSearchCallContext(nameof(LlmJobKind.VisitMedicationEnrichment), job.Id);
+                var callContext = new WebSearchCallContext("VisitMedicationEnrichment", job.Id);
                 rawSnippets = await provider.SearchAsync(
                     EnrichmentReviewGate.EffectiveQuery(job), WebSearchTopic.Medication, ct: ct, callContext: callContext);
                 if (provider.Name != "Null")
@@ -133,7 +130,7 @@ public class VisitMedicationEnrichmentProcessor(
                     job.ExternalSearchAt = DateTime.UtcNow;
                     job.Provider = provider.Name;
                     await db.SaveChangesAsync(ct);
-                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct, job.SourceDisplayName);
                 }
             }
 

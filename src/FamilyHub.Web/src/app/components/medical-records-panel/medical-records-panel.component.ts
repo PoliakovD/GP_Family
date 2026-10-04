@@ -144,8 +144,6 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   /** Доступен в шаблоне для сравнения с this.kind(). */
   readonly pluralizeRu = pluralizeRu;
 
-  /** Тултип чипа «уточняем норму…» (§5 + план "живой поток мыслей") — живая "мысль" модели, если
-   * задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
   readonly shortenDisplayName = shortenDisplayName;
   readonly formatDayMonth = formatDayMonth;
   readonly formatDayMonthYear = formatDayMonthYear;

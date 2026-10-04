@@ -136,9 +136,11 @@
               <td><input class="input" style="width: 100px;" [ngModel]="r.populationDetail" (ngModelChange)="updateRefRange($index, 'populationDetail', $event)" /></td>
               <td><input class="input" style="width: 100px;" [ngModel]="r.sourceDomain" (ngModelChange)="updateRefRange($index, 'sourceDomain', $event)" /></td>
               <td><input class="input" type="number" style="width: 56px;" [ngModel]="r.sourceRank" (ngModelChange)="updateRefRange($index, 'sourceRank', $event)" /></td>
-              <td class="d-flex gap-1">
-                <button type="button" class="btn-icon" aria-label="Дублировать" (click)="duplicateRefRange($index)"><i class="ph ph-copy" aria-hidden="true"></i></button>
-                <button type="button" class="btn-icon" aria-label="Удалить" (click)="removeRefRange($index)"><i class="ph ph-trash" aria-hidden="true"></i></button>
+              <td>
+                <div class="d-flex gap-1">
+                  <button type="button" class="btn-icon" aria-label="Дублировать диапазон" (click)="duplicateRefRange($index)"><i class="ph ph-copy" aria-hidden="true"></i></button>
+                  <button type="button" class="btn-icon" aria-label="Удалить диапазон" (click)="removeRefRange($index)"><i class="ph ph-trash" aria-hidden="true"></i></button>
+                </div>
               </td>
             </tr>
           } @empty {

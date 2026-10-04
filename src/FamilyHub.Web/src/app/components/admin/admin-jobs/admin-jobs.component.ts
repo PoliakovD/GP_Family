@@ -17,6 +17,9 @@ import { AdminStatusPipe } from '../shared/admin-status.pipe';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
 
 const JOB_POLL_INTERVAL_MS = 3000;
+const PAGE_SIZE = 25;
+/** Предел take на бэкенде — автообновление перечитывает не больше стольких первых строк. */
+const MAX_POLL_ROWS = 100;
 
 const JOB_TYPES: { value: PipelineJobType; label: string }[] = [
   { value: 'lab-analyte', label: 'Обогащение показателей' },
@@ -96,13 +99,30 @@ export class AdminJobsComponent implements OnInit, OnDestroy {
     this.jobsLoading.set(true);
     this.jobsError.set(null);
     try {
-      const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, 25, this.jobReason());
+      const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, PAGE_SIZE, this.jobReason());
       this.jobs.set(page.rows);
       this.jobsTotal.set(page.total);
       this.selectedJobIds.set(new Set());
       this.scheduleJobsPollIfRunning();
     } catch {
       this.jobsError.set('Не удалось загрузить список задач.');
+    } finally {
+      this.jobsLoading.set(false);
+    }
+  }
+
+  /** Следующая страница — раньше список молча обрывался на первых 25 задачах. */
+  async loadMoreJobs(): Promise<void> {
+    this.jobsLoading.set(true);
+    try {
+      const page = await this.api.getPipelineJobs(
+        this.jobType(), this.jobStatus() || null, this.jobs().length, PAGE_SIZE, this.jobReason());
+      const known = new Set(this.jobs().map((j) => j.id));
+      this.jobs.update((rows) => [...rows, ...page.rows.filter((j) => !known.has(j.id))]);
+      this.jobsTotal.set(page.total);
+      this.scheduleJobsPollIfRunning();
+    } catch {
+      this.toast.error('Не удалось загрузить ещё задачи.');
     } finally {
       this.jobsLoading.set(false);
     }
@@ -116,8 +136,16 @@ export class AdminJobsComponent implements OnInit, OnDestroy {
 
     this.jobPollTimer = setTimeout(async () => {
       try {
-        const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, 25, this.jobReason());
-        this.jobs.set(page.rows);
+        // Перечитываем столько строк, сколько уже показано (не сбрасывая подгруженные страницы).
+        const shown = this.jobs().length;
+        const take = Math.min(MAX_POLL_ROWS, Math.max(PAGE_SIZE, shown));
+        const page = await this.api.getPipelineJobs(this.jobType(), this.jobStatus() || null, 0, take, this.jobReason());
+        if (shown <= MAX_POLL_ROWS) {
+          this.jobs.set(page.rows);
+        } else {
+          const fresh = new Map(page.rows.map((j) => [j.id, j]));
+          this.jobs.update((rows) => rows.map((j) => fresh.get(j.id) ?? j));
+        }
         this.jobsTotal.set(page.total);
       } catch {
         // Транзиентная ошибка поллинга — пробуем снова на следующем тике.
@@ -167,6 +195,18 @@ export class AdminJobsComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Выбрать можно только упавшие задачи — их и перезапускают/удаляют массово. */
+  readonly failedJobIds = () => this.jobs().filter((j) => j.status === 'Failed').map((j) => j.id);
+
+  allFailedSelected(): boolean {
+    const failed = this.failedJobIds();
+    return failed.length > 0 && failed.every((id) => this.selectedJobIds().has(id));
+  }
+
+  toggleSelectAllFailed(): void {
+    this.selectedJobIds.set(this.allFailedSelected() ? new Set() : new Set(this.failedJobIds()));
+  }
+
   toggleJobSelection(id: string): void {
     this.selectedJobIds.update((set) => {
       const copy = new Set(set);
@@ -204,6 +244,7 @@ export class AdminJobsComponent implements OnInit, OnDestroy {
     this.jobsBusy.set(true);
     try {
       await this.api.deleteJob(job.id, job.type);
+      this.toast.success('Задача удалена.');
       if (this.openJobId() === job.id) this.closeJobPanel();
       await this.loadJobs();
     } catch {

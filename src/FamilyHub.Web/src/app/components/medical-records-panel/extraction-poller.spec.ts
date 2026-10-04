@@ -6,7 +6,7 @@ import { ExtractionPoller } from './extraction-poller';
 const status = (over: Partial<ExtractionStatusResponse> = {}): ExtractionStatusResponse => ({
   status: ExtractionJobStatus.Running, stage: ExtractionStage.Ocr, indicatorCount: 0, error: null,
   totalFiles: 1, processedFiles: 0, createdAt: '', completedAt: null, queuePosition: 0,
-  currentThought: null, waitingForAi: false, ...over,
+  waitingForAi: false, ...over,
 });
 
 const record = { id: 'r1' };

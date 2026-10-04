@@ -260,11 +260,10 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
     return expiryClass(item.expiryDate);
   }
 
-  /** Тултип чипа «ищем описание препарата…» (§5 + план "живой поток мыслей") — живая "мысль"
-   * модели, если задача реально держит гейт LM Studio, иначе — позиция в общей очереди к LLM. */
+  /** Тултип чипа «ищем описание препарата…» (§5) — позиция в общей очереди к LLM. */
   medicationEnrichmentTitle(item: Medication): string {
     return enrichmentStatusTitle(
-      item.enrichmentLiveText, item.enrichmentQueueAhead, 'Справочник пока не знает этот препарат — идёт фоновый поиск');
+      item.enrichmentQueueAhead, 'Справочник пока не знает этот препарат — идёт фоновый поиск');
   }
 
   dataEntries(item: Medication): DataRow[] {

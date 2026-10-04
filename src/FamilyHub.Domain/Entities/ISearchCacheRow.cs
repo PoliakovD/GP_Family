@@ -9,6 +9,9 @@ public interface ISearchCacheRow
 {
     Guid Id { get; }
     string NormalizedName { get; }
+
+    /// <summary>Название для людей (не ключ) — см. LabAnalyteSearchCache.DisplayName.</summary>
+    string? DisplayName { get; set; }
     string Provider { get; set; }
     DateTime LastUpdatedAt { get; set; }
     DateTime CanBeUpdatedAfter { get; set; }

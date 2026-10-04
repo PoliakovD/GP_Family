@@ -20,8 +20,8 @@
         «Моча» — два отдельных платных вызова. Биоматериал задаётся один на весь список ниже.
       </p>
       <div class="mb-2">
-        <label class="form-label">Биоматериал</label>
-        <select class="input" [ngModel]="specimenId()" (ngModelChange)="specimenId.set($event)" name="warmupSpecimen">
+        <label class="form-label" for="warmup-specimen">Биоматериал</label>
+        <select id="warmup-specimen" class="input" [ngModel]="specimenId()" (ngModelChange)="specimenId.set($event)" name="warmupSpecimen">
           <option [ngValue]="null">— выберите —</option>
           @for (s of specimens(); track s.id) {
             <option [ngValue]="s.id">{{ s.displayName }}</option>
@@ -32,15 +32,15 @@
     }
 
     <div class="mb-2">
-      <label class="form-label">Названия — по одному на строку</label>
-      <textarea class="input" rows="8" style="width: 100%; font-family: monospace;"
+      <label class="form-label" for="warmup-names">Названия — по одному на строку</label>
+      <textarea id="warmup-names" class="input" rows="8" style="width: 100%; font-family: monospace;"
                 placeholder="парацетамол&#10;ибупрофен&#10;гемоглобин"
                 [ngModel]="names()" (ngModelChange)="names.set($event)" name="warmupNames"></textarea>
     </div>
 
     <div class="mb-3 d-flex gap-2" style="align-items: center; flex-wrap: wrap;">
-      <label class="form-label mb-0">Максимум платных вызовов за прогон</label>
-      <input class="input" type="number" min="1" style="width: 120px;" placeholder="без ограничения"
+      <label class="form-label mb-0" for="warmup-max-paid">Максимум платных вызовов за прогон</label>
+      <input id="warmup-max-paid" class="input" type="number" min="1" style="width: 120px;" placeholder="без ограничения"
              [ngModel]="maxPaidCalls()" (ngModelChange)="maxPaidCalls.set($event === '' || $event === null ? null : +$event)"
              name="warmupMaxPaidCalls" />
     </div>
@@ -61,20 +61,22 @@
     } @else {
       @let w = status();
       @if (w && w.status) {
-        <table class="table mb-3">
-          <tbody>
-            <tr><td>Статус</td><td>{{ w.status | adminStatus }}</td></tr>
-            <tr><td>Тема</td><td>{{ w.topic === WebSearchTopic.LabAnalyte ? 'Анализы' : 'Медикаменты' }}{{ w.specimenDisplayName ? ' — ' + w.specimenDisplayName : '' }}</td></tr>
-            <tr><td>Запущен</td><td>{{ w.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr>
-            @if (w.finishedAt) { <tr><td>Завершён</td><td>{{ w.finishedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr> }
-            <tr><td>Обработано</td><td>{{ w.cursor }} / {{ w.totalNames }}</td></tr>
-            <tr><td>Платных вызовов</td><td>{{ w.paidCalls }}{{ w.maxPaidCalls !== null ? ' / ' + w.maxPaidCalls : '' }}</td></tr>
-            <tr><td>Пропущено (уже в справочнике)</td><td>{{ w.skippedKbHit }}</td></tr>
-            <tr><td>Пропущено (свежий кэш)</td><td>{{ w.skippedFreshCache }}</td></tr>
-            <tr><td>Ошибок</td><td>{{ w.failures }}</td></tr>
-            @if (w.lastError) { <tr><td>Ошибка</td><td class="text-danger">{{ w.lastError }}</td></tr> }
-          </tbody>
-        </table>
+        <div class="table-responsive mb-3">
+          <table class="table">
+            <tbody>
+              <tr><td>Статус</td><td>{{ w.status | adminStatus }}</td></tr>
+              <tr><td>Тема</td><td>{{ w.topic === WebSearchTopic.LabAnalyte ? 'Анализы' : 'Медикаменты' }}{{ w.specimenDisplayName ? ' — ' + w.specimenDisplayName : '' }}</td></tr>
+              <tr><td>Запущен</td><td>{{ w.startedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr>
+              @if (w.finishedAt) { <tr><td>Завершён</td><td>{{ w.finishedAt | date: 'dd.MM.yyyy HH:mm' }}</td></tr> }
+              <tr><td>Обработано</td><td>{{ w.cursor }} / {{ w.totalNames }}</td></tr>
+              <tr><td>Платных вызовов</td><td>{{ w.paidCalls }}{{ w.maxPaidCalls !== null ? ' / ' + w.maxPaidCalls : '' }}</td></tr>
+              <tr><td>Пропущено (уже в справочнике)</td><td>{{ w.skippedKbHit }}</td></tr>
+              <tr><td>Пропущено (свежий кэш)</td><td>{{ w.skippedFreshCache }}</td></tr>
+              <tr><td>Ошибок</td><td>{{ w.failures }}</td></tr>
+              @if (w.lastError) { <tr><td>Ошибка</td><td class="text-danger">{{ w.lastError }}</td></tr> }
+            </tbody>
+          </table>
+        </div>
         @if (w.status === 'Running' || w.status === 'Paused') {
           <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="cancel()">
             Остановить

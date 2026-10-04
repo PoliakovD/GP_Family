@@ -10,7 +10,7 @@ const ind = (id: string, name: string, flag: number): IndicatorDto => ({
   id, analyteKey: id, displayName: name, flag, refSource: RefSource.Blank, specimenKbId: 's',
   specimenDisplayName: null, position: 0, valueRaw: '1', unit: null, refLowText: '0', refHighText: '2',
   refText: null, recordDate: '2026-01-01', medicalRecordId: 'r1', valueNumericText: '1', kbAnalyteId: null,
-  rawDisplayName: null, enrichmentPending: false, enrichmentLiveText: null, enrichmentQueueAhead: 0,
+  rawDisplayName: null, enrichmentPending: false, enrichmentQueueAhead: 0,
   enrichmentWaitingForAi: false,
 } as IndicatorDto);
 

@@ -85,10 +85,8 @@
   display: block;
 }
 
-// Живой обрывок "мысли" модели (план "живой поток мыслей") — вторая строка, только у той ОДНОЙ
-// задачи из всех активных, что реально держит гейт LM Studio прямо сейчас (см. class doc
-// ActiveJobItem.LiveText).
-.background-jobs-item-thought {
+// Статус задачи второй строкой: «ждём ИИ», позиция в очереди или «обрабатываем…».
+.background-jobs-item-status {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;

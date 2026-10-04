@@ -336,7 +336,7 @@ public static class AdminPipelineEndpoints
                         searchCache = AdminEnrichmentEndpoints.BuildDetail(
                             cacheRow.Id, cacheRow.NormalizedName, specimenName, cacheRow.Provider,
                             cacheRow.LastUpdatedAt, cacheRow.CanBeUpdatedAfter,
-                            cached?.Snippets ?? [], cached?.Overrides, activeDomains);
+                            cached?.Snippets ?? [], cached?.Overrides, activeDomains, cacheRow.DisplayName, cacheRow.Units);
                     }
 
                     return Results.Ok(new PipelineJobDetailDto(
@@ -362,7 +362,7 @@ public static class AdminPipelineEndpoints
                         searchCache = AdminEnrichmentEndpoints.BuildDetail(
                             cacheRow.Id, cacheRow.NormalizedName, null, cacheRow.Provider,
                             cacheRow.LastUpdatedAt, cacheRow.CanBeUpdatedAfter,
-                            cached?.Snippets ?? [], cached?.Overrides, activeDomains);
+                            cached?.Snippets ?? [], cached?.Overrides, activeDomains, cacheRow.DisplayName);
                     }
 
                     return Results.Ok(new PipelineJobDetailDto(
@@ -388,7 +388,7 @@ public static class AdminPipelineEndpoints
                         searchCache = AdminEnrichmentEndpoints.BuildDetail(
                             cacheRow.Id, cacheRow.NormalizedName, null, cacheRow.Provider,
                             cacheRow.LastUpdatedAt, cacheRow.CanBeUpdatedAfter,
-                            cached?.Snippets ?? [], cached?.Overrides, activeDomains);
+                            cached?.Snippets ?? [], cached?.Overrides, activeDomains, cacheRow.DisplayName);
                     }
 
                     return Results.Ok(new PipelineJobDetailDto(

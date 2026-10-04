@@ -11,10 +11,15 @@
     </p>
 
     <form class="d-flex gap-2 mb-3" style="flex-wrap: wrap;" (ngSubmit)="load(true)">
-      <input class="input" placeholder="поиск по названию…"
+      <input class="input" placeholder="название или ключ…" aria-label="Поиск по названию или ключу"
              [ngModel]="query()" (ngModelChange)="query.set($event)" name="cacheQuery" />
       <button type="submit" class="btn btn-secondary btn-sm" [disabled]="loading()">Найти</button>
       @if (topicState.topic() === WebSearchTopic.LabAnalyte) {
+        <label class="d-inline-flex align-items-center gap-1">
+          <input type="checkbox" name="unitsUndetermined"
+                 [ngModel]="unitsUndetermined()" (ngModelChange)="toggleUnitsUndetermined($event)" />
+          только с неопределёнными единицами
+        </label>
         <button type="button" class="btn btn-danger btn-sm" [disabled]="loading() || purgeBusy()" (click)="purgeUnresolvedSpecimen()">
           Удалить строки с неопределённым источником
         </button>
@@ -26,11 +31,12 @@
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
+      <div class="table-responsive">
       <table class="table">
         <thead>
           <tr>
             <th>Название</th>
-            @if (topicState.topic() === WebSearchTopic.LabAnalyte) { <th>Биоматериал</th> }
+            @if (topicState.topic() === WebSearchTopic.LabAnalyte) { <th>Биоматериал</th> <th>Единицы</th> }
             <th>Провайдер</th>
             <th>Обновлён</th>
             <th>Сниппетов</th>
@@ -40,8 +46,26 @@
         <tbody>
           @for (row of rows(); track row.id) {
             <tr>
-              <td>{{ row.normalizedName }}</td>
-              @if (topicState.topic() === WebSearchTopic.LabAnalyte) { <td>{{ row.specimen }}</td> }
+              <td>
+                @if (row.displayName) {
+                  <div>{{ row.displayName }}</div>
+                } @else {
+                  <span class="tag tag-warning">нет названия</span>
+                }
+                <code class="cache-key" title="Ключ кэша — по нему задачи находят строку">{{ row.normalizedName }}</code>
+              </td>
+              @if (topicState.topic() === WebSearchTopic.LabAnalyte) {
+                <td>{{ row.specimen }}</td>
+                <td>
+                  @if (row.units === null) {
+                    <span class="tag tag-neutral text-nowrap">не определены</span>
+                  } @else if (row.units === '') {
+                    <span class="text-muted">нет</span>
+                  } @else {
+                    {{ row.units }}
+                  }
+                </td>
+              }
               <td>{{ row.provider }}</td>
               <td>{{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
               <td>{{ row.snippetCount }}</td>
@@ -50,10 +74,11 @@
               </td>
             </tr>
           } @empty {
-            <tr><td [attr.colspan]="topicState.topic() === WebSearchTopic.LabAnalyte ? 6 : 5" class="text-muted">Ничего не найдено.</td></tr>
+            <tr><td [attr.colspan]="topicState.topic() === WebSearchTopic.LabAnalyte ? 7 : 5" class="text-muted">Ничего не найдено.</td></tr>
           }
         </tbody>
       </table>
+      </div>
 
       @if (rows().length < total()) {
         <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load(false)">
@@ -64,13 +89,13 @@
   </div>
 </div>
 
-<app-side-panel [open]="!!openRowId()" title="Кэш поиска" width="min(760px, 100vw)" (closed)="closeDetail()">
+<app-side-panel [open]="!!openRowId()" title="Кэш поиска" width="min(760px, 100vw)" (closed)="requestClose()">
   @if (openRowId()) {
     <app-admin-cache-panel
       [cacheId]="openRowId()!"
       [topic]="topicState.topic()"
-      (changed)="load(true)"
-      (deleted)="closeDetail(); load(true)"
+      (changed)="applyPatch($event)"
+      (deleted)="removeRow(openRowId()!); closeDetail()"
     />
   }
 </app-side-panel>

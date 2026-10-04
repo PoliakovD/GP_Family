@@ -57,7 +57,8 @@
       <ul class="inbox-rows">
         @for (r of rows(); track inboxKey(r)) {
           <li class="inbox-row" [class.inbox-row-active]="inboxKey(r) === selectedKey()" [class.inbox-row-low]="r.belowThreshold"
-              (click)="select(r)">
+              tabindex="0" role="button" [attr.aria-current]="inboxKey(r) === selectedKey() ? 'true' : null"
+              (click)="select(r)" (keydown.enter)="onRowKey(r, $event)" (keydown.space)="onRowKey(r, $event)">
             @if (r.stage === 'search') {
               <input type="checkbox" [checked]="checked().has(inboxKey(r))" (click)="toggleChecked(r, $event)"
                      [attr.aria-label]="'Выбрать ' + r.name" />
@@ -109,7 +110,7 @@
 
 <div style="margin-top: 16px;">
   <button type="button" class="btn btn-secondary btn-sm mb-2" (click)="showConfig.set(!showConfig())">
-    {{ showConfig() ? 'Скрыть настройки confidence' : 'Настройки confidence' }}
+    {{ showConfig() ? 'Скрыть пороги уверенности' : 'Пороги уверенности' }}
   </button>
   @if (showConfig()) {
     <app-review-config />

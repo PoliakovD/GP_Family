@@ -44,34 +44,36 @@
     } @else if (domainsError()) {
       <div class="alert-danger mb-3">{{ domainsError() }}</div>
     } @else {
-      <table class="table mb-3">
-        <thead><tr><th>Домен</th><th>Порядок</th><th>Включён</th><th></th></tr></thead>
-        <tbody>
-          @for (d of domains(); track d.id; let i = $index) {
-            <tr [class.text-muted]="!d.isEnabled">
-              <td>{{ d.domain }}</td>
-              <td>
-                <button type="button" class="btn-link" [disabled]="i === 0 || domainsBusy()" (click)="moveDomain(i, -1)">↑</button>
-                <button type="button" class="btn-link" [disabled]="i === domains().length - 1 || domainsBusy()" (click)="moveDomain(i, 1)">↓</button>
-              </td>
-              <td>
-                <label class="switch">
-                  <input type="checkbox" [checked]="d.isEnabled" [disabled]="domainsBusy()"
-                         [attr.aria-label]="'Домен ' + d.domain" (change)="toggleDomain(d, $event)" />
-                  <span class="switch-knob"></span>
-                </label>
-              </td>
-              <td>
-                <button type="button" class="btn btn-secondary btn-sm" [disabled]="domainsBusy()" (click)="deleteDomain(d)">
-                  Удалить
-                </button>
-              </td>
-            </tr>
-          } @empty {
-            <tr><td colspan="4" class="text-muted">Список пуст.</td></tr>
-          }
-        </tbody>
-      </table>
+      <div class="table-responsive mb-3">
+        <table class="table">
+          <thead><tr><th>Домен</th><th>Порядок</th><th>Включён</th><th></th></tr></thead>
+          <tbody>
+            @for (d of domains(); track d.id; let i = $index) {
+              <tr [class.text-muted]="!d.isEnabled">
+                <td>{{ d.domain }}</td>
+                <td>
+                  <button type="button" class="btn-link" [attr.aria-label]="'Поднять ' + d.domain + ' выше'" [disabled]="i === 0 || domainsBusy()" (click)="moveDomain(i, -1)">↑</button>
+                  <button type="button" class="btn-link" [attr.aria-label]="'Опустить ' + d.domain + ' ниже'" [disabled]="i === domains().length - 1 || domainsBusy()" (click)="moveDomain(i, 1)">↓</button>
+                </td>
+                <td>
+                  <label class="switch">
+                    <input type="checkbox" [checked]="d.isEnabled" [disabled]="domainsBusy()"
+                           [attr.aria-label]="'Домен ' + d.domain" (change)="toggleDomain(d, $event)" />
+                    <span class="switch-knob"></span>
+                  </label>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" [disabled]="domainsBusy()" (click)="deleteDomain(d)">
+                    Удалить
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="4" class="text-muted">Список пуст.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
 
     <form class="d-flex gap-2" (ngSubmit)="addDomain()">

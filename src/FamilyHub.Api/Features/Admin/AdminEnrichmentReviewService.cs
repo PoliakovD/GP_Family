@@ -476,8 +476,8 @@ public class AdminEnrichmentReviewService(
         if (job is null) return new ReviewActionOutcome<Guid>(ReviewActionResult.NotFound);
 
         var row = job is LabAnalyteEnrichmentJob lab
-            ? (ISearchCacheRow)await labCache.GetOrCreateAsync(lab.NormalizedName, lab.SpecimenKbId, ct)
-            : await medCache.GetOrCreateAsync(job.NormalizedName, ct);
+            ? (ISearchCacheRow)await labCache.GetOrCreateAsync(lab.NormalizedName, lab.SpecimenKbId, ct, lab.SourceDisplayName)
+            : await medCache.GetOrCreateAsync(job.NormalizedName, ct, job.SourceDisplayName);
 
         // Кэша не было, а у задачи есть черновик: наполняем новую строку снимком его сниппетов. Иначе пустая строка
         // заменила бы в карточке снимок черновика, и «Пересуммировать» после добавления своего источника потерял бы
@@ -723,7 +723,7 @@ public class AdminEnrichmentReviewService(
         ISearchCacheRow row;
         if (job is LabAnalyteEnrichmentJob lab)
         {
-            row = await labCache.GetOrCreateAsync(lab.NormalizedName, lab.SpecimenKbId, ct);
+            row = await labCache.GetOrCreateAsync(lab.NormalizedName, lab.SpecimenKbId, ct, lab.SourceDisplayName);
             if (twinCacheId is { } twinId)
             {
                 var copied = await cacheEditor.CopyFromAsync(row.Id, twinId, ct);
@@ -736,7 +736,7 @@ public class AdminEnrichmentReviewService(
         {
             if (twinCacheId is not null)
                 return new ReviewActionOutcome(ReviewActionResult.Invalid, "У препаратов нет двойников по биоматериалу.");
-            row = await medCache.GetOrCreateAsync(job.NormalizedName, ct);
+            row = await medCache.GetOrCreateAsync(job.NormalizedName, ct, job.SourceDisplayName);
         }
 
         // Перечитываем: строка могла измениться в редакторе (копия/ручные правки).

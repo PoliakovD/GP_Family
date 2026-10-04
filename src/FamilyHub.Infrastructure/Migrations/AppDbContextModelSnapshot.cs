@@ -1042,9 +1042,6 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CurrentThought")
-                        .HasColumnType("text");
-
                     b.Property<string>("DraftPayloadJson")
                         .HasColumnType("text");
 
@@ -1151,6 +1148,10 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<DateTime>("CanBeUpdatedAfter")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1365,9 +1366,6 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CurrentThought")
-                        .HasColumnType("text");
 
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
@@ -1733,9 +1731,6 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CurrentThought")
-                        .HasColumnType("text");
-
                     b.Property<string>("DraftPayloadJson")
                         .HasColumnType("text");
 
@@ -1832,6 +1827,10 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<DateTime>("CanBeUpdatedAfter")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2576,9 +2575,6 @@ namespace FamilyHub.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CurrentThought")
-                        .HasColumnType("text");
 
                     b.Property<string>("DraftPayloadJson")
                         .HasColumnType("text");

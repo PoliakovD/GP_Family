@@ -24,12 +24,11 @@ public sealed class CountingAlwaysValidLmStudioJsonClient : ILmStudioJsonClient
 
     public Task<LmStudioJsonResult> ExtractJsonAsync(
         string systemPrompt, string userText, IReadOnlyList<(byte[] Bytes, string ContentType)> images,
-        CancellationToken ct = default, bool suppressThinking = false, bool shortTimeout = false) =>
-        ExtractJsonAsync(systemPrompt, userText, ct, suppressThinking, shortTimeout);
+        CancellationToken ct = default, bool shortTimeout = false) =>
+        ExtractJsonAsync(systemPrompt, userText, ct, shortTimeout);
 
     public Task<LmStudioJsonResult> ExtractJsonAsync(
-        string systemPrompt, string userText, CancellationToken ct = default, bool suppressThinking = false,
-        bool shortTimeout = false)
+        string systemPrompt, string userText, CancellationToken ct = default, bool shortTimeout = false)
     {
         Interlocked.Increment(ref _callCount);
         var payload = new Dictionary<string, JsonElement>

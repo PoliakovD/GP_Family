@@ -12,15 +12,6 @@ namespace FamilyHub.Infrastructure.LmStudio;
 /// </summary>
 public interface ILmStudioJsonClient
 {
-    /// <summary>suppressThinking — выключить живой поток "мыслей" (план "живой поток мыслей") для
-    /// ЭТОГО вызова, даже если он идёт внутри ambient job-контекста (см. LmStudioThinkingContext).
-    /// Дефолт false — не "включить для избранных", а "выключить для гейтов": по умолчанию поток
-    /// включён для любого вызова внутри job-контекста, и только LegitimacyGuardService/
-    /// AnalytePlausibilityGuardService явно передают true, потому что это единственные два места,
-    /// вызываемые И из фоновых процессоров (где ambient-контекст уже установлен родительским job'ом
-    /// и сам по себе не отличает "обычная работа" от "гейт"), И синхронно из HTTP (где
-    /// ambient-контекста и так нет). Вне job-контекста (HTTP-путь, тесты) параметр не имеет
-    /// эффекта — поток и так не включится.</summary>
     /// <param name="shortTimeout">true — ограничить ЭТОТ вызов (основной проход и починку JSON,
     /// если до неё дойдёт) LmStudioOptions.ShortCallTimeoutSeconds вместо полного TimeoutSeconds
     /// (см. class doc LmStudioJsonClient и TECH_DEBT.md #7/#6). Для одного короткого текстового
@@ -32,15 +23,13 @@ public interface ILmStudioJsonClient
         string userText,
         IReadOnlyList<(byte[] Bytes, string ContentType)> images,
         CancellationToken ct = default,
-        bool suppressThinking = false,
         bool shortTimeout = false);
 
     /// <summary>Текстовый запрос без фото (суммаризация сниппетов и т.п.) — реализация делегирует в
-    /// перегрузку с изображениями, передавая пустой список. suppressThinking/shortTimeout — см.
+    /// перегрузку с изображениями, передавая пустой список. shortTimeout — см.
     /// docstring выше.</summary>
     Task<LmStudioJsonResult> ExtractJsonAsync(
-        string systemPrompt, string userText, CancellationToken ct = default, bool suppressThinking = false,
-        bool shortTimeout = false);
+        string systemPrompt, string userText, CancellationToken ct = default, bool shortTimeout = false);
 }
 
 /// <summary>

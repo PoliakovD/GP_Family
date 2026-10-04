@@ -91,7 +91,7 @@ public static class AdminLmStudioEndpoints
 
         // Уровень "размышлений" (см. LmStudioReasoning) — тот же приём "БД + фолбэк на
         // appsettings/env", что и модель выше, только тут ещё и позволяет сравнивать скорость на
-        // лету, без передеплоя (см. план "живой поток мыслей").
+        // лету, без передеплоя.
         group.MapGet("/reasoning", async (AppDbContext db, IOptions<LmStudioOptions> options, CancellationToken ct) =>
         {
             var configured = await db.LmStudioReasoningConfigs.AsNoTracking()

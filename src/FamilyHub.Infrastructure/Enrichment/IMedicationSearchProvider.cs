@@ -50,10 +50,8 @@ public static class SnippetKinds
 
 /// <summary>Откуда пришёл вызов SearchAsync — только для WebSearchCallLog.JobKind/JobId (переход
 /// из строки аудит-лога в карточку задачи в /admin/pipeline), никак не влияет на сам поиск.
-/// JobKind — строка, зеркалящая FamilyHub.Infrastructure.LmStudio.LlmJobKind ("Extraction" здесь
-/// не используется — SearchAsync вызывается только тремя enrichment-процессорами, не
-/// extraction), не сам enum (WebSearchCallLog — Domain-сущность, Domain не зависит от
-/// Infrastructure).</summary>
+/// JobKind — вид задачи строкой ("LabAnalyteEnrichment"/"MedicationEnrichment"/"VisitMedicationEnrichment",
+/// "SearchCacheWarmup" — см. WebSearchCallLog.JobKind).</summary>
 public record WebSearchCallContext(string JobKind, Guid JobId);
 
 /// <summary>

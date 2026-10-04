@@ -45,43 +45,52 @@
       Найдено поиском {{ cache.lastUpdatedAt | date: 'dd.MM.yyyy' }} — то, что реально уйдёт
       суммаризатору при следующем прогоне с текущими настройками (плюс черновик ниже, ещё не применённый).
     </p>
+    @if (cache.specimen !== null) {
+      <p class="text-muted mb-2">
+        Единицы в кэше: {{ cache.units === null ? 'не определены' : (cache.units || 'нет') }}
+        @if (cache.displayName) { · название «{{ cache.displayName }}» }
+      </p>
+    }
 
-    <table class="table mb-3">
-      <thead><tr><th></th><th>Домен</th><th>Заголовок</th><th></th></tr></thead>
-      <tbody>
-        @for (s of cache.snippets; track s.url) {
-          <tr [class.text-muted]="!effectiveEnabled(s)">
-            <td>
-              <input type="checkbox" [checked]="effectiveEnabled(s)" (change)="cycleOverride(s)" />
-            </td>
-            <td>
-              {{ s.domain ?? '—' }}
-              @if (overrideDraftFor(s.url) !== undefined) {
-                <span class="tag tag-accent-2">черновик</span>
-              } @else if (s.override !== null) {
-                <span class="tag tag-neutral">override={{ s.override ? 'вкл' : 'выкл' }}</span>
-              } @else if (s.isTrustedByDomain) {
-                <span class="tag tag-accent">доверен</span>
-              }
-            </td>
-            <td class="text-muted">
-              <a [href]="s.url" target="_blank" rel="noopener noreferrer">{{ s.title || s.url }}</a>
-            </td>
-            <td>
-              @if (!s.isTrustedByDomain && s.domain) {
-                <button type="button" class="btn btn-secondary btn-sm"
-                        [class.btn-primary]="trustDraft().has(s.domain)"
-                        (click)="toggleTrustDomain(s.domain)">
-                  ✚ доверить домен
-                </button>
-              }
-            </td>
-          </tr>
-        } @empty {
-          <tr><td colspan="4" class="text-muted">Сниппетов нет.</td></tr>
-        }
-      </tbody>
-    </table>
+    <div class="table-responsive mb-3">
+      <table class="table">
+        <thead><tr><th></th><th>Домен</th><th>Заголовок</th><th></th></tr></thead>
+        <tbody>
+          @for (s of cache.snippets; track s.url) {
+            <tr [class.text-muted]="!effectiveEnabled(s)">
+              <td>
+                <input type="checkbox" [attr.aria-label]="'Учитывать сниппет ' + (s.title || s.url)"
+                       [checked]="effectiveEnabled(s)" (change)="cycleOverride(s)" />
+              </td>
+              <td>
+                {{ s.domain ?? '—' }}
+                @if (overrideDraftFor(s.url) !== undefined) {
+                  <span class="tag tag-accent-2">черновик</span>
+                } @else if (s.override !== null) {
+                  <span class="tag tag-neutral">override={{ s.override ? 'вкл' : 'выкл' }}</span>
+                } @else if (s.isTrustedByDomain) {
+                  <span class="tag tag-accent">доверен</span>
+                }
+              </td>
+              <td class="text-muted">
+                <a [href]="s.url" target="_blank" rel="noopener noreferrer">{{ s.title || s.url }}</a>
+              </td>
+              <td>
+                @if (!s.isTrustedByDomain && s.domain) {
+                  <button type="button" class="btn btn-secondary btn-sm"
+                          [class.btn-primary]="trustDraft().has(s.domain)"
+                          (click)="toggleTrustDomain(s.domain)">
+                    ✚ доверить домен
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="4" class="text-muted">Сниппетов нет.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
   } @else if (d.type !== 'extraction') {
     <p class="text-muted mb-3">По этому названию ещё не было ни одного платного поиска.</p>
   }

@@ -7,26 +7,28 @@
     <div class="card mb-3">
       <div class="card-title">Связки ключей</div>
       <div class="card-body">
-        <table class="table">
-          <thead><tr><th>Назначение</th><th>Активен</th><th>Отставные</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>Шифрование данных (Encryption)</td>
-              <td>{{ r.encryption.activeKeyId }}</td>
-              <td>{{ r.encryption.previousKeyIds.length === 0 ? '—' : r.encryption.previousKeyIds.join(', ') }}</td>
-            </tr>
-            <tr>
-              <td>Подпись сессий (JWT)</td>
-              <td>{{ r.jwt.activeKeyId }}</td>
-              <td>{{ r.jwt.previousKeyIds.length === 0 ? '—' : r.jwt.previousKeyIds.join(', ') }}</td>
-            </tr>
-            <tr>
-              <td>Ссылки на скачивание (Attachments)</td>
-              <td>активный</td>
-              <td>{{ r.attachments.previousKeyCount === 0 ? '—' : r.attachments.previousKeyCount + ' шт.' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="table">
+            <thead><tr><th>Назначение</th><th>Активен</th><th>Отставные</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Шифрование данных (Encryption)</td>
+                <td>{{ r.encryption.activeKeyId }}</td>
+                <td>{{ r.encryption.previousKeyIds.length === 0 ? '—' : r.encryption.previousKeyIds.join(', ') }}</td>
+              </tr>
+              <tr>
+                <td>Подпись сессий (JWT)</td>
+                <td>{{ r.jwt.activeKeyId }}</td>
+                <td>{{ r.jwt.previousKeyIds.length === 0 ? '—' : r.jwt.previousKeyIds.join(', ') }}</td>
+              </tr>
+              <tr>
+                <td>Ссылки на скачивание (Attachments)</td>
+                <td>активный</td>
+                <td>{{ r.attachments.previousKeyCount === 0 ? '—' : r.attachments.previousKeyCount + ' шт.' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   }

@@ -16,6 +16,11 @@ public class MedicationSearchCache : ISearchCacheRow
     /// друг на друга, см. инвариант изоляции), а совпадающее по смыслу нормализованное имя.</summary>
     public string NormalizedName { get; set; } = string.Empty;
 
+    /// <summary>Название для людей — как у препарата/в справочнике («L-Тироксин»), а не свёрнутый ключ. Только для
+    /// отображения и поиска в админке: в ключ кэша не входит, задачи по нему строку не ищут. Ставится из
+    /// SourceDisplayName задачи при первом поиске; правка админа не перетирается.</summary>
+    public string? DisplayName { get; set; }
+
     /// <summary>Провайдер последнего обращения (например, "Yandex").</summary>
     public string Provider { get; set; } = string.Empty;
 

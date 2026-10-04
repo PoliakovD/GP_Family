@@ -11,7 +11,7 @@ const ind = (over: Partial<IndicatorDto> = {}): IndicatorDto => ({
   specimenKbId: 's', specimenDisplayName: null, position: 0, valueRaw: '130', unit: 'г/л',
   refLowText: '120', refHighText: '160', refText: null, recordDate: '2026-01-01', medicalRecordId: 'r',
   valueNumericText: '130', kbAnalyteId: null, rawDisplayName: null, enrichmentPending: false,
-  enrichmentLiveText: null, enrichmentQueueAhead: 0, enrichmentWaitingForAi: false,
+  enrichmentQueueAhead: 0, enrichmentWaitingForAi: false,
   ...over,
 } as IndicatorDto);
 

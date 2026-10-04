@@ -22,7 +22,7 @@ public class PatientReferenceCalculatorTests
     [Fact]
     public async Task CalculateAsync_ModelUnavailable_ReturnsNull_DoesNotThrow()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("недоступен"));
 
         var result = await _sut.CalculateAsync("Клиренс креатинина", "методика", 30, null, "мл/мин");
@@ -34,7 +34,7 @@ public class PatientReferenceCalculatorTests
     [Fact]
     public async Task CalculateAsync_TransientFailure_Throws()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
 
         var act = () => _sut.CalculateAsync("Клиренс креатинина", "методика", 30, null, "мл/мин");

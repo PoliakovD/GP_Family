@@ -56,13 +56,6 @@ public class MedicalDocumentExtractionJob : IPipelineJob
     /// (сбрасывая флаг), как только сервер снова отвечает. Фронт показывает «ждём ИИ» вместо ошибки.</summary>
     public bool WaitingForAi { get; set; }
 
-    /// <summary>Живой обрывок текста внутри ещё не закрытого &lt;think&gt; модели, пока задача
-    /// реально думает (план "живой поток мыслей") — null, когда модель сейчас не думает вслух
-    /// (между вызовами, security-гейты, &lt;think&gt; уже закрылся) или задача не Running.
-    /// Пишется LlmThinkingReportService throttled-обновлениями напрямую (ExecuteUpdateAsync), не
-    /// через SaveChangesAsync этого job — см. LmStudioThinkingContext/FamilyHub.Infrastructure.LmStudio.</summary>
-    public string? CurrentThought { get; set; }
-
     public DateTime CreatedAt { get; set; }
 
     public DateTime? StartedAt { get; set; }

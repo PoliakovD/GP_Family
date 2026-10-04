@@ -11,7 +11,7 @@
           </button>
         }
       </div>
-      <select class="input" [ngModel]="jobStatus()" (ngModelChange)="selectJobStatus($event)">
+      <select class="input" aria-label="Статус задачи" [ngModel]="jobStatus()" (ngModelChange)="selectJobStatus($event)">
         <option value="">Любой статус</option>
         @for (o of statusOptions; track o.value) {
           <option [value]="o.value">{{ o.label }}</option>
@@ -25,6 +25,9 @@
           </button>
         </span>
       }
+      <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsLoading()" (click)="loadJobs()">
+        <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновить
+      </button>
       @if (selectedJobIds().size > 0) {
         <button type="button" class="btn btn-primary btn-sm" [disabled]="jobsBusy()" (click)="bulkRetrySelected()">
           Перезапустить выбранные ({{ selectedJobIds().size }})
@@ -40,29 +43,45 @@
     } @else if (jobsError()) {
       <div class="alert-danger">{{ jobsError() }}</div>
     } @else {
+      <div class="table-responsive">
       <table class="table">
-        <thead><tr><th></th><th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>
+              @if (failedJobIds().length > 0) {
+                <input type="checkbox" aria-label="Выбрать все упавшие задачи на странице"
+                       [checked]="allFailedSelected()" (change)="toggleSelectAllFailed()" />
+              }
+            </th>
+            <th>Название</th><th>Статус</th><th>Попыток</th><th>Ошибка</th><th>Создана</th><th></th>
+          </tr>
+        </thead>
         <tbody>
           @for (j of jobs(); track j.id) {
             <tr>
               <td>
                 @if (j.status === 'Failed') {
-                  <input type="checkbox" [checked]="selectedJobIds().has(j.id)" (click)="$event.stopPropagation(); toggleJobSelection(j.id)" />
+                  <input type="checkbox" [attr.aria-label]="'Выбрать задачу ' + j.displayName"
+                         [checked]="selectedJobIds().has(j.id)" (click)="$event.stopPropagation(); toggleJobSelection(j.id)" />
                 }
               </td>
-              <td class="card-clickable" (click)="openJob(j)">{{ j.displayName }}</td>
+              <td>
+                <button type="button" class="link-inline" (click)="openJob(j)">{{ j.displayName }}</button>
+              </td>
               <td>{{ j.status | adminStatus }}</td>
               <td>{{ j.attempts }}</td>
               <td class="text-muted">{{ j.error }}</td>
               <td>{{ j.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
-              <td class="d-flex gap-1">
+              <td>
                 @if (j.status === 'Failed') {
-                  <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsBusy()" (click)="retryJob(j)">
-                    Повторить
-                  </button>
-                  <button type="button" class="btn-icon" aria-label="Удалить задачу" [disabled]="jobsBusy()" (click)="deleteJob(j)">
-                    <i class="ph ph-trash" aria-hidden="true"></i>
-                  </button>
+                  <div class="d-flex gap-1 align-items-center">
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsBusy()" (click)="retryJob(j)">
+                      Повторить
+                    </button>
+                    <button type="button" class="btn-icon" aria-label="Удалить задачу" [disabled]="jobsBusy()" (click)="deleteJob(j)">
+                      <i class="ph ph-trash" aria-hidden="true"></i>
+                    </button>
+                  </div>
                 }
               </td>
             </tr>
@@ -71,7 +90,16 @@
           }
         </tbody>
       </table>
-      <p class="text-muted">Всего: {{ jobsTotal() }}</p>
+      </div>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        @if (jobs().length < jobsTotal()) {
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsLoading()" (click)="loadMoreJobs()">
+            Показать ещё ({{ jobs().length }} / {{ jobsTotal() }})
+          </button>
+        } @else {
+          <span class="text-muted">Всего: {{ jobsTotal() }}</span>
+        }
+      </div>
     }
   </div>
 </div>

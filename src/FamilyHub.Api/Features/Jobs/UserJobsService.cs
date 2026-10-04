@@ -9,17 +9,15 @@ namespace FamilyHub.Api.Features.Jobs;
 /// <summary>Одна строка глобального индикатора фоновых процессов (§4 плана «живой конвейер») —
 /// RecordId/RecordKind null, когда цель уже не существует (запись/медикамент удалены к моменту
 /// опроса — все четыре таблицы задач хранят такие ссылки справочно, не как FK) — тогда строка
-/// в выпадающем списке остаётся просто текстом, без навигации. LiveText — живой обрывок "мысли"
-/// модели (план "живой поток мыслей"), non-null максимум у ОДНОЙ строки за раз во всей системе —
-/// LmStudioConcurrencyGate сериализует все вызовы LM Studio, значит "думает" всегда только одна
-/// задача из всех четырёх таблиц одновременно, остальные Pending просто ждут очередь. QueueAhead
+/// в выпадающем списке остаётся просто текстом, без навигации. IsRunning — задача уже взята воркером
+/// (Status = Running); вместе с QueueAhead = 0 это «обрабатываем…». QueueAhead
 /// — сколько задач из ЛЮБОГО из четырёх конвейеров реально стоят раньше этой в общей очереди к
 /// LLM (см. LlmQueuePositionService) — 0 у той самой строки, что реально держит гейт прямо сейчас.
 /// WaitingForAi — распознавание ждёт, пока вернётся ИИ (LM Studio недоступен): позиция в очереди
 /// к модели тогда не показывается, UI пишет «ждём ИИ».</summary>
 public record ActiveJobItem(
     Guid JobId, string Label, Guid? RecordId, NotificationRelatedKind? RecordKind, DateTime CreatedAt,
-    string? LiveText = null, int QueueAhead = 0, bool WaitingForAi = false);
+    bool IsRunning = false, int QueueAhead = 0, bool WaitingForAi = false);
 
 /// <summary>Total — реальный COUNT (для бейджа), Items — top-N старейших (для выпадающего списка,
 /// не грузим сотни строк ради индикатора).</summary>
@@ -70,7 +68,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(j => j.CreatedAt).Take(MaxItemsPerGroup)
-            .Select(j => new { j.Id, j.MedicalRecordId, j.CreatedAt, j.CurrentThought, j.WaitingForAi })
+            .Select(j => new { j.Id, j.MedicalRecordId, j.CreatedAt, j.Status, j.WaitingForAi })
             .ToListAsync(ct);
         if (rows.Count == 0) return new ActiveJobsGroup(total, []);
 
@@ -84,12 +82,12 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
         {
             var queueAhead = r.WaitingForAi ? 0 : LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt);
             if (!records.TryGetValue(r.MedicalRecordId, out var mr))
-                return new ActiveJobItem(r.Id, "Медицинская запись", null, null, r.CreatedAt, r.CurrentThought, queueAhead, r.WaitingForAi);
+                return new ActiveJobItem(r.Id, "Медицинская запись", null, null, r.CreatedAt, r.Status == EnrichmentJobStatus.Running, queueAhead, r.WaitingForAi);
 
             var isVisit = mr.Kind == MedicalRecordKind.DoctorVisit;
             var label = mr.Title ?? (isVisit ? "Приём врача" : "Анализ");
             var kind = isVisit ? NotificationRelatedKind.MedicalRecordVisit : NotificationRelatedKind.MedicalRecordAnalysis;
-            return new ActiveJobItem(r.Id, label, mr.Id, kind, r.CreatedAt, r.CurrentThought, queueAhead, r.WaitingForAi);
+            return new ActiveJobItem(r.Id, label, mr.Id, kind, r.CreatedAt, r.Status == EnrichmentJobStatus.Running, queueAhead, r.WaitingForAi);
         }).ToList();
 
         return new ActiveJobsGroup(total, items);
@@ -103,7 +101,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(j => j.CreatedAt).Take(MaxItemsPerGroup)
-            .Select(j => new { j.Id, j.SourceDisplayName, j.LabIndicatorId, j.CreatedAt, j.CurrentThought })
+            .Select(j => new { j.Id, j.SourceDisplayName, j.LabIndicatorId, j.CreatedAt, j.Status })
             .ToListAsync(ct);
         if (rows.Count == 0) return new ActiveJobsGroup(total, []);
 
@@ -127,7 +125,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
             // (Kind=DoctorVisit) хранят PrescribedMedications, не LabIndicators.
             return new ActiveJobItem(
                 r.Id, r.SourceDisplayName, recordId, recordId is null ? null : NotificationRelatedKind.MedicalRecordAnalysis,
-                r.CreatedAt, r.CurrentThought, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
+                r.CreatedAt, r.Status == EnrichmentJobStatus.Running, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
         }).ToList();
 
         return new ActiveJobsGroup(total, items);
@@ -141,7 +139,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(j => j.CreatedAt).Take(MaxItemsPerGroup)
-            .Select(j => new { j.Id, j.SourceDisplayName, j.MedicationId, j.CreatedAt, j.CurrentThought })
+            .Select(j => new { j.Id, j.SourceDisplayName, j.MedicationId, j.CreatedAt, j.Status })
             .ToListAsync(ct);
         if (rows.Count == 0) return new ActiveJobsGroup(total, []);
 
@@ -162,7 +160,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
                 ? mk : null;
             return new ActiveJobItem(
                 r.Id, r.SourceDisplayName, medkitId, medkitId is null ? null : NotificationRelatedKind.Medkit,
-                r.CreatedAt, r.CurrentThought, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
+                r.CreatedAt, r.Status == EnrichmentJobStatus.Running, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
         }).ToList();
 
         return new ActiveJobsGroup(total, items);
@@ -176,7 +174,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
 
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(j => j.CreatedAt).Take(MaxItemsPerGroup)
-            .Select(j => new { j.Id, j.SourceDisplayName, j.MedicalRecordId, j.CreatedAt, j.CurrentThought })
+            .Select(j => new { j.Id, j.SourceDisplayName, j.MedicalRecordId, j.CreatedAt, j.Status })
             .ToListAsync(ct);
         if (rows.Count == 0) return new ActiveJobsGroup(total, []);
 
@@ -194,7 +192,7 @@ public class UserJobsService(AppDbContext db, LlmQueuePositionService queuePosit
                 ? r.MedicalRecordId : null;
             return new ActiveJobItem(
                 r.Id, r.SourceDisplayName, recordId, recordId is null ? null : NotificationRelatedKind.MedicalRecordVisit,
-                r.CreatedAt, r.CurrentThought, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
+                r.CreatedAt, r.Status == EnrichmentJobStatus.Running, LlmQueuePositionService.CountAhead(activeTimestamps, r.CreatedAt));
         }).ToList();
 
         return new ActiveJobsGroup(total, items);

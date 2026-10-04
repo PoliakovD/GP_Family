@@ -1,0 +1,7 @@
+// Ключ кэша под названием для людей — мелко и моноширинно, чтобы не путать их.
+.cache-key {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8235rem;
+  color: var(--color-neutral-600);
+}
