@@ -123,6 +123,15 @@ public static class LabTableRowDetector
         @"^(Оказанные услуги|Исполнители|Документ составил|Документ заверил)\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    /// <summary>Первая строка названия, склеенная со значением: название заполнило узкую колонку во всю ширину,
+    /// зазор до колонки «Значение» оказался меньше порога LayoutTextReconstructor, и ячейки слились
+    /// («Натрий, молярная 138,8 ммоль/л | 130-156», «Аспартатаминотра 11 МЕ/л | &lt;35» — протокол ГБУЗ РК).
+    /// Без разреза референс встаёт на место значения, и модель честно возвращает «&lt;35» вместо 11.
+    /// Единица обязательна (с «/» или «%») — голое число в конце названия бывает частью имени («Витамин B12»).</summary>
+    private static readonly Regex GluedValuePattern = new(
+        @"^(?<name>.*\p{L}.*?)\s+(?<value>(?:[<>≤≥]\s?)?-?\d+(?:[.,]\d+)?\s+(?:\S*/\S+|%))$",
+        RegexOptions.Compiled);
+
     private const int MaxContinuationLines = 14;
 
     /// <summary>Заголовок раздела длиннее этого — уже не заголовок, а фраза-примечание.</summary>
@@ -239,7 +248,9 @@ public static class LabTableRowDetector
             if (inTable && cells.Length >= 3 && DateStartPattern.IsMatch(cells[0]))
             {
                 Flush();
-                open = new DatedRecord(cells[0], cells[1], cells[2], cells.Length >= 4 ? cells[3] : null, currentPanel);
+                open = cells.Length == 3 && GluedValuePattern.Match(cells[1]) is { Success: true } glued
+                    ? new DatedRecord(cells[0], glued.Groups["name"].Value, glued.Groups["value"].Value, cells[2], currentPanel)
+                    : new DatedRecord(cells[0], cells[1], cells[2], cells.Length >= 4 ? cells[3] : null, currentPanel);
                 continue;
             }
 
