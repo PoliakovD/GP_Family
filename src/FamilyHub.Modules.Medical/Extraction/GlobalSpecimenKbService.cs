@@ -44,13 +44,17 @@ public record AdminSpecimenDto(
 /// <summary>Conflict — синоним уже занят другим источником (его название или синоним); ConflictWith — его DisplayName.</summary>
 public enum SpecimenAliasesResult { Ok, NotFound, Conflict, Sentinel }
 
-file sealed class SpecimenAliasesRow
+// Строки raw-SQL (Database.SqlQuery<T>) — internal, НЕ file: у file-типа имя, сгенерированное компилятором
+// ("<GlobalSpecimenKbService>F…__SpecimenAliasesRow"), EF Core не переваривает — запрос падает с
+// IndexOutOfRangeException в NavigationExpandingExpressionVisitor (живой баг GET /api/admin/kb/specimens
+// и поиска источника с непустым q). Охраняется SqlQueryRowTypesTests.
+internal sealed class SpecimenAliasesRow
 {
     public Guid Id { get; set; }
     public string[] Aliases { get; set; } = [];
 }
 
-file sealed class GlobalSpecimenSearchRow
+internal sealed class GlobalSpecimenSearchRow
 {
     public Guid Id { get; set; }
     public string DisplayName { get; set; } = string.Empty;
