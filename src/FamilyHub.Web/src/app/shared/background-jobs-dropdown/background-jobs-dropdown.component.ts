@@ -63,17 +63,15 @@ export class BackgroundJobsDropdownComponent {
     void this.router.navigate([relatedKindBasePath(item.recordKind), item.recordId]);
   }
 
-  /** Живая "мысль" модели, если задача реально держит гейт LM Studio прямо сейчас; иначе — её
-   * позиция в общей очереди к LLM (план "живой поток мыслей" — не путать пользователя тем, что
-   * задача "висит" Running без объяснений, пока справочник насыщается или идёт большой поток
-   * анализов); null — вообще ничего показывать не нужно (задача Pending и никого нет впереди).*/
+  /** Позиция задачи в общей очереди к LLM (не путать пользователя тем, что задача "висит" без
+   * объяснений, пока справочник насыщается или идёт большой поток анализов) либо «обрабатываем…»,
+   * если её уже взяли и впереди никого; null — показывать нечего (Pending, впереди никого). */
   itemStatusText(item: ActiveJobItem): string | null {
     if (item.waitingForAi) return 'ждём ИИ — начнём автоматически, как только он вернётся';
-    // item.liveText (сырой вывод модели) намеренно не показываем — см. pipeline-progress.
-    if (item.liveText) return 'обрабатываем…';
     if (item.queueAhead > 0) {
       return `в очереди — ещё ${item.queueAhead} ${pluralizeRu(item.queueAhead, 'задача', 'задачи', 'задач')} впереди`;
     }
+    if (item.isRunning) return 'обрабатываем…';
     return null;
   }
 

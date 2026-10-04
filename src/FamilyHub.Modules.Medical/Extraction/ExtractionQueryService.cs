@@ -77,7 +77,7 @@ public class ExtractionQueryService(
 
         return (ExtractionQueryResult.Success, new ExtractionStatusResponse(
             job.Status, job.Stage, job.IndicatorCount, job.Error, job.TotalFiles, job.ProcessedFiles,
-            job.CreatedAt, job.CompletedAt, queueAhead, job.CurrentThought, waitingForAi));
+            job.CreatedAt, job.CompletedAt, queueAhead, waitingForAi));
     }
 
     public async Task<(ExtractionQueryResult Result, List<IndicatorDto> Items)> GetIndicatorsAsync(
@@ -102,20 +102,18 @@ public class ExtractionQueryService(
         return (ExtractionQueryResult.Success, items
             .Select(i =>
             {
-                var (pending, liveText, createdAt, waitingForAi) = FindPendingEnrichment(i, pendingKeys);
+                var (pending, createdAt, waitingForAi) = FindPendingEnrichment(i, pendingKeys);
                 var queueAhead = pending && !waitingForAi ? LlmQueuePositionService.CountAhead(activeTimestamps, createdAt) : 0;
-                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, liveText, queueAhead, waitingForAi);
+                return ToDto(i, specimenNames.GetValueOrDefault(i.SpecimenKbId), pending, queueAhead, waitingForAi);
             })
             .ToList());
     }
 
     /// <summary>§5 плана «живой конвейер» — один доп. запрос на всю СТРАНИЦУ показателей (не на
-    /// каждый), т.к. GetIndicatorsAsync и так вызывается на каждое открытие записи. CurrentThought
-    /// — живой обрывок "мысли" модели (план "живой поток мыслей") — non-null максимум на одной
-    /// строке из всех активных задач всей системы одновременно, см. class doc ActiveJobItem.
+    /// каждый), т.к. GetIndicatorsAsync и так вызывается на каждое открытие записи.
     /// CreatedAt — для позиции в ОБЩЕЙ очереди к LLM (см. LlmQueuePositionService), не только
     /// среди показателей этой записи.</summary>
-    private async Task<List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt, bool WaitingForAi)>> GetPendingEnrichmentKeysAsync(
+    private async Task<List<(string NormalizedName, Guid SpecimenKbId, DateTime CreatedAt, bool WaitingForAi)>> GetPendingEnrichmentKeysAsync(
         List<DomainLabIndicator> items, CancellationToken ct)
     {
         var specimenIds = items.Select(i => i.SpecimenKbId).Distinct().ToList();
@@ -130,10 +128,10 @@ public class ExtractionQueryService(
                 && (j.Status == EnrichmentJobStatus.Pending || j.Status == EnrichmentJobStatus.Running
                     || EnrichmentJobStatusSets.AwaitingAdmin.Contains(j.Status) // ждёт админа (ADR-0018) — тоже «в процессе»
                     || (j.Status == EnrichmentJobStatus.Failed && j.IsTransientFailure && j.CreatedAt > waitingSince)))
-            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CurrentThought, j.CreatedAt, Waiting = j.Status == EnrichmentJobStatus.Failed })
+            .Select(j => new { j.NormalizedName, j.SpecimenKbId, j.CreatedAt, Waiting = j.Status == EnrichmentJobStatus.Failed })
             .ToListAsync(ct);
 
-        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CurrentThought, r.CreatedAt, r.Waiting)).ToList();
+        return rows.Select(r => (r.NormalizedName, r.SpecimenKbId, r.CreatedAt, r.Waiting)).ToList();
     }
 
     /// <summary>Матчинг НЕ точным равенством — LabIndicator.AnalyteKey иногда несёт суффикс
@@ -142,12 +140,12 @@ public class ExtractionQueryService(
     /// ключу (lookupKey), не по разведённому analyteKey") — поэтому StartsWith, не ==. Ложных
     /// совпадений на практике не бывает: коллизия имени ПОСЛЕ нормализации в пределах одного
     /// источника — редкий случай, который и разводит AnalyteKeyDisambiguator.</summary>
-    private static (bool Pending, string? LiveText, DateTime CreatedAt, bool WaitingForAi) FindPendingEnrichment(
-        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, string? CurrentThought, DateTime CreatedAt, bool WaitingForAi)> pendingKeys)
+    private static (bool Pending, DateTime CreatedAt, bool WaitingForAi) FindPendingEnrichment(
+        DomainLabIndicator indicator, List<(string NormalizedName, Guid SpecimenKbId, DateTime CreatedAt, bool WaitingForAi)> pendingKeys)
     {
         var match = pendingKeys.FirstOrDefault(k => k.SpecimenKbId == indicator.SpecimenKbId
             && indicator.AnalyteKey.StartsWith(k.NormalizedName, StringComparison.Ordinal));
-        return match.NormalizedName is null ? (false, null, default, false) : (true, match.CurrentThought, match.CreatedAt, match.WaitingForAi);
+        return match.NormalizedName is null ? (false, default, false) : (true, match.CreatedAt, match.WaitingForAi);
     }
 
     /// <summary>Заключение врача (Kind=DoctorVisit) — MedicalRecord.ExtractedDataJson, зеркало
@@ -696,11 +694,11 @@ public class ExtractionQueryService(
     }
 
     private static IndicatorDto ToDto(
-        DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false, string? enrichmentLiveText = null,
+        DomainLabIndicator i, string? specimenDisplayName, bool enrichmentPending = false,
         int enrichmentQueueAhead = 0, bool enrichmentWaitingForAi = false) => new(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
         i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
-        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentLiveText, enrichmentQueueAhead,
+        i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentQueueAhead,
         enrichmentWaitingForAi);
 
     private static double? ParseNumeric(string? value)

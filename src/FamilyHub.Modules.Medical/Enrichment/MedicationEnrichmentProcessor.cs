@@ -57,9 +57,6 @@ public class MedicationEnrichmentProcessor(
             return;
         }
 
-        // Ambient-контекст для живого потока "мыслей" (план) — см. class doc LmStudioThinkingContext.
-        using var _ = LmStudioThinkingContext.Begin(LlmJobKind.MedicationEnrichment, job.Id);
-
         job.Attempts++;
         job.Status = EnrichmentJobStatus.Running;
         job.StartedAt ??= DateTime.UtcNow;
@@ -130,7 +127,7 @@ public class MedicationEnrichmentProcessor(
                 await callLogger.LogAsync(new WebSearchCallLogEntry(
                     cached.Provider, WebSearchTopic.Medication, job.NormalizedName, null, string.Empty, null, null, 0,
                     WebSearchCallOutcome.CacheHit, cached.Snippets.Count, null, null,
-                    nameof(LlmJobKind.MedicationEnrichment), job.Id), ct);
+                    "MedicationEnrichment", job.Id), ct);
             }
             else
             {
@@ -161,7 +158,7 @@ public class MedicationEnrichmentProcessor(
                     }
                 }
 
-                var callContext = new WebSearchCallContext(nameof(LlmJobKind.MedicationEnrichment), job.Id);
+                var callContext = new WebSearchCallContext("MedicationEnrichment", job.Id);
                 // Текст запроса — правка админа (ProposedQueryText) либо нормализованное имя.
                 rawSnippets = await provider.SearchAsync(
                     EnrichmentReviewGate.EffectiveQuery(job), WebSearchTopic.Medication, ct: ct, callContext: callContext);

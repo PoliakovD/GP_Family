@@ -60,7 +60,7 @@ export class IndicatorTableComponent {
   protected enrichmentTitle(ind: IndicatorDto): string {
     if (ind.enrichmentWaitingForAi) return 'ИИ недоступен — уточнение нормы продолжится автоматически, когда он вернётся';
     return enrichmentStatusTitle(
-      ind.enrichmentLiveText, ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
+      ind.enrichmentQueueAhead, 'Справочник пока не знает норму — идёт фоновый поиск');
   }
 
   startCreate(): void {

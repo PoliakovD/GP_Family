@@ -59,10 +59,8 @@ public class WebSearchCallLog
     public string? Error { get; set; }
 
     /// <summary>"Extraction"/"LabAnalyteEnrichment"/"MedicationEnrichment"/
-    /// "VisitMedicationEnrichment" — зеркалит FamilyHub.Infrastructure.LmStudio.LlmJobKind СТРОКОЙ,
-    /// не ссылкой на сам enum: FamilyHub.Domain не может зависеть от Infrastructure (см.
-    /// FamilyHub.Domain.csproj — ноль ProjectReference, инвариант слоёв). Вместе с JobId — переход
-    /// из строки лога в карточку задачи в /admin/pipeline.</summary>
+    /// "VisitMedicationEnrichment" — вид задачи конвейера строкой (имена таблиц задач без "Job").
+    /// Вместе с JobId — переход из строки лога в карточку задачи в /admin/pipeline.</summary>
     public string? JobKind { get; set; }
 
     public Guid? JobId { get; set; }

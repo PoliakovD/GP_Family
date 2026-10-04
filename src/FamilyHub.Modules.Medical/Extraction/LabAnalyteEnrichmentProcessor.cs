@@ -54,9 +54,6 @@ public class LabAnalyteEnrichmentProcessor(
             return;
         }
 
-        // Ambient-контекст для живого потока "мыслей" (план) — см. class doc LmStudioThinkingContext.
-        using var _ = LmStudioThinkingContext.Begin(LlmJobKind.LabAnalyteEnrichment, job.Id);
-
         job.Attempts++;
         job.Status = EnrichmentJobStatus.Running;
         job.StartedAt ??= DateTime.UtcNow;
@@ -174,7 +171,7 @@ public class LabAnalyteEnrichmentProcessor(
                 await callLogger.LogAsync(new WebSearchCallLogEntry(
                     cached.Provider, WebSearchTopic.LabAnalyte, job.NormalizedName, specimenDisplayNameForLog,
                     string.Empty, null, null, 0, WebSearchCallOutcome.CacheHit, cached.Snippets.Count, null, null,
-                    nameof(LlmJobKind.LabAnalyteEnrichment), job.Id), ct);
+                    "LabAnalyteEnrichment", job.Id), ct);
             }
             else
             {
@@ -213,7 +210,7 @@ public class LabAnalyteEnrichmentProcessor(
                 // Отображаемое имя источника для текста поискового запроса (AnalyteSearchQueryBuilder) —
                 // читается по факту непосредственно перед платным вызовом, не заранее: на кэш-хите
                 // выше этот запрос вообще не нужен.
-                var callContext = new WebSearchCallContext(nameof(LlmJobKind.LabAnalyteEnrichment), job.Id);
+                var callContext = new WebSearchCallContext("LabAnalyteEnrichment", job.Id);
                 // Текст запроса — правка админа (ProposedQueryText) либо нормализованное имя.
                 rawSnippets = await provider.SearchAsync(
                     EnrichmentReviewGate.EffectiveQuery(job), WebSearchTopic.LabAnalyte, specimenDisplayNameForLog, ct, callContext);

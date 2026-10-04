@@ -70,7 +70,7 @@ public class MedicationOcrServiceTests
             ["name"] = JsonSerializer.SerializeToElement("Тестпрепарат"),
         };
         _client.ExtractJsonAsync(
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<(byte[], string)>>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<(byte[], string)>>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var withinLimit = FakeFile(length: 1 * 1024 * 1024, bytes: [1, 2, 3]);

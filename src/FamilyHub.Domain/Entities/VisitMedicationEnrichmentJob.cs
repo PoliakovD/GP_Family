@@ -49,10 +49,6 @@ public class VisitMedicationEnrichmentJob : IReviewableEnrichmentJob
 
     public Guid? KbId { get; set; }
 
-    /// <summary>См. MedicalDocumentExtractionJob.CurrentThought — тот же смысл, тот же писатель
-    /// (LlmThinkingReportService).</summary>
-    public string? CurrentThought { get; set; }
-
     public DateTime CreatedAt { get; set; }
 
     public DateTime? StartedAt { get; set; }

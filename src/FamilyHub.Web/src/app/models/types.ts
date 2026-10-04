@@ -147,8 +147,6 @@ export interface Medication {
     /** §5 плана «живой конвейер» — зеркало IndicatorDto.enrichmentPending, см.
      * FamilyHub.Modules.Medical.Medications.MedicationDto. */
     enrichmentPending: boolean;
-    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — см. IndicatorDto.enrichmentLiveText. */
-    enrichmentLiveText: string | null;
     /** См. ActiveJobItem.queueAhead — позиция в общей очереди к LLM, не только конвейера обогащения препаратов. */
     enrichmentQueueAhead: number;
 }
@@ -486,15 +484,13 @@ export interface ActiveJobItem {
     recordId: string | null;
     recordKind: NotificationRelatedKind | null;
     createdAt: string;
-    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — non-null максимум у ОДНОЙ
-     * строки из всех активных задач всей системы одновременно (LmStudioConcurrencyGate
-     * сериализует все вызовы LM Studio) — у остальных Pending это просто null, они ждут очередь. */
-    liveText: string | null;
+    /** Задача уже взята воркером (Running); вместе с queueAhead === 0 — «обрабатываем…». */
+    isRunning: boolean;
     /** Распознавание ждёт, пока вернётся ИИ (LM Studio недоступен) — позиции в очереди у него нет. */
     waitingForAi: boolean;
     /** Сколько задач из ЛЮБОГО из четырёх конвейеров реально стоят раньше этой в общей очереди к
      * LLM (не только своего конвейера — "extraction"/"enrichment" делят одну модель) — 0 у той
-     * самой строки, что реально держит гейт прямо сейчас (см. liveText выше). */
+     * самой строки, что реально держит гейт прямо сейчас. */
     queueAhead: number;
 }
 
@@ -554,9 +550,6 @@ export interface ExtractionStatusResponse {
      * очереди; осмысленна, пока status === Pending или Running (иначе всегда 0) — Running не
      * значит "модель прямо сейчас отвечает по этой задаче", только что Hangfire её уже взял. */
     queuePosition: number;
-    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — null между вызовами/на
-     * security-гейтах/когда задача не Running. */
-    currentThought: string | null;
     /** Задача Pending, но ИИ (LM Studio) сейчас недоступен: она не потеряна и стартует сама, когда
      * сервер вернётся — UI показывает «ждём ИИ» вместо позиции в очереди. */
     waitingForAi: boolean;
@@ -601,10 +594,6 @@ export interface IndicatorDto {
      * FamilyHub.Modules.Medical.Extraction.ExtractionQueryDtos.IndicatorDto). UI показывает чип
      * «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда. */
     enrichmentPending: boolean;
-    /** Живой обрывок "мысли" модели (план "живой поток мыслей") — null почти всегда, даже когда
-     * enrichmentPending===true: непусто только пока эта конкретная задача реально держит гейт LM
-     * Studio, не просто ждёт очередь (см. class doc ActiveJobItem.LiveText). */
-    enrichmentLiveText: string | null;
     /** См. ActiveJobItem.queueAhead — позиция в общей очереди к LLM, не только конвейера обогащения показателей. */
     enrichmentQueueAhead: number;
     /** Обогащение остановилось из-за недоступного ИИ и продолжится само, когда он вернётся. */

@@ -46,7 +46,7 @@ public class MedicationSummarizerTests
     [Fact]
     public async Task EmptyUsedSourceIndexes_Rejects_EvenIfFieldsArePopulated()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new
             {
                 internationalName = "Ибупрофен",
@@ -67,7 +67,7 @@ public class MedicationSummarizerTests
     [Fact]
     public async Task AllFieldsEmpty_Rejects_EvenWithSourceIndex()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new
             {
                 internationalName = (string?)null,
@@ -88,7 +88,7 @@ public class MedicationSummarizerTests
     [Fact]
     public async Task ModelCallFails_PropagatesError()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен."));
 
         var result = await _sut.SummarizeAsync("Ибупрофен", OneTrustedSnippet);
@@ -100,7 +100,7 @@ public class MedicationSummarizerTests
     [Fact]
     public async Task ValidResponse_ReturnsSummaryWithMappedFields()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new
             {
                 internationalName = "Ибупрофен",
@@ -125,7 +125,7 @@ public class MedicationSummarizerTests
     [Fact]
     public async Task ValidResponse_MapsUsageField()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new
             {
                 internationalName = "Ибупрофен",
@@ -151,7 +151,7 @@ public class MedicationSummarizerTests
     [Fact]
     public async Task ValidResponse_MapsSimplePurposeField()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, Payload(new
             {
                 internationalName = "Ибупрофен",

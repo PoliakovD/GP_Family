@@ -277,9 +277,9 @@ public class GuardConfidenceTests
         var payload = fields.ToDictionary(f => f.Key, f => JsonSerializer.SerializeToElement(f.Value));
         _client.ExtractJsonAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<(byte[], string)>>(), Arg.Any<CancellationToken>(),
-                Arg.Any<bool>(), Arg.Any<bool>())
+                Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
@@ -343,7 +343,7 @@ public class SummarizerConfidenceTests
     private void Respond(params (string Key, object? Value)[] fields)
     {
         var payload = fields.ToDictionary(f => f.Key, f => JsonSerializer.SerializeToElement(f.Value));
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 

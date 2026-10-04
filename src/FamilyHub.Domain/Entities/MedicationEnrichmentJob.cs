@@ -51,10 +51,6 @@ public class MedicationEnrichmentJob : IReviewableEnrichmentJob
     /// <summary>Строка справочника, которой завершилась задача (справочно, не FK — kb не ссылается наружу и внутрь).</summary>
     public Guid? KbId { get; set; }
 
-    /// <summary>См. MedicalDocumentExtractionJob.CurrentThought — тот же смысл, тот же писатель
-    /// (LlmThinkingReportService).</summary>
-    public string? CurrentThought { get; set; }
-
     public DateTime CreatedAt { get; set; }
 
     public DateTime? StartedAt { get; set; }

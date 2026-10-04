@@ -65,7 +65,7 @@ describe('record UI components', () => {
 
     const partial: ExtractionStatusResponse = {
       status: ExtractionJobStatus.Completed, stage: ExtractionStage.Summarizing, indicatorCount: 3, error: 'часть не прочитана',
-      totalFiles: 1, processedFiles: 1, createdAt: '', completedAt: null, queuePosition: 0, currentThought: null, waitingForAi: false,
+      totalFiles: 1, processedFiles: 1, createdAt: '', completedAt: null, queuePosition: 0, waitingForAi: false,
     };
     fixture.componentRef.setInput('status', partial);
     fixture.detectChanges();

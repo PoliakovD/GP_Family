@@ -77,13 +77,6 @@ public class MedicalDocumentExtractionProcessor(
             return;
         }
 
-        // Ambient-контекст для живого потока "мыслей" (план) — на весь остаток метода: любой
-        // вложенный вызов LmStudioJsonClient.ExtractJsonAsync ниже (напрямую или через
-        // LmStudioMedicalDocumentExtractor/SpecimenResolver/AnalysisTitleGenerator/
-        // AnalyteSubjectResolver/OcrNameCorrector/PatientReferenceCalculator/LabSummarizer)
-        // подхватит его сам, без передачи через сигнатуры этих методов — см. LmStudioThinkingContext.
-        using var _ = LmStudioThinkingContext.Begin(LlmJobKind.Extraction, job.Id);
-
         job.Attempts++;
         job.Status = EnrichmentJobStatus.Running;
         job.Stage = ExtractionStage.Decoding;
@@ -233,7 +226,6 @@ public class MedicalDocumentExtractionProcessor(
             job.Attempts = Math.Max(0, job.Attempts - 1);
             job.ProcessedFiles = 0;
             job.Error = null;
-            job.CurrentThought = null;
             await db.SaveChangesAsync(ct);
             logger.LogWarning(ex, "MedicalDocumentExtractionJob {JobId}: ИИ недоступен — задача ждёт его в очереди.", job.Id);
             return;

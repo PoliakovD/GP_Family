@@ -35,7 +35,7 @@ public class SpecimenResolverTests : SqliteTestBase
     private static DocumentContent TextContent(string text) => DocumentContent.FromText(text);
 
     private void SetUpModelResponse(object payload) =>
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(
                 true, JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(JsonSerializer.Serialize(payload)), null));
 
@@ -43,7 +43,7 @@ public class SpecimenResolverTests : SqliteTestBase
     [Fact]
     public async Task ResolveAsync_TransientFailure_Throws()
     {
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
 
         var act = () => _sut.ResolveAsync(TextContent("текст бланка"));

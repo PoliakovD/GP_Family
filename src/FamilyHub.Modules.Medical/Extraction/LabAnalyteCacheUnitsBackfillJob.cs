@@ -62,7 +62,7 @@ public class LabAnalyteCacheUnitsBackfillJob(
             var text = BuildSnippetText(snippets);
             var result = await client.ExtractJsonAsync(
                 await promptProvider.GetAsync("analysis.cache-units", Prompt, ct),
-                $"Показатель: {cache.DisplayName ?? cache.NormalizedName}\n\n{text}", ct, suppressThinking: true, shortTimeout: true);
+                $"Показатель: {cache.DisplayName ?? cache.NormalizedName}\n\n{text}", ct, shortTimeout: true);
             if (!result.Success || result.Payload is null)
             {
                 if (result.IsTransient) { unavailable = new LmStudioUnavailableException(result.Error ?? "ИИ недоступен."); break; }

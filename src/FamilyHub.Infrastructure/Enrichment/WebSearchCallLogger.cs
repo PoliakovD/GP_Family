@@ -24,8 +24,7 @@ public record WebSearchCallLogEntry(
 /// до того как процессор дойдёт до собственного финального SaveChangesAsync (а на пути между
 /// записью лога и тем финалом ещё может случиться отказ гейта/суммаризатора).
 ///
-/// Запись обёрнута в try/catch с логированием — аудит никогда не должен ронять сам поиск (тот же
-/// принцип, что у LlmThinkingReportService).
+/// Запись обёрнута в try/catch с логированием — аудит никогда не должен ронять сам поиск.
 /// </summary>
 public class WebSearchCallLogger(IServiceScopeFactory scopeFactory, ILogger<WebSearchCallLogger> logger)
 {

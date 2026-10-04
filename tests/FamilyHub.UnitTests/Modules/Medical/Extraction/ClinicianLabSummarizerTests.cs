@@ -35,7 +35,7 @@ public class ClinicianLabSummarizerTests
             ["dataQualityNote"] = JsonSerializer.SerializeToElement(dataQualityNote),
             ["usedIndicatorNames"] = JsonSerializer.SerializeToElement(usedNames),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
@@ -105,7 +105,7 @@ public class ClinicianLabSummarizerTests
     public async Task SummarizeAsync_ModelUnavailable_ReturnsTransientFailure()
     {
         var indicators = new List<LabIndicator> { Indicator("Глюкоза", "5.0", "ммоль/л", IndicatorFlag.Normal) };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(LmStudioJsonResult.Failure("Локальный сервер распознавания недоступен.", isTransient: true));
 
         var result = await _sut.SummarizeAsync(indicators, ageYears: null, sex: null);
@@ -121,7 +121,7 @@ public class ClinicianLabSummarizerTests
         // BuildUserText) — проверяем, что этот контекст реально доходит до модели.
         var indicators = new List<LabIndicator> { Indicator("Тестостерон", "3.2", "нг/мл", IndicatorFlag.Normal, RefSource.Inferred) };
         string? capturedUserText = null;
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Do<string>(t => capturedUserText = t), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Do<string>(t => capturedUserText = t), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, new Dictionary<string, JsonElement>
             {
                 ["overview"] = JsonSerializer.SerializeToElement("В норме."),

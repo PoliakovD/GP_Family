@@ -63,7 +63,7 @@ public class LmStudioMedicalDocumentExtractorTests
             ["indicators"] = JsonSerializer.SerializeToElement(
                 indicators.Select(i => new { name = i.Name, value = i.Value }).ToArray()),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
     }
 
@@ -151,7 +151,7 @@ public class LmStudioMedicalDocumentExtractorTests
             ["indicators"] = JsonSerializer.SerializeToElement(new[] { new { name = "Гемоглобин", value = "118" } }),
             ["doctor"] = JsonSerializer.SerializeToElement("Петрова И.И."),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
@@ -172,7 +172,7 @@ public class LmStudioMedicalDocumentExtractorTests
                 new { name = "Парацетамол", dosageInstructions = "по 1 таблетке 3 раза в день" },
             }),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.DoctorVisit);
@@ -250,7 +250,7 @@ public class LmStudioMedicalDocumentExtractorTests
             "Гемоглобин | 118 | г/л | 130 - 160",
             "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1");
         SetUpTextChunk(text);
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(ci => RowEchoResult(ci.ArgAt<string>(1)));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
@@ -276,7 +276,7 @@ public class LmStudioMedicalDocumentExtractorTests
         // тот же Substitute на весь тест, см. конструктор) — считаем только вызовы С реальными
         // строками-кандидатами ("[R..] ..."), чтобы не путать их с побочными вызовами.
         var rowBatchCallCount = 0;
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(ci =>
             {
                 var userText = ci.ArgAt<string>(1);
@@ -314,7 +314,7 @@ public class LmStudioMedicalDocumentExtractorTests
                 new { rowId = "R1", name = "Гемоглобин", value = "999" },
             }),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
@@ -342,7 +342,7 @@ public class LmStudioMedicalDocumentExtractorTests
                 new { rowId = "R2", name = "Гемоглобин", value = "17.3" },
             }),
         };
-        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>(), Arg.Any<bool>())
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
             .Returns(new LmStudioJsonResult(true, payload, null));
 
         var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
