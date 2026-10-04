@@ -13,7 +13,9 @@ test('настройки: аккаунт, безопасность, оповещ
 
   await page.getByRole('link', { name: 'Оповещения' }).first().click();
   await expect(page).toHaveURL(/settings\/notifications/);
-  await expect(page.getByText(/Push-уведомления выключены/)).toBeVisible();
+  // Термин «push» убран из интерфейса — «уведомления на этом устройстве».
+  await expect(page.getByText(/Уведомления на этом устройстве выключены/)).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Пора принять лекарство: на устройство' })).toBeChecked();
 
   await page.getByRole('link', { name: 'Данные и приватность' }).first().click();
   await expect(page).toHaveURL(/settings\/data/);

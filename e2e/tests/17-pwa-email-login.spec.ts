@@ -18,7 +18,7 @@ test('регистрация email+паролем: код с почты, вхо�
   await page.goto('/login');
   // Баннер cookie перекрывает форму (fixed-позиционирование) — снять сразу, иначе поздние клики
   // по кнопкам формы (например «Отправить код на email») на него и попадут.
-  await page.getByRole('button', { name: 'Принять' }).click();
+  await page.getByRole('region', { name: 'Об использовании cookie' }).getByRole('button', { name: 'Понятно' }).click();
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
 
   await page.locator('#reg-email').fill(email);

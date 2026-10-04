@@ -30,6 +30,7 @@ test('мобильная навигация: таб «Профиль» и кол
   await tabs.getByRole('button', { name: 'Профиль' }).click();
   await expect(page).toHaveURL(/\/settings/);
 
-  await page.getByRole('link', { name: 'Уведомления' }).click();
+  // exact: в меню настроек есть ещё баннер «Уведомления выключены…» со ссылкой на настройки оповещений.
+  await page.getByRole('link', { name: 'Уведомления', exact: true }).click();
   await expect(page).toHaveURL(/\/notifications/);
 });

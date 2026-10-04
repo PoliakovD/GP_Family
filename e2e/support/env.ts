@@ -43,6 +43,9 @@ export const API_ENV: Record<string, string> = {
   // Все сценарии идут с одного IP (127.0.0.1) — дефолтные 10 запросов/мин на /api/auth/* дают 429 (как в
   // интеграционных тестах, FamilyHubWebFactory).
   RateLimiting__AuthPermitLimit: '100000',
+  // /api/auth/me, /refresh, /sessions — 60/мин на IP: каждое открытие страницы дёргает /me, и подряд идущие
+  // сценарии с одного 127.0.0.1 упирались в 429 (страница оставалась на «Загрузка…»).
+  RateLimiting__AuthSessionPermitLimit: '100000',
   RateLimiting__CodePermitLimit: '100000',
   RateLimiting__RedeemPermitLimit: '100000',
 };
