@@ -120,13 +120,13 @@
 
         <div class="mb-3">
           <label class="d-flex justify-content-between align-items-center">
-            <span>Синонимы (через запятую)</span>
+            <span>Синонимы (по одному на строку)</span>
             @if (d.lockedFields.includes('aliases')) {
               <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('aliases')">🔒 залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
-            <input class="input flex-fill" [ngModel]="analyteEditorAliases()" (ngModelChange)="analyteEditorAliases.set($event)" />
+            <textarea class="input flex-fill" rows="3" [ngModel]="analyteEditorAliases()" (ngModelChange)="analyteEditorAliases.set($event)"></textarea>
             <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="saveAnalyteField('aliases')">Сохранить</button>
           </div>
         </div>
@@ -268,13 +268,13 @@
 
         <div class="mb-3">
           <label class="d-flex justify-content-between align-items-center">
-            <span>Синонимы/торговые названия (через запятую)</span>
+            <span>Синонимы/торговые названия (по одному на строку)</span>
             @if (d.lockedFields.includes('aliases')) {
               <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('aliases')">🔒 залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
-            <input class="input flex-fill" [ngModel]="medicationEditorAliases()" (ngModelChange)="medicationEditorAliases.set($event)" />
+            <textarea class="input flex-fill" rows="3" [ngModel]="medicationEditorAliases()" (ngModelChange)="medicationEditorAliases.set($event)"></textarea>
             <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="saveMedicationField('aliases')">Сохранить</button>
           </div>
         </div>

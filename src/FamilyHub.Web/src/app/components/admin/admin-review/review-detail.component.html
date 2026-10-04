@@ -123,8 +123,8 @@
 
             <label class="form-label" for="rd-name">Название</label>
             <input id="rd-name" class="input mb-2" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" />
-            <label class="form-label" for="rd-aliases">Синонимы (через запятую)</label>
-            <input id="rd-aliases" class="input mb-2" [ngModel]="aliasesText()" (ngModelChange)="aliasesText.set($event)" />
+            <label class="form-label" for="rd-aliases">Синонимы (по одному на строку)</label>
+            <textarea id="rd-aliases" class="input mb-2" rows="3" [ngModel]="aliasesText()" (ngModelChange)="aliasesText.set($event)"></textarea>
 
             @if (fieldSourceRows().length > 0 || warnKeys().length > 0) {
               <div class="rd-provenance">
@@ -248,8 +248,8 @@
         }
         <label class="form-label" for="rd-name2">Название</label>
         <input id="rd-name2" class="input mb-2" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" />
-        <label class="form-label" for="rd-aliases2">Синонимы (через запятую)</label>
-        <input id="rd-aliases2" class="input mb-2" [ngModel]="aliasesText()" (ngModelChange)="aliasesText.set($event)" />
+        <label class="form-label" for="rd-aliases2">Синонимы (по одному на строку)</label>
+        <textarea id="rd-aliases2" class="input mb-2" rows="3" [ngModel]="aliasesText()" (ngModelChange)="aliasesText.set($event)"></textarea>
         @if (fieldSourceRows().length > 0 || warnKeys().length > 0) {
           <div class="rd-provenance">
             <strong>Откуда поля (предложение)</strong>

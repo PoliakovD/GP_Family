@@ -35,12 +35,14 @@ import {
   PayloadFieldDiff,
   confidenceLabel,
   diffPayload,
+  joinAliasLines,
   kbMatchExplanation,
   payloadFieldLabel,
   previewValue,
   reviewKindLabel,
   reviewOriginLabel,
   reviewStageLabel,
+  splitAliasLines,
 } from './review-helpers';
 
 /** Что произошло в карточке — родитель (Inbox) убирает задачу из очереди и открывает следующую. */
@@ -168,7 +170,7 @@ export class ReviewDetailComponent implements OnChanges {
         this.preview.set(null);
         this.editorPayload.set(entity.current.payloadJson);
         this.displayName.set(entity.current.displayName);
-        this.aliasesText.set(entity.current.aliases.join(', '));
+        this.aliasesText.set(joinAliasLines(entity.current.aliases));
       } else {
         const item = await this.api.getReviewItem(this.kind, this.id);
         this.item.set(item);
@@ -177,7 +179,7 @@ export class ReviewDetailComponent implements OnChanges {
         this.queryText.set(item.queryText);
         if (!keepNote) this.note.set(item.note ?? '');
         this.displayName.set(item.draft?.displayName ?? '');
-        this.aliasesText.set((item.draft?.aliases ?? []).join(', '));
+        this.aliasesText.set(joinAliasLines(item.draft?.aliases ?? []));
         this.editorPayload.set(item.draft?.payloadJson ?? '{}');
         this.choice.set(this.defaultChoice(item));
         this.sourcesDirty.set(false);
@@ -400,7 +402,7 @@ export class ReviewDetailComponent implements OnChanges {
   }
 
   private aliasesList(): string[] {
-    return this.aliasesText().split(',').map((a) => a.trim()).filter((a) => a.length > 0);
+    return splitAliasLines(this.aliasesText());
   }
 
   // ------------------------------------------------------------------ карточка записи вне очереди
@@ -412,7 +414,7 @@ export class ReviewDetailComponent implements OnChanges {
     if (!p) return;
     this.editorPayload.set(p.payloadJson);
     this.displayName.set(p.displayName);
-    this.aliasesText.set(p.aliases.join(', '));
+    this.aliasesText.set(joinAliasLines(p.aliases));
     this.toast.info('Предложение загружено в редактор — проверьте и сохраните.');
   }
 
