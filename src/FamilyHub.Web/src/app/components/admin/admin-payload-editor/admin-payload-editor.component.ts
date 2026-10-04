@@ -273,6 +273,13 @@ export class AdminPayloadEditorComponent implements OnChanges {
     this.changedKeys.add(key);
   }
 
+  /** Есть правки, не отправленные кнопкой «Сохранить» (для unsavedChangesGuard родителя). */
+  hasUnsavedChanges(): boolean {
+    return this.mode() === 'json'
+      ? this.jsonDraft() !== this.prettyJson(this.parsedRoot)
+      : this.changedKeys.size > 0;
+  }
+
   /** Подсветка поля без источника (см. warnKeys). */
   isWarn(key: string): boolean {
     return this.warnKeys.includes(key);

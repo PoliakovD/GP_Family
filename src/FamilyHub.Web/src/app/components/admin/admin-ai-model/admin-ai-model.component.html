@@ -31,7 +31,7 @@
 
       <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
         @if (modelAvailable()?.models?.length) {
-          <select class="input" [ngModel]="modelSelected()" (ngModelChange)="modelSelected.set($event)">
+          <select class="input" aria-label="Модель" [ngModel]="modelSelected()" (ngModelChange)="modelSelected.set($event)">
             @for (m of modelAvailable()!.models; track m) {
               <option [value]="m">{{ m }}</option>
             }
@@ -78,7 +78,7 @@
       </p>
 
       <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
-        <select class="input" [ngModel]="reasoningSelected()" (ngModelChange)="reasoningSelected.set($event)">
+        <select class="input" aria-label="Уровень размышлений" [ngModel]="reasoningSelected()" (ngModelChange)="reasoningSelected.set($event)">
           @for (o of reasoningOptions; track o.value) {
             <option [ngValue]="o.value">{{ o.label }}</option>
           }

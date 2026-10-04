@@ -13,7 +13,7 @@ import {
  *
  * Семь разделов верхнего уровня («Одобрение» — отдельная страница с внутренними вкладками); у каждого, кроме «Требует внимания», — вторая ступень вкладок
  * (`AdminSectionComponent` рисует её из `data.tabs`). Страницы со сохраняемыми формами
- * (ИИ-модель, Промпты, Учётки БД/MinIO — показанный один раз секрет) закрыты `unsavedChangesGuard`.
+ * (ИИ-модель, Промпты, Справочники, Учётки БД/MinIO — показанный один раз секрет) закрыты `unsavedChangesGuard`.
  *
  * Старые адреса (`/admin/keys`, `/admin/pipeline?tab=…` и т.д.) сохранены как редиректы — см.
  * admin-legacy-redirects.ts.
@@ -183,7 +183,9 @@ export const ADMIN_ROUTES: Routes = [
   section(
     'catalog',
     CATALOG_TABS,
-    CATALOG_TABS.map((t) => ({ path: t.path, data: { tab: t.path }, loadComponent: loadCatalog })),
+    CATALOG_TABS.map((t) => ({
+      path: t.path, data: { tab: t.path }, loadComponent: loadCatalog, canDeactivate: [unsavedChangesGuard],
+    })),
     redirectCatalog,
   ),
 

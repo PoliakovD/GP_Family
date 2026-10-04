@@ -122,6 +122,7 @@ export class AdminWebSearchComponent implements OnInit {
     this.domainsBusy.set(true);
     try {
       await this.api.deleteTrustedDomain(d.id);
+      this.toast.success(`Домен ${d.domain} удалён.`);
       await this.loadDomains();
     } catch {
       this.toast.error('Не удалось удалить домен.');

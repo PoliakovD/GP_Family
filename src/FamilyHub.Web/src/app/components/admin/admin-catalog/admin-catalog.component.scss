@@ -1,0 +1,11 @@
+// «🔒 … — снять» — кнопка, а не кликабельный span: доступна с клавиатуры и читалкам экрана.
+.tag-button {
+  border: none;
+  font: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}

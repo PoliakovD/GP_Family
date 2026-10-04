@@ -33,7 +33,7 @@ interface ConfigRow {
   imports: [FormsModule, DatePipe],
   template: `
     <div class="card">
-      <div class="card-title">Настройки confidence</div>
+      <div class="card-title">Пороги уверенности ИИ</div>
       <div class="card-body">
         <p class="text-muted mb-3">
           «Запрос» — оценка стража перед платным поиском; «Результат» — самооценка суммаризатора. Уверенность ниже порога или

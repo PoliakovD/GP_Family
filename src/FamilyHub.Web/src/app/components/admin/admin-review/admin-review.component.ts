@@ -220,6 +220,14 @@ export class AdminReviewComponent implements OnInit {
 
   // ------------------------------------------------------------------ пакетные действия
 
+  /** Enter/пробел на строке инбокса — открыть её, как кликом. Только на самой строке: пробел на чекбоксе
+   * внутри должен по-прежнему отмечать его. */
+  onRowKey(item: ReviewInboxItem, event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    this.select(item);
+  }
+
   toggleChecked(item: ReviewInboxItem, event: Event): void {
     event.stopPropagation();
     const key = inboxKey(item);

@@ -21,26 +21,28 @@
       <div class="card mb-3">
         <div class="card-title">{{ section.title }}</div>
         <div class="card-body">
-          <table class="table">
-            <thead><tr><th>Переменная</th><th>Значение</th><th>Источник</th></tr></thead>
-            <tbody>
-              @for (item of section.items; track item.key) {
-                <tr>
-                  <td><code>{{ envName(item) }}</code></td>
-                  <td>
-                    @if (item.isSecret) {
-                      <span class="tag" [class.tag-accent]="item.isSet" [class.tag-neutral]="!item.isSet">
-                        {{ item.isSet ? 'задан' : 'не задан' }}
-                      </span>
-                    } @else {
-                      {{ item.value === null || item.value === '' ? '—' : item.value }}
-                    }
-                  </td>
-                  <td><span class="tag" [class]="'tag ' + sourceTag(item.source)">{{ sourceLabel(item.source) }}</span></td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table">
+              <thead><tr><th>Переменная</th><th>Значение</th><th>Источник</th></tr></thead>
+              <tbody>
+                @for (item of section.items; track item.key) {
+                  <tr>
+                    <td><code>{{ envName(item) }}</code></td>
+                    <td>
+                      @if (item.isSecret) {
+                        <span class="tag" [class.tag-accent]="item.isSet" [class.tag-neutral]="!item.isSet">
+                          {{ item.isSet ? 'задан' : 'не задан' }}
+                        </span>
+                      } @else {
+                        {{ item.value === null || item.value === '' ? '—' : item.value }}
+                      }
+                    </td>
+                    <td><span class="tag" [class]="'tag ' + sourceTag(item.source)">{{ sourceLabel(item.source) }}</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     }

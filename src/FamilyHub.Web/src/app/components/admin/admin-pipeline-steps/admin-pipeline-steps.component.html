@@ -12,30 +12,32 @@
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
-      <table class="table">
-        <thead><tr><th>Пайплайн</th><th>Шаг</th><th>Описание</th><th>Промпт</th><th>Включён</th></tr></thead>
-        <tbody>
-          @for (s of steps(); track s.pipelineKey + s.stepKey) {
-            <tr [class.text-muted]="!s.isEnabled">
-              <td>{{ s.pipelineKey }}</td>
-              <td>{{ s.stepKey }}</td>
-              <td>{{ s.description }}</td>
-              <td>{{ s.promptKey ?? '—' }}</td>
-              <td>
-                @if (s.isMandatory) {
-                  <span class="tag tag-neutral">обязателен</span>
-                } @else {
-                  <label class="switch">
-                    <input type="checkbox" [checked]="s.isEnabled" [disabled]="busy()"
-                           [attr.aria-label]="'Шаг ' + s.stepKey" (change)="toggle(s, $event)" />
-                    <span class="switch-knob"></span>
-                  </label>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Пайплайн</th><th>Шаг</th><th>Описание</th><th>Промпт</th><th>Включён</th></tr></thead>
+          <tbody>
+            @for (s of steps(); track s.pipelineKey + s.stepKey) {
+              <tr [class.text-muted]="!s.isEnabled">
+                <td>{{ s.pipelineKey }}</td>
+                <td>{{ s.stepKey }}</td>
+                <td>{{ s.description }}</td>
+                <td>{{ s.promptKey ?? '—' }}</td>
+                <td>
+                  @if (s.isMandatory) {
+                    <span class="tag tag-neutral">обязателен</span>
+                  } @else {
+                    <label class="switch">
+                      <input type="checkbox" [checked]="s.isEnabled" [disabled]="busy()"
+                             [attr.aria-label]="'Шаг ' + s.stepKey" (change)="toggle(s, $event)" />
+                      <span class="switch-knob"></span>
+                    </label>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   </div>
 </div>

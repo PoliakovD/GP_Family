@@ -6,21 +6,23 @@
     } @else if (promptsError()) {
       <div class="alert-danger">{{ promptsError() }}</div>
     } @else {
-      <table class="table">
-        <thead><tr><th>Ключ</th><th>Описание</th><th>Активная версия</th><th></th></tr></thead>
-        <tbody>
-          @for (p of promptSlots(); track p.key) {
-            <tr [class.text-muted]="selectedPromptKey() !== p.key">
-              <td>{{ p.key }}</td>
-              <td>{{ p.description }}</td>
-              <td>{{ p.activeVersion ?? 'код (фолбэк)' }}</td>
-              <td>
-                <button type="button" class="btn btn-secondary btn-sm" (click)="selectPrompt(p.key)">Открыть</button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Ключ</th><th>Описание</th><th>Активная версия</th><th></th></tr></thead>
+          <tbody>
+            @for (p of promptSlots(); track p.key) {
+              <tr [class.text-muted]="selectedPromptKey() !== p.key">
+                <td>{{ p.key }}</td>
+                <td>{{ p.description }}</td>
+                <td>{{ p.activeVersion ?? 'код (фолбэк)' }}</td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="selectPrompt(p.key)">Открыть</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     }
   </div>
 </div>
@@ -48,32 +50,34 @@
         </div>
 
         <div class="card-title" style="font-size: 0.8235rem;">История версий</div>
-        <table class="table mb-3">
-          <thead><tr><th>Версия</th><th>Активна</th><th>Создана</th><th>Заметка</th><th></th></tr></thead>
-          <tbody>
-            @for (v of promptVersions(); track v.id) {
-              <tr [class.text-muted]="!v.isActive">
-                <td>{{ v.version }}</td>
-                <td>{{ v.isActive ? 'да' : '' }}</td>
-                <td>{{ v.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
-                <td>{{ v.note }}</td>
-                <td>
-                  @if (!v.isActive) {
-                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="editorBusy()" (click)="activateVersion(v)">
-                      Активировать (откат)
-                    </button>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="table-responsive mb-3">
+          <table class="table">
+            <thead><tr><th>Версия</th><th>Активна</th><th>Создана</th><th>Заметка</th><th></th></tr></thead>
+            <tbody>
+              @for (v of promptVersions(); track v.id) {
+                <tr [class.text-muted]="!v.isActive">
+                  <td>{{ v.version }}</td>
+                  <td>{{ v.isActive ? 'да' : '' }}</td>
+                  <td>{{ v.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+                  <td>{{ v.note }}</td>
+                  <td>
+                    @if (!v.isActive) {
+                      <button type="button" class="btn btn-secondary btn-sm" [disabled]="editorBusy()" (click)="activateVersion(v)">
+                        Активировать (откат)
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       }
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Пробный прогон (dry-run) — без записи в справочник</div>
+    <div class="card-title">Пробный прогон — без записи в справочник</div>
     <div class="card-body">
       <p class="text-muted mb-2">
         Прогоняет текущий текст из редактора выше по образцу текста ниже через локальную LLM —

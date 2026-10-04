@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, inject, signal, viewChildren } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -16,6 +16,7 @@ import {
   SpecimenSearchGroupItem,
 } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
 import { KbHistoryComponent } from '../admin-review/kb-history.component';
@@ -37,6 +38,7 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
     selector: 'app-admin-catalog',
     imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, KbHistoryComponent, VerificationBadgeComponent],
     templateUrl: './admin-catalog.component.html',
+    styleUrl: './admin-catalog.component.scss',
     // Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
     styles: [`
       .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
@@ -44,7 +46,9 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
       .seg-opt.active, .seg-opt.active:hover { color: var(--color-bg); background: var(--color-accent); }
     `]
 })
-export class AdminCatalogComponent implements OnInit {
+export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
+  private readonly payloadEditors = viewChildren(AdminPayloadEditorComponent);
+
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -68,6 +72,8 @@ export class AdminCatalogComponent implements OnInit {
   readonly analyteQuery = signal('');
   readonly analytes = signal<KbAnalyteListItem[]>([]);
   readonly analytesLoading = signal(false);
+  readonly analytesHasMore = signal(false);
+  readonly analytesError = signal<string | null>(null);
   readonly analyteDetail = signal<AdminLabAnalyteDetail | null>(null);
   readonly analyteEditorDisplayName = signal('');
   readonly analyteEditorAliases = signal('');
@@ -75,11 +81,16 @@ export class AdminCatalogComponent implements OnInit {
   /** Мердж дублей (§ ручной мердж): id строки, отмеченной как "проигравшая" — следующий клик
    * "Слить сюда" на другой строке того же списка довершает мердж. null — режим мерджа не начат. */
   readonly analyteMergeSourceId = signal<string | null>(null);
+  /** Имя «проигравшего» запоминаем при выборе: после поиска/подгрузки его строки может не быть в списке,
+   * и подтверждение показало бы GUID. */
+  private analyteMergeSourceName: string | null = null;
 
   // --- Медикаменты ---
   readonly medicationQuery = signal('');
   readonly medications = signal<KbListItem[]>([]);
   readonly medicationsLoading = signal(false);
+  readonly medicationsHasMore = signal(false);
+  readonly medicationsError = signal<string | null>(null);
   readonly medicationDetail = signal<AdminMedicationDetail | null>(null);
   readonly medicationEditorDisplayName = signal('');
   readonly medicationEditorAliases = signal('');
@@ -95,9 +106,26 @@ export class AdminCatalogComponent implements OnInit {
    * одной, см. class doc GlobalSpecimenKbService.MergeAsync на бэкенде) — та же двухкликовая
    * схема, что у показателей: отметить проигравшего, затем кликнуть "Слить сюда" на победителе. */
   readonly specimenMergeSourceId = signal<string | null>(null);
+  private specimenMergeSourceName: string | null = null;
   /** Группы поиска (ADR-0018): биоматериалы с одинаковой группой делят кэш и запрос платного поиска. */
   readonly specimenGroups = signal<Record<string, SpecimenSearchGroupItem>>({});
   readonly specimenGroupDrafts = signal<Record<string, string>>({});
+
+  /** Несохранённые правки названия/синонимов/данных справочника или черновики источников — уход со
+   * страницы спросит подтверждение (unsavedChangesGuard), закрытие вкладки — beforeunload. */
+  hasUnsavedChanges(): boolean {
+    const a = this.analyteDetail();
+    if (a && (this.analyteEditorDisplayName() !== a.displayName || this.analyteEditorAliases() !== a.aliases.join(', '))) return true;
+    const m = this.medicationDetail();
+    if (m && (this.medicationEditorDisplayName() !== m.displayName || this.medicationEditorAliases() !== m.aliases.join(', '))) return true;
+    if (this.specimens().some((sp) => this.specimenDraft(sp).trim() !== sp.displayName || this.specimenGroupChanged(sp))) return true;
+    return this.payloadEditors().some((e) => e.hasUnsavedChanges());
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) event.preventDefault();
+  }
 
   ngOnInit(): void {
     void this.loadVerificationSummary();
@@ -179,13 +207,19 @@ export class AdminCatalogComponent implements OnInit {
 
   // --- Показатели ---
 
-  async searchAnalytes(): Promise<void> {
+  /** more — следующая страница к уже показанным (раньше список молча обрывался на первых 20). */
+  async searchAnalytes(more = false): Promise<void> {
     this.analytesLoading.set(true);
+    this.analytesError.set(null);
     try {
-      const page = await this.api.searchLabAnalytes(this.analyteQuery(), 0, PAGE_SIZE, this.analyteFilter());
-      this.analytes.set(page.items);
+      const skip = more ? this.analytes().length : 0;
+      const page = await this.api.searchLabAnalytes(this.analyteQuery(), skip, PAGE_SIZE, this.analyteFilter());
+      this.analytes.set(more ? [...this.analytes(), ...page.items] : page.items);
+      this.analytesHasMore.set(page.hasMore);
     } catch {
-      this.toast.error('Не удалось загрузить список показателей.');
+      // Не «Ничего не найдено»: пустая таблица после ошибки выглядела бы как пустой справочник.
+      if (more) this.toast.error('Не удалось загрузить ещё показатели.');
+      else this.analytesError.set('Не удалось загрузить список показателей.');
     } finally {
       this.analytesLoading.set(false);
     }
@@ -259,6 +293,7 @@ export class AdminCatalogComponent implements OnInit {
     try {
       await this.api.unlockLabAnalyteField(detail.id, field);
       this.analyteDetail.set(await this.api.getLabAnalyte(detail.id));
+      this.toast.success('Замок снят — поле снова может обновить ИИ.');
     } catch {
       this.toast.error('Не удалось снять замок.');
     } finally {
@@ -286,6 +321,7 @@ export class AdminCatalogComponent implements OnInit {
     const sourceId = this.analyteMergeSourceId();
     if (sourceId === null) {
       this.analyteMergeSourceId.set(item.id);
+      this.analyteMergeSourceName = item.displayName;
       return;
     }
     if (sourceId === item.id) {
@@ -293,10 +329,10 @@ export class AdminCatalogComponent implements OnInit {
       return;
     }
 
-    const loser = this.analytes().find((a) => a.id === sourceId);
+    const loserName = this.analytes().find((a) => a.id === sourceId)?.displayName ?? this.analyteMergeSourceName;
     const ok = await this.confirm.confirm({
       title: 'Объединить показатели?',
-      message: `«${loser?.displayName ?? sourceId}» будет удалён, его показатели пользователей и синонимы переедут на «${item.displayName}».`,
+      message: `«${loserName ?? 'выбранный показатель'}» будет удалён, его показатели пользователей и синонимы переедут на «${item.displayName}».`,
       confirmText: 'Объединить',
       danger: true,
     });
@@ -331,6 +367,7 @@ export class AdminCatalogComponent implements OnInit {
     this.analyteBusy.set(true);
     try {
       await this.api.deleteLabAnalyte(detail.id);
+      this.toast.success('Показатель удалён из справочника.');
       this.analyteDetail.set(null);
       await this.searchAnalytes();
     } catch {
@@ -342,13 +379,17 @@ export class AdminCatalogComponent implements OnInit {
 
   // --- Медикаменты ---
 
-  async searchMedications(): Promise<void> {
+  async searchMedications(more = false): Promise<void> {
     this.medicationsLoading.set(true);
+    this.medicationsError.set(null);
     try {
-      const page = await this.api.searchMedications(this.medicationQuery(), 0, PAGE_SIZE, this.medicationFilter());
-      this.medications.set(page.items);
+      const skip = more ? this.medications().length : 0;
+      const page = await this.api.searchMedications(this.medicationQuery(), skip, PAGE_SIZE, this.medicationFilter());
+      this.medications.set(more ? [...this.medications(), ...page.items] : page.items);
+      this.medicationsHasMore.set(page.hasMore);
     } catch {
-      this.toast.error('Не удалось загрузить список медикаментов.');
+      if (more) this.toast.error('Не удалось загрузить ещё медикаменты.');
+      else this.medicationsError.set('Не удалось загрузить список медикаментов.');
     } finally {
       this.medicationsLoading.set(false);
     }
@@ -413,6 +454,7 @@ export class AdminCatalogComponent implements OnInit {
     try {
       await this.api.unlockMedicationField(detail.id, field);
       this.medicationDetail.set(await this.api.getMedication(detail.id));
+      this.toast.success('Замок снят — поле снова может обновить ИИ.');
     } catch {
       this.toast.error('Не удалось снять замок.');
     } finally {
@@ -435,6 +477,7 @@ export class AdminCatalogComponent implements OnInit {
     this.medicationBusy.set(true);
     try {
       await this.api.deleteMedication(detail.id);
+      this.toast.success('Медикамент удалён из справочника.');
       this.medicationDetail.set(null);
       await this.searchMedications();
     } catch {
@@ -524,6 +567,7 @@ export class AdminCatalogComponent implements OnInit {
     const sourceId = this.specimenMergeSourceId();
     if (sourceId === null) {
       this.specimenMergeSourceId.set(item.id);
+      this.specimenMergeSourceName = item.displayName;
       return;
     }
     if (sourceId === item.id) {
@@ -531,10 +575,10 @@ export class AdminCatalogComponent implements OnInit {
       return;
     }
 
-    const loser = this.specimens().find((s) => s.id === sourceId);
+    const loserName = this.specimens().find((s) => s.id === sourceId)?.displayName ?? this.specimenMergeSourceName;
     const ok = await this.confirm.confirm({
       title: 'Объединить источники?',
-      message: `«${loser?.displayName ?? sourceId}» будет удалён, все показатели/статьи справочника, использующие его, переедут на «${item.displayName}», а старое название станет синонимом.`,
+      message: `«${loserName ?? 'выбранный источник'}» будет удалён, все показатели/статьи справочника, использующие его, переедут на «${item.displayName}», а старое название станет синонимом.`,
       confirmText: 'Объединить',
       danger: true,
     });
@@ -565,6 +609,7 @@ export class AdminCatalogComponent implements OnInit {
     this.specimenBusy.set(true);
     try {
       await this.api.deleteSpecimen(s.id);
+      this.toast.success('Источник удалён.');
       await this.searchSpecimens();
     } catch {
       this.toast.error('Не удалось удалить — источник используется.');

@@ -18,13 +18,16 @@
 
       @if (analyteMergeSourceId()) {
         <p class="text-muted mb-2">
-          Проигравший выбран — кликните «Слить сюда» на строке-победителе (или «Отменить мердж», чтобы выйти из режима).
+          Проигравший выбран — кликните «Слить сюда» на строке-победителе (или «Отменить объединение», чтобы выйти из режима).
         </p>
       }
 
-      @if (analytesLoading()) {
+      @if (analytesLoading() && analytes().length === 0) {
         <p class="text-muted">Загрузка…</p>
+      } @else if (analytesError()) {
+        <div class="alert-danger">{{ analytesError() }}</div>
       } @else {
+        <div class="table-responsive">
         <table class="table">
           <thead><tr><th>Название</th><th>Биоматериал</th><th>Проверка</th><th></th><th></th></tr></thead>
           <tbody>
@@ -39,11 +42,11 @@
                 <td><button type="button" class="btn btn-secondary btn-sm" (click)="openAnalyte(a)">Открыть</button></td>
                 <td>
                   @if (analyteMergeSourceId() === a.id) {
-                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Отменить мердж</button>
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Отменить объединение</button>
                   } @else if (analyteMergeSourceId()) {
                     <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Слить сюда</button>
                   } @else {
-                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Мердж</button>
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="analyteBusy()" (click)="onAnalyteMergeClick(a)">Объединить</button>
                   }
                 </td>
               </tr>
@@ -52,6 +55,12 @@
             }
           </tbody>
         </table>
+        </div>
+        @if (analytesHasMore()) {
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="analytesLoading()" (click)="searchAnalytes(true)">
+            Показать ещё (показано {{ analytes().length }})
+          </button>
+        }
       }
     </div>
   </div>
@@ -77,7 +86,7 @@
           <label class="d-flex justify-content-between" style="align-items: center;">
             <span>Название</span>
             @if (d.lockedFields.includes('displayName')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('displayName')">🔒 залочено — снять</span>
+              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('displayName')">🔒 залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
@@ -90,7 +99,7 @@
           <label class="d-flex justify-content-between" style="align-items: center;">
             <span>Синонимы (через запятую)</span>
             @if (d.lockedFields.includes('aliases')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('aliases')">🔒 залочено — снять</span>
+              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('aliases')">🔒 залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
@@ -101,9 +110,9 @@
 
         <div class="mb-2">
           <label class="d-flex justify-content-between mb-1" style="align-items: center;">
-            <span>Payload</span>
+            <span>Данные справочника</span>
             @if (d.lockedFields.includes('payload')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('payload')">🔒 залочен целиком — снять</span>
+              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('payload')">🔒 залочен целиком — снять</button>
             }
           </label>
           @if (partialPayloadLocks(d.lockedFields); as partial) {
@@ -111,7 +120,7 @@
               <p class="text-muted mb-2">
                 Залочены отдельные поля:
                 @for (key of partial; track key) {
-                  <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockAnalyteField('payload.' + key)">🔒 {{ key }} — снять</span>
+                  <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('payload.' + key)">🔒 {{ key }} — снять</button>
                 }
               </p>
             }
@@ -152,9 +161,12 @@
         <span class="text-muted">{{ countsText(medicationCounts()) }}</span>
       </div>
 
-      @if (medicationsLoading()) {
+      @if (medicationsLoading() && medications().length === 0) {
         <p class="text-muted">Загрузка…</p>
+      } @else if (medicationsError()) {
+        <div class="alert-danger">{{ medicationsError() }}</div>
       } @else {
+        <div class="table-responsive">
         <table class="table">
           <thead><tr><th>Название</th><th>Проверка</th><th></th></tr></thead>
           <tbody>
@@ -169,6 +181,12 @@
             }
           </tbody>
         </table>
+        </div>
+        @if (medicationsHasMore()) {
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="medicationsLoading()" (click)="searchMedications(true)">
+            Показать ещё (показано {{ medications().length }})
+          </button>
+        }
       }
     </div>
   </div>
@@ -193,7 +211,7 @@
           <label class="d-flex justify-content-between" style="align-items: center;">
             <span>Название</span>
             @if (d.lockedFields.includes('displayName')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('displayName')">🔒 залочено — снять</span>
+              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('displayName')">🔒 залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
@@ -206,7 +224,7 @@
           <label class="d-flex justify-content-between" style="align-items: center;">
             <span>Синонимы/торговые названия (через запятую)</span>
             @if (d.lockedFields.includes('aliases')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('aliases')">🔒 залочено — снять</span>
+              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('aliases')">🔒 залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
@@ -217,9 +235,9 @@
 
         <div class="mb-2">
           <label class="d-flex justify-content-between mb-1" style="align-items: center;">
-            <span>Payload</span>
+            <span>Данные справочника</span>
             @if (d.lockedFields.includes('payload')) {
-              <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('payload')">🔒 залочен целиком — снять</span>
+              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('payload')">🔒 залочен целиком — снять</button>
             }
           </label>
           @if (partialPayloadLocks(d.lockedFields); as partial) {
@@ -227,7 +245,7 @@
               <p class="text-muted mb-2">
                 Залочены отдельные поля:
                 @for (key of partial; track key) {
-                  <span class="tag tag-neutral" style="cursor: pointer;" (click)="unlockMedicationField('payload.' + key)">🔒 {{ key }} — снять</span>
+                  <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('payload.' + key)">🔒 {{ key }} — снять</button>
                 }
               </p>
             }
@@ -271,20 +289,22 @@
       @if (specimenMergeSourceId()) {
         <p class="text-muted mb-2">
           Проигравший выбран — кликните «Слить сюда» на строке-победителе (например, здесь «Эякулят» ←
-          «Физические свойства эякулята»), или «Отменить мердж», чтобы выйти из режима.
+          «Физические свойства эякулята»), или «Отменить объединение», чтобы выйти из режима.
         </p>
       }
 
       @if (specimensLoading()) {
         <p class="text-muted">Загрузка…</p>
       } @else {
+        <div class="table-responsive">
         <table class="table">
           <thead><tr><th>Название</th><th>Группа поиска</th><th></th><th></th><th></th></tr></thead>
           <tbody>
             @for (s of specimens(); track s.id) {
               <tr [class.text-muted]="specimenMergeSourceId() === s.id">
                 <td>
-                  <input class="input" [ngModel]="specimenDraft(s)" (ngModelChange)="setSpecimenDraft(s.id, $event)" />
+                  <input class="input" [attr.aria-label]="'Название источника: ' + s.displayName"
+                         [ngModel]="specimenDraft(s)" (ngModelChange)="setSpecimenDraft(s.id, $event)" />
                   @if (specimenMergeSourceId() === s.id) { <span class="tag tag-neutral">проигравший</span> }
                 </td>
                 <td>
@@ -297,17 +317,19 @@
                   </div>
                 </td>
                 <td>
-                  <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="renameSpecimen(s)">
+                  <button type="button" class="btn btn-secondary btn-sm"
+                          [disabled]="specimenBusy() || !specimenDraft(s).trim() || specimenDraft(s).trim() === s.displayName"
+                          (click)="renameSpecimen(s)">
                     Переименовать
                   </button>
                 </td>
                 <td>
                   @if (specimenMergeSourceId() === s.id) {
-                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Отменить мердж</button>
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Отменить объединение</button>
                   } @else if (specimenMergeSourceId()) {
                     <button type="button" class="btn btn-primary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Слить сюда</button>
                   } @else {
-                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Мердж</button>
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="specimenBusy()" (click)="onSpecimenMergeClick(s)">Объединить</button>
                   }
                 </td>
                 <td>
@@ -321,6 +343,7 @@
             }
           </tbody>
         </table>
+        </div>
       }
     </div>
   </div>
