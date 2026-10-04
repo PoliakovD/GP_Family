@@ -179,7 +179,9 @@ var visibleRecords = _db.MedicalRecords
   доступен как декларативная альтернатива. `FallbackPolicy` требует аутентификации на любом
   непокрытом явной политикой маршруте.
 - **Согласия (152-ФЗ)** — `ConsentRequiredFilter` блокирует Medical/Birthdays-модули до принятия
-  актуальной версии политики (`/api/consents`), тексты — `Api/Legal/*.html`.
+  актуальной версии согласия на обработку ПДн (`/api/consents`). Тексты — `Api/Legal/pdn-consent.html` и
+  `privacy-policy.html` (embedded resources). Изменили любой из них → обновите комментарий «Версия» и
+  `ConsentOptions.CurrentVersion` — все пользователи подтвердят новую версию при следующем входе.
 - **Аудит** — `MedicalAccessAudit` логирует доступ к чужим медданным.
 - **Событийная шина (MassTransit 8.5.x + EF Core Outbox + Kafka Rider)** — изоляция модулей друг
   от друга через доменные события (`FamilyHub.Contracts/Events`, публикация — только через

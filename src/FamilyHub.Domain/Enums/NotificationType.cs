@@ -38,7 +38,8 @@ public enum NotificationType
     MedicationEnrichmentFailed = 9,
 
     /// <summary>Пора принять лекарство (курс приёма). Текст намеренно без названия препарата:
-    /// таблица уведомлений не шифруется, а Telegram пересылает текст дословно (ADR-0015).</summary>
+    /// таблица уведомлений не шифруется (ADR-0015). В Telegram и Web Push Title/Body не уходят вовсе —
+    /// только обобщённый текст по типу (TelegramOutboundPublisher.BuildGenericText).</summary>
     MedicationDoseDue = 10,
 
     /// <summary>Приём лекарства не отмечен вовремя — адресуется наблюдателям за курсом.</summary>
