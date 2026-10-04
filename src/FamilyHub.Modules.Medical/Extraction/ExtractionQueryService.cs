@@ -699,7 +699,7 @@ public class ExtractionQueryService(
         i.Id, i.AnalyteKey, i.DisplayName, i.Flag, i.RefSource, i.SpecimenKbId, specimenDisplayName, i.Position,
         i.ValueRaw, i.Unit, i.RefLowText, i.RefHighText, i.RefText, i.RecordDate, i.MedicalRecordId,
         i.ValueNumericText, i.KbAnalyteId, i.RawDisplayName, enrichmentPending, enrichmentQueueAhead,
-        enrichmentWaitingForAi);
+        enrichmentWaitingForAi, i.PanelLabel);
 
     private static double? ParseNumeric(string? value)
     {

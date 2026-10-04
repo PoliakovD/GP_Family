@@ -91,7 +91,8 @@ public class LmStudioMedicalDocumentExtractor(
               "refLow": 130,
               "refHigh": 160,
               "refText": "референсный диапазон текстом или null — заполняй ТОЛЬКО если референс НЕ раскладывается на refLow/refHigh (например, \"отрицательно\", \"1-3 в п/зр\")",
-              "refExpected": "ожидаемый НОРМАЛЬНЫЙ результат этого показателя по общемедицинским знаниям — заполняй ТОЛЬКО если в бланке референса нет вовсе (ни числом, ни текстом); если референс в бланке есть — всегда null"
+              "refExpected": "ожидаемый НОРМАЛЬНЫЙ результат этого показателя по общемедицинским знаниям — заполняй ТОЛЬКО если в бланке референса нет вовсе (ни числом, ни текстом); если референс в бланке есть — всегда null",
+              "section": "заголовок раздела бланка, под которым напечатан показатель (например, \"Лейкоцитарная формула\", \"Гормоны щитовидной железы\"), или null"
             }
           ],
           "documentDate": "дата анализа/забора материала, как указана в бланке, в формате YYYY-MM-DD, или null",
@@ -130,6 +131,10 @@ public class LmStudioMedicalDocumentExtractor(
           показателя с типичной нормой — сам диапазон текстом, "3,5-5,0"). Если референс есть в
           любом виде — "refExpected" всегда null. Не придумывай норму для показателя, в котором сам
           не уверен — лучше null, чем ошибочная подсказка.
+        - "section" — ТОЛЬКО напечатанный в бланке заголовок раздела/группы показателей, под которым
+          стоит этот показатель ("Общий анализ крови", "Лейкоцитарная формула", "Биохимия"). Это НЕ
+          биоматериал ("кровь", "моча") и НЕ название показателя. Если разделов в бланке нет или
+          заголовок не виден — null; не придумывай раздел по смыслу показателя.
         - "documentDate"/"doctor" — заполняй, только если это ДЕЙСТВИТЕЛЬНО есть во входных данных
           (обычно в шапке документа); если во входе только строки таблицы без шапки, оставь оба
           null.
@@ -372,7 +377,11 @@ public class LmStudioMedicalDocumentExtractor(
         IReadOnlyList<LabTableRow> tableRows, string analysisPrompt,
         Action<Dictionary<string, JsonElement>> captureDocumentFields, CancellationToken ct)
     {
-        var indicators = new List<ExtractedLabIndicator>();
+        // Индекс строки в исходном порядке бланка — строки повторного прохода (ниже) иначе
+        // оказались бы в конце списка, и Position/порядок «Как в бланке» (а с ним и блоки разделов
+        // бланка в UI) разъехался бы с реальным бланком.
+        var rowOrder = tableRows.Select((r, i) => (r.RowId, i)).ToDictionary(x => x.RowId, x => x.i, StringComparer.Ordinal);
+        var indicators = new List<(int Order, ExtractedLabIndicator Indicator)>();
         var hadAnySuccessfulCall = false;
         var hadAnyTransientFailure = false;
         var remaining = tableRows;
@@ -419,7 +428,13 @@ public class LmStudioMedicalDocumentExtractor(
                     var blankName = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.BlankNameWithoutValue(
                         row.Cells[row.NameCellIndex], indicator.Value);
                     var fullName = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.PreferFullBlankName(indicator.Name, blankName, MaxIndicatorNameLength);
-                    indicators.Add(indicator with { Name = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.RestoreAbbreviations(fullName, blankName) });
+                    // Раздел — из детектора (детерминированно, по самому бланку), ответ модели — только
+                    // если детектор раздела не увидел.
+                    indicators.Add((rowOrder[rowId], indicator with
+                    {
+                        Name = FamilyHub.Infrastructure.Search.LabAnalyteNameCleaner.RestoreAbbreviations(fullName, blankName),
+                        Section = row.PanelLabel ?? indicator.Section,
+                    }));
                 }
 
                 stillMissing.AddRange(batch.Where(r => !matchedInBatch.Contains(r.RowId)));
@@ -428,7 +443,8 @@ public class LmStudioMedicalDocumentExtractor(
             remaining = stillMissing;
         }
 
-        return new RowExtractionOutcome(indicators, remaining, hadAnySuccessfulCall, hadAnyTransientFailure);
+        var ordered = indicators.OrderBy(x => x.Order).Select(x => x.Indicator).ToList();
+        return new RowExtractionOutcome(ordered, remaining, hadAnySuccessfulCall, hadAnyTransientFailure);
     }
 
     private static string BuildRowBatchUserText(IReadOnlyList<LabTableRow> rows) =>
@@ -566,7 +582,8 @@ public class LmStudioMedicalDocumentExtractor(
                     RefLow: ReadDouble(item, "refLow"),
                     RefHigh: ReadDouble(item, "refHigh"),
                     RefText: ReadString(item, "refText"),
-                    RefExpected: ReadString(item, "refExpected")));
+                    RefExpected: ReadString(item, "refExpected"),
+                    Section: ReadString(item, "section")?.Trim() is { Length: > 0 } section ? section : null));
         }
     }
 

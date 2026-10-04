@@ -8,8 +8,11 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// только теперь на строго определённом наборе строк с явным id вместо целого чанка текста —
 /// детектор отвечает только на вопрос "это результат анализа или нет". NameCellIndex — в какой
 /// ячейке название показателя: 0 в обычной таблице, 1 в таблице с датой в первой колонке
-/// (протоколы медорганизаций: Дата | Показатель | Значение | Референс).</summary>
-public sealed record LabTableRow(string RowId, IReadOnlyList<string> Cells, string RawLine, int NameCellIndex = 0);
+/// (протоколы медорганизаций: Дата | Показатель | Значение | Референс). PanelLabel — заголовок
+/// раздела бланка ("Общий анализ крови", "Лейкоцитарная формула"), под которым стоит строка, как
+/// напечатан; null — разделов на бланке нет (см. Detect: currentPanel).</summary>
+public sealed record LabTableRow(
+    string RowId, IReadOnlyList<string> Cells, string RawLine, int NameCellIndex = 0, string? PanelLabel = null);
 
 /// <summary>Результат разбора одной страницы/документа: только строки-результаты идут дальше в
 /// LLM, PanelHeaderLines/NoiseLines — для диагностики (почему модель получила меньше строк, чем
@@ -65,6 +68,12 @@ public static class LabTableRowDetector
         (MinQualitativeValueLength - 1) + "," + (MaxQualitativeValueLength - 1) + "})(?:\\s?\\*)?$",
         RegexOptions.Compiled);
 
+    /// <summary>Код пункта номенклатуры услуг отдельной строкой ("1.50.", "6.10.") — шум, но заодно и
+    /// граница услуги: у Гемотест каждая заказанная услуга начинается с такого кода, поэтому он
+    /// закрывает раздел-панель предыдущей услуги ("Индекс инсулинорезистентности HOMA-IR"), чтобы
+    /// следующий одиночный показатель не унаследовал чужой заголовок (см. Detect: currentPanel).</summary>
+    private static readonly Regex NomenclatureCodePattern = new(@"^\d+\.\d+\.?\s*$", RegexOptions.Compiled);
+
     /// <summary>Строки, которые НИКОГДА не являются результатом анализа, даже если случайно прошли
     /// бы по форме "имя | что-то похожее на значение" — техническая "вода" бланка: сведения о
     /// пробе/заборе материала, методика и оборудование, дата исследования отдельной строкой, код
@@ -76,7 +85,7 @@ public static class LabTableRowDetector
         new(@"^Метод\s*:", RegexOptions.IgnoreCase | RegexOptions.Compiled),
         new(@"^Оборудование\s*:", RegexOptions.IgnoreCase | RegexOptions.Compiled),
         new(@"^Дата\s+исследования\s*:", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new(@"^\d+\.\d+\.?\s*$", RegexOptions.Compiled),
+        NomenclatureCodePattern,
         new(@"^\*", RegexOptions.Compiled),
     ];
 
@@ -116,9 +125,29 @@ public static class LabTableRowDetector
 
     private const int MaxContinuationLines = 14;
 
+    /// <summary>Заголовок раздела длиннее этого — уже не заголовок, а фраза-примечание.</summary>
+    private const int MaxPanelHeaderLength = 80;
+
+    /// <summary>Заголовок раздела — короткая именная группа; больше слов — уже предложение-примечание.</summary>
+    private const int MaxPanelHeaderWords = 10;
+
+    /// <summary>Однострочные подписи шапки документа (не разделы таблицы): "Пациент", "Пол", "Заказ №…",
+    /// "Дата рождения", "Протокол лабораторного исследования" — без этого списка подпись над блоком
+    /// сведений о пациенте/название документа стали бы "разделом" первых показателей.</summary>
+    private static readonly Regex NonPanelHeaderPattern = new(
+        @"^(?:(?:Пациент|ФИО|Ф\.\s*И\.\s*О|Пол|Возраст|Дата|Заказ|Номер|Врач|Отделение|Лаборатория|Адрес|Телефон|Тел|Страница|Бланк|Медицинская\s+организация|Протокол|Направление|Заключение)\b|№|Стр\.|Результаты\s+исследований\s*$)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Обрывок шапки колонок, перенесённый на отдельную строку узкой колонкой ("Референтный" /
+    /// "диапазон", "Референсные" / "значения") — не раздел. "Исследование"/"Показатель"/"Результат" — только
+    /// одним словом: "Исследование гормонов" уже может быть настоящим разделом.</summary>
+    private static readonly Regex ColumnHeaderFragmentPattern = new(
+        @"^(?:(?:Референ\w*|Значени\w*|Единиц\w*|Ед\.\s*изм\.?|Комментари\w*|Норма)(?:\s+\w+)?|Результат\w*|Исследовани\w*|Показател\w*|Наименовани\w*)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     /// <summary>Запись таблицы, начатая строкой с датой: название показателя переносится на
     /// несколько строк (узкая колонка), значение и референс лежат на первой.</summary>
-    private sealed class DatedRecord(string date, string firstNamePart, string value, string? reference)
+    private sealed class DatedRecord(string date, string firstNamePart, string value, string? reference, string? panelLabel)
     {
         private readonly List<string> _nameParts = [firstNamePart];
         private string _value = value;
@@ -140,7 +169,7 @@ public static class LabTableRowDetector
 
             List<string> cells = [date, name, _value];
             if (!string.IsNullOrWhiteSpace(reference)) cells.Add(reference);
-            return new LabTableRow($"R{rowNumber}", cells, string.Join(" | ", cells), NameCellIndex: 1);
+            return new LabTableRow($"R{rowNumber}", cells, string.Join(" | ", cells), NameCellIndex: 1, PanelLabel: panelLabel);
         }
     }
 
@@ -155,6 +184,11 @@ public static class LabTableRowDetector
         // («MCH (ср. содер. Hb в» / «эр.)»), он приклеивается к этой строке, а не теряется.
         var lastWasRow = false;
         DatedRecord? open = null;
+        // Заголовок раздела, под которым идут следующие строки-результаты. Задаётся однострочной
+        // строкой-заголовком (см. IsPanelHeader) — и до шапки колонок (у Гемотест название раздела
+        // напечатано НАД строкой "Исследование | Результат | …"), и внутри таблицы. Маркер страницы и
+        // повтор шапки колонок на новой странице его НЕ сбрасывают — таблица раздела продолжается.
+        string? currentPanel = null;
 
         void Flush()
         {
@@ -197,6 +231,7 @@ public static class LabTableRowDetector
             {
                 Flush();
                 inTable = false;
+                currentPanel = null;
                 noiseLines++;
                 continue;
             }
@@ -204,7 +239,7 @@ public static class LabTableRowDetector
             if (inTable && cells.Length >= 3 && DateStartPattern.IsMatch(cells[0]))
             {
                 Flush();
-                open = new DatedRecord(cells[0], cells[1], cells[2], cells.Length >= 4 ? cells[3] : null);
+                open = new DatedRecord(cells[0], cells[1], cells[2], cells.Length >= 4 ? cells[3] : null, currentPanel);
                 continue;
             }
 
@@ -216,6 +251,7 @@ public static class LabTableRowDetector
 
             if (NoiseLinePrefixes.Any(pattern => pattern.IsMatch(cells[0])))
             {
+                if (NomenclatureCodePattern.IsMatch(cells[0])) currentPanel = null;
                 noiseLines++;
                 continue;
             }
@@ -238,7 +274,7 @@ public static class LabTableRowDetector
                 cells[0].Length is > 0 and <= MaxNameLength && ValueCellPattern.IsMatch(cells[1]) &&
                 LabUnitNormalizer.Canonicalize(cells[1]) is null)
             {
-                rows.Add(new LabTableRow($"R{rows.Count + 1}", cells, line));
+                rows.Add(new LabTableRow($"R{rows.Count + 1}", cells, line, PanelLabel: currentPanel));
                 lastWasRow = true;
                 continue;
             }
@@ -257,14 +293,36 @@ public static class LabTableRowDetector
             if (cells.Length == 1)
             {
                 panelHeaderLines++;
+                if (IsPanelHeader(cells[0])) currentPanel = cells[0];
                 continue;
             }
 
+            // Многоячеечная "вода" ДО таблицы — сведения о пациенте/заказе ("ФИО | Ж | 22.02.2002"):
+            // однострочная подпись над ними ("Пациент") не была заголовком раздела показателей.
+            if (!inTable) currentPanel = null;
             noiseLines++;
         }
 
         Flush();
         return new LabTableDetectionResult(rows, panelHeaderLines, noiseLines);
+    }
+
+    /// <summary>Однострочная строка — заголовок раздела показателей ("Общий анализ крови",
+    /// "ЛЕЙКОЦИТАРНАЯ ФОРМУЛА", "Гормоны щитовидной железы"), а не подпись шапки документа, не
+    /// примечание и не перенос названия: с заглавной буквы (хвосты названий — со строчной, см.
+    /// IsNameTail), без двоеточия/точки в конце ("Комментарий:"), не длиннее MaxPanelHeaderLength, не из
+    /// NonPanelHeaderPattern и не чистое число/код.</summary>
+    private static bool IsPanelHeader(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length is < 3 or > MaxPanelHeaderLength) return false;
+        if (!char.IsLetter(trimmed[0]) || !char.IsUpper(trimmed[0])) return false;
+        // Двоеточие ("Комментарий:") или точка ("Результат подтверждён.") в конце — подпись/примечание.
+        if (trimmed.EndsWith(':') || trimmed.EndsWith('.')) return false;
+        if (trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > MaxPanelHeaderWords) return false;
+        if (trimmed.Count(char.IsDigit) > trimmed.Length / 3) return false;
+        if (NonPanelHeaderPattern.IsMatch(trimmed) || ColumnHeaderFragmentPattern.IsMatch(trimmed)) return false;
+        return !NoiseLinePrefixes.Any(pattern => pattern.IsMatch(trimmed)) && !FooterStartPattern.IsMatch(trimmed);
     }
 
     /// <summary>Хвост названия: короткая строка со строчной буквы без цифр (заголовки панелей

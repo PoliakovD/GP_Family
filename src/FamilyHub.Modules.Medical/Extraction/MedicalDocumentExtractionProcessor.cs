@@ -68,6 +68,9 @@ public class MedicalDocumentExtractionProcessor(
     /// модель на конкретный файл.</summary>
     private const int MaxIndicatorsForSubjectRewrite = 5;
 
+    /// <summary>= HasMaxLength колонки LabIndicators.PanelLabel (LabIndicatorConfiguration).</summary>
+    private const int MaxPanelLabelLength = 200;
+
     public async Task RunAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await db.MedicalDocumentExtractionJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
@@ -608,6 +611,11 @@ public class MedicalDocumentExtractionProcessor(
             entity.RefHighText = effHigh?.ToString(CultureInfo.InvariantCulture);
             entity.RefText = dto.RefText;
 
+            // Раздел бланка — только отображение (см. LabIndicator.PanelLabel), в ключи не входит.
+            // Пустой раздел нового прогона НЕ затирает найденный раньше: повторное «Распознать» с
+            // фото без видимого заголовка не должно стирать раздел, распознанный по текстовому PDF.
+            if (CleanPanelLabel(dto.Section) is { } panelLabel) entity.PanelLabel = panelLabel;
+
             // Промах/неуверенный кандидат — ставим показатель в очередь обогащения справочника.
             // ПО БАЗОВОМУ ключу (lookupKey), не по разведённому analyteKey — иначе в
             // kb.global_lab_analytes_kb ушло бы суффиксированное имя вида "... файл 2" (§4 плана).
@@ -832,6 +840,15 @@ public class MedicalDocumentExtractionProcessor(
         if (job.IsTransientFailure || ownerUserId == Guid.Empty) return;
         await publisher.PublishAsync(
             new MedicalDocumentExtractionFailedEvent(job.Id, job.MedicalRecordId, ownerUserId, isDoctorVisit, reason), ct);
+    }
+
+    /// <summary>Та же чистка, что у имени показателя (нумерация, КАПС → литературный регистр с
+    /// сохранением аббревиатур) + потолок длины колонки; пусто → null.</summary>
+    private static string? CleanPanelLabel(string? raw)
+    {
+        var cleaned = LabAnalyteNameCleaner.Clean(raw);
+        if (cleaned.Length == 0) return null;
+        return cleaned.Length > MaxPanelLabelLength ? cleaned[..MaxPanelLabelLength].TrimEnd() : cleaned;
     }
 
     private static string? TryFormatNumeric(string value)

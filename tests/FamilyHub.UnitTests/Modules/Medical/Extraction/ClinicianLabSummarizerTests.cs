@@ -133,4 +133,43 @@ public class ClinicianLabSummarizerTests
 
         capturedUserText.Should().Contain("35 лет").And.Contain("мужской пол").And.Contain("оценка ИИ");
     }
+
+    [Fact]
+    public async Task SummarizeAsync_IndicatorsWithPanels_InputGroupedUnderPanelHeadings()
+    {
+        // Раздел бланка — только структура входа модели (заголовки), в блоке порядок бланка (Position).
+        var indicators = new List<LabIndicator>
+        {
+            Indicator("Ферритин", "9", "нг/мл", IndicatorFlag.Low),
+        };
+        indicators[0].Position = 2;
+        var neu = Indicator("Нейтрофилы", "80", "%", IndicatorFlag.High);
+        neu.Position = 1;
+        neu.PanelLabel = "Лейкоцитарная формула";
+        var hgb = Indicator("Гемоглобин", "134", "г/л", IndicatorFlag.Normal);
+        hgb.Position = 0;
+        hgb.PanelLabel = "Общий анализ крови";
+        indicators.AddRange([neu, hgb]);
+        SetUpModelResponse("Ок.", [], ["Гемоглобин"]);
+
+        await _sut.SummarizeAsync(indicators, ageYears: null, sex: null);
+
+        var userText = (string)_client.ReceivedCalls().Single().GetArguments()[1]!;
+        userText.Should().ContainAll("## Общий анализ крови", "## Лейкоцитарная формула", "## Прочие показатели");
+        userText.IndexOf("## Общий анализ крови", StringComparison.Ordinal).Should()
+            .BeLessThan(userText.IndexOf("- Гемоглобин", StringComparison.Ordinal));
+        userText.IndexOf("- Нейтрофилы", StringComparison.Ordinal).Should()
+            .BeLessThan(userText.IndexOf("## Прочие показатели", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_IndicatorsWithoutPanels_InputHasNoHeadings()
+    {
+        SetUpModelResponse("Ок.", [], ["Глюкоза"]);
+
+        await _sut.SummarizeAsync([Indicator("Глюкоза", "5", "ммоль/л", IndicatorFlag.Normal)], ageYears: null, sex: null);
+
+        var userText = (string)_client.ReceivedCalls().Single().GetArguments()[1]!;
+        userText.Should().NotContain("##");
+    }
 }

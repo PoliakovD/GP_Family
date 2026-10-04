@@ -180,8 +180,20 @@ public static class DoctorReportHtmlRenderer
         sb.Append("<table class=\"grid labs\"><thead><tr><th>Показатель</th>");
         foreach (var d in labs.Dates) sb.Append("<th class=\"num\">").Append(Date(d, withYear: false)).Append("</th>");
         sb.Append("<th>Референс</th></tr></thead><tbody>");
+        // Подзаголовки разделов бланка — только если хоть у одной строки раздел есть (строки уже сгруппированы
+        // сборщиком, см. DoctorReportDataCollector.OrderByPanel).
+        var grouped = labs.Rows.Any(r => r.Panel is not null);
+        string? currentPanel = null;
+        var first = true;
         foreach (var row in labs.Rows)
         {
+            if (grouped && (first || !string.Equals(row.Panel, currentPanel, StringComparison.Ordinal)))
+            {
+                currentPanel = row.Panel;
+                sb.Append("<tr class=\"panel\"><td colspan=\"").Append(labs.Dates.Count + 2).Append("\">")
+                  .Append(E(currentPanel ?? "Прочие показатели")).Append("</td></tr>");
+            }
+            first = false;
             sb.Append("<tr><td><b>").Append(E(row.Name)).Append("</b>");
             if (!string.IsNullOrWhiteSpace(row.Unit)) sb.Append("<span class=\"muted\">, ").Append(E(row.Unit!)).Append("</span>");
             sb.Append("</td>");
@@ -206,7 +218,8 @@ public static class DoctorReportHtmlRenderer
             sb.Append("<td class=\"muted\">").Append(string.IsNullOrWhiteSpace(row.Reference) ? "—" : E(row.Reference!)).Append("</td></tr>");
         }
         sb.Append("</tbody></table>");
-        sb.Append("<div class=\"legend\">↑ выше нормы · ↓ ниже нормы · ‼ критично. Показатели с отклонениями — сверху.</div>");
+        sb.Append("<div class=\"legend\">↑ выше нормы · ↓ ниже нормы · ‼ критично. Показатели с отклонениями — сверху")
+          .Append(grouped ? " (внутри раздела)." : ".").Append("</div>");
         if (labs.OmittedCount > 0)
             Note(sb, $"Ещё {labs.OmittedCount} {Plural(labs.OmittedCount, "показатель", "показателя", "показателей")} в норме не показаны (единичные измерения).");
     }
@@ -421,6 +434,7 @@ public static class DoctorReportHtmlRenderer
         table.grid th{background:#f1eeec;text-align:left;padding:4px 6px;border:1px solid #d9d5d2;font-size:8.5pt;text-transform:uppercase;letter-spacing:.03em;color:#555}
         table.grid td{padding:4px 6px;border:1px solid #e3dfdc;vertical-align:top}
         table.grid tr{break-inside:avoid}
+        table.grid tr.panel td{background:#faf8f7;font-weight:600;font-size:9pt;color:#555;break-after:avoid}
         .num{text-align:right;white-space:nowrap}
         .hi{color:#a01c1c;font-weight:bold}.lo{color:#0a5c8a;font-weight:bold}
         """;

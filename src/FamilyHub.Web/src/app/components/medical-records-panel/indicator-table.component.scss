@@ -134,3 +134,18 @@
   line-height: 1.6;
   vertical-align: middle;
 }
+
+// Подзаголовок раздела бланка («Общий анализ крови», «Лейкоцитарная формула») в режиме «Как в бланке».
+.indicators-table .indicator-panel-row td {
+  padding-top: 12px;
+  color: var(--color-text);
+  font-weight: 700;
+  background: var(--color-neutral-100);
+}
+
+.indicator-panel-heading {
+  margin-top: 6px;
+  font-weight: 700;
+  font-size: 0.8235rem;
+  color: var(--color-text);
+}

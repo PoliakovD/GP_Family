@@ -18,7 +18,15 @@
           </tr>
         </thead>
         <tbody>
-          @for (ind of sorted(); track ind.id) {
+          @for (group of groups(); track $index) {
+          <!-- Подзаголовок раздела бланка («Лейкоцитарная формула») — только в режиме «Как в бланке»
+               и только если у записи есть разделы (см. groupIndicatorsByPanel). -->
+          @if (group.label) {
+            <tr class="indicator-panel-row">
+              <td colspan="4">{{ group.label }}</td>
+            </tr>
+          }
+          @for (ind of group.items; track ind.id) {
             <!-- 4 колонки (Показатель+норма / Значение / шкала / статус); клик по строке — панель
                  справки, где и правка/удаление. Строка подсвечена по статусу. -->
             <tr class="indicator-row" [class]="rowStatusClass(ind)" appClickable (click)="open.emit(ind)">
@@ -70,6 +78,7 @@
               <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
             </tr>
           }
+          }
           @if (creating) {
             <tr class="indicator-edit-row">
               <td colspan="4">
@@ -92,7 +101,11 @@
     <!-- Узкий экран: компактные карточки вместо таблицы (4 колонки на 390px нечитаемы). Клик
          открывает тот же показатель — на этой ширине полноэкранно. -->
     <div class="d-flex flex-column gap-2 mb-2">
-      @for (ind of sorted(); track ind.id) {
+      @for (group of groups(); track $index) {
+      @if (group.label) {
+        <div class="indicator-panel-heading">{{ group.label }}</div>
+      }
+      @for (ind of group.items; track ind.id) {
         <button type="button" class="indicator-card" [class]="rowStatusClass(ind)" (click)="open.emit(ind)">
           <div class="indicator-card-head">
             <div class="flex-fill" style="min-width:0">
@@ -133,6 +146,7 @@
           }
           <app-status-chip [flag]="ind.flag" />
         </button>
+      }
       }
     </div>
     <ng-container *ngTemplateOutlet="addIndicator" />

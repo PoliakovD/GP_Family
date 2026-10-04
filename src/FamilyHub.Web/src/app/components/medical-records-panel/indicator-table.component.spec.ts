@@ -56,6 +56,27 @@ describe('IndicatorTableComponent', () => {
     expect(opened).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
   });
 
+  it('panel subheadings appear only in «Как в бланке» mode', () => {
+    const fixture = create([
+      { ...ind('h', 'Гемоглобин', IndicatorFlag.Normal), panelLabel: 'Общий анализ крови' },
+      { ...ind('n', 'Нейтрофилы', IndicatorFlag.High), panelLabel: 'Лейкоцитарная формула' },
+    ]);
+    const headings = () => Array.from(fixture.nativeElement.querySelectorAll('tr.indicator-panel-row'))
+      .map((r) => (r as HTMLElement).textContent!.trim());
+    expect(headings()).toEqual([]);
+    fixture.componentInstance.sortMode.set('form');
+    fixture.detectChanges();
+    expect(headings()).toEqual(['Общий анализ крови', 'Лейкоцитарная формула']);
+  });
+
+  it('narrow screens show panel headings above card groups', () => {
+    const fixture = create([{ ...ind('n', 'Нейтрофилы', IndicatorFlag.High), panelLabel: 'Лейкоцитарная формула' }], false);
+    fixture.componentInstance.sortMode.set('form');
+    fixture.detectChanges();
+    expect((fixture.nativeElement.querySelector('.indicator-panel-heading') as HTMLElement).textContent!.trim())
+      .toBe('Лейкоцитарная формула');
+  });
+
   it('narrow screens get cards instead of a table', () => {
     const fixture = create([ind('a', 'Альбумин', IndicatorFlag.Normal)], false);
     expect(fixture.nativeElement.querySelector('table')).toBeNull();

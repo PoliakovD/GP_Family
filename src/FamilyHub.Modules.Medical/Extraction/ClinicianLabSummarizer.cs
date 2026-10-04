@@ -119,16 +119,20 @@ public class ClinicianLabSummarizer(ILmStudioJsonClient client, IPromptProvider 
             sb.AppendLine();
         }
 
-        foreach (var i in indicators)
+        foreach (var block in LabPanelGrouping.SplitByPanel(indicators))
         {
-            sb.Append("- ").Append(i.DisplayName).Append(": ").Append(i.ValueRaw);
-            if (!string.IsNullOrEmpty(i.Unit)) sb.Append(' ').Append(i.Unit);
-            if (!string.IsNullOrEmpty(i.RefText)) sb.Append(" (референс: ").Append(i.RefText).Append(')');
-            else if (i.RefLowText is not null || i.RefHighText is not null)
-                sb.Append(" (референс: ").Append(i.RefLowText).Append('-').Append(i.RefHighText).Append(')');
-            sb.Append(" — ").Append(FlagText(i.Flag));
-            if (i.RefSource == RefSource.Inferred) sb.Append(" [норма — оценка ИИ, не с бланка]");
-            sb.AppendLine();
+            if (block.Header is not null) sb.Append("## ").AppendLine(block.Header);
+            foreach (var i in block.Indicators)
+            {
+                sb.Append("- ").Append(i.DisplayName).Append(": ").Append(i.ValueRaw);
+                if (!string.IsNullOrEmpty(i.Unit)) sb.Append(' ').Append(i.Unit);
+                if (!string.IsNullOrEmpty(i.RefText)) sb.Append(" (референс: ").Append(i.RefText).Append(')');
+                else if (i.RefLowText is not null || i.RefHighText is not null)
+                    sb.Append(" (референс: ").Append(i.RefLowText).Append('-').Append(i.RefHighText).Append(')');
+                sb.Append(" — ").Append(FlagText(i.Flag));
+                if (i.RefSource == RefSource.Inferred) sb.Append(" [норма — оценка ИИ, не с бланка]");
+                sb.AppendLine();
+            }
         }
         return sb.ToString();
     }

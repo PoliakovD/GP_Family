@@ -51,7 +51,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
     }
 
     private void AddIndicator(MedicalRecord record, string key, string value, IndicatorFlag flag = IndicatorFlag.Normal,
-        string? unit = null, string? refLow = null, string? refHigh = null)
+        string? unit = null, string? refLow = null, string? refHigh = null, string? panel = null)
     {
         Db.LabIndicators.Add(new LabIndicator
         {
@@ -67,6 +67,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
             Unit = unit,
             RefLowText = refLow,
             RefHighText = refHigh,
+            PanelLabel = panel,
             CreatedAt = DateTime.UtcNow,
         });
         Db.SaveChanges();
@@ -152,6 +153,27 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         labs.Rows[0].Unit.Should().Be("г/л");
         labs.Rows[0].Cells.Select(c => c.Text).Should().Equal("118", "134");
         labs.OmittedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Labs_GroupedByPanel_PanelsWithDeviationsFirst_RowsWithoutPanelLast()
+    {
+        // Раздел строки — из самого свежего измерения с разделом (старое без раздела не мешает).
+        var r1 = AddRecord(_me.Id, new DateOnly(2026, 5, 10));
+        var r2 = AddRecord(_me.Id, new DateOnly(2026, 8, 10));
+        AddIndicator(r1, "гемоглобин", "130", IndicatorFlag.Normal);
+        AddIndicator(r2, "гемоглобин", "134", IndicatorFlag.Normal, panel: "Общий анализ крови");
+        AddIndicator(r2, "нейтрофилы", "80", IndicatorFlag.High, panel: "Лейкоцитарная формула");
+        AddIndicator(r2, "лимфоциты", "10", IndicatorFlag.Low, panel: "Лейкоцитарная формула");
+        AddIndicator(r2, "ферритин", "9", IndicatorFlag.Low);
+
+        var labs = (await _sut.CollectAsync(_me.Id, From, To, All, null)).Labs!;
+
+        labs.Rows.Select(r => (r.Panel, r.Name)).Should().Equal(
+            ("Лейкоцитарная формула", "лимфоциты"),
+            ("Лейкоцитарная формула", "нейтрофилы"),
+            ("Общий анализ крови", "гемоглобин"),
+            ((string?)null, "ферритин"));
     }
 
     [Fact]

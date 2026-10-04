@@ -15,6 +15,7 @@ public class LabIndicatorConfiguration : IEntityTypeConfiguration<LabIndicator>
         builder.Property(i => i.AnalyteKey).HasMaxLength(200).IsRequired();
         builder.Property(i => i.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(i => i.RawDisplayName).HasMaxLength(200);
+        builder.Property(i => i.PanelLabel).HasMaxLength(200);
         builder.Property(i => i.Flag).HasConversion<int>();
         builder.Property(i => i.RefSource).HasConversion<int>();
         builder.Property(i => i.SpecimenKbId).IsRequired();
