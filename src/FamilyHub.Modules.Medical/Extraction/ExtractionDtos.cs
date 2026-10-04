@@ -16,10 +16,13 @@ namespace FamilyHub.Modules.Medical.Extraction;
 /// результат по общемедицинским знаниям МОДЕЛИ (не то, что напечатано в бланке!) — заполняется
 /// моделью только когда в бланке референса нет вовсе (см. промпт analysis.extract); последний,
 /// наименее надёжный источник каскада (IndicatorFlagCalculator.Calculate → RefSource.Inferred),
-/// null у всех путей, кроме LLM-распознавания (ручной ввод/правка показателя его не заполняют).</summary>
+/// null у всех путей, кроме LLM-распознавания (ручной ввод/правка показателя его не заполняют).
+/// Section — заголовок раздела бланка, под которым стоит показатель ("Лейкоцитарная формула"):
+/// на текстовом пути — из LabTableRowDetector (детерминированно), на vision/чанковом — поле "section"
+/// ответа модели; дальше по конвейеру становится LabIndicator.PanelLabel (только отображение, не ключ).</summary>
 public record ExtractedLabIndicator(
     string Name, string Value, string? Unit, double? RefLow, double? RefHigh, string? RefText,
-    string? RefExpected = null);
+    string? RefExpected = null, string? Section = null);
 
 /// <summary>Покрытие строк-кандидатов таблицы результатов (см. LabTableRowDetector) итоговым
 /// списком показателей — заполняется только для текстового пути analysis-extraction, когда

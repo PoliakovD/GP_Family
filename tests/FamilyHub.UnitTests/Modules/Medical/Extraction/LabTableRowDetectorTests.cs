@@ -325,4 +325,146 @@ public class LabTableRowDetectorTests
 
         result.Rows.Select(r => r.RowId).Should().Equal("R1", "R2");
     }
+
+    [Fact]
+    public void Detect_PanelHeaders_AreAttachedToFollowingRows()
+    {
+        // Заголовок раздела над шапкой колонок (как у Гемотест) и второй раздел внутри таблицы.
+        var text = string.Join('\n',
+            "Общий анализ крови",
+            Header,
+            "Гемоглобин | 118 | г/л | 130 - 160",
+            "Лейкоциты | 6.5 | 10^9/л | 4.0 - 9.0",
+            "ЛЕЙКОЦИТАРНАЯ ФОРМУЛА",
+            "Нейтрофилы, % | 55 | % | 47 - 72",
+            "Лимфоциты, % | 30 | % | 19 - 37");
+
+        var result = LabTableRowDetector.Detect(text);
+
+        result.Rows.Select(r => r.PanelLabel).Should().Equal(
+            "Общий анализ крови", "Общий анализ крови", "ЛЕЙКОЦИТАРНАЯ ФОРМУЛА", "ЛЕЙКОЦИТАРНАЯ ФОРМУЛА");
+    }
+
+    [Fact]
+    public void Detect_PanelSurvivesPageBreakAndRepeatedHeader()
+    {
+        var text = string.Join('\n',
+            "Биохимический анализ крови",
+            Header,
+            "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1",
+            "--- стр. 2 ---",
+            Header,
+            "Креатинин | 80 | мкмоль/л | 62 - 106");
+
+        var result = LabTableRowDetector.Detect(text);
+
+        result.Rows.Select(r => r.PanelLabel).Should().AllBe("Биохимический анализ крови");
+    }
+
+    [Fact]
+    public void Detect_DocumentHeaderCaptions_AreNotPanels()
+    {
+        // "Пациент" над строкой ФИО — подпись шапки документа, не раздел; без разделов на бланке
+        // PanelLabel остаётся null (таблица как раньше).
+        var text = string.Join('\n',
+            "Пациент",
+            "Тестовна Теста Тестовична | Ж | 22.02.2002",
+            Header,
+            "Гемоглобин | 118 | г/л | 130 - 160");
+
+        var result = LabTableRowDetector.Detect(text);
+
+        result.Rows.Should().ContainSingle().Which.PanelLabel.Should().BeNull();
+    }
+
+    [Fact]
+    public void Detect_PatientCaptionWithoutStopWord_IsResetByPatientRow()
+    {
+        // Подпись шапки, которой нет в стоп-листе, всё равно не становится разделом: многоячеечная
+        // строка-шум ДО таблицы (сведения о пациенте) её сбрасывает.
+        var text = string.Join('\n',
+            "Сведения о заказе",
+            "Тестовна Теста Тестовична | Ж | 22.02.2002",
+            Header,
+            "Гемоглобин | 118 | г/л | 130 - 160");
+
+        LabTableRowDetector.Detect(text).Rows.Single().PanelLabel.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Половые гормоны")] // "Пол" в стоп-листе — только целым словом
+    [InlineData("Гормоны щитовидной железы")]
+    [InlineData("HOMA-IR")]
+    public void Detect_PanelHeaderVariants_AreRecognized(string panel)
+    {
+        var text = string.Join('\n', Header, panel, "Показатель Х | 5 | ед | 1 - 9");
+
+        LabTableRowDetector.Detect(text).Rows.Single().PanelLabel.Should().Be(panel);
+    }
+
+    [Theory]
+    [InlineData("Комментарий:")]
+    [InlineData("Результат подтверждён повторно.")]
+    [InlineData("Дата взятия биоматериала")]
+    public void Detect_CaptionsAndNotes_AreNotPanels(string line)
+    {
+        var text = string.Join('\n', Header, line, "Показатель Х | 5 | ед | 1 - 9");
+
+        LabTableRowDetector.Detect(text).Rows.Single().PanelLabel.Should().BeNull();
+    }
+
+    [Fact]
+    public void Detect_NomenclatureCode_ClosesPreviousServicePanel()
+    {
+        // Гемотест: каждая услуга начинается с кода номенклатуры — панель "HOMA-IR" не должна
+        // перейти на следующий одиночный показатель другой услуги.
+        var text = string.Join('\n',
+            Header,
+            "Индекс инсулинорезистентности HOMA-IR",
+            "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1",
+            "Инсулин | 1.2 | мкЕд/мл | 2.2 - 25",
+            "6.10.",
+            "С-реактивный белок (СРБ) | 1.01 | мг/л | < 5");
+
+        var result = LabTableRowDetector.Detect(text);
+
+        result.Rows.Select(r => r.PanelLabel).Should().Equal(
+            "Индекс инсулинорезистентности HOMA-IR", "Индекс инсулинорезистентности HOMA-IR", null);
+    }
+
+    [Fact]
+    public void Detect_TableEnd_ClosesPanel()
+    {
+        var text = string.Join('\n',
+            "Общий анализ крови",
+            Header,
+            "Гемоглобин | 118 | г/л | 130 - 160",
+            "Оказанные услуги",
+            Header,
+            "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1");
+
+        LabTableRowDetector.Detect(text).Rows.Select(r => r.PanelLabel).Should().Equal("Общий анализ крови", null);
+    }
+
+    [Fact]
+    public void Detect_DatedRecordRows_GetPanel()
+    {
+        var text = string.Join('\n',
+            "Посев на микрофлору",
+            "Дата | Показатель | Результат | Норма",
+            "09.06.2026 13:51 | Бактериальные микроорганизмы | 10^4 | < 10^3");
+
+        LabTableRowDetector.Detect(text).Rows.Single().PanelLabel.Should().Be("Посев на микрофлору");
+    }
+
+    [Fact]
+    public void Detect_DatedProtocol_SectionTitleIsPanel_ColumnFragmentsAndDocTitleAreNot()
+    {
+        // "Протокол лабораторного исследования" (название документа) и "Референтный" (обрывок шапки
+        // колонок) — не разделы; "Отдельные лабораторные тесты" — раздел.
+        var result = LabTableRowDetector.Detect(DatedProtocol);
+
+        result.Rows.Should().NotBeEmpty();
+        result.Rows.Select(r => r.PanelLabel).Should().AllBe("Отдельные лабораторные тесты");
+    }
 }

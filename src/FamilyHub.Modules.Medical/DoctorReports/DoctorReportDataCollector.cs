@@ -242,15 +242,33 @@ public class DoctorReportDataCollector(AppDbContext db)
                 ordered.Select(i => i.Unit).LastOrDefault(u => !string.IsNullOrWhiteSpace(u)),
                 Reference(latest),
                 cells,
-                hasDeviation));
+                hasDeviation,
+                ordered.LastOrDefault(i => i.PanelLabel is not null)?.PanelLabel));
         }
 
+        // Отбор в лимит — как и раньше, отклонения в приоритете; разделы бланка меняют только порядок
+        // показа уже отобранных строк.
         var shown = rows
             .OrderByDescending(r => r.HasDeviation)
             .ThenBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase)
             .Take(MaxLabRows)
             .ToList();
-        return new ReportLabTable(dates, shown, total - shown.Count);
+        return new ReportLabTable(dates, OrderByPanel(shown), total - shown.Count);
+    }
+
+    /// <summary>Строки одного раздела бланка — подряд (рендер ставит над ними подзаголовок): разделы с
+    /// отклонениями выше, затем по алфавиту, строки без раздела — в конце; внутри раздела порядок
+    /// прежний (отклонения сверху, затем по алфавиту). Без единого раздела — порядок не меняется.</summary>
+    private static List<ReportLabRow> OrderByPanel(List<ReportLabRow> rows)
+    {
+        if (!rows.Any(r => r.Panel is not null)) return rows;
+        return rows
+            .GroupBy(r => r.Panel)
+            .OrderBy(g => g.Key is null)
+            .ThenByDescending(g => g.Any(r => r.HasDeviation))
+            .ThenBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase)
+            .SelectMany(g => g)
+            .ToList();
     }
 
     private static string? Reference(LabIndicator i)

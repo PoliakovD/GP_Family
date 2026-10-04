@@ -29,6 +29,35 @@ export function sortIndicators(items: readonly IndicatorDto[], mode: IndicatorSo
   return sorted;
 }
 
+/** Подряд идущие показатели одного раздела бланка; label null — без подзаголовка. */
+export interface IndicatorGroup {
+  label: string | null;
+  items: IndicatorDto[];
+}
+
+/** Подзаголовок блока без раздела, идущего после блока с разделом (тот же текст, что в отчёте врачу). */
+export const NO_PANEL_LABEL = 'Прочие показатели';
+
+/** Разбивка на блоки по разделу бланка (panelLabel) — для режима «Как в бланке»: порядок не меняется,
+ * подряд идущие показатели одного раздела — один блок. Без единого раздела — один блок без заголовка
+ * (таблица как раньше). Блок без раздела в начале — без заголовка, после раздела — «Прочие показатели». */
+export function groupIndicatorsByPanel(items: readonly IndicatorDto[]): IndicatorGroup[] {
+  if (!items.some(i => i.panelLabel)) return [{ label: null, items: [...items] }];
+  const groups: IndicatorGroup[] = [];
+  let current: IndicatorGroup | null = null;
+  let currentPanel: string | null = null;
+  for (const item of items) {
+    const panel = item.panelLabel || null;
+    if (current === null || panel !== currentPanel) {
+      currentPanel = panel;
+      current = { label: panel ?? (groups.length === 0 ? null : NO_PANEL_LABEL), items: [] };
+      groups.push(current);
+    }
+    current.items.push(item);
+  }
+  return groups;
+}
+
 /** Подсветка строки по статусу — зелёная/красная, ровно два состояния (не градация
  * Low/High/Critical) — тот же принцип, что палочка на шкале (см. reference-scale). */
 export function rowStatusClass(ind: IndicatorDto): string {

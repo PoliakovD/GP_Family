@@ -27,7 +27,9 @@ public record ExtractionStatusResponse(
 /// EnrichmentPending — §5 плана «живой конвейер»: показатель промахнулся по справочнику
 /// при распознавании, и обогащение (LabAnalyteEnrichmentJob) ещё не завершилось — UI показывает
 /// чип «уточняем норму…» вместо того, чтобы молча остаться без нормы навсегда неотличимо от
-/// случая "справочник не смог найти" (см. ExtractionQueryService.GetIndicatorsAsync).</summary>
+/// случая "справочник не смог найти" (см. ExtractionQueryService.GetIndicatorsAsync).
+/// PanelLabel — раздел бланка (см. LabIndicator.PanelLabel): UI группирует по нему показатели в
+/// режиме «Как в бланке»; null — раздела нет.</summary>
 public record IndicatorDto(
     Guid Id, string AnalyteKey, string DisplayName, IndicatorFlag Flag, RefSource RefSource,
     Guid SpecimenKbId, string? SpecimenDisplayName, int Position,
@@ -35,7 +37,7 @@ public record IndicatorDto(
     DateOnly RecordDate, Guid MedicalRecordId,
     string? ValueNumericText = null, Guid? KbAnalyteId = null, string? RawDisplayName = null,
     bool EnrichmentPending = false, int EnrichmentQueueAhead = 0,
-    bool EnrichmentWaitingForAi = false);
+    bool EnrichmentWaitingForAi = false, string? PanelLabel = null);
 
 public record IndicatorHistoryPoint(DateOnly RecordDate, string ValueRaw, string? ValueNumericText, IndicatorFlag Flag, Guid MedicalRecordId);
 

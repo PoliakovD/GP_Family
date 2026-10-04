@@ -29,7 +29,10 @@ public sealed record ReportSubject(Guid ViewerId, Guid? UserId, Guid? DependentI
 
 public record ReportLabCell(DateOnly Date, string Text, IndicatorFlag Flag);
 
-public record ReportLabRow(string Name, string? Unit, string? Reference, IReadOnlyList<ReportLabCell> Cells, bool HasDeviation);
+/// <summary>Panel — раздел бланка самого свежего измерения с разделом (LabIndicator.PanelLabel); строки таблицы
+/// группируются по нему подзаголовками, null — раздела нет.</summary>
+public record ReportLabRow(
+    string Name, string? Unit, string? Reference, IReadOnlyList<ReportLabCell> Cells, bool HasDeviation, string? Panel = null);
 
 public record ReportLabTable(IReadOnlyList<DateOnly> Dates, IReadOnlyList<ReportLabRow> Rows, int OmittedCount);
 

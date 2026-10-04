@@ -3,7 +3,7 @@ import { IndicatorFlag, RefSource } from '../../models/types';
 import type { IndicatorDto } from '../../models/types';
 import {
   deviationFor, flagClass, indicatorReference, isCalculatedRef, isInferredRef, rowStatusClass, scaleBounds,
-  scaleValue, sortIndicators,
+  scaleValue, sortIndicators, groupIndicatorsByPanel, NO_PANEL_LABEL,
 } from './indicator-display';
 
 const ind = (over: Partial<IndicatorDto> = {}): IndicatorDto => ({
@@ -34,6 +34,31 @@ describe('sortIndicators', () => {
     const input = [c, a];
     sortIndicators(input, 'alpha');
     expect(input.map((i) => i.id)).toEqual(['c', 'a']);
+  });
+});
+
+describe('groupIndicatorsByPanel', () => {
+  it('no panels — single unlabeled group, order kept', () => {
+    const groups = groupIndicatorsByPanel([ind({ id: 'a' }), ind({ id: 'b', panelLabel: null })]);
+    expect(groups.length).toBe(1);
+    expect(groups[0].label).toBeNull();
+    expect(groups[0].items.map((i) => i.id)).toEqual(['a', 'b']);
+  });
+
+  it('consecutive indicators of one panel form a block; trailing unpaneled block is labeled', () => {
+    const groups = groupIndicatorsByPanel([
+      ind({ id: 'hgb', panelLabel: 'Общий анализ крови' }),
+      ind({ id: 'wbc', panelLabel: 'Общий анализ крови' }),
+      ind({ id: 'neu', panelLabel: 'Лейкоцитарная формула' }),
+      ind({ id: 'fer', panelLabel: null }),
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(['Общий анализ крови', 'Лейкоцитарная формула', NO_PANEL_LABEL]);
+    expect(groups.map((g) => g.items.map((i) => i.id))).toEqual([['hgb', 'wbc'], ['neu'], ['fer']]);
+  });
+
+  it('leading unpaneled block has no heading', () => {
+    const groups = groupIndicatorsByPanel([ind({ id: 'x' }), ind({ id: 'y', panelLabel: 'Биохимия' })]);
+    expect(groups.map((g) => g.label)).toEqual([null, 'Биохимия']);
   });
 });
 

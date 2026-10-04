@@ -104,6 +104,33 @@ public class DoctorReportHtmlRendererTests
     }
 
     [Fact]
+    public void LabTable_WithPanels_RendersPanelSubheadings()
+    {
+        var d = new DateOnly(2026, 8, 10);
+        var labs = new ReportLabTable([d],
+        [
+            new ReportLabRow("Нейтрофилы", "%", null, [new ReportLabCell(d, "80", IndicatorFlag.High)], true, "Лейкоцитарная формула"),
+            new ReportLabRow("Ферритин", null, null, [new ReportLabCell(d, "9", IndicatorFlag.Low)], true),
+        ], 0);
+
+        var html = DoctorReportHtmlRenderer.Render(Model(labs: labs));
+
+        html.Should().Contain("<tr class=\"panel\"><td colspan=\"3\">Лейкоцитарная формула</td></tr>")
+            .And.Contain("<tr class=\"panel\"><td colspan=\"3\">Прочие показатели</td></tr>")
+            .And.Contain("(внутри раздела)");
+    }
+
+    [Fact]
+    public void LabTable_WithoutPanels_HasNoSubheadings()
+    {
+        var d = new DateOnly(2026, 8, 10);
+        var labs = new ReportLabTable([d],
+            [new ReportLabRow("Ферритин", null, null, [new ReportLabCell(d, "9", IndicatorFlag.Low)], true)], 0);
+
+        DoctorReportHtmlRenderer.Render(Model(labs: labs)).Should().NotContain("class=\"panel\"");
+    }
+
+    [Fact]
     public void Metrics_ShowPairedValuesAndSparkline()
     {
         var metric = new ReportMetric("blood_pressure", "Давление", "мм рт. ст.", 3,

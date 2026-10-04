@@ -10,7 +10,7 @@ import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import {
   type IndicatorSortMode, deviationFor, flagClass, indicatorLabel, indicatorReference, isCalculatedRef, isInferredRef,
-  rowStatusClass, scaleBounds, scaleValue, sortIndicators,
+  groupIndicatorsByPanel, rowStatusClass, scaleBounds, scaleValue, sortIndicators,
 } from './indicator-display';
 import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
 
@@ -42,6 +42,11 @@ export class IndicatorTableComponent {
   /** Индикаторов обычно от единиц до пары десятков — сортируем на каждый пересчёт без мемоизации. */
   readonly sortMode = signal<IndicatorSortMode>('abnormal');
   readonly sorted = computed(() => sortIndicators(this.indicators(), this.sortMode()));
+  /** Блоки по разделам бланка — только «Как в бланке»: в других режимах порядок уже не бланковый,
+   * и подзаголовки разрезали бы список случайным образом. */
+  readonly groups = computed(() => this.sortMode() === 'form'
+    ? groupIndicatorsByPanel(this.sorted())
+    : [{ label: null, items: this.sorted() }]);
 
   creating = false;
   form: UpdateIndicatorRequest = emptyIndicatorForm();

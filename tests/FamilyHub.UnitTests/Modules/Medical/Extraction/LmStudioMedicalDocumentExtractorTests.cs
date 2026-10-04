@@ -367,4 +367,76 @@ public class LmStudioMedicalDocumentExtractorTests
         result.LabIndicators!.Select(i => i.Name).Should().BeEquivalentTo(["Гемоглобин"]);
         result.RowCoverage.Should().BeNull();
     }
+
+    [Fact]
+    public async Task ExtractAsync_TableWithPanelHeaders_SectionComesFromDetector()
+    {
+        // Разделы бланка: заголовок ("Общий анализ крови") — однострочная строка, детектор проставляет
+        // его строкам ниже; модель о разделе не говорит ничего (RowEchoResult не отдаёт "section").
+        var text = string.Join('\n',
+            "Общий анализ крови",
+            "Исследование | Результат | Ед. изм. | Реф. значения",
+            "Гемоглобин | 118 | г/л | 130 - 160",
+            "Лейкоцитарная формула",
+            "Нейтрофилы | 55 | % | 47 - 72");
+        SetUpTextChunk(text);
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
+            .Returns(ci => RowEchoResult(ci.ArgAt<string>(1)));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => (i.Name, i.Section)).Should().Equal(
+            ("Гемоглобин", "Общий анализ крови"), ("Нейтрофилы", "Лейкоцитарная формула"));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_RowRecoveredOnRetryPass_KeepsBlankOrder()
+    {
+        // Строка, пропущенная моделью в первом батче и найденная повторным проходом, раньше
+        // дописывалась в конец — Position и режим «Как в бланке» (и блоки разделов) расходились с бланком.
+        var text = string.Join('\n',
+            "Исследование | Результат | Ед. изм. | Реф. значения",
+            "Гемоглобин | 118 | г/л | 130 - 160",
+            "Глюкоза | 4.41 | ммоль/л | 4.11 - 6.1",
+            "Лейкоциты | 6.5 | 10^9/л | 4.0 - 9.0");
+        SetUpTextChunk(text);
+        var rowBatchCallCount = 0;
+        _client.ExtractJsonAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<bool>())
+            .Returns(ci =>
+            {
+                var userText = ci.ArgAt<string>(1);
+                if (!RowLinePattern.IsMatch(userText)) return new LmStudioJsonResult(true, [], null);
+                rowBatchCallCount++;
+                return rowBatchCallCount == 1 ? RowEchoResult(userText, "R2") : RowEchoResult(userText);
+            });
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "text/plain", "a.txt"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => i.Name).Should().Equal("Гемоглобин", "Глюкоза", "Лейкоциты");
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ImagePath_ReadsSectionFromModelAnswer()
+    {
+        // Фото/скан: строк-кандидатов нет, раздел может дать только модель (поле "section" промпта).
+        _textExtractor.ExtractAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(DocumentContent.FromImages([new DecodedImage([1, 2, 3], "image/jpeg")]));
+        var payload = new Dictionary<string, JsonElement>
+        {
+            ["indicators"] = JsonSerializer.SerializeToElement(new object[]
+            {
+                new { name = "ТТГ", value = "2.1", section = "Гормоны щитовидной железы" },
+                new { name = "Глюкоза", value = "5.0", section = "  " },
+            }),
+        };
+        _client.ExtractJsonAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<(byte[] Bytes, string ContentType)>>(),
+                Arg.Any<CancellationToken>(), Arg.Any<bool>())
+            .Returns(new LmStudioJsonResult(true, payload, null));
+
+        var result = await _sut.ExtractAsync(new DocumentSource([1], "image/jpeg", "a.jpg"), MedicalRecordKind.Analysis);
+
+        result.LabIndicators!.Select(i => (i.Name, i.Section)).Should().Equal(
+            ("ТТГ", "Гормоны щитовидной железы"), ("Глюкоза", (string?)null));
+    }
 }
