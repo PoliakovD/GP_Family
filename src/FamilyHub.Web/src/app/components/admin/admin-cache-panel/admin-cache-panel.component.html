@@ -2,51 +2,83 @@
   <p class="text-muted">Загрузка…</p>
 } @else {
   <div class="mb-3">
-    <strong>{{ normalizedName() }}</strong>
-    @if (specimen()) { <span class="text-muted"> · {{ specimen() }}</span> }
+    <div class="d-flex flex-column gap-1 mb-2">
+      <label class="form-label mb-0" for="cache-display-name">Название</label>
+      <input id="cache-display-name" class="input" maxlength="300"
+             placeholder="как в бланке, например «СРБ»"
+             [ngModel]="displayName()" (ngModelChange)="onDisplayNameChange($event)" />
+      <span class="text-muted cache-key">
+        Ключ кэша: <code>{{ normalizedName() }}</code>
+        @if (specimen()) { · {{ specimen() }} }
+        — не редактируется: по нему задачи находят эту строку.
+      </span>
+    </div>
+
+    @if (isLabAnalyte) {
+      <div class="d-flex flex-column gap-1 mb-2">
+        <label class="form-label mb-0" for="cache-units">Единицы, для которых в выдаче есть нормы</label>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <input id="cache-units" class="input flex-fill" maxlength="200"
+                 [placeholder]="unitsUndetermined() ? 'не определены' : 'единиц нет'"
+                 [ngModel]="unitsText()" (ngModelChange)="onUnitsChange($event)" />
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="unitsUndetermined()"
+                  (click)="resetUnitsToUndetermined()">
+            Сбросить — определить заново
+          </button>
+        </div>
+        <span class="text-muted">
+          Через «;» или «,», например «г/л; ммоль/л». Пустое поле — «проверено, единиц нет».
+          @if (unitsUndetermined()) {
+            Сейчас не определены — их разметит фоновая задача «Пересборки → Определить единицы в кэше».
+          }
+          Показатель с единицей из списка берёт нормы из этого кэша без платного поиска.
+        </span>
+      </div>
+    }
+
     <p class="text-muted mb-2">
       Обновлён {{ lastUpdatedAt() | date: 'dd.MM.yyyy HH:mm' }} · можно обновить с
       {{ canBeUpdatedAfter() | date: 'dd.MM.yyyy' }}
     </p>
-    <div class="d-flex gap-2" style="align-items: center;">
-      <label class="form-label mb-0">Провайдер</label>
-      <input class="input" style="max-width: 200px;" [ngModel]="provider()" (ngModelChange)="onProviderChange($event)" />
+    <div class="d-flex gap-2 align-items-center">
+      <label class="form-label mb-0" for="cache-provider">Провайдер</label>
+      <input id="cache-provider" class="input" style="max-width: 200px;" [ngModel]="provider()" (ngModelChange)="onProviderChange($event)" />
     </div>
   </div>
 
-  <div class="d-flex justify-content-between mb-2" style="align-items: center;">
-    <div class="card-title" style="font-size: 0.8235rem;">Сниппеты ({{ rows().length }})</div>
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="card-title cache-subtitle">Сниппеты ({{ rows().length }})</div>
     <button type="button" class="btn btn-secondary btn-sm" (click)="addRow()">+ Сниппет</button>
   </div>
   <p class="text-muted mb-2">
-    Чекбокс — тройной клик: не задано (решает домен) → включено вручную → выключено вручную → снова
-    не задано. Недоступен для ещё не сохранённых строк.
+    «Учитывать»: «по домену» — решает список доверенных доменов, «да»/«нет» — вручную. Меняется сразу, без
+    кнопки «Сохранить»; у ещё не сохранённого сниппета недоступно.
   </p>
 
   <div class="table-responsive mb-3">
     <table class="table">
-      <thead><tr><th></th><th>Заголовок</th><th>Ссылка</th><th>Текст</th><th></th></tr></thead>
+      <thead><tr><th>Учитывать</th><th>Заголовок</th><th>Ссылка</th><th>Текст</th><th></th></tr></thead>
       <tbody>
         @for (row of rows(); track $index) {
           <tr [class.text-muted]="!row.enabled">
             <td>
-              <input
-                type="checkbox"
-                [checked]="row.enabled"
-                [disabled]="row.originalUrl === null"
-                [title]="row.originalUrl === null
-                  ? 'сохраните сниппет, чтобы включить/выключить override'
-                  : (row.override === null
-                    ? 'по домену (' + (row.isTrustedByDomain ? 'доверен' : 'не доверен') + ')'
-                    : (row.override ? 'включён вручную' : 'выключен вручную'))"
-                (change)="cycleOverride(row)"
-              />
-              @if (row.override !== null) { <span class="tag tag-neutral">вручную</span> }
-              @if (row.originalUrl === null) { <span class="tag tag-accent-2">новый</span> }
+              <select class="input cache-override"
+                      [attr.aria-label]="'Учитывать сниппет ' + (row.title || row.url)"
+                      [disabled]="row.originalUrl === null"
+                      [ngModel]="overrideMode(row)" (ngModelChange)="setOverride(row, $event)">
+                <option value="auto">по домену ({{ row.isTrustedByDomain ? 'да' : 'нет' }})</option>
+                <option value="on">да</option>
+                <option value="off">нет</option>
+              </select>
+              <div class="d-flex gap-1 flex-wrap mt-1">
+                @if (row.originalUrl === null) { <span class="tag tag-accent-2">новый</span> }
+                @if (row.origin === 'Manual') { <span class="tag tag-accent" [title]="row.note ?? ''">ручной</span> }
+                @if (row.pinned) { <span class="tag tag-neutral">закреплён</span> }
+              </div>
             </td>
-            <td><input class="input" style="min-width: 160px;" [ngModel]="row.title" (ngModelChange)="updateRow($index, 'title', $event)" /></td>
-            <td><input class="input" style="min-width: 220px;" [ngModel]="row.url" (ngModelChange)="updateRow($index, 'url', $event)" /></td>
-            <td><textarea class="input" rows="2" style="min-width: 260px;" [ngModel]="row.text" (ngModelChange)="updateRow($index, 'text', $event)"></textarea></td>
+            <td><input class="input" style="min-width: 160px;" aria-label="Заголовок" [ngModel]="row.title" (ngModelChange)="updateRow($index, 'title', $event)" /></td>
+            <td><input class="input" style="min-width: 220px;" aria-label="Ссылка" [ngModel]="row.url" (ngModelChange)="updateRow($index, 'url', $event)" /></td>
+            <td><textarea class="input" rows="2" style="min-width: 260px;" aria-label="Текст" [ngModel]="row.text" (ngModelChange)="updateRow($index, 'text', $event)"></textarea></td>
             <td>
               <button type="button" class="btn-icon" aria-label="Удалить сниппет" (click)="removeRow($index)">
                 <i class="ph ph-trash" aria-hidden="true"></i>
@@ -60,7 +92,7 @@
     </table>
   </div>
 
-  <div class="d-flex justify-content-between" style="flex-wrap: wrap; gap: 8px;">
+  <div class="d-flex justify-content-between flex-wrap gap-2">
     <button type="button" class="btn btn-primary btn-sm" [disabled]="busy() || !dirty()" (click)="save()">
       Сохранить изменения
     </button>

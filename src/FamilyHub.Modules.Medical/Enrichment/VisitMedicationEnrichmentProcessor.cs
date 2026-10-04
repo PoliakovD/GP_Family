@@ -133,7 +133,7 @@ public class VisitMedicationEnrichmentProcessor(
                     job.ExternalSearchAt = DateTime.UtcNow;
                     job.Provider = provider.Name;
                     await db.SaveChangesAsync(ct);
-                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct, job.SourceDisplayName);
                 }
             }
 

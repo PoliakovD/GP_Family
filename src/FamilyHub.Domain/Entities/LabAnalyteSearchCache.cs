@@ -15,6 +15,11 @@ public class LabAnalyteSearchCache : ISearchCacheRow
 
     public string NormalizedName { get; set; } = string.Empty;
 
+    /// <summary>Название для людей — как в бланке/справочнике («СРБ», «АЧТВ»), а не свёрнутый ключ. Только для
+    /// отображения и поиска в админке: в ключ кэша не входит, задачи по нему строку не ищут. Ставится из
+    /// SourceDisplayName задачи при первом поиске; правка админа не перетирается.</summary>
+    public string? DisplayName { get; set; }
+
     /// <summary>«Представитель» строки — биоматериал, с которого строка создана; при общей группе поиска
     /// строкой пользуются все биоматериалы группы (ключ — SearchGroupKey), эта колонка нужна для отображения.</summary>
     public Guid SpecimenKbId { get; set; }

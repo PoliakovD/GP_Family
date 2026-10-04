@@ -60,7 +60,7 @@ public static class AdminEnrichmentEndpoints
         });
 
         group.MapGet("/search-cache", async (
-            WebSearchTopic topic, string? query, int? skip, int? take,
+            WebSearchTopic topic, string? query, int? skip, int? take, bool? unitsUndetermined,
             MedicationSearchCacheService medicationCache, LabAnalyteSearchCacheService analyteCache,
             AppDbContext db, CancellationToken ct) =>
         {
@@ -73,17 +73,18 @@ public static class AdminEnrichmentEndpoints
                 return Results.Ok(new SearchCacheListResponse(
                     rows.Select(r => new SearchCacheRowDto(
                         r.Id, r.NormalizedName, null, r.Provider, r.LastUpdatedAt, r.CanBeUpdatedAfter,
-                        CountSnippets(r.SnippetsJson))).ToList(),
+                        CountSnippets(r.SnippetsJson), r.DisplayName)).ToList(),
                     total));
             }
             else
             {
-                var (rows, total) = await analyteCache.ListAsync(query, skip2, take2, ct);
+                var (rows, total) = await analyteCache.ListAsync(query, skip2, take2, ct, unitsUndetermined == true);
                 var specimenNames = await ResolveSpecimenNamesAsync(db, rows.Select(r => r.SpecimenKbId), ct);
                 return Results.Ok(new SearchCacheListResponse(
                     rows.Select(r => new SearchCacheRowDto(
                         r.Id, r.NormalizedName, specimenNames.GetValueOrDefault(r.SpecimenKbId, r.SpecimenKbId.ToString()),
-                        r.Provider, r.LastUpdatedAt, r.CanBeUpdatedAfter, CountSnippets(r.SnippetsJson))).ToList(),
+                        r.Provider, r.LastUpdatedAt, r.CanBeUpdatedAfter, CountSnippets(r.SnippetsJson),
+                        r.DisplayName, r.Units)).ToList(),
                     total));
             }
         });
@@ -101,7 +102,7 @@ public static class AdminEnrichmentEndpoints
                 if (row is null) return Results.NotFound();
                 var cached = await medicationCache.GetCachedAsync(row.NormalizedName, ct);
                 return Results.Ok(BuildDetail(id, row.NormalizedName, null, row.Provider, row.LastUpdatedAt,
-                    row.CanBeUpdatedAfter, cached?.Snippets ?? [], cached?.Overrides, activeDomains));
+                    row.CanBeUpdatedAfter, cached?.Snippets ?? [], cached?.Overrides, activeDomains, row.DisplayName));
             }
             else
             {
@@ -112,7 +113,7 @@ public static class AdminEnrichmentEndpoints
                     .Where(s => s.Id == row.SpecimenKbId).Select(s => s.DisplayName).FirstOrDefaultAsync(ct)
                     ?? row.SpecimenKbId.ToString();
                 return Results.Ok(BuildDetail(id, row.NormalizedName, specimenName, row.Provider, row.LastUpdatedAt,
-                    row.CanBeUpdatedAfter, cached?.Snippets ?? [], cached?.Overrides, activeDomains));
+                    row.CanBeUpdatedAfter, cached?.Snippets ?? [], cached?.Overrides, activeDomains, row.DisplayName, row.Units));
             }
         });
 
@@ -151,11 +152,21 @@ public static class AdminEnrichmentEndpoints
                 if (string.IsNullOrWhiteSpace(s.Url))
                     return Results.BadRequest(new { code = "empty_url", message = "У сниппета не может быть пустая ссылка." });
 
-            var snippets = request.Snippets.Select(s => new WebSnippet(
-                s.Title, s.Url, s.Text, s.Origin ?? SnippetOrigin.Auto, s.Kind, s.Note, s.Pinned ?? false)).ToList();
+            string? units = null;
+            if (request.Topic == WebSearchTopic.LabAnalyte && request.Units is not null && !request.ResetUnits)
+            {
+                var (normalized, error) = SearchCacheUnits.Normalize(request.Units);
+                if (error is not null) return Results.BadRequest(new { code = "units_too_long", message = error });
+                units = normalized;
+            }
+
+            var existingSnippets = request.Topic == WebSearchTopic.Medication
+                ? (await medicationCache.GetByIdAsync(id, ct))?.SnippetsJson
+                : (await analyteCache.GetByIdAsync(id, ct))?.SnippetsJson;
+            var snippets = ToSnippets(request.Snippets, SearchCacheSnippets.Parse(existingSnippets));
             var updated = request.Topic == WebSearchTopic.Medication
-                ? await medicationCache.UpdateAsync(id, request.Provider, snippets, ct)
-                : await analyteCache.UpdateAsync(id, request.Provider, snippets, ct);
+                ? await medicationCache.UpdateAsync(id, request.Provider, snippets, ct, request.DisplayName)
+                : await analyteCache.UpdateAsync(id, request.Provider, snippets, ct, units, request.ResetUnits, request.DisplayName);
             return updated ? Results.NoContent() : Results.NotFound();
         });
 
@@ -172,11 +183,28 @@ public static class AdminEnrichmentEndpoints
         });
     }
 
+    /// <summary>Сниппеты из формы правки кэша. Клиент, не приславший Origin (старый редактор), не должен молча превращать
+    /// ручной или закреплённый сниппет в обычный авто: Origin/Kind/Note/Pinned берутся у сохранённого сниппета с тем же URL.</summary>
+    public static List<WebSnippet> ToSnippets(IReadOnlyList<SearchCacheSnippetInput> input, IReadOnlyList<WebSnippet> stored)
+    {
+        var storedByUrl = stored
+            .GroupBy(s => s.Url, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        return input.Select(s =>
+        {
+            var prev = s.Origin is null ? storedByUrl.GetValueOrDefault(s.Url) : null;
+            return new WebSnippet(
+                s.Title, s.Url, s.Text, s.Origin ?? prev?.Origin ?? SnippetOrigin.Auto,
+                s.Kind ?? prev?.Kind, s.Note ?? prev?.Note, s.Pinned ?? prev?.Pinned ?? false);
+        }).ToList();
+    }
+
     /// <summary>internal, не private — переиспользуется AdminPipelineEndpoints (карточка задачи
     /// показывает те же сниппеты с тем же вычисленным Enabled, что и эта страница кэша, одним кодом).</summary>
     internal static SearchCacheDetailDto BuildDetail(
         Guid id, string normalizedName, string? specimen, string provider, DateTime lastUpdatedAt, DateTime canBeUpdatedAfter,
-        IReadOnlyList<WebSnippet> snippets, IReadOnlyDictionary<string, bool>? overrides, IReadOnlyList<string> activeDomains)
+        IReadOnlyList<WebSnippet> snippets, IReadOnlyDictionary<string, bool>? overrides, IReadOnlyList<string> activeDomains,
+        string? displayName = null, string? units = null)
     {
         var snippetDtos = snippets.Select(s =>
         {
@@ -189,7 +217,8 @@ public static class AdminEnrichmentEndpoints
                 s.Origin, s.Kind, s.Note, s.Pinned);
         }).ToList();
 
-        return new SearchCacheDetailDto(id, normalizedName, specimen, provider, lastUpdatedAt, canBeUpdatedAfter, snippetDtos);
+        return new SearchCacheDetailDto(
+            id, normalizedName, specimen, provider, lastUpdatedAt, canBeUpdatedAfter, snippetDtos, displayName, units);
     }
 
     /// <summary>Батч-резолв DisplayName источников (пересборка enrich-пайплайна: строки кэша

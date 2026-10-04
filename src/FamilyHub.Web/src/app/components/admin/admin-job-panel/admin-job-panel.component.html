@@ -45,6 +45,12 @@
       Найдено поиском {{ cache.lastUpdatedAt | date: 'dd.MM.yyyy' }} — то, что реально уйдёт
       суммаризатору при следующем прогоне с текущими настройками (плюс черновик ниже, ещё не применённый).
     </p>
+    @if (cache.specimen !== null) {
+      <p class="text-muted mb-2">
+        Единицы в кэше: {{ cache.units === null ? 'не определены' : (cache.units || 'нет') }}
+        @if (cache.displayName) { · название «{{ cache.displayName }}» }
+      </p>
+    }
 
     <table class="table mb-3">
       <thead><tr><th></th><th>Домен</th><th>Заголовок</th><th></th></tr></thead>

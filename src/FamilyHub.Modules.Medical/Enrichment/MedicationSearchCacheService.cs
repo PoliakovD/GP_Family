@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Search;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -69,7 +70,14 @@ public class MedicationSearchCacheService(
     {
         var filtered = db.MedicationSearchCaches.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(query))
-            filtered = filtered.Where(c => c.NormalizedName.Contains(query));
+        {
+            // И по названию для людей, и по ключу (запрос свёрнут тем же нормализатором) — см. LabAnalyteSearchCacheService.ListAsync.
+            var lowered = query.Trim().ToLower();
+            var key = MedicationNameNormalizer.Normalize(query);
+            filtered = filtered.Where(c => c.NormalizedName.Contains(lowered)
+                || (key != "" && c.NormalizedName.Contains(key))
+                || (c.DisplayName != null && c.DisplayName.ToLower().Contains(lowered)));
+        }
 
         var total = await filtered.CountAsync(ct);
         var rows = await filtered.OrderByDescending(c => c.LastUpdatedAt).Skip(skip).Take(take).ToListAsync(ct);
@@ -88,11 +96,13 @@ public class MedicationSearchCacheService(
     /// <summary>Полное редактирование строки кэша из админки — см. LabAnalyteSearchCacheService.UpdateAsync,
     /// тот же приём на другую таблицу.</summary>
     public async Task<bool> UpdateAsync(
-        Guid id, string? provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
+        Guid id, string? provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default,
+        string? displayName = null)
     {
         var cache = await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (cache is null) return false;
 
+        if (displayName is not null) cache.DisplayName = SearchCacheDisplayName.Clean(displayName);
         if (provider is not null) cache.Provider = provider;
         // Ручные сниппеты (ADR-0018), которых нет в присланном списке, остаются — старый редактор
         // кэша про них не знает; явно удалить ручной сниппет можно через очередь «Одобрение».
@@ -117,15 +127,21 @@ public class MedicationSearchCacheService(
     /// <summary>Строка кэша по ключу; если её нет — создаёт пустую «устаревшую» (CanBeUpdatedAfter = сейчас): очередь
     /// «Одобрение» (ADR-0018) позволяет админу добавить ручные сниппеты ещё ДО первого платного поиска, а платный
     /// поиск после этого по-прежнему разрешён (строка не свежая) и сохранит ручные сниппеты.</summary>
-    public async Task<MedicationSearchCache> GetOrCreateAsync(string normalizedName, CancellationToken ct = default)
+    public async Task<MedicationSearchCache> GetOrCreateAsync(
+        string normalizedName, CancellationToken ct = default, string? displayName = null)
     {
         var existing = await db.MedicationSearchCaches.FirstOrDefaultAsync(c => c.NormalizedName == normalizedName, ct);
-        if (existing is not null) return existing;
+        if (existing is not null)
+        {
+            existing.DisplayName ??= SearchCacheDisplayName.Clean(displayName);
+            return existing;
+        }
 
         var now = DateTime.UtcNow;
         var cache = new MedicationSearchCache
         {
-            Id = Guid.NewGuid(), NormalizedName = normalizedName, Provider = "manual",
+            Id = Guid.NewGuid(), NormalizedName = normalizedName, DisplayName = SearchCacheDisplayName.Clean(displayName),
+            Provider = "manual",
             LastUpdatedAt = now, CanBeUpdatedAfter = now, SnippetsJson = "[]",
         };
         db.MedicationSearchCaches.Add(cache);
@@ -149,8 +165,10 @@ public class MedicationSearchCacheService(
     /// а пустой список тоже стоит кэшировать — не имеет смысла платно спрашивать снова
     /// раньше срока то же название, если в прошлый раз ничего не нашлось).</summary>
     public async Task RecordSearchAsync(
-        string normalizedName, string provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
+        string normalizedName, string provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default,
+        string? displayName = null)
     {
+        var cleanName = SearchCacheDisplayName.Clean(displayName);
         var now = DateTime.UtcNow;
         var canBeUpdatedAfter = now.AddMonths(options.Value.MinRefreshIntervalMonths);
         var snippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
@@ -159,6 +177,7 @@ public class MedicationSearchCacheService(
         if (existing is not null)
         {
             ApplyRecord(existing, provider, now, canBeUpdatedAfter, MergeKeepingManual(existing.SnippetsJson, snippets));
+            existing.DisplayName ??= cleanName;
             await db.SaveChangesAsync(ct);
             return;
         }
@@ -167,6 +186,7 @@ public class MedicationSearchCacheService(
         {
             Id = Guid.NewGuid(),
             NormalizedName = normalizedName,
+            DisplayName = cleanName,
             Provider = provider,
             LastUpdatedAt = now,
             CanBeUpdatedAfter = canBeUpdatedAfter,
@@ -189,6 +209,7 @@ public class MedicationSearchCacheService(
 
             var existingAfterRace = await db.MedicationSearchCaches.SingleAsync(c => c.NormalizedName == normalizedName, ct);
             ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, MergeKeepingManual(existingAfterRace.SnippetsJson, snippets));
+            existingAfterRace.DisplayName ??= cleanName;
             await db.SaveChangesAsync(ct);
         }
     }

@@ -1,0 +1,19 @@
+// Ключ кэша — служебная подпись под редактируемым названием: моноширинный, чтобы не путать с названием для людей.
+.cache-key {
+  font-size: 0.8235rem;
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--color-neutral-100);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0 4px;
+  }
+}
+
+.cache-subtitle {
+  font-size: 0.8235rem;
+}
+
+.cache-override {
+  min-width: 150px;
+}

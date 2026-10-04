@@ -225,7 +225,8 @@ public class LabAnalyteEnrichmentProcessor(
                     // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
                     // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) сразу после
                     // запроса, а не после успешной записи в справочник.
-                    await searchCache.RecordSearchAsync(job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct, job.Units);
+                    await searchCache.RecordSearchAsync(
+                        job.NormalizedName, job.SpecimenKbId, provider.Name, rawSnippets, ct, job.Units, job.SourceDisplayName);
                 }
             }
 

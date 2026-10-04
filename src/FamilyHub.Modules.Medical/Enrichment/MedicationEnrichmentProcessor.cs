@@ -175,7 +175,7 @@ public class MedicationEnrichmentProcessor(
                     // Платная квота уже потрачена независимо от исхода суммаризации ниже — кэшируем
                     // ВСЕ сниппеты (не только доверенные — пересборка enrich-пайплайна) и кулдаун
                     // сразу после запроса, а не после успешной записи в справочник.
-                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct);
+                    await searchCache.RecordSearchAsync(job.NormalizedName, provider.Name, rawSnippets, ct, job.SourceDisplayName);
                 }
             }
 

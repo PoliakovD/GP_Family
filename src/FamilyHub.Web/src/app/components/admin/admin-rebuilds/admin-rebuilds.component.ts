@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { AdminApiService, KbRebuildStatus } from '../../../services/admin-api.service';
+import { RouterLink } from '@angular/router';
+import { AdminApiService, KbRebuildStatus, WebSearchTopic } from '../../../services/admin-api.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
@@ -19,10 +20,12 @@ const REBUILD_POLL_INTERVAL_MS = 2000;
  */
 @Component({
     selector: 'app-admin-rebuilds',
-    imports: [DatePipe, AdminStatusPipe],
+    imports: [DatePipe, RouterLink, AdminStatusPipe],
     templateUrl: './admin-rebuilds.component.html'
 })
 export class AdminRebuildsComponent implements OnInit, OnDestroy {
+  readonly WebSearchTopic = WebSearchTopic;
+
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);

@@ -64,9 +64,15 @@
       дальше показатель с новой единицей берёт нормы из кэша без платного запроса. Платных вызовов нет;
       фоновая задача, батчами по 20 — запускайте один раз.
     </p>
-    <button type="button" class="btn btn-secondary btn-sm" [disabled]="cacheUnitsBusy()" (click)="backfillCacheUnits()">
-      Определить единицы в кэше
-    </button>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <button type="button" class="btn btn-secondary btn-sm" [disabled]="cacheUnitsBusy()" (click)="backfillCacheUnits()">
+        Определить единицы в кэше
+      </button>
+      <a class="btn-link" routerLink="/admin/operations/search-cache"
+         [queryParams]="{ topic: WebSearchTopic.LabAnalyte, units: 'undetermined' }">
+        Строки без единиц — посмотреть и поправить вручную
+      </a>
+    </div>
   </div>
 </div>
 

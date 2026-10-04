@@ -103,24 +103,32 @@ export type WebSearchTopicValue = (typeof WebSearchTopic)[keyof typeof WebSearch
 
 export interface TrustedDomain { id: string; domain: string; rank: number; isEnabled: boolean; }
 
+/** normalizedName — ключ кэша (свёрнутый, по нему задачи находят строку; не редактируется), displayName — название
+ * для людей («СРБ»), null — не известно. units (только показатели): null — не определены, '' — проверено, единиц
+ * нет, иначе «г/л; ммоль/л». */
 export interface SearchCacheRow {
-  id: string; normalizedName: string; specimen: string | null; provider: string;
-  lastUpdatedAt: string; canBeUpdatedAfter: string; snippetCount: number;
+  id: string; normalizedName: string; displayName: string | null; specimen: string | null; provider: string;
+  lastUpdatedAt: string; canBeUpdatedAfter: string; snippetCount: number; units: string | null;
 }
 export interface SearchCacheListResponse { rows: SearchCacheRow[]; total: number; }
 
 export interface SearchCacheSnippet {
   title: string; url: string; text: string; domain: string | null;
   isTrustedByDomain: boolean; override: boolean | null; enabled: boolean;
+  /** Ручной сниппет/закрепление из «Одобрения» — при сохранении отправляются обратно как есть. */
+  origin: 'Auto' | 'Manual'; kind: string | null; note: string | null; pinned: boolean;
 }
 export interface SearchCacheDetail {
-  id: string; normalizedName: string; specimen: string | null; provider: string;
-  lastUpdatedAt: string; canBeUpdatedAfter: string; snippets: SearchCacheSnippet[];
+  id: string; normalizedName: string; displayName: string | null; specimen: string | null; provider: string;
+  lastUpdatedAt: string; canBeUpdatedAfter: string; snippets: SearchCacheSnippet[]; units: string | null;
 }
 
 /** Черновик правки сниппета — только то, что реально редактируется (без вычисленных
  * enabled/isTrustedByDomain — это read-only проекция сервера). */
-export interface SearchCacheSnippetInput { title: string; url: string; text: string; }
+export interface SearchCacheSnippetInput {
+  title: string; url: string; text: string;
+  origin?: 'Auto' | 'Manual'; kind?: string | null; note?: string | null; pinned?: boolean;
+}
 
 /** Полное редактирование строки кэша (§ CRUD кэша) — snippets заменяет список целиком: добавить =
  * включить новую запись, отредактировать = поменять поля существующей, убрать = не включить в
@@ -128,6 +136,12 @@ export interface SearchCacheSnippetInput { title: string; url: string; text: str
  * на бэкенде (бизнес-ключ, по которому задачи ищут строку). */
 export interface UpdateSearchCacheRequest {
   topic: WebSearchTopicValue; provider?: string | null; snippets: SearchCacheSnippetInput[];
+  /** null — не трогать, '' — убрать название. */
+  displayName?: string | null;
+  /** Только показатели: null — не трогать, иначе список через «;» ('' — единиц нет). */
+  units?: string | null;
+  /** Вернуть единицы в «не определено» — строку подхватит фоновая разметка. */
+  resetUnits?: boolean;
 }
 
 /** WebSearchCallOutcome (см. FamilyHub.Domain.Enums) — тот же приём числового enum'а, что
@@ -558,9 +572,10 @@ export class AdminApiService {
   reorderTrustedDomains = (topic: WebSearchTopicValue, orderedIds: string[]) =>
     this.post<void>('/api/admin/enrichment/trusted-domains/reorder', { topic, orderedIds });
 
-  getSearchCache = (topic: WebSearchTopicValue, query: string, skip: number, take: number) =>
+  getSearchCache = (topic: WebSearchTopicValue, query: string, skip: number, take: number, unitsUndetermined = false) =>
     this.get<SearchCacheListResponse>(
-      `/api/admin/enrichment/search-cache?topic=${topic}&query=${encodeURIComponent(query)}&skip=${skip}&take=${take}`);
+      `/api/admin/enrichment/search-cache?topic=${topic}&query=${encodeURIComponent(query)}&skip=${skip}&take=${take}` +
+      (unitsUndetermined ? '&unitsUndetermined=true' : ''));
 
   getSearchCacheDetail = (id: string, topic: WebSearchTopicValue) =>
     this.get<SearchCacheDetail>(`/api/admin/enrichment/search-cache/${id}?topic=${topic}`);

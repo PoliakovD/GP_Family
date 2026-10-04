@@ -2,6 +2,7 @@ using System.Text.Json;
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Search;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,24 @@ public record CachedAnalyteSearch(
         static string Key(string u) => LabUnitNormalizer.Canonicalize(u)?.Canonical ?? u.Trim().ToLowerInvariant();
         var wanted = Key(unit);
         return Units.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Any(u => Key(u) == wanted);
+    }
+}
+
+/// <summary>Текст единиц строки кэша (LabAnalyteSearchCache.Units), введённый админом: «г/л, ммоль/л;г/л» →
+/// «г/л; ммоль/л». Разделители — «;» и «,», пустые и повторы (без учёта регистра) отбрасываются.</summary>
+public static class SearchCacheUnits
+{
+    public const int MaxLength = 200;
+
+    /// <summary>Error != null — значение не помещается в колонку.</summary>
+    public static (string Value, string? Error) Normalize(string raw)
+    {
+        var units = raw.Split([';', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        var value = string.Join("; ", units);
+        return value.Length > MaxLength
+            ? (value, $"Список единиц длиннее {MaxLength} символов.")
+            : (value, null);
     }
 }
 
@@ -93,13 +112,24 @@ public class LabAnalyteSearchCacheService(
         return true;
     }
 
-    /// <summary>Постранично, с поиском по подстроке названия — для админки (EnrichmentAdminEndpoints).</summary>
+    /// <summary>Постранично, с поиском по подстроке названия — для админки (EnrichmentAdminEndpoints).
+    /// unitsUndetermined — только строки с выдачей, для которых единицы ещё не определены (Units == null).</summary>
     public async Task<(List<LabAnalyteSearchCache> Rows, int Total)> ListAsync(
-        string? query, int skip, int take, CancellationToken ct = default)
+        string? query, int skip, int take, CancellationToken ct = default, bool unitsUndetermined = false)
     {
         var filtered = db.LabAnalyteSearchCaches.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(query))
-            filtered = filtered.Where(c => c.NormalizedName.Contains(query));
+        {
+            // Ищем и по названию для людей («СРБ»), и по ключу — запрос сворачиваем тем же нормализатором, что
+            // и ключ, иначе «Adenovirus» не найдёт ключ «аденовирус».
+            var lowered = query.Trim().ToLower();
+            var key = LabAnalyteNormalizer.NormalizeAnalyteKey(query);
+            filtered = filtered.Where(c => c.NormalizedName.Contains(lowered)
+                || (key != "" && c.NormalizedName.Contains(key))
+                || (c.DisplayName != null && c.DisplayName.ToLower().Contains(lowered)));
+        }
+        if (unitsUndetermined)
+            filtered = filtered.Where(c => c.Units == null && c.SnippetsJson != null && c.SnippetsJson != "[]");
 
         var total = await filtered.CountAsync(ct);
         var rows = await filtered.OrderByDescending(c => c.LastUpdatedAt).Skip(skip).Take(take).ToListAsync(ct);
@@ -152,14 +182,20 @@ public class LabAnalyteSearchCacheService(
     /// Provider не трогается, если не передан (null — оставить как есть). Overrides,
     /// ссылающиеся на URL, которых больше нет в новом списке, вычищаются — иначе они бы
     /// молча висели в БД, ни на что не влияя (EnrichmentSnippetFilter сверяет override только
-    /// с URL реально пришедших сниппетов).</summary>
+    /// с URL реально пришедших сниппетов).
+    /// units — уже нормализованный список (SearchCacheUnits.Normalize), null — не трогать;
+    /// resetUnits — снова «не определено» (Units = null), строку подхватит LabAnalyteCacheUnitsBackfillJob.</summary>
     public async Task<bool> UpdateAsync(
-        Guid id, string? provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default)
+        Guid id, string? provider, IReadOnlyList<WebSnippet> snippets, CancellationToken ct = default,
+        string? units = null, bool resetUnits = false, string? displayName = null)
     {
         var cache = await db.LabAnalyteSearchCaches.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (cache is null) return false;
 
+        if (displayName is not null) cache.DisplayName = SearchCacheDisplayName.Clean(displayName);
         if (provider is not null) cache.Provider = provider;
+        if (resetUnits) cache.Units = null;
+        else if (units is not null) cache.Units = units;
         // Ручные сниппеты (ADR-0018), которых нет в присланном списке, остаются — старый редактор
         // кэша про них не знает; явно удалить ручной сниппет можно через очередь «Одобрение».
         var merged = SearchCacheSnippets.MergeAfterReplace(SearchCacheSnippets.Parse(cache.SnippetsJson), snippets);
@@ -197,18 +233,23 @@ public class LabAnalyteSearchCacheService(
             .ExecuteDeleteAsync(ct);
 
     /// <summary>Строка кэша по ключу; если её нет — создаёт пустую «устаревшую» (см. MedicationSearchCacheService.GetOrCreateAsync).</summary>
-    public async Task<LabAnalyteSearchCache> GetOrCreateAsync(string normalizedName, Guid specimenKbId, CancellationToken ct = default)
+    public async Task<LabAnalyteSearchCache> GetOrCreateAsync(
+        string normalizedName, Guid specimenKbId, CancellationToken ct = default, string? displayName = null)
     {
         var group = await GetSearchGroupAsync(specimenKbId, ct);
         var existing = await db.LabAnalyteSearchCaches
             .FirstOrDefaultAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
-        if (existing is not null) return existing;
+        if (existing is not null)
+        {
+            existing.DisplayName ??= SearchCacheDisplayName.Clean(displayName);
+            return existing;
+        }
 
         var now = DateTime.UtcNow;
         var cache = new LabAnalyteSearchCache
         {
-            Id = Guid.NewGuid(), NormalizedName = normalizedName, SpecimenKbId = specimenKbId,
-            SearchGroupKey = group.EffectiveKey, Provider = "manual",
+            Id = Guid.NewGuid(), NormalizedName = normalizedName, DisplayName = SearchCacheDisplayName.Clean(displayName),
+            SpecimenKbId = specimenKbId, SearchGroupKey = group.EffectiveKey, Provider = "manual",
             LastUpdatedAt = now, CanBeUpdatedAfter = now, SnippetsJson = "[]",
         };
         db.LabAnalyteSearchCaches.Add(cache);
@@ -233,8 +274,9 @@ public class LabAnalyteSearchCacheService(
     /// MedicationSearchCacheService.RecordSearchAsync (см. её doc-комментарий).</summary>
     public async Task RecordSearchAsync(
         string normalizedName, Guid specimenKbId, string provider, IReadOnlyList<WebSnippet> snippets,
-        CancellationToken ct = default, string? units = null)
+        CancellationToken ct = default, string? units = null, string? displayName = null)
     {
+        var cleanName = SearchCacheDisplayName.Clean(displayName);
         var now = DateTime.UtcNow;
         var canBeUpdatedAfter = now.AddMonths(options.Value.MinRefreshIntervalMonths);
         var snippetsJson = JsonSerializer.Serialize(snippets, JsonOptions);
@@ -246,6 +288,7 @@ public class LabAnalyteSearchCacheService(
         {
             ApplyRecord(existing, provider, now, canBeUpdatedAfter, MergeKeepingManual(existing.SnippetsJson, snippets));
             existing.Units = units;
+            existing.DisplayName ??= cleanName;
             await db.SaveChangesAsync(ct);
             return;
         }
@@ -254,6 +297,7 @@ public class LabAnalyteSearchCacheService(
         {
             Id = Guid.NewGuid(),
             NormalizedName = normalizedName,
+            DisplayName = cleanName,
             SpecimenKbId = specimenKbId,
             SearchGroupKey = group.EffectiveKey,
             Provider = provider,
@@ -281,6 +325,7 @@ public class LabAnalyteSearchCacheService(
                 .SingleAsync(c => c.NormalizedName == normalizedName && c.SearchGroupKey == group.EffectiveKey, ct);
             ApplyRecord(existingAfterRace, provider, now, canBeUpdatedAfter, MergeKeepingManual(existingAfterRace.SnippetsJson, snippets));
             existingAfterRace.Units = units;
+            existingAfterRace.DisplayName ??= cleanName;
             await db.SaveChangesAsync(ct);
         }
     }
