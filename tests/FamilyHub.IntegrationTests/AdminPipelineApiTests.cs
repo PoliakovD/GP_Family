@@ -123,7 +123,7 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
     }
 
     [Fact]
-    public async Task Prompts_SeededMigrationRows_AllEighteenSlotsHaveActiveVersion()
+    public async Task Prompts_SeededMigrationRows_AllSlotsHaveActiveVersion()
     {
         var client = await AuthenticatedClientAsync();
 
@@ -138,18 +138,21 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         // документа для батч-загрузки (AddDocumentKindClassifyPrompt) — тот же механизм
         // PipelinePrompt/PromptVersion на все восемь родов. analysis.specimen-resolve/
         // analysis.specimen-validate получили версию 2 (UpdateSpecimenPromptsForSiteHint),
-        // analysis.extract — версию 4 (AddAnalysisTitlePrompt → 2, AddReferenceRangePrompt → 3,
+        // analysis.extract — версию 6 (AddAnalysisTitlePrompt → 2, AddReferenceRangePrompt → 3,
         // UpdateAnalysisExtractPromptForRowBatching → 4 — построчное извлечение, план "качество
-        // ИИ-распознавания анализов"), analysis.qualitative-judge — версию 2
+        // ИИ-распознавания анализов", AnalysisExtractPromptKeepAbbreviations → 5,
+        // AnalysisExtractPromptAddSection → 6), analysis.qualitative-judge — версию 2
         // (UpdateQualitativeJudgePromptForRangeContext) — не все слоты обязаны застыть на версии 1
         // навсегда, важно только, что у каждого есть РОВНО одна активная версия. + 1 клиническая
         // сводка для врача (AddClinicianSummaryToMedicalRecord, план "качество ИИ-распознавания
-        // анализов", Этап 4) — итого 20.
-        slots.Should().HaveCount(20);
+        // анализов", Этап 4) + 2 слота, которые код уже читал через IPromptProvider, но
+        // их не было в БД — analysis.cache-units и vaccination.certificate-ocr
+        // (AddCacheUnitsAndVaccinationOcrPrompts) — итого 22.
+        slots.Should().HaveCount(22);
         slots.Should().OnlyContain(s => s.ActiveVersion >= 1);
         slots.Should().Contain(s => s.Key == "analysis.specimen-resolve" && s.ActiveVersion == 2);
         slots.Should().Contain(s => s.Key == "analysis.specimen-validate" && s.ActiveVersion == 2);
-        slots.Should().Contain(s => s.Key == "analysis.extract" && s.ActiveVersion == 5);
+        slots.Should().Contain(s => s.Key == "analysis.extract" && s.ActiveVersion == 6);
         slots.Should().Contain(s => s.Key == "analysis.title" && s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.subject-resolve" && s.ActiveVersion == 1);
         slots.Should().Contain(s => s.Key == "analysis.qualitative-judge" && s.ActiveVersion == 2);
@@ -160,6 +163,8 @@ public class AdminPipelineApiTests(AdminWebFactory factory)
         slots.Should().Contain(s => s.Key == "medication.search-query.yandex");
         slots.Should().Contain(s => s.Key == "guard.legitimacy-check");
         slots.Should().Contain(s => s.Key == "analysis.analyte-plausibility");
+        slots.Should().Contain(s => s.Key == "analysis.cache-units" && s.ActiveVersion == 1);
+        slots.Should().Contain(s => s.Key == "vaccination.certificate-ocr" && s.ActiveVersion == 1);
     }
 
     [Fact]
