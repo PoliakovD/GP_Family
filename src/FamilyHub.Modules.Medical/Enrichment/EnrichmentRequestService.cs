@@ -56,7 +56,7 @@ public class EnrichmentRequestService(
             return;
         }
 
-        await EnqueueAsync(medication, normalizedName, userId, ct);
+        await EnqueueAsync(NewJob(normalizedName, medication.Name, medication.Id, userId, medication.FamilyId, force: false), ct);
     }
 
     public async Task<EnrichmentRefreshOutcome> RequestRefreshAsync(Medication medication, Guid userId, CancellationToken ct = default)
@@ -66,25 +66,53 @@ public class EnrichmentRequestService(
 
         // Ручной запрос («Уточнить в справочнике», GET/POST /api/medications/{id}/kb/refresh) —
         // в отличие от RequestAsync намеренно НЕ прерывается на Hit: пользователь мог заметить
-        // устаревшую/неполную карточку и хочет принудительного повторного обогащения. Дедуп на
-        // Pending/Running всё равно защищает от повторной постановки, пока предыдущая не завершилась.
-        await EnqueueAsync(medication, normalizedName, userId, ct);
+        // устаревшую/неполную карточку и хочет принудительного повторного обогащения (Force — иначе
+        // процессор завершил бы задачу на том же Hit, ничего не сделав). Дедуп на Pending/Running
+        // всё равно защищает от повторной постановки, пока предыдущая не завершилась.
+        // Если название найдено по синониму — обогащаем саму найденную статью (её ключ), а не заводим
+        // рядом вторую под ключом этого написания.
+        var lookup = await kbLookup.LookupAsync(normalizedName, ct);
+        if (lookup.Kind == KbLookupKind.Hit && lookup.KbId is { } kbId)
+        {
+            normalizedName = await db.GlobalMedicationsKb.AsNoTracking()
+                .Where(k => k.Id == kbId).Select(k => k.NormalizedName).FirstOrDefaultAsync(ct) ?? normalizedName;
+        }
+
+        await EnqueueAsync(NewJob(normalizedName, medication.Name, medication.Id, userId, medication.FamilyId, force: true), ct);
         return EnrichmentRefreshOutcome.Requested();
     }
 
-    private async Task EnqueueAsync(Medication medication, string normalizedName, Guid userId, CancellationToken ct)
+    /// <summary>«Переобогатить» статью из админки: та же задача конвейера, но без пользователя и семьи
+    /// (Guid.Empty — уведомлять некого, см. MedicationEnrichmentProcessor) и с Force.</summary>
+    public async Task<AdminReenrichResult> RequestKbReenrichAsync(Guid kbId, CancellationToken ct = default)
     {
-        var job = new MedicationEnrichmentJob
-        {
-            Id = Guid.NewGuid(),
-            NormalizedName = normalizedName,
-            SourceDisplayName = medication.Name,
-            MedicationId = medication.Id,
-            RequestedByUserId = userId,
-            FamilyId = medication.FamilyId,
-            Status = EnrichmentJobStatus.Pending,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var kb = await db.GlobalMedicationsKb.AsNoTracking()
+            .Where(k => k.Id == kbId).Select(k => new { k.NormalizedName, k.DisplayName }).FirstOrDefaultAsync(ct);
+        if (kb is null) return AdminReenrichResult.NotFound;
+
+        return await EnqueueAsync(NewJob(kb.NormalizedName, kb.DisplayName, null, Guid.Empty, Guid.Empty, force: true), ct)
+            ? AdminReenrichResult.Queued
+            : AdminReenrichResult.AlreadyQueued;
+    }
+
+    private static MedicationEnrichmentJob NewJob(
+        string normalizedName, string displayName, Guid? medicationId, Guid userId, Guid familyId, bool force) => new()
+    {
+        Id = Guid.NewGuid(),
+        NormalizedName = normalizedName,
+        SourceDisplayName = displayName,
+        MedicationId = medicationId,
+        RequestedByUserId = userId,
+        FamilyId = familyId,
+        Force = force,
+        Status = EnrichmentJobStatus.Pending,
+        CreatedAt = DateTime.UtcNow,
+    };
+
+    /// <summary>false — задача не поставлена (уже есть живая на это название либо Hangfire недоступен).</summary>
+    private async Task<bool> EnqueueAsync(MedicationEnrichmentJob job, CancellationToken ct)
+    {
+        var normalizedName = job.NormalizedName;
         db.MedicationEnrichmentJobs.Add(job);
 
         // Pending-строка и Hangfire-энкью — единая единица отката в явной транзакции (Hangfire
@@ -110,17 +138,20 @@ public class EnrichmentRequestService(
             await tx.RollbackAsync(ct);
             logger.LogDebug(ex, "Обогащение «{NormalizedName}» уже в очереди, пропускаем", normalizedName);
             db.Entry(job).State = EntityState.Detached;
-            return;
+            return false;
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(ct);
             logger.LogWarning(ex, "Не удалось поставить обогащение «{NormalizedName}» в очередь", normalizedName);
             db.Entry(job).State = EntityState.Detached;
-            return;
+            return false;
         }
 
         logger.LogInformation(
-            "Обогащение справочника поставлено в очередь: «{Name}» ({NormalizedName})", medication.Name, normalizedName);
+            "Обогащение справочника поставлено в очередь: «{Name}» ({NormalizedName})", job.SourceDisplayName, normalizedName);
+        return true;
     }
 }
+
+public enum AdminReenrichResult { Queued, NotFound, AlreadyQueued }

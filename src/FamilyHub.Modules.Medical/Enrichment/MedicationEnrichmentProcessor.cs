@@ -90,8 +90,9 @@ public class MedicationEnrichmentProcessor(
 
             // Соседняя задача (другая семья, тот же препарат) могла успеть наполнить справочник,
             // пока эта ждала своей очереди — тогда внешний запрос вообще не нужен.
+            // Force (ручное уточнение/переобогащение из админки) — пересобрать статью всё равно.
             var existing = await kbLookup.LookupAsync(job.NormalizedName, ct);
-            if (existing.Kind == KbLookupKind.Hit)
+            if (!job.Force && existing.Kind == KbLookupKind.Hit)
             {
                 job.Status = EnrichmentJobStatus.Completed;
                 job.KbId = existing.KbId;
@@ -258,9 +259,13 @@ public class MedicationEnrichmentProcessor(
             // (корректно — тот же AppDbContext), но delivery-service шины "будится" сразу после
             // SaveChangesAsync, ДО commit — строку он ещё не увидит и подхватит только на
             // следующем тике Messaging:Outbox:QueryDelay. Не ошибка, просто небольшая задержка.
-            var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
-            await publisher.PublishAsync(new MedicationEnrichedEvent(
-                job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);
+            // Задачу из админки (RequestedByUserId = Guid.Empty) некому уведомлять.
+            if (job.RequestedByUserId != Guid.Empty)
+            {
+                var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
+                await publisher.PublishAsync(new MedicationEnrichedEvent(
+                    job.Id, writeResult.KbId!.Value, finalDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);
+            }
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
@@ -297,7 +302,7 @@ public class MedicationEnrichmentProcessor(
     /// job нет вовсе (только справочный MedicationId).</summary>
     private async Task PublishFailureAsync(MedicationEnrichmentJob job, CancellationToken ct)
     {
-        if (job.IsTransientFailure) return;
+        if (job.IsTransientFailure || job.RequestedByUserId == Guid.Empty) return;
         var medkitId = await ResolveMedkitIdAsync(job.MedicationId, ct);
         await publisher.PublishAsync(
             new MedicationEnrichmentFailedEvent(job.Id, job.SourceDisplayName, job.RequestedByUserId, job.FamilyId, medkitId), ct);

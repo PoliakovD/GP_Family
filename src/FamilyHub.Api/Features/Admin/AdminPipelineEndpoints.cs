@@ -653,6 +653,19 @@ public static class AdminPipelineEndpoints
             return Results.Accepted();
         });
 
+        // «Переобогатить» статью справочника медикаментов — задача конвейера без пользователя и семьи, с Force
+        // (свежий кэш поиска переиспользуется, платного вызова не будет).
+        group.MapPost("/kb/medications/{id:guid}/reenrich", async (
+            Guid id, EnrichmentRequestService enrichmentRequest, CancellationToken ct) =>
+            await enrichmentRequest.RequestKbReenrichAsync(id, ct) switch
+            {
+                AdminReenrichResult.Queued => Results.Accepted(),
+                AdminReenrichResult.AlreadyQueued => Results.Json(
+                    new { code = "already_queued", message = "Обогащение этого препарата уже в очереди." },
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            });
+
         // Прогресс ручных пакетных операций «Пересборок» (единицы кэша, перепрогон норм, переобогащение).
         group.MapGet("/batch-status", async (AdminBatchStatusService status, CancellationToken ct) =>
             Results.Ok(await status.GetAsync(ct)));
