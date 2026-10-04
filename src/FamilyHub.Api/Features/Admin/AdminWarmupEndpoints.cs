@@ -11,6 +11,8 @@ public record WebSearchValveDto(bool IsPaused, DateTime? PausedAt, string? Note)
 
 public record SetWebSearchValveRequest(bool IsPaused, string? Note);
 
+public record SetWebSearchNoteRequest(string? Note);
+
 /// <summary>
 /// Прогрев кэша веб-поиска из админки (см. class doc SearchWarmupRun/SearchCacheWarmupJob) и
 /// вентиль платного поиска (ADR-0005 §9, замена месячной квоты) — вкладка «Прогрев» и переключатель
@@ -69,6 +71,18 @@ public static class AdminWarmupEndpoints
             if (!request.IsPaused)
                 backgroundJobs.Enqueue<DeferredEnrichmentReleaseJob>(j => j.RunAsync(CancellationToken.None));
 
+            return Results.NoContent();
+        });
+
+        // Правка заметки отдельно от переключения: PUT /web-search переписал бы время паузы и при открытом
+        // вентиле лишний раз запустил бы DeferredEnrichmentReleaseJob.
+        group.MapPut("/web-search/note", async (
+            SetWebSearchNoteRequest request, IWebSearchValveService valve, IMemoryCache cache, CancellationToken ct) =>
+        {
+            if (request.Note is { Length: > 500 })
+                return Results.BadRequest(new { code = "note_too_long", message = "Заметка длиннее 500 символов." });
+            await valve.SetNoteAsync(request.Note, ct);
+            cache.Remove(AdminPipelineEndpoints.AttentionCacheKey);
             return Results.NoContent();
         });
     }

@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import {
   AdminApiService,
   EnrichmentFailureReasonValue,
@@ -11,20 +12,14 @@ import {
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
+import { failureReasonLabel } from '../shared/admin-labels';
 
 const POLL_INTERVAL_MS = 3000;
 
-const REASON_LABELS: Record<EnrichmentFailureReasonValue, string> = {
-  Legitimacy: 'Не прошла проверка легитимности',
-  Plausibility: 'Не прошла проверка правдоподобности',
-  NoTrustedSnippets: 'Нет доверенных сниппетов',
-  NoSourcesCited: 'Модель не сослалась на источник',
-  SummarizerFailed: 'Сбой суммаризации',
-  IsolationViolation: 'Подозрение на персональные данные',
-  LmStudioUnavailable: 'LM Studio недоступна',
-  ProviderFailed: 'Сбой провайдера поиска',
-  Unknown: 'Неизвестная ошибка',
-  RejectedByAdmin: 'Отклонено администратором',
+const ORIGIN_LABELS: Record<string, string> = {
+  Extraction: 'распознан из документа',
+  ManualEntry: 'введён вручную',
+  SystemMaintenance: 'переобогащение (обслуживание)',
 };
 
 /**
@@ -42,7 +37,7 @@ const REASON_LABELS: Record<EnrichmentFailureReasonValue, string> = {
  */
 @Component({
     selector: 'app-admin-job-panel',
-    imports: [DatePipe, AdminStatusPipe],
+    imports: [DatePipe, RouterLink, AdminStatusPipe],
     templateUrl: './admin-job-panel.component.html'
 })
 export class AdminJobPanelComponent implements OnChanges, OnDestroy {
@@ -112,7 +107,12 @@ export class AdminJobPanelComponent implements OnChanges, OnDestroy {
   }
 
   reasonLabel(reason: EnrichmentFailureReasonValue | null): string | null {
-    return reason ? (REASON_LABELS[reason] ?? reason) : null;
+    return reason ? failureReasonLabel(reason) : null;
+  }
+
+  /** Откуда пришла задача обогащения показателя (EnrichmentRequestOrigin). */
+  originLabel(origin: string): string {
+    return ORIGIN_LABELS[origin] ?? origin;
   }
 
   /** Итоговое решение с учётом ЕЩЁ НЕ отправленного черновика — предпросмотр того, что реально

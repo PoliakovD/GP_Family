@@ -17,19 +17,33 @@
     }
     <p class="text-muted mb-0">
       Попыток: {{ d.attempts }} · создана {{ d.createdAt | date: 'dd.MM.yyyy HH:mm' }}
+      @if (d.startedAt) { · начата {{ d.startedAt | date: 'dd.MM.yyyy HH:mm' }} }
       @if (d.completedAt) { · завершена {{ d.completedAt | date: 'dd.MM.yyyy HH:mm' }} }
     </p>
-    @if (d.provider) {
-      <p class="text-muted mb-0">Провайдер: {{ d.provider }}</p>
+    @if (d.origin || d.force) {
+      <p class="text-muted mb-0">
+        @if (d.origin) { Откуда: {{ originLabel(d.origin) }} }
+        @if (d.force) { · <span class="tag tag-neutral">принудительно</span> }
+      </p>
+    }
+    @if (d.provider || d.externalSearchAt) {
+      <p class="text-muted mb-0">
+        @if (d.provider) { Провайдер: {{ d.provider }} }
+        @if (d.externalSearchAt) { · платный поиск {{ d.externalSearchAt | date: 'dd.MM.yyyy HH:mm' }} }
+      </p>
     }
     @if (d.kbId) {
-      <p class="text-muted mb-0">Уже в справочнике (id {{ d.kbId }}).</p>
+      <p class="text-muted mb-0">
+        <a [routerLink]="['/admin/catalog', d.type === 'lab-analyte' ? 'analytes' : 'medications']"
+           [queryParams]="{ open: d.kbId }">Открыть статью в справочнике</a>
+      </p>
     }
   </div>
 
   @if (d.status === 'Failed') {
     <div class="alert-danger mb-3">
       <strong>{{ reasonLabel(d.failureReason) ?? 'Причина не определена' }}</strong>
+      @if (d.isTransientFailure) { <span class="tag tag-neutral">временный сбой — повторится сам</span> }
       @if (d.error) {
         <p class="mb-0" style="white-space: pre-wrap;">{{ d.error }}</p>
       }

@@ -332,6 +332,77 @@ public class AdminCatalogApiTests(AdminWebFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+    [Fact]
+    public async Task MergeMedications_MovesNameToWinnerAliases_DeletesLoser()
+    {
+        var client = await AuthenticatedClientAsync();
+        var loserName = $"парацетамолакрихин{Guid.NewGuid():N}";
+        var loserId = await SeedMedicationAsync(loserName, "Парацетамол-Акрихин", "{}");
+        var winnerId = await SeedMedicationAsync($"парацетамол{Guid.NewGuid():N}", "Парацетамол", "{}");
+
+        (await client.PostAsync($"/api/admin/kb/medications/{loserId}/merge-into/{winnerId}", null))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await client.GetAsync($"/api/admin/kb/medications/{loserId}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var winner = await client.GetFromJsonAsync<AdminMedicationDetailDto>($"/api/admin/kb/medications/{winnerId}");
+        winner!.Aliases.Should().Contain(loserName);
+    }
+
+    private async Task<Guid> SeedLabAnalyteForSpecimenAsync(string normalizedName, string displayName, Guid specimenKbId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var id = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        db.GlobalLabAnalytesKb.Add(new GlobalLabAnalyteKb
+        {
+            Id = id, NormalizedName = normalizedName, SpecimenKbId = specimenKbId, DisplayName = displayName,
+            PayloadJson = "{}", Source = "тест", PayloadVersion = 3, CreatedAt = now, UpdatedAt = now,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private record SpecimenConflictDto(string Code, Guid ExistingId, string ExistingDisplayName);
+
+    [Fact]
+    public async Task ChangeLabAnalyteSpecimen_NoTwin_Moves_Twin_ReturnsConflictWithExistingId()
+    {
+        var client = await AuthenticatedClientAsync();
+        var blood = await SeedSpecimenDirectAsync($"кровь{Guid.NewGuid():N}");
+        var urine = await SeedSpecimenDirectAsync($"моча{Guid.NewGuid():N}");
+        var serum = await SeedSpecimenDirectAsync($"сыворотка{Guid.NewGuid():N}");
+        var name = $"белок{Guid.NewGuid():N}";
+        var id = await SeedLabAnalyteForSpecimenAsync(name, "Белок", blood);
+        var twin = await SeedLabAnalyteForSpecimenAsync(name, "Белок в моче", urine);
+
+        var moved = await client.PutAsJsonAsync($"/api/admin/kb/lab-analytes/{id}/specimen", new { specimenKbId = serum });
+        moved.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await moved.Content.ReadFromJsonAsync<AdminLabAnalyteDetailDto>())!.SpecimenKbId.Should().Be(serum);
+
+        var conflict = await client.PutAsJsonAsync($"/api/admin/kb/lab-analytes/{id}/specimen", new { specimenKbId = urine });
+        conflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await conflict.Content.ReadFromJsonAsync<SpecimenConflictDto>();
+        body!.ExistingId.Should().Be(twin);
+        body.ExistingDisplayName.Should().Be("Белок в моче");
+    }
+
+    [Fact]
+    public async Task SetSpecimenAliases_NormalizesAndSaves_AliasOfOtherSpecimen_ReturnsConflict()
+    {
+        var client = await AuthenticatedClientAsync();
+        var a = await SeedSpecimenDirectAsync($"плазма{Guid.NewGuid():N}");
+        var b = await SeedSpecimenDirectAsync($"сыворотка{Guid.NewGuid():N}");
+        var alias = $"Плазма Крови {Guid.NewGuid():N}";
+
+        (await client.PutAsJsonAsync($"/api/admin/kb/specimens/{a}/aliases", new { aliases = new[] { alias, alias.ToUpperInvariant() } }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await GetSpecimenAliasesAsync(a)).Should().Equal(LabAnalyteNormalizer.Normalize(alias));
+
+        (await client.PutAsJsonAsync($"/api/admin/kb/specimens/{b}/aliases", new { aliases = new[] { alias } }))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
     private async Task<Guid> SeedSpecimenDirectAsync(string displayName)
     {
         using var scope = factory.Services.CreateScope();

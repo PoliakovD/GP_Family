@@ -1,4 +1,8 @@
-import { WebSearchCallOutcome, WebSearchCallOutcomeValue } from '../../../services/admin-api.service';
+import {
+  EnrichmentFailureReasonValue,
+  WebSearchCallOutcome,
+  WebSearchCallOutcomeValue,
+} from '../../../services/admin-api.service';
 
 /**
  * Русские подписи для статусов и исходов, которые бэкенд отдаёт английскими идентификаторами.
@@ -69,3 +73,28 @@ export function outcomeKeyLabel(key: string): string {
 export const OUTCOME_OPTIONS: { value: WebSearchCallOutcomeValue; label: string }[] = (
   Object.values(WebSearchCallOutcome) as WebSearchCallOutcomeValue[]
 ).map((value) => ({ value, label: outcomeLabel(value) }));
+
+/** Причины отказа задач обогащения — те же подписи, что у групп «Требует внимания»
+ * (AdminAttentionService.LabelFor на бэкенде). */
+const FAILURE_REASON_LABELS: Record<EnrichmentFailureReasonValue, string> = {
+  Legitimacy: 'Не прошла проверка легитимности',
+  Plausibility: 'Не прошла проверка правдоподобности',
+  NoTrustedSnippets: 'Нет доверенных сниппетов',
+  NoSourcesCited: 'Модель не сослалась на источник',
+  SummarizerFailed: 'Сбой суммаризации',
+  IsolationViolation: 'Подозрение на персональные данные',
+  LmStudioUnavailable: 'ИИ (LM Studio) недоступен',
+  ProviderFailed: 'Сбой провайдера поиска',
+  Unknown: 'Неизвестная ошибка',
+  RejectedByAdmin: 'Отклонено администратором',
+};
+
+export function failureReasonLabel(reason: EnrichmentFailureReasonValue | null | undefined): string {
+  if (!reason) return '—';
+  return FAILURE_REASON_LABELS[reason] ?? reason;
+}
+
+/** Причины для фильтра списка задач. */
+export const FAILURE_REASON_OPTIONS: { value: EnrichmentFailureReasonValue; label: string }[] =
+  (Object.keys(FAILURE_REASON_LABELS) as EnrichmentFailureReasonValue[])
+    .map((value) => ({ value, label: FAILURE_REASON_LABELS[value] }));

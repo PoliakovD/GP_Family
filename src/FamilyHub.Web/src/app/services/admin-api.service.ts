@@ -257,6 +257,12 @@ export interface AdminKbEditRequest {
 
 export interface GlobalSpecimen { id: string; displayName: string; }
 
+/** Источник в админке: ключ дедупликации, откуда взялся, синонимы (нормализованные названия, по которым
+ * распознавание находит этот источник — в т.ч. старые имена после объединения). */
+export interface AdminSpecimen extends GlobalSpecimen {
+  normalizedName: string; source: string; createdAt: string; aliases: string[];
+}
+
 /** Итог резолва одного related-имени по точному NormalizedName — id/displayName/specimenDisplayName
  * все null, если статьи с таким именем в справочнике ещё нет (оборванная ссылка/опечатка, не ошибка). */
 export interface AdminRelatedAnalyteMatch {
@@ -525,7 +531,9 @@ export class AdminApiService {
     if (e instanceof HttpErrorResponse) {
       const msg = typeof e.error === 'string' ? e.error : (e.error?.code ?? e.statusText);
       const detail = typeof e.error?.message === 'string' ? e.error.message : undefined;
-      return new ApiError(e.status, msg, detail);
+      const code = typeof e.error?.code === 'string' ? e.error.code : undefined;
+      const body = e.error && typeof e.error === 'object' ? e.error as Record<string, unknown> : undefined;
+      return new ApiError(e.status, msg, detail, code, body);
     }
     return new ApiError(0, 'Неизвестная ошибка');
   }
@@ -648,6 +656,10 @@ export class AdminApiService {
   getWebSearchValve = () => this.get<WebSearchValve>('/api/admin/enrichment/web-search');
   setWebSearchValve = (isPaused: boolean, note: string | null) =>
     this.put<void>('/api/admin/enrichment/web-search', { isPaused, note });
+
+  /** Только заметка вентиля — состояние и время паузы не меняются. */
+  setWebSearchNote = (note: string | null) =>
+    this.put<void>('/api/admin/enrichment/web-search/note', { note });
 
   // Управление enrich-пайплайном из админки (§2 плана) — вкл/выкл необязательных шагов,
   // версионирование промптов, dry-run без записи, листинг задач всех четырёх конвейеров.
@@ -851,6 +863,14 @@ export class AdminApiService {
 
   deleteLabAnalyte = (id: string) => this.del<void>(`/api/admin/kb/lab-analytes/${id}`);
 
+  /** Смена биоматериала статьи; 409 { code: 'exists', existingId, existingDisplayName } — у нового
+   * биоматериала уже есть статья с тем же названием (предлагаем объединить). */
+  mergeMedications = (loserId: string, winnerId: string) =>
+    this.post<void>(`/api/admin/kb/medications/${loserId}/merge-into/${winnerId}`);
+
+  changeLabAnalyteSpecimen = (id: string, specimenKbId: string) =>
+    this.put<AdminLabAnalyteDetail>(`/api/admin/kb/lab-analytes/${id}/specimen`, { specimenKbId });
+
   mergeLabAnalytes = (loserId: string, winnerId: string) =>
     this.post<void>(`/api/admin/kb/lab-analytes/${loserId}/merge-into/${winnerId}`);
 
@@ -868,7 +888,11 @@ export class AdminApiService {
   deleteMedication = (id: string) => this.del<void>(`/api/admin/kb/medications/${id}`);
 
   searchSpecimens = (q: string, take = 20) =>
-    this.get<GlobalSpecimen[]>(`/api/admin/kb/specimens?q=${encodeURIComponent(q)}&take=${take}`);
+    this.get<AdminSpecimen[]>(`/api/admin/kb/specimens?q=${encodeURIComponent(q)}&take=${take}`);
+
+  /** Синонимы источника целиком; 409 alias_conflict — синоним занят другим источником. */
+  setSpecimenAliases = (id: string, aliases: string[]) =>
+    this.put<void>(`/api/admin/kb/specimens/${id}/aliases`, { aliases });
 
   renameSpecimen = (id: string, displayName: string) =>
     this.put<void>(`/api/admin/kb/specimens/${id}`, { displayName });

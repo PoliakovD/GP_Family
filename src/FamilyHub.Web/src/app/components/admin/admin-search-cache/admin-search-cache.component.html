@@ -67,7 +67,12 @@
                 </td>
               }
               <td>{{ row.provider }}</td>
-              <td>{{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}</td>
+              <td>
+                {{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}
+                @if (isStale(row)) {
+                  <span class="tag tag-neutral text-nowrap" title="Срок свежести вышел — следующая задача может оплатить новый поиск">устарел</span>
+                }
+              </td>
               <td>{{ row.snippetCount }}</td>
               <td>
                 <button type="button" class="btn btn-secondary btn-sm" (click)="openRow(row)">Открыть</button>

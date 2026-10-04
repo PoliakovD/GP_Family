@@ -33,6 +33,15 @@ export class AdminWebSearchComponent implements OnInit {
   readonly valveStore = inject(WebSearchValveStore);
   readonly topicState = inject(AdminTopicState);
 
+  /** Черновик заметки вентиля; null — не трогали, в поле показывается сохранённая. */
+  readonly noteDraft = signal<string | null>(null);
+
+  async saveNote(): Promise<void> {
+    const draft = this.noteDraft();
+    if (draft === null) return;
+    if (await this.valveStore.saveNote(draft)) this.noteDraft.set(null);
+  }
+
   readonly domains = signal<TrustedDomain[]>([]);
   readonly newDomain = signal('');
   readonly domainsLoading = signal(true);

@@ -53,6 +53,25 @@ public static class AdminCatalogEndpoints
             };
         });
 
+        group.MapPut("/lab-analytes/{id:guid}/specimen", async (
+            Guid id, AdminChangeSpecimenRequest request, AdminCatalogService admin, CancellationToken ct) =>
+        {
+            var (result, detail, conflict) = await admin.ChangeLabAnalyteSpecimenAsync(id, request.SpecimenKbId, ct);
+            return result switch
+            {
+                AdminSpecimenChangeResult.Ok => Results.Ok(detail),
+                AdminSpecimenChangeResult.Conflict => Results.Json(
+                    new
+                    {
+                        code = "exists", existingId = conflict!.ExistingId, existingDisplayName = conflict.ExistingDisplayName,
+                        message = $"Для этого биоматериала уже есть статья «{conflict.ExistingDisplayName}».",
+                    },
+                    statusCode: StatusCodes.Status409Conflict),
+                AdminSpecimenChangeResult.SpecimenNotFound => Results.BadRequest(new { code = "specimen_not_found", message = "Нет такого биоматериала." }),
+                _ => Results.NotFound(),
+            };
+        });
+
         group.MapDelete("/lab-analytes/{id:guid}/locks/{field}", async (
             Guid id, string field, AdminCatalogService admin, CancellationToken ct) =>
             await admin.UnlockLabAnalyteFieldAsync(id, field, ct) ? Results.NoContent() : Results.NotFound());
@@ -97,6 +116,20 @@ public static class AdminCatalogEndpoints
             return detail is null ? Results.NotFound() : Results.Ok(detail);
         });
 
+        group.MapPost("/medications/{loserId:guid}/merge-into/{winnerId:guid}", async (
+            Guid loserId, Guid winnerId, AdminCatalogService admin, CancellationToken ct) =>
+        {
+            var result = await admin.MergeMedicationsAsync(loserId, winnerId, ct);
+            return result switch
+            {
+                AdminKbMergeResult.Ok => Results.NoContent(),
+                AdminKbMergeResult.SameId => Results.Json(
+                    new { code = "same_id", message = "Победитель и проигравший — одна и та же строка." },
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
+        });
+
         group.MapPut("/medications/{id:guid}", async (
             Guid id, AdminKbEditRequest request, AdminCatalogService admin, CancellationToken ct) =>
         {
@@ -136,7 +169,24 @@ public static class AdminCatalogEndpoints
         });
 
         group.MapGet("/specimens", async (string? q, int? take, GlobalSpecimenKbService specimens, CancellationToken ct) =>
-            Results.Ok(await specimens.SearchAsync(q, take ?? 20, ct)));
+            Results.Ok(await specimens.SearchAdminAsync(q, take ?? 20, ct)));
+
+        group.MapPut("/specimens/{id:guid}/aliases", async (
+            Guid id, AdminSpecimenAliasesRequest request, GlobalSpecimenKbService specimens, CancellationToken ct) =>
+        {
+            var (result, conflictWith) = await specimens.SetAliasesAsync(id, request.Aliases ?? [], ct);
+            return result switch
+            {
+                SpecimenAliasesResult.Ok => Results.NoContent(),
+                SpecimenAliasesResult.Conflict => Results.Json(
+                    new { code = "alias_conflict", message = $"Такое название уже принадлежит источнику «{conflictWith}» — объедините их." },
+                    statusCode: StatusCodes.Status409Conflict),
+                SpecimenAliasesResult.Sentinel => Results.Json(
+                    new { code = "sentinel", message = "У системной записи «источник не определён» синонимов нет." },
+                    statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound(),
+            };
+        });
 
         group.MapPut("/specimens/{id:guid}", async (
             Guid id, AdminSpecimenRenameRequest request, GlobalSpecimenKbService specimens, CancellationToken ct) =>
