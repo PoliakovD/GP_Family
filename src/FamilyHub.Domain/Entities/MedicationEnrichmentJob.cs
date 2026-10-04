@@ -28,6 +28,11 @@ public class MedicationEnrichmentJob : IReviewableEnrichmentJob
 
     public Guid FamilyId { get; set; }
 
+    /// <summary>Принудительное обогащение: «уже есть в справочнике» не повод завершить задачу без работы
+    /// (ручное «Уточнить в справочнике» и «Переобогатить» из админки) — то же, что LabAnalyteEnrichmentJob.Force.
+    /// Свежий кэш поиска при этом всё равно переиспользуется — платного вызова не будет.</summary>
+    public bool Force { get; set; }
+
     public EnrichmentJobStatus Status { get; set; } = EnrichmentJobStatus.Pending;
 
     public int Attempts { get; set; }

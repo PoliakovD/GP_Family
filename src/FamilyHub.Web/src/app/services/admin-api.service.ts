@@ -743,6 +743,8 @@ export class AdminApiService {
   dedupeFailedJobs = () => this.post<DedupeFailedResponse>('/api/admin/pipeline/jobs/dedupe-failed');
 
   reenrichLabAnalyte = (id: string) => this.post<void>(`/api/admin/pipeline/kb/lab-analytes/${id}/reenrich`);
+  /** 409 already_queued — обогащение этого препарата уже в очереди. */
+  reenrichMedication = (id: string) => this.post<void>(`/api/admin/pipeline/kb/medications/${id}/reenrich`);
 
   /** Одноразовый перепрогон показателей, застрявших на Flag.Unknown ДО фикса каскада
    * IndicatorFlagCalculator (односторонние референсы "<47"/">47", качественные результаты вида

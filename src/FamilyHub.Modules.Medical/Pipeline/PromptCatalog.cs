@@ -44,5 +44,8 @@ public static class PromptCatalog
             "(см. LegitimacyGuardService), нельзя выключить из админки."),
         new("analysis.analyte-plausibility", "Гейт «на бред» для показателей, введённых вручную — реальность " +
             "названия и осмысленность сочетания с источником (см. AnalytePlausibilityGuardService)."),
+        new("analysis.cache-units", "Единицы измерения, для которых в сохранённой выдаче платного поиска есть " +
+            "нормы (см. LabAnalyteCacheUnitsBackfillJob)."),
+        new("vaccination.certificate-ocr", "Распознавание прививочного сертификата по фото (см. VaccinationCertificateOcrService)."),
     ];
 }

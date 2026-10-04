@@ -165,7 +165,8 @@ public static class MedicalModule
         services.AddScoped<MedicationSearchCacheService>();
         // Доверенные домены обоих конвейеров — БД-backed, управляются через админку (см. class doc).
         services.AddScoped<EnrichmentTrustedDomainService>();
-        services.AddScoped<IEnrichmentRequestService, EnrichmentRequestService>();
+        services.AddScoped<EnrichmentRequestService>();
+        services.AddScoped<IEnrichmentRequestService>(sp => sp.GetRequiredService<EnrichmentRequestService>());
         services.AddScoped<MedicationEnrichmentProcessor>();
         // Обогащение справочника медикаментов из заключений врача (UX-редизайн) — отдельный
         // конвейер задач (не FamilyId-скоуп, см. VisitMedicationEnrichmentJob), тот же справочник.

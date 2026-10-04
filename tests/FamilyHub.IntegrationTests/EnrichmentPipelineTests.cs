@@ -609,6 +609,11 @@ public class EnrichmentPipelineTests(EnrichmentWebFactory factory)
             return completedCount >= 2;
         }, "ручной рефреш должен поставить и выполнить вторую задачу, переиспользовав кэш");
 
+        // Force: иначе процессор закрыл бы задачу на «уже есть в справочнике», так ничего и не уточнив.
+        (await db.MedicationEnrichmentJobs.AsNoTracking()
+                .Where(j => j.NormalizedName == normalizedName).OrderByDescending(j => j.CreatedAt).FirstAsync())
+            .Force.Should().BeTrue();
+
         var cacheRowAfter = await db.MedicationSearchCaches.AsNoTracking()
             .SingleAsync(c => c.NormalizedName == normalizedName);
         cacheRowAfter.LastUpdatedAt.Should().Be(lastUpdatedBefore,

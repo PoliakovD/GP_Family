@@ -240,6 +240,7 @@
         <div class="d-flex gap-2 flex-wrap">
           <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="markMedicationVerified()">Отметить проверенным</button>
           <button type="button" class="btn btn-secondary btn-sm" (click)="showHistory.set(!showHistory())">{{ showHistory() ? 'Скрыть историю' : 'История' }}</button>
+          <button type="button" class="btn btn-secondary btn-sm" [disabled]="medicationBusy()" (click)="reenrichMedication()">Переобогатить</button>
           <button type="button" class="btn btn-danger btn-sm" [disabled]="medicationBusy()" (click)="deleteMedication()">Удалить</button>
         </div>
       </div>

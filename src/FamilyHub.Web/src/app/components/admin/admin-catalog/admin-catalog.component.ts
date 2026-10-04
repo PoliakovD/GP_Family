@@ -417,6 +417,23 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     }
   }
 
+  /** Пересобрать статью препарата: свежий кэш поиска переиспользуется, платного вызова не будет;
+   * уведомлений пользователям нет — задача системная. */
+  async reenrichMedication(): Promise<void> {
+    const detail = this.medicationDetail();
+    if (!detail) return;
+
+    this.medicationBusy.set(true);
+    try {
+      await this.api.reenrichMedication(detail.id);
+      this.toast.success('Переобогащение поставлено в очередь — ход виден в «Операции → Задачи».');
+    } catch (e) {
+      this.toast.error((e instanceof ApiError && e.detail) || 'Не удалось поставить переобогащение.');
+    } finally {
+      this.medicationBusy.set(false);
+    }
+  }
+
   /** Клик "Начать мердж"/"Отмена"/"Слить сюда" на строке списка (см. analyteMergeSourceId). */
   async onAnalyteMergeClick(item: KbAnalyteListItem): Promise<void> {
     const sourceId = this.analyteMergeSourceId();
