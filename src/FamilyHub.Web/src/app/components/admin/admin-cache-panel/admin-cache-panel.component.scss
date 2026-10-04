@@ -1,5 +1,6 @@
 // Ключ кэша — служебная подпись под редактируемым названием: моноширинный, чтобы не путать с названием для людей.
-.cache-key {
+.cache-key,
+.cache-hint {
   font-size: 0.8235rem;
 
   code {
@@ -15,5 +16,5 @@
 }
 
 .cache-override {
-  min-width: 150px;
+  min-width: 120px;
 }

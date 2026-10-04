@@ -58,7 +58,7 @@
                 <td>{{ row.specimen }}</td>
                 <td>
                   @if (row.units === null) {
-                    <span class="tag tag-neutral">не определены</span>
+                    <span class="tag tag-neutral text-nowrap">не определены</span>
                   } @else if (row.units === '') {
                     <span class="text-muted">нет</span>
                   } @else {

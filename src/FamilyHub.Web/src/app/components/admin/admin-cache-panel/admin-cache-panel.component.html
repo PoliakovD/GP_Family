@@ -26,12 +26,10 @@
             Сбросить — определить заново
           </button>
         </div>
-        <span class="text-muted">
-          Через «;» или «,», например «г/л; ммоль/л». Пустое поле — «проверено, единиц нет».
-          @if (unitsUndetermined()) {
-            Сейчас не определены — их разметит фоновая задача «Пересборки → Определить единицы в кэше».
-          }
-          Показатель с единицей из списка берёт нормы из этого кэша без платного поиска.
+        <span class="text-muted cache-hint">
+          Через «;», например «г/л; ммоль/л»; пустое поле — единиц нет. Показатель в единице из списка берёт
+          нормы отсюда без платного поиска.
+          @if (unitsUndetermined()) { Не определённые разметит «Пересборки → Определить единицы в кэше». }
         </span>
       </div>
     }
@@ -50,9 +48,9 @@
     <div class="card-title cache-subtitle">Сниппеты ({{ rows().length }})</div>
     <button type="button" class="btn btn-secondary btn-sm" (click)="addRow()">+ Сниппет</button>
   </div>
-  <p class="text-muted mb-2">
-    «Учитывать»: «по домену» — решает список доверенных доменов, «да»/«нет» — вручную. Меняется сразу, без
-    кнопки «Сохранить»; у ещё не сохранённого сниппета недоступно.
+  <p class="text-muted cache-hint mb-2">
+    «Учитывать»: «авто» — по списку доверенных доменов, «да»/«нет» — вручную. Меняется сразу, без кнопки
+    «Сохранить».
   </p>
 
   <div class="table-responsive mb-3">
@@ -66,7 +64,7 @@
                       [attr.aria-label]="'Учитывать сниппет ' + (row.title || row.url)"
                       [disabled]="row.originalUrl === null"
                       [ngModel]="overrideMode(row)" (ngModelChange)="setOverride(row, $event)">
-                <option value="auto">по домену ({{ row.isTrustedByDomain ? 'да' : 'нет' }})</option>
+                <option value="auto">авто ({{ row.isTrustedByDomain ? 'да' : 'нет' }})</option>
                 <option value="on">да</option>
                 <option value="off">нет</option>
               </select>
