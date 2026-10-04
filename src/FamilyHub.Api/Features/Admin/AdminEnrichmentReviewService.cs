@@ -39,6 +39,7 @@ public class AdminEnrichmentReviewService(
     EnrichmentTrustedDomainService trustedDomains,
     MedicationSearchCacheService medCache,
     LabAnalyteSearchCacheService labCache,
+    LabAnalyteKbLookupService labKbLookup,
     SearchCacheEditor cacheEditor,
     IOptions<EnrichmentOptions> options,
     IDomainEventPublisher publisher,
@@ -319,6 +320,10 @@ public class AdminEnrichmentReviewService(
                 .ToList();
         }
 
+        var kbMatch = stage == ReviewStages.Search && job is LabAnalyteEnrichmentJob parkedLab
+            ? await FindKbMatchAsync(parkedLab, ct)
+            : null;
+
         var queryText = EnrichmentReviewGate.EffectiveQuery(job);
         return new ReviewItemDetailDto(
             job.Id, kind, stage, job.SourceDisplayName, specimen, origin, job.Provider, job.CreatedAt,
@@ -326,7 +331,25 @@ public class AdminEnrichmentReviewService(
             !EnrichmentReviewThresholds.IsConfident(job.QueryConfidence, queryThreshold),
             job.ResultConfidence, job.ResultConfidenceReason, resultThreshold,
             !EnrichmentReviewThresholds.IsConfident(job.ResultConfidence, resultThreshold),
-            draftDto, current, fieldInfo, ToCacheDto(topic, cacheRow, groupKey, queryLabel), sources, twins, job.ReviewNote);
+            draftDto, current, fieldInfo, ToCacheDto(topic, cacheRow, groupKey, queryLabel), sources, twins, job.ReviewNote,
+            kbMatch);
+    }
+
+    /// <summary>Статья справочника, которую находит запаркованный поиск показателя, и почему поиск всё равно ждёт
+    /// одобрения: force-задача из распознавания — в статье нет нормы в единицах бланка; force-задача обслуживания —
+    /// переобогащение; обычная задача с попаданием — справочник стал находимым после парковки (её закроет
+    /// «Перепроверить по справочнику»); кандидат — похожая статья ниже порога автопривязки.</summary>
+    private async Task<ReviewKbMatchDto?> FindKbMatchAsync(LabAnalyteEnrichmentJob job, CancellationToken ct)
+    {
+        var key = LabAnalyteNormalizer.RenormalizeKey(job.NormalizedName);
+        var match = await labKbLookup.LookupAsync(key.Length > 0 ? key : job.NormalizedName, job.SpecimenKbId, ct);
+        if (match.Kind == KbLookupKind.Miss || match.KbId is null) return null;
+
+        var reason = match.Kind == KbLookupKind.Candidate ? ReviewKbMatchReasons.Candidate
+            : !job.Force ? ReviewKbMatchReasons.Found
+            : job.Origin == EnrichmentRequestOrigin.Extraction ? ReviewKbMatchReasons.UnitGap
+            : ReviewKbMatchReasons.Reenrich;
+        return new ReviewKbMatchDto(match.KbId.Value, match.DisplayName ?? job.SourceDisplayName, reason, match.Score, job.Units);
     }
 
     private static ReviewCurrentKbDto ToCurrent(AdminLabAnalyteDetail d) => new(
@@ -909,8 +932,13 @@ public class AdminEnrichmentReviewService(
 
         // Дозаполнение задним числом — как в процессоре: показатели, распознанные до появления
         // статьи, застряли на RefSource.None. Постановка после коммита (Hangfire — отдельное соединение).
+        // Новая/обновлённая статья (синонимы из черновика) могла стать находимой для других запаркованных поисков
+        // того же показателя под иным написанием — закрыть их, не дожидаясь клика админа.
         if (kind == ReviewKinds.LabAnalyte)
+        {
             backgroundJobs.Enqueue<RecalculateIndicatorFlagsJob>(j => j.RunAsync(kbId, CancellationToken.None));
+            backgroundJobs.Enqueue<LabAnalyteParkedKbResolver>(r => r.ResolveAsync(CancellationToken.None));
+        }
 
         logger.LogInformation("Одобрен результат {Kind} {JobId} «{Name}»{Edited}.",
             kind, job.Id, finalDisplayName, edit is null ? string.Empty : " с правками");

@@ -66,6 +66,7 @@ export class AdminReviewComponent implements OnInit {
   readonly selectedKey = signal<string | null>(null);
   readonly checked = signal<ReadonlySet<string>>(new Set());
   readonly bulkBusy = signal(false);
+  readonly rechecking = signal(false);
   readonly showConfig = signal(false);
   /** Карточка записи справочника вне очереди (вариант C) — поверх выбранной задачи. */
   readonly entityRef = signal<{ kind: ReviewKind; kbId: string } | null>(null);
@@ -89,6 +90,21 @@ export class AdminReviewComponent implements OnInit {
 
   ngOnInit(): void {
     void this.load();
+  }
+
+  /** «Перепроверить по справочнику»: поиски показателей, которые справочник уже находит, закрываются без платного запроса. */
+  async recheckKb(): Promise<void> {
+    this.rechecking.set(true);
+    try {
+      const { resolved } = await this.api.recheckReviewSearchesAgainstKb();
+      if (resolved > 0) this.toast.success(`Закрыто поисков — уже есть в справочнике: ${resolved}.`);
+      else this.toast.info('Новых совпадений со справочником нет.');
+      await this.load();
+    } catch (e) {
+      this.toast.error(e instanceof ApiError && e.detail ? e.detail : 'Не удалось перепроверить по справочнику.');
+    } finally {
+      this.rechecking.set(false);
+    }
   }
 
   async load(selectKey: string | null = null): Promise<void> {

@@ -314,7 +314,8 @@ public class AdminCatalogApiTests(AdminWebFactory factory)
 
         var winnerDetail = await (await client.GetAsync($"/api/admin/kb/lab-analytes/{winnerId}"))
             .Content.ReadFromJsonAsync<AdminLabAnalyteDetailDto>();
-        winnerDetail!.Aliases.Should().Contain(loserNormalizedName,
+        // В текущей форме ключа (RenormalizeKey): следующее распознавание даёт свёрнутый ключ, сырой синоним с ним не совпал бы.
+        winnerDetail!.Aliases.Should().Contain(LabAnalyteNormalizer.RenormalizeKey(loserNormalizedName),
             "старое название проигравшего должно попасть в алиасы победителя — то же название после следующего OCR не даст новый дубль");
 
         var indicator = await verifyDb.LabIndicators.SingleAsync(i => i.SpecimenKbId == specimenId);

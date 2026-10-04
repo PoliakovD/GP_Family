@@ -45,6 +45,7 @@ namespace FamilyHub.Modules.Medical.Extraction;
 public class LabAnalyteKbRebuildJob(
     AppDbContext db,
     LabAnalyteEnrichmentRequestService enrichmentRequest,
+    LabAnalyteKbRekeyJob rekeyJob,
     ILogger<LabAnalyteKbRebuildJob> logger)
 {
     /// <summary>Тот же приём, что MedicalDocumentExtractionProcessor.MaxAttempts — на последней
@@ -89,6 +90,10 @@ public class LabAnalyteKbRebuildJob(
             }
             if (run.StageIndex <= 3)
             {
+                // Строки, пережившие очистку (ручная правка/проверка), несут ключ на момент своего создания —
+                // перекейить их ДО пересева: иначе пересев по новому ключу показателей завёл бы рядом дубль, а
+                // поиск по-прежнему не находил бы саму строку. Идемпотентно — повтор этапа после сбоя безопасен.
+                await rekeyJob.RunAsync(ct);
                 await ReseedAsync(run, ct);
                 run.StageIndex = 4;
                 await db.SaveChangesAsync(ct);

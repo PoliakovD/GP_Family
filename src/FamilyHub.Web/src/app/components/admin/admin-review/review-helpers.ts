@@ -3,6 +3,7 @@ import {
   KbVerificationStatus,
   type KbChangeTargetValue,
   type KbVerificationStatusValue,
+  type ReviewKbMatch,
   type ReviewKind,
   type ReviewOrigin,
   type ReviewStage,
@@ -173,7 +174,25 @@ const HISTORY_ACTION_LABELS: Record<string, string> = {
   'cache-override': 'Включение/выключение источника',
   'cache-replace': 'Набор источников заменён',
   'cache-merge': 'Слияние кэша',
+  rekey: 'Перенормализация ключа',
 };
+
+/** Почему поиск ждёт одобрения, хотя статья справочника уже находится, — подсказка в карточке поиска. */
+export function kbMatchExplanation(m: ReviewKbMatch): string {
+  switch (m.reason) {
+    case 'unit-gap':
+      return `В статье нет нормы в единицах бланка${m.units ? ` («${m.units}»)` : ''} — поиск нужен только за ней. `
+        + 'Если такая норма не нужна, поиск можно отклонить.';
+    case 'reenrich':
+      return 'Это переобогащение существующей статьи (обслуживание справочника).';
+    case 'found':
+      return 'Статья стала находимой уже после того, как поиск встал в очередь, — платный поиск не нужен: '
+        + 'нажмите «Перепроверить по справочнику», и он закроется сам.';
+    case 'candidate':
+      return `Похожая статья (совпадение ${Math.round(m.score * 100)}%). Если это тот же показатель — добавьте `
+        + 'синоним в статью или объедините их, поиск закроется сам.';
+  }
+}
 
 export function historyActionLabel(action: string): string {
   return HISTORY_ACTION_LABELS[action] ?? action;

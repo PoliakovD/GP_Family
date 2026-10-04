@@ -177,5 +177,36 @@ public class LabAnalyteNormalizerTests
         LabAnalyteNormalizer.NormalizeAnalyteKey("Абсолютное количество нейтрофилов")
             .Should().NotEndWith(" абс", "слово «абсолютное» уже в ключе — «абс» не дописывается");
     }
-}
 
+    /// <summary>Прод-случай «Одобрения»: статья справочника, заведённая до кросс-алфавитной свёртки, хранит ключ
+    /// латиницей («treponema pallidum»), а новое распознавание полного названия из бланка даёт свёрнутый ключ.
+    /// Перенормализация старого ключа (LabAnalyteKbRekeyJob) обязана сойтись с ключом распознавания.</summary>
+    [Fact]
+    public void NormalizeAnalyteKey_StaleLatinKbKey_RenormalizesToKeyOfFullBlankName()
+    {
+        var fromBlank = LabAnalyteNormalizer.NormalizeAnalyteKey(
+            "Treponema pallidum (Антитела IgG и IgM к трепонеме паллидум, обнаружение в сыворотке крови)");
+
+        LabAnalyteNormalizer.RenormalizeKey("treponema pallidum").Should().Be(fromBlank);
+        fromBlank.Should().NotBe("treponema pallidum");
+    }
+
+    /// <summary>LabAnalyteKbRekeyJob запускается на каждом старте — ключ в текущей форме не должен меняться
+    /// перенормализацией: иначе job переписывал бы справочник (и журнал) при каждом деплое, а ведущее число в ключе
+    /// ("17 он прогестерон") NormalizeAnalyteKey снял бы как нумерацию пункта бланка.</summary>
+    [Theory]
+    [InlineData("Treponema pallidum (Антитела IgG и IgM)")]
+    [InlineData("Hepatitis B virus (Антиген HBsAg)")]
+    [InlineData("Гемоглобин (HGB), г/л")]
+    [InlineData("Нейтрофилы (абс.)")]
+    [InlineData("Витамин B12")]
+    [InlineData("17-ОН-прогестерон")]
+    [InlineData("Adenovirus")]
+    [InlineData("Аллергены: молоко коровье")]
+    public void RenormalizeKey_OnCurrentKey_IsNoOp(string raw)
+    {
+        var key = LabAnalyteNormalizer.NormalizeAnalyteKey(raw);
+
+        LabAnalyteNormalizer.RenormalizeKey(key).Should().Be(key);
+    }
+}

@@ -88,6 +88,19 @@ public static partial class LabAnalyteNormalizer
         return MedicalTextTransliterator.Fold(normalized);
     }
 
+    /// <summary>
+    /// Приводит УЖЕ ГОТОВЫЙ ключ (строки справочника, задачи обогащения), посчитанный прежней версией
+    /// <see cref="NormalizeAnalyteKey"/>, к текущей форме — кросс-алфавитная свёртка, которой у старых ключей ещё не
+    /// было ("treponema pallidum" → тот же ключ, что даёт сегодня бланк). НЕ <see cref="NormalizeAnalyteKey"/>
+    /// повторно: тот рассчитан на сырой текст бланка и снимает ведущее число как нумерацию пункта, а в ключе это
+    /// часть названия ("17 он прогестерон" превратился бы в "он прогестерон"). Идемпотентно.
+    /// </summary>
+    public static string RenormalizeKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
+        return WhitespaceRegex().Replace(MedicalTextTransliterator.Fold(key), " ").Trim();
+    }
+
     /// <summary>Слово-маркер абсолютной формы в ключе показателя.</summary>
     public const string AbsoluteKeyWord = "абс";
 

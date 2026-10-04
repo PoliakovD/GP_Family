@@ -78,7 +78,28 @@ public record ReviewItemDetailDto(
     string QueryText, double? QueryConfidence, string? QueryConfidenceReason, double QueryThreshold, bool QueryBelowThreshold,
     double? ResultConfidence, string? ResultConfidenceReason, double ResultThreshold, bool ResultBelowThreshold,
     ReviewDraftDto? Draft, ReviewCurrentKbDto? Current, ReviewFieldSourcesDto? FieldSourceInfo,
-    ReviewCacheDto Cache, List<ReviewSourceDto> Sources, List<ReviewTwinDto> Twins, string? Note);
+    ReviewCacheDto Cache, List<ReviewSourceDto> Sources, List<ReviewTwinDto> Twins, string? Note,
+    ReviewKbMatchDto? KbMatch = null);
+
+/// <summary>Почему поиск показателя ждёт одобрения, хотя статья справочника находится (см. ReviewKbMatchDto).</summary>
+public static class ReviewKbMatchReasons
+{
+    /// <summary>Статья есть, но в ней нет нормы в единицах бланка (Units) — поиск за единицами.</summary>
+    public const string UnitGap = "unit-gap";
+
+    /// <summary>Переобогащение существующей статьи (обслуживание справочника, «Переобогатить»).</summary>
+    public const string Reenrich = "reenrich";
+
+    /// <summary>Статья стала находимой уже после парковки — поиск не нужен, закроется перепроверкой.</summary>
+    public const string Found = "found";
+
+    /// <summary>Похожая статья ниже порога автопривязки — возможно, тот же показатель (объединить/синоним).</summary>
+    public const string Candidate = "candidate";
+}
+
+/// <summary>Статья справочника, найденная для запаркованного поиска показателя (только стадия поиска). Reason — см.
+/// <see cref="ReviewKbMatchReasons"/>; Score — уверенность совпадения (1 — точный ключ/синоним); Units — единицы бланков.</summary>
+public record ReviewKbMatchDto(Guid KbId, string DisplayName, string Reason, double Score, string? Units);
 
 /// <summary>Карточка сущности вне очереди (вариант C): запись справочника + кэш источников + задача в очереди, если есть.</summary>
 public record ReviewEntityDto(
@@ -107,6 +128,9 @@ public record BulkApproveSearchesRequest(List<BulkApproveItem> Items);
 public record BulkRejectRequest(List<ReviewItemRef> Items, string? Reason);
 
 public record BulkReviewResponse(int ProcessedCount, List<ReviewItemRef> FailedItems);
+
+/// <summary>Итог «Перепроверить по справочнику»: сколько запаркованных поисков закрыто — показатель уже есть в справочнике.</summary>
+public record RecheckKbResponse(int Resolved);
 
 /// <summary>Одобрение результата. Все поля необязательны: без правок в kb уходит черновик как есть. PayloadJson/DisplayName/
 /// Aliases — правки админа; реально изменённые относительно черновика поля попадают в LockedFields записи (как при ручной
