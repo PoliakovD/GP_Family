@@ -35,6 +35,7 @@ import {
   PayloadFieldDiff,
   confidenceLabel,
   diffPayload,
+  kbMatchExplanation,
   payloadFieldLabel,
   previewValue,
   reviewKindLabel,
@@ -147,7 +148,9 @@ export class ReviewDetailComponent implements OnChanges {
   readonly kbTarget = computed<KbChangeTargetValue>(() =>
     this.kind === 'lab-analyte' ? KbChangeTarget.LabAnalyteKb : KbChangeTarget.MedicationKb);
 
-  readonly kbId = computed(() => this.entity()?.current.id ?? this.item()?.current?.id ?? null);
+  readonly kbId = computed(() => this.entity()?.current.id ?? this.item()?.current?.id ?? this.item()?.kbMatch?.kbId ?? null);
+
+  readonly kbMatchExplanation = kbMatchExplanation;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['id'] || changes['kind'] || changes['mode']) void this.load();

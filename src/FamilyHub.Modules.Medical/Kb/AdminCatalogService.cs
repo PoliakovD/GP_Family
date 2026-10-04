@@ -210,7 +210,10 @@ public partial class AdminCatalogService(AppDbContext db, KbChangeLogService cha
         await db.LabIndicators.Where(i => i.KbAnalyteId == loserId)
             .ExecuteUpdateAsync(s => s.SetProperty(i => i.KbAnalyteId, winnerId), ct);
 
-        var loserAliases = loser.Aliases.Append(loser.NormalizedName).ToArray();
+        // Ключ/синонимы проигравшего могли остаться от прежнего нормализатора (строка старше его смены) — в
+        // победителя они уходят в текущей форме, иначе синоним никогда не совпадёт с ключом поиска.
+        var loserAliases = loser.Aliases.Append(loser.NormalizedName)
+            .Select(LabAnalyteNormalizer.RenormalizeKey).Where(a => a.Length > 0).Distinct().ToArray();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE kb.global_lab_analytes_kb
             SET "Aliases" = ARRAY(SELECT DISTINCT unnest("Aliases" || {loserAliases})), "UpdatedAt" = {DateTime.UtcNow}

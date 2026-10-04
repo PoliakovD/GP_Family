@@ -398,6 +398,12 @@ export interface ReviewCache {
 export interface ReviewTwin { cacheId: string; specimen: string; searchGroupKey: string | null; provider: string; lastUpdatedAt: string; snippetCount: number; }
 export interface ReviewFieldSources { available: boolean; fieldSources: Record<string, string[]>; fieldsWithoutSource: string[]; }
 
+/** Почему поиск показателя ждёт одобрения, хотя статья справочника находится. */
+export type ReviewKbMatchReason = 'unit-gap' | 'reenrich' | 'found' | 'candidate';
+/** Статья справочника, найденная для запаркованного поиска показателя (только стадия поиска). */
+export interface ReviewKbMatch { kbId: string; displayName: string; reason: ReviewKbMatchReason; score: number; units: string | null; }
+export interface RecheckKbResponse { resolved: number; }
+
 export interface ReviewItemDetail {
   id: string; kind: ReviewKind; stage: ReviewStage; name: string; specimen: string | null; origin: ReviewOrigin;
   provider: string | null; createdAt: string;
@@ -405,6 +411,7 @@ export interface ReviewItemDetail {
   resultConfidence: number | null; resultConfidenceReason: string | null; resultThreshold: number; resultBelowThreshold: boolean;
   draft: ReviewDraft | null; current: ReviewCurrentKb | null; fieldSourceInfo: ReviewFieldSources | null;
   cache: ReviewCache; sources: ReviewSource[]; twins: ReviewTwin[]; note: string | null;
+  kbMatch?: ReviewKbMatch | null;
 }
 
 /** Карточка записи справочника вне очереди (вариант C). */
@@ -786,6 +793,10 @@ export class AdminApiService {
 
   bulkApproveReviewSearches = (items: BulkApproveItem[]) =>
     this.post<BulkReviewResponse>('/api/admin/review/searches/bulk-approve', { items });
+
+  /** Ключи справочника — к текущей нормализации; поиски показателей, которые там уже находятся, закрываются. */
+  recheckReviewSearchesAgainstKb = () =>
+    this.post<RecheckKbResponse>('/api/admin/review/searches/recheck-kb', {});
 
   bulkRejectReviewSearches = (items: ReviewItemRef[], reason: string | null = null) =>
     this.post<BulkReviewResponse>('/api/admin/review/searches/bulk-reject', { items, reason });

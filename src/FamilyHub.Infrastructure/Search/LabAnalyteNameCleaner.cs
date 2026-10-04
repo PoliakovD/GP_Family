@@ -51,21 +51,30 @@ public static partial class LabAnalyteNameCleaner
         return hasAbbreviation ? src : candidate;
     }
 
+    /// <summary>Маркеры отклонения, которые бланк печатает рядом со значением: «*», «↑»/«↓», «!», «H»/«L».</summary>
+    private const string FlagMarkers = @"(?:\s*(?:[*↑↓!]|\b[HL]\b))*";
+
+    /// <summary>Хвост имени из бланка, который — одно лишь число (значение) с маркерами отклонения: «29,8», «29.8 ↓».</summary>
+    [GeneratedRegex(@"^\s*[<>≤≥]?\s*\d+(?:[.,]\d+)?" + FlagMarkers + @"\s*$")]
+    private static partial Regex NumericTailRegex();
+
     /// <summary>Название показателя из ячейки бланка БЕЗ слипшегося с ним значения: в узкой колонке PDF «название» и
-    /// «результат» нередко склеиваются в одну ячейку («MCV (ср. объем эритр.) 84.2»). Значение (и маркер «*») отрезается
-    /// с конца, только если ячейка им действительно заканчивается.</summary>
+    /// «результат» нередко склеиваются в одну ячейку («MCV (ср. объем эритр.) 84.2»). Значение (и маркеры отклонения
+    /// «*», «↑»/«↓», «H»/«L») отрезается с конца, только если ячейка им действительно заканчивается. Десятичный
+    /// разделитель не важен: модель нормализует «29,8» бланка в «29.8», и строгое сравнение оставляло значение в имени
+    /// («Гематокрит крови 29,8» — дальше это имя уходило в ключ, мимо справочника, и в текст платного поиска).</summary>
     public static string BlankNameWithoutValue(string? cell, string? value)
     {
         var name = (cell ?? string.Empty).Trim();
         var v = (value ?? string.Empty).Trim().TrimEnd('*').Trim();
         if (v.Length == 0) return name;
 
-        var withoutStar = name.TrimEnd('*').TrimEnd();
         // Приклеенное значение отделено от названия пробелом ("… эритр.) 84.2"); без пробела это часть названия ("Витамин B12").
-        if (withoutStar.Length > v.Length && withoutStar.EndsWith(v, StringComparison.OrdinalIgnoreCase) &&
-            char.IsWhiteSpace(withoutStar[withoutStar.Length - v.Length - 1]))
+        var valuePattern = string.Join("[.,]", v.Split('.', ',').Select(Regex.Escape));
+        var match = Regex.Match(name, $@"\s{valuePattern}{FlagMarkers}\s*$", RegexOptions.IgnoreCase);
+        if (match.Success)
         {
-            var stripped = withoutStar[..^v.Length].TrimEnd();
+            var stripped = name[..match.Index].TrimEnd();
             if (stripped.Length > 0) return stripped;
         }
 
@@ -87,7 +96,11 @@ public static partial class LabAnalyteNameCleaner
 
         // Граница слова: «Гемоглобин» → «Гемоглобин (HGB)», но не «Гем» → «Гемоглобин».
         var next = cleanedBlank[cleanedCandidate.Length];
-        return next is ' ' or '(' or ',' or '/' or '-' ? cleanedBlank : candidate;
+        if (next is not (' ' or '(' or ',' or '/' or '-')) return candidate;
+
+        // Ячейка со слипшимся значением, которое BlankNameWithoutValue не отрезал («Гематокрит крови 29,8»): «полное»
+        // имя отличается лишь числом — это не название, оставляем имя модели.
+        return NumericTailRegex().IsMatch(cleanedBlank[cleanedCandidate.Length..]) ? candidate : cleanedBlank;
     }
 
     /// <summary>Та же чистка (нумерация/эхо-индекс/гомоглифы), но КАПС разбирается по словам, а не

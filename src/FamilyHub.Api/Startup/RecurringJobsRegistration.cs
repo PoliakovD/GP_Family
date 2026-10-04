@@ -83,13 +83,16 @@ public static class RecurringJobsRegistration
     {
         try
         {
-            app.Services.GetRequiredService<IBackgroundJobClient>().Enqueue<LabAnalyteKbReenrichJob>(
-                j => j.RunAsync(CancellationToken.None));
+            var jobs = app.Services.GetRequiredService<IBackgroundJobClient>();
+            // LabAnalyteKbRekeyJob — ключи справочника к текущему нормализатору (no-op, если уже в текущей форме)
+            // и закрытие запаркованных поисков, ставших находимыми. Первым: переобогащение ищет строки по ключу.
+            jobs.Enqueue<LabAnalyteKbRekeyJob>(j => j.RunAsync(CancellationToken.None));
+            jobs.Enqueue<LabAnalyteKbReenrichJob>(j => j.RunAsync(CancellationToken.None));
         }
         catch (Exception ex)
         {
             app.Services.GetRequiredService<ILogger<Program>>().LogWarning(
-                ex, "Не удалось поставить LabAnalyteKbReenrichJob в очередь при старте — попробуется на следующем деплое.");
+                ex, "Не удалось поставить обслуживание справочника показателей в очередь при старте — попробуется на следующем деплое.");
         }
 
         return app;

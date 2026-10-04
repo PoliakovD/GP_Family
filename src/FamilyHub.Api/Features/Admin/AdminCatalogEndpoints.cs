@@ -1,6 +1,7 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Kb;
+using Hangfire;
 
 namespace FamilyHub.Api.Features.Admin;
 
@@ -14,6 +15,12 @@ namespace FamilyHub.Api.Features.Admin;
 /// </summary>
 public static class AdminCatalogEndpoints
 {
+    /// <summary>Правка статьи (синонимы, биоматериал, объединение) могла сделать находимыми показатели, чьи
+    /// платные поиски ждут в «Одобрении», — LabAnalyteKbRekeyJob заодно приведёт ключ строки к текущему
+    /// нормализатору и закроет такие поиски. Фоном: ответ на правку не ждёт обхода справочника.</summary>
+    private static void RecheckParkedSearches(IBackgroundJobClient jobs) =>
+        jobs.Enqueue<LabAnalyteKbRekeyJob>(j => j.RunAsync(CancellationToken.None));
+
     public static void MapAdminCatalogEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/kb").RequireAuthorization("PlatformAdmin");
@@ -41,9 +48,10 @@ public static class AdminCatalogEndpoints
         });
 
         group.MapPut("/lab-analytes/{id:guid}", async (
-            Guid id, AdminKbEditRequest request, AdminCatalogService admin, CancellationToken ct) =>
+            Guid id, AdminKbEditRequest request, AdminCatalogService admin, IBackgroundJobClient jobs, CancellationToken ct) =>
         {
             var (result, detail, reason) = await admin.UpdateLabAnalyteAsync(id, request, ct);
+            if (result == AdminKbEditResult.Ok) RecheckParkedSearches(jobs);
             return result switch
             {
                 AdminKbEditResult.Ok => Results.Ok(detail),
@@ -54,9 +62,10 @@ public static class AdminCatalogEndpoints
         });
 
         group.MapPut("/lab-analytes/{id:guid}/specimen", async (
-            Guid id, AdminChangeSpecimenRequest request, AdminCatalogService admin, CancellationToken ct) =>
+            Guid id, AdminChangeSpecimenRequest request, AdminCatalogService admin, IBackgroundJobClient jobs, CancellationToken ct) =>
         {
             var (result, detail, conflict) = await admin.ChangeLabAnalyteSpecimenAsync(id, request.SpecimenKbId, ct);
+            if (result == AdminSpecimenChangeResult.Ok) RecheckParkedSearches(jobs);
             return result switch
             {
                 AdminSpecimenChangeResult.Ok => Results.Ok(detail),
@@ -87,9 +96,10 @@ public static class AdminCatalogEndpoints
             Results.Ok(await admin.ResolveRelatedNamesAsync(names, ct)));
 
         group.MapPost("/lab-analytes/{loserId:guid}/merge-into/{winnerId:guid}", async (
-            Guid loserId, Guid winnerId, AdminCatalogService admin, CancellationToken ct) =>
+            Guid loserId, Guid winnerId, AdminCatalogService admin, IBackgroundJobClient jobs, CancellationToken ct) =>
         {
             var result = await admin.MergeLabAnalytesAsync(loserId, winnerId, ct);
+            if (result == AdminKbMergeResult.Ok) RecheckParkedSearches(jobs);
             return result switch
             {
                 AdminKbMergeResult.Ok => Results.NoContent(),

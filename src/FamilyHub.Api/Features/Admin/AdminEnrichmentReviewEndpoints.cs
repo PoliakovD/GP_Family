@@ -1,4 +1,5 @@
 using FamilyHub.Domain.Enums;
+using FamilyHub.Modules.Medical.Extraction;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace FamilyHub.Api.Features.Admin;
@@ -149,6 +150,15 @@ public static class AdminEnrichmentReviewEndpoints
             var response = await review.BulkRejectSearchesAsync(request.Items, request.Reason, ct);
             if (response.ProcessedCount > 0) cache.Remove(AdminPipelineEndpoints.AttentionCacheKey);
             return Results.Ok(response);
+        });
+
+        // «Перепроверить по справочнику»: ключи справочника — к текущему нормализатору, запаркованные поиски показателей,
+        // которые там уже находятся, — закрыть. Синхронно: админ сразу видит, сколько поисков ушло из очереди.
+        group.MapPost("/searches/recheck-kb", async (LabAnalyteKbRekeyJob rekey, IMemoryCache cache, CancellationToken ct) =>
+        {
+            var resolved = await rekey.RunAsync(ct);
+            if (resolved > 0) cache.Remove(AdminPipelineEndpoints.AttentionCacheKey);
+            return Results.Ok(new RecheckKbResponse(resolved));
         });
 
         // --- Результаты (гейт 2) ---

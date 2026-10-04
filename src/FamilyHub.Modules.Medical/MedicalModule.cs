@@ -111,6 +111,8 @@ public static class MedicalModule
         services.AddScoped<LabAnalyteEnrichmentProcessor>();
         services.AddScoped<LabAnalyteKbReenrichJob>();
         services.AddScoped<LabAnalyteKbRebuildJob>();
+        services.AddScoped<LabAnalyteKbRekeyJob>();
+        services.AddScoped<LabAnalyteParkedKbResolver>();
         services.AddScoped<RecalculateIndicatorFlagsJob>();
         // Одноразовый ручной перепрогон (см. class doc) — раньше жил без явной регистрации,
         // работал только на фоллбэке Hangfire (ActivatorUtilities.GetServiceOrCreateInstance

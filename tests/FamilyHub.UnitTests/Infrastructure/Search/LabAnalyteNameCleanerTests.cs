@@ -150,4 +150,28 @@ public class LabAnalyteNameCleanerTests
 
         LabAnalyteNameCleaner.PreferFullBlankName("Показатель", blank, maxLength: 160).Should().Be("Показатель");
     }
+
+    /// <summary>Прод-случай: модель вернула значение «29.8», а в ячейке бланка «29,8» (иногда с маркером отклонения) —
+    /// строгое сравнение оставляло значение в названии, и «Гематокрит крови 29,8» уходил в ключ и в платный поиск.</summary>
+    [Theory]
+    [InlineData("Гематокрит крови 29,8", "29.8", "Гематокрит крови")]
+    [InlineData("Гематокрит крови 29.8", "29,8", "Гематокрит крови")]
+    [InlineData("Гематокрит крови 29,8 ↓", "29.8", "Гематокрит крови")]
+    [InlineData("Гематокрит крови 29,8 L", "29.8", "Гематокрит крови")]
+    [InlineData("Гематокрит крови 29,8*", "29.8", "Гематокрит крови")]
+    [InlineData("Витамин B12", "12", "Витамин B12")]
+    [InlineData("Гематокрит крови 29,8", "29.9", "Гематокрит крови 29,8")]
+    public void BlankNameWithoutValue_DecimalSeparatorAndFlags_DoNotKeepValueInName(string cell, string value, string expected)
+    {
+        LabAnalyteNameCleaner.BlankNameWithoutValue(cell, value).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Гематокрит крови", "Гематокрит крови 29,8")]
+    [InlineData("Гематокрит крови", "Гематокрит крови 29.8 ↓")]
+    [InlineData("Гематокрит крови", "Гематокрит крови < 5")]
+    public void PreferFullBlankName_BlankDiffersOnlyByNumber_KeepsModelName(string candidate, string blank)
+    {
+        LabAnalyteNameCleaner.PreferFullBlankName(candidate, blank).Should().Be(candidate);
+    }
 }

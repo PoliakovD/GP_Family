@@ -51,6 +51,14 @@
               ; в запрос подставляется «{{ it.cache.queryLabel }}»}. Правка применяется только к платному поиску.
           </p>
 
+          @if (it.kbMatch; as m) {
+            <p class="rd-hint">
+              Уже есть в справочнике:
+              <button type="button" class="btn-link" (click)="openEntityCard()">{{ m.displayName }}</button>.
+              {{ kbMatchExplanation(m) }}
+            </p>
+          }
+
           @if (it.twins.length > 0) {
             <p class="rd-hint">
               Этот показатель уже искали для другого биоматериала — бесплатный кэш можно взять вместо нового платного поиска.

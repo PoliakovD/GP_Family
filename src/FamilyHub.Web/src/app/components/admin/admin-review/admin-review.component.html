@@ -25,6 +25,10 @@
       <option value="visit-medication">Препараты из заключений</option>
     </select>
     <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load()">Обновить</button>
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading() || rechecking()" (click)="recheckKb()"
+            title="Закрыть поиски показателей, которые уже есть в справочнике (в том числе под старым ключом)">
+      Перепроверить по справочнику
+    </button>
   </div>
 </div>
 
