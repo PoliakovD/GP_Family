@@ -3,7 +3,7 @@
 } @else if (detail()) {
   @let d = detail()!;
   <div class="mb-3">
-    <div class="d-flex gap-2 mb-1" style="align-items: center; flex-wrap: wrap;">
+    <div class="d-flex gap-2 mb-1 align-items-center flex-wrap">
       <span class="tag" [class.tag-accent-2]="d.status === 'Failed'" [class.tag-accent]="d.status === 'Completed'">
         {{ d.status | adminStatus }}
       </span>
@@ -95,7 +95,7 @@
     <p class="text-muted mb-3">По этому названию ещё не было ни одного платного поиска.</p>
   }
 
-  <div class="d-flex gap-2" style="flex-wrap: wrap;">
+  <div class="d-flex gap-2 flex-wrap">
     @if (d.searchCache) {
       <button type="button" class="btn btn-primary btn-sm" [disabled]="busy() || !hasDraftChanges" (click)="applyAndRetry()">
         Применить и перезапустить

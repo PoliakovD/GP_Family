@@ -7,7 +7,7 @@
     <div class="card mb-3">
       <div class="card-title">Пользователи</div>
       <div class="card-body">
-        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+        <div class="d-flex gap-3 flex-wrap">
           <div><strong>{{ d.users.total }}</strong><div class="text-muted">всего</div></div>
           <div><strong>{{ d.users.both }}</strong><div class="text-muted">Telegram + PWA</div></div>
           <div><strong>{{ d.users.telegramOnly }}</strong><div class="text-muted">только Telegram</div></div>
@@ -22,7 +22,7 @@
     <div class="card mb-3">
       <div class="card-title">Семьи</div>
       <div class="card-body">
-        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+        <div class="d-flex gap-3 flex-wrap">
           <div><strong>{{ d.families.total }}</strong><div class="text-muted">всего</div></div>
           <div><strong>{{ d.families.withActiveMembers }}</strong><div class="text-muted">с активными участниками</div></div>
           <div><strong>{{ d.families.averageActiveMembers | number: '1.1-1' }}</strong><div class="text-muted">в среднем участников</div></div>
@@ -33,7 +33,7 @@
     <div class="card">
       <div class="card-title">Домен</div>
       <div class="card-body">
-        <div class="d-flex gap-3" style="flex-wrap: wrap;">
+        <div class="d-flex gap-3 flex-wrap">
           <div><strong>{{ d.domain.medicalRecords }}</strong><div class="text-muted">мед. записей</div></div>
           <div><strong>{{ d.domain.medications }}</strong><div class="text-muted">лекарств</div></div>
           <div><strong>{{ d.domain.expiredMedications }}</strong><div class="text-muted">просрочено</div></div>

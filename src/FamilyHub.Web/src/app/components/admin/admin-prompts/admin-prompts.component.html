@@ -37,10 +37,10 @@
         <textarea class="input mb-2" rows="14" style="width: 100%; font-family: monospace;"
                   [ngModel]="editorBody()" (ngModelChange)="editorBody.set($event)"></textarea>
 
-        <input class="input mb-2" placeholder="что изменилось (необязательно)…" style="width: 100%;"
+        <input class="input mb-2 w-100" placeholder="что изменилось (необязательно)…"
                [ngModel]="editorNote()" (ngModelChange)="editorNote.set($event)" />
 
-        <div class="d-flex gap-2 mb-3" style="align-items: center; flex-wrap: wrap;">
+        <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
           <button type="button" class="btn btn-primary btn-sm" [disabled]="editorBusy() || !editorBody().trim() || !dirty()" (click)="saveNewVersion()">
             Сохранить и активировать
           </button>
@@ -83,7 +83,7 @@
         Прогоняет текущий текст из редактора выше по образцу текста ниже через локальную LLM —
         без веб-поиска, без записи в справочник. Проверить промпт перед сохранением.
       </p>
-      <textarea class="input mb-2" rows="6" style="width: 100%;" placeholder="вставьте пример текста (кусок бланка, сниппеты и т.п.)…"
+      <textarea class="input mb-2 w-100" rows="6" placeholder="вставьте пример текста (кусок бланка, сниппеты и т.п.)…"
                 [ngModel]="dryRunUserText()" (ngModelChange)="dryRunUserText.set($event)"></textarea>
       <button type="button" class="btn btn-secondary btn-sm mb-3" [disabled]="dryRunBusy() || !dryRunUserText().trim()" (click)="runDryRun()">
         Прогнать

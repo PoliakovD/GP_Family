@@ -38,21 +38,6 @@ public record ReviewInboxItemDto(
 
 public record ReviewInboxResponse(List<ReviewInboxItemDto> Rows, int Total, int Searches, int Results);
 
-// Совместимые списки по стадиям (GET /searches, GET /results) — те же поля, что в Inbox.
-public record ReviewSearchItemDto(
-    Guid Id, string Kind, string Name, string? Specimen, string QueryText,
-    double? QueryConfidence, string? QueryConfidenceReason, double Threshold, bool BelowThreshold,
-    string Origin, DateTime CreatedAt);
-
-public record ReviewSearchListResponse(List<ReviewSearchItemDto> Rows, int Total);
-
-public record ReviewResultItemDto(
-    Guid Id, string Kind, string Name, string? Specimen,
-    double? ResultConfidence, string? ResultConfidenceReason, double Threshold, bool BelowThreshold,
-    string? Provider, DateTime CreatedAt);
-
-public record ReviewResultListResponse(List<ReviewResultItemDto> Rows, int Total);
-
 /// <summary>Черновик в форме записи справочника: PayloadJson — ровно тот jsonb, что ляжет в kb (его
 /// показывает/правит admin-payload-editor), Aliases — уже нормализованные.</summary>
 public record ReviewDraftDto(

@@ -1,7 +1,7 @@
 @let valve = valveStore.valve();
 
 <div class="card mb-3">
-  <div class="card-title d-flex justify-content-between" style="align-items: center;">
+  <div class="card-title d-flex justify-content-between align-items-center">
     <span>Вентиль платного поиска</span>
     @if (valve) {
       <button type="button" class="btn btn-sm" [class.btn-danger]="!valve.isPaused" [class.btn-primary]="valve.isPaused"
@@ -26,7 +26,7 @@
   </div>
 </div>
 
-<div class="d-flex mb-3" style="justify-content: flex-end;">
+<div class="d-flex mb-3 justify-content-end">
   <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
 </div>
 

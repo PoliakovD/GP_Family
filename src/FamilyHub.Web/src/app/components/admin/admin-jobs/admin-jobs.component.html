@@ -3,7 +3,7 @@
 <div class="card">
   <div class="card-title">Задачи конвейеров</div>
   <div class="card-body">
-    <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap; align-items: center;">
+    <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
       <div class="seg">
         @for (t of jobTypes; track t.value) {
           <button type="button" class="seg-opt" [class.active]="jobType() === t.value" (click)="selectJobType(t.value)">

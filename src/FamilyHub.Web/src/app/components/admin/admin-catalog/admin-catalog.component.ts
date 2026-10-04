@@ -114,12 +114,30 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   /** Несохранённые правки названия/синонимов/данных справочника или черновики источников — уход со
    * страницы спросит подтверждение (unsavedChangesGuard), закрытие вкладки — beforeunload. */
   hasUnsavedChanges(): boolean {
+    if (this.openArticleDirty()) return true;
+    return this.specimens().some((sp) => this.specimenDraft(sp).trim() !== sp.displayName || this.specimenGroupChanged(sp));
+  }
+
+  /** Несохранённые правки открытой статьи (показателя или медикамента). */
+  private openArticleDirty(): boolean {
     const a = this.analyteDetail();
     if (a && (this.analyteEditorDisplayName() !== a.displayName || this.analyteEditorAliases() !== a.aliases.join(', '))) return true;
     const m = this.medicationDetail();
     if (m && (this.medicationEditorDisplayName() !== m.displayName || this.medicationEditorAliases() !== m.aliases.join(', '))) return true;
-    if (this.specimens().some((sp) => this.specimenDraft(sp).trim() !== sp.displayName || this.specimenGroupChanged(sp))) return true;
     return this.payloadEditors().some((e) => e.hasUnsavedChanges());
+  }
+
+  /** Переход к другой статье при несохранённых правках текущей — только после подтверждения
+   * (решение владельца: раньше правки молча пропадали). */
+  private async confirmLeaveArticle(): Promise<boolean> {
+    if (!this.openArticleDirty()) return true;
+    return this.confirm.confirm({
+      title: 'Есть несохранённые изменения',
+      message: 'Если открыть другую статью, правки текущей пропадут.',
+      confirmText: 'Открыть другую',
+      cancelText: 'Остаться',
+      danger: true,
+    });
   }
 
   @HostListener('window:beforeunload', ['$event'])
@@ -226,7 +244,14 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   }
 
   async openAnalyte(item: KbAnalyteListItem): Promise<void> {
+    if (item.id === this.analyteDetail()?.id || !(await this.confirmLeaveArticle())) return;
     await this.openAnalyteById(item.id);
+  }
+
+  /** Клик по чипу «Что смотрят вместе» в редакторе данных — переход к связанной статье. */
+  async openRelatedAnalyte(id: string): Promise<void> {
+    if (!(await this.confirmLeaveArticle())) return;
+    await this.openAnalyteById(id);
   }
 
   /** Переход по ссылке «Что смотрят вместе» из редактора payload — та же загрузка, что
@@ -393,6 +418,12 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
     } finally {
       this.medicationsLoading.set(false);
     }
+  }
+
+  /** Клик «Открыть» в списке медикаментов — с подтверждением, если у открытой статьи есть несохранённые правки. */
+  async selectMedication(item: KbListItem): Promise<void> {
+    if (item.id === this.medicationDetail()?.id || !(await this.confirmLeaveArticle())) return;
+    await this.openMedication(item);
   }
 
   async openMedication(item: KbListItem): Promise<void> {

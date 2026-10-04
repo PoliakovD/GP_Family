@@ -207,6 +207,8 @@ export interface StartWarmupRequest {
 export interface PipelineStep {
   pipelineKey: string; stepKey: string; description: string;
   isMandatory: boolean; isEnabled: boolean; promptKey: string | null;
+  /** Когда админ последний раз переключал шаг; null — ни разу (включён по умолчанию). */
+  updatedAt: string | null;
 }
 
 /** Слот промпта — activeVersion=null означает, что в БД нет активной версии и конвейер использует
@@ -724,7 +726,9 @@ export class AdminApiService {
   recomputeIndicatorFlags = () => this.post<void>('/api/admin/pipeline/recompute-indicator-flags');
 
   // Инбокс «Требует внимания» — точка входа админки в разбор падений конвейера (см. план, Context).
-  getAttention = () => this.get<AdminAttention>('/api/admin/pipeline/attention');
+  /** fresh — мимо минутного кэша сводки на бэкенде (кнопка «Обновить»). */
+  getAttention = (fresh = false) =>
+    this.get<AdminAttention>(`/api/admin/pipeline/attention${fresh ? '?fresh=true' : ''}`);
 
   trustDomainsAndRetry = (topic: WebSearchTopicValue, domains: string[]) =>
     this.post<TrustAndRetryResponse>('/api/admin/pipeline/attention/trust-and-retry', { topic, domains });
@@ -733,7 +737,7 @@ export class AdminApiService {
   // Ошибки: 409 wrong_status (задача уже обработана), 400 invalid (ApiError.detail — причина), 502 upstream_failed.
   getReviewCounts = () => this.get<ReviewQueueCounts>('/api/admin/review/counts');
 
-  getReviewInbox = (kind: ReviewKind | null, stage: ReviewStage | null, skip = 0, take = 500) =>
+  getReviewInbox = (kind: ReviewKind | null, stage: ReviewStage | null, skip = 0, take = 100) =>
     this.get<ReviewInbox>(
       `/api/admin/review/inbox?skip=${skip}&take=${take}${kind ? `&kind=${kind}` : ''}${stage ? `&stage=${stage}` : ''}`);
 

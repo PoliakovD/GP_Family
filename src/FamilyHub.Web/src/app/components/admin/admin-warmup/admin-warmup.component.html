@@ -1,6 +1,6 @@
 <app-web-search-banner />
 
-<div class="d-flex mb-3" style="justify-content: flex-end;">
+<div class="d-flex mb-3 justify-content-end">
   <app-topic-switch [topic]="topicState.topic()" (topicChange)="selectTopic($event)" />
 </div>
 
@@ -38,7 +38,7 @@
                 [ngModel]="names()" (ngModelChange)="names.set($event)" name="warmupNames"></textarea>
     </div>
 
-    <div class="mb-3 d-flex gap-2" style="align-items: center; flex-wrap: wrap;">
+    <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
       <label class="form-label mb-0" for="warmup-max-paid">Максимум платных вызовов за прогон</label>
       <input id="warmup-max-paid" class="input" type="number" min="1" style="width: 120px;" placeholder="без ограничения"
              [ngModel]="maxPaidCalls()" (ngModelChange)="maxPaidCalls.set($event === '' || $event === null ? null : +$event)"

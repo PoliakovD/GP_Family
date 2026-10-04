@@ -1,4 +1,11 @@
-@if (loading()) {
+<div class="d-flex gap-2 align-items-center justify-content-end mb-2">
+  @if (loadedAt()) { <span class="text-muted">обновлено в {{ loadedAt() | date: 'HH:mm:ss' }}</span> }
+  <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load(true)">
+    <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновить
+  </button>
+</div>
+
+@if (loading() && !attention()) {
   <p class="text-muted">Загрузка…</p>
 } @else if (error()) {
   <div class="alert-danger">{{ error() }}</div>

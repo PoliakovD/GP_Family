@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AdminApiService, AdminAttention, PipelineJobType, ReviewQueueSummary, WebSearchTopic } from '../../../services/admin-api.service';
@@ -27,7 +28,7 @@ const TYPE_LABELS: Record<string, string> = {
  */
 @Component({
     selector: 'app-admin-attention',
-    imports: [AttentionCardComponent, WebSearchBannerComponent],
+    imports: [DatePipe, AttentionCardComponent, WebSearchBannerComponent],
     templateUrl: './admin-attention.component.html'
 })
 export class AdminAttentionComponent implements OnInit {
@@ -47,11 +48,15 @@ export class AdminAttentionComponent implements OnInit {
     void this.load();
   }
 
-  async load(): Promise<void> {
+  /** Время последней загрузки сводки — рядом с «Обновить». */
+  readonly loadedAt = signal<Date | null>(null);
+
+  async load(fresh = false): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.attention.set(await this.api.getAttention());
+      this.attention.set(await this.api.getAttention(fresh));
+      this.loadedAt.set(new Date());
     } catch {
       this.error.set('Не удалось загрузить сводку.');
     } finally {

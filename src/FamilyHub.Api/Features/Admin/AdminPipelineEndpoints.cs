@@ -48,14 +48,15 @@ public static class AdminPipelineEndpoints
         // сломано и почему, сгруппировано, вместо ручного разбора списка задач построчно.
         // Разбор кэша поиска по каждой Failed-задаче не бесплатен — короткий TTL, тот же приём,
         // что AdminEndpoints.GetStorageStatsAsync (там 15 минут — там дороже и меняется реже).
-        group.MapGet("/attention", async (AdminAttentionService attention, IMemoryCache cache, CancellationToken ct) =>
+        // fresh=true — кнопка «Обновить»: админ явно хочет текущее состояние, а не снимок до минуты назад.
+        group.MapGet("/attention", async (bool? fresh, AdminAttentionService attention, IMemoryCache cache, CancellationToken ct) =>
         {
-            if (cache.TryGetValue(AttentionCacheKey, out AdminAttentionDto? cached) && cached is not null)
+            if (fresh != true && cache.TryGetValue(AttentionCacheKey, out AdminAttentionDto? cached) && cached is not null)
                 return Results.Ok(cached);
 
-            var fresh = await attention.GetAttentionAsync(ct);
-            cache.Set(AttentionCacheKey, fresh, AttentionCacheTtl);
-            return Results.Ok(fresh);
+            var dto = await attention.GetAttentionAsync(ct);
+            cache.Set(AttentionCacheKey, dto, AttentionCacheTtl);
+            return Results.Ok(dto);
         });
 
         // «Доверить все и перезапустить N» — батч-действие на самый частый отброшенный домен(ы)
@@ -98,12 +99,15 @@ public static class AdminPipelineEndpoints
         group.MapGet("/pipelines", async (AppDbContext db, CancellationToken ct) =>
         {
             var configs = await db.PipelineStepConfigs.AsNoTracking()
-                .ToDictionaryAsync(s => (s.PipelineKey, s.StepKey), s => s.IsEnabled, ct);
+                .ToDictionaryAsync(s => (s.PipelineKey, s.StepKey), s => new { s.IsEnabled, s.UpdatedAt }, ct);
 
-            var steps = PipelineCatalog.Steps.Select(s => new PipelineStepDto(
-                s.PipelineKey, s.StepKey, s.Description, s.IsMandatory,
-                s.IsMandatory || !configs.TryGetValue((s.PipelineKey, s.StepKey), out var enabled) || enabled,
-                s.PromptKey)).ToList();
+            var steps = PipelineCatalog.Steps.Select(s =>
+            {
+                var config = configs.GetValueOrDefault((s.PipelineKey, s.StepKey));
+                return new PipelineStepDto(
+                    s.PipelineKey, s.StepKey, s.Description, s.IsMandatory,
+                    s.IsMandatory || config is null || config.IsEnabled, s.PromptKey, config?.UpdatedAt);
+            }).ToList();
 
             return Results.Ok(steps);
         });

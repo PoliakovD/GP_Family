@@ -393,8 +393,9 @@ public class EnrichmentAdminReviewTests(ReviewWebFactory factory)
         // Очередь видит задачу: ниже порога, с черновиком, атрибуцией полей и сниппетами.
         var inbox = await admin.GetFromJsonAsync<ReviewInboxResponse>("/api/admin/review/inbox?stage=result", JsonOpts);
         inbox!.Rows.Should().Contain(r => r.Id == jobId && r.BelowThreshold);
-        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/results/medication/{jobId}", JsonOpts);
-        detail!.Draft.Should().NotBeNull();
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/items/medication/{jobId}", JsonOpts);
+        detail!.Stage.Should().Be(ReviewStages.Result);
+        detail.Draft.Should().NotBeNull();
         detail.Current.Should().BeNull();
         detail.FieldSourceInfo!.Available.Should().BeTrue();
         detail.FieldSourceInfo.FieldsWithoutSource.Should().Contain("form", "поле «форма» заполнено, а модель не указала для него источник");
@@ -443,7 +444,7 @@ public class EnrichmentAdminReviewTests(ReviewWebFactory factory)
             await db.SaveChangesAsync();
         }
 
-        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/results/medication/{jobId}", JsonOpts);
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/items/medication/{jobId}", JsonOpts);
         detail!.Cache.CacheId.Should().BeNull("строки кэша нет — показан снимок черновика");
         detail.Sources.Should().HaveCount(2);
         detail.Sources.Should().OnlyContain(s => !string.IsNullOrEmpty(s.Text), "текст выдержки виден и в снимке");
@@ -470,7 +471,7 @@ public class EnrichmentAdminReviewTests(ReviewWebFactory factory)
         (await admin.PostAsJsonAsync($"/api/admin/review/cache/medication/{cacheId}/snippets",
             new { kind = "expert-knowledge", text = "Своё знание админа." })).EnsureSuccessStatusCode();
 
-        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/results/medication/{jobId}", JsonOpts);
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/items/medication/{jobId}", JsonOpts);
         detail!.Sources.Should().HaveCount(2, "исходный источник черновика не потерян + добавленное знание");
         detail.Sources.Should().Contain(s => s.Domain == "www.vidal.ru" && s.UsedInDraft);
         detail.Sources.Should().Contain(s => s.Kind == "expert-knowledge");
@@ -520,7 +521,7 @@ public class EnrichmentAdminReviewTests(ReviewWebFactory factory)
         (await admin.PostAsJsonAsync($"/api/admin/review/searches/medication/{jobId}/approve", new { })).EnsureSuccessStatusCode();
         await WaitForStatusAsync(jobId, EnrichmentJobStatus.AwaitingResultReview, "ожидание ревью");
 
-        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/results/medication/{jobId}", JsonOpts);
+        var detail = await admin.GetFromJsonAsync<ReviewItemDetailDto>($"/api/admin/review/items/medication/{jobId}", JsonOpts);
         var payload = System.Text.Json.Nodes.JsonNode.Parse(detail!.Draft!.PayloadJson)!.AsObject();
         payload["purpose"] = "правка администратора";
 
