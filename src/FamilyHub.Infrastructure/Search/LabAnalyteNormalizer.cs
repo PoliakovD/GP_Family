@@ -70,6 +70,34 @@ public static partial class LabAnalyteNormalizer
     /// остаются на обычном <see cref="Normalize"/>) — специмины почти всегда однословные русские
     /// термины, а бэкофилла для их справочника (аналога <c>LabAnalyteKbRebuildJob</c>) не
     /// существует; свернуть их ключ значило бы открыть миграцию без механизма её закрыть.
+    ///
+    /// Абсолютная форма показателя ("Нейтрофилы (абс.)", "NEU#") отличается от процентной ("Нейтрофилы,
+    /// %", "NEU%") только тем, что Normalize вырезает (скобки, "#", завершающий "%"), — без этого шага обе
+    /// давали один ключ: на одном бланке лейкоцитарной формулы вторая строка молча перезаписывала первую
+    /// (уникальный индекс записи), а абсолютное значение получало процентные нормы справочника. Поэтому
+    /// маркер абсолютной формы, потерянный при нормализации, возвращается в ключ словом "абс" — тем же,
+    /// что уже даёт бланк, печатающий "Нейтрофилы, абс." вне скобок (тренды сходятся). Процентная форма
+    /// ключ НЕ меняет — существующие строки справочника и кэша поиска остаются валидными. Идемпотентно:
+    /// ключ, уже содержащий "абс", повторно не дополняется.
     /// </summary>
-    public static string NormalizeAnalyteKey(string? raw) => MedicalTextTransliterator.Fold(Normalize(raw));
+    public static string NormalizeAnalyteKey(string? raw)
+    {
+        var normalized = Normalize(raw);
+        if (normalized.Length > 0 && AbsoluteMarkerRegex().IsMatch(raw!) && !AbsoluteWordRegex().IsMatch(normalized))
+            normalized += " " + AbsoluteKeyWord;
+        return MedicalTextTransliterator.Fold(normalized);
+    }
+
+    /// <summary>Слово-маркер абсолютной формы в ключе показателя.</summary>
+    public const string AbsoluteKeyWord = "абс";
+
+    /// <summary>Маркер абсолютной формы в сыром названии: "абс"/"abs" отдельным словом (в т.ч. в скобках —
+    /// "(абс.)", "(абс. кол-во)"), "абсолютн…", "#" ("NEU#").</summary>
+    [GeneratedRegex(@"(?<!\p{L})(?:абс|abs)(?!\p{L})|абсолютн|#", RegexOptions.IgnoreCase)]
+    private static partial Regex AbsoluteMarkerRegex();
+
+    /// <summary>Маркер уже есть в нормализованном ключе (слово, начинающееся с "абс"/"abs": "абс",
+    /// "абсолютное") — дописывать не нужно.</summary>
+    [GeneratedRegex(@"(?<!\p{L})(?:абс|abs)", RegexOptions.IgnoreCase)]
+    private static partial Regex AbsoluteWordRegex();
 }
