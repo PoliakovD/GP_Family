@@ -21,6 +21,7 @@ import { ApiError } from '../../../services/api-error';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-editor/admin-payload-editor.component';
 import { KbHistoryComponent } from '../admin-review/kb-history.component';
+import { joinAliasLines, splitAliasLines } from '../admin-review/review-helpers';
 import { VerificationBadgeComponent } from '../shared/verification-badge.component';
 
 const PAGE_SIZE = 20;
@@ -133,9 +134,9 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   private openArticleDirty(): boolean {
     const a = this.analyteDetail();
     if (a && this.analyteSpecimenDraft() && this.analyteSpecimenDraft() !== a.specimenKbId) return true;
-    if (a && (this.analyteEditorDisplayName() !== a.displayName || this.analyteEditorAliases() !== a.aliases.join(', '))) return true;
+    if (a && (this.analyteEditorDisplayName() !== a.displayName || this.analyteEditorAliases() !== joinAliasLines(a.aliases))) return true;
     const m = this.medicationDetail();
-    if (m && (this.medicationEditorDisplayName() !== m.displayName || this.medicationEditorAliases() !== m.aliases.join(', '))) return true;
+    if (m && (this.medicationEditorDisplayName() !== m.displayName || this.medicationEditorAliases() !== joinAliasLines(m.aliases))) return true;
     return this.payloadEditors().some((e) => e.hasUnsavedChanges());
   }
 
@@ -279,7 +280,7 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
       const detail = await this.api.getLabAnalyte(id);
       this.analyteDetail.set(detail);
       this.analyteEditorDisplayName.set(detail.displayName);
-      this.analyteEditorAliases.set(detail.aliases.join(', '));
+      this.analyteEditorAliases.set(joinAliasLines(detail.aliases));
     } catch {
       this.toast.error('Не удалось загрузить показатель.');
     }
@@ -353,9 +354,14 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
       const request: AdminKbEditRequest =
         field === 'displayName'
           ? { displayName: this.analyteEditorDisplayName() }
-          : { aliases: this.splitAliases(this.analyteEditorAliases()) };
+          : { aliases: splitAliasLines(this.analyteEditorAliases()) };
 
-      this.analyteDetail.set(await this.api.updateLabAnalyte(detail.id, request));
+      const updated = await this.api.updateLabAnalyte(detail.id, request);
+      this.analyteDetail.set(updated);
+      // Сервер хранит синонимы ключами поиска (нижний регистр, латиница свёрнута) — поле показывает то, что
+      // реально сохранено, иначе статья навсегда «с несохранёнными правками».
+      if (field === 'displayName') this.analyteEditorDisplayName.set(updated.displayName);
+      else this.analyteEditorAliases.set(joinAliasLines(updated.aliases));
       this.toast.success('Сохранено и залочено.');
       await this.searchAnalytes();
     } catch {
@@ -560,7 +566,7 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
       const detail = await this.api.getMedication(item.id);
       this.medicationDetail.set(detail);
       this.medicationEditorDisplayName.set(detail.displayName);
-      this.medicationEditorAliases.set(detail.aliases.join(', '));
+      this.medicationEditorAliases.set(joinAliasLines(detail.aliases));
     } catch {
       this.toast.error('Не удалось загрузить медикамент.');
     }
@@ -575,9 +581,12 @@ export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
       const request: AdminKbEditRequest =
         field === 'displayName'
           ? { displayName: this.medicationEditorDisplayName() }
-          : { aliases: this.splitAliases(this.medicationEditorAliases()) };
+          : { aliases: splitAliasLines(this.medicationEditorAliases()) };
 
-      this.medicationDetail.set(await this.api.updateMedication(detail.id, request));
+      const updated = await this.api.updateMedication(detail.id, request);
+      this.medicationDetail.set(updated);
+      if (field === 'displayName') this.medicationEditorDisplayName.set(updated.displayName);
+      else this.medicationEditorAliases.set(joinAliasLines(updated.aliases));
       this.toast.success('Сохранено и залочено.');
       await this.searchMedications();
     } catch {

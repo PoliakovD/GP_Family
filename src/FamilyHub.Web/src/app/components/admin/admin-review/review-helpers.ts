@@ -32,6 +32,18 @@ export function reviewOriginLabel(origin: ReviewOrigin): string {
   return ORIGIN_LABELS[origin] ?? origin;
 }
 
+/** Синонимы справочника в поле ввода — по одному на строку, НЕ через запятую: в названиях показателей запятая
+ * встречается («Ненасыщенная железосвязывающая способность, молярная концентрация в сыворотке…») — разрез по ней
+ * сохранял обрывок «молярная концентрация в …» мусорным синонимом, а голова совпадала с именем статьи и
+ * выбрасывалась (LabAnalyteKbRekeyJob), т.е. добавленный синоним «пропадал». */
+export function splitAliasLines(raw: string): string[] {
+  return raw.split(/\r?\n/).map((a) => a.trim()).filter((a) => a.length > 0);
+}
+
+export function joinAliasLines(aliases: readonly string[]): string {
+  return aliases.join('\n');
+}
+
 /** «85%» либо «нет оценки» — отсутствие оценки модели тоже считается «ниже порога» (безопасный
  * дефолт на бэкенде), поэтому пустое значение показываем явно, а не прочерком. */
 export function confidenceLabel(confidence: number | null | undefined): string {

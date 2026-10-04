@@ -3,6 +3,7 @@ import { KbChangeTarget, KbVerificationStatus } from '../../../services/admin-ap
 import {
   confidenceLabel, diffPayload, diffSnapshots, historyActionLabel, historyTargetLabel, indexAfterRemoval, isTypingTarget, payloadFieldLabel,
   parseThreshold, previewValue, reviewKindLabel, reviewOriginLabel, reviewStageLabel, sourceKindLabel, verificationLabel, verificationTagClass,
+  joinAliasLines, splitAliasLines,
 } from './review-helpers';
 
 describe('confidenceLabel', () => {
@@ -195,5 +196,21 @@ describe('parseThreshold', () => {
     expect(parseThreshold(1.01)).toBeNull();
     expect(parseThreshold(-0.1)).toBeNull();
     expect(parseThreshold(NaN)).toBeNull();
+  });
+});
+
+describe('splitAliasLines / joinAliasLines', () => {
+  it('keeps commas inside an alias — one alias per line', () => {
+    const raw = 'УИБК\r\nНенасыщенная железосвязывающая способность, молярная концентрация в сыворотке или плазме крови\n\n  НЖСС  ';
+    expect(splitAliasLines(raw)).toEqual([
+      'УИБК',
+      'Ненасыщенная железосвязывающая способность, молярная концентрация в сыворотке или плазме крови',
+      'НЖСС',
+    ]);
+  });
+
+  it('round-trips stored aliases', () => {
+    const aliases = ['уибк', 'нжсс, молярная'];
+    expect(splitAliasLines(joinAliasLines(aliases))).toEqual(aliases);
   });
 });
