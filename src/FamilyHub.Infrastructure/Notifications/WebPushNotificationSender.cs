@@ -71,6 +71,19 @@ public class WebPushNotificationSender(
                     subscription.Id, ex.StatusCode);
                 expired.Add(subscription);
             }
+            catch (WebPushException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                // VAPID-ключи сменили (WebPush__* в env), а подписка браузера привязана к СТАРОМУ публичному
+                // ключу — релей отвечает 403 «the VAPID credentials … do not correspond to the credentials used to
+                // create the subscriptions» (FCM; Mozilla — 401). Серверу её не починить: нужна новая подписка
+                // браузера под новый ключ. Клиент переподписывается сам при следующем входе
+                // (PushNotificationService.healAfterKeyRotation), а мёртвую строку удаляем — иначе каждое
+                // уведомление снова билось бы в неё и писало ошибку в лог.
+                logger.LogInformation(
+                    "Push-подписка {SubscriptionId} не принимает текущий VAPID-ключ ({Status}) — удаляем, браузер переподпишется.",
+                    subscription.Id, ex.StatusCode);
+                expired.Add(subscription);
+            }
             catch (Exception ex)
             {
                 // Сбой одной подписки не должен прерывать остальные — тот же принцип изоляции,

@@ -13,6 +13,7 @@ import { AuthService } from './services/auth.service';
 import { DevLoggerService } from './services/dev-logger.service';
 import { ApiError, ApiService } from './services/api.service';
 import { PendingInviteService } from './services/pending-invite.service';
+import { PushNotificationService } from './services/push-notification.service';
 import { ToastService } from './shared/toast/toast.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 import { ToastContainerComponent } from './shared/toast/toast-container.component';
@@ -96,6 +97,7 @@ export class AppComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly pendingInvite = inject(PendingInviteService);
   private readonly toast = inject(ToastService);
+  private readonly push = inject(PushNotificationService);
 
   /** Признак десктопа — существующий BreakpointService (первая брейкпойнт-абстракция в
    * проекте), второй параллельный механизм не заводим (см. .claude/patterns/frontend_web.md). */
@@ -285,6 +287,8 @@ export class AppComponent implements OnInit {
         this.intake.startPolling();
         this.ai.start();
         void this.tryRedeemPendingInvite();
+        // Push-подписка под старый VAPID-ключ (после ротации WebPush__*) — тихо переподписываемся.
+        void this.push.healAfterKeyRotation();
       }
     }, { allowSignalWrites: true });
 

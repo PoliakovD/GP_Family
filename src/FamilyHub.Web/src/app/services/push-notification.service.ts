@@ -113,10 +113,53 @@ export class PushNotificationService {
       throw new ApiError(0, 'Push-уведомления сейчас недоступны на сервере — попробуйте позже.');
     }
 
-    const subscription = this.usesNgsw
-      ? await this.swPush.requestSubscription({ serverPublicKey: publicKey })
-      : await this.subscribeManually(publicKey);
+    await this.register(await this.createSubscription(publicKey));
+    this.isSubscribed.set(true);
+  }
 
+  /**
+   * Самовосстановление после смены VAPID-ключей на сервере (WebPush__* в env). Подписка браузера
+   * навсегда привязана к публичному ключу, под который создана: после ротации push-релей отвечает 403
+   * «the VAPID credentials … do not correspond…», и сервер удаляет такую подписку (WebPushNotificationSender).
+   * Здесь, при входе в PWA, ключ существующей подписки сверяется с текущим: не совпал — тихо
+   * переподписываемся (разрешение уже выдано, диалога не будет); совпал — повторно отдаём подписку серверу
+   * (upsert по endpoint), на случай если он её уже удалил. Подписки нет / разрешение не выдано — ничего не
+   * делаем: включать push за пользователя нельзя. Раз за сессию, ошибки только в dev-лог.
+   */
+  async healAfterKeyRotation(): Promise<void> {
+    if (this.healStarted || !this.isSupported || Notification.permission !== 'granted') return;
+    this.healStarted = true;
+
+    try {
+      const existing = await this.existingSubscription();
+      if (!existing) return;
+
+      const publicKey = await this.fetchVapidKeyWithRetry();
+      if (!publicKey) return;
+
+      if (this.isSameKey(existing.options.applicationServerKey, publicKey)) {
+        await this.register(existing);
+      } else {
+        this.log.log('push', 'info', 'VAPID-ключ сервера сменился — переподписываемся под новый');
+        if (this.usesNgsw) await this.swPush.unsubscribe();
+        else await existing.unsubscribe();
+        await this.register(await this.createSubscription(publicKey));
+      }
+      this.isSubscribed.set(true);
+    } catch (e) {
+      this.log.log('push', 'error', `healAfterKeyRotation: ${String(e)}`);
+    }
+  }
+
+  private healStarted = false;
+
+  private async createSubscription(publicKey: string): Promise<PushSubscription> {
+    return this.usesNgsw
+      ? this.swPush.requestSubscription({ serverPublicKey: publicKey })
+      : this.subscribeManually(publicKey);
+  }
+
+  private async register(subscription: PushSubscription): Promise<void> {
     const json = subscription.toJSON();
     const p256dh = json.keys?.['p256dh'];
     const auth = json.keys?.['auth'];
@@ -125,7 +168,22 @@ export class PushNotificationService {
     }
 
     await this.api.subscribePush(json.endpoint, p256dh, auth);
-    this.isSubscribed.set(true);
+  }
+
+  /** Как currentSubscription, но без регистрации push-sw.js — проверка при входе не должна ставить SW
+   * пользователю, который push никогда не включал. */
+  private async existingSubscription(): Promise<PushSubscription | null> {
+    if (this.usesNgsw) return firstValueFrom(this.swPush.subscription);
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration ? registration.pushManager.getSubscription() : null;
+  }
+
+  /** null — браузер не отдал ключ подписки: считаем совпавшим (переподписка без повода хуже). */
+  private isSameKey(subscriptionKey: ArrayBuffer | null, publicKey: string): boolean {
+    if (!subscriptionKey) return true;
+    const current = this.urlBase64ToUint8Array(publicKey);
+    const stored = new Uint8Array(subscriptionKey);
+    return stored.length === current.length && stored.every((b, i) => b === current[i]);
   }
 
   /**
