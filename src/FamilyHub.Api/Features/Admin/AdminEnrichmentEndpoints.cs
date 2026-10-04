@@ -1,3 +1,5 @@
+using FamilyHub.Modules.Medical.Kb;
+using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Enrichment;
 using FamilyHub.Infrastructure.Persistence;
@@ -130,12 +132,18 @@ public static class AdminEnrichmentEndpoints
 
         group.MapPost("/search-cache/{id:guid}/override", async (
             Guid id, SetSnippetOverrideRequest request, MedicationSearchCacheService medicationCache,
-            LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+            LabAnalyteSearchCacheService analyteCache, KbChangeLogService changeLog, CancellationToken ct) =>
         {
+            var before = await LoadCacheRowAsync(request.Topic, id, medicationCache, analyteCache, ct);
             var updated = request.Topic == WebSearchTopic.Medication
                 ? await medicationCache.SetSnippetOverrideAsync(id, request.Url, request.Enabled, ct)
                 : await analyteCache.SetSnippetOverrideAsync(id, request.Url, request.Enabled, ct);
-            return updated ? Results.NoContent() : Results.NotFound();
+            if (!updated) return Results.NotFound();
+
+            var state = request.Enabled switch { true => "включён вручную", false => "выключен вручную", null => "решает домен" };
+            await LogCacheChangeAsync(changeLog, request.Topic, id, before, medicationCache, analyteCache,
+                "cache-override", $"{request.Url}: {state}", ct);
+            return Results.NoContent();
         });
 
         // Полное редактирование строки — снипеты (заголовок/ссылка/текст) заменяются целиком
@@ -146,7 +154,7 @@ public static class AdminEnrichmentEndpoints
         // строку от задач, которые её ищут, и следующий прогон заново оплатил бы поиск.
         group.MapPut("/search-cache/{id:guid}", async (
             Guid id, UpdateSearchCacheRequest request, MedicationSearchCacheService medicationCache,
-            LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+            LabAnalyteSearchCacheService analyteCache, KbChangeLogService changeLog, CancellationToken ct) =>
         {
             foreach (var s in request.Snippets)
                 if (string.IsNullOrWhiteSpace(s.Url))
@@ -160,27 +168,60 @@ public static class AdminEnrichmentEndpoints
                 units = normalized;
             }
 
-            var existingSnippets = request.Topic == WebSearchTopic.Medication
-                ? (await medicationCache.GetByIdAsync(id, ct))?.SnippetsJson
-                : (await analyteCache.GetByIdAsync(id, ct))?.SnippetsJson;
-            var snippets = ToSnippets(request.Snippets, SearchCacheSnippets.Parse(existingSnippets));
+            var before = await LoadCacheRowAsync(request.Topic, id, medicationCache, analyteCache, ct);
+            if (before is null) return Results.NotFound();
+            var snippets = ToSnippets(request.Snippets, SearchCacheSnippets.Parse(before.SnippetsJson));
             var updated = request.Topic == WebSearchTopic.Medication
                 ? await medicationCache.UpdateAsync(id, request.Provider, snippets, ct, request.DisplayName)
                 : await analyteCache.UpdateAsync(id, request.Provider, snippets, ct, units, request.ResetUnits, request.DisplayName);
-            return updated ? Results.NoContent() : Results.NotFound();
+            if (!updated) return Results.NotFound();
+
+            await LogCacheChangeAsync(changeLog, request.Topic, id, before, medicationCache, analyteCache,
+                "admin-edit", "Правка в «Кэше поиска»", ct);
+            return Results.NoContent();
         });
 
         // Удаление строки целиком — следующая задача, ссылающаяся на это (название[, источник]),
         // увидит "не кэшировано" и оплатит поиск заново, как будто кэша никогда не было.
         group.MapDelete("/search-cache/{id:guid}", async (
             Guid id, WebSearchTopic topic, MedicationSearchCacheService medicationCache,
-            LabAnalyteSearchCacheService analyteCache, CancellationToken ct) =>
+            LabAnalyteSearchCacheService analyteCache, KbChangeLogService changeLog, CancellationToken ct) =>
         {
+            var before = await LoadCacheRowAsync(topic, id, medicationCache, analyteCache, ct);
             var deleted = topic == WebSearchTopic.Medication
                 ? await medicationCache.DeleteAsync(id, ct)
                 : await analyteCache.DeleteAsync(id, ct);
-            return deleted ? Results.NoContent() : Results.NotFound();
+            if (!deleted) return Results.NotFound();
+
+            // Удаление откатывается из журнала восстановлением строки.
+            await LogCacheChangeAsync(changeLog, topic, id, before, medicationCache, analyteCache,
+                "admin-delete", "Удалено в «Кэше поиска»", ct);
+            return Results.NoContent();
         });
+    }
+
+    private static async Task<ISearchCacheRow?> LoadCacheRowAsync(
+        WebSearchTopic topic, Guid id, MedicationSearchCacheService medicationCache, LabAnalyteSearchCacheService analyteCache,
+        CancellationToken ct) =>
+        topic == WebSearchTopic.Medication
+            ? await medicationCache.GetByIdAsync(id, ct)
+            : await analyteCache.GetByIdAsync(id, ct);
+
+    /// <summary>Правки строки кэша из «Операции → Кэш поиска» — в журнал изменений (история строки и откат),
+    /// как и правки из очереди «Одобрение» (SearchCacheEditor).</summary>
+    private static async Task LogCacheChangeAsync(
+        KbChangeLogService changeLog, WebSearchTopic topic, Guid id, ISearchCacheRow? before,
+        MedicationSearchCacheService medicationCache, LabAnalyteSearchCacheService analyteCache,
+        string action, string note, CancellationToken ct)
+    {
+        var after = await LoadCacheRowAsync(topic, id, medicationCache, analyteCache, ct);
+        var target = topic == WebSearchTopic.Medication ? KbChangeTarget.MedicationSearchCache : KbChangeTarget.LabAnalyteSearchCache;
+        var label = (after ?? before)?.DisplayName ?? (after ?? before)?.NormalizedName ?? id.ToString();
+        await changeLog.RecordAsync(
+            target, id, label, action,
+            before is null ? null : KbChangeLogService.ToJson(SearchCacheSnapshots.From(before)),
+            after is null ? null : KbChangeLogService.ToJson(SearchCacheSnapshots.From(after)),
+            KbChangeLogService.ActorAdmin, note, ct: ct);
     }
 
     /// <summary>Сниппеты из формы правки кэша. Клиент, не приславший Origin (старый редактор), не должен молча превращать

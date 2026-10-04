@@ -32,8 +32,9 @@ public static class AdminSearchCallsEndpoints
             if (topic is not null) filtered = filtered.Where(l => l.Topic == topic);
             if (outcome is not null) filtered = filtered.Where(l => l.Outcome == outcome);
             if (!string.IsNullOrWhiteSpace(query)) filtered = filtered.Where(l => l.NormalizedName.Contains(query));
-            if (from is not null) filtered = filtered.Where(l => l.OccurredAt >= from.Value);
-            if (to is not null) filtered = filtered.Where(l => l.OccurredAt <= to.Value);
+            // ToUniversalTime: «…Z» из браузера биндится как Kind=Local, а timestamptz в Npgsql принимает только Utc.
+            if (from is not null) { var f = from.Value.ToUniversalTime(); filtered = filtered.Where(l => l.OccurredAt >= f); }
+            if (to is not null) { var t = to.Value.ToUniversalTime(); filtered = filtered.Where(l => l.OccurredAt <= t); }
 
             var total = await filtered.CountAsync(ct);
             var rows = await filtered
@@ -68,8 +69,8 @@ public static class AdminSearchCallsEndpoints
         group.MapGet("/stats", async (
             DateTime? from, DateTime? to, AppDbContext db, IOptions<EnrichmentOptions> enrichmentOptions, CancellationToken ct) =>
         {
-            var fromDate = from ?? DateTime.UtcNow.AddDays(-30);
-            var toDate = to ?? DateTime.UtcNow;
+            var fromDate = from?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(-30);
+            var toDate = to?.ToUniversalTime() ?? DateTime.UtcNow;
 
             // Материализуем период ОДНИМ запросом и считаем все разбивки в памяти: g.Key.ToString()
             // на enum-группировке не всегда транслируется в SQL Npgsql-провайдером, а период отчёта

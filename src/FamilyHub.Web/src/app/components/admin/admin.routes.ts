@@ -63,6 +63,7 @@ const OPERATIONS_TABS: AdminTab[] = [
   { path: 'search-cache', label: 'Кэш поиска' },
   { path: 'rebuilds', label: 'Пересборки' },
   { path: 'search-calls', label: 'Журнал вызовов' },
+  { path: 'changes', label: 'Журнал правок' },
 ];
 
 const CATALOG_TABS: AdminTab[] = [
@@ -175,6 +176,10 @@ export const ADMIN_ROUTES: Routes = [
       path: 'search-calls',
       loadComponent: () =>
         import('./admin-search-calls/admin-search-calls.component').then((m) => m.AdminSearchCallsComponent),
+    },
+    {
+      path: 'changes',
+      loadComponent: () => import('./admin-changes/admin-changes.component').then((m) => m.AdminChangesComponent),
     },
   ]),
 

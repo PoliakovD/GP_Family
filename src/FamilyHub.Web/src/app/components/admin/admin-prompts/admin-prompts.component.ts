@@ -2,6 +2,7 @@ import { Component, HostListener, OnInit, computed, inject, signal } from '@angu
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, PromptSlot, PromptVersion } from '../../../services/admin-api.service';
+import { TextDiffLine, diffLines } from '../shared/text-diff';
 import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
@@ -18,7 +19,14 @@ import { ToastService } from '../../../shared/toast/toast.service';
 @Component({
     selector: 'app-admin-prompts',
     imports: [FormsModule, DatePipe, JsonPipe],
-    templateUrl: './admin-prompts.component.html'
+    templateUrl: './admin-prompts.component.html',
+    styles: [`
+      .prompt-diff { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8235rem;
+        white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; margin: 0; }
+      .prompt-diff-added { background: color-mix(in srgb, var(--color-status-ok-text) 14%, transparent); }
+      .prompt-diff-removed { background: color-mix(in srgb, var(--color-status-danger-text) 14%, transparent);
+        text-decoration: line-through; }
+    `]
 })
 export class AdminPromptsComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);
@@ -33,6 +41,26 @@ export class AdminPromptsComponent implements OnInit, HasUnsavedChanges {
   readonly promptVersions = signal<PromptVersion[]>([]);
   readonly promptVersionsLoading = signal(false);
   readonly editorBody = signal('');
+  /** Версия, раскрытая в истории: показать текст либо сравнение с текстом в редакторе. */
+  readonly viewedVersionId = signal<string | null>(null);
+  readonly viewMode = signal<'text' | 'diff'>('text');
+
+  viewVersion(v: PromptVersion, mode: 'text' | 'diff'): void {
+    const same = this.viewedVersionId() === v.id && this.viewMode() === mode;
+    this.viewedVersionId.set(same ? null : v.id);
+    this.viewMode.set(mode);
+  }
+
+  /** Было — выбранная версия, стало — текст в редакторе (то, что уйдёт при «Сохранить»). */
+  versionDiff(v: PromptVersion): TextDiffLine[] {
+    return diffLines(v.body, this.editorBody());
+  }
+
+  /** Подставить текст старой версии в редактор — дальше как обычная правка (пробный прогон, сохранение). */
+  loadIntoEditor(v: PromptVersion): void {
+    this.editorBody.set(v.body);
+    this.editorNote.set(`На основе версии ${v.version}`);
+  }
   readonly editorNote = signal('');
   readonly editorBusy = signal(false);
   /** Текст активной версии на момент загрузки — точка отсчёта для «есть несохранённые правки». */

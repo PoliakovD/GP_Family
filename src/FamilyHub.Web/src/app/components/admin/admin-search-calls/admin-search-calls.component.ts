@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   AdminApiService,
   SearchCallDetail,
@@ -18,6 +18,13 @@ import { AdminTopicState } from '../shared/admin-topic-state';
 import { TopicSwitchComponent } from '../shared/topic-switch.component';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
 
+/** WebSearchCallLog.JobKind → тип задачи на странице «Задачи». */
+const JOB_KIND_TYPES: Record<string, string> = {
+  LabAnalyteEnrichment: 'lab-analyte',
+  MedicationEnrichment: 'medication',
+  VisitMedicationEnrichment: 'visit-medication',
+};
+
 /**
  * «Операции → Журнал вызовов»: полный аудит обращений к платному внешнему поиску (Yandex/Brave) —
  * включая кэш-хиты (не платные, но видны здесь же: так можно проверить, что кэш реально работает),
@@ -28,7 +35,7 @@ import { WebSearchBannerComponent } from '../shared/web-search-banner.component'
  */
 @Component({
     selector: 'app-admin-search-calls',
-    imports: [FormsModule, DatePipe, DecimalPipe, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent],
+    imports: [FormsModule, DatePipe, DecimalPipe, RouterLink, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent],
     templateUrl: './admin-search-calls.component.html'
 })
 export class AdminSearchCallsComponent implements OnInit {
@@ -49,6 +56,11 @@ export class AdminSearchCallsComponent implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly outcomeFilter = signal<WebSearchCallOutcomeValue | null>(null);
+  readonly providerFilter = signal('');
+  /** Период (yyyy-MM-dd, локальная дата); пусто — без ограничения (статистика — последние 30 дней). */
+  readonly fromDate = signal('');
+  readonly toDate = signal('');
+  readonly showByDay = signal(false);
   readonly query = signal('');
   readonly openCallId = signal<string | null>(null);
   readonly detail = signal<SearchCallDetail | null>(null);
@@ -78,7 +90,10 @@ export class AdminSearchCallsComponent implements OnInit {
     try {
       const outcome = this.outcomeFilter();
       const response = await this.api.getSearchCalls(
-        { topic: this.topicState.topic(), outcome: outcome ?? undefined, query: this.query() || undefined },
+        {
+          topic: this.topicState.topic(), outcome: outcome ?? undefined, query: this.query() || undefined,
+          provider: this.providerFilter() || undefined, ...this.periodIso(),
+        },
         page, this.pageSize,
       );
       this.rows.set(response.rows);
@@ -94,12 +109,41 @@ export class AdminSearchCallsComponent implements OnInit {
     this.statsLoading.set(true);
     this.statsError.set(null);
     try {
-      this.stats.set(await this.api.getSearchCallStats());
+      const period = this.periodIso();
+      this.stats.set(await this.api.getSearchCallStats(period.from, period.to));
     } catch {
       this.statsError.set('Не удалось загрузить статистику вызовов поиска.');
     } finally {
       this.statsLoading.set(false);
     }
+  }
+
+  /** Период из полей дат — границы суток по локальному времени, в UTC для API. */
+  private periodIso(): { from?: string; to?: string } {
+    const from = this.fromDate() ? new Date(`${this.fromDate()}T00:00:00`).toISOString() : undefined;
+    const to = this.toDate() ? new Date(`${this.toDate()}T23:59:59.999`).toISOString() : undefined;
+    return { from, to };
+  }
+
+  /** Новый период/провайдер — перечитываем и список, и статистику. */
+  applyFilters(): void {
+    void this.load(1);
+    void this.loadStats();
+  }
+
+  resetPeriod(): void {
+    this.fromDate.set('');
+    this.toDate.set('');
+    this.applyFilters();
+  }
+
+  /** Ссылка из вызова на породившую его задачу (WebSearchCallLog.JobKind). */
+  jobLink(d: SearchCallRow): { path: string; query: Record<string, string> } | null {
+    if (!d.jobId || !d.jobKind) return null;
+    const type = JOB_KIND_TYPES[d.jobKind];
+    if (type) return { path: '/admin/operations/jobs', query: { type, job: d.jobId } };
+    if (d.jobKind === 'SearchCacheWarmup') return { path: '/admin/operations/warmup', query: {} };
+    return null;
   }
 
   setOutcomeFilter(outcome: WebSearchCallOutcomeValue | null): void {

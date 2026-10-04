@@ -1,7 +1,8 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
-import { AdminApiService, WebSearchTopic, WebSearchTopicValue } from '../../../services/admin-api.service';
+import { AdminApiService, KbChangeTarget, KbChangeTargetValue, WebSearchTopic, WebSearchTopicValue } from '../../../services/admin-api.service';
+import { KbHistoryComponent } from '../admin-review/kb-history.component';
 import { ApiError } from '../../../services/api-error';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
@@ -54,7 +55,7 @@ export interface SearchCacheRowPatch {
  */
 @Component({
     selector: 'app-admin-cache-panel',
-    imports: [FormsModule, DatePipe],
+    imports: [FormsModule, DatePipe, KbHistoryComponent],
     templateUrl: './admin-cache-panel.component.html',
     styleUrl: './admin-cache-panel.component.scss'
 })
@@ -87,6 +88,13 @@ export class AdminCachePanelComponent implements OnChanges {
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly dirty = signal(false);
+
+  /** История правок этой строки (журнал изменений, с откатом). */
+  readonly showHistory = signal(false);
+
+  get historyTarget(): KbChangeTargetValue {
+    return this.isLabAnalyte ? KbChangeTarget.LabAnalyteSearchCache : KbChangeTarget.MedicationSearchCache;
+  }
 
   get isLabAnalyte(): boolean {
     return this.topic === WebSearchTopic.LabAnalyte;

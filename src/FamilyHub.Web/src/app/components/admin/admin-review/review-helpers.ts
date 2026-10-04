@@ -240,6 +240,35 @@ export function diffSnapshots(beforeJson: string | null, afterJson: string | nul
   const probe = after ?? before;
   if (!probe) return lines;
 
+  // Кэш — первым: в его снимке тоже есть displayName, по которому опознаётся запись справочника.
+  if ('snippetsJson' in probe) {
+    const b = parseSnippets(before?.['snippetsJson']);
+    const a = parseSnippets(after?.['snippetsJson']);
+    const byUrl = (list: typeof a) => new Map(list.map((s) => [s.url, s]));
+    const bm = byUrl(b);
+    const am = byUrl(a);
+    for (const s of a) if (!bm.has(s.url)) lines.push({ label: 'Источник добавлен', before: '—', after: s.title || s.url });
+    for (const s of b) if (!am.has(s.url)) lines.push({ label: 'Источник удалён', before: s.title || s.url, after: '—' });
+    for (const s of a) {
+      const old = bm.get(s.url);
+      if (old && old.pinned !== s.pinned)
+        lines.push({ label: 'Закрепление', before: old.pinned ? 'закреплён' : 'нет', after: s.pinned ? 'закреплён' : 'нет' });
+    }
+    for (const s of a) {
+      const old = bm.get(s.url);
+      if (old && old.title !== s.title) lines.push({ label: 'Заголовок источника', before: old.title, after: s.title });
+    }
+    // Название/единицы/провайдер — в снимках с 2026-10-04 (в старых записях полей нет — не сравниваем).
+    const field = (o: Record<string, unknown> | null, key: string): string => (o && o[key] != null && o[key] !== '' ? String(o[key]) : '—');
+    for (const [key, label] of [['displayName', 'Название'], ['units', 'Единицы'], ['provider', 'Провайдер']] as const) {
+      if (before && after && key in before && key in after && field(before, key) !== field(after, key))
+        lines.push({ label, before: field(before, key), after: field(after, key) });
+    }
+    const ov = (o: Record<string, unknown> | null): string => String(o?.['overridesJson'] ?? '—');
+    if (ov(before) !== ov(after)) lines.push({ label: 'Включение/выключение источников', before: ov(before), after: ov(after) });
+    return lines;
+  }
+
   if ('payloadJson' in probe || 'displayName' in probe) {
     const text = (o: Record<string, unknown> | null, key: string): string => (o && o[key] != null ? String(o[key]) : '—');
     const list = (o: Record<string, unknown> | null, key: string): string =>
@@ -259,24 +288,6 @@ export function diffSnapshots(beforeJson: string | null, afterJson: string | nul
     const beforePayload = before ? String(before['payloadJson'] ?? '{}') : null;
     for (const d of diffPayload(afterPayload, beforePayload))
       lines.push({ label: payloadFieldLabel(d.key), before: previewValue(d.before), after: previewValue(d.after) });
-    return lines;
-  }
-
-  if ('snippetsJson' in probe) {
-    const b = parseSnippets(before?.['snippetsJson']);
-    const a = parseSnippets(after?.['snippetsJson']);
-    const byUrl = (list: typeof a) => new Map(list.map((s) => [s.url, s]));
-    const bm = byUrl(b);
-    const am = byUrl(a);
-    for (const s of a) if (!bm.has(s.url)) lines.push({ label: 'Источник добавлен', before: '—', after: s.title || s.url });
-    for (const s of b) if (!am.has(s.url)) lines.push({ label: 'Источник удалён', before: s.title || s.url, after: '—' });
-    for (const s of a) {
-      const old = bm.get(s.url);
-      if (old && old.pinned !== s.pinned)
-        lines.push({ label: 'Закрепление', before: old.pinned ? 'закреплён' : 'нет', after: s.pinned ? 'закреплён' : 'нет' });
-    }
-    const ov = (o: Record<string, unknown> | null): string => String(o?.['overridesJson'] ?? '—');
-    if (ov(before) !== ov(after)) lines.push({ label: 'Включение/выключение источников', before: ov(before), after: ov(after) });
     return lines;
   }
 

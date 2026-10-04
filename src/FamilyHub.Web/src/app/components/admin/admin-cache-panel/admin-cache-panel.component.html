@@ -91,11 +91,22 @@
   </div>
 
   <div class="d-flex justify-content-between flex-wrap gap-2">
-    <button type="button" class="btn btn-primary btn-sm" [disabled]="busy() || !dirty()" (click)="save()">
-      Сохранить изменения
-    </button>
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-primary btn-sm" [disabled]="busy() || !dirty()" (click)="save()">
+        Сохранить изменения
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="showHistory.set(!showHistory())">
+        {{ showHistory() ? 'Скрыть историю' : 'История' }}
+      </button>
+    </div>
     <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="deleteCache()">
       Удалить кэш целиком
     </button>
   </div>
+
+  @if (showHistory()) {
+    <div class="mt-1">
+      <app-kb-history title="История строки кэша" [target]="historyTarget" [targetId]="cacheId" (reverted)="load()" />
+    </div>
+  }
 }
