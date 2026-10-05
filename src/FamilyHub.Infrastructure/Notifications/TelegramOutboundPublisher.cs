@@ -48,9 +48,40 @@ public class TelegramOutboundPublisher(
         await publisher.PublishAsync(
             new TelegramMessageRequestedEvent(
                 telegramId.Value,
-                $"{notification.Title}\n\n{notification.Body}",
+                BuildGenericText(notification.Type),
                 WithMiniAppButton: true,
                 notification.DedupKey),
             ct);
     }
+
+    /// <summary>
+    /// Текст для Telegram — только вид уведомления, НИКОГДА не <see cref="Notification.Title"/>/<see cref="Notification.Body"/>:
+    /// там имена членов семьи и подопечных, названия препаратов, «найдено отклонений» — сведения о здоровье, а
+    /// Telegram — трансграничная передача (серверы вне РФ). Тот же принцип, что у Web Push (ADR-0004,
+    /// WebPushNotificationSender.BuildPayload); подробности пользователь открывает в приложении кнопкой Mini App.
+    /// Политика конфиденциальности обещает ровно это — не возвращать сюда Title/Body.
+    /// </summary>
+    public static string BuildGenericText(NotificationType type) =>
+        $"FamilyHub: {(GenericTitles.TryGetValue(type, out var title) ? title : "новое уведомление")}\n\nПодробности — в приложении.";
+
+    private static readonly Dictionary<NotificationType, string> GenericTitles = new()
+    {
+        [NotificationType.MedicationExpiringSoon] = "скоро истекает срок годности препарата в аптечке",
+        [NotificationType.MedicationExpired] = "истёк срок годности препарата в аптечке",
+        [NotificationType.BirthdayUpcoming] = "скоро день рождения в семье",
+        [NotificationType.MemberLeft] = "изменения в составе семьи",
+        [NotificationType.MemberApproved] = "изменения в составе семьи",
+        [NotificationType.MedicalRecordShared] = "вам открыли доступ к медицинским записям",
+        [NotificationType.MedicationEnriched] = "справочник пополнен",
+        [NotificationType.MedicalDocumentExtracted] = "документ распознан",
+        [NotificationType.MedicalDocumentExtractionFailed] = "документ не удалось распознать",
+        [NotificationType.MedicationEnrichmentFailed] = "справочник не удалось пополнить",
+        [NotificationType.MedicationDoseDue] = "напоминание о приёме",
+        [NotificationType.MedicationDoseMissed] = "приём не отмечен",
+        [NotificationType.MedicationStockLow] = "заканчивается препарат в аптечке",
+        [NotificationType.VaccinationDue] = "напоминание о прививке",
+        [NotificationType.VaccinationOverdue] = "напоминание о прививке",
+        [NotificationType.VaccinationWellbeingCheck] = "как самочувствие после прививки?",
+        [NotificationType.DoctorReportAboutYou] = "составлен отчёт для врача",
+    };
 }
