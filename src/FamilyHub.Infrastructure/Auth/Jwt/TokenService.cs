@@ -6,12 +6,13 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FamilyHub.Infrastructure.Auth.Jwt;
 
-public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : ITokenService
+public class TokenService(AppDbContext db, IOptions<JwtOptions> options, IMemoryCache cache) : ITokenService
 {
     public async Task<IssuedSession> IssueAsync(
         Guid userId, string email, string? createdByIp, string? deviceInfo, CancellationToken ct = default)
@@ -73,6 +74,7 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
 
         session.RevokedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+        await InvalidateChecksAsync(session.UserId, ct);
     }
 
     public async Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default)
@@ -80,6 +82,7 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
         await db.UserSessions
             .Where(s => s.UserId == userId && s.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
+        await InvalidateChecksAsync(userId, ct);
     }
 
     public async Task<bool> RevokeByIdAsync(Guid userId, Guid sessionId, CancellationToken ct = default)
@@ -87,7 +90,18 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options) : IToke
         var affected = await db.UserSessions
             .Where(s => s.Id == sessionId && s.UserId == userId && s.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, DateTime.UtcNow), ct);
+        if (affected > 0) await InvalidateChecksAsync(userId, ct);
         return affected > 0;
+    }
+
+    /// <summary>Сбросить закэшированные SessionValidityChecker-проверки ВСЕХ сессий пользователя
+    /// (включая ротированные — access-токен мог ссылаться на любую из них), чтобы отзыв подействовал
+    /// на уже выданные access-токены сразу (аудит security-audit-2026-10, M5). Сессий у пользователя
+    /// единицы-десятки, а отзыв — редкая операция.</summary>
+    private async Task InvalidateChecksAsync(Guid userId, CancellationToken ct)
+    {
+        var ids = await db.UserSessions.AsNoTracking().Where(s => s.UserId == userId).Select(s => s.Id).ToListAsync(ct);
+        SessionValidityChecker.Invalidate(cache, ids);
     }
 
     private (string Token, DateTime ExpiresAt) CreateAccessToken(Guid userId, string email, Guid sessionId)
