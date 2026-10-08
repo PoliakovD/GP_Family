@@ -13,8 +13,8 @@
 
 | ID | Уровень | Кратко | Этап |
 |---|---|---|---|
-| H1 | 🔴 | SSRF / чтение внутренних ресурсов через конвертацию документов в Gotenberg (LibreOffice) | 0 |
-| H2 | 🔴 | Сброс пароля не отзывает действующие сессии | 0 |
+| H1 | 🔴 ✅ | SSRF / чтение внутренних ресурсов через конвертацию документов в Gotenberg (LibreOffice) — **исправлено** | 0 |
+| H2 | 🔴 ✅ | Сброс пароля не отзывает действующие сессии — **исправлено** | 0 |
 | M1 | 🟡 | Слепой SSRF через endpoint Web Push-подписки | 1 |
 | M2 | 🟡 | HTML/XML-вложения отдаются inline на основном origin | 1 |
 | M3 | 🟡 | Админ-панель отделена от публичного домена только фильтром путей Caddy | 1 |
@@ -56,6 +56,18 @@ docker-сеть и дальше: `api:8080`, `minio:9000/9001`, `seq`, LM Studio
 **Проверка:** PoC с canary-URL (HTML `<img src="http://canary.internal/x">` и DOCX с `INCLUDEPICTURE`)
 до и после исправления. Интеграционный тест: при конвертации нет исходящих запросов.
 
+**✅ Исправлено (ветка `security`):**
+- HTML больше не уходит в LibreOffice: `AttachmentPreviewRenderer.IsOfficeRoute` его не включает, а
+  `GotenbergConverter` не знает расширения `html`. Вьюер, как и раньше, показывает HTML как текст.
+  Регрессионный unit-тест: `AttachmentPreviewRendererTests.RenderAsync_Html_DoesNotCallGotenberg`.
+- В проде gotenberg вынесен в отдельную сеть `previews` с `internal: true`
+  (`deploy/docker-compose.prod.yml`). `api` подключён к `default` и `previews`, у gotenberg нет ни
+  egress, ни доступа к postgres/minio/seq/kafka, LM Studio и метаданным VPS.
+- Образ закреплён на `gotenberg/gotenberg:8.37.0` (прод и дев).
+- Остаток: DOC/DOCX/RTF по-прежнему разбирает LibreOffice, но без сети. Это закрывает SSRF, но не
+  уязвимости самого парсера, поэтому версию Gotenberg нужно регулярно обновлять (см. M7).
+  Ручной PoC на живом стенде не проводился.
+
 ### H2. Сброс пароля не отзывает действующие сессии
 
 **Где:** `src/FamilyHub.Api/Features/Auth/AuthEndpoints.cs:95-109` (`/reset-password/confirm`) →
@@ -73,6 +85,11 @@ docker-сеть и дальше: `api:8080`, `minio:9000/9001`, `seq`, LM Studio
 
 **Проверка:** интеграционный тест в `PwaAuthFlowTests`: refresh-токен, выданный до сброса, после
 сброса получает 401, а новая сессия работает.
+
+**✅ Исправлено (ветка `security`):** `/reset-password/confirm` вызывает `RevokeAllForUserAsync` перед
+выпуском новой сессии. Регрессионный интеграционный тест:
+`JwtSessionTests.ResetPassword_RevokesExistingSessions_AndIssuesWorkingNewOne`. Письмо «пароль
+изменён» пока не добавлено, а access-токен живёт до 15 минут — это остаётся в M5.
 
 ---
 
@@ -183,8 +200,8 @@ initData, перехваченные один раз (логи, расширен
 - GitHub Actions закреплены изменяемыми тегами (`@v4`, `@v3`), в том числе сторонний
   `webfactory/ssh-agent@v0.9.0` (`.github/workflows/deploy.yml:71`) в job, где есть SSH-ключ прода
   и `PROD_ENV`. → Закрепить по SHA, включить Dependabot для `github-actions`.
-- Плавающие теги образов: `datalust/seq:latest`, `gotenberg/gotenberg:8`, `caddy:2-alpine`
-  (`deploy/docker-compose.prod.yml:85,109,346`). Деплой берёт `IMAGE_TAG=latest` без digest
+- Плавающие теги образов: `datalust/seq:latest`, `caddy:2-alpine` (`gotenberg` закреплён на
+  `8.37.0` в рамках H1). Деплой берёт `IMAGE_TAG=latest` без digest
   (`deploy.yml:97`). → Закрепить версии и digest, деплоить по digest собранного образа.
 - В `ci.yml` и `deploy.yml` не задан явный `permissions:`. → Указать `permissions: contents: read`
   (и `packages: read` там, где нужно).
@@ -258,7 +275,7 @@ initData, перехваченные один раз (логи, расширен
 
 | Этап | Срок | Задачи | Критерий готовности |
 |---|---|---|---|
-| **0. Немедленно** | 1–2 дня | **H2**: `RevokeAllForUserAsync` в reset + тест. **H1**: PoC; сеть `previews` (`internal: true`) для gotenberg; HTML/XML показывать как текст; закрепить версию Gotenberg | Тест H2 зелёный; PoC H1 после исправления не даёт исходящих запросов |
+| **0. Немедленно** ✅ | 1–2 дня | **H2**: `RevokeAllForUserAsync` в reset + тест. **H1**: PoC; сеть `previews` (`internal: true`) для gotenberg; HTML/XML показывать как текст; закрепить версию Gotenberg | Тест H2 зелёный; PoC H1 после исправления не даёт исходящих запросов |
 | **1. Ближайший спринт** | ≤ 2 нед | **M1** валидатор push-endpoint и лимиты; **M2** `text/plain` + `CSP: sandbox` для вложений, magic bytes; **M3** `RequireHost` + блокировка + аудит входов; **M4** CSRF без fail-open; **M6** обязательный `auth_date`, TTL ≈1 ч | Интеграционные и unit-тесты на каждый пункт; `CaddyfileTests` не сломаны |
 | **2. Следующий спринт** | ≤ 1 мес | **M5** проверка `SessionId` в `OnTokenValidated`; **M7** pin SHA/digest, `permissions:`, Dependabot, `npm audit fix`, `dotnet list package --vulnerable` в CI; **L3/L5** сегментация сетей и доверие XFF только от Caddy; **L4** изоляция Kafka | В CI есть шаг скана зависимостей; `docker compose config` с новыми сетями; деплой по digest |
 | **3. Бэклог** | — | **L1** маскирование токенов в логах, POST для dose-action; **L2** deny-list Chromium; **L6** блокировка при change-password; **L7**; **L8** review-гейт; TOTP и серверные сессии для админки | — |

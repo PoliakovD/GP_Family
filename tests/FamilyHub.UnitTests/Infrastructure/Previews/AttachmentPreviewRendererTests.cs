@@ -105,6 +105,22 @@ public class AttachmentPreviewRendererTests
         result.Artifacts.Should().BeEmpty();
     }
 
+    // Регрессия на находку H1 (docs/security/security-audit-2026-10.md): HTML не должен уходить в
+    // LibreOffice — тот подтягивает внешние ресурсы документа (SSRF через PDF-превью).
+    [Fact]
+    public async Task RenderAsync_Html_DoesNotCallGotenberg()
+    {
+        var gotenberg = new FakeGotenbergConverter(CreateOnePagePdf());
+        var sut = CreateSut(gotenberg);
+
+        var result = await sut.RenderAsync(
+            "<html><body><img src=\"http://169.254.169.254/latest/meta-data/\"></body></html>"u8.ToArray(),
+            DocumentContentTypes.Html);
+
+        result.Artifacts.Should().BeEmpty();
+        gotenberg.CallCount.Should().Be(0);
+    }
+
     [Fact]
     public async Task RenderAsync_Heic_NoDecoderAvailable_ReturnsUnsupported()
     {
