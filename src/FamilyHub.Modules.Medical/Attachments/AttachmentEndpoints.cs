@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.Documents;
 using FamilyHub.Infrastructure.Storage;
 using Microsoft.AspNetCore.Http;
 
@@ -103,7 +104,7 @@ public static class AttachmentEndpoints
             return download is null
                 ? Results.NotFound()
                 : Results.Stream(download.Value.Content, download.Value.ContentType, download.Value.FileName);
-        }).AllowAnonymous();
+        }).AllowAnonymous().AddEndpointFilter(HardenFileResponse);
 
         // Отрисовка оригинала — без имени файла в Results.Stream, поэтому без
         // Content-Disposition: attachment (иначе браузер/pdf.js/<img> скачивал бы вместо
@@ -116,10 +117,15 @@ public static class AttachmentEndpoints
                 return Results.Unauthorized();
 
             var download = await service.GetDownloadAsync(attachmentId, ct);
-            return download is null
-                ? Results.NotFound()
-                : Results.Stream(download.Value.Content, download.Value.ContentType);
-        }).AllowAnonymous();
+            if (download is null) return Results.NotFound();
+            // HTML/XML/CSV и прочий «текст» отдаётся как text/plain: вьюер показывает его как текст
+            // (вид — по ContentType из /preview, не из этого ответа), а браузер, открывший ссылку
+            // напрямую, не отрисует HTML на origin приложения (аудит security-audit-2026-10, M2).
+            var contentType = DocumentContentTypes.PlainTextLike.Contains(download.Value.ContentType)
+                ? "text/plain; charset=utf-8"
+                : download.Value.ContentType;
+            return Results.Stream(download.Value.Content, contentType);
+        }).AllowAnonymous().AddEndpointFilter(HardenFileResponse);
 
         app.MapGet("/api/attachments/{attachmentId:guid}/preview/thumb", async (
             Guid attachmentId, long expires, string sig,
@@ -132,7 +138,7 @@ public static class AttachmentEndpoints
             return artifact is null
                 ? Results.NotFound()
                 : Results.Stream(artifact.Value.Content, artifact.Value.ContentType);
-        }).AllowAnonymous();
+        }).AllowAnonymous().AddEndpointFilter(HardenFileResponse);
 
         app.MapGet("/api/attachments/{attachmentId:guid}/preview/pdf", async (
             Guid attachmentId, long expires, string sig,
@@ -145,7 +151,7 @@ public static class AttachmentEndpoints
             return artifact is null
                 ? Results.NotFound()
                 : Results.Stream(artifact.Value.Content, artifact.Value.ContentType);
-        }).AllowAnonymous();
+        }).AllowAnonymous().AddEndpointFilter(HardenFileResponse);
 
         app.MapGet("/api/attachments/{attachmentId:guid}/preview/page", async (
             Guid attachmentId, long expires, string sig,
@@ -158,6 +164,18 @@ public static class AttachmentEndpoints
             return artifact is null
                 ? Results.NotFound()
                 : Results.Stream(artifact.Value.Content, artifact.Value.ContentType);
-        }).AllowAnonymous();
+        }).AllowAnonymous().AddEndpointFilter(HardenFileResponse);
+    }
+
+    /// <summary>Байты вложений — пользовательский контент на origin приложения. Общий CSP SPA
+    /// (SecurityHeadersMiddleware) тут заменяется песочницей без скриптов/форм/ресурсов — тот же
+    /// приём, что у raw.githubusercontent.com (аудит security-audit-2026-10, M2). Просмотрщику это не
+    /// мешает: PDF и текст он тянет fetch'ем (pdf.js), картинки — через &lt;img&gt;.</summary>
+    private static async ValueTask<object?> HardenFileResponse(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var headers = context.HttpContext.Response.Headers;
+        headers.ContentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+        headers.XContentTypeOptions = "nosniff";
+        return await next(context);
     }
 }
