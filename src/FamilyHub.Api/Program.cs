@@ -75,6 +75,7 @@ try
 
     // --- Pipeline (порядок критичен, сохранён ровно тем же, каким он был в исходном Program.cs) ---
     app.UseFamilyHubProxyHeaders();
+    app.UseFamilyHubAdminHostGuard(adminOptions);
     app.UseFamilyHubRequestLogging();
     app.MapFamilyHubHealthChecks();
     app.UseFamilyHubSwagger(devTools);

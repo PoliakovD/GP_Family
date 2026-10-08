@@ -204,6 +204,9 @@ services:
       # Превью вложений (Анализы/Врачи) — сайдкар gotenberg выше. Пусто/недоступен — Office-файлы
       # деградируют в карточку «Скачать» (NullGotenbergConverter/fail-soft), не роняют задачу.
       Previews__GotenbergBaseUrl: "http://gotenberg:3000"
+      # Админ-панель отвечает только на своём Host (аудит security-audit-2026-10, M3) — Caddy передаёт
+      # Host как есть, вместе с нестандартным портом. На любом другом Host /api/admin/* и /admin* → 404.
+      Admin__AllowedHosts__0: "admin.${PUBLIC_DOMAIN:?не задан в .env}:4059"
       # Секрет обмена с FamilyHub.TelegramBot (см. telegrambot ниже, profiles: ["bot"]) —
       # ADR-0008. НЕ required (:-, не :?): пока профиль "bot" не включён, этой переменной может
       # не быть в PROD_ENV вовсе — Api тогда просто не мапит /internal/bot/* (internalBotApiConfigured

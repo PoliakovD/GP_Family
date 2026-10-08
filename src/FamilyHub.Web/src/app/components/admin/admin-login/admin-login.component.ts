@@ -28,13 +28,17 @@ export class AdminLoginComponent {
       await this.api.login(this.user, this.password);
       await this.router.navigate(['/admin']);
     } catch (e) {
-      this.error.set(
-        e instanceof HttpErrorResponse && e.status === 401
-          ? 'Неверный логин или пароль.'
-          : 'Что-то пошло не так. Попробуйте ещё раз.',
-      );
+      this.error.set(this.describeError(e));
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private describeError(e: unknown): string {
+    if (!(e instanceof HttpErrorResponse)) return 'Что-то пошло не так. Попробуйте ещё раз.';
+    if (e.status === 401) return 'Неверный логин или пароль.';
+    // Блокировка после серии неудачных входов (сервер: AdminLoginThrottle) или общий rate-limit "auth".
+    if (e.status === 429) return 'Слишком много попыток входа. Попробуйте через 15 минут.';
+    return 'Что-то пошло не так. Попробуйте ещё раз.';
   }
 }
