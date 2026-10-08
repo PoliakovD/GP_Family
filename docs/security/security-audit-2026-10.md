@@ -19,10 +19,10 @@
 | M2 | 🟡 ✅ | HTML/XML-вложения отдаются inline на основном origin — **исправлено** | 1 |
 | M3 | 🟡 ✅ | Админ-панель отделена от публичного домена только фильтром путей Caddy — **исправлено** | 1 |
 | M4 | 🟡 ✅ | CSRF-проверка не выполняется, если нет cookie `XSRF-TOKEN` (fail-open) — **исправлено** | 1 |
-| M5 | 🟡 | Access-JWT действует до 15 мин после отзыва сессии | 2 |
+| M5 | 🟡 ✅ | Access-JWT действует до 15 мин после отзыва сессии — **исправлено** | 2 |
 | M6 | 🟡 ✅ | Telegram initData: без `auth_date` срок не проверяется, окно повтора 24 ч — **исправлено** | 1 |
-| M7 | 🟡 | Цепочка поставки CI/CD и уязвимые dev-зависимости npm | 2 |
-| L1–L8 | 🟢 | Токены в путях логов, доверие XFF, Kafka без аутентификации, сегментация сети и др. | 2–3 |
+| M7 | 🟡 ✅ | Цепочка поставки CI/CD и уязвимые зависимости — **исправлено** (остаток: vitest 3) | 2 |
+| L1–L8 | 🟢 ✅ | Токены в логах, доверие XFF, Kafka, сегментация сети, lockout смены пароля — **исправлено**; L2, L7, L8 закрыты другими пунктами или приняты | 2–3 |
 
 ---
 
@@ -240,6 +240,17 @@ CSRF-cookie при каждом refresh. Для сессионных cookie по
 сессий (`IMemoryCache` с TTL ≈ `AccessTokenLifetime`, промах кэша — запрос в БД) или сократить
 `AccessTokenLifetime` до 5 минут.
 
+**✅ Исправлено (ветка `security`, второй заход):**
+- `SessionValidityChecker` + `JwtBearerEvents.OnTokenValidated`: access-токен принимается, только если
+  его сессия (claim `SessionId`) не отозвана, либо лишь ротирована через `/refresh`, а сменившая её
+  сессия жива (ротация не выход). Токен без `SessionId` отклоняется.
+- Результат кэшируется на 30 с. `TokenService.Revoke*` сбрасывает кэш всех сессий пользователя,
+  поэтому выход, «завершить сеанс», `logout-all`, смена и сброс пароля действуют сразу. Удаление
+  аккаунта — не позже чем через 30 с.
+- Тесты: `SessionRevocationTests` (выход, logout-all с другого устройства, сброс пароля, ротация
+  не ломает старый access). Тесты идут на обычной фабрике: в `JwtWebFactory` access живёт 2 с,
+  и там отзыв нельзя было бы отличить от истечения.
+
 ### M6. Telegram initData: без `auth_date` срок не проверяется, окно повтора 24 ч
 
 **Где:** `src/FamilyHub.Infrastructure/Telegram/TelegramInitDataValidator.cs:66`: TTL проверяется только
@@ -284,6 +295,31 @@ initData, перехваченные один раз (логи, расширен
 - **NuGet:** `dotnet list package --vulnerable --include-transitive` в этом аудите не запускался
   (в окружении нет .NET SDK). → Запустить локально и добавить шаг в `ci.yml`.
 
+**✅ Исправлено (ветка `security`, второй заход):**
+- Все `uses:` закреплены по commit SHA с комментарием-тегом. Добавлен `.github/dependabot.yml`
+  (actions, NuGet, npm Web/e2e, Dockerfile, compose; еженедельно). `actionlint` чистый.
+- `permissions:` — `ci.yml`: `contents: read`; `deploy.yml`: `contents: read`, `packages: read`.
+- Деплой по sha-тегу: `build.yml` передаёт в `deploy.yml` `image_tag` этой сборки (тег проверяется
+  регуляркой). Ручной запуск — `latest` или указанный sha для отката. После `pull` на VPS выполняется
+  `docker logout ghcr.io`. Деплой идёт по тегу, а не по digest: sha-тег неизменяем по договорённости
+  build.yml, а digest для трёх образов усложнил бы workflow без заметной выгоды.
+- Образы: `datalust/seq:2026.1.17182`, `caddy:2.11.7-alpine` (а также `gotenberg:8.37.0` из H1).
+  Базовые образы в Dockerfile остаются на мажорных тегах и обновляются через Dependabot.
+- CI: `dotnet list package --vulnerable` (High/Critical — падение, Moderate/Low — warning) и
+  `npm audit --omit=dev --audit-level=high`.
+- **NuGet, 2026-10-08:** единственная находка — `SixLabors.ImageSharp 2.1.13`, Moderate
+  ([GHSA-gwg2-r3hj-4w44](https://github.com/advisories/GHSA-gwg2-r3hj-4w44): DoS через выделение
+  памяти при разборе ICC-профиля). Патча в 2.x нет, исправлена только 4.1.2, которая распространяется
+  под Six Labors Split License, а 2.x — под Apache 2.0. Не обновляли, а закрыли путь: фолбэк
+  `ImageDownscaler` принимает только TIFF (по сигнатуре) и декодирует с `IgnoreMetadata = true`,
+  поэтому ICC-профиль не создаётся. NPOI тоже тянет ImageSharp, но для извлечения текста DOCX/XLSX
+  картинки не декодирует. Шаг CI оставит warning, пока пакет на 2.x. Решение по 4.x (лицензия)
+  остаётся за владельцем.
+- **npm:** `piscina` закреплён на 5.3.2 через `overrides` (critical закрыт). Осталось `vitest` 3 →
+  `tinypool` 1.x и `@vitest/mocker` (2 critical, 2 moderate, только тест-раннер, атакующий ввод до них
+  не доходит). Нужен мажорный апгрейд vitest вместе с проверкой совместимости
+  `@angular/build:unit-test` — бэклог.
+
 ---
 
 ## 🟢 Низкий / defense-in-depth
@@ -294,26 +330,49 @@ initData, перехваченные один раз (логи, расширен
   `/api/public/dose-actions/{token}` (`DoseActionEndpoints.cs:16`, к тому же это state-changing
   GET, который могут вызвать префетчеры). → Маскировать сегмент токена в `EnrichDiagnosticContext`
   или `MessageTemplate`; dose-action перевести на POST (или на подтверждение в SW).
+  **✅ Исправлено:** `LogPathMasker` маскирует сегмент-секрет в `/api/public/doctor-reports/`,
+  `/api/public/dose-actions/`, `/api/invites/`, `/r/`, `/join/`. Найдено попутно: в лог уходил и
+  весь `QueryString` с действующими HMAC-подписями ссылок на вложения (`sig`), теперь `sig`, `token`
+  и `code` заменяются на `***`. В Caddy access-лог не включён. Dose-action остаётся GET:
+  `sendRequest` Angular-ngsw умеет только GET, а токен одноразовый и живёт ≤ 24 ч.
 - **L2. Gotenberg Chromium (отчёт для врача).** JS выключен (`--chromium-disable-javascript`),
   пользовательский текст экранируется (`DoctorReportHtmlRenderer.E`), но нет `--chromium-deny-list`
   и сетевой изоляции. Если где-то пропустить экранирование, получится SSRF. Закрывается вместе с H1.
+  **✅ Закрыто H1:** у gotenberg только сеть `previews` без выхода наружу и без соседей, кроме api.
 - **L3. Доверие `X-Forwarded-*` от всей `172.16.0.0/12`** (`ProxyHeadersMiddleware.cs:22`): любой
   контейнер docker-сети подделает IP клиента (обход rate-limit) и схему. → Доверять только
   IP или подсети Caddy (фиксированная подсеть сети `frontend`).
+  **✅ Исправлено:** `ReverseProxy:KnownProxies` — если задан, `X-Forwarded-*` принимаются только от
+  этих IP, loopback-дефолты сброшены. В проде это `172.31.250.2`, фиксированный адрес Caddy в сети
+  `edge`; без настройки (дев, e2e) остаётся прежний `172.16.0.0/12`.
 - **L4. Kafka в режиме PLAINTEXT без аутентификации.** Любой скомпрометированный контейнер может
   писать в `telegram-outbound` (рассылать сообщения от имени бота). → Изолировать сетью; SASL/ACL
   по мере роста.
+  **✅ Исправлено сетью:** kafka только в `messaging` (`internal: true`) вместе с api и ботом.
+  SASL/ACL не вводили, это остаток на случай роста.
 - **L5. Docker-сети прода не сегментированы**: все сервисы в default-сети, что усиливает H1, M1, L3
   и L4. → Сети `frontend` (caddy↔api, wg-client), `backend` (api↔postgres/minio/kafka/seq),
   `previews` (`internal: true`, api↔gotenberg).
+  **✅ Исправлено:** четыре сети. `edge`: caddy (только она, `.2`), api, seq, minio, wg-client.
+  `default`: postgres, minio, seq, api, backup. `messaging`: kafka, api, бот. `previews`: gotenberg, api.
+  Caddy больше не видит postgres и kafka. У `edge` задан `ip_range .16–.31`: без него Docker отдал
+  `.2` первому поднявшемуся контейнеру, и Caddy не стартовал («Address already in use»). Это
+  воспроизведено на живом Docker, как и то, что api видит Caddy строго с `172.31.250.2`, а internal-сети
+  не имеют выхода наружу. Описание — `deploy/README.md`.
 - **L6. `/change-password`: неверный текущий пароль не увеличивает `FailedLoginAttempts`**
   (`PwaAuthService.cs:246`). При угнанной сессии пароль подбирается, тормозит только rate-limit
   `auth-session`. → Тот же счётчик и блокировка, что при входе.
+  **✅ Исправлено:** общий счётчик со входом, после 5 неверных паролей — `423 locked_out` на 15 минут
+  (и вход тоже). Тест: `PwaAuthFlowTests.ChangePassword_FiveWrongCurrentPasswords_Returns423_AndLocksLogin`.
 - **L7. Push-подписка:** upsert по `EndpointHash` переносит владение подпиской, нет лимитов количества
   и длины полей (закрывается вместе с M1).
+  **✅ Лимиты сделаны в M1.** Перенос владения по endpoint оставлен намеренно: на общем устройстве
+  подписка переходит к тому, кто вошёл последним.
 - **L8. «Отравление» общего справочника:** веб-поиск и LLM-суммаризация пишут в KB, который видят все
   пользователи. → Держать review-гейт (`EnrichmentReviewConfig`) включённым для новых записей и
   показывать источник.
+  **Принято:** гейт уже есть (пороги уверенности 0.7 для запроса и 0.8 для результата, настраиваются
+  в админке), кода не меняли.
 
 ---
 
@@ -346,8 +405,8 @@ initData, перехваченные один раз (логи, расширен
 |---|---|---|---|
 | **0. Немедленно** ✅ | 1–2 дня | **H2**: `RevokeAllForUserAsync` в reset + тест. **H1**: PoC; сеть `previews` (`internal: true`) для gotenberg; HTML/XML показывать как текст; закрепить версию Gotenberg | Тест H2 зелёный; PoC H1 после исправления не даёт исходящих запросов |
 | **1. Ближайший спринт** ✅ | ≤ 2 нед | **M1** валидатор push-endpoint и лимиты; **M2** `text/plain` + `CSP: sandbox` для вложений, magic bytes; **M3** `RequireHost` + блокировка + аудит входов; **M4** CSRF без fail-open; **M6** обязательный `auth_date`, TTL ≈1 ч | Интеграционные и unit-тесты на каждый пункт; `CaddyfileTests` не сломаны |
-| **2. Следующий спринт** | ≤ 1 мес | **M5** проверка `SessionId` в `OnTokenValidated`; **M7** pin SHA/digest, `permissions:`, Dependabot, `npm audit fix`, `dotnet list package --vulnerable` в CI; **L3/L5** сегментация сетей и доверие XFF только от Caddy; **L4** изоляция Kafka | В CI есть шаг скана зависимостей; `docker compose config` с новыми сетями; деплой по digest |
-| **3. Бэклог** | — | **L1** маскирование токенов в логах, POST для dose-action; **L2** deny-list Chromium; **L6** блокировка при change-password; **L7**; **L8** review-гейт; TOTP и серверные сессии для админки | — |
+| **2. Следующий спринт** ✅ | ≤ 1 мес | **M5** проверка `SessionId` в `OnTokenValidated`; **M7** pin SHA/digest, `permissions:`, Dependabot, `npm audit fix`, `dotnet list package --vulnerable` в CI; **L3/L5** сегментация сетей и доверие XFF только от Caddy; **L4** изоляция Kafka | В CI есть шаг скана зависимостей; `docker compose config` с новыми сетями; деплой по digest |
+| **3. Бэклог** | — | ~~L1, L2, L6, L7, L8~~ (сделано или принято). Осталось: TOTP и персистентные сессии админки, `__Host-` для cookie, сверка magic bytes, мажорный апгрейд vitest, решение по ImageSharp 4.x (лицензия), SASL для Kafka при росте | — |
 
 После закрытия каждого этапа: отметить находки здесь как `✅ Исправлено (коммит/PR)` и обновить
 [threat-model.md](threat-model.md) и [access-matrix.md](access-matrix.md).
