@@ -62,6 +62,8 @@ services:
     # запуск workflow "MinIO image" и правка этого тега (+ docker-compose.yml, TestImages.cs, backup/Dockerfile).
     image: ghcr.io/poliakovd/gp_family-minio:RELEASE.2025-10-15T17-29-55Z
     restart: unless-stopped
+    # default — api и backup (S3 API :9000); edge — консоль :9001 через Caddy (аудит 2026-10, L5).
+    networks: [default, edge]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -84,6 +86,8 @@ services:
   seq:
     image: datalust/seq:latest
     restart: unless-stopped
+    # default — приём логов от api/бота; edge — веб-интерфейс через Caddy (аудит 2026-10, L5).
+    networks: [default, edge]
     environment:
       ACCEPT_EULA: "Y"
       # В отличие от локального дев-стека (SEQ_NO_AUTH=true) — на VPS Seq смотрит через Caddy
@@ -139,6 +143,9 @@ services:
   kafka:
     image: apache/kafka:3.9.0
     restart: unless-stopped
+    # Только messaging (internal): брокер без аутентификации (PLAINTEXT) видят лишь api и бот —
+    # остальные контейнеры не могут писать в telegram-outbound (аудит security-audit-2026-10, L4).
+    networks: [messaging]
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -207,6 +214,9 @@ services:
       # Админ-панель отвечает только на своём Host (аудит security-audit-2026-10, M3) — Caddy передаёт
       # Host как есть, вместе с нестандартным портом. На любом другом Host /api/admin/* и /admin* → 404.
       Admin__AllowedHosts__0: "admin.${PUBLIC_DOMAIN:?не задан в .env}:4059"
+      # X-Forwarded-For/Proto принимаются только от Caddy — его адрес в сети edge фиксирован ниже
+      # (аудит security-audit-2026-10, L3). Раньше доверялась вся 172.16.0.0/12.
+      ReverseProxy__KnownProxies__0: "172.31.250.2"
       # Секрет обмена с FamilyHub.TelegramBot (см. telegrambot ниже, profiles: ["bot"]) —
       # ADR-0008. НЕ required (:-, не :?): пока профиль "bot" не включён, этой переменной может
       # не быть в PROD_ENV вовсе — Api тогда просто не мапит /internal/bot/* (internalBotApiConfigured
@@ -233,8 +243,9 @@ services:
       kafka: { condition: service_healthy }
       seq: { condition: service_started }
       gotenberg: { condition: service_healthy }
-    # default — все остальные сервисы и egress; previews — единственный путь к gotenberg (аудит H1).
-    networks: [default, previews]
+    # default — postgres/minio/seq и egress; edge — входящие от Caddy; messaging — kafka;
+    # previews — gotenberg (аудит security-audit-2026-10, H1/L3–L5).
+    networks: [default, edge, messaging, previews]
     logging:
       driver: json-file
       options: { max-size: "50m", max-file: "3" }
@@ -273,6 +284,9 @@ services:
     image: ${WG_IMAGE}
     restart: unless-stopped
     profiles: ["bot"]
+    # edge — вебхук от Caddy, api (/internal/bot/*) и seq; messaging — kafka (telegram-outbound).
+    # Сеть делит и telegrambot (network_mode: service:wg-client). Аудит security-audit-2026-10, L5.
+    networks: [edge, messaging]
     cap_add: [NET_ADMIN]
     devices: ["/dev/net/tun:/dev/net/tun"]
     sysctls:
@@ -356,6 +370,11 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    # Только edge и с фиксированным адресом: api доверяет X-Forwarded-* ровно от 172.31.250.2
+    # (ReverseProxy__KnownProxies), а postgres/kafka для Caddy недостижимы (аудит 2026-10, L3/L5).
+    networks:
+      edge:
+        ipv4_address: 172.31.250.2
     env_file: .env
     ports:
       - "80:80"
@@ -416,7 +435,20 @@ services:
           memory: 256M
 
 networks:
+  # Бэкенд: postgres, minio, seq, api, backup (аудит security-audit-2026-10, L5).
   default: {}
+  # Входящий трафик: Caddy и то, куда он проксирует (api, seq, minio-консоль, вебхук бота).
+  # Подсеть фиксирована ради статического адреса Caddy (см. caddy и ReverseProxy__KnownProxies у api).
+  # ip_range — динамические адреса только из .16–.31: без него Docker мог отдать .2 контейнеру,
+  # поднявшемуся раньше Caddy, и тот не стартовал бы с «Address already in use» (проверено).
+  edge:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/27
+          ip_range: 172.31.250.16/28
+  # Kafka без выхода наружу — только api и бот (L4).
+  messaging:
+    internal: true
   # Сеть без выхода наружу только для api↔gotenberg (аудит security-audit-2026-10, H1).
   previews:
     internal: true
