@@ -84,7 +84,7 @@ services:
           memory: 1G
 
   seq:
-    image: datalust/seq:latest
+    image: datalust/seq:2026.1.17182
     restart: unless-stopped
     # default — приём логов от api/бота; edge — веб-интерфейс через Caddy (аудит 2026-10, L5).
     networks: [default, edge]
@@ -368,7 +368,7 @@ services:
           memory: 512M
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.7-alpine
     restart: unless-stopped
     # Только edge и с фиксированным адресом: api доверяет X-Forwarded-* ровно от 172.31.250.2
     # (ReverseProxy__KnownProxies), а postgres/kafka для Caddy недостижимы (аудит 2026-10, L3/L5).

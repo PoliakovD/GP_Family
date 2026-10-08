@@ -1,5 +1,6 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SkiaSharp;
@@ -78,15 +79,24 @@ public static class ImageDownscaler
     /// <summary>Покрывает TIFF (SkiaSharp его на Linux не декодирует вовсе). Для форматов, которые
     /// не декодирует и ImageSharp (практически — только HEIC), бросает тот же
     /// NotSupportedException, что раньше бросал только сам SkiaSharp-путь — вызывающий код
-    /// (DocumentTextExtractor/AttachmentPreviewRenderer) уже ловит именно этот тип.</summary>
+    /// (DocumentTextExtractor/AttachmentPreviewRenderer) уже ловит именно этот тип.
+    ///
+    /// Только TIFF и без метаданных (аудит security-audit-2026-10, M7): у ImageSharp 2.x есть
+    /// неисправленная DoS через разбор встроенного ICC-профиля (GHSA-gwg2-r3hj-4w44, патч только в 4.1.2
+    /// под другой лицензией). Раньше сюда попадал любой формат, который не осилил SkiaSharp (в том
+    /// числе специально испорченный PNG/JPEG с ICC — ровно PoC advisory), и метаданные разбирались.
+    /// Ради TIFF фолбэк и существует, а IgnoreMetadata не создаёт ICC-профиль вовсе.</summary>
     private static DecodedImage DownscaleWithImageSharpFallback(byte[] source, int maxDimension, int jpegQuality)
     {
+        if (!IsTiff(source))
+            throw new NotSupportedException("Не удалось декодировать изображение (неподдерживаемый формат).");
+
         Image<Rgba32> image;
         try
         {
-            image = Image.Load<Rgba32>(source);
+            image = Image.Load<Rgba32>(source, new TiffDecoder { IgnoreMetadata = true });
         }
-        catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException)
+        catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException or ImageFormatException)
         {
             throw new NotSupportedException("Не удалось декодировать изображение (неподдерживаемый формат).", ex);
         }
@@ -107,4 +117,10 @@ public static class ImageDownscaler
             return new DecodedImage(encoded.ToArray(), DocumentContentTypes.Jpeg);
         }
     }
+
+    /// <summary>Сигнатуры TIFF и BigTIFF: II*\0, MM\0*, II+\0, MM\0+.</summary>
+    private static bool IsTiff(ReadOnlySpan<byte> data) =>
+        data.Length >= 4
+        && ((data[0] == 'I' && data[1] == 'I' && data[3] == 0 && (data[2] == 42 || data[2] == 43))
+            || (data[0] == 'M' && data[1] == 'M' && data[2] == 0 && (data[3] == 42 || data[3] == 43)));
 }

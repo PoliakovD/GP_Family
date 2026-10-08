@@ -37,7 +37,7 @@ services:
       retries: 10
 
   seq:
-    image: datalust/seq:latest
+    image: datalust/seq:2026.1.17182
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"

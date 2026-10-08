@@ -121,6 +121,19 @@ public class AttachmentPreviewRendererTests
         gotenberg.CallCount.Should().Be(0);
     }
 
+    // Регрессия к M7 (docs/security/security-audit-2026-10.md): фолбэк ImageSharp только для TIFF —
+    // испорченная «картинка» другого формата (PoC GHSA-gwg2-r3hj-4w44 — PNG с ICC) до него не доходит.
+    [Fact]
+    public async Task RenderAsync_UndecodablePngBytes_DoesNotReachImageSharp_ReturnsUnsupported()
+    {
+        var sut = CreateSut();
+        byte[] brokenPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D];
+
+        var result = await sut.RenderAsync(brokenPng, DocumentContentTypes.Png);
+
+        result.Outcome.Should().Be(PreviewRenderOutcome.Unsupported);
+    }
+
     [Fact]
     public async Task RenderAsync_Heic_NoDecoderAvailable_ReturnsUnsupported()
     {
