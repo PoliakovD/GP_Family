@@ -15,12 +15,12 @@
 |---|---|---|---|
 | H1 | 🔴 ✅ | SSRF / чтение внутренних ресурсов через конвертацию документов в Gotenberg (LibreOffice) — **исправлено** | 0 |
 | H2 | 🔴 ✅ | Сброс пароля не отзывает действующие сессии — **исправлено** | 0 |
-| M1 | 🟡 | Слепой SSRF через endpoint Web Push-подписки | 1 |
-| M2 | 🟡 | HTML/XML-вложения отдаются inline на основном origin | 1 |
-| M3 | 🟡 | Админ-панель отделена от публичного домена только фильтром путей Caddy | 1 |
-| M4 | 🟡 | CSRF-проверка не выполняется, если нет cookie `XSRF-TOKEN` (fail-open) | 1 |
+| M1 | 🟡 ✅ | Слепой SSRF через endpoint Web Push-подписки — **исправлено** | 1 |
+| M2 | 🟡 ✅ | HTML/XML-вложения отдаются inline на основном origin — **исправлено** | 1 |
+| M3 | 🟡 ✅ | Админ-панель отделена от публичного домена только фильтром путей Caddy — **исправлено** | 1 |
+| M4 | 🟡 ✅ | CSRF-проверка не выполняется, если нет cookie `XSRF-TOKEN` (fail-open) — **исправлено** | 1 |
 | M5 | 🟡 | Access-JWT действует до 15 мин после отзыва сессии | 2 |
-| M6 | 🟡 | Telegram initData: без `auth_date` срок не проверяется, окно повтора 24 ч | 1 |
+| M6 | 🟡 ✅ | Telegram initData: без `auth_date` срок не проверяется, окно повтора 24 ч — **исправлено** | 1 |
 | M7 | 🟡 | Цепочка поставки CI/CD и уязвимые dev-зависимости npm | 2 |
 | L1–L8 | 🟢 | Токены в путях логов, доверие XFF, Kafka без аутентификации, сегментация сети и др. | 2–3 |
 
@@ -117,6 +117,19 @@ docker-сеть и дальше: `api:8080`, `minio:9000/9001`, `seq`, LM Studio
 **Проверка:** unit-тесты валидатора (http, IP, `localhost`, имя сервиса docker, допустимые хосты)
 и интеграционный тест: 400 на недопустимый endpoint.
 
+**✅ Исправлено (ветка `security`):**
+- `PushEndpointPolicy` (`src/FamilyHub.Infrastructure/Notifications/`): только `https`, стандартный порт,
+  без userinfo и IP-литералов, хост из allow-list ADR-0004; ключи — base64url до 256 символов.
+  `/api/push/subscribe` на остальное отвечает `400 invalid_push_subscription`.
+- `WebPushNotificationSender` не отправляет на недопустимые endpoint, сохранённые до исправления,
+  и удаляет такие подписки.
+- Не больше 10 подписок на пользователя: при новой сверх лимита вытесняется самая давно
+  не использовавшаяся (закрывает и L7 по количеству).
+- Тесты: `PushEndpointPolicyTests`, `WebPushNotificationSenderTests.SendAsync_NonPushRelayEndpoint_IsNotCalled_AndRemoved`,
+  `PushApiTests.Subscribe_NonPushRelayEndpoint_Returns400`.
+- Не сделано: запрет приватных адресов в `ConnectCallback`. Allow-list состоит из доменов Google,
+  Mozilla, Apple и Microsoft, DNS-rebinding через них не реален.
+
 ### M2. HTML/XML-вложения отдаются inline на основном origin
 
 **Где:** `src/FamilyHub.Modules.Medical/Attachments/AttachmentEndpoints.cs:108-122` (`/inline`:
@@ -135,6 +148,18 @@ docker-сеть и дальше: `api:8080`, `minio:9000/9001`, `seq`, LM Studio
 
 **Проверка:** интеграционный тест: `/inline` для HTML-вложения возвращает `text/plain` и заголовок
 `sandbox`.
+
+**✅ Исправлено (ветка `security`):**
+- Все анонимные эндпоинты байт вложений (`file`, `inline`, `preview/thumb|pdf|page`) отдают
+  `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` и `nosniff`
+  вместо CSP приложения (фильтр `HardenFileResponse` в `AttachmentEndpoints.cs`).
+- `/inline` для `PlainTextLike` (HTML, XML, CSV, TXT, RTF) отдаёт `text/plain; charset=utf-8`.
+  Просмотрщик это не задевает: вид текста он берёт из `ContentType` в `/preview`, а PDF и текст
+  загружает через `fetch` (pdf.js).
+- Тест: `AttachmentsApiTests.HtmlAttachment_ServedInlineAsPlainText_InSandbox`.
+- Не сделано: сверка magic bytes. С `nosniff` и sandbox-CSP подмена типа уже не даёт исполнения,
+  а проверка сломала бы около 7 интеграционных тестов, которые загружают текст как `application/pdf`.
+  Остаётся в бэклоге как защита от мусорных загрузок.
 
 ### M3. Админ-панель отделена от публичного домена только фильтром путей Caddy
 
@@ -158,6 +183,23 @@ docker-сеть и дальше: `api:8080`, `minio:9000/9001`, `seq`, LM Studio
 
 **Проверка:** интеграционный тест: запрос `/api/admin/*` с чужим Host возвращает 404.
 
+**✅ Исправлено (ветка `security`):**
+- `Admin:AllowedHosts` + `AdminHostGuardMiddleware`: на чужом Host `/api/admin/*` и `/admin*`
+  отвечают 404 до аутентификации и SPA-fallback. Прод задаёт `admin.${PUBLIC_DOMAIN}:4059`
+  (`deploy/docker-compose.prod.yml`). Если список пуст (дев, тесты), ограничения нет и на старте
+  пишется предупреждение.
+- `AdminLoginThrottle`: после `Admin:MaxFailedLogins` (10) неудач подряд вход блокируется на
+  `Admin:LockoutDuration` (15 мин) глобально, ответ `429 admin_locked`, пароль в это время
+  не проверяется. Форма входа показывает понятное сообщение.
+- Cookie сессии несёт случайный id. `DELETE /api/admin/session` отзывает его на сервере
+  (`AdminSessionRevocations`), и скопированная cookie больше не работает. Реестр хранится в памяти:
+  после рестарта API отозванная сессия снова действительна до конца своего `SessionLifetime`
+  (≤ 12 ч). Это осознанный компромисс при одном инстансе, вместо таблицы и миграции.
+- Аудит-логи в Seq: успешный и неудачный вход, блокировка, выход, с IP.
+- Тесты: `AdminLoginThrottleTests`, `AdminHostGuardMiddlewareTests`, `AdminHostGuardApiTests`,
+  `AdminSessionApiTests.Logout_RevokesSessionServerSide_CopiedCookieNoLongerWorks`.
+- Не сделано: TOTP и «выйти везде» (бэклог, этап 3).
+
 ### M4. CSRF-проверка не выполняется, если нет cookie `XSRF-TOKEN` (fail-open)
 
 **Где:** `src/FamilyHub.Api/Startup/CsrfGateMiddleware.cs:54-57`: заголовок проверяется, только если
@@ -174,6 +216,21 @@ docker-сеть и дальше: `api:8080`, `minio:9000/9001`, `seq`, LM Studio
 CSRF-cookie при каждом refresh. Для сессионных cookie по возможности взять префикс `__Host-`.
 
 **Проверка:** тест: PWA-запрос POST без CSRF-cookie и без заголовка получает 400.
+
+**✅ Исправлено (ветка `security`):**
+- `CsrfGateMiddleware` проверяет `IAntiforgery` у каждого мутирующего `/api`-запроса с identity
+  `PwaCookie`, есть cookie `XSRF-TOKEN` или нет.
+- Публичная CSRF-cookie стала сессионной, как и приватная половина. Раньше она протухала через
+  `AccessTokenLifetime` после `/me` и не перевыпускалась на `/refresh`, а с fail-closed гейтом это
+  ломало бы живые вкладки. Перевыпуск на `/refresh` невозможен: этот запрос анонимный, а токен
+  привязывается к identity.
+- Фронт (`auth.interceptor.ts`): на `400 csrf_token_invalid` один раз вызывает `GET /api/auth/me`
+  (выдаёт свежую пару) и повторяет запрос через полный HTTP-конвейер, чтобы заголовок подставил
+  xsrf-интерцептор Angular.
+- Тесты: `JwtSessionTests.MutatingPwaRequest_WithoutAnyCsrfCookie_Returns400` и `…_WithCsrfPair_Passes`.
+  Logout-тесты и e2e `18-pwa-password-reset` теперь шлют CSRF-пару.
+- Не сделано: префикс `__Host-` для cookie. Смена имён разлогинила бы всех пользователей,
+  поэтому вынесено в бэклог.
 
 ### M5. Access-JWT действует до 15 минут после отзыва сессии
 
@@ -194,6 +251,18 @@ initData, перехваченные один раз (логи, расширен
 **Исправление:** без валидного `auth_date` отклонять. Отклонять `auth_date` из будущего с запасом
 больше ~1 мин. Снизить `MaxInitDataAge` до ~1 ч: Mini App получает свежие initData при каждом
 открытии. Unit-тесты на оба случая.
+
+**✅ Исправлено (ветка `security`):**
+- `TelegramInitDataValidator.Check`: без валидного `auth_date` и с `auth_date` из будущего
+  (больше 5 мин) — `Invalid`, старше `MaxInitDataAge` — `Expired`. Срок проверяется после подписи.
+- `Telegram:MaxInitDataAge`: 24 ч → **1 ч** (решение владельца продукта).
+- На просроченные initData `TelegramMiniAppAuthenticationHandler` отвечает
+  `401 {code: "init_data_expired"}`. Фронт показывает экран `/telegram-expired` («закройте и откройте
+  приложение заново») вместо повторной привязки почты.
+- Тесты: `TelegramInitDataValidatorTests` (без `auth_date`, мусор, будущее, просрочка, подделка),
+  `TelegramMiniAppAuthenticationHandlerTests.ExpiredInitData_…`.
+- Остаток: в пределах часа перехваченные initData всё ещё можно использовать повторно.
+  Выход из PWA на Telegram-доступ не влияет, это следствие модели Telegram.
 
 ### M7. Цепочка поставки CI/CD и зависимости
 
@@ -276,7 +345,7 @@ initData, перехваченные один раз (логи, расширен
 | Этап | Срок | Задачи | Критерий готовности |
 |---|---|---|---|
 | **0. Немедленно** ✅ | 1–2 дня | **H2**: `RevokeAllForUserAsync` в reset + тест. **H1**: PoC; сеть `previews` (`internal: true`) для gotenberg; HTML/XML показывать как текст; закрепить версию Gotenberg | Тест H2 зелёный; PoC H1 после исправления не даёт исходящих запросов |
-| **1. Ближайший спринт** | ≤ 2 нед | **M1** валидатор push-endpoint и лимиты; **M2** `text/plain` + `CSP: sandbox` для вложений, magic bytes; **M3** `RequireHost` + блокировка + аудит входов; **M4** CSRF без fail-open; **M6** обязательный `auth_date`, TTL ≈1 ч | Интеграционные и unit-тесты на каждый пункт; `CaddyfileTests` не сломаны |
+| **1. Ближайший спринт** ✅ | ≤ 2 нед | **M1** валидатор push-endpoint и лимиты; **M2** `text/plain` + `CSP: sandbox` для вложений, magic bytes; **M3** `RequireHost` + блокировка + аудит входов; **M4** CSRF без fail-open; **M6** обязательный `auth_date`, TTL ≈1 ч | Интеграционные и unit-тесты на каждый пункт; `CaddyfileTests` не сломаны |
 | **2. Следующий спринт** | ≤ 1 мес | **M5** проверка `SessionId` в `OnTokenValidated`; **M7** pin SHA/digest, `permissions:`, Dependabot, `npm audit fix`, `dotnet list package --vulnerable` в CI; **L3/L5** сегментация сетей и доверие XFF только от Caddy; **L4** изоляция Kafka | В CI есть шаг скана зависимостей; `docker compose config` с новыми сетями; деплой по digest |
 | **3. Бэклог** | — | **L1** маскирование токенов в логах, POST для dose-action; **L2** deny-list Chromium; **L6** блокировка при change-password; **L7**; **L8** review-гейт; TOTP и серверные сессии для админки | — |
 
