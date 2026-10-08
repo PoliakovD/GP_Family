@@ -53,8 +53,13 @@ public static class PwaSessionCookieWriter
     /// связаны, сверяются вместе в CSRF-гейте (Program.cs). Вызывать ТОЛЬКО из аутентифицированного
     /// контекста (см. GET /api/auth/me) — GetAndStoreTokens привязывает токен к identity текущего
     /// запроса, и пара, выпущенная в анонимном контексте, не пройдёт валидацию на аутентифицированном.
+    ///
+    /// Сессионная (без Expires), как и приватная половина: раньше она жила AccessTokenLifetime от
+    /// вызова /me и после /refresh не перевыпускалась, а гейт молча пропускал запросы без неё. Теперь
+    /// гейт fail-closed (аудит security-audit-2026-10, M4), и cookie не должна протухать посреди
+    /// живой вкладки; ClearSessionCookies (выход) её по-прежнему удаляет.
     /// </summary>
-    public static void IssueCsrfCookie(HttpContext http, IAntiforgery antiforgery, DateTime expiresAt, bool? secure = null)
+    public static void IssueCsrfCookie(HttpContext http, IAntiforgery antiforgery, bool? secure = null)
     {
         var tokens = antiforgery.GetAndStoreTokens(http);
         http.Response.Cookies.Append(CsrfCookieNames.PublicToken, tokens.RequestToken!, new CookieOptions
@@ -62,7 +67,6 @@ public static class PwaSessionCookieWriter
             HttpOnly = false,
             SameSite = SameSiteMode.Lax,
             Secure = secure ?? http.Request.IsHttps,
-            Expires = expiresAt,
             Path = "/",
         });
     }

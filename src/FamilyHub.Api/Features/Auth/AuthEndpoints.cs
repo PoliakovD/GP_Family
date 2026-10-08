@@ -154,7 +154,7 @@ public static class AuthEndpoints
         // AuthRateLimitOptions.AuthSessionPermitLimit / TECH_DEBT.md #12).
         group.MapGet("/me", async (
             ICurrentUser currentUser, ClaimsPrincipal principal, AppDbContext db, HttpContext http,
-            IAntiforgery antiforgery, IOptions<JwtOptions> jwtOptions, CancellationToken ct) =>
+            IAntiforgery antiforgery, CancellationToken ct) =>
         {
             // SingleOrDefaultAsync, не SingleAsync: узкое окно гонки с удалением аккаунта
             // (слияние аккаунтов, самостоятельное удаление с другого устройства) — старый
@@ -172,7 +172,7 @@ public static class AuthEndpoints
             // (app.component.ts дёргает /me на старте), а не только на следующем логине. Только
             // для PWA — у Telegram/Dev ambient-cookie аутентификации нет, CSRF неприменим.
             if (isPwaSession)
-                PwaSessionCookieWriter.IssueCsrfCookie(http, antiforgery, DateTime.UtcNow.Add(jwtOptions.Value.AccessTokenLifetime));
+                PwaSessionCookieWriter.IssueCsrfCookie(http, antiforgery);
 
             return Results.Ok(new
             {
