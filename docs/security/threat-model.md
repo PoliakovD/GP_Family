@@ -1,6 +1,8 @@
 # Модель угроз FamilyHub (этап 2, задача 2.4)
 
 Два окружения входа: **Telegram Mini App** (initData) и **PWA** (email + пароль, cookie).
+
+> Актуальный аудит безопасности и план устранения находок — [security-audit-2026-10.md](security-audit-2026-10.md).
 Ниже — угрозы по STRIDE и реализованные контрмеры.
 
 ## Аутентификация: Telegram Mini App
