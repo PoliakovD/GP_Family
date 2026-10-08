@@ -209,6 +209,7 @@ public static class AuthEndpoints
                 {
                     ChangePasswordResult.NoPassword => Results.BadRequest(new { code = "no_password" }),
                     ChangePasswordResult.InvalidCurrentPassword => Results.BadRequest(new { code = "invalid_credentials" }),
+                    ChangePasswordResult.LockedOut => Results.Json(new { code = "locked_out" }, statusCode: StatusCodes.Status423Locked),
                     _ => Results.BadRequest(new { code = "weak_password" }),
                 };
             }
