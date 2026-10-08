@@ -20,4 +20,17 @@ public class AdminOptions
 
     /// <summary>Как долго действует cookie сессии после входа (абсолютная, без sliding-продления).</summary>
     public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromHours(12);
+
+    /// <summary>Host-заголовки (с портом, если он не стандартный), на которых обслуживаются /api/admin/*
+    /// и SPA-маршруты /admin — например <c>admin.example.ru:4059</c>. Пусто — без ограничения (дев/тесты;
+    /// на старте пишется предупреждение). Аудит security-audit-2026-10, M3: без этого панель отделена от
+    /// публичного домена только путевым фильтром Caddy. Env: <c>Admin__AllowedHosts__0</c>.</summary>
+    public List<string> AllowedHosts { get; set; } = [];
+
+    /// <summary>Сколько неудачных входов подряд (в окне <see cref="LockoutDuration"/>) блокирует форму входа.
+    /// Счётчик общий, не по IP: логин у панели один, а сама она доступна только из-за WireGuard.</summary>
+    public int MaxFailedLogins { get; set; } = 10;
+
+    /// <summary>Окно подсчёта неудач и длительность блокировки входа.</summary>
+    public TimeSpan LockoutDuration { get; set; } = TimeSpan.FromMinutes(15);
 }

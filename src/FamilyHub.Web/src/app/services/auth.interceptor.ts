@@ -1,4 +1,4 @@
-import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpClient, HttpContextToken, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, firstValueFrom, from, switchMap, throwError } from 'rxjs';
@@ -44,6 +44,26 @@ function ensureRefreshed(http: HttpClient): Promise<boolean> {
       });
   }
   return refreshInFlight;
+}
+
+/**
+ * Запрос уже повторён после перевыпуска CSRF-токена — второй 400 csrf_token_invalid не ретраим
+ * (иначе бесконечный цикл, если сервер отвергает токен по другой причине).
+ */
+const CSRF_RETRIED = new HttpContextToken<boolean>(() => false);
+
+/** Общий in-flight перевыпуск CSRF-токена: GET /api/auth/me выставляет свежую пару cookie. */
+let csrfReissueInFlight: Promise<void> | null = null;
+
+function reissueCsrfToken(http: HttpClient): Promise<void> {
+  if (!csrfReissueInFlight) {
+    csrfReissueInFlight = firstValueFrom(http.get('/api/auth/me', { withCredentials: true }))
+      .then(() => undefined)
+      .finally(() => {
+        csrfReissueInFlight = null;
+      });
+  }
+  return csrfReissueInFlight;
 }
 
 /**
@@ -96,6 +116,20 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       // отправить adminGuard. AdminApiService/adminGuard сами решают, что делать с 401 отсюда.
       const isAdminPath = req.url.startsWith('/api/admin');
 
+      // Сервер проверяет CSRF у каждого мутирующего PWA-запроса (аудит security-audit-2026-10, M4),
+      // а CSRF-cookie выдаёт только GET /api/auth/me. Если её нет (новая сессия браузера до первого
+      // /me, вытеснена) — перевыпускаем и повторяем запрос один раз. Повтор — через http.request,
+      // а не next(): так он снова проходит xsrf-интерцептор Angular и получает свежий заголовок.
+      if (error.status === 400 && error.error?.code === 'csrf_token_invalid' && isPwaMode
+        && !req.context.get(CSRF_RETRIED)) {
+        // Ошибка самого перевыпуска — отдаём исходную 400; ошибка повтора (409/422 и т.п.) — как есть.
+        return from(reissueCsrfToken(http).then(() => true, () => false)).pipe(
+          switchMap((reissued) => reissued
+            ? http.request(req.clone({ context: req.context.set(CSRF_RETRIED, true) }))
+            : throwError(() => error)),
+        );
+      }
+
       if (error.status === 401 && isPwaMode && !isSessionLessPath && !isAdminPath) {
         return from(ensureRefreshed(http)).pipe(
           switchMap((refreshed) =>
@@ -119,6 +153,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       // TelegramId (например, только что отвязали Telegram в этой же сессии через revoke, или
       // TelegramId отвязан с другого устройства) — как и в PWA-ветке выше, ретраить нечего,
       // сессии в telegram-режиме нет вообще; ведём на повторную привязку.
+      if (error.status === 401 && initData && error.error?.code === 'init_data_expired') {
+        // initData старше Telegram:MaxInitDataAge (аудит security-audit-2026-10, M6) — аккаунт
+        // в порядке, нужны только свежие данные от Telegram: просим перезапустить Mini App.
+        if (!router.url.startsWith('/telegram-expired')) void router.navigate(['/telegram-expired']);
+        return throwError(() => error);
+      }
+
       if (error.status === 401 && initData) {
         auth.telegramBound.set(false);
         void router.navigate(['/telegram-bind']);

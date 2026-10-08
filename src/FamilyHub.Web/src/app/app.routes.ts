@@ -41,6 +41,14 @@ export const routes: Routes = [
       import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
   },
   {
+    // initData Mini App просрочена (аудит security-audit-2026-10, M6) — без гардов: любой запрос
+    // к API здесь всё равно получил бы тот же 401.
+    path: 'telegram-expired',
+    title: 'Сессия устарела',
+    loadComponent: () =>
+      import('./components/telegram-expired/telegram-expired.component').then((m) => m.TelegramExpiredComponent),
+  },
+  {
     // Публичный лендинг приглашения (веб-альтернатива Telegram-инвайту, см. FamilyDetailsComponent) —
     // намеренно БЕЗ гардов: гость должен увидеть превью и решить, создавать ли аккаунт, до входа.
     path: 'join/:code',

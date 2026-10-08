@@ -1,6 +1,9 @@
 # Модель угроз FamilyHub (этап 2, задача 2.4)
 
 Два окружения входа: **Telegram Mini App** (initData) и **PWA** (email + пароль, cookie).
+
+> Актуальный аудит безопасности и план устранения находок — [security-audit-2026-10.md](security-audit-2026-10.md).
+
 Ниже — угрозы по STRIDE и реализованные контрмеры.
 
 ## Аутентификация: Telegram Mini App
@@ -8,7 +11,7 @@
 | Угроза | Контрмера |
 |--------|-----------|
 | Подделка initData (spoofing) | HMAC-SHA256 по официальному алгоритму (`TelegramInitDataValidator`), constant-time сравнение; отказ при незаданном BotToken (fail closed) |
-| Replay устаревшего initData | TTL по `auth_date` (`Telegram:MaxInitDataAge`, 24 ч). Остаточный риск: окно велико для украденного initData — компенсируется тем, что initData передаётся только в заголовке к нашему API по TLS |
+| Replay устаревшего initData | TTL по `auth_date` (`Telegram:MaxInitDataAge`, 1 ч; было 24 ч до аудита 2026-10, M6). `auth_date` обязателен, дата из будущего > 5 мин отклоняется. На просрочку API отвечает `401 init_data_expired`, фронт просит перезапустить Mini App. Остаточный риск: часовое окно для перехваченных initData; передаются они только в заголовке к нашему API по TLS |
 | Утечка BotToken | токен только в env прода; в dev бот не поднимается вовсе |
 
 ## Аутентификация: PWA (email + пароль)
@@ -26,7 +29,7 @@
 | Спам кодами / истощение email-лимитов | троттлинг: 3 активных кода в час на адрес + IP-лимит 3/час на выдачу |
 | Перечисление аккаунтов (enumeration) | register/start всегда 200; login с выравниванием времени (фиктивный PBKDF2-verify для несуществующих) |
 | Кража cookie (XSS) | HttpOnly + SameSite=Lax; SPA не имеет доступа к cookie из JS |
-| CSRF | SameSite=Lax (базовый слой) + double-submit антифорджери-токен (`IAntiforgery`): публичная cookie `XSRF-TOKEN` + заголовок `X-XSRF-TOKEN` на каждый мутирующий `/api`-запрос PWA-сессии (Angular `withXsrfConfiguration` подставляет сама, см. `app.config.ts`/`Program.cs` CSRF-гейт). Telegram Mini App — initData в заголовке, ambient-cookie CSRF неприменим по конструкции. Вне модели: login CSRF (принуждение залогиниться под чужим аккаунтом) — отдельный, более редкий класс, не покрыт |
+| CSRF | SameSite=Lax (базовый слой) + double-submit антифорджери-токен (`IAntiforgery`): публичная cookie `XSRF-TOKEN` + заголовок `X-XSRF-TOKEN` на каждый мутирующий `/api`-запрос PWA-сессии (Angular `withXsrfConfiguration` подставляет сама, см. `app.config.ts`/`Program.cs` CSRF-гейт). Гейт fail-closed: проверка идёт и без cookie `XSRF-TOKEN` (аудит 2026-10, M4); обе половины токена — сессионные cookie, выдаются `GET /api/auth/me`, фронт перевыпускает их на `400 csrf_token_invalid`. Telegram Mini App — initData в заголовке, ambient-cookie CSRF неприменим по конструкции. Вне модели: login CSRF (принуждение залогиниться под чужим аккаунтом) — отдельный, более редкий класс, не покрыт |
 | Захват привязки email к чужому аккаунту | код LinkEmail связан с UserId инициатора; подтверждение с чужой сессии отвергается |
 | Session fixation | cookie выпускается только после успешной проверки, самим сервером |
 

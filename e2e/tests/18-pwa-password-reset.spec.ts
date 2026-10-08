@@ -23,8 +23,16 @@ test('сброс пароля: неверный пароль, код с почт
   });
   expect(registered.ok(), `register/confirm: HTTP ${registered.status()} ${await registered.text()}`).toBeTruthy();
   // Согласие ПДн фронт принимает сразу после кода — повторяем то же через сессию из регистрации.
+  // Мутирующий PWA-запрос требует CSRF-пару (сервер fail-closed): как и SPA, берём её из GET /api/auth/me.
+  expect((await anon.get('/api/auth/me')).ok()).toBeTruthy();
+  const xsrf = (await anon.storageState()).cookies.find((c) => c.name === 'XSRF-TOKEN');
+  expect(xsrf, 'GET /api/auth/me должен выставить cookie XSRF-TOKEN').toBeTruthy();
   const consent = (await (await anon.get('/api/consents/current')).json()) as { version: string };
-  expect((await anon.post('/api/consents/accept', { data: { version: consent.version } })).ok()).toBeTruthy();
+  const accepted = await anon.post('/api/consents/accept', {
+    data: { version: consent.version },
+    headers: { 'X-XSRF-TOKEN': decodeURIComponent(xsrf!.value) },
+  });
+  expect(accepted.ok(), `consents/accept: HTTP ${accepted.status()} ${await accepted.text()}`).toBeTruthy();
   await anon.dispose();
 
   await page.goto('/login');

@@ -101,13 +101,19 @@ services:
         limits:
           memory: 1.5G
 
-  # Сайдкар для превью Office-документов (docx/xlsx/xls/doc/rtf/html → PDF, см.
+  # Сайдкар для превью Office-документов (docx/xlsx/xls/doc/rtf → PDF, см.
   # FamilyHub.Infrastructure.Previews.GotenbergConverter) — тот же сервис, что в дев-стеке
   # (docker-compose.yml). Ни у одного сервиса, кроме caddy, нет наружу смотрящих портов (см.
   # шапку файла) — api ходит по имени сервиса внутри docker-сети.
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8.37.0
     restart: unless-stopped
+    # Только изолированная сеть previews (internal: true) — аудит security-audit-2026-10, H1:
+    # LibreOffice разбирает недоверенные DOC/DOCX/RTF пользователей и может подтягивать внешние
+    # ресурсы документа. Без этой изоляции такой запрос дотягивался бы до postgres/minio/seq/kafka,
+    # LM Studio за WireGuard и метаданных VPS, а ответ попадал бы в PDF-превью. Здесь у сайдкара нет
+    # ни egress, ни соседей, кроме api (healthcheck — локальный curl, отчёты для врача — без внешних ресурсов).
+    networks: [previews]
     command: ["gotenberg", "--api-port=3000", "--chromium-disable-javascript=true"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -198,6 +204,9 @@ services:
       # Превью вложений (Анализы/Врачи) — сайдкар gotenberg выше. Пусто/недоступен — Office-файлы
       # деградируют в карточку «Скачать» (NullGotenbergConverter/fail-soft), не роняют задачу.
       Previews__GotenbergBaseUrl: "http://gotenberg:3000"
+      # Админ-панель отвечает только на своём Host (аудит security-audit-2026-10, M3) — Caddy передаёт
+      # Host как есть, вместе с нестандартным портом. На любом другом Host /api/admin/* и /admin* → 404.
+      Admin__AllowedHosts__0: "admin.${PUBLIC_DOMAIN:?не задан в .env}:4059"
       # Секрет обмена с FamilyHub.TelegramBot (см. telegrambot ниже, profiles: ["bot"]) —
       # ADR-0008. НЕ required (:-, не :?): пока профиль "bot" не включён, этой переменной может
       # не быть в PROD_ENV вовсе — Api тогда просто не мапит /internal/bot/* (internalBotApiConfigured
@@ -224,6 +233,8 @@ services:
       kafka: { condition: service_healthy }
       seq: { condition: service_started }
       gotenberg: { condition: service_healthy }
+    # default — все остальные сервисы и egress; previews — единственный путь к gotenberg (аудит H1).
+    networks: [default, previews]
     logging:
       driver: json-file
       options: { max-size: "50m", max-file: "3" }
@@ -403,6 +414,12 @@ services:
       resources:
         limits:
           memory: 256M
+
+networks:
+  default: {}
+  # Сеть без выхода наружу только для api↔gotenberg (аудит security-audit-2026-10, H1).
+  previews:
+    internal: true
 
 volumes:
   postgres-data:

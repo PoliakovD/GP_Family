@@ -88,6 +88,26 @@ public class JwtSessionTests(JwtWebFactory factory)
         throw new InvalidOperationException($"Cookie {cookieName} не найден в Set-Cookie заголовках ответа.");
     }
 
+    private const string CsrfPublic = "XSRF-TOKEN";
+    private const string CsrfPrivate = "familyhub.csrf";
+
+    /// <summary>CSRF-пара, как её получает SPA: GET /api/auth/me с access-cookie выставляет публичную
+    /// (её значение уходит в X-XSRF-TOKEN) и приватную половину. Без неё мутирующие PWA-запросы
+    /// получают 400 (аудит security-audit-2026-10, M4).</summary>
+    private async Task<(string HeaderValue, (string Name, string Value) PrivateCookie)> CsrfAsync(
+        HttpClient client, string accessToken)
+    {
+        var me = await client.SendAsync(Request(HttpMethod.Get, "/api/auth/me", (PwaAt, accessToken)));
+        me.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (Uri.UnescapeDataString(ExtractCookie(me, CsrfPublic)), (CsrfPrivate, ExtractCookie(me, CsrfPrivate)));
+    }
+
+    private static HttpRequestMessage WithCsrf(HttpRequestMessage request, string headerValue)
+    {
+        request.Headers.Add("X-XSRF-TOKEN", headerValue);
+        return request;
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, string url, params (string Name, string Value)[] cookies)
     {
         var request = new HttpRequestMessage(method, url);
@@ -144,8 +164,9 @@ public class JwtSessionTests(JwtWebFactory factory)
         var client = RawClient();
         var (_, accessToken, refreshToken) = await RegisterAsync(client);
 
-        var logout = await client.SendAsync(
-            Request(HttpMethod.Post, "/api/auth/logout", (PwaAt, accessToken), (PwaRt, refreshToken)));
+        var (csrf, csrfCookie) = await CsrfAsync(client, accessToken);
+        var logout = await client.SendAsync(WithCsrf(
+            Request(HttpMethod.Post, "/api/auth/logout", (PwaAt, accessToken), (PwaRt, refreshToken), csrfCookie), csrf));
         logout.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Раньше (cookie-модель) logout лишь стирал cookie у клиента — сервер ничего не помнил,
@@ -167,13 +188,69 @@ public class JwtSessionTests(JwtWebFactory factory)
         loginB.StatusCode.Should().Be(HttpStatusCode.OK);
         var refreshTokenB = ExtractCookie(loginB, PwaRt);
 
-        var logoutAll = await deviceA.SendAsync(
-            Request(HttpMethod.Post, "/api/auth/logout-all", (PwaAt, accessTokenA)));
+        var (csrf, csrfCookie) = await CsrfAsync(deviceA, accessTokenA);
+        var logoutAll = await deviceA.SendAsync(WithCsrf(
+            Request(HttpMethod.Post, "/api/auth/logout-all", (PwaAt, accessTokenA), csrfCookie), csrf));
         logoutAll.StatusCode.Should().Be(HttpStatusCode.OK);
 
         (await deviceA.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, refreshTokenA))))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await deviceB.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, refreshTokenB))))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "logout-all обязан отозвать сессии ВСЕХ устройств");
+    }
+
+    // Регрессия на находку M4 (docs/security/security-audit-2026-10.md): раньше гейт проверял CSRF,
+    // только если в запросе была публичная cookie XSRF-TOKEN, — без неё мутирующий запрос с живой
+    // PWA-сессией проходил вовсе без проверки.
+    [Fact]
+    public async Task MutatingPwaRequest_WithoutAnyCsrfCookie_Returns400()
+    {
+        var client = RawClient();
+        var (_, accessToken, _) = await RegisterAsync(client);
+
+        var request = Request(HttpMethod.Post, "/api/families", (PwaAt, accessToken));
+        request.Content = JsonContent.Create(new { name = "CSRF-проверка" });
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("csrf_token_invalid");
+    }
+
+    [Fact]
+    public async Task MutatingPwaRequest_WithCsrfPair_Passes()
+    {
+        var client = RawClient();
+        var (_, accessToken, _) = await RegisterAsync(client);
+        var (csrf, csrfCookie) = await CsrfAsync(client, accessToken);
+
+        var request = WithCsrf(Request(HttpMethod.Post, "/api/families", (PwaAt, accessToken), csrfCookie), csrf);
+        request.Content = JsonContent.Create(new { name = "CSRF-проверка" });
+
+        (await client.SendAsync(request)).StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    // Регрессия на находку H2 (docs/security/security-audit-2026-10.md): «Забыли пароль?» — путь
+    // восстановления после кражи сессии, поэтому выданный ДО сброса refresh-токен должен умереть.
+    [Fact]
+    public async Task ResetPassword_RevokesExistingSessions_AndIssuesWorkingNewOne()
+    {
+        var victim = RawClient();
+        var (email, _, stolenRefreshToken) = await RegisterAsync(victim);
+
+        var resetClient = RawClient();
+        (await resetClient.PostAsJsonAsync("/api/auth/reset-password/start", new { email }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var code = factory.Emails.LastCodeFor(email);
+        code.Should().NotBeNullOrEmpty();
+
+        var confirm = await resetClient.PostAsJsonAsync("/api/auth/reset-password/confirm",
+            new { email, code, newPassword = "N3wPassw0rd" });
+        confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+        var newRefreshToken = ExtractCookie(confirm, PwaRt);
+
+        (await victim.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, stolenRefreshToken))))
+            .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "сброс пароля обязан отозвать ранее выданные сессии");
+        (await resetClient.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, newRefreshToken))))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

@@ -55,7 +55,7 @@ services:
   # выполнять их JS незачем и небезопасно (Gotenberg использует Chromium только для HTML/route
   # конвертации; для LibreOffice-маршрута сам флаг не задействован, но безвреден оставить всегда).
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8.37.0
     restart: unless-stopped
     command: ["gotenberg", "--api-port=3000", "--chromium-disable-javascript=true"]
     healthcheck:

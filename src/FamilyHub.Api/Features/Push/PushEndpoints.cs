@@ -1,4 +1,5 @@
 using FamilyHub.Infrastructure.CurrentUser;
+using FamilyHub.Infrastructure.Notifications;
 
 namespace FamilyHub.Api.Features.Push;
 
@@ -18,6 +19,12 @@ public static class PushEndpoints
         group.MapPost("/subscribe", async (
             SubscribePushRequest request, PushSubscriptionService service, ICurrentUser currentUser, CancellationToken ct) =>
         {
+            // Endpoint — адрес, на который сервер сам будет делать POST: только push-релеи браузеров
+            // (аудит security-audit-2026-10, M1 — иначе слепой SSRF во внутреннюю сеть).
+            if (!PushEndpointPolicy.IsAllowedEndpoint(request.Endpoint)
+                || !PushEndpointPolicy.IsValidKey(request.P256dh) || !PushEndpointPolicy.IsValidKey(request.Auth))
+                return Results.BadRequest(new { code = "invalid_push_subscription" });
+
             await service.SubscribeAsync(currentUser.UserId, request.Endpoint, request.P256dh, request.Auth, ct);
             return Results.NoContent();
         });

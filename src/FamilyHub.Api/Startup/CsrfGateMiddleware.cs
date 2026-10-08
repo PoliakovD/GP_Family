@@ -10,10 +10,13 @@ namespace FamilyHub.Api.Startup;
 /// </summary>
 public static class CsrfGateMiddleware
 {
-    /// <summary>Мутирующий /api-запрос, несущий публичную cookie CsrfCookieNames.PublicToken
-    /// (выставляется ТОЛЬКО вместе с PWA-сессией, см. PwaSessionCookieWriter.IssueCsrfCookie),
-    /// обязан нести валидный заголовок X-XSRF-TOKEN. Telegram/Dev-запросы эту cookie никогда не
-    /// получают — пропускаются естественно, без отдельной проверки auth-схемы. IsRequestValidAsync
+    /// <summary>Мутирующий /api-запрос PWA-сессии (identity схемы PwaCookie) обязан нести валидный
+    /// заголовок X-XSRF-TOKEN в паре с приватной CSRF-cookie — НЕЗАВИСИМО от того, есть ли в запросе
+    /// публичная cookie CsrfCookieNames.PublicToken (аудит security-audit-2026-10, M4). Раньше гейт
+    /// срабатывал только при наличии этой cookie, то есть защита зависела от того, что атакующий
+    /// может косвенно контролировать: истёкшая/вытесненная cookie или cookie, перезаписанная с
+    /// same-site поддомена, выключали проверку целиком. Telegram/Dev/Admin-запросы не несут
+    /// identity PwaCookie и пропускаются, как и раньше. IsRequestValidAsync
     /// при наличии заголовка читает токен ИЗ заголовка, не трогая тело запроса — безопасно и для
     /// multipart-загрузок.
     ///
@@ -53,8 +56,7 @@ public static class CsrfGateMiddleware
             var isMutating = HttpMethods.IsPost(method) || HttpMethods.IsPut(method)
                 || HttpMethods.IsPatch(method) || HttpMethods.IsDelete(method);
             if (isMutating && context.Request.Path.StartsWithSegments("/api")
-                && context.User.Identities.Any(i => i.IsAuthenticated && i.AuthenticationType == AuthSchemes.PwaCookie)
-                && context.Request.Cookies.ContainsKey(CsrfCookieNames.PublicToken))
+                && context.User.Identities.Any(i => i.IsAuthenticated && i.AuthenticationType == AuthSchemes.PwaCookie))
             {
                 var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
                 if (!await antiforgery.IsRequestValidAsync(context))

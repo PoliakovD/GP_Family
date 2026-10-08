@@ -124,4 +124,76 @@ public class TelegramInitDataValidatorTests
 
         result.Should().BeNull();
     }
+
+    /// <summary>Подписывает произвольный набор полей — чтобы проверить данные, которые Telegram мог бы
+    /// подписать без auth_date или с некорректным auth_date.</summary>
+    private static string SignFields(Dictionary<string, string> fields)
+    {
+        var dataCheckString = string.Join('\n', fields.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key}={kv.Value}"));
+        var secretKey = HMACSHA256.HashData(Encoding.UTF8.GetBytes("WebAppData"), Encoding.UTF8.GetBytes(BotToken));
+        var hash = Convert.ToHexStringLower(HMACSHA256.HashData(secretKey, Encoding.UTF8.GetBytes(dataCheckString)));
+        var query = fields.ToDictionary(kv => kv.Key, kv => Uri.EscapeDataString(kv.Value));
+        query["hash"] = hash;
+        return string.Join('&', query.Select(kv => $"{kv.Key}={kv.Value}"));
+    }
+
+    // --- Регрессия на находку M6 (docs/security/security-audit-2026-10.md) ---
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-number")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("99999999999999999")]
+    public void Check_SignedButAuthDateMissingOrInvalid_IsInvalid(string? authDate)
+    {
+        var fields = new Dictionary<string, string> { ["query_id"] = "AAA", ["user"] = "{\"id\":42,\"first_name\":\"Ada\"}" };
+        if (authDate is not null) fields["auth_date"] = authDate;
+
+        var check = CreateSut().Check(SignFields(fields));
+
+        check.Result.Should().BeNull();
+        check.Failure.Should().Be(TelegramInitDataFailure.Invalid);
+    }
+
+    [Fact]
+    public void Check_AuthDateFarInFuture_IsInvalid()
+    {
+        var initData = BuildSignedInitData(42, "Ada", "Lovelace", DateTimeOffset.UtcNow.AddHours(1));
+
+        CreateSut().Check(initData).Failure.Should().Be(TelegramInitDataFailure.Invalid);
+    }
+
+    [Fact]
+    public void Check_AuthDateSlightlyInFuture_WithinClockSkew_IsValid()
+    {
+        var initData = BuildSignedInitData(42, "Ada", "Lovelace", DateTimeOffset.UtcNow.AddMinutes(2));
+
+        CreateSut().Check(initData).Result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Check_OlderThanMaxAge_IsExpired_NotInvalid()
+    {
+        var initData = BuildSignedInitData(42, "Ada", "Lovelace", DateTimeOffset.UtcNow.AddMinutes(-61));
+
+        var check = CreateSut(maxAge: TimeSpan.FromHours(1)).Check(initData);
+
+        check.Result.Should().BeNull();
+        check.Failure.Should().Be(TelegramInitDataFailure.Expired);
+    }
+
+    [Fact]
+    public void Check_TamperedButOld_IsInvalid_NotExpired()
+    {
+        // Сначала подпись, потом срок: по просроченным, но поддельным данным не должно быть видно,
+        // что подпись «могла бы» пройти.
+        var initData = BuildSignedInitData(42, "Ada", "Lovelace", DateTimeOffset.UtcNow.AddHours(-48)).Replace("hash=", "hash=0");
+
+        CreateSut().Check(initData).Failure.Should().Be(TelegramInitDataFailure.Invalid);
+    }
+
+    [Fact]
+    public void DefaultMaxInitDataAge_IsOneHour() =>
+        new TelegramOptions().MaxInitDataAge.Should().Be(TimeSpan.FromHours(1));
 }

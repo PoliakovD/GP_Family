@@ -110,6 +110,28 @@ public class WebPushNotificationSenderTests : SqliteTestBase
             Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
     }
 
+    // Регрессия на находку M1 (docs/security/security-audit-2026-10.md): подписка, сохранённая до
+    // валидации endpoint, не должна порождать запрос во внутреннюю сеть.
+    [Fact]
+    public async Task SendAsync_NonPushRelayEndpoint_IsNotCalled_AndRemoved()
+    {
+        var owner = Db.AddUser();
+        var internalHost = AddSubscription(owner.Id, "http://seq/api/events/raw");
+        AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/device-1");
+        await Db.SaveChangesAsync();
+
+        _client.SendNotificationAsync(Arg.Any<WebPush.PushSubscription>(), Arg.Any<string>(),
+                Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        await _sut.SendAsync(NewNotification(owner.Id));
+
+        await _client.Received(1).SendNotificationAsync(
+            Arg.Is<WebPush.PushSubscription>(s => s.Endpoint == "https://fcm.googleapis.com/fcm/send/device-1"),
+            Arg.Any<string>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
+        (await Db.PushSubscriptions.AnyAsync(s => s.Id == internalHost.Id)).Should().BeFalse();
+    }
+
     [Fact]
     public async Task SendAsync_ExpiredSubscription_Gone410_IsRemoved_OthersUnaffected()
     {

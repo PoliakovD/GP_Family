@@ -13,8 +13,11 @@ public class TelegramOptions
 
     public string BotToken { get; set; } = string.Empty;
 
-    /// <summary>Максимальный возраст initData (auth_date), после которого она считается просроченной.</summary>
-    public TimeSpan MaxInitDataAge { get; set; } = TimeSpan.FromHours(24);
+    /// <summary>Максимальный возраст initData (auth_date), после которого она считается просроченной.
+    /// 1 ч (было 24 ч, аудит security-audit-2026-10, M6): столько же действуют перехваченные initData.
+    /// Telegram выдаёт свежие initData при каждом открытии Mini App; если приложение висело открытым
+    /// дольше, API отвечает 401 init_data_expired, и фронт просит перезапустить приложение.</summary>
+    public TimeSpan MaxInitDataAge { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>Username бота без символа '@' (напр. "FamilyHubBot") — для формирования Deep Link инвайтов.</summary>
     public string BotUsername { get; set; } = string.Empty;

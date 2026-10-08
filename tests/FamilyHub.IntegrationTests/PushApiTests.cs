@@ -32,6 +32,25 @@ public class PushApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(fac
         response.StatusCode.Should().Be(HttpStatusCode.NotFound, "тестовое окружение не задаёт WebPush:VapidPublicKey — фронт должен скрывать тумблер");
     }
 
+    // Регрессия на находку M1 (docs/security/security-audit-2026-10.md): endpoint вне push-релеев браузеров
+    // не сохраняется — иначе сервер сам слал бы POST во внутреннюю сеть при каждом уведомлении.
+    [Theory]
+    [InlineData("http://seq/api/events/raw")]
+    [InlineData("https://169.254.169.254/latest/meta-data/")]
+    [InlineData("https://minio:9000/familyhub")]
+    public async Task Subscribe_NonPushRelayEndpoint_Returns400(string endpoint)
+    {
+        var user = ClientAs(FreshTelegramId());
+
+        var response = await user.PostAsJsonAsync("/api/push/subscribe", SubscribeBody(endpoint));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // Endpoint зашифрован at-rest — сравниваем после расшифровки, как в Subscribe_ThenUnsubscribe_Succeeds.
+        (await db.PushSubscriptions.AsNoTracking().ToListAsync()).Should().NotContain(s => s.Endpoint == endpoint);
+    }
+
     [Fact]
     public async Task Subscribe_ThenUnsubscribe_Succeeds()
     {
