@@ -176,4 +176,29 @@ public class JwtSessionTests(JwtWebFactory factory)
         (await deviceB.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, refreshTokenB))))
             .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "logout-all обязан отозвать сессии ВСЕХ устройств");
     }
+
+    // Регрессия на находку H2 (docs/security/security-audit-2026-10.md): «Забыли пароль?» — путь
+    // восстановления после кражи сессии, поэтому выданный ДО сброса refresh-токен должен умереть.
+    [Fact]
+    public async Task ResetPassword_RevokesExistingSessions_AndIssuesWorkingNewOne()
+    {
+        var victim = RawClient();
+        var (email, _, stolenRefreshToken) = await RegisterAsync(victim);
+
+        var resetClient = RawClient();
+        (await resetClient.PostAsJsonAsync("/api/auth/reset-password/start", new { email }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        var code = factory.Emails.LastCodeFor(email);
+        code.Should().NotBeNullOrEmpty();
+
+        var confirm = await resetClient.PostAsJsonAsync("/api/auth/reset-password/confirm",
+            new { email, code, newPassword = "N3wPassw0rd" });
+        confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+        var newRefreshToken = ExtractCookie(confirm, PwaRt);
+
+        (await victim.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, stolenRefreshToken))))
+            .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "сброс пароля обязан отозвать ранее выданные сессии");
+        (await resetClient.SendAsync(Request(HttpMethod.Post, "/api/auth/refresh", (PwaRt, newRefreshToken))))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }

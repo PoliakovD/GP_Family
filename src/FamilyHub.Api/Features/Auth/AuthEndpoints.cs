@@ -105,6 +105,9 @@ public static class AuthEndpoints
                     _ => Results.BadRequest(new { code = "weak_password" }),
                 };
             }
+            // Сброс пароля — основной путь восстановления после кражи сессии: все ранее выданные
+            // refresh-сессии отзываются, как и при /change-password (аудит security-audit-2026-10, H2).
+            await tokenService.RevokeAllForUserAsync(userId, ct);
             return await IssueSessionAsync(userId, PwaAuthService.NormalizeEmail(request.Email), tokenService, http, ct);
         }).AllowAnonymous();
 
