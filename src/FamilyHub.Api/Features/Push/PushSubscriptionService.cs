@@ -17,6 +17,10 @@ namespace FamilyHub.Api.Features.Push;
 public class PushSubscriptionService(
     AppDbContext db, IOptions<WebPushOptions> webPushOptions, ILogger<PushSubscriptionService> logger)
 {
+    /// <summary>Сколько устройств одного пользователя держим подписанными; сверх лимита вытесняется
+    /// самая давно не использовавшаяся подписка (аудит security-audit-2026-10, M1/L7).</summary>
+    public const int MaxSubscriptionsPerUser = 10;
+
     /// <summary>null — Web Push не настроен на бэкенде (нет VAPID-ключей); фронт скрывает тумблер.</summary>
     public string? GetVapidPublicKey() =>
         webPushOptions.Value.IsConfigured ? webPushOptions.Value.VapidPublicKey : null;
@@ -52,6 +56,19 @@ public class PushSubscriptionService(
             LastUsedAt = now,
         };
         db.PushSubscriptions.Add(subscription);
+
+        var stale = await db.PushSubscriptions
+            .Where(s => s.UserId == userId)
+            .OrderByDescending(s => s.LastUsedAt)
+            .Skip(MaxSubscriptionsPerUser - 1)
+            .ToListAsync(ct);
+        if (stale.Count > 0)
+        {
+            db.PushSubscriptions.RemoveRange(stale);
+            logger.LogInformation(
+                "Push-подписки пользователя {UserId}: превышен лимит {Limit}, вытеснено старых — {Count}",
+                userId, MaxSubscriptionsPerUser, stale.Count);
+        }
 
         try
         {

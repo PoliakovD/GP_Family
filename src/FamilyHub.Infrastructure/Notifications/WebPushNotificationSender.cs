@@ -56,6 +56,17 @@ public class WebPushNotificationSender(
 
         foreach (var subscription in subscriptions)
         {
+            // Подписки, сохранённые до валидации в /api/push/subscribe (аудит security-audit-2026-10,
+            // M1): на недопустимый адрес не стучимся и удаляем строку.
+            if (!PushEndpointPolicy.IsAllowedEndpoint(subscription.Endpoint))
+            {
+                logger.LogWarning(
+                    "Push-подписка {SubscriptionId} указывает не на push-релей браузера — удаляем без отправки.",
+                    subscription.Id);
+                expired.Add(subscription);
+                continue;
+            }
+
             try
             {
                 var pushSubscription = new WebPush.PushSubscription(
