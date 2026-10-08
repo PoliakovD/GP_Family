@@ -153,6 +153,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       // TelegramId (например, только что отвязали Telegram в этой же сессии через revoke, или
       // TelegramId отвязан с другого устройства) — как и в PWA-ветке выше, ретраить нечего,
       // сессии в telegram-режиме нет вообще; ведём на повторную привязку.
+      if (error.status === 401 && initData && error.error?.code === 'init_data_expired') {
+        // initData старше Telegram:MaxInitDataAge (аудит security-audit-2026-10, M6) — аккаунт
+        // в порядке, нужны только свежие данные от Telegram: просим перезапустить Mini App.
+        if (!router.url.startsWith('/telegram-expired')) void router.navigate(['/telegram-expired']);
+        return throwError(() => error);
+      }
+
       if (error.status === 401 && initData) {
         auth.telegramBound.set(false);
         void router.navigate(['/telegram-bind']);

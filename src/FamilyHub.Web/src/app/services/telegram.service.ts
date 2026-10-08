@@ -127,4 +127,9 @@ export class TelegramService {
   disableClosingConfirmation(): void {
     this.webApp?.disableClosingConfirmation();
   }
+
+  /** Закрыть Mini App — например, чтобы пользователь открыл его заново со свежими initData. */
+  close(): void {
+    this.webApp?.close();
+  }
 }

@@ -22,19 +22,25 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options, ILogge
 {
     private static readonly byte[] WebAppDataKey = Encoding.UTF8.GetBytes("WebAppData");
 
-    public TelegramInitDataResult? Validate(string initData)
+    /// <summary>Допуск на расхождение часов: auth_date «из будущего» больше чем на это — подделка
+    /// или сломанные часы клиента, такие initData не принимаем (аудит security-audit-2026-10, M6).</summary>
+    private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(5);
+
+    public TelegramInitDataResult? Validate(string initData) => Check(initData).Result;
+
+    public TelegramInitDataCheck Check(string initData)
     {
         if (string.IsNullOrWhiteSpace(initData))
         {
             logger.LogDebug("Валидация initData: пустая строка");
-            return null;
+            return TelegramInitDataCheck.Invalid;
         }
 
         var botToken = options.Value.BotToken;
         if (string.IsNullOrWhiteSpace(botToken))
         {
             logger.LogWarning("Валидация initData отклонена: не сконфигурирован Telegram:BotToken");
-            return null; // не сконфигурирован токен бота — отказываем, а не пропускаем
+            return TelegramInitDataCheck.Invalid; // не сконфигурирован токен бота — отказываем, а не пропускаем
         }
 
         var pairs = HttpUtility.ParseQueryString(initData);
@@ -42,7 +48,7 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options, ILogge
         if (string.IsNullOrEmpty(receivedHash))
         {
             logger.LogDebug("Валидация initData отклонена: отсутствует поле hash");
-            return null;
+            return TelegramInitDataCheck.Invalid;
         }
 
         var dataCheckString = pairs.AllKeys
@@ -60,26 +66,36 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options, ILogge
                 Encoding.UTF8.GetBytes(computedHashHex), Encoding.UTF8.GetBytes(receivedHash)))
         {
             logger.LogWarning("Валидация initData отклонена: несовпадение HMAC-подписи");
-            return null;
+            return TelegramInitDataCheck.Invalid;
         }
 
-        if (long.TryParse(pairs["auth_date"], out var authDateUnix))
+        // auth_date обязателен: раньше TTL проверялся только если поле распарсилось, и подписанные
+        // данные без него (или с мусором в нём) действовали бессрочно (аудит security-audit-2026-10, M6).
+        if (!long.TryParse(pairs["auth_date"], out var authDateUnix)
+            || authDateUnix <= 0 || authDateUnix > DateTimeOffset.MaxValue.ToUnixTimeSeconds())
         {
-            var authDate = DateTimeOffset.FromUnixTimeSeconds(authDateUnix);
-            var age = DateTimeOffset.UtcNow - authDate;
-            if (age > options.Value.MaxInitDataAge)
-            {
-                logger.LogWarning(
-                    "Валидация initData отклонена: истекла (возраст {Age}, лимит {MaxAge})", age, options.Value.MaxInitDataAge);
-                return null; // просрочена
-            }
+            logger.LogWarning("Валидация initData отклонена: отсутствует или некорректно поле auth_date");
+            return TelegramInitDataCheck.Invalid;
+        }
+
+        var age = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(authDateUnix);
+        if (age < -MaxFutureSkew)
+        {
+            logger.LogWarning("Валидация initData отклонена: auth_date в будущем (на {Ahead})", -age);
+            return TelegramInitDataCheck.Invalid;
+        }
+        if (age > options.Value.MaxInitDataAge)
+        {
+            logger.LogInformation(
+                "Валидация initData отклонена: истекла (возраст {Age}, лимит {MaxAge})", age, options.Value.MaxInitDataAge);
+            return TelegramInitDataCheck.Expired;
         }
 
         var userJson = pairs["user"];
         if (string.IsNullOrEmpty(userJson))
         {
             logger.LogWarning("Валидация initData отклонена: отсутствует поле user");
-            return null;
+            return TelegramInitDataCheck.Invalid;
         }
 
         TelegramUserDto? user;
@@ -90,13 +106,13 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options, ILogge
         catch (JsonException ex)
         {
             logger.LogWarning(ex, "Валидация initData отклонена: не удалось разобрать поле user");
-            return null;
+            return TelegramInitDataCheck.Invalid;
         }
 
         if (user is null || user.Id == 0)
         {
             logger.LogWarning("Валидация initData отклонена: некорректный или нулевой Telegram ID");
-            return null;
+            return TelegramInitDataCheck.Invalid;
         }
 
         var displayName = string.Join(' ', new[] { user.FirstName, user.LastName }
@@ -104,10 +120,10 @@ public class TelegramInitDataValidator(IOptions<TelegramOptions> options, ILogge
 
         logger.LogDebug("initData валидна для Telegram ID {TelegramId}", user.Id);
 
-        return new TelegramInitDataResult(
+        return new TelegramInitDataCheck(new TelegramInitDataResult(
             user.Id,
             string.IsNullOrWhiteSpace(displayName) ? null : displayName,
-            string.IsNullOrWhiteSpace(user.Username) ? null : user.Username);
+            string.IsNullOrWhiteSpace(user.Username) ? null : user.Username), TelegramInitDataFailure.None);
     }
 
     private sealed class TelegramUserDto
