@@ -5,7 +5,7 @@
 # статический (CGO_ENABLED=0), поэтому спокойно переезжает в postgres:alpine. Тег — как в compose.
 FROM ghcr.io/poliakovd/gp_family-minio:RELEASE.2025-10-15T17-29-55Z AS mc
 
-FROM postgres:17-alpine
+FROM postgres:18-alpine
 
 RUN apk add --no-cache bash gzip
 COPY --from=mc /usr/bin/mc /usr/bin/mc
