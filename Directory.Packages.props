@@ -37,7 +37,7 @@
     <!-- Явная версия (не только транзитивная через MassTransit.Kafka) — Confluent.Kafka.Admin
          используется напрямую для явного создания топиков при старте (ADR-0007), и в
          IntegrationTests для raw-проб-консьюмера (KafkaBridgeFlowTests). -->
-    <PackageVersion Include="Confluent.Kafka" Version="2.15.1" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.16.0" />
   </ItemGroup>
 
   <ItemGroup Label="Фоновые задачи (Hangfire)">
