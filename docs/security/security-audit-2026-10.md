@@ -406,7 +406,39 @@ initData, перехваченные один раз (логи, расширен
 | **0. Немедленно** ✅ | 1–2 дня | **H2**: `RevokeAllForUserAsync` в reset + тест. **H1**: PoC; сеть `previews` (`internal: true`) для gotenberg; HTML/XML показывать как текст; закрепить версию Gotenberg | Тест H2 зелёный; PoC H1 после исправления не даёт исходящих запросов |
 | **1. Ближайший спринт** ✅ | ≤ 2 нед | **M1** валидатор push-endpoint и лимиты; **M2** `text/plain` + `CSP: sandbox` для вложений, magic bytes; **M3** `RequireHost` + блокировка + аудит входов; **M4** CSRF без fail-open; **M6** обязательный `auth_date`, TTL ≈1 ч | Интеграционные и unit-тесты на каждый пункт; `CaddyfileTests` не сломаны |
 | **2. Следующий спринт** ✅ | ≤ 1 мес | **M5** проверка `SessionId` в `OnTokenValidated`; **M7** pin SHA/digest, `permissions:`, Dependabot, `npm audit fix`, `dotnet list package --vulnerable` в CI; **L3/L5** сегментация сетей и доверие XFF только от Caddy; **L4** изоляция Kafka | В CI есть шаг скана зависимостей; `docker compose config` с новыми сетями; деплой по digest |
-| **3. Бэклог** | — | ~~L1, L2, L6, L7, L8~~ (сделано или принято). Осталось: TOTP и персистентные сессии админки, `__Host-` для cookie, сверка magic bytes, мажорный апгрейд vitest, решение по ImageSharp 4.x (лицензия), SASL для Kafka при росте | — |
+| **3. Бэклог** ✅ | — | ~~L1, L2, L6, L7, L8~~; TOTP и сессии админки в БД ✅, `__Host-` ✅, magic bytes ✅, tinypool ✅. Открыто: ImageSharp 4.x (нужен лицензионный ключ Six Labors), `@vitest/mocker` (Angular 21). Kafka SASL — принятый риск | см. раздел «Бэклог — третий заход» |
+
+## Бэклог — третий заход (2026-10-09)
+
+Решения владельца: ImageSharp → 4.x, TOTP + сессии админки в БД, `__Host-` с разовым разлогином,
+Kafka SASL не делать.
+
+- **✅ TOTP для админ-панели.** RFC 6238 (HMAC-SHA1, 30 с, 6 цифр), своя реализация (`Totp`,
+  `AdminTotpVerifier`): окно ±1 шаг, сравнение за постоянное время, один код принимается один раз.
+  Неверный код считается неудачей для `AdminLoginThrottle`, ответ одинаков для неверного пароля и
+  неверного кода. `Admin:TotpSecret` (base32) обязателен при `Admin:Enabled` — без него хост не
+  стартует. ⚠️ Перед деплоем — секрет в `PROD_ENV` (`deploy/README.md`, «TOTP для админ-панели»).
+  Тесты: `TotpTests` (векторы RFC 6238), `AdminTotpApiTests`.
+- **✅ Сессии админки в БД.** Таблица `AdminSessions` (миграция `AdminSessions`), `AdminSessionStore`
+  с кэшем 30 с. Выход отзывает текущую сессию, «Выйти везде» (`POST /api/admin/session/revoke-all`) —
+  все; отзыв переживает рестарт. In-memory `AdminSessionRevocations` удалён.
+- **✅ `__Host-` для cookie.** `Auth:HostPrefixedCookies` (в проде — true): access, refresh, приватная
+  половина CSRF и cookie админки — `__Host-…` (Secure, Path=/, без Domain), подбросить их с поддомена
+  нельзя. Refresh-cookie становится Path=/ — это требование префикса. Публичная `XSRF-TOKEN` остаётся
+  без префикса: её читает Angular, а подменять её бесполезно. В деве и интеграционных тестах (http)
+  настройка выключена. Включение один раз разлогинивает всех.
+- **✅ Magic bytes.** `FileSignatures` + `AttachmentService.ValidateUpload`: размер, allow-list и
+  сигнатура для вложений мед-записей, прививок и сертификатов. Найдено попутно: у вложений прививок
+  и сертификатов раньше не было ни лимита размера, ни allow-list типов.
+- **✅ tinypool 2.1.2** через `overrides` (2 critical закрыты, vitest 3 с ним работает). Остаток —
+  moderate в `@vitest/mocker` (только тест-раннер): исправлен в vitest 5, для которого нужен Angular 21.
+- **⏸ ImageSharp 4.x — заблокировано.** 4.1.2 при Release-сборке без лицензионного ключа Six Labors
+  падает с ошибкой (`SixLabors_ValidateLicense`, «No Six Labors license found»), а это CI и Docker.
+  Нужен ключ (бесплатный для подходящих под Split License, выдаётся на sixlabors.com) в виде секрета
+  `SixLaborsLicenseKey` для CI и сборки образа. Пока остаёмся на 2.1.13, а обе известные DoS (ICC —
+  GHSA-gwg2-r3hj-4w44 и найденная 2026-10-09 BigTIFF EXIF — GHSA-wmxv-xphr-5c9g) закрыты сужением
+  входа: в ImageSharp попадает только классический TIFF без метаданных. CI по ним выдаёт warning.
+- **Kafka SASL — принятый риск:** брокер в internal-сети `messaging` (только api и бот).
 
 После закрытия каждого этапа: отметить находки здесь как `✅ Исправлено (коммит/PR)` и обновить
 [threat-model.md](threat-model.md) и [access-matrix.md](access-matrix.md).
