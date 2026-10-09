@@ -85,10 +85,15 @@ public static class ImageDownscaler
     /// неисправленная DoS через разбор встроенного ICC-профиля (GHSA-gwg2-r3hj-4w44, патч только в 4.1.2
     /// под другой лицензией). Раньше сюда попадал любой формат, который не осилил SkiaSharp (в том
     /// числе специально испорченный PNG/JPEG с ICC — ровно PoC advisory), и метаданные разбирались.
-    /// Ради TIFF фолбэк и существует, а IgnoreMetadata не создаёт ICC-профиль вовсе.</summary>
+    /// Ради TIFF фолбэк и существует, а IgnoreMetadata не создаёт ICC-профиль вовсе.
+    ///
+    /// И только классический TIFF, без BigTIFF: в 2.x есть ещё одна неисправленная DoS —
+    /// бесконечный цикл разбора EXIF IFD в BigTIFF (GHSA-wmxv-xphr-5c9g, 24-байтовый PoC). Сканы
+    /// документов на практике — классический TIFF (до 4 ГБ); BigTIFF получает «предпросмотр
+    /// недоступен», файл при этом сохраняется и скачивается.</summary>
     private static DecodedImage DownscaleWithImageSharpFallback(byte[] source, int maxDimension, int jpegQuality)
     {
-        if (!FileSignatures.IsTiff(source))
+        if (!FileSignatures.IsClassicTiff(source))
             throw new NotSupportedException("Не удалось декодировать изображение (неподдерживаемый формат).");
 
         Image<Rgba32> image;

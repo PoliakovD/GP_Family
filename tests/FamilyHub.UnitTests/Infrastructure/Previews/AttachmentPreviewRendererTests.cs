@@ -134,6 +134,22 @@ public class AttachmentPreviewRendererTests
         result.Outcome.Should().Be(PreviewRenderOutcome.Unsupported);
     }
 
+    // GHSA-wmxv-xphr-5c9g: BigTIFF с усечённым EXIF IFD зацикливает декодер ImageSharp 2.x — до него не доходит.
+    [Fact]
+    public async Task RenderAsync_BigTiff_DoesNotReachImageSharp_ReturnsUnsupportedQuickly()
+    {
+        var sut = CreateSut();
+        // Заголовок BigTIFF (II, 43, размер смещения 8) + смещение первого IFD и огромный счётчик записей.
+        byte[] bigTiff = [0x49, 0x49, 0x2B, 0x00, 0x08, 0x00, 0x00, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0,
+                          0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F];
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var result = await sut.RenderAsync(bigTiff, DocumentContentTypes.Tiff);
+
+        result.Outcome.Should().Be(PreviewRenderOutcome.Unsupported);
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+    }
+
     [Fact]
     public async Task RenderAsync_Heic_NoDecoderAvailable_ReturnsUnsupported()
     {

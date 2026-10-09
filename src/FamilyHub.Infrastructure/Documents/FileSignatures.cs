@@ -41,6 +41,12 @@ public static class FileSignatures
         && ((data[0] == 'I' && data[1] == 'I' && data[3] == 0 && (data[2] == 42 || data[2] == 43))
             || (data[0] == 'M' && data[1] == 'M' && data[2] == 0 && (data[3] == 42 || data[3] == 43)));
 
+    /// <summary>Только классический TIFF (II*\0 / MM\0*), без BigTIFF.</summary>
+    public static bool IsClassicTiff(ReadOnlySpan<byte> data) =>
+        data.Length >= 4
+        && ((data[0] == 'I' && data[1] == 'I' && data[2] == 42 && data[3] == 0)
+            || (data[0] == 'M' && data[1] == 'M' && data[2] == 0 && data[3] == 42));
+
     /// <summary>HEIC/HEIF: ISO BMFF-бокс ftyp с брендом семейства HEIF (размер бокса — первые 4 байта).</summary>
     private static bool IsHeif(ReadOnlySpan<byte> head)
     {
