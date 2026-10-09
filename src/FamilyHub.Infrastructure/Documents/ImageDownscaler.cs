@@ -88,7 +88,7 @@ public static class ImageDownscaler
     /// Ради TIFF фолбэк и существует, а IgnoreMetadata не создаёт ICC-профиль вовсе.</summary>
     private static DecodedImage DownscaleWithImageSharpFallback(byte[] source, int maxDimension, int jpegQuality)
     {
-        if (!IsTiff(source))
+        if (!FileSignatures.IsTiff(source))
             throw new NotSupportedException("Не удалось декодировать изображение (неподдерживаемый формат).");
 
         Image<Rgba32> image;
@@ -117,10 +117,4 @@ public static class ImageDownscaler
             return new DecodedImage(encoded.ToArray(), DocumentContentTypes.Jpeg);
         }
     }
-
-    /// <summary>Сигнатуры TIFF и BigTIFF: II*\0, MM\0*, II+\0, MM\0+.</summary>
-    private static bool IsTiff(ReadOnlySpan<byte> data) =>
-        data.Length >= 4
-        && ((data[0] == 'I' && data[1] == 'I' && data[3] == 0 && (data[2] == 42 || data[2] == 43))
-            || (data[0] == 'M' && data[1] == 'M' && data[2] == 0 && (data[3] == 42 || data[3] == 43)));
 }

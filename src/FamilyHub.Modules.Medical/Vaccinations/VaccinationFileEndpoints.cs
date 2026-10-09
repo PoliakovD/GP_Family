@@ -24,6 +24,17 @@ public static class VaccinationFileEndpoints
             if (level != VaccinationAccessLevel.Full) return Results.StatusCode(StatusCodes.Status403Forbidden);
 
             await using var stream = file.OpenReadStream();
+            // Тот же размер/allow-list/сигнатура, что у вложений мед-записей (раньше здесь не было
+            // никаких ограничений — аудит security-audit-2026-10).
+            switch (attachments.ValidateUpload(file.ContentType, file.Length, stream))
+            {
+                case AttachmentAccessResult.TooLarge:
+                    return Results.Json(new { code = "attachment_too_large", maxSizeBytes = attachments.MaxSizeBytes },
+                        statusCode: StatusCodes.Status413PayloadTooLarge);
+                case AttachmentAccessResult.UnsupportedContentType:
+                    return Results.Json(new { code = "unsupported_content_type", allowed = AttachmentService.AllowedContentTypes },
+                        statusCode: StatusCodes.Status415UnsupportedMediaType);
+            }
             var dto = await attachments.UploadRawAsync(
                 FileOwnerType.Vaccination, id, file.FileName, file.ContentType, file.Length, stream, ct);
             return Results.Created($"/api/attachments/{dto.Id}", dto);

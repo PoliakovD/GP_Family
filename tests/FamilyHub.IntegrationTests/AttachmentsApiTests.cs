@@ -47,11 +47,15 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         return (await response.Content.ReadFromJsonAsync<MedicalRecordDto>())!;
     }
 
+    private const string PdfPrefix = "%PDF-1.4\n";
+
     private static MultipartFormDataContent BuildUpload(
         string text = "scan-content", string fileName = "scan.txt", string contentType = "application/pdf")
     {
         var content = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(text));
+        // Загрузка сверяет magic bytes с ContentType — «PDF» должен начинаться с сигнатуры PDF.
+        var body = contentType == "application/pdf" ? PdfPrefix + text : text;
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
         content.Add(fileContent, "file", fileName);
         return content;
@@ -116,7 +120,7 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var anonymous = AnonymousClient();
         var fileResponse = await anonymous.GetAsync(relativeUrl);
         fileResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await fileResponse.Content.ReadAsStringAsync()).Should().Be("hello-from-test");
+        (await fileResponse.Content.ReadAsStringAsync()).Should().Be(PdfPrefix + "hello-from-test");
 
         var tamperedUrl = relativeUrl[..^1] + (relativeUrl[^1] == 'a' ? 'b' : 'a');
         var tamperedResponse = await anonymous.GetAsync(tamperedUrl);
@@ -215,6 +219,19 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         var file = await anonymous.GetAsync(tokens.CreateUrl(created.Id, DownloadScope.File));
         file.StatusCode.Should().Be(HttpStatusCode.OK);
         file.Headers.GetValues("Content-Security-Policy").Single().Should().Contain("sandbox");
+    }
+
+    // Бэклог аудита (docs/security/security-audit-2026-10.md): содержимое сверяется с заявленным типом.
+    [Fact]
+    public async Task Upload_ContentNotMatchingDeclaredType_Returns415()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+
+        var response = await owner.PostAsync($"/api/medical-records/{record.Id}/attachments",
+            BuildUpload("<html><script>alert(1)</script></html>", "scan.png", "image/png"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
     }
 
     [Fact]

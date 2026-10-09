@@ -49,29 +49,53 @@ public class AttachmentService(
     /// <summary>Сканы мед-документов: изображения, PDF, офисные форматы, текст (ветка
     /// medicalrecords расширила список под конвейер извлечения — см.
     /// FamilyHub.Infrastructure.Documents.DocumentContentTypes, единая точка правды и для
-    /// допустимой загрузки, и для того, что конвейер умеет распознать). Defense-in-depth —
-    /// проверка по заявленному ContentType, не по magic bytes (тело всё равно скачивается с
-    /// Content-Disposition: attachment, см. AttachmentEndpoints — снижает риск даже при
-    /// подделке заголовка).</summary>
+    /// допустимой загрузки, и для того, что конвейер умеет распознать). Заявленный ContentType
+    /// дополнительно сверяется с сигнатурой файла (<see cref="ValidateUpload"/>).</summary>
     public static readonly IReadOnlySet<string> AllowedContentTypes = DocumentContentTypes.All;
+
+    /// <summary>
+    /// Общая проверка любой загрузки вложения: размер, тип из allow-list и соответствие magic bytes
+    /// заявленному типу (FileSignatures, аудит security-audit-2026-10). Стрим должен быть seekable
+    /// (IFormFile.OpenReadStream такой): проверяются первые байты, затем позиция возвращается в начало.
+    /// Используется и мед-записями, и прививками/сертификатами, у которых раньше не было ни лимита,
+    /// ни allow-list.
+    /// </summary>
+    public AttachmentAccessResult ValidateUpload(string contentType, long sizeBytes, Stream content)
+    {
+        if (sizeBytes > MaxSizeBytes)
+        {
+            logger.LogWarning("Загрузка вложения отклонена: {SizeBytes} байт превышает лимит {MaxSizeBytes}", sizeBytes, MaxSizeBytes);
+            return AttachmentAccessResult.TooLarge;
+        }
+        if (!AllowedContentTypes.Contains(contentType))
+        {
+            logger.LogWarning("Загрузка вложения отклонена: ContentType {ContentType} не в allow-list", contentType);
+            return AttachmentAccessResult.UnsupportedContentType;
+        }
+        if (!content.CanSeek)
+            throw new InvalidOperationException("Для проверки сигнатуры вложения нужен seekable-стрим.");
+
+        Span<byte> head = stackalloc byte[FileSignatures.HeadLength];
+        var start = content.Position;
+        var read = content.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+        content.Position = start;
+        if (!FileSignatures.Matches(contentType, head[..read]))
+        {
+            logger.LogWarning("Загрузка вложения отклонена: содержимое не соответствует ContentType {ContentType}", contentType);
+            return AttachmentAccessResult.UnsupportedContentType;
+        }
+        return AttachmentAccessResult.Success;
+    }
 
     /// <summary>Прикладывать сканы к анализу может только владелец записи — тот же барьер, что и для шаринга.</summary>
     public async Task<(AttachmentAccessResult Result, AttachmentDto? Item)> UploadForMedicalRecordAsync(
         Guid recordId, Guid ownerUserId, string fileName, string contentType, long sizeBytes, Stream content, CancellationToken ct = default)
     {
-        if (sizeBytes > MaxSizeBytes)
+        var validation = ValidateUpload(contentType, sizeBytes, content);
+        if (validation != AttachmentAccessResult.Success)
         {
-            logger.LogWarning(
-                "Загрузка вложения к мед-записи {RecordId} отклонена: {SizeBytes} байт превышает лимит {MaxSizeBytes}",
-                recordId, sizeBytes, MaxSizeBytes);
-            return (AttachmentAccessResult.TooLarge, null);
-        }
-        if (!AllowedContentTypes.Contains(contentType))
-        {
-            logger.LogWarning(
-                "Загрузка вложения к мед-записи {RecordId} отклонена: ContentType {ContentType} не в allow-list",
-                recordId, contentType);
-            return (AttachmentAccessResult.UnsupportedContentType, null);
+            logger.LogWarning("Загрузка вложения к мед-записи {RecordId} отклонена: {Reason}", recordId, validation);
+            return (validation, null);
         }
 
         var record = await db.MedicalRecords.AsNoTracking().FirstOrDefaultAsync(r => r.Id == recordId, ct);

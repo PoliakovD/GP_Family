@@ -291,7 +291,7 @@ public class MedicalRecordsApiTests(FamilyHubWebFactory factory) : IntegrationTe
         var stranger = ClientAs(FreshTelegramId());
 
         var content = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("scan-bytes"));
+        var fileContent = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("%PDF-1.4\nscan-bytes"));
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "file", "scan.pdf");
         (await owner.PostAsync($"/api/medical-records/{record.Id}/attachments", content)).StatusCode.Should().Be(HttpStatusCode.Created);

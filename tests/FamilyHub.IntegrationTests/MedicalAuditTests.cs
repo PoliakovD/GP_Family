@@ -45,7 +45,7 @@ public class MedicalAuditTests(FamilyHubWebFactory factory) : IntegrationTestBas
             .Content.ReadFromJsonAsync<MedicalRecordDto>(JsonOpts);
 
         var upload = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("scan"));
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.4\nscan"));
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         upload.Add(fileContent, "file", "scan.txt");
         var attachment = await (await owner.PostAsync($"/api/medical-records/{record!.Id}/attachments", upload))

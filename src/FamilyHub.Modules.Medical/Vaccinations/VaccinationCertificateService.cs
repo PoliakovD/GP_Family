@@ -28,6 +28,14 @@ public class VaccinationCertificateService(
         if (!subject.CanEdit) return (VaccinationResult.Forbidden, null, null);
         if (files.Count == 0) return (VaccinationResult.Invalid, null, "Прикрепите фото сертификата.");
         if (items.Count == 0) return (VaccinationResult.Invalid, null, "Отметьте хотя бы одну прививку.");
+        // Проверяем все файлы до создания сертификата — иначе полупустой сертификат остался бы в БД
+        // (размер/allow-list/сигнатура, как у вложений мед-записей; аудит security-audit-2026-10).
+        foreach (var file in files)
+        {
+            await using var probe = file.OpenReadStream();
+            if (attachments.ValidateUpload(file.ContentType, file.Length, probe) != AttachmentAccessResult.Success)
+                return (VaccinationResult.Invalid, null, $"Файл «{file.FileName}» не подходит: нужен снимок или PDF не больше {attachments.MaxSizeBytes / (1024 * 1024)} МБ.");
+        }
 
         var certificate = new VaccinationCertificate
         {

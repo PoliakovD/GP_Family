@@ -44,7 +44,7 @@ public class AccountErasureTests(FamilyHubWebFactory factory) : IntegrationTestB
     private static MultipartFormDataContent BuildUpload(string text)
     {
         var content = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(text));
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.4\n" + text));
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "file", "scan.txt");
         return content;

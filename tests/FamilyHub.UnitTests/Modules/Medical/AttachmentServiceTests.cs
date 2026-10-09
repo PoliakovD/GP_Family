@@ -59,7 +59,8 @@ public class AttachmentServiceTests : SqliteTestBase
             Options.Create(new AttachmentUploadOptions()), NullLogger<AttachmentService>.Instance);
     }
 
-    private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("scan-bytes"));
+    // Содержимое должно начинаться с сигнатуры PDF — загрузка сверяет magic bytes с ContentType.
+    private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("%PDF-1.4 scan-bytes"));
 
     [Fact]
     public async Task UploadForMedicalRecordAsync_Owner_SavesEncryptedBlobWithoutFileNameInKey()
@@ -83,7 +84,7 @@ public class AttachmentServiceTests : SqliteTestBase
         storageKey.Should().NotContain("scan.pdf", "имя файла — ПДн и не должно попадать в ключ хранилища");
 
         // В хранилище лежит шифротекст, а не исходные байты.
-        _savedBlobs[storageKey].Should().NotBeEquivalentTo(Encoding.UTF8.GetBytes("scan-bytes"));
+        _savedBlobs[storageKey].Should().NotBeEquivalentTo(Encoding.UTF8.GetBytes("%PDF-1.4 scan-bytes"));
         Encoding.UTF8.GetString(_savedBlobs[storageKey]).Should().NotContain("scan-bytes");
         Db.FileAttachments.Single().IsEncrypted.Should().BeTrue();
     }
@@ -104,7 +105,7 @@ public class AttachmentServiceTests : SqliteTestBase
         download!.Value.ContentType.Should().Be("application/pdf");
         download.Value.FileName.Should().Be("scan.pdf");
         using var reader = new StreamReader(download.Value.Content);
-        (await reader.ReadToEndAsync()).Should().Be("scan-bytes");
+        (await reader.ReadToEndAsync()).Should().Be("%PDF-1.4 scan-bytes");
     }
 
     [Fact]
@@ -139,6 +140,27 @@ public class AttachmentServiceTests : SqliteTestBase
         result.Should().Be(AttachmentAccessResult.Forbidden);
         item.Should().BeNull();
         await _storage.DidNotReceive().SaveAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // Регрессия к бэклогу аудита (docs/security/security-audit-2026-10.md): заявленный тип сверяется
+    // с сигнатурой файла — текст/HTML под видом PDF в хранилище и конвейер не попадает.
+    [Theory]
+    [InlineData("application/pdf", "<html><script>alert(1)</script></html>")]
+    [InlineData("image/png", "GIF89a....")]
+    [InlineData("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "not a zip")]
+    public async Task UploadForMedicalRecordAsync_ContentDoesNotMatchType_UnsupportedAndNothingStored(string contentType, string body)
+    {
+        var owner = Db.AddUser();
+        var record = TestData.NewMedicalRecord(owner.Id);
+        Db.MedicalRecords.Add(record);
+        await Db.SaveChangesAsync();
+
+        var (result, item) = await _sut.UploadForMedicalRecordAsync(
+            record.Id, owner.Id, "file.bin", contentType, body.Length, new MemoryStream(Encoding.UTF8.GetBytes(body)));
+
+        result.Should().Be(AttachmentAccessResult.UnsupportedContentType);
+        item.Should().BeNull();
+        _savedBlobs.Should().BeEmpty();
     }
 
     [Fact]

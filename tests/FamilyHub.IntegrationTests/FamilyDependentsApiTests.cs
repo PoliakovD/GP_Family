@@ -122,7 +122,7 @@ public class FamilyDependentsApiTests(FamilyHubWebFactory factory) : Integration
         record!.FamilyDependentId.Should().Be(dependent.Id);
 
         var content = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("vet-scan-bytes"));
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.4\nvet-scan-bytes"));
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         content.Add(fileContent, "file", "scan.pdf");
         (await member.PostAsync($"/api/medical-records/{record.Id}/attachments", content))

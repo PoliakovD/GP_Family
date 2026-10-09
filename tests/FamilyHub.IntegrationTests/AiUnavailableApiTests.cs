@@ -47,7 +47,7 @@ public class AiUnavailableApiTests(FamilyHubWebFactory factory) : IntegrationTes
         var recordId = (await created.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
 
         var upload = new MultipartFormDataContent();
-        var file = new ByteArrayContent(Encoding.UTF8.GetBytes("scan"));
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.4\nscan"));
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         upload.Add(file, "file", "scan.pdf");
         (await owner.PostAsync($"/api/medical-records/{recordId}/attachments", upload)).StatusCode.Should().Be(HttpStatusCode.Created);
@@ -83,7 +83,7 @@ public class AiUnavailableApiTests(FamilyHubWebFactory factory) : IntegrationTes
             new CreateMedicalRecordRequest(new DateOnly(2026, 1, 1), null, null, null));
         var recordId = (await created.Content.ReadFromJsonAsync<MedicalRecordDto>())!.Id;
         var upload = new MultipartFormDataContent();
-        var file = new ByteArrayContent(Encoding.UTF8.GetBytes("scan"));
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.4\nscan"));
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
         upload.Add(file, "file", "scan.pdf");
         (await owner.PostAsync($"/api/medical-records/{recordId}/attachments", upload)).StatusCode.Should().Be(HttpStatusCode.Created);
