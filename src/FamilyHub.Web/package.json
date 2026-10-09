@@ -41,6 +41,7 @@
     "msgpackr-extract@3.0.4": true
   },
   "overrides": {
-    "piscina": "5.3.2"
+    "piscina": "5.3.2",
+    "tinypool": "2.1.2"
   }
 }
