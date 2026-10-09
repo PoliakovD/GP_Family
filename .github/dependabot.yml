@@ -1,0 +1,46 @@
+# Еженедельные обновления зависимостей (аудит security-audit-2026-10, M7): actions закреплены по
+# SHA, образы — по точным версиям, поэтому без Dependabot они бы тихо устаревали. Уязвимости
+# (security updates) Dependabot присылает вне этого расписания, если они включены в Settings →
+# Code security.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directories:
+      - /src/FamilyHub.Web
+      - /e2e
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      angular:
+        patterns: ["@angular/*", "@angular-devkit/*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /src/FamilyHub.Api
+      - /src/FamilyHub.TelegramBot
+      - /deploy/backup
+      - /deploy/wg
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directories:
+      - /
+      - /deploy
+    schedule:
+      interval: weekly

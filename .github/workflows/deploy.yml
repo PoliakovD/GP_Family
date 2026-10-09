@@ -6,12 +6,30 @@ name: Deploy
 #     Environments превращают автодеплой обратно в деплой "по кнопке".
 #  2. Вручную (workflow_dispatch) — повторный деплой без пересборки / откат файлов deploy/.
 # Ветка/тег/SHA выбирается на экране ручного запуска ("Use workflow from"); от неё берутся только
-# файлы deploy/ (Caddyfile, docker-compose.prod.yml), само приложение ВСЕГДА разворачивается образом
-# :latest, собранным build.yml. Тестов и сборки образов здесь нет: build.yml публикует образы,
-# ci.yml гоняет тесты на каждый push.
+# файлы deploy/ (Caddyfile, docker-compose.prod.yml). Образы — по тегу image_tag: автодеплой из
+# build.yml передаёт sha-тег только что собранной сборки (аудит security-audit-2026-10, M7 —
+# раньше всегда :latest, т.е. «что последним запушили в GHCR», а не то, что прошло этот build);
+# ручной запуск по умолчанию берёт latest, но можно указать любой sha-тег для отката.
+# Тестов и сборки образов здесь нет: build.yml публикует образы, ci.yml гоняет тесты на каждый push.
 on:
-  workflow_dispatch: {}
-  workflow_call: {}
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Тег образов в GHCR (sha из build.yml или latest)'
+        required: false
+        default: latest
+        type: string
+  workflow_call:
+    inputs:
+      image_tag:
+        required: false
+        default: latest
+        type: string
+
+# Минимум прав GITHUB_TOKEN: код (sparse checkout deploy/) и чтение пакетов GHCR на VPS.
+permissions:
+  contents: read
+  packages: read
 
 concurrency:
   # Один деплой за раз — второй запуск ждёт, не отменяет первый (cancel-in-progress: false),
@@ -29,7 +47,7 @@ jobs:
       # Нестандартный SSH-порт VPS — секрет не заведён -> дефолт 22.
       SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: |
             deploy
@@ -68,7 +86,7 @@ jobs:
           rm -f "$key_file"
 
       - name: Install SSH key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
         with:
           ssh-private-key: ${{ steps.ssh_key.outputs.key }}
 
@@ -88,15 +106,18 @@ jobs:
         # "Снять passphrase с ключа" выше.
         env:
           PROD_ENV: ${{ secrets.PROD_ENV }}
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag || 'latest' }}
         run: |
+          # Тег — только sha (hex) или latest: значение уходит в .env на VPS.
+          if ! printf '%s' "$IMAGE_TAG_INPUT" | grep -Eq '^([0-9a-f]{7,40}|latest)$'; then
+            echo "Недопустимый image_tag: $IMAGE_TAG_INPUT" >&2; exit 1
+          fi
           printf '%s\n' "$PROD_ENV" > env.rendered
           echo "IMAGE=${{ steps.meta.outputs.image }}" >> env.rendered
-          # Всегда latest — build.yml публикует его при каждом push в master; этот workflow
-          # ничего не собирает и не выбирает конкретный SHA (см. шапку файла и deploy/README.md
-          # про откат на конкретный тег вручную, если он когда-нибудь понадобится).
-          echo "IMAGE_TAG=latest" >> env.rendered
+          # Тег образов — из входа image_tag (см. шапку файла): sha-тег сборки при автодеплое.
+          echo "IMAGE_TAG=${IMAGE_TAG_INPUT}" >> env.rendered
           echo "IMAGE_BOT=${{ steps.meta.outputs.image_bot }}" >> env.rendered
-          echo "WG_IMAGE=${{ steps.meta.outputs.image_wg }}:latest" >> env.rendered
+          echo "WG_IMAGE=${{ steps.meta.outputs.image_wg }}:${IMAGE_TAG_INPUT}" >> env.rendered
 
       - name: Render конфиг Amnezia WG из секрета WG_CONF (ADR-0008)
         # Приватный ключ тоннеля — секрет, в git ему нельзя. Пустой WG_CONF допустим (бот тогда
@@ -135,6 +156,8 @@ jobs:
             chmod 600 wg/awg0.conf
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
+            # Токен из docker login не должен оставаться в ~/.docker/config.json на VPS (аудит M7).
+            docker logout ghcr.io
             # up -d сам пересоздаёт только сервисы, у которых сменился образ/конфиг — неизменившиеся
             # (wg-client, бот) не трогаются. Единственная связка: telegrambot живёт в сети wg-client
             # (network_mode: service:wg-client) — пересоздание wg-client без бота осиротит его

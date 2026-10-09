@@ -2,6 +2,7 @@ using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Security;
 using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Auth.Jwt;
+using FamilyHub.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -47,6 +48,7 @@ public static class AuthenticationRegistration
         // (дубли keyId, некорректный base64) валит старт хоста сразу, см. JwtSigningKeyRing.
         var jwtSigningKeys = JwtSigningKeyRing.Build(jwtOptions);
         builder.Services.AddScoped<ITokenService, TokenService>();
+        builder.Services.AddScoped<SessionValidityChecker>();
 
         // --- CSRF: double-submit антифорджери-токен поверх SameSite=Lax для PWA-cookie сессии (аудит
         // --- module-review-2026-08-02/01-auth-identity.md, находка 4). Только PWA — Telegram Mini App
@@ -115,6 +117,22 @@ public static class AuthenticationRegistration
                     if (ctx.Request.Cookies.TryGetValue(PwaCookieNames.AccessToken, out var accessToken))
                         ctx.Token = accessToken;
                     return Task.CompletedTask;
+                },
+                // Подпись и срок проверены — но сессия, на которую ссылается токен, могла быть
+                // отозвана (выход, «завершить сеанс», смена/сброс пароля, удаление аккаунта). Без этой
+                // проверки access-токен жил до конца AccessTokenLifetime (аудит security-audit-2026-10, M5).
+                OnTokenValidated = async ctx =>
+                {
+                    var sessionClaim = ctx.Principal?.FindFirst(FamilyHubClaimTypes.SessionId)?.Value;
+                    if (!Guid.TryParse(sessionClaim, out var sessionId))
+                    {
+                        ctx.Fail("Access-токен без идентификатора сессии.");
+                        return;
+                    }
+
+                    var checker = ctx.HttpContext.RequestServices.GetRequiredService<SessionValidityChecker>();
+                    if (!await checker.IsActiveAsync(sessionId, ctx.HttpContext.RequestAborted))
+                        ctx.Fail("Сессия отозвана.");
                 },
                 // SPA-API: вместо WWW-Authenticate-челленджа отдаём голый 401, как и раньше у cookie-схемы.
                 OnChallenge = ctx =>

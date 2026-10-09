@@ -10,6 +10,10 @@ on:
     branches: ['**']
   pull_request:
 
+# Явный минимум прав GITHUB_TOKEN (аудит security-audit-2026-10, M7): CI только читает код.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -18,14 +22,14 @@ jobs:
   build-and-unit-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '10.0.x'
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
@@ -34,6 +38,19 @@ jobs:
 
       - name: Restore
         run: dotnet restore GP_Family.slnx
+
+      # Аудит security-audit-2026-10, M7: High/Critical в NuGet (включая транзитивные) роняют CI,
+      # Moderate/Low — предупреждение (принятые остатки описаны в docs/security/security-audit-2026-10.md).
+      - name: Vulnerable NuGet packages
+        run: |
+          dotnet list GP_Family.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -Eq '^\s+>\s.*\s(High|Critical)\s' vulnerable.txt; then
+            echo "::error::Найдены NuGet-пакеты с уязвимостями High/Critical — см. вывод шага."
+            exit 1
+          fi
+          if grep -Eq '^\s+>\s' vulnerable.txt; then
+            echo "::warning::Есть NuGet-пакеты с уязвимостями Moderate/Low — см. вывод шага и отчёт аудита."
+          fi
 
       - name: Build (Release)
         run: dotnet build GP_Family.slnx -c Release --no-restore
@@ -49,15 +66,19 @@ jobs:
       run:
         working-directory: src/FamilyHub.Web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/FamilyHub.Web/package-lock.json
 
       - run: npm ci
+
+      # Аудит security-audit-2026-10, M7: High/Critical в зависимостях, попадающих в бандл.
+      - name: npm audit (prod)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Unit tests
         run: npm test

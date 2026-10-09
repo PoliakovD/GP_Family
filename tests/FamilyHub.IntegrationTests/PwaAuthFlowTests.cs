@@ -108,6 +108,28 @@ public class PwaAuthFlowTests(FamilyHubWebFactory factory) : IntegrationTestBase
             .StatusCode.Should().Be(HttpStatusCode.Locked);
     }
 
+    // Регрессия на находку L6 (docs/security/security-audit-2026-10.md): с угнанной сессией текущий
+    // пароль нельзя подбирать через смену пароля — те же 5 попыток и блокировка, что у входа.
+    [Fact]
+    public async Task ChangePassword_FiveWrongCurrentPasswords_Returns423_AndLocksLogin()
+    {
+        var (client, email) = await RegisterAsync(password: "Str0ngPw");
+
+        for (var i = 0; i < 4; i++)
+            (await client.PostAsJsonAsync("/api/auth/change-password",
+                    new { currentPassword = "Wr0ngPwd", newPassword = "N3wStr0ng" }))
+                .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        (await client.PostAsJsonAsync("/api/auth/change-password",
+                new { currentPassword = "Wr0ngPwd", newPassword = "N3wStr0ng" }))
+            .StatusCode.Should().Be(HttpStatusCode.Locked);
+        (await client.PostAsJsonAsync("/api/auth/change-password",
+                new { currentPassword = "Str0ngPw", newPassword = "N3wStr0ng" }))
+            .StatusCode.Should().Be(HttpStatusCode.Locked, "во время блокировки не проверяется даже верный пароль");
+        (await AnonymousClient().PostAsJsonAsync("/api/auth/login", new { email, password = "Str0ngPw" }))
+            .StatusCode.Should().Be(HttpStatusCode.Locked, "блокировка общая со входом");
+    }
+
     [Fact]
     public async Task Logout_InvalidatesCookieSession()
     {
