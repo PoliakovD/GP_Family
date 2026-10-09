@@ -141,7 +141,7 @@ services:
   # сам API при старте (EnsureTopicsExist, ADR-0007), поэтому автосоздание выключено — иначе
   # опечатка в имени топика тихо создала бы отдельный "мусорный" топик вместо явной ошибки.
   kafka:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:4.3.1
     restart: unless-stopped
     # Только messaging (internal): брокер без аутентификации (PLAINTEXT) видят лишь api и бот —
     # остальные контейнеры не могут писать в telegram-outbound (аудит security-audit-2026-10, L4).
