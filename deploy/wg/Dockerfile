@@ -10,7 +10,7 @@
 #
 #   docker build -f deploy/wg/Dockerfile -t familyhub-wg-client deploy/wg
 
-FROM golang:1.25.12 AS awg
+FROM golang:1.27.0 AS awg
 ARG AMNEZIAWG_GO_COMMIT=master
 RUN git clone https://github.com/amnezia-vpn/amneziawg-go.git /awg && \
     cd /awg && git checkout ${AMNEZIAWG_GO_COMMIT}
