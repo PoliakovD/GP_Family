@@ -47,7 +47,7 @@ jobs:
       # Нестандартный SSH-порт VPS — секрет не заведён -> дефолт 22.
       SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: |
             deploy
@@ -86,7 +86,7 @@ jobs:
           rm -f "$key_file"
 
       - name: Install SSH key
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
         with:
           ssh-private-key: ${{ steps.ssh_key.outputs.key }}
 
