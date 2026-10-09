@@ -217,6 +217,10 @@ services:
       # X-Forwarded-For/Proto принимаются только от Caddy — его адрес в сети edge фиксирован ниже
       # (аудит security-audit-2026-10, L3). Раньше доверялась вся 172.16.0.0/12.
       ReverseProxy__KnownProxies__0: "172.31.250.2"
+      # Сессионные cookie с префиксом __Host- (Secure, Path=/, без Domain) — их нельзя подбросить
+      # с поддоменов seq./s3./admin. (аудит security-audit-2026-10, бэклог M4). Включение один раз
+      # разлогинивает всех: старые cookie без префикса больше не читаются.
+      Auth__HostPrefixedCookies: "true"
       # Секрет обмена с FamilyHub.TelegramBot (см. telegrambot ниже, profiles: ["bot"]) —
       # ADR-0008. НЕ required (:-, не :?): пока профиль "bot" не включён, этой переменной может
       # не быть в PROD_ENV вовсе — Api тогда просто не мапит /internal/bot/* (internalBotApiConfigured

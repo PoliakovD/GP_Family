@@ -115,7 +115,7 @@ public static class AuthEndpoints
         // "auth-session", не "auth" — см. AuthRateLimitOptions.AuthSessionPermitLimit.
         group.MapPost("/logout", async (HttpContext http, ITokenService tokenService, CancellationToken ct) =>
         {
-            if (http.Request.Cookies.TryGetValue(PwaCookieNames.RefreshToken, out var refreshToken))
+            if (http.Request.Cookies.TryGetValue(SessionCookieSettings.For(http).RefreshToken, out var refreshToken))
                 await tokenService.RevokeAsync(refreshToken, ct);
             PwaSessionCookieWriter.ClearSessionCookies(http);
             return Results.Ok();
@@ -127,7 +127,7 @@ public static class AuthEndpoints
         // access-токена, это обычный трафик сессии, а не попытка входа.
         group.MapPost("/refresh", async (HttpContext http, ITokenService tokenService, CancellationToken ct) =>
         {
-            if (!http.Request.Cookies.TryGetValue(PwaCookieNames.RefreshToken, out var refreshToken))
+            if (!http.Request.Cookies.TryGetValue(SessionCookieSettings.For(http).RefreshToken, out var refreshToken))
                 return Results.Unauthorized();
 
             var session = await tokenService.RefreshAsync(
@@ -217,7 +217,7 @@ public static class AuthEndpoints
             await tokenService.RevokeAllForUserAsync(currentUser.UserId, ct);
 
             var email = principal.FindFirst(FamilyHubClaimTypes.Email)?.Value;
-            if (email is not null && http.Request.Cookies.ContainsKey(PwaCookieNames.RefreshToken))
+            if (email is not null && http.Request.Cookies.ContainsKey(SessionCookieSettings.For(http).RefreshToken))
                 return await IssueSessionAsync(currentUser.UserId, email, tokenService, http, ct);
 
             return Results.Ok();

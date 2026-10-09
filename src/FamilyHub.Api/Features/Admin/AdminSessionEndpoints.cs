@@ -1,5 +1,6 @@
 using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Security;
+using FamilyHub.Infrastructure.Auth.Jwt;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 
@@ -55,10 +56,11 @@ public static class AdminSessionEndpoints
             var session = await sessions.CreateAsync(admin.SessionLifetime, ip, http.Request.Headers.UserAgent.ToString(), ct);
             var expiresAt = new DateTimeOffset(session.ExpiresAt, TimeSpan.Zero);
             var token = AdminSessionCookie.Issue(dataProtection, session.Id, expiresAt);
-            http.Response.Cookies.Append(AdminCookieNames.Session, token, new CookieOptions
+            var cookies = SessionCookieSettings.For(http);
+            http.Response.Cookies.Append(cookies.AdminSession, token, new CookieOptions
             {
                 HttpOnly = true,
-                Secure = http.Request.IsHttps,
+                Secure = cookies.Secure(http),
                 SameSite = SameSiteMode.Strict,
                 Expires = expiresAt,
                 Path = "/",
@@ -77,7 +79,8 @@ public static class AdminSessionEndpoints
             HttpContext http, IDataProtectionProvider dataProtection, AdminSessionStore sessions,
             ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
-            if (http.Request.Cookies.TryGetValue(AdminCookieNames.Session, out var token)
+            var cookies = SessionCookieSettings.For(http);
+            if (http.Request.Cookies.TryGetValue(cookies.AdminSession, out var token)
                 && !string.IsNullOrEmpty(token)
                 && AdminSessionCookie.Validate(dataProtection, token) is { } session)
             {
@@ -86,7 +89,7 @@ public static class AdminSessionEndpoints
                     "Админ-панель: выход, сессия отозвана (IP {Ip})", http.Connection.RemoteIpAddress?.ToString());
             }
 
-            http.Response.Cookies.Delete(AdminCookieNames.Session, new CookieOptions { Path = "/" });
+            http.Response.Cookies.Delete(cookies.AdminSession, new CookieOptions { Path = "/", Secure = cookies.Secure(http) });
             return Results.Ok();
         }).AllowAnonymous();
 
@@ -97,7 +100,8 @@ public static class AdminSessionEndpoints
             var revoked = await sessions.RevokeAllAsync(ct);
             loggerFactory.CreateLogger("FamilyHub.Admin.Session").LogWarning(
                 "Админ-панель: «выйти везде» — отозвано сессий: {Count} (IP {Ip})", revoked, http.Connection.RemoteIpAddress?.ToString());
-            http.Response.Cookies.Delete(AdminCookieNames.Session, new CookieOptions { Path = "/" });
+            var cookies = SessionCookieSettings.For(http);
+            http.Response.Cookies.Delete(cookies.AdminSession, new CookieOptions { Path = "/", Secure = cookies.Secure(http) });
             return Results.Ok(new { revoked });
         }).RequireAuthorization("PlatformAdmin");
 

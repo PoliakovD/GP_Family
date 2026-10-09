@@ -1,3 +1,4 @@
+using FamilyHub.Infrastructure.Auth.Jwt;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
@@ -9,7 +10,7 @@ namespace FamilyHub.Api.Security;
 
 /// <summary>
 /// Схема аутентификации админ-панели (ADR-0009) — читает httpOnly-cookie
-/// <see cref="AdminCookieNames.Session"/>, выставленную POST /api/admin/session после проверки
+/// cookie сессии (SessionCookieSettings.AdminSession), выставленную POST /api/admin/session после проверки
 /// логина/пароля (AdminBasicAuth.IsAuthorized, тот же constant-time compare, что у Hangfire/
 /// Swagger-гейта). Никогда не участвует в AuthSchemes.Smart-селекторе — подключается ТОЛЬКО
 /// явной политикой "PlatformAdmin" на группе /api/admin (см. Program.cs), поэтому обычные PWA/
@@ -27,7 +28,7 @@ public class AdminAuthenticationHandler(
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Cookies.TryGetValue(AdminCookieNames.Session, out var token) || string.IsNullOrEmpty(token))
+        if (!Request.Cookies.TryGetValue(SessionCookieSettings.For(Context).AdminSession, out var token) || string.IsNullOrEmpty(token))
             return AuthenticateResult.Fail("Отсутствует cookie сессии админ-панели.");
 
         var session = AdminSessionCookie.Validate(dataProtection, token);

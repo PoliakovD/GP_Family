@@ -13,9 +13,10 @@ public static class PwaSessionCookieWriter
 {
     public static void SetSessionCookies(HttpContext http, IssuedSession session)
     {
-        var secure = http.Request.IsHttps; // SameAsRequest: TLS в проде, http локально.
+        var names = SessionCookieSettings.For(http);
+        var secure = names.Secure(http); // TLS в проде (и всегда с __Host-), http локально.
 
-        http.Response.Cookies.Append(PwaCookieNames.AccessToken, session.AccessToken, new CookieOptions
+        http.Response.Cookies.Append(names.AccessToken, session.AccessToken, new CookieOptions
         {
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
@@ -23,15 +24,15 @@ public static class PwaSessionCookieWriter
             Expires = session.AccessTokenExpiresAt,
             Path = "/",
         });
-        http.Response.Cookies.Append(PwaCookieNames.RefreshToken, session.RefreshToken, new CookieOptions
+        http.Response.Cookies.Append(names.RefreshToken, session.RefreshToken, new CookieOptions
         {
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
             Secure = secure,
             Expires = session.RefreshTokenExpiresAt,
             // Только auth-эндпоинты (/refresh, /logout) — незачем гонять долгоживущий секрет
-            // с каждым запросом к API.
-            Path = "/api/auth",
+            // с каждым запросом к API. С префиксом __Host- путь обязан быть "/" (см. SessionCookieSettings).
+            Path = names.RefreshTokenPath,
         });
 
         // CSRF-cookie здесь НЕ выставляем: login/register/reset-password/confirm/refresh — все
@@ -66,15 +67,23 @@ public static class PwaSessionCookieWriter
         {
             HttpOnly = false,
             SameSite = SameSiteMode.Lax,
-            Secure = secure ?? http.Request.IsHttps,
+            Secure = secure ?? SessionCookieSettings.For(http).Secure(http),
             Path = "/",
         });
     }
 
     public static void ClearSessionCookies(HttpContext http)
     {
-        http.Response.Cookies.Delete(PwaCookieNames.AccessToken, new CookieOptions { Path = "/" });
-        http.Response.Cookies.Delete(PwaCookieNames.RefreshToken, new CookieOptions { Path = "/api/auth" });
+        var names = SessionCookieSettings.For(http);
+        var secure = names.Secure(http);
+        http.Response.Cookies.Delete(names.AccessToken, new CookieOptions { Path = "/", Secure = secure });
+        http.Response.Cookies.Delete(names.RefreshToken, new CookieOptions { Path = names.RefreshTokenPath, Secure = secure });
+        if (names.HostPrefixed)
+        {
+            // Хвосты cookie без префикса, выданные до включения __Host- (переход разлогинил всех).
+            http.Response.Cookies.Delete(PwaCookieNames.AccessToken, new CookieOptions { Path = "/" });
+            http.Response.Cookies.Delete(PwaCookieNames.RefreshToken, new CookieOptions { Path = "/api/auth" });
+        }
         http.Response.Cookies.Delete(CsrfCookieNames.PublicToken, new CookieOptions { Path = "/" });
     }
 }

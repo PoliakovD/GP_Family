@@ -55,12 +55,16 @@ public static class AuthenticationRegistration
         // --- аутентифицируется явным initData в заголовке, ambient-cookie CSRF к нему неприменим.
         // --- Cookie.Name — приватная (httpOnly) половина токена; публичную, которую читает Angular
         // --- (withXsrfConfiguration), выставляет PwaSessionCookieWriter.IssueCsrfCookie отдельно.
+        // Имена/атрибуты сессионных cookie, в т.ч. __Host- на проде (аудит security-audit-2026-10, бэклог M4).
+        var cookieSettings = new SessionCookieSettings(builder.Configuration.GetValue<bool>(SessionCookieSettings.ConfigKey));
+        builder.Services.AddSingleton(cookieSettings);
+
         builder.Services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = "familyhub.csrf";
+            options.Cookie.Name = cookieSettings.Antiforgery;
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = SameSiteMode.Lax;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.Cookie.SecurePolicy = cookieSettings.HostPrefixed ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
             // Path обязателен явно: без него браузер/CookieContainer скоупит cookie по RFC 6265
             // default-path (директория ПЕРВОГО запроса, который её выставил — например
             // "/api/auth/register", если сессия открыта регистрацией) и она не долетает до
@@ -114,7 +118,7 @@ public static class AuthenticationRegistration
                 // PWA-запросы идут через withCredentials, не bearer-заголовок.
                 OnMessageReceived = ctx =>
                 {
-                    if (ctx.Request.Cookies.TryGetValue(PwaCookieNames.AccessToken, out var accessToken))
+                    if (ctx.Request.Cookies.TryGetValue(cookieSettings.AccessToken, out var accessToken))
                         ctx.Token = accessToken;
                     return Task.CompletedTask;
                 },
