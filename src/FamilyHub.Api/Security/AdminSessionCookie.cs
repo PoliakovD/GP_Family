@@ -16,26 +16,26 @@ namespace FamilyHub.Api.Security;
 public static class AdminSessionCookie
 {
     private const string Purpose = "FamilyHub.Admin.Session";
-    // Формат полезной нагрузки — "admin:{sessionId}". Id нужен только для отзыва при выходе
-    // (AdminSessionRevocations, аудит security-audit-2026-10, M3); токены старого формата ("admin")
-    // больше не принимаются — после выкатки админ однократно перелогинится.
+    // Формат полезной нагрузки — "admin:{sessionId}", id строки AdminSessions (AdminSessionStore,
+    // аудит security-audit-2026-10, M3): по нему сессия отзывается на сервере.
     private const string PayloadPrefix = "admin:";
 
     private static ITimeLimitedDataProtector CreateProtector(IDataProtectionProvider provider) =>
         provider.CreateProtector(Purpose).ToTimeLimitedDataProtector();
 
-    public static string Issue(IDataProtectionProvider provider, TimeSpan lifetime) =>
-        CreateProtector(provider).Protect(PayloadPrefix + Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow.Add(lifetime));
+    /// <summary>Cookie для уже созданной строки AdminSessions (AdminSessionStore.CreateAsync).</summary>
+    public static string Issue(IDataProtectionProvider provider, Guid sessionId, DateTimeOffset expiresAt) =>
+        CreateProtector(provider).Protect(PayloadPrefix + sessionId.ToString("N"), expiresAt);
 
     /// <returns>Id и срок сессии, либо null — токен просрочен, подделан или старого формата.</returns>
-    public static AdminSession? Validate(IDataProtectionProvider provider, string token)
+    public static AdminSessionToken? Validate(IDataProtectionProvider provider, string token)
     {
         try
         {
             var payload = CreateProtector(provider).Unprotect(token, out var expiresAt);
             return payload.StartsWith(PayloadPrefix, StringComparison.Ordinal)
                 && Guid.TryParseExact(payload[PayloadPrefix.Length..], "N", out var sessionId)
-                    ? new AdminSession(sessionId, expiresAt)
+                    ? new AdminSessionToken(sessionId, expiresAt)
                     : null;
         }
         catch (CryptographicException)
@@ -47,4 +47,4 @@ public static class AdminSessionCookie
     }
 }
 
-public record AdminSession(Guid Id, DateTimeOffset ExpiresAt);
+public record AdminSessionToken(Guid Id, DateTimeOffset ExpiresAt);

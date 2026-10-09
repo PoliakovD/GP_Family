@@ -92,6 +92,13 @@ public static class OptionsRegistration
             throw new InvalidOperationException(
                 "Admin:Enabled=true, но Admin:User/Password (env Admin__User/Admin__Password) не заданы — " +
                 "форма входа админ-панели была бы недостижима (сравнение всегда отклонит любой ввод).");
+        if (adminOptions.Enabled && adminOptions.RequireTotp
+            && FamilyHub.Api.Security.Totp.DecodeBase32(adminOptions.TotpSecret) is not { Length: >= 10 })
+            throw new InvalidOperationException(
+                "Admin:Enabled=true, но Admin:TotpSecret (env Admin__TotpSecret) не задан или не base32 длиной " +
+                "от 16 символов — вход в админ-панель требует второй фактор (аудит security-audit-2026-10). " +
+                "Сгенерируйте: python3 -c 'import base64,os;print(base64.b32encode(os.urandom(20)).decode())' " +
+                "и добавьте в приложение-аутентификатор (см. deploy/README.md).");
 
         return (devToolsOptions, adminOptions);
     }

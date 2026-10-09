@@ -20,24 +20,28 @@ public class AdminAuthenticationHandler(
     ILoggerFactory logger,
     UrlEncoder encoder,
     IDataProtectionProvider dataProtection,
-    AdminSessionRevocations revocations)
+    AdminSessionStore sessions)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    public const string SessionIdClaim = "familyhub:admin_session_id";
+
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Cookies.TryGetValue(AdminCookieNames.Session, out var token) || string.IsNullOrEmpty(token))
-            return Task.FromResult(AuthenticateResult.Fail("Отсутствует cookie сессии админ-панели."));
+            return AuthenticateResult.Fail("Отсутствует cookie сессии админ-панели.");
 
         var session = AdminSessionCookie.Validate(dataProtection, token);
-        if (session is null || revocations.IsRevoked(session.Id))
+        if (session is null || !await sessions.IsActiveAsync(session.Id, Context.RequestAborted))
         {
-            Logger.LogWarning("Аутентификация админ-панели отклонена: cookie недействительна/просрочена ({Path})", Request.Path);
-            return Task.FromResult(AuthenticateResult.Fail("Сессия админ-панели недействительна или истекла."));
+            Logger.LogWarning("Аутентификация админ-панели отклонена: cookie недействительна/просрочена/отозвана ({Path})", Request.Path);
+            return AuthenticateResult.Fail("Сессия админ-панели недействительна или истекла.");
         }
 
-        // Единственный логин на всю панель — identity без UserId, только сам факт "это админ".
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "admin")], Scheme.Name);
+        // Единственный логин на всю панель — identity без UserId, только сам факт "это админ" и id
+        // сессии (для отзыва текущей при выходе).
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.Name, "admin"), new Claim(SessionIdClaim, session.Id.ToString())], Scheme.Name);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return AuthenticateResult.Success(ticket);
     }
 }

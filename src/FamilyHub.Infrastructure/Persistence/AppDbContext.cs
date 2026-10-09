@@ -117,6 +117,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     /// <summary>История ротаций учёток приложения к Postgres/MinIO (ADR-0011) — только метаданные, без секретов.</summary>
     public DbSet<CredentialRotation> CredentialRotations => Set<CredentialRotation>();
 
+    /// <summary>Сессии админ-панели (ADR-0009): отзыв выходом/«выйти везде» переживает рестарт.</summary>
+    public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
+
     /// <summary>Аудит платных вызовов внешнего веб-поиска (см. WebSearchCallLogger,
     /// /admin/enrichment → «Вызовы поиска») — одна строка на каждый SearchAsync, включая
     /// кэш-хиты.</summary>

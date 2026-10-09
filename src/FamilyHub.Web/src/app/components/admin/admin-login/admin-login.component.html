@@ -17,8 +17,13 @@
 
       <label class="form-label" for="admin-password">Пароль</label>
       <input
-        id="admin-password" class="input mb-3" type="password" name="password"
+        id="admin-password" class="input mb-2" type="password" name="password"
         [(ngModel)]="password" required autocomplete="current-password" />
+
+      <label class="form-label" for="admin-totp">Код из приложения-аутентификатора</label>
+      <input
+        id="admin-totp" class="input mb-3" type="text" name="totp" inputmode="numeric" maxlength="6"
+        pattern="[0-9]{6}" placeholder="6 цифр" [(ngModel)]="totp" required autocomplete="one-time-code" />
 
       <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
     </form>

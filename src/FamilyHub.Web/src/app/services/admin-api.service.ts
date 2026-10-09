@@ -554,8 +554,11 @@ export class AdminApiService {
     return new ApiError(0, 'Неизвестная ошибка');
   }
 
-  login = (user: string, password: string) => this.post<void>('/api/admin/session', { user, password });
+  /** totp — код из приложения-аутентификатора (второй фактор входа, аудит security-audit-2026-10). */
+  login = (user: string, password: string, totp: string) => this.post<void>('/api/admin/session', { user, password, totp });
   logout = () => this.del<void>('/api/admin/session');
+  /** «Выйти на всех устройствах» — отзывает все сессии панели, включая текущую. */
+  logoutEverywhere = () => this.post<{ revoked: number }>('/api/admin/session/revoke-all', {});
   checkSession = () => this.get<void>('/api/admin/session');
 
   getOverview = () => this.get<AdminOverview>('/api/admin/stats/overview');

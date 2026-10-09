@@ -29,6 +29,10 @@ public class AdminWebFactory : FamilyHubWebFactory
         builder.UseSetting("Admin:Enabled", "true");
         builder.UseSetting("Admin:User", TestUser);
         builder.UseSetting("Admin:Password", TestPassword);
+        // Второй фактор выключен для общей коллекции: код TOTP одноразовый (AdminTotpVerifier помнит
+        // использованный шаг), а десятки тестов логинятся в пределах одних 30 секунд. Сам вход с TOTP
+        // проверяет AdminTotpApiTests на отдельной фабрике.
+        builder.UseSetting("Admin:RequireTotp", "false");
         // Короче прод-дефолта (12 часов, AdminOptions.SessionLifetime), но заведомо длиннее любого
         // поллинга в этой коллекции (LabAnalyteKbRebuildJobTests.WaitForAsync — до 45с) — раньше
         // здесь стояло 5с "для теста истечения без ожидания часами", но ни один тест в коллекции

@@ -49,6 +49,7 @@ public class RotationWebFactory : LeastPrivilegeWebFactory
         builder.UseSetting("Admin:Enabled", "true");
         builder.UseSetting("Admin:User", AdminWebFactory.TestUser);
         builder.UseSetting("Admin:Password", AdminWebFactory.TestPassword);
+        builder.UseSetting("Admin:RequireTotp", "false"); // см. AdminWebFactory
         builder.UseSetting("Admin:SessionLifetime", "00:10:00");
     }
 

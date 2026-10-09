@@ -228,6 +228,22 @@ curl -i -H 'X-Dev-TelegramId: 1' https://gp-family.ru/api/families   # 401, не
   панель только на Host `admin.${PUBLIC_DOMAIN}:4059` (`Admin__AllowedHosts__0` в compose) —
   на `:8443` и публичном домене `/admin*` и `/api/admin/*` отвечают 404. После 10 неудачных
   входов подряд форма блокируется на 15 минут (`Admin__MaxFailedLogins`/`Admin__LockoutDuration`).
+  Вход требует второй фактор — код из приложения-аутентификатора (см. ниже «TOTP для админ-панели»);
+  кнопка «Выйти везде» отзывает все сессии панели (они хранятся в БД, таблица `AdminSessions`).
+
+### TOTP для админ-панели
+
+При `Admin__Enabled=true` в `PROD_ENV` **обязателен** `Admin__TotpSecret` — без него api не стартует
+(fail-fast, чтобы панель не оказалась без второго фактора). Один раз:
+
+1. Сгенерировать секрет: `python3 -c 'import base64,os;print(base64.b32encode(os.urandom(20)).decode())'`.
+2. Добавить в `PROD_ENV` строку `Admin__TotpSecret=<секрет>`.
+3. Добавить секрет в приложение-аутентификатор (Google Authenticator, Aegis, 1Password, Bitwarden):
+   вручную как «ключ» (тип — по времени, 6 цифр, 30 с) или QR-кодом из ссылки
+   `otpauth://totp/FamilyHub:admin?secret=<секрет>&issuer=FamilyHub` (например, `qrencode -t ansiutf8 '<ссылка>'`).
+
+Смена секрета — так же; старые коды перестают подходить сразу после деплоя. Один код принимается
+только один раз. Сессии панели после деплоя этой версии нужно открыть заново (формат cookie сменился).
 
 Postgres — не HTTP, поэтому без Caddy: контейнер публикует `5432` напрямую на `10.8.0.1`
 (host-IP-scoped, как и `8443`/`4059` выше). Подключение любым клиентом (DBeaver/pgAdmin/psql)

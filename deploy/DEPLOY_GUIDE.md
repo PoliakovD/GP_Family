@@ -91,6 +91,7 @@ GitHub Environment `production` с этими же секретами (`deploy.y
 | `DB_APP_USER`, `DB_APP_PASSWORD`, `MINIO_APP_ACCESS_KEY`, `MINIO_APP_SECRET_KEY` | всегда — деплой без них падает | **не вручную**: `bash scripts/bootstrap-app-credentials.sh` на сервере (README, «Учётки приложения», ADR-0011) |
 | `SEQ_ADMIN_PASSWORD_HASH` | всегда (на VPS `SEQ_FIRSTRUN_NOAUTHENTICATION=false`) | `docker run --rm datalust/seq config hash <пароль>` |
 | `DevTools__AdminUser` / `DevTools__AdminPassword` | т.к. на VPS `DevTools__AdminUiEnabled=true` | пароль: `openssl rand -base64 24` |
+| `Admin__User` / `Admin__Password` / `Admin__TotpSecret` | если `Admin__Enabled=true` (админ-панель) — без TOTP-секрета api не стартует | пароль: `openssl rand -base64 24`; секрет: `python3 -c 'import base64,os;print(base64.b32encode(os.urandom(20)).decode())'` → в приложение-аутентификатор (README, «TOTP для админ-панели») |
 | `Telegram__BotToken`, `Telegram__WebhookSecret` | если нужен бот | @BotFather / любая случайная строка |
 | `Enrichment__ApiKey` | если `Enrichment__Provider` ≠ `Null` | у выбранного провайдера (Brave/Yandex) |
 | `Enrichment__FolderId` | только если `Enrichment__Provider=Yandex` | Yandex Cloud console |

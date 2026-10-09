@@ -33,4 +33,13 @@ public class AdminOptions
 
     /// <summary>Окно подсчёта неудач и длительность блокировки входа.</summary>
     public TimeSpan LockoutDuration { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>Секрет второго фактора (TOTP, RFC 6238) в base32 — его же один раз добавляют в
+    /// приложение-аутентификатор. Env: <c>Admin__TotpSecret</c>. Аудит security-audit-2026-10, бэклог M3.</summary>
+    public string? TotpSecret { get; set; }
+
+    /// <summary>Требовать код TOTP при входе (по умолчанию да; при <see cref="Enabled"/> без валидного
+    /// <see cref="TotpSecret"/> хост не стартует). Выключать только осознанно — например, в изолированном
+    /// e2e-стеке.</summary>
+    public bool RequireTotp { get; set; } = true;
 }

@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AdminApiService } from '../../../services/admin-api.service';
+import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ReviewQueueStore } from '../shared/review-queue.store';
 
 /**
@@ -28,6 +29,7 @@ import { ReviewQueueStore } from '../shared/review-queue.store';
 export class AdminHubComponent implements OnInit {
   private readonly api = inject(AdminApiService);
   private readonly router = inject(Router);
+  private readonly confirm = inject(ConfirmService);
   readonly reviewQueue = inject(ReviewQueueStore);
 
   /** Страница «Одобрение» (Inbox с тремя колонками) не помещается в 960px оболочки — на ней оболочка шире. */
@@ -54,6 +56,22 @@ export class AdminHubComponent implements OnInit {
   async logout(): Promise<void> {
     try {
       await this.api.logout();
+    } finally {
+      await this.router.navigate(['/admin/login']);
+    }
+  }
+
+  /** Отзывает все сессии панели на сервере — например, если пароль или устройство скомпрометированы. */
+  async logoutEverywhere(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Выйти на всех устройствах?',
+      message: 'Все сессии админ-панели, включая эту, будут завершены. Войти снова можно с паролем и кодом из приложения.',
+      confirmText: 'Выйти везде',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await this.api.logoutEverywhere();
     } finally {
       await this.router.navigate(['/admin/login']);
     }

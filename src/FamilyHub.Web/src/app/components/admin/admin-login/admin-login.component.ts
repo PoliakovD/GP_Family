@@ -20,12 +20,13 @@ export class AdminLoginComponent {
 
   user = '';
   password = '';
+  totp = '';
 
   async login(): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     try {
-      await this.api.login(this.user, this.password);
+      await this.api.login(this.user, this.password, this.totp.trim());
       await this.router.navigate(['/admin']);
     } catch (e) {
       this.error.set(this.describeError(e));
@@ -36,7 +37,7 @@ export class AdminLoginComponent {
 
   private describeError(e: unknown): string {
     if (!(e instanceof HttpErrorResponse)) return 'Что-то пошло не так. Попробуйте ещё раз.';
-    if (e.status === 401) return 'Неверный логин или пароль.';
+    if (e.status === 401) return 'Неверный логин, пароль или код из приложения.';
     // Блокировка после серии неудачных входов (сервер: AdminLoginThrottle) или общий rate-limit "auth".
     if (e.status === 429) return 'Слишком много попыток входа. Попробуйте через 15 минут.';
     return 'Что-то пошло не так. Попробуйте ещё раз.';

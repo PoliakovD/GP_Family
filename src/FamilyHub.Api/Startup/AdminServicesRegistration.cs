@@ -15,10 +15,11 @@ public static class AdminServicesRegistration
 {
     public static WebApplicationBuilder AddFamilyHubAdminServices(this WebApplicationBuilder builder)
     {
-        // Защита входа и отзыв сессий панели (аудит security-audit-2026-10, M3) — состояние на процесс.
+        // Защита входа (блокировка, TOTP) и сессии панели в БД (аудит security-audit-2026-10, M3/бэклог).
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<AdminLoginThrottle>();
-        builder.Services.AddSingleton<AdminSessionRevocations>();
+        builder.Services.AddScoped<AdminSessionStore>();
+        builder.Services.AddSingleton<AdminTotpVerifier>();
 
         builder.Services.AddScoped<AdminStatsService>();
         builder.Services.AddScoped<AdminKeysService>();
