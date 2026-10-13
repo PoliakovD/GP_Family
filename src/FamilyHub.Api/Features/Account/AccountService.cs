@@ -79,11 +79,18 @@ public class AccountService(
         // ключи блобов собираем здесь же, как для остальных владельцев.
         var vaccinationIds = await db.Vaccinations.Where(v => v.SubjectUserId == userId).Select(v => v.Id).ToListAsync(ct);
         var certificateIds = await db.VaccinationCertificates.Where(c => c.SubjectUserId == userId).Select(c => c.Id).ToListAsync(ct);
+        // Чат семьи (ADR-0019): свои сообщения во всех семьях и все сообщения семей, удаляемых целиком, — строки
+        // уйдут каскадом (FK на User/Family), а вложения полиморфны и без FK — их чистим явно.
+        var chatMessageIds = await db.ChatMessages
+            .Where(m => m.AuthorUserId == userId || soleMemberFamilyIds.Contains(m.FamilyId))
+            .Select(m => m.Id)
+            .ToListAsync(ct);
         var storageKeys = await db.FileAttachments
             .Where(a => (a.OwnerType == FileOwnerType.MedicalRecord && recordIds.Contains(a.OwnerId))
                      || (a.OwnerType == FileOwnerType.DoctorReport && reportIds.Contains(a.OwnerId))
                      || (a.OwnerType == FileOwnerType.Vaccination && vaccinationIds.Contains(a.OwnerId))
-                     || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId)))
+                     || (a.OwnerType == FileOwnerType.VaccinationCertificate && certificateIds.Contains(a.OwnerId))
+                     || (a.OwnerType == FileOwnerType.ChatMessage && chatMessageIds.Contains(a.OwnerId)))
             .Select(a => a.StorageKey)
             .ToListAsync(ct);
 
@@ -108,6 +115,11 @@ public class AccountService(
                 return new DeleteAccountOutcome(false, [new LastAdminFamily(familyId, familyName)]);
             }
         }
+
+        // Вложения сообщений чата (ключи блобов собраны выше) — до удаления семей и пользователя, пока id известны.
+        await db.FileAttachments
+            .Where(a => a.OwnerType == FileOwnerType.ChatMessage && chatMessageIds.Contains(a.OwnerId))
+            .ExecuteDeleteAsync(ct);
 
         // Семьи, где пользователь один: удаляются целиком (каскад БД + явная чистка
         // shares/hidden — тот же порядок, что в FamilyService.DeleteFamilyAsync).
@@ -159,7 +171,8 @@ public class AccountService(
         await db.FamilyInvites.Where(i => i.TargetUserId == userId || i.CreatedByUserId == userId)
             .ExecuteDeleteAsync(ct);
 
-        // User: членства и оповещения каскадом (FK), UserConsents намеренно остаются.
+        // User: членства, оповещения и чат (сообщения, реакции, отметки прочтения) каскадом (FK), UserConsents
+        // намеренно остаются.
         await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(ct);
 
         // Аудит erasure — в той же транзакции; строка без FK переживает удаление пользователя.
@@ -325,6 +338,26 @@ public class AccountService(
             vaccinationRows.Select(v => new
             {
                 v.Id, v.SeriesCode, v.DoseIndex, v.CustomName, v.VaccineName, v.Kind, v.Date, v.DatePrecision, v.CreatedAt,
+            }),
+            jsonOptions, ct);
+
+        // Чат семьи: свои сообщения (кроме удалённых — их содержимое уже стёрто). Вложения — только именами:
+        // сами файлы пользователь и так отправлял со своего устройства.
+        var chatMessages = await db.ChatMessages.AsNoTracking()
+            .Where(m => m.AuthorUserId == userId && m.DeletedAt == null)
+            .Include(m => m.Family)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync(ct);
+        var chatMessageIds = chatMessages.Select(m => m.Id).ToList();
+        var chatFiles = (await db.FileAttachments.AsNoTracking()
+                .Where(a => a.OwnerType == FileOwnerType.ChatMessage && chatMessageIds.Contains(a.OwnerId))
+                .ToListAsync(ct))
+            .ToLookup(a => a.OwnerId);
+        await AddJsonAsync(zip, "chat-messages.json",
+            chatMessages.Select(m => new
+            {
+                m.Id, m.FamilyId, family = m.Family.Name, m.Text, m.ReplyToMessageId, m.CreatedAt, m.EditedAt,
+                files = chatFiles[m.Id].Select(a => new { a.FileName, a.ContentType, a.SizeBytes }),
             }),
             jsonOptions, ct);
 

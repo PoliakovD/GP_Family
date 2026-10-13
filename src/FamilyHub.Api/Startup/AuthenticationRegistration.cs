@@ -73,6 +73,7 @@ public static class AuthenticationRegistration
         // --- плюс Dev-заглушка (DevTools:DevAuthEnabled, НЕ привязана к ASPNETCORE_ENVIRONMENT —---
         // --- см. DevToolsOptions). Селектор "Smart" во всех средах:                           ---
         // --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.             ---
+        // --- /hubs/* — всегда HubTicket (ADR-0019).                                            ---
         var authBuilder = builder.Services.AddAuthentication(options =>
         {
             options.DefaultScheme = AuthSchemes.Smart;
@@ -81,6 +82,10 @@ public static class AuthenticationRegistration
         });
 
         authBuilder.AddScheme<AuthenticationSchemeOptions, TelegramMiniAppAuthenticationHandler>(AuthSchemes.TelegramMiniApp, null);
+
+        // Вход в SignalR-хаб чата по короткоживущему тикету (ADR-0019 п. 3) — см. селектор ниже.
+        builder.Services.AddSingleton<HubTicketService>();
+        authBuilder.AddScheme<AuthenticationSchemeOptions, HubTicketAuthenticationHandler>(AuthSchemes.HubTicket, null);
 
         authBuilder.AddJwtBearer(AuthSchemes.PwaCookie, jwtBearerOptions =>
         {
@@ -162,6 +167,8 @@ public static class AuthenticationRegistration
             policyOptions.ForwardDefaultSelector = httpContext =>
             {
                 var request = httpContext.Request;
+                // Хабы (ADR-0019) принимают только тикет — ни cookie, ни initData, ни dev-заголовок.
+                if (request.Path.StartsWithSegments("/hubs")) return AuthSchemes.HubTicket;
                 var hasInitData = request.Headers.Authorization.ToString().StartsWith("tma ", StringComparison.Ordinal)
                     || request.Headers.ContainsKey("X-Telegram-Init-Data");
                 if (hasInitData) return AuthSchemes.TelegramMiniApp;

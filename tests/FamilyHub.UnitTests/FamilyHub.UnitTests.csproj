@@ -7,6 +7,7 @@
     <ProjectReference Include="..\..\src\FamilyHub.TelegramBot\FamilyHub.TelegramBot.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Medical\FamilyHub.Modules.Medical.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Birthdays\FamilyHub.Modules.Birthdays.csproj" />
+    <ProjectReference Include="..\..\src\FamilyHub.Modules.Chat\FamilyHub.Modules.Chat.csproj" />
     <ProjectReference Include="..\FamilyHub.TestUtils\FamilyHub.TestUtils.csproj" />
   </ItemGroup>
 

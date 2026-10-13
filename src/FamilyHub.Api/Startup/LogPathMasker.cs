@@ -40,6 +40,6 @@ public static partial class LogPathMasker
     public static string? MaskQuery(string? query) =>
         string.IsNullOrEmpty(query) ? query : SecretQueryParam().Replace(query, m => m.Groups["key"].Value + "=" + Mask);
 
-    [GeneratedRegex(@"(?<key>(?<=[?&])(sig|token|code))=[^&]*", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<key>(?<=[?&])(sig|token|code|access_token))=[^&]*", RegexOptions.IgnoreCase)]
     private static partial Regex SecretQueryParam();
 }

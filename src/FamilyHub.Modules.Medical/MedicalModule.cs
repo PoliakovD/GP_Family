@@ -56,6 +56,8 @@ public static class MedicalModule
         services.AddScoped<HealthSummaryService>();
         // Курсы приёма лекарств (ADR-0015): доступ, курсы, приёмы, «Сегодня», напоминания.
         services.AddScoped<MedicationCourseAccess>();
+        // Карточки ссылок чата семьи (ADR-0019) — чат не знает о медицинских правилах видимости.
+        services.AddScoped<FamilyHub.Infrastructure.Chat.IChatLinkResolver, Chat.MedicalChatLinkResolver>();
         services.AddScoped<CourseSubjects>();
         services.AddScoped<MedkitStockService>();
         services.AddScoped<MedicationCourseService>();

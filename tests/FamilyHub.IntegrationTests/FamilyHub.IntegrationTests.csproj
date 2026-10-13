@@ -6,6 +6,7 @@
     <ProjectReference Include="..\..\src\FamilyHub.Infrastructure\FamilyHub.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Medical\FamilyHub.Modules.Medical.csproj" />
     <ProjectReference Include="..\..\src\FamilyHub.Modules.Birthdays\FamilyHub.Modules.Birthdays.csproj" />
+    <ProjectReference Include="..\..\src\FamilyHub.Modules.Chat\FamilyHub.Modules.Chat.csproj" />
     <ProjectReference Include="..\FamilyHub.TestUtils\FamilyHub.TestUtils.csproj" />
     <!-- Alias обязателен: у обоих проектов top-level Program.cs генерирует public partial class
          Program в глобальном пространстве имён — без разделения по алиасам сборок
@@ -18,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Testcontainers.Minio" />
     <PackageReference Include="Testcontainers.Kafka" />
