@@ -60,4 +60,8 @@ public enum NotificationType
 
     /// <summary>Член семьи составил отчёт для врача о пользователе. Текст без медицинских подробностей.</summary>
     DoctorReportAboutYou = 16,
+
+    /// <summary>Новое сообщение в чате семьи (ADR-0019). Title/Body — имя автора и название семьи, без текста
+    /// сообщения; RelatedEntityId — Id семьи. Не чаще одного на получателя за 10 минут (DedupKey по окну).</summary>
+    FamilyChatMessage = 17,
 }

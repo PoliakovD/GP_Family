@@ -83,5 +83,6 @@ public class TelegramOutboundPublisher(
         [NotificationType.VaccinationOverdue] = "напоминание о прививке",
         [NotificationType.VaccinationWellbeingCheck] = "как самочувствие после прививки?",
         [NotificationType.DoctorReportAboutYou] = "составлен отчёт для врача",
+        [NotificationType.FamilyChatMessage] = "новое сообщение в чате семьи",
     };
 }

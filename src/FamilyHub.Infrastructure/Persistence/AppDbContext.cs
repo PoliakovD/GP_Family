@@ -53,6 +53,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IFieldCipher f
     public DbSet<AttachmentPreview> AttachmentPreviews => Set<AttachmentPreview>();
     public DbSet<Birthday> Birthdays => Set<Birthday>();
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    /// <summary>Чат семьи (ADR-0019).</summary>
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ChatMessageReaction> ChatMessageReactions => Set<ChatMessageReaction>();
+    public DbSet<ChatMessageLink> ChatMessageLinks => Set<ChatMessageLink>();
+    public DbSet<ChatReadState> ChatReadStates => Set<ChatReadState>();
     public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
     public DbSet<TelegramLinkCode> TelegramLinkCodes => Set<TelegramLinkCode>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
