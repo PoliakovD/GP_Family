@@ -142,6 +142,9 @@ export class ChatRealtimeService {
       this.connected.set(true);
       this.log.log('chat', 'info', 'hub connected');
       void this.sendViewing();
+      // Счётчик, запрошенный в start(), мог уйти раньше, чем соединение вошло в группы семей: сообщение,
+      // пришедшее в этом окне, не дало бы ни события, ни бейджа. Перечитываем уже с подключённым хабом.
+      void this.refreshUnread();
     } catch (e) {
       // Нет согласия (403 на тикет), сеть, прокси без WebSocket и т.п. — чат работает и без realtime
       // (лента грузится по REST), просто без мгновенных обновлений; пробуем снова позже.
