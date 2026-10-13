@@ -37,6 +37,7 @@ COPY src/FamilyHub.Domain/FamilyHub.Domain.csproj                        FamilyH
 COPY src/FamilyHub.Contracts/FamilyHub.Contracts.csproj                  FamilyHub.Contracts/
 COPY src/FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj        FamilyHub.Infrastructure/
 COPY src/FamilyHub.Modules.Birthdays/FamilyHub.Modules.Birthdays.csproj  FamilyHub.Modules.Birthdays/
+COPY src/FamilyHub.Modules.Chat/FamilyHub.Modules.Chat.csproj            FamilyHub.Modules.Chat/
 COPY src/FamilyHub.Modules.Medical/FamilyHub.Modules.Medical.csproj      FamilyHub.Modules.Medical/
 
 RUN dotnet restore FamilyHub.Api/FamilyHub.Api.csproj
