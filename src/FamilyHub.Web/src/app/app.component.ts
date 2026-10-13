@@ -7,6 +7,7 @@ import { IntakeStateService } from './services/intake-state.service';
 import { VaccinationStateService } from './services/vaccination-state.service';
 import { BackgroundJobsStateService } from './services/background-jobs-state.service';
 import { AiStatusService } from './services/ai-status.service';
+import { ChatRealtimeService } from './services/chat-realtime.service';
 import { PageActionService } from './services/page-action.service';
 import { BreakpointService } from './services/breakpoint.service';
 import { AuthService } from './services/auth.service';
@@ -89,6 +90,7 @@ export class AppComponent implements OnInit {
   readonly vaccinations = inject(VaccinationStateService);
   readonly backgroundJobs = inject(BackgroundJobsStateService);
   readonly ai = inject(AiStatusService);
+  readonly chat = inject(ChatRealtimeService);
   readonly pageAction = inject(PageActionService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly tg = inject(TelegramService);
@@ -189,6 +191,7 @@ export class AppComponent implements OnInit {
   /** Семейные саб-пункты — фиксированные ярлыки, роут всегда на текущую выбранную семью с ?tab=. */
   readonly familySubItems: { tab: string; label: string }[] = [
     { tab: 'members', label: 'Участники' },
+    { tab: 'chat', label: 'Чат' },
     { tab: 'medkits', label: 'Аптечки' },
     { tab: 'birthdays', label: 'Дни рождения' },
     { tab: 'dependents', label: 'Близкие и питомцы' },
@@ -197,6 +200,12 @@ export class AppComponent implements OnInit {
   /** Куда ведёт пункт «Семья» — решённый вопрос №1 плана редизайна: сразу в текущую выбранную
    * семью, а не на список. У нового пользователя без семей активных семей ещё нет — тогда
    * единственный осмысленный переход — список/создание. */
+  /** Бейдж «Чат» в саб-пунктах «Семьи» — непрочитанное именно выбранной семьи. */
+  readonly selectedFamilyChatUnread = computed(() => {
+    const family = this.state.selectedFamily();
+    return family ? (this.chat.unreadByFamily()[family.id] ?? 0) : 0;
+  });
+
   familyHref(): string {
     const family = this.state.selectedFamily();
     return family ? `/families/${family.id}` : '/families';
@@ -286,11 +295,17 @@ export class AppComponent implements OnInit {
         void this.vaccinations.refresh();
         this.intake.startPolling();
         this.ai.start();
+        void this.chat.start();
         void this.tryRedeemPendingInvite();
         // Push-подписка под старый VAPID-ключ (после ротации WebPush__*) — тихо переподписываемся.
         void this.push.healAfterKeyRotation();
       }
     }, { allowSignalWrites: true });
+
+    // Выход из PWA-сессии: соединение с хабом чата несёт прежнюю личность — закрываем (ADR-0019).
+    effect(() => {
+      if (this.auth.mode === 'pwa' && this.auth.me() === null) void untracked(() => this.chat.stop());
+    });
 
     // Часовой пояс браузера → сервер (время приёма лекарств и «сегодня» считаются в нём): на каждом появлении me.
     effect(() => {
@@ -315,6 +330,7 @@ export class AppComponent implements OnInit {
         void this.vaccinations.refresh();
         this.intake.startPolling();
         this.ai.start();
+        void this.chat.start();
         void this.auth.loadMe();
         void this.tryRedeemPendingInvite();
       }
@@ -384,6 +400,7 @@ export class AppComponent implements OnInit {
       void this.vaccinations.refresh();
       this.intake.startPolling();
       this.ai.start();
+      void this.chat.start();
       return;
     }
 

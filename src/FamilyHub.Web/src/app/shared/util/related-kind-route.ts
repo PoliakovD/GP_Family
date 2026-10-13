@@ -24,10 +24,17 @@ export function relatedKindBasePath(kind: NotificationRelatedKind): string {
       return '/health/vaccinations/people/dependent';
     case NotificationRelatedKind.DoctorReport:
       return '/health/reports';
+    case NotificationRelatedKind.FamilyChat:
+      return '/families';
   }
 }
 
 /** Маршрут к связанной сущности. У отчёта для врача своего экрана нет — ведём в общий список отчётов. */
 export function relatedEntityRoute(kind: NotificationRelatedKind, id: string): string[] {
   return kind === NotificationRelatedKind.DoctorReport ? [relatedKindBasePath(kind)] : [relatedKindBasePath(kind), id];
+}
+
+/** Query-параметры к маршруту — чат семьи живёт вкладкой страницы семьи, а не своим роутом. */
+export function relatedEntityQueryParams(kind: NotificationRelatedKind): Record<string, string> | undefined {
+  return kind === NotificationRelatedKind.FamilyChat ? { tab: 'chat' } : undefined;
 }

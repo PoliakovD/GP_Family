@@ -27,6 +27,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<number, string> = {
   [NotificationType.VaccinationOverdue]: 'Можно сделать прививку',
   [NotificationType.VaccinationWellbeingCheck]: 'Как самочувствие после прививки',
   [NotificationType.DoctorReportAboutYou]: 'Член семьи составил отчёт для врача о вас',
+  [NotificationType.FamilyChatMessage]: 'Новое сообщение в чате семьи',
 };
 
 export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
@@ -47,6 +48,7 @@ export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
   [NotificationType.VaccinationOverdue]: 'ph-duotone ph-syringe',
   [NotificationType.VaccinationWellbeingCheck]: 'ph-duotone ph-notebook',
   [NotificationType.DoctorReportAboutYou]: 'ph-duotone ph-file-pdf',
+  [NotificationType.FamilyChatMessage]: 'ph-duotone ph-chat-circle-text',
 };
 
 export function notificationTypeLabel(type: number): string {
@@ -73,6 +75,7 @@ export const NOTIFICATION_TYPE_SECTION: Record<number, string> = {
   [NotificationType.BirthdayUpcoming]: 'Семья',
   [NotificationType.MemberLeft]: 'Семья',
   [NotificationType.MemberApproved]: 'Семья',
+  [NotificationType.FamilyChatMessage]: 'Семья',
   [NotificationType.MedicalRecordShared]: 'Доступ к записям',
   [NotificationType.MedicalDocumentExtracted]: 'Доступ к записям',
   [NotificationType.MedicalDocumentExtractionFailed]: 'Доступ к записям',

@@ -13,6 +13,8 @@ import {
 import {MedkitsPanelComponent} from '../medkits-panel/medkits-panel.component';
 import {BirthdaysPanelComponent} from '../birthdays-panel/birthdays-panel.component';
 import {DependentsPanelComponent} from '../dependents-panel/dependents-panel.component';
+import {FamilyChatComponent} from '../family-chat/family-chat.component';
+import {ChatRealtimeService} from '../../services/chat-realtime.service';
 import {DatePipe} from "@angular/common";
 import {ToastService} from '../../shared/toast/toast.service';
 import {ConfirmService} from '../../shared/confirm/confirm.service';
@@ -21,12 +23,12 @@ import {PersonNameComponent} from '../../shared/person-name/person-name.componen
 import {AvatarComponent} from '../../shared/avatar/avatar.component';
 import {ActionMenuComponent, type ActionMenuItem} from '../../shared/action-menu/action-menu.component';
 
-type FamilySubTab = 'members' | 'medkits' | 'birthdays' | 'dependents';
+type FamilySubTab = 'members' | 'chat' | 'medkits' | 'birthdays' | 'dependents';
 
 @Component({
     selector: 'app-family-details',
     imports: [
-        RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent,
+        RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent, FamilyChatComponent,
         DatePipe, InviteModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent,
     ],
     templateUrl: './family-details.component.html',
@@ -37,6 +39,7 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
 
     readonly state = inject(FamilyStateService);
     readonly auth = inject(AuthService);
+    readonly chat = inject(ChatRealtimeService);
     private readonly api = inject(ApiService);
     private readonly toast = inject(ToastService);
     private readonly confirm = inject(ConfirmService);
@@ -56,6 +59,7 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
 
     readonly subTabs: { id: FamilySubTab; label: string }[] = [
         {id: 'members', label: 'Участники'},
+        {id: 'chat', label: 'Чат'},
         {id: 'medkits', label: 'Аптечки'},
         {id: 'birthdays', label: 'Дни рождения'},
         {id: 'dependents', label: 'Близкие и питомцы'},
@@ -114,6 +118,11 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
         } catch {
             // Не критично для этой страницы — карточка "это вы" просто не покажет строку доступа.
         }
+    }
+
+    /** Бейдж вкладки «Чат» — непрочитанное этой семьи (ChatRealtimeService). */
+    chatUnread(): number {
+        return this.chat.unreadByFamily()[this.id] ?? 0;
     }
 
     hasSharedWithThisFamily(): boolean {

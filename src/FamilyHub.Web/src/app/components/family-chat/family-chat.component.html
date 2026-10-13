@@ -1,0 +1,234 @@
+<div class="chat card">
+    <div class="chat-feed" #scroller (scroll)="onScroll()" role="log" aria-live="polite" aria-label="Сообщения чата семьи">
+        @if (loading()) {
+            <p class="muted chat-empty">Загрузка…</p>
+        } @else if (loadError()) {
+            <div class="chat-empty">
+                <p class="muted mb-2">{{ loadError() }}</p>
+                <button class="btn btn-secondary btn-sm" type="button" (click)="retry()">Повторить</button>
+            </div>
+        } @else {
+            @if (hasOlder()) {
+                <app-infinite-scroll-sentinel (visible)="loadOlder()" />
+                @if (loadingOlder()) {
+                    <p class="muted chat-older">Загружаем историю…</p>
+                }
+            }
+
+            @if (rows().length === 0) {
+                <div class="chat-empty">
+                    <i class="ph-duotone ph-chat-circle-text chat-empty-icon" aria-hidden="true"></i>
+                    <p class="mb-1">Здесь пока тихо.</p>
+                    <p class="muted mb-0">Напишите первым — сообщение увидят все участники семьи.</p>
+                </div>
+            }
+
+            @for (row of rows(); track row.message.id) {
+                @if (row.dayLabel) {
+                    <div class="chat-day"><span>{{ row.dayLabel }}</span></div>
+                }
+
+                <div class="msg" [class.mine]="row.mine" [class.grouped]="!row.showAuthor" [attr.data-message-id]="row.message.id">
+                    @if (!row.mine) {
+                        <div class="msg-avatar">
+                            @if (row.showAuthor) {
+                                <app-avatar [person]="avatarPerson(row.message.author)" size="sm" />
+                            }
+                        </div>
+                    }
+
+                    <div class="msg-body">
+                        @if (row.showAuthor && !row.mine) {
+                            <div class="msg-author">{{ authorName(row.message.author) }}</div>
+                        }
+
+                        <div class="bubble" [class.deleted]="row.message.deleted">
+                            @if (row.message.deleted) {
+                                <span class="muted"><i class="ph ph-prohibit" aria-hidden="true"></i> Сообщение удалено</span>
+                            } @else {
+                                @if (row.message.replyTo; as reply) {
+                                    <button type="button" class="reply-quote" (click)="scrollToMessage(reply.id)">
+                                        <span class="reply-author">{{ authorName(reply.author) }}</span>
+                                        <span class="reply-snippet">
+                                            @if (reply.deleted) {
+                                                Сообщение удалено
+                                            } @else if (reply.snippet) {
+                                                {{ reply.snippet }}
+                                            } @else if (reply.attachmentCount > 0) {
+                                                <i class="ph ph-paperclip" aria-hidden="true"></i> Вложение
+                                            } @else {
+                                                Ссылка
+                                            }
+                                        </span>
+                                    </button>
+                                }
+
+                                @if (row.message.attachments.length > 0) {
+                                    <div class="msg-files">
+                                        @for (a of row.message.attachments; track a.id) {
+                                            @if (isImage(a) && imageUrls()[a.id]) {
+                                                <button type="button" class="msg-image" (click)="openViewer(row.message, a)" [attr.aria-label]="'Открыть ' + a.fileName">
+                                                    <img [src]="imageUrls()[a.id]" [alt]="a.fileName" loading="lazy" />
+                                                </button>
+                                            } @else {
+                                                <button type="button" class="msg-file" (click)="openViewer(row.message, a)">
+                                                    <i class="ph-duotone {{ fileIcon(a) }}" aria-hidden="true"></i>
+                                                    <span class="msg-file-name">{{ a.fileName }}</span>
+                                                    <span class="muted">{{ formatFileSize(a.sizeBytes) }}</span>
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                }
+
+                                @if (row.message.text) {
+                                    <div class="msg-text">{{ row.message.text }}</div>
+                                }
+
+                                @for (link of row.message.links; track link.kind + link.entityId) {
+                                    <button type="button" class="msg-link" [class.locked]="!link.accessible" [disabled]="!link.accessible" (click)="openLink(link)">
+                                        <i [class]="link.accessible ? linkIcon(link.kind) : 'ph ph-lock-simple'" aria-hidden="true"></i>
+                                        <span class="msg-link-text">
+                                            @if (link.accessible) {
+                                                <span class="msg-link-title">{{ link.title }}</span>
+                                                <span class="muted">{{ link.subtitle }}</span>
+                                            } @else {
+                                                <span class="msg-link-title">Нет доступа</span>
+                                                <span class="muted">Автор не открыл вам эту запись</span>
+                                            }
+                                        </span>
+                                    </button>
+                                }
+                            }
+
+                            <span class="msg-meta">
+                                @if (row.message.editedAt && !row.message.deleted) {
+                                    <span>изменено</span>
+                                }
+                                <time [attr.datetime]="row.message.createdAt">{{ time(row.message.createdAt) }}</time>
+                            </span>
+                        </div>
+
+                        @if (row.message.reactions.length > 0 || reactionPickerFor() === row.message.id) {
+                            <div class="msg-reactions">
+                                @for (r of row.message.reactions; track r.emoji) {
+                                    <button type="button" class="reaction" [class.mine]="r.mine" (click)="toggleReaction(row.message, r.emoji)"
+                                            [attr.aria-pressed]="r.mine" [attr.aria-label]="r.emoji + ' — ' + r.count">
+                                        {{ r.emoji }} <span>{{ r.count }}</span>
+                                    </button>
+                                }
+                                @if (reactionPickerFor() === row.message.id) {
+                                    <span class="reaction-picker" role="group" aria-label="Выберите реакцию">
+                                        @for (emoji of config()?.reactions ?? []; track emoji) {
+                                            <button type="button" class="reaction" (click)="toggleReaction(row.message, emoji)">{{ emoji }}</button>
+                                        }
+                                        <button type="button" class="btn btn-ghost btn-sm" (click)="reactionPickerFor.set(null)" aria-label="Закрыть">
+                                            <i class="ph ph-x" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (!row.message.deleted) {
+                        <div class="msg-actions">
+                            <app-action-menu [actions]="messageActions(row)" label="Действия с сообщением" />
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <form class="composer" (submit)="$event.preventDefault(); submit()">
+        @if (replyTo(); as reply) {
+            <div class="composer-context">
+                <i class="ph ph-arrow-bend-up-left" aria-hidden="true"></i>
+                <span class="composer-context-text">
+                    Ответ {{ authorName(reply.author) }}: <span class="muted">{{ reply.text || 'вложение' }}</span>
+                </span>
+                <button type="button" class="btn btn-ghost btn-sm" (click)="cancelContext()" aria-label="Отменить ответ">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
+            </div>
+        }
+        @if (editing()) {
+            <div class="composer-context">
+                <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                <span class="composer-context-text">Редактирование сообщения</span>
+                <button type="button" class="btn btn-ghost btn-sm" (click)="cancelContext()" aria-label="Отменить редактирование">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
+            </div>
+        }
+
+        @if (files().length > 0 || links().length > 0) {
+            <div class="composer-chips">
+                @for (f of files(); track $index) {
+                    <span class="chip">
+                        <i class="ph ph-paperclip" aria-hidden="true"></i>
+                        <span class="chip-text">{{ f.name }}</span>
+                        <button type="button" (click)="removeFile($index)" [attr.aria-label]="'Убрать ' + f.name"><i class="ph ph-x" aria-hidden="true"></i></button>
+                    </span>
+                }
+                @for (l of links(); track l.kind + l.entityId; let i = $index) {
+                    <span class="chip">
+                        <i [class]="linkIcon(l.kind)" aria-hidden="true"></i>
+                        <span class="chip-text">{{ l.title }}</span>
+                        <button type="button" (click)="removeLink(i)" [attr.aria-label]="'Убрать ссылку ' + l.title"><i class="ph ph-x" aria-hidden="true"></i></button>
+                    </span>
+                }
+            </div>
+        }
+
+        <div class="composer-row">
+            @if (!editing()) {
+                <button type="button" class="btn btn-ghost btn-icon" (click)="pickFiles()" aria-label="Прикрепить файл" title="Прикрепить файл">
+                    <i class="ph ph-paperclip" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="btn btn-ghost btn-icon" (click)="openLinkPicker()" aria-label="Поделиться записью" title="Поделиться записью">
+                    <i class="ph ph-link-simple" aria-hidden="true"></i>
+                </button>
+                <input #fileInput type="file" multiple hidden [accept]="accept" (change)="onFilesSelected($event)" />
+            }
+
+            <textarea #textarea class="input composer-input" rows="1" name="text"
+                      [ngModel]="text()" (ngModelChange)="text.set($event); autoGrow()"
+                      (keydown)="onKeydown($event)"
+                      [attr.maxlength]="config()?.maxTextLength ?? 4000"
+                      placeholder="Сообщение семье" aria-label="Текст сообщения"></textarea>
+
+            <button type="submit" class="btn btn-primary btn-icon" [disabled]="!canSend()" [attr.aria-label]="editing() ? 'Сохранить' : 'Отправить'">
+                <i [class]="editing() ? 'ph ph-check' : 'ph ph-paper-plane-right'" aria-hidden="true"></i>
+            </button>
+        </div>
+    </form>
+</div>
+
+<app-bottom-sheet title="Поделиться записью" [open]="linkPickerOpen()" (closed)="linkPickerOpen.set(false)">
+    @if (linkCandidates() === null) {
+        <p class="muted">Загрузка…</p>
+    } @else if (linkCandidates()!.length === 0) {
+        <p class="muted">Пока нечем поделиться: нет своих записей, курсов приёма и аптечек семьи.</p>
+    } @else {
+        <p class="muted picker-hint">Получатели увидят карточку, только если у них уже есть доступ к записи.</p>
+        @for (group of linkCandidates(); track group.title) {
+            <div class="card-kicker">{{ group.title }}</div>
+            <div class="picker-list mb-3">
+                @for (item of group.items; track item.kind + item.entityId) {
+                    <button type="button" class="picker-item" (click)="addLink(item)">
+                        <i [class]="linkIcon(item.kind)" aria-hidden="true"></i>
+                        <span class="msg-link-text">
+                            <span class="msg-link-title">{{ item.title }}</span>
+                            <span class="muted">{{ item.subtitle }}</span>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    }
+</app-bottom-sheet>
+
+<app-file-viewer [open]="viewerOpen()" [attachments]="viewerAttachments()" [activeIndex]="viewerIndex()"
+                 (activeIndexChange)="viewerIndex.set($event)" (closed)="viewerOpen.set(false)" />
