@@ -1,0 +1,378 @@
+:host {
+  display: block;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+// Лента — своя прокрутка: композер остаётся на месте, история листается вверх.
+.chat-feed {
+  height: clamp(320px, 62dvh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-empty {
+  margin: auto;
+  text-align: center;
+  padding: var(--space-6) var(--space-3);
+}
+
+.chat-empty-icon {
+  font-size: 2.4rem;
+  color: var(--color-accent);
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.chat-older {
+  text-align: center;
+  font-size: 0.8235rem;
+}
+
+.chat-day {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-3) 0 var(--space-2);
+
+  span {
+    font-size: 0.7647rem;
+    color: var(--color-neutral-600);
+    background: var(--color-neutral-100);
+    border: 1px solid var(--color-divider);
+    border-radius: 999px;
+    padding: 2px 10px;
+  }
+}
+
+.msg {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  max-width: 100%;
+
+  &.grouped {
+    margin-top: 2px;
+  }
+
+  &.mine {
+    flex-direction: row-reverse;
+  }
+
+  &.flash .bubble {
+    outline: 2px solid var(--color-accent-400);
+  }
+
+  &:hover .msg-actions,
+  &:focus-within .msg-actions {
+    opacity: 1;
+  }
+}
+
+.msg-avatar {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.msg-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: min(78%, 560px);
+
+  .mine & {
+    align-items: flex-end;
+  }
+}
+
+.msg-author {
+  font-size: 0.7647rem;
+  color: var(--color-neutral-600);
+  margin: 0 0 2px var(--space-1);
+}
+
+.bubble {
+  position: relative;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: 12px 12px 12px 4px;
+  padding: 6px 10px 4px;
+  min-width: 64px;
+  box-shadow: var(--shadow-sm);
+
+  .mine & {
+    background: var(--color-accent-100);
+    border-color: var(--color-accent-200);
+    border-radius: 12px 12px 4px 12px;
+  }
+
+  &.deleted {
+    background: transparent;
+    box-shadow: none;
+    font-style: italic;
+  }
+}
+
+.msg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 0.6471rem;
+  color: var(--color-neutral-600);
+  margin-top: 2px;
+}
+
+.reply-quote {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-left: 3px solid var(--color-accent-500);
+  background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  padding: 3px 8px;
+  margin-bottom: 4px;
+  border-radius: 2px;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.reply-author {
+  display: block;
+  font-size: 0.7647rem;
+  font-weight: 600;
+  color: var(--color-accent-700);
+}
+
+.reply-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8235rem;
+}
+
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.msg-image {
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: zoom-in;
+
+  img {
+    display: block;
+    max-width: 240px;
+    max-height: 240px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+}
+
+.msg-file,
+.msg-link,
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+
+  > i {
+    font-size: 1.3rem;
+    color: var(--color-accent);
+    flex-shrink: 0;
+  }
+}
+
+.msg-link {
+  margin-top: 4px;
+
+  &.locked {
+    cursor: default;
+
+    > i {
+      color: var(--color-neutral-500);
+    }
+  }
+}
+
+.msg-file-name,
+.msg-link-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-file-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-link-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.8824rem;
+
+  .muted {
+    font-size: 0.7647rem;
+  }
+}
+
+.msg-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.reaction {
+  border: 1px solid var(--color-divider);
+  background: var(--color-paper);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 0.8235rem;
+  cursor: pointer;
+
+  &.mine {
+    border-color: var(--color-accent-500);
+    background: var(--color-accent-100);
+  }
+}
+
+.reaction-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  padding: 1px 4px;
+  box-shadow: var(--shadow-md);
+
+  .reaction {
+    border: none;
+    font-size: 1.05rem;
+  }
+}
+
+// На широких экранах меню «…» появляется при наведении; на сенсорных — видно всегда.
+.msg-actions {
+  opacity: 0;
+  transition: opacity 0.12s;
+  align-self: center;
+
+  @media (pointer: coarse) {
+    opacity: 1;
+  }
+}
+
+.composer {
+  border-top: 1px solid var(--color-divider);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-paper);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.composer-input {
+  flex: 1;
+  resize: none;
+  min-height: 38px;
+  max-height: 180px;
+  line-height: 1.35;
+}
+
+.composer-context {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.8235rem;
+  border-left: 3px solid var(--color-accent-500);
+  padding-left: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.composer-context-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  font-size: 0.8235rem;
+  border: 1px solid var(--color-divider);
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 2px 4px 2px 8px;
+
+  button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+    color: inherit;
+  }
+}
+
+.chip-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-hint {
+  font-size: 0.8235rem;
+}
+
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

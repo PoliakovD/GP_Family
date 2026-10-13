@@ -48,6 +48,8 @@
     "!/api/medication-courses/**",
     "!/api/medication-doses/**",
     "!/api/medication-reminders/**",
+    "!/api/chat/**",
+    "!/hubs/**",
 
     "!/hangfire",
     "!/hangfire/**",

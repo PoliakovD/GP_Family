@@ -19,4 +19,11 @@ public static class AuthSchemes
     /// по умолчанию — только явно, через политику "PlatformAdmin" на группе /api/admin.
     /// </summary>
     public const string Admin = "Admin";
+
+    /// <summary>
+    /// Вход в SignalR-хаб чата (ADR-0019 п. 3): короткоживущий HMAC-тикет из POST /api/chat/hub-ticket в
+    /// query <c>access_token</c> (WebSocket) или в Bearer-заголовке (negotiate/long polling). Smart-селектор
+    /// направляет сюда все запросы к /hubs/* — ни cookie, ни initData хаб не принимает.
+    /// </summary>
+    public const string HubTicket = "HubTicket";
 }

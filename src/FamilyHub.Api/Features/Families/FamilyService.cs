@@ -2,6 +2,7 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +21,7 @@ public enum GetFamilyMembersResult { Success, Forbidden }
 
 public enum CreateFamilyResult { Success, LimitExceeded }
 
-public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger<FamilyService> logger)
+public class FamilyService(AppDbContext db, IFamilyAccessService access, IFileStorage storage, ILogger<FamilyService> logger)
 {
     /// <summary>Максимум семей, которые может СОЗДАТЬ (не просто состоять в них) один
     /// пользователь — Admin присваивается только создателю (промоушена участника в Admin в
@@ -132,8 +133,28 @@ public class FamilyService(AppDbContext db, IFamilyAccessService access, ILogger
         var hidden = db.MedicalRecordHiddens.Where(h => h.FamilyId == familyId);
         db.MedicalRecordHiddens.RemoveRange(hidden);
 
+        // Вложения чата семьи (ADR-0019): сами сообщения уйдут каскадом, а FileAttachment полиморфен и без FK.
+        var chatFiles = await db.FileAttachments
+            .Where(a => a.OwnerType == FileOwnerType.ChatMessage
+                && db.ChatMessages.Any(m => m.Id == a.OwnerId && m.FamilyId == familyId))
+            .ToListAsync(ct);
+        db.FileAttachments.RemoveRange(chatFiles);
+
         db.Families.Remove(family);
         await db.SaveChangesAsync(ct);
+
+        // Блобы — после коммита и best-effort, как при удалении аккаунта: шифрованный объект без строки нечитаем.
+        foreach (var file in chatFiles)
+        {
+            try
+            {
+                await storage.DeleteAsync(file.StorageKey, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Удаление семьи: не удалось удалить блоб {StorageKey} — требуется ручная зачистка", file.StorageKey);
+            }
+        }
 
         logger.LogInformation("Семья {FamilyId} удалена пользователем {UserId}", familyId, requestingUserId);
         return DeleteFamilyResult.Deleted;

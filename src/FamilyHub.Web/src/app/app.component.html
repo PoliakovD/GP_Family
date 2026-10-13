@@ -18,6 +18,9 @@
             @if (item.id === 'health' && backgroundJobs.totalActive() > 0) {
               <span class="app-sidebar-badge" title="Идёт распознавание/обогащение в фоне">{{ backgroundJobs.totalActive() }}</span>
             }
+            @if (item.id === 'family' && chat.totalUnread() > 0) {
+              <span class="app-sidebar-badge" title="Непрочитанные сообщения в чатах семей">{{ chat.totalUnread() }}</span>
+            }
           </a>
 
           <!-- Редизайн хаба «Здоровье» — подпункты сгруппированы «Каждый день»/«Медкарта»/«Инструменты»
@@ -45,7 +48,10 @@
             <div class="app-sidebar-children">
               @for (sub of familySubItems; track sub.tab) {
                 <a class="app-sidebar-child" [routerLink]="familyHref()" [queryParams]="{tab: sub.tab}" [class.active]="isFamilySubActive(sub.tab)">
-                  {{ sub.label }}
+                  <span class="flex-fill">{{ sub.label }}</span>
+                  @if (sub.tab === 'chat' && selectedFamilyChatUnread() > 0) {
+                    <span class="app-sidebar-badge" title="Непрочитанные сообщения">{{ selectedFamilyChatUnread() }}</span>
+                  }
                 </a>
               }
             </div>
@@ -224,7 +230,13 @@
         <span>Здоровье</span>
       </button>
       <button type="button" [routerLink]="familyHref()" [class.active]="isFamilyActive()" [attr.aria-current]="isFamilyActive() ? 'page' : null">
-        <i [class]="(isFamilyActive() ? 'ph-fill ' : 'ph ') + 'ph-users-three'" aria-hidden="true"></i>
+        <span class="tab-bar-more-icon">
+          <i [class]="(isFamilyActive() ? 'ph-fill ' : 'ph ') + 'ph-users-three'" aria-hidden="true"></i>
+          @if (chat.totalUnread() > 0) {
+            <span class="tab-bar-dot" aria-hidden="true"></span>
+            <span class="visually-hidden">— есть непрочитанные сообщения в чате</span>
+          }
+        </span>
         <span>Семья</span>
       </button>
       <button type="button" [routerLink]="'/settings'" [class.active]="isSettingsActive()" [attr.aria-current]="isSettingsActive() ? 'page' : null">

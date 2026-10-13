@@ -40,6 +40,9 @@
                 <label class="seg-opt">
                     <input type="radio" name="familySubTab" [checked]="activeSubTab === t.id" (change)="selectSubTab(t.id)" />
                     {{ t.label }}
+                    @if (t.id === 'chat' && chatUnread() > 0) {
+                        <span class="app-sidebar-badge" [attr.aria-label]="'непрочитанных: ' + chatUnread()">{{ chatUnread() }}</span>
+                    }
                 </label>
             }
         </div>
@@ -136,6 +139,14 @@
                     <p class="muted mb-0">Пригласить нового человека может администратор семьи — попросите его прислать ссылку.</p>
                 }
             </div>
+        }
+
+        @if (activeSubTab === 'chat') {
+            @if (family.myStatus === MemberStatus.Active) {
+                <app-family-chat [familyId]="id" [isAdmin]="family.myRole === FamilyRole.Admin" />
+            } @else {
+                <p class="muted">Чат станет доступен после подтверждения заявки администратором семьи.</p>
+            }
         }
 
         @if (activeSubTab === 'medkits') {

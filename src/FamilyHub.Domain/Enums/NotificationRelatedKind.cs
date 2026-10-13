@@ -35,4 +35,7 @@ public enum NotificationRelatedKind
 
     /// <summary>RelatedEntityId — Id отчёта для врача (DoctorReport) → /health/reports.</summary>
     DoctorReport = 7,
+
+    /// <summary>RelatedEntityId — Id семьи, в чате которой новое сообщение → /families/:id?tab=chat (ADR-0019).</summary>
+    FamilyChat = 8,
 }

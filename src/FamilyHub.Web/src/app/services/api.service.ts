@@ -85,6 +85,11 @@ import {
   VaccinationScheduleItem,
   VaccinationSeriesDetail,
   VaccineCatalogSeries,
+  ChatConfig,
+  ChatMessage,
+  ChatPage,
+  ChatUnread,
+  SendChatMessageRequest,
 } from '../models/types';
 import { FamilyRole } from '../models/types';
 import { DevLoggerService } from './dev-logger.service';
@@ -155,6 +160,19 @@ export class ApiService {
     } catch (e) {
       const err = this.toApiError(e);
       this.log.log('api', 'error', `PUT ${path} ✗ ${err.status}: ${err.message}`);
+      throw err;
+    }
+  }
+
+  private async patch<T>(path: string, body: unknown = null): Promise<T> {
+    this.log.log('api', 'info', `PATCH ${path}`);
+    try {
+      const result = await firstValueFrom(this.http.patch<T>(path, body));
+      this.log.log('api', 'info', `PATCH ${path} ✓`);
+      return result as T;
+    } catch (e) {
+      const err = this.toApiError(e);
+      this.log.log('api', 'error', `PATCH ${path} ✗ ${err.status}: ${err.message}`);
       throw err;
     }
   }
@@ -731,4 +749,43 @@ export class ApiService {
     files.forEach((file, i) => formData.append('files', file, `page-${i}.jpg`));
     return this.post<BulkMarkVaccinationResult>('/api/vaccinations/certificate/confirm', formData);
   }
+
+  // ─── Чат семьи (ADR-0019) ────────────────────────────────────────────────────────────────────
+
+  getChatConfig = () => this.get<ChatConfig>('/api/chat/config');
+
+  getChatUnread = () => this.get<ChatUnread[]>('/api/chat/unread');
+
+  /** Тикет входа в SignalR-хаб — живёт минуту, берётся заново на каждое (пере)подключение. */
+  getChatHubTicket = () => this.post<{ ticket: string; expiresAt: string }>('/api/chat/hub-ticket');
+
+  getChatMessages = (familyId: string, before: string | null, limit?: number) =>
+    this.get<ChatPage>(`/api/families/${familyId}/chat/messages${buildQuery({ before, limit })}`);
+
+  getChatMessage = (familyId: string, messageId: string) =>
+    this.get<ChatMessage>(`/api/families/${familyId}/chat/messages/${messageId}`);
+
+  /** Все файлы — одним multipart-запросом (у эндпоинта свой лимит тела, см. ChatEndpoints). */
+  sendChatMessage(familyId: string, request: SendChatMessageRequest): Promise<ChatMessage> {
+    const formData = new FormData();
+    if (request.text) formData.append('text', request.text);
+    if (request.replyToMessageId) formData.append('replyToMessageId', request.replyToMessageId);
+    if (request.links.length > 0) formData.append('links', JSON.stringify(request.links));
+    request.files.forEach((file) => formData.append('files', file, file.name));
+    return this.post<ChatMessage>(`/api/families/${familyId}/chat/messages`, formData);
+  }
+
+  editChatMessage = (familyId: string, messageId: string, text: string) =>
+    this.patch<void>(`/api/families/${familyId}/chat/messages/${messageId}`, { text });
+
+  deleteChatMessage = (familyId: string, messageId: string) =>
+    this.del<void>(`/api/families/${familyId}/chat/messages/${messageId}`);
+
+  setChatReaction = (familyId: string, messageId: string, emoji: string, on: boolean) => {
+    const path = `/api/families/${familyId}/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`;
+    return on ? this.put<void>(path) : this.del<void>(path);
+  };
+
+  markChatRead = (familyId: string, upTo?: string) =>
+    this.post<void>(`/api/families/${familyId}/chat/read`, { upTo: upTo ?? null });
 }
