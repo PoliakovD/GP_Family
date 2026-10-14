@@ -31,8 +31,8 @@ const STATUS_COLOR: Record<number, string> = {
   [VaccinationStatus.HadDisease]: 'var(--color-status-ok)',
   [VaccinationStatus.DueSoon]: 'var(--color-accent)',
   [VaccinationStatus.CanDo]: 'var(--color-status-warning)',
-  [VaccinationStatus.Upcoming]: 'var(--color-neutral-500)',
-  [VaccinationStatus.NoData]: 'var(--color-neutral-500)',
+  [VaccinationStatus.Upcoming]: 'var(--color-neutral-600)',
+  [VaccinationStatus.NoData]: 'var(--color-neutral-600)',
 };
 
 export function statusLabel(status: number): string {
@@ -43,8 +43,25 @@ export function statusIcon(status: number): string {
   return STATUS_ICON[status] ?? 'ph ph-circle';
 }
 
+/** Тон бейджа статуса (подложка + тёмный текст) — для текста на цвете, где сплошной
+ * statusColor() с белым текстом не проходит контраст 4,5:1. Смыслы те же, что у STATUS_COLOR. */
+export type StatusTone = 'ok' | 'accent' | 'warning' | 'neutral';
+
+const STATUS_TONE: Record<number, StatusTone> = {
+  [VaccinationStatus.Done]: 'ok',
+  [VaccinationStatus.HadDisease]: 'ok',
+  [VaccinationStatus.DueSoon]: 'accent',
+  [VaccinationStatus.CanDo]: 'warning',
+  [VaccinationStatus.Upcoming]: 'neutral',
+  [VaccinationStatus.NoData]: 'neutral',
+};
+
+export function statusTone(status: number): StatusTone {
+  return STATUS_TONE[status] ?? 'neutral';
+}
+
 export function statusColor(status: number): string {
-  return STATUS_COLOR[status] ?? 'var(--color-neutral-500)';
+  return STATUS_COLOR[status] ?? 'var(--color-neutral-600)';
 }
 
 const STAGE_LABEL: Record<string, string> = {

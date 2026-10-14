@@ -11,7 +11,7 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { DoseAction, HealthSummary, HealthSummaryIntake, HealthSummaryNextDose, VaccinationStatus } from '../../models/types';
 import { ageParts } from '../../shared/util/age';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { statusColor, statusLabel, windowToText } from '../../shared/util/vaccination-labels';
+import { statusLabel, statusTone, windowToText } from '../../shared/util/vaccination-labels';
 import { formatDayMonth, formatDayMonthYear } from '../../shared/util/date-format';
 import { MONTHS_GEN } from '../../shared/util/birthday-date';
 
@@ -48,7 +48,7 @@ export class HealthHomeComponent implements OnInit {
 
   protected readonly VaccinationStatus = VaccinationStatus;
   protected readonly statusLabel = statusLabel;
-  protected readonly statusColor = statusColor;
+  protected readonly statusTone = statusTone;
   protected readonly windowToText = windowToText;
   protected readonly formatDayMonth = formatDayMonth;
   protected readonly formatDayMonthYear = formatDayMonthYear;

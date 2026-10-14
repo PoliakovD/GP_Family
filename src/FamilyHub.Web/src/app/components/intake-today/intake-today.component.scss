@@ -66,15 +66,9 @@
 .it-now-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .it-who { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 0.8235rem; color: var(--color-neutral-700); }
 
-.it-take {
-  background: var(--color-status-ok);
-  border-color: var(--color-status-ok);
-  color: #fff;
-  font-weight: 600;
-  gap: 7px;
-
-  &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-status-ok) 88%, #000); }
-}
+// «Принято» — основное действие строки: .btn-primary, а не зелёная заливка (белый текст на
+// --color-status-ok давал 3,45:1). Статус «принято» показывает сама строка, а не цвет кнопки.
+.it-take { gap: 7px; }
 
 .it-take-sm { min-height: 36px; padding: 4px 14px; }
 

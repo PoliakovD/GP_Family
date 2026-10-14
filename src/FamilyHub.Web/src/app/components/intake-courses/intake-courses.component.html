@@ -83,9 +83,7 @@
   @if (showCard()) {
     <div class="ic-card">
       @if (!isWide()) {
-        <button type="button" class="back-link" (click)="back()">
-          <i class="ph ph-caret-left" aria-hidden="true"></i> Курсы
-        </button>
+        <app-back-link class="ic-back" label="Курсы" (activated)="back()" />
       }
       <app-intake-course-card [courseId]="id()!" (removed)="afterRemoved()" />
     </div>

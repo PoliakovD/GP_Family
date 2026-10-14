@@ -1,3 +1,4 @@
+import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { pluralizeRu } from '../../shared/util/pluralize';
@@ -36,7 +37,7 @@ interface StageGroup {
  */
 @Component({
   selector: 'app-vaccination-person',
-  imports: [ClickableDirective, AvatarComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
+  imports: [ClickableDirective, AvatarComponent, BackLinkComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './vaccination-person.component.html',
   styleUrl: './vaccination-person.component.scss',
 })
