@@ -64,7 +64,10 @@
 | `--color-kind-mood` / `-soft` | `#8A5300` / `#FDF1DC` | дневник: самочувствие |
 | `--color-kind-sleep` / `-soft` | `#5B3FB8` / `#EEEAFB` | дневник: сон |
 | `--color-kind-note` / `-soft` | `#3D4147` / `#F0F1EE` | дневник: заметки |
+| `--color-kind-symptom` / `-soft` | `#9C2A6B` / `#F8E8F1` | дневник: симптомы (не красный — красный значит «вне нормы») |
+| `--color-kind-medication` / `-soft` | `#0F6B66` / `#E2F2F0` | дневник: лекарства (не зелёный — зелёный значит «норма») |
 | `--color-avatar-warm` / `-text` | `#FDF1DC` / `#7A4300` | аватар/иконка семьи (тёплый) |
+| `--color-scrim` / `--color-on-scrim` | `#17191C` / `#FFFFFF` | затемнение под медиа (просмотр файла, «убрать фото»), одинаково в обеих темах |
 
 Правила:
 - Белый текст на `success` **запрещён** (контраст 3,45:1). Кнопки «Принять дозу» и т.п. — `primary`
@@ -92,6 +95,8 @@
 | danger / soft | `#FF8A80` / `#3A1E1C` |
 | warning / soft | `#F2B35C` / `#3A2C14` |
 | success / soft | `#6FCF97` / `#16301F` |
+| kind-symptom / soft | `#F28DC0` / `#3A1E2E` |
+| kind-medication / soft | `#6FD0C8` / `#14302E` |
 
 ### 2.3. Типографика
 

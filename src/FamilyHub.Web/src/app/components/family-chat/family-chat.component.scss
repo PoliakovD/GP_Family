@@ -14,7 +14,7 @@
   height: clamp(320px, 62dvh, 760px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--space-3);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -23,7 +23,7 @@
 .chat-empty {
   margin: auto;
   text-align: center;
-  padding: var(--space-6) var(--space-3);
+  padding: var(--space-8) var(--space-4);
 }
 
 .chat-empty-icon {
@@ -41,7 +41,7 @@
 .chat-day {
   display: flex;
   justify-content: center;
-  margin: var(--space-3) 0 var(--space-2);
+  margin: var(--space-4) 0 var(--space-2);
 
   span {
     font-size: 0.7647rem;
@@ -297,7 +297,7 @@
 
 .composer {
   border-top: 1px solid var(--color-divider);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-paper);
 }
 
@@ -321,7 +321,7 @@
   gap: var(--space-2);
   font-size: 0.8235rem;
   border-left: 3px solid var(--color-accent-500);
-  padding-left: var(--space-2);
+  padding-left: var(--space-3);
   margin-bottom: var(--space-2);
 }
 

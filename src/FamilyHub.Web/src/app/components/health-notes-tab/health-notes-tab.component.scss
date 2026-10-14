@@ -3,14 +3,14 @@
 .dn-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   max-width: 940px;
 }
 
 .dn-head {
   display: flex;
   align-items: flex-end;
-  gap: var(--space-3);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -100,7 +100,7 @@
 .dn-tools {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -203,7 +203,7 @@
   padding: 40px 20px;
   text-align: center;
   background: var(--color-paper);
-  border: 1px dashed var(--color-divider);
+  border: 1px dashed var(--color-border-dashed);
 
   i { font-size: 2.4rem; color: var(--color-neutral-600); }
   h5, p { margin: 0; }
@@ -240,7 +240,7 @@
   & + .seg-opt { border-left: 1px solid var(--color-divider); }
 
   &.active {
-    color: var(--color-bg);
+    color: var(--color-on-accent);
     background: var(--color-accent);
   }
 }

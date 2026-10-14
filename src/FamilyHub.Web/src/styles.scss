@@ -1,123 +1,114 @@
 // ============================================================================
-// Дизайн-токены — порт из «FamilyHub Redesign - standalone.html» (дизайн-дэк).
-// Бумажная печатная эстетика: Source Serif 4, спокойная бумажная палитра, cyan-акцент,
-// острые углы. Тема фиксированная (дэк свето-only) — --tg-theme-* больше не используется.
+// Дизайн-токены — редизайн «Гибрид A+B». Источник правды: docs/redesign/DESIGN.md §2,
+// план перехода: docs/redesign/PLAN.md (фаза 1). Литералы цвета, кегля, отступов, радиусов и теней
+// в компонентах запрещены — только эти токены.
+//
+// Блок «Совместимость» ниже — старые имена (палитра «бумажной» темы v2), сведённые к новым ролям.
+// Они нужны, пока экраны не переведены (фаза 4), и удаляются её последним PR.
 // ============================================================================
 :root {
   color-scheme: light;
 
-  --color-bg: #f3f2f2;
-  --color-surface: #eae9e9;
-  --color-text: #201e1d;
-  // Было #0088b0 — контраст 3.4–3.9:1 (ссылки, текст .btn-primary, активный таб). #006f94 — тот же
-  // оттенок, ≥4.5:1 на всех фонах (bg/paper/surface) и для светлого текста на акцентной кнопке.
-  --color-accent: #006f94;
-  --color-accent-2: #d6006c;
-  --color-process-yellow: #edbb00;
-  --color-divider: color-mix(in srgb, #201e1d 16%, transparent);
-  // Рамка интерактивных элементов (поля, вторичные кнопки, сегменты) — заметнее декоративных
-  // разделителей: при 16% поле почти сливалось с фоном (≈1.4:1), а пожилому пользователю нужно видеть, куда нажимать.
-  --color-control-border: color-mix(in srgb, #201e1d 38%, transparent);
+  // --- Цвет: поверхности (DESIGN §2.1) ---
+  --color-bg: #F5F5F2;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #FAFAF8;
+  --color-surface-sunken: #F5F5F2;
+  --color-bubble-in: #F2F3EF;
+  --color-border: #E6E7E3;
+  --color-divider: #EEEFEB;
+  --color-border-dashed: #C9CBC4;
 
-  // Тональные рампы — единая шкала светлоты для каждой роли.
-  --color-neutral-100: #f8f4f4;
-  --color-neutral-200: #eae7e7;
-  --color-neutral-300: #d7d3d3;
-  --color-neutral-400: #bab6b6;
-  --color-neutral-500: #9b9797;
-  --color-neutral-600: #666262; // было #7d7979 (3.6–3.9:1) — muted-текст и подписи теперь ≥4.9:1
-  --color-neutral-700: #605d5d;
-  --color-neutral-800: #444141;
-  --color-neutral-900: #2d2b2b;
+  // --- Текст ---
+  --color-text: #17191C;
+  --color-text-secondary: #3D4147;
+  --color-text-muted: #5F646B; // ≥ 4,5:1 на bg и surface
 
-  --color-accent-100: #e9f8ff;
-  --color-accent-200: #cbeeff;
-  --color-accent-300: #99e0ff;
-  --color-accent-400: #62c5ee;
-  --color-accent-500: #38a6cf;
-  --color-accent-600: #1186ac;
-  --color-accent-700: #006786;
-  --color-accent-800: #004961;
-  --color-accent-900: #0a303e;
+  // --- Акцент — только действия и навигация, никогда не статус ---
+  --color-accent: #2456C8;
+  --color-accent-hover: #1C46A6;
+  --color-accent-soft: #E8EEFB;
+  --color-on-accent: #FFFFFF; // текст/иконки на accent, danger, inverse
+  --color-inverse: #17191C;
 
-  --color-accent-2-100: #fff1f4;
-  --color-accent-2-200: #ffdee6;
-  --color-accent-2-300: #ffc0d0;
-  --color-accent-2-400: #ff90b1;
-  --color-accent-2-500: #ff458e;
-  --color-accent-2-600: #d82071;
-  --color-accent-2-700: #aa0b56;
-  --color-accent-2-800: #790e3d;
-  --color-accent-2-900: #4b1528;
+  // --- Статусы: один смысл — один цвет ---
+  --color-danger: #B42318;
+  --color-danger-soft: #FDECEA;
+  --color-warning: #8A5300;
+  --color-warning-soft: #FDF1DC;
+  --color-success: #1E7A45;
+  --color-success-soft: #E5F3EA;
+  --color-range-ok: #BFE3CC;
+  --color-range-track: #EEEFEB;
 
-  --font-heading: "Source Serif 4", Georgia, serif;
+  // --- Дневник: цвет по виду записи, не по тяжести ---
+  --color-kind-measure: #1C46A6;
+  --color-kind-measure-soft: #E8EEFB;
+  --color-kind-mood: #8A5300;
+  --color-kind-mood-soft: #FDF1DC;
+  --color-kind-sleep: #5B3FB8;
+  --color-kind-sleep-soft: #EEEAFB;
+  --color-kind-note: #3D4147;
+  --color-kind-note-soft: #F0F1EE;
+  --color-kind-symptom: #9C2A6B; // не красный: красный в анализах значит «вне нормы»
+  --color-kind-symptom-soft: #F8E8F1;
+  --color-kind-medication: #0F6B66;
+  --color-kind-medication-soft: #E2F2F0;
+  --color-avatar-warm: #FDF1DC;
+  --color-avatar-warm-text: #7A4300;
+
+  // --- Затемнение под медиа (просмотр файла, кнопка «убрать фото») — одинаково в обеих темах ---
+  --color-scrim: #17191C;
+  --color-on-scrim: #FFFFFF;
+
+  // --- Типографика (DESIGN §2.3). Кегли в px, пока html{font-size} fluid (см. PLAN.md, п. 1.3) ---
+  --font-body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-heading: var(--font-body);
   --font-heading-weight: 600;
-  --font-body: "Source Serif 4", Georgia, serif;
 
-  --space-1: 5px;
-  --space-2: 10px;
-  --space-3: 15px;
-  --space-4: 20px;
-  // Шаг новой шкалы (кратной 4, docs/redesign/DESIGN.md §2.4) — заведён заранее: на него уже
-  // ссылался обзор прививок, и gap там молча не применялся. В фазе 1 значение не меняется.
+  --text-display: 700 34px/1.15 var(--font-body);
+  --text-display-mobile: 700 28px/1.15 var(--font-body);
+  --text-metric-xl: 700 40px/1.05 var(--font-body);
+  --text-metric: 700 34px/1.1 var(--font-body);
+  --text-metric-mobile: 700 28px/1.1 var(--font-body);
+  --text-title: 600 19px/1.3 var(--font-body);
+  --text-title-mobile: 600 17px/1.3 var(--font-body);
+  --text-body-lg: 400 17px/1.5 var(--font-body);
+  --text-body: 400 16px/1.45 var(--font-body);
+  --text-body-sm: 400 15px/1.45 var(--font-body);
+  --text-caption: 400 14px/1.4 var(--font-body);
+  --text-micro: 600 12px/1.3 var(--font-body);
+  --letter-spacing-display: -0.02em;
+
+  // --- Отступы: шкала кратна 4 (DESIGN §2.4) ---
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
   --space-5: 20px;
-  --space-6: 30px;
-  --space-8: 40px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
 
-  --radius-sm: 1px;
-  --radius-md: 2px;
-  --radius-lg: 4px;
+  // --- Радиусы (DESIGN §2.5) ---
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 22px;
+  --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+  // --- Тени (DESIGN §2.6): карточки на bg — без тени и рамки ---
+  --shadow-segment: 0 1px 2px rgba(23, 25, 28, 0.08);
+  --shadow-fab: 0 8px 24px rgba(36, 86, 200, 0.35);
+  --shadow-overlay: 0 12px 32px rgba(23, 25, 28, 0.18);
 
-  // Редизайн v2 — «бумажная» карточка поверх серого фона (--color-surface остаётся для «хрома»:
-  // таб-бар, .seg, инпуты). Контур карточки на --color-bg почти не читался при --color-surface.
-  --color-paper: #fbfaf9;
-
-  // Статусные цвета (норма/отклонение/нет данных) — канонизированы из уже существующей аптечной
-  // палитры сроков годности (см. shared/util/expiry.ts, medications-panel.component.scss), не
-  // новые смыслы. Единый источник вместо 4 разошедшихся копий (см. commit message/риск Р6).
-  --color-status-ok: #2f9e44;
-  --color-status-warning: #f08c00;
-  --color-status-danger: #e03131;
-  --color-status-none: #9c36b5;
-  // Тёмные текстовые варианты — контраст текста на светлой цветной подложке (плитки-сводки,
-  // карточки «Требует внимания» и т.п.), где сам --color-status-* слишком ярок для текста.
-  --color-status-ok-text: #1f6b2f;
-  --color-status-danger-text: #a01c1c;
-  --color-status-warning-text: #8a5200;
-
-  // Дневник самочувствия — цвет по ТИПУ записи, не по тяжести (макет «Screen - Diary»). Красный
-  // намеренно не используется: в анализах он значит «вне нормы», и в дневнике создавал бы ложную
-  // тревогу. Первые три — из палитры приложения, amber/indigo — новые акценты дневника.
-  --color-kind-symptom: var(--color-accent-2);
-  --color-kind-symptom-text: var(--color-accent-2-700);
-  --color-kind-metric: var(--color-accent);
-  --color-kind-wellbeing: #d97700;
-  --color-kind-wellbeing-text: #8a4c00;
-  --color-kind-medication: var(--color-status-ok);
-  --color-kind-sleep: #5b5bd6;
-  --color-kind-note: var(--color-neutral-700);
-
-  // Редизайн v2 — базовый кегль поднят под аудиторию, включающую пожилых родителей (17px вместо
-  // 16), плюс отдельные размеры для заголовков записей и минимальная высота интерактивных
-  // элементов. Применяются точечно к существующим селекторам — см. риск Р1 в плане редизайна.
-  //
-  // Редизайн v2.1 — токены переведены в rem (1rem = 17px, прежний --font-size-body, теперь
-  // относительно html{font-size} ниже) и вместе с ним стали fluid: на узких экранах (390px)
-  // html{font-size} даёт ровно 17px — рендер идентичен тому, что было, — на широких плавно растёт
-  // до потолка 18.5px, чтобы не мельчить на большом экране, но и не разрастись сверх меры. Все
-  // ~150 точечных font-size в компонентах в этом же коммите переведены с px на rem той же
-  // формулой (N/17), поэтому масштабируются вместе с этими токенами.
-  --font-size-body: 1rem;
-  --font-size-meta: 0.8824rem;
-  --font-size-record-title: 1.1176rem;
   --tap-min: 44px; // физическая величина (минимальная тач-цель) — не текст, не масштабируется.
 
-  // Слои — один порядок для всего приложения (раньше 1…9999 вразнобой, и confirm из окна просмотра
-  // файла оказывался ПОД ним). Локальные 0/1/5/10 внутри компонентов — не слои страницы.
+  // Слои — один порядок для всего приложения. Локальные 0/1/5/10 внутри компонентов — не слои страницы.
   --z-dropdown: 20;   // выпадающие меню, фильтры
   --z-popover: 50;    // поиск, плавающие панели
   --z-fab: 90;        // плавающая кнопка «Добавить»
@@ -127,6 +118,119 @@
   --z-viewer: 550;    // просмотр файла
   --z-dialog: 600;    // подтверждение — всегда над любым окном
   --z-toast: 1000;    // уведомления
+
+  // ==========================================================================
+  // Совместимость: старые имена → новые роли. Удаляются в последнем PR фазы 4.
+  // ==========================================================================
+  --color-paper: var(--color-surface);
+  --color-control-border: var(--color-border);
+
+  --color-neutral-100: var(--color-surface-muted);
+  --color-neutral-200: var(--color-divider);
+  --color-neutral-300: var(--color-border);
+  --color-neutral-400: var(--color-border-dashed);
+  --color-neutral-500: var(--color-text-muted);
+  --color-neutral-600: var(--color-text-muted);
+  --color-neutral-700: var(--color-text-muted);
+  --color-neutral-800: var(--color-text-secondary);
+  --color-neutral-900: var(--color-text);
+
+  --color-accent-100: var(--color-accent-soft);
+  --color-accent-200: var(--color-accent-soft);
+  --color-accent-300: color-mix(in srgb, var(--color-accent) 35%, var(--color-surface));
+  --color-accent-400: color-mix(in srgb, var(--color-accent) 60%, var(--color-surface));
+  --color-accent-500: var(--color-accent);
+  --color-accent-600: var(--color-accent-hover);
+  --color-accent-700: var(--color-accent-hover);
+  --color-accent-800: var(--color-accent-hover);
+  --color-accent-900: var(--color-accent-hover);
+
+  // Пурпурный «второй акцент» служил ошибкам и счётчикам — по DESIGN §2.1 ошибки = danger.
+  --color-accent-2: var(--color-danger);
+  --color-accent-2-100: var(--color-danger-soft);
+  --color-accent-2-200: var(--color-danger-soft);
+  --color-accent-2-300: var(--color-danger);
+  --color-accent-2-400: var(--color-danger);
+  --color-accent-2-500: var(--color-danger);
+  --color-accent-2-600: var(--color-danger);
+  --color-accent-2-700: var(--color-danger);
+  --color-accent-2-800: var(--color-danger);
+  --color-accent-2-900: var(--color-danger);
+
+  --color-status-ok: var(--color-success);
+  --color-status-ok-text: var(--color-success);
+  --color-status-warning: var(--color-warning);
+  --color-status-warning-text: var(--color-warning);
+  --color-status-danger: var(--color-danger);
+  --color-status-danger-text: var(--color-danger);
+  --color-status-none: var(--color-text-muted);
+
+  --color-kind-symptom-text: var(--color-kind-symptom);
+  --color-kind-metric: var(--color-kind-measure);
+  --color-kind-wellbeing: var(--color-kind-mood);
+  --color-kind-wellbeing-text: var(--color-kind-mood);
+
+  --font-size-body: 1rem;
+  --font-size-meta: 0.8824rem;
+  --font-size-record-title: 1.1176rem;
+
+  --shadow-sm: none;
+  --shadow-md: var(--shadow-overlay);
+  --shadow-lg: var(--shadow-overlay);
+}
+
+// Тёмная тема (DESIGN §2.2). Пока только по явному data-theme="dark": на ещё не переведённых
+// экранах остались color-mix() и литералы, рассчитанные на светлый фон (PLAN.md, п. 1.1).
+// Системная тема (prefers-color-scheme) включается последним PR фазы 4.
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #111315;
+  --color-surface: #1A1D20;
+  --color-surface-muted: #202327;
+  --color-surface-sunken: #16181B;
+  --color-bubble-in: #24282C;
+  --color-border: #2E3237;
+  --color-divider: #262A2E;
+  --color-border-dashed: #4A4F55;
+
+  --color-text: #ECEDEE;
+  --color-text-secondary: #C4C7CC;
+  --color-text-muted: #9AA0A8;
+
+  --color-accent: #6E95F0;
+  --color-accent-hover: #8DACF4;
+  --color-accent-soft: #1E2A45;
+  --color-on-accent: #0E1116;
+  --color-inverse: #ECEDEE;
+
+  --color-danger: #FF8A80;
+  --color-danger-soft: #3A1E1C;
+  --color-warning: #F2B35C;
+  --color-warning-soft: #3A2C14;
+  --color-success: #6FCF97;
+  --color-success-soft: #16301F;
+  --color-range-ok: #2B5A3C;
+  --color-range-track: #262A2E;
+
+  --color-kind-measure: #8DACF4;
+  --color-kind-measure-soft: #1E2A45;
+  --color-kind-mood: #F2B35C;
+  --color-kind-mood-soft: #3A2C14;
+  --color-kind-sleep: #B3A2F0;
+  --color-kind-sleep-soft: #2A2340;
+  --color-kind-note: #C4C7CC;
+  --color-kind-note-soft: #24282C;
+  --color-kind-symptom: #F28DC0;
+  --color-kind-symptom-soft: #3A1E2E;
+  --color-kind-medication: #6FD0C8;
+  --color-kind-medication-soft: #14302E;
+  --color-avatar-warm: #3A2C14;
+  --color-avatar-warm-text: #F2B35C;
+
+  --shadow-segment: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-fab: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 // Редизайн v2.1 — единственный источник fluid-масштабирования: 17px на ≤390px (мобильный кегль
@@ -147,7 +251,7 @@ body {
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--font-size-body);
-  line-height: 1.55;
+  line-height: 1.45;
   font-weight: 400;
 }
 
@@ -170,7 +274,7 @@ h5 { font-size: 1rem; }
 h6 { font-size: 1rem; } // редизайн v2: было 15px
 
 p {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
 }
 
 a {
@@ -190,7 +294,7 @@ a {
 .hr {
   height: 1px;
   border: 0;
-  margin: var(--space-4) 0;
+  margin: var(--space-5) 0;
   background: var(--color-divider);
 }
 
@@ -211,7 +315,7 @@ a {
   color: var(--color-text);
   background: transparent;
   border: 1px solid transparent;
-  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  padding: var(--space-3) calc(var(--space-4) * 1.2);
   border-radius: var(--radius-md);
   min-height: var(--tap-min); // редизайн v2 — цель по высоте интерактивных элементов
 
@@ -223,7 +327,7 @@ a {
 
 .btn-primary {
   background: var(--color-accent);
-  color: var(--color-bg);
+  color: var(--color-on-accent);
 
   &:hover { background: var(--color-accent-600); }
   &:active { background: var(--color-accent-700); }
@@ -417,7 +521,7 @@ select.input {
 
   &:has(input:checked) {
     background: var(--color-accent);
-    color: var(--color-bg);
+    color: var(--color-on-accent);
   }
 
   // :not(.active) — иначе hover перебивает фон активной кнопки-сегмента (у неё нет input:checked),
@@ -448,7 +552,7 @@ select.input {
   // роутинговые сегмент-контролы: та же визуальная схема, что и у input:checked выше.
   &.active {
     background: var(--color-accent);
-    color: var(--color-bg);
+    color: var(--color-on-accent);
   }
 }
 
@@ -510,7 +614,7 @@ select.input {
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--color-on-scrim); // ручка переключателя — белая в обеих темах
     box-shadow: var(--shadow-sm);
     transition: transform 0.15s ease;
   }
@@ -523,11 +627,9 @@ select.input {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  // Редизайн v2: было --color-surface — совпадало с фоном страницы, контур карточки почти не
-  // читался. --color-paper белее фона, --color-surface остаётся для «хрома» (таб-бар/.seg/инпуты).
-  background: var(--color-paper);
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface); // DESIGN §2.6: на bg — без рамки и тени
 }
 
 // Горизонтальная прокрутка для широких таблиц внутри узкой .card (UX-редизайн) — использовался в
@@ -590,7 +692,7 @@ select.input {
   font-size: 0.7647rem; // редизайн v2: было 11px
   letter-spacing: 0.02em;
   padding: 3px 10px;
-  border-radius: calc(var(--radius-md) * 0.75);
+  border-radius: var(--radius-pill);
   background: var(--color-neutral-100);
   color: var(--color-neutral-800);
 }
@@ -644,7 +746,7 @@ select.input {
   font-size: 0.7059rem;
   font-weight: 600;
   background: var(--color-status-danger);
-  color: var(--color-bg);
+  color: var(--color-on-accent);
 }
 
 // §5 плана «живой конвейер» — глобальная копия shared/pipeline-progress/pipeline-progress.
@@ -694,12 +796,12 @@ select.input {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: color-mix(in srgb, var(--color-text) 60%, transparent);
-    padding: var(--space-2);
+    padding: var(--space-3);
     border-bottom: 1px solid var(--color-divider);
   }
 
   td {
-    padding: var(--space-2);
+    padding: var(--space-3);
     border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
   }
 
@@ -727,28 +829,28 @@ select.input {
 
 .gap-1 { gap: var(--space-1); }
 .gap-2 { gap: var(--space-2); }
-.gap-3 { gap: var(--space-3); }
+.gap-3 { gap: var(--space-4); }
 
 .mb-0 { margin-bottom: 0; }
 .mb-1 { margin-bottom: var(--space-1); }
 .mb-2 { margin-bottom: var(--space-2); }
-.mb-3 { margin-bottom: var(--space-3); }
+.mb-3 { margin-bottom: var(--space-4); }
 .mt-1 { margin-top: var(--space-1); }
 .mt-2 { margin-top: var(--space-2); }
-.mt-3 { margin-top: var(--space-3); }
+.mt-3 { margin-top: var(--space-4); }
 .me-2 { margin-right: var(--space-2); }
 .ms-2 { margin-left: var(--space-2); }
 // Ниже — классы, которые шаблоны уже использовали (Настройки, нижний лист, админка), но которых
 // здесь не было: отступы/обрезка тихо не применялись.
-.gap-4 { gap: var(--space-4); }
-.mb-4 { margin-bottom: var(--space-4); }
-.mt-4 { margin-top: var(--space-4); }
+.gap-4 { gap: var(--space-5); }
+.mb-4 { margin-bottom: var(--space-5); }
+.mt-4 { margin-top: var(--space-5); }
 .ms-auto { margin-left: auto; }
 .mx-auto { margin-left: auto; margin-right: auto; }
 .flex-grow-1 { flex-grow: 1; }
 
-.p-3 { padding: var(--space-3); }
-.py-2 { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.p-3 { padding: var(--space-4); }
+.py-2 { padding-top: var(--space-3); padding-bottom: var(--space-3); }
 
 .w-100 { width: 100%; }
 .text-nowrap { white-space: nowrap; }
@@ -818,7 +920,7 @@ select.input {
   background: var(--color-accent-2-100);
   color: var(--color-accent-2-800);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   font-size: 0.8824rem; // ошибки — не мельче 15px
 }
 
@@ -826,7 +928,7 @@ select.input {
   background: var(--color-accent-100);
   color: var(--color-accent-800);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   font-size: 0.8824rem;
 }
 
@@ -963,8 +1065,8 @@ select.input {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-scrim) 65%, transparent);
+  color: var(--color-on-scrim);
   font-size: 0.7059rem;
   line-height: 1;
   display: flex;
@@ -994,7 +1096,7 @@ select.input {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 2px dashed var(--color-divider);
+  border: 2px dashed var(--color-border-dashed);
   background: transparent;
   color: var(--color-neutral-600);
   cursor: pointer;
@@ -1108,10 +1210,10 @@ select.input {
   min-width: 20px;
   padding: 1px 6px;
   background: var(--color-accent-2);
-  color: #fff;
+  color: var(--color-on-accent);
   font: 700 12px/1.5 var(--font-heading);
   text-align: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
 }
 
 .app-sidebar-children {
@@ -1270,7 +1372,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-5);
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-divider);
   position: sticky;
@@ -1299,7 +1401,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-divider);
   position: sticky;
@@ -1331,13 +1433,13 @@ select.input {
   flex: 1;
   // 88px — высота таб-бара с запасом; плюс home indicator iPhone, иначе таб-бар (у которого свой
   // safe-area padding) перекрывает последний блок контента.
-  padding: var(--space-3) var(--space-4) calc(88px + env(safe-area-inset-bottom, 0px));
+  padding: var(--space-4) var(--space-5) calc(88px + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
 }
 
 // На десктопе нет нижнего таб-бара — резервировать под него 88px незачем.
 .app-shell-wide .app-content {
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-4);
 }
 
 // ----------------------------------------------------------------------------
@@ -1386,9 +1488,9 @@ select.input {
   // рядом с карточкой появляется .login-intro. wrap вместо media-query — на узких экранах
   // .login-intro не помещается в строку с карточкой (min-width ниже) и сама переносится
   // выше неё, ровно то расположение «текст над формой», которое нужно на мобильных.
-  gap: var(--space-6);
+  gap: var(--space-8);
   flex-wrap: wrap;
-  padding: var(--space-4);
+  padding: var(--space-5);
 }
 
 .auth-card {
@@ -1406,11 +1508,11 @@ select.input {
 .login-intro {
   flex: 1 1 340px;
   max-width: 420px;
-  padding: var(--space-2) 0;
+  padding: var(--space-3) 0;
 }
 
 .login-intro-title {
-  margin: var(--space-1) 0 var(--space-4);
+  margin: var(--space-1) 0 var(--space-5);
   font-family: var(--font-heading);
   font-weight: 600;
   font-size: 1.4706rem;
@@ -1421,11 +1523,11 @@ select.input {
 
 .login-intro-features {
   list-style: none;
-  margin: 0 0 var(--space-4);
+  margin: 0 0 var(--space-5);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .login-intro-features li {
@@ -1468,7 +1570,7 @@ select.input {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
-    gap: var(--space-3) var(--space-4);
+    gap: var(--space-4) var(--space-5);
   }
 
   .login-intro-features li {
@@ -1492,14 +1594,14 @@ select.input {
 // у нового пользователя он закрывал нижнюю навигацию, пока тот не нажмёт кнопку.
 .cookie-banner {
   position: fixed;
-  left: var(--space-3);
-  right: var(--space-3);
+  left: var(--space-4);
+  right: var(--space-4);
   bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-banner);
   box-shadow: var(--shadow-lg);
 
   @media (min-width: 1024px) {
-    bottom: var(--space-3);
+    bottom: var(--space-4);
   }
 }
 

@@ -25,7 +25,7 @@
   font-family: var(--font-heading);
   font-size: 0.8824rem; // было 13px
   font-weight: 600;
-  color: var(--color-bg);
+  color: var(--color-on-accent);
   box-shadow: var(--shadow-lg);
   animation: toast-in 0.18s ease-out;
 
@@ -70,7 +70,7 @@
   min-height: 36px;
   padding: 4px 12px;
   border: 1px solid currentColor;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
   font: inherit;

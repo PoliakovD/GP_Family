@@ -5,13 +5,13 @@
 .hh-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .hh-header {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .hh-title {
@@ -143,7 +143,7 @@
 .hh-dose-square {
   width: 16px;
   height: 16px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
 }
 
 .hh-dose-square-taken {
@@ -172,7 +172,7 @@
   background: var(--color-accent-100);
   color: var(--color-accent-800);
   font-size: 0.8824rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 
   i {
     color: var(--color-accent-2);
@@ -218,7 +218,7 @@
 // текст на сплошном статусном цвете не дотягивал до 4,5:1 (warning 2,5:1, ok 3,45:1, danger 4,0:1).
 .hh-badge {
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-size: 0.7647rem;
   flex: none;
 }

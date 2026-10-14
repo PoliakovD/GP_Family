@@ -117,7 +117,7 @@ const EMPTY_REF_RANGE = (): RefRangeRow => ({
     styles: [`
       .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
       .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
-      .seg-opt.active, .seg-opt.active:hover { color: var(--color-bg); background: var(--color-accent); }
+      .seg-opt.active, .seg-opt.active:hover { color: var(--color-on-accent); background: var(--color-accent); }
     `]
 })
 export class AdminPayloadEditorComponent implements OnChanges {
