@@ -10,7 +10,7 @@
 # --- Стадия 1: Angular SPA -----------------------------------------------------------------
 # Первой, не последней: слой npm ci кэшируется независимо от последующих изменений в C#
 # (тот же принцип, что COPY *.csproj + restore до COPY src/ в стадии build ниже).
-FROM node:22-alpine AS web
+FROM node:25-alpine AS web
 WORKDIR /src/FamilyHub.Web
 COPY src/FamilyHub.Web/package.json src/FamilyHub.Web/package-lock.json ./
 RUN npm ci
