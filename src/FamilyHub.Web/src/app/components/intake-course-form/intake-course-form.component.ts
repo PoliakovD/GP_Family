@@ -13,6 +13,8 @@ import {
   DOSE_UNITS, FOOD_OPTIONS, WEEKDAY_ORDER, coversText, daysBetween, describeSchedule, endDateFor, formatNumber,
   fromTimeInput, scheduleTimes, clock, todayLocal, toTimeInput, weekdayShort,
 } from '../../shared/util/intake-labels';
+import { BriefcaseMedical, CalendarCheck, CircleCheck, Pencil, Pill, Plus, Stethoscope, TriangleAlert, Users, X } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 interface TimeRow {
   /** «HH:mm» для <input type="time">. */
@@ -65,12 +67,14 @@ const DEFAULT_TIMES: Record<number, string[]> = {
  */
 @Component({
   selector: 'app-intake-course-form',
-  imports: [FormsModule],
+  imports: [FormsModule, IconComponent],
   templateUrl: './intake-course-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-course-form.component.scss',
 })
 export class IntakeCourseFormComponent implements OnInit {
+  protected readonly icons = { BriefcaseMedical, CalendarCheck, CircleCheck, Pencil, Pill, Plus, Stethoscope, TriangleAlert, Users, X };
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly families = inject(FamilyStateService);

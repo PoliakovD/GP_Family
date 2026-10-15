@@ -28,7 +28,7 @@ import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.com
 import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
-import { Camera, Eye, Info, Plus, SlidersHorizontal, X } from 'lucide';
+import { Camera, Eye, Info, Layers, Pencil, Plus, Share2, SlidersHorizontal, Trash2, WandSparkles, X } from 'lucide';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
@@ -116,7 +116,7 @@ let nextInstanceId = 0;
     styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
-  protected readonly icons = { Camera, Eye, Info, Plus, SlidersHorizontal, X };
+  protected readonly icons = { Camera, Eye, Info, Plus, SlidersHorizontal, WandSparkles, X };
   readonly kind = input.required<MedicalRecordKind>();
 
   /** Редизайн v3 — «одиночный режим» (PR6 плана): мобильный экран открытой записи
@@ -340,7 +340,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // (было — createOpen, см. PR7 плана).
       this.pageAction.set({
         label: this.labels.addButtonLabel,
-        icon: 'ph-bold ph-plus',
+        icon: Plus,
         handler: () => this.openCreate(),
       });
       // Батч-загрузка (несколько документов одного пациента, каждый — своя запись/свой прогон
@@ -348,7 +348,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // остаётся отдельным. См. class doc RecordBatchAddComponent.
       this.pageAction.setSecondaryAction({
         label: 'Загрузить несколько',
-        icon: 'ph-bold ph-stack',
+        icon: Layers,
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
       // Редизайн v2.1 — своё поле поиска отдаётся топбару целиком (было — рисовалось инлайн под
@@ -377,12 +377,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (!this.recordId()) {
       this.pageAction.set({
         label: this.labels.addButtonLabel,
-        icon: 'ph-bold ph-plus',
+        icon: Plus,
         handler: () => this.openCreate(),
       });
       this.pageAction.setSecondaryAction({
         label: 'Загрузить несколько',
-        icon: 'ph-bold ph-stack',
+        icon: Layers,
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
       this.pageAction.setPageSearch({
@@ -540,11 +540,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   recordMenuActions(item: MedicalRecord): ActionMenuItem[] {
     const actions: ActionMenuItem[] = [];
     if (this.canDelete(item)) {
-      actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
+      actions.push({ label: 'Редактировать', icon: Pencil, handler: () => this.openEditSheet(item) });
     }
-    actions.push({ label: 'Доступ', icon: 'ph ph-share-network', handler: () => this.openAccessSheet(item) });
+    actions.push({ label: 'Доступ', icon: Share2, handler: () => this.openAccessSheet(item) });
     if (this.canDelete(item)) {
-      actions.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDelete(item) });
+      actions.push({ label: 'Удалить', icon: Trash2, danger: true, handler: () => void this.handleDelete(item) });
     }
     return actions;
   }

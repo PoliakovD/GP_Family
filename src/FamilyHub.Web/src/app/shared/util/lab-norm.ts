@@ -1,5 +1,7 @@
 import { Gender } from '../../models/types';
 import type { KbRefRangeDto } from '../../models/types';
+import { Baby, Droplet, Mars, Users, Venus } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 
 /** Человекочитаемые подписи типа нормы/категории популяции (пересборка enrich-пайплайна) — см.
  * FamilyHub.Domain.Enums.LabNormKind/LabPopulation, KbRefRangeDto.normKind/population. */
@@ -34,17 +36,17 @@ export function shouldShowPopulationBadge(population: number): boolean {
 
 // --- Строки блока «Нормы» в статье справочника: иконка группы + подпись + диапазон ---
 
-/** Иконка группы, для которой действует диапазон нормы (Phosphor): беременные, дети, фаза цикла
+/** Иконка группы, для которой действует диапазон нормы (Lucide): беременные, дети, фаза цикла
  * — по категории популяции; иначе по полу (женщины/мужчины), без пола — «все». */
-export function normGroupIcon(range: Pick<KbRefRangeDto, 'sex' | 'population'>): string {
+export function normGroupIcon(range: Pick<KbRefRangeDto, 'sex' | 'population'>): LucideIconData {
   switch (range.population) {
-    case 1: return 'ph-fill ph-baby-carriage';
-    case 2: return 'ph-fill ph-baby';
-    case 3: return 'ph-fill ph-drop';
+    case 1: return Baby;
+    case 2: return Baby;
+    case 3: return Droplet;
   }
-  if (range.sex === Gender.Female) return 'ph-fill ph-gender-female';
-  if (range.sex === Gender.Male) return 'ph-fill ph-gender-male';
-  return 'ph-fill ph-users';
+  if (range.sex === Gender.Female) return Venus;
+  if (range.sex === Gender.Male) return Mars;
+  return Users;
 }
 
 /** «Женщины 18–60 лет», «Беременные, II триместр», «Дети до 18 лет», «Все». */

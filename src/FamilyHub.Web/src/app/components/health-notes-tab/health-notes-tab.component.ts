@@ -66,7 +66,6 @@ interface FeedGroup {
 interface MetricTile {
   code: string;
   name: string;
-  icon: string;
   value: string;
   unit: string;
   stamp: string;
@@ -190,9 +189,9 @@ export class HealthNotesTabComponent implements OnInit {
 
   protected readonly tiles = computed<MetricTile[]>(() =>
     [
-      this.metricTile('blood_pressure', 'heartbeat', 7),
-      this.metricTile('pulse', 'wave-sine', 7),
-      this.metricTile('weight', 'scales', 30),
+      this.metricTile('blood_pressure', 7),
+      this.metricTile('pulse', 7),
+      this.metricTile('weight', 30),
     ].filter((t): t is MetricTile => t !== null));
 
   protected readonly wellbeingTile = computed<WellbeingTile | null>(() => this.buildWellbeingTile());
@@ -325,7 +324,7 @@ export class HealthNotesTabComponent implements OnInit {
       : h.title;
   }
 
-  private metricTile(code: string, icon: string, windowDays: number): MetricTile | null {
+  private metricTile(code: string, windowDays: number): MetricTile | null {
     const def = this.metrics().find((m) => m.code === code);
     const month = this.series(code, 30);
     const latestNote = this.notes()
@@ -367,7 +366,6 @@ export class HealthNotesTabComponent implements OnInit {
     return {
       code,
       name: def?.name ?? code,
-      icon,
       value: metricValueText(latest, latestNote.metric.value2),
       unit: def?.unit ?? '',
       stamp: this.stamp(latestNote.occurredAt),

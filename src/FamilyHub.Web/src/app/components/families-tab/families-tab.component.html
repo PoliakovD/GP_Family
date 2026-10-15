@@ -7,7 +7,7 @@
       [title]="atFamilyLimit() ? 'Достигнут лимит в ' + MAX_FAMILIES_PER_USER + ' созданных семей' : ''"
       (click)="openCreateModal()"
     >
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Создать
+      <app-icon [icon]="icons.Plus" [size]="18" /> Создать
     </button>
   </div>
 
@@ -51,7 +51,7 @@
         <li>Или вставьте ниже ссылку-приглашение, которую вам прислали.</li>
       </ul>
       <button class="btn btn-primary align-self-start" [disabled]="atFamilyLimit()" (click)="openCreateModal()">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Создать семью
+        <app-icon [icon]="icons.Plus" [size]="18" /> Создать семью
       </button>
     </div>
   }
@@ -84,7 +84,7 @@
       <a class="card elev-sm mb-2" style="text-decoration:none;color:inherit" [routerLink]="['/families', family.id]">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <strong class="card-title">{{ family.name }}</strong>
-          <i class="ph ph-caret-right" style="color:var(--color-neutral-600)" aria-hidden="true"></i>
+          <app-icon [icon]="icons.ChevronRight" [size]="18" style="color:var(--color-neutral-600)" />
         </div>
         <div class="d-flex align-items-center gap-2">
           <span class="badge badge-neutral">

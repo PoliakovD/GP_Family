@@ -85,7 +85,7 @@
       <div class="ir-kicker">Тихие часы</div>
       <div class="ir-quiet">
         <div class="ir-line">
-          <i class="ph ph-moon" aria-hidden="true"></i>
+          <app-icon [icon]="icons.Moon" [size]="18" />
           <span class="ir-name">Напоминания без звука</span>
           <label class="switch">
             <input type="checkbox" [checked]="quietOn()" (change)="setQuiet($any($event.target).checked)" aria-label="Тихие часы" />
@@ -103,7 +103,7 @@
     </section>
 
     @if (s.timeZoneId) {
-      <p class="ir-note muted"><i class="ph ph-globe" aria-hidden="true"></i> Часовой пояс: {{ timeZoneLabel(s.timeZoneId) }} — время приёма считается в нём.</p>
+      <p class="ir-note muted"><app-icon [icon]="icons.Globe" [size]="18" /> Часовой пояс: {{ timeZoneLabel(s.timeZoneId) }} — время приёма считается в нём.</p>
     }
 
     <button type="button" class="btn btn-secondary ir-done" (click)="closed.emit()">Готово</button>

@@ -9,6 +9,8 @@ import {
   DEFAULT_SHARE_DAYS, SHARE_DAY_OPTIONS, dayMonthFromIso, expiryPreview, reportUrl,
 } from '../../shared/util/report-labels';
 import { shareLink } from '../../shared/util/share-link';
+import { Copy } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 /**
  * Диалог ссылки для врача. Два состояния: «выбрать срок» (создать / продлить / выпустить новую) и
@@ -18,7 +20,7 @@ import { shareLink } from '../../shared/util/share-link';
  */
 @Component({
   selector: 'app-doctor-report-link-dialog',
-  imports: [ModalComponent],
+  imports: [ModalComponent, IconComponent],
   template: `
     <app-modal [title]="title()" [open]="report() !== null" (closed)="closed.emit()">
       @if (ready(); as r) {
@@ -29,7 +31,7 @@ import { shareLink } from '../../shared/util/share-link';
         <div class="d-flex gap-2 mb-2">
           <button type="button" class="btn btn-primary flex-grow-1" (click)="share(r)">Поделиться</button>
           <button type="button" class="btn btn-secondary btn-icon" title="Скопировать ссылку" aria-label="Скопировать ссылку" (click)="copy(r)">
-            <i class="ph ph-copy" aria-hidden="true"></i>
+            <app-icon [icon]="icons.Copy" [size]="18" />
           </button>
         </div>
         <div class="d-flex justify-content-end">
@@ -71,6 +73,8 @@ import { shareLink } from '../../shared/util/share-link';
   `,
 })
 export class DoctorReportLinkDialogComponent {
+  protected readonly icons = { Copy };
+
   private readonly api = inject(ApiService);
   private readonly tg = inject(TelegramService);
   private readonly toast = inject(ToastService);

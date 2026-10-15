@@ -21,8 +21,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 
-  > i {
-    font-size: 3.2941rem;
+  > app-icon {
     color: var(--color-accent);
     margin-bottom: 4px;
   }

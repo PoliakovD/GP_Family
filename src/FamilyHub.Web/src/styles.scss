@@ -326,9 +326,7 @@ a {
   min-height: var(--control-height);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
-  i { font-size: var(--icon-size-sm); }
-
-  &:disabled,
+&:disabled,
   &[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;
@@ -556,10 +554,9 @@ select.input {
   display: flex;
   align-items: center;
 
-  > i, > app-icon {
+  > app-icon {
     position: absolute;
     left: var(--space-4);
-    font-size: var(--icon-size-sm);
     color: var(--color-text-muted);
     pointer-events: none;
   }
@@ -1344,8 +1341,7 @@ select.input {
     object-fit: cover;
   }
 
-  i {
-    font-size: 1.2941rem;
+  app-icon {
     color: var(--color-neutral-600);
   }
 }
@@ -1416,9 +1412,7 @@ select.input {
   font: var(--text-micro);
   transition: border-color 0.15s ease, color 0.15s ease;
 
-  i { font-size: 1.2941rem; }
-
-  &:active {
+&:active {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
@@ -1570,7 +1564,7 @@ select.input {
   border-radius: var(--radius-lg);
   font: var(--text-body-sm);
 
-  > i { flex: none; font-size: var(--icon-size); }
+  > app-icon { flex: none; }
   strong { font-weight: 600; }
 }
 

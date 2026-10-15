@@ -28,7 +28,7 @@ import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdo
 import { NotificationBellComponent } from './shared/notification-bell/notification-bell.component';
 import { IconComponent } from './shared/ui/icon/icon.component';
 import { FamilySwitcherComponent } from './shared/ui/family-switcher/family-switcher.component';
-import { Heart, House, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
+import { Heart, House, MoonStar, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
 import { FamilyRole } from './models/types';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
@@ -91,6 +91,7 @@ interface SidebarItem {
     templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
+
   readonly state = inject(FamilyStateService);
   readonly auth = inject(AuthService);
   readonly notifications = inject(NotificationStateService);
@@ -114,7 +115,7 @@ export class AppComponent implements OnInit {
   readonly isWide = computed(() => this.breakpoints.tier() === 'wide');
 
   /** Иконки каркаса (Lucide, DESIGN §2.7). */
-  readonly icons = { Heart, House, Search, User, Users, X };
+  readonly icons = { Heart, House, MoonStar, Search, User, Users, X };
   /** Мобильная шапка (макет «Screen - Health hub»): по умолчанию заголовок + иконка поиска +
    * колокольчик; клик по лупе разворачивает поле поиска на всю ширину строки вместо заголовка. */
   readonly mobileSearchOpen = signal(false);

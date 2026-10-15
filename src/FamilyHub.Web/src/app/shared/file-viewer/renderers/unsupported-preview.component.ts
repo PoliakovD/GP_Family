@@ -1,18 +1,22 @@
 import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { describeFile, formatFileSize } from '../../util/file-type';
 import { LoadingSpinnerComponent } from '../../loading-spinner/loading-spinner.component';
+import { Download } from 'lucide';
+import { IconComponent } from '../../ui/icon/icon.component';
 
 /** Карточка «Скачать» — общее состояние для Pending (спиннер вместо кнопки), Failed/Unsupported
  * и любого формата, для которого сервер не строит превью (см. AttachmentPreviewRenderer). Ни
  * ошибок, ни пустых экранов — только понятная карточка с типом/именем/размером (см. план). */
 @Component({
     selector: 'app-unsupported-preview',
-    imports: [LoadingSpinnerComponent],
+    imports: [LoadingSpinnerComponent, IconComponent],
     templateUrl: './unsupported-preview.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './unsupported-preview.component.scss'
 })
 export class UnsupportedPreviewComponent {
+  protected readonly icons = { Download };
+
   @Input({ required: true }) fileName!: string;
   @Input({ required: true }) contentType!: string;
   @Input({ required: true }) sizeBytes!: number;

@@ -1,6 +1,8 @@
 import { Component, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { HistoryDismissController } from '../util/history-dismiss';
 import { OverlayStackService } from '../util/overlay-stack.service';
+import { ChevronLeft } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Шторка снизу — по структуре зеркалит ModalComponent (open/closed, проекция контента),
@@ -13,12 +15,15 @@ import { OverlayStackService } from '../util/overlay-stack.service';
  */
 @Component({
   selector: 'app-bottom-sheet',
+  imports: [IconComponent],
   standalone: true,
   templateUrl: './bottom-sheet.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bottom-sheet.component.scss',
 })
 export class BottomSheetComponent implements OnChanges, OnDestroy {
+  protected readonly icons = { ChevronLeft };
+
   @Input() title = '';
   @Input() open = false;
   @Output() closed = new EventEmitter<void>();

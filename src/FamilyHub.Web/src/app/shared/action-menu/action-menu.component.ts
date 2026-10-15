@@ -2,6 +2,7 @@ import { Component, ElementRef, HostListener, inject, input, signal, ChangeDetec
 import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
+import type { IconNode as LucideIconData } from 'lucide';
 import { IconComponent } from '../ui/icon/icon.component';
 import { Ellipsis } from 'lucide';
 
@@ -10,7 +11,7 @@ import { Ellipsis } from 'lucide';
  * `danger`, чтобы не плодить третий визуальный язык кнопок. */
 export interface ActionMenuItem {
   label: string;
-  icon?: string; // класс Phosphor-иконки
+  icon?: LucideIconData;
   danger?: boolean;
   handler: () => void;
 }

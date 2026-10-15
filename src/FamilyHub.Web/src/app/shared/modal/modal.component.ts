@@ -5,17 +5,22 @@ import {
 } from '@angular/core';
 import { OverlayA11y } from '../util/overlay-a11y';
 import { OverlayStackService } from '../util/overlay-stack.service';
+import { X } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 let nextModalId = 0;
 
 @Component({
   selector: 'app-modal',
+  imports: [IconComponent],
   standalone: true,
   templateUrl: './modal.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './modal.component.scss',
 })
 export class ModalComponent implements OnChanges, OnDestroy {
+  protected readonly icons = { X };
+
   @Input() title = '';
   @Input() open = false;
   /** Широкая карточка (списки с превью текста) — по умолчанию оверлей узкий (400px), под формы. */

@@ -8,7 +8,7 @@
       @for (item of actions(); track item.label) {
         <button type="button" class="action-menu-item" [class.danger]="item.danger" (click)="select(item)">
           @if (item.icon) {
-            <i [class]="item.icon" aria-hidden="true"></i>
+            <app-icon [icon]="item.icon" [size]="18" />
           }
           {{ item.label }}
         </button>
@@ -22,7 +22,7 @@
     @for (item of actions(); track item.label) {
       <button type="button" class="action-menu-item action-menu-item-sheet" [class.danger]="item.danger" (click)="select(item)">
         @if (item.icon) {
-          <i [class]="item.icon" aria-hidden="true"></i>
+          <app-icon [icon]="item.icon" [size]="18" />
         }
         {{ item.label }}
       </button>

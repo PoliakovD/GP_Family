@@ -42,7 +42,7 @@
                 [ngModel]="comment()" (ngModelChange)="comment.set($event)" name="comment"></textarea>
       @if ((counts()?.flaggedNotes ?? 0) > 0) {
         <span class="dr-hint dr-hint-icon">
-          <i class="ph ph-note-pencil" aria-hidden="true"></i>
+          <app-icon [icon]="icons.NotebookPen" [size]="18" />
           Из дневника будет добавлено заметок с пометкой «в вопросы к врачу»: {{ counts()!.flaggedNotes }}
         </span>
       }
@@ -75,23 +75,23 @@
       <div class="dr-group-title">Из медкарты</div>
       <div class="dr-toggles">
         <label class="dr-toggle">
-          <i class="ph-duotone ph-chart-line" aria-hidden="true"></i><span>Динамика анализов</span>
+          <app-icon [icon]="icons.ChartLine" [size]="18" /><span>Динамика анализов</span>
           <span class="switch"><input type="checkbox" [checked]="labs()" (change)="labs.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
-          <i class="ph-duotone ph-sparkle" aria-hidden="true"></i><span>ИИ-резюме анализов <span class="muted">(составлено ИИ, не врачом)</span></span>
+          <app-icon [icon]="icons.Sparkles" [size]="18" /><span>ИИ-резюме анализов <span class="muted">(составлено ИИ, не врачом)</span></span>
           <span class="switch"><input type="checkbox" [checked]="aiSummaries()" (change)="aiSummaries.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
-          <i class="ph-duotone ph-pill" aria-hidden="true"></i><span>Текущие препараты</span>
+          <app-icon [icon]="icons.Pill" [size]="18" /><span>Текущие препараты</span>
           <span class="switch"><input type="checkbox" [checked]="medications()" (change)="medications.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
-          <i class="ph-duotone ph-stethoscope" aria-hidden="true"></i><span>Приёмы врача</span>
+          <app-icon [icon]="icons.Stethoscope" [size]="18" /><span>Приёмы врача</span>
           <span class="switch"><input type="checkbox" [checked]="visits()" (change)="visits.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
-          <i class="ph-duotone ph-syringe" aria-hidden="true"></i><span>Прививки</span>
+          <app-icon [icon]="icons.Syringe" [size]="18" /><span>Прививки</span>
           <span class="switch"><input type="checkbox" [checked]="vaccinationsOn()" [disabled]="!vaccinationsAvailable()" (change)="vaccinations.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
       </div>
@@ -102,11 +102,11 @@
       <div class="dr-group-title">Из дневника</div>
       <div class="dr-toggles">
         <label class="dr-toggle">
-          <i class="ph-duotone ph-heartbeat" aria-hidden="true"></i><span>Домашние замеры, самочувствие и сон</span>
+          <app-icon [icon]="icons.HeartPulse" [size]="18" /><span>Домашние замеры, самочувствие и сон</span>
           <span class="switch"><input type="checkbox" [checked]="measurementsOn()" [disabled]="!diaryAvailable()" (change)="measurements.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
         <label class="dr-toggle">
-          <i class="ph-duotone ph-lightning" aria-hidden="true"></i><span>Симптомы и заметки</span>
+          <app-icon [icon]="icons.Zap" [size]="18" /><span>Симптомы и заметки</span>
           <span class="switch"><input type="checkbox" [checked]="symptomsNotesOn()" [disabled]="!diaryAvailable()" (change)="symptomsNotes.set($any($event.target).checked)" /><span class="switch-knob"></span></span>
         </label>
       </div>
@@ -133,7 +133,7 @@
     <div class="dr-actions">
       <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="cancelled.emit()">Отмена</button>
       <button type="submit" class="btn btn-primary" [disabled]="!canSubmit()">
-        <i class="ph ph-file-pdf" aria-hidden="true"></i>
+        <app-icon [icon]="icons.FileText" [size]="18" />
         {{ busy() ? 'Формируем PDF…' : 'Сформировать PDF' }}
       </button>
     </div>

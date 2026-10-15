@@ -10,7 +10,7 @@
 .dr-optional { font-weight: 400; color: var(--color-text-muted); }
 
 .dr-hint { font: var(--text-caption); color: var(--color-text-muted); }
-.dr-hint-icon { display: flex; align-items: flex-start; gap: var(--space-2); i { margin-top: 2px; color: var(--color-accent-hover); } }
+.dr-hint-icon { display: flex; align-items: flex-start; gap: var(--space-2); app-icon { margin-top: 2px; color: var(--color-accent-hover); } }
 .dr-hint-warn { color: var(--color-danger); }
 
 .dr-dates { display: flex; align-items: center; gap: var(--space-3); }
@@ -30,7 +30,7 @@
   cursor: pointer;
 
   & + & { border-top: 1px solid var(--color-divider); }
-  i { font-size: var(--icon-size); color: var(--color-text-secondary); }
+  app-icon { color: var(--color-text-secondary); }
   span:not(.switch):not(.switch-knob) { flex: 1; }
 }
 

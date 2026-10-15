@@ -4,7 +4,7 @@
   </div>
 } @else if (error) {
   <div class="text-preview-status">
-    <i class="ph ph-warning-circle" aria-hidden="true"></i>
+    <app-icon [icon]="icons.CircleAlert" [size]="18" />
     <span>Не удалось загрузить содержимое файла.</span>
   </div>
 } @else if (kind === 'csv') {

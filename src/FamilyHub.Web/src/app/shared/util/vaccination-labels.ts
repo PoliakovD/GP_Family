@@ -4,6 +4,8 @@
 import { VaccinationKind, VaccinationStatus, VaccineGroup } from '../../models/types';
 import { formatDayMonthYear, formatYear } from './date-format';
 import { MONTHS_GEN, parseLocalBirthDate } from './birthday-date';
+import { Circle, CircleArrowRight, CircleCheck, CircleDashed, CircleHelp, Clock } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 
 const STATUS_LABEL: Record<number, string> = {
   [VaccinationStatus.Done]: 'Сделано',
@@ -14,13 +16,13 @@ const STATUS_LABEL: Record<number, string> = {
   [VaccinationStatus.NoData]: 'Нет данных',
 };
 
-const STATUS_ICON: Record<number, string> = {
-  [VaccinationStatus.Done]: 'ph-fill ph-check-circle',
-  [VaccinationStatus.HadDisease]: 'ph-fill ph-check-circle',
-  [VaccinationStatus.DueSoon]: 'ph-fill ph-clock',
-  [VaccinationStatus.CanDo]: 'ph-fill ph-arrow-circle-right',
-  [VaccinationStatus.Upcoming]: 'ph ph-circle-dashed',
-  [VaccinationStatus.NoData]: 'ph ph-question',
+const STATUS_ICON: Record<number, LucideIconData> = {
+  [VaccinationStatus.Done]: CircleCheck,
+  [VaccinationStatus.HadDisease]: CircleCheck,
+  [VaccinationStatus.DueSoon]: Clock,
+  [VaccinationStatus.CanDo]: CircleArrowRight,
+  [VaccinationStatus.Upcoming]: CircleDashed,
+  [VaccinationStatus.NoData]: CircleHelp,
 };
 
 /** Цвета статусов по DESIGN §1: success — сделано, warning — «скоро» (срок близко), «можно сделать» (срок
@@ -39,8 +41,8 @@ export function statusLabel(status: number): string {
   return STATUS_LABEL[status] ?? '';
 }
 
-export function statusIcon(status: number): string {
-  return STATUS_ICON[status] ?? 'ph ph-circle';
+export function statusIcon(status: number): LucideIconData {
+  return STATUS_ICON[status] ?? Circle;
 }
 
 /** Тон бейджа статуса (подложка + тёмный текст) — для текста на цвете, где сплошной

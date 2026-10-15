@@ -18,7 +18,7 @@
   border-radius: var(--radius-lg);
   background: var(--color-success-soft);
 
-  > i { font-size: var(--icon-size); color: var(--color-success); }
+  > app-icon { color: var(--color-success); }
 }
 
 .vs-title { font: var(--text-title); }
@@ -42,8 +42,8 @@
   cursor: pointer;
 
   &:first-child { border-top: none; }
-  > i:first-child { font-size: var(--icon-size); color: var(--color-accent-hover); }
-  > i:last-child { color: var(--color-text-muted); }
+  > app-icon:first-child { color: var(--color-accent-hover); }
+  > app-icon:last-child { color: var(--color-text-muted); }
 }
 
 .vs-reminder {
@@ -57,5 +57,5 @@
   font: var(--text-body-sm);
   cursor: pointer;
 
-  > i { flex: none; color: var(--color-text-muted); }
+  > app-icon { flex: none; color: var(--color-text-muted); }
 }

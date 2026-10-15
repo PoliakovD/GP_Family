@@ -28,7 +28,7 @@
 }
 
 .ir-row-col { flex-direction: column; align-items: stretch; gap: var(--space-2); }
-.ir-line { display: flex; align-items: center; gap: var(--space-3); > i { font-size: var(--icon-size); color: var(--color-text-secondary); } }
+.ir-line { display: flex; align-items: center; gap: var(--space-3); > app-icon { color: var(--color-text-secondary); } }
 .ir-name { flex: 1; min-width: 0; font: var(--text-body-sm); small { display: block; font: var(--text-caption); color: var(--color-text-muted); } }
 
 .ir-sub {

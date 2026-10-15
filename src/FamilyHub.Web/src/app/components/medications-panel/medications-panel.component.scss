@@ -144,7 +144,6 @@
   color: var(--color-text-secondary);
   cursor: pointer;
 
-  i { font-size: var(--icon-size); }
   &:active { border-color: var(--color-accent); color: var(--color-accent-hover); }
 }
 

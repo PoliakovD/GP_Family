@@ -1,4 +1,5 @@
-import { ArrowRight, Check, MessageCircle, Paperclip, Plus } from 'lucide';
+import { ArrowRight, Ban, BriefcaseMedical, Check, Copy, FileText, Lock, MessageCircle, Paperclip, Pencil, Pill, Plus, Reply, Smile, Trash2, X } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import {
   Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked, viewChild,
@@ -80,7 +81,7 @@ const COMPRESSIBLE = new Set(['image/jpeg', 'image/png', 'image/webp']);
   styleUrl: './family-chat.component.scss',
 })
 export class FamilyChatComponent implements OnInit, OnDestroy {
-  protected readonly icons = { ArrowRight, Check, MessageCircle, Paperclip, Plus };
+  protected readonly icons = { ArrowRight, Ban, Check, Lock, MessageCircle, Paperclip, Pencil, Plus, Reply, X };
 
   readonly familyId = input.required<string>();
   /** Админ семьи может удалять чужие сообщения — права приходят с сервера (canDelete), здесь только подпись. */
@@ -405,13 +406,13 @@ export class FamilyChatComponent implements OnInit, OnDestroy {
   messageActions(row: FeedRow): ActionMenuItem[] {
     const m = row.message;
     const items: ActionMenuItem[] = [
-      { label: 'Ответить', icon: 'ph ph-arrow-bend-up-left', handler: () => this.startReply(m) },
-      { label: 'Реакция', icon: 'ph ph-smiley', handler: () => this.reactionPickerFor.set(m.id) },
+      { label: 'Ответить', icon: Reply, handler: () => this.startReply(m) },
+      { label: 'Реакция', icon: Smile, handler: () => this.reactionPickerFor.set(m.id) },
     ];
-    if (m.text) items.push({ label: 'Копировать текст', icon: 'ph ph-copy', handler: () => void this.copy(m.text) });
-    if (m.canEdit) items.push({ label: 'Изменить', icon: 'ph ph-pencil-simple', handler: () => this.startEdit(m) });
+    if (m.text) items.push({ label: 'Копировать текст', icon: Copy, handler: () => void this.copy(m.text) });
+    if (m.canEdit) items.push({ label: 'Изменить', icon: Pencil, handler: () => this.startEdit(m) });
     if (m.canDelete) {
-      items.push({ label: row.mine ? 'Удалить' : 'Удалить (админ)', icon: 'ph ph-trash', danger: true, handler: () => void this.remove(m) });
+      items.push({ label: row.mine ? 'Удалить' : 'Удалить (админ)', icon: Trash2, danger: true, handler: () => void this.remove(m) });
     }
     return items;
   }
@@ -483,7 +484,7 @@ export class FamilyChatComponent implements OnInit, OnDestroy {
     return a.previewStatus === AttachmentPreviewStatus.Ready && a.contentType.startsWith('image/');
   }
 
-  fileIcon(a: ChatAttachment): string {
+  fileIcon(a: ChatAttachment): LucideIconData {
     return describeFile(a.contentType, a.fileName).icon;
   }
 
@@ -559,11 +560,11 @@ export class FamilyChatComponent implements OnInit, OnDestroy {
     this.links.update((list) => list.filter((_, i) => i !== index));
   }
 
-  linkIcon(kind: ChatLinkKind): string {
+  linkIcon(kind: ChatLinkKind): LucideIconData {
     switch (kind) {
-      case ChatLinkKind.MedicalRecord: return 'ph ph-file-text';
-      case ChatLinkKind.MedicationCourse: return 'ph ph-pill';
-      case ChatLinkKind.Medkit: return 'ph ph-first-aid-kit';
+      case ChatLinkKind.MedicalRecord: return FileText;
+      case ChatLinkKind.MedicationCourse: return Pill;
+      case ChatLinkKind.Medkit: return BriefcaseMedical;
     }
   }
 

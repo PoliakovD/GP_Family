@@ -23,13 +23,13 @@
           <div class="photo-tile">
             <img [src]="photo.previewUrl" alt="" />
             <button type="button" class="photo-remove" aria-label="Удалить фото" (click)="removePhoto(i)">
-              <i class="ph-bold ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </div>
         }
         @if (photos.length < 5 && !recognizing) {
           <label class="photo-tile photo-add" [attr.for]="photoInputId">
-            <i class="ph ph-camera" aria-hidden="true"></i>
+            <app-icon [icon]="icons.Camera" [size]="18" />
             <span>Фото</span>
           </label>
         }
@@ -59,7 +59,7 @@
             <div class="recognize-step flex-fill text-center" [class]="'step-' + stepState(step.id)">
               <div class="recognize-step-dot mx-auto mb-1">
                 @if (stepState(step.id) === 'done') {
-                  <i class="ph-bold ph-check" aria-hidden="true"></i>
+                  <app-icon [icon]="icons.Check" [size]="18" />
                 } @else if (stepState(step.id) === 'active') {
                   <span class="step-spinner"></span>
                 }
@@ -109,7 +109,7 @@
             <input class="input" [(ngModel)]="row.key" placeholder="Поле" />
             <input class="input" [(ngModel)]="row.value" placeholder="Значение" />
             <button type="button" class="btn btn-icon btn-danger" (click)="removeExtraRow(i)" aria-label="Удалить поле">
-              <i class="ph-bold ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </div>
         }

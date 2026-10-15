@@ -6,6 +6,8 @@ import type { InviteCreated } from '../../models/types';
 import { ToastService } from '../toast/toast.service';
 import { ModalComponent } from '../modal/modal.component';
 import { copyToClipboard } from '../util/clipboard';
+import { Copy, Send } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Модалка «Пригласить в семью» — создание одноразовой ссылки-приглашения и её шаринг. Вынесена из
@@ -15,7 +17,7 @@ import { copyToClipboard } from '../util/clipboard';
  */
 @Component({
     selector: 'app-invite-modal',
-    imports: [ModalComponent],
+    imports: [ModalComponent, IconComponent],
     template: `
     <app-modal title="Пригласить в семью" [open]="open()" (closed)="closed.emit()">
       @if (created(); as invite) {
@@ -34,7 +36,7 @@ import { copyToClipboard } from '../util/clipboard';
             aria-label="Скопировать ссылку"
             (click)="copy(invite.webLink)"
           >
-            <i class="ph ph-copy" aria-hidden="true"></i>
+            <app-icon [icon]="icons.Copy" [size]="18" />
           </button>
           @if (invite.telegramLink) {
             <button
@@ -44,7 +46,7 @@ import { copyToClipboard } from '../util/clipboard';
               aria-label="Отправить в Telegram"
               (click)="openTelegram(invite.telegramLink)"
             >
-              <i class="ph-fill ph-telegram-logo" aria-hidden="true"></i>
+              <app-icon [icon]="icons.Send" [size]="18" />
             </button>
           }
         </div>
@@ -81,6 +83,8 @@ import { copyToClipboard } from '../util/clipboard';
   `
 })
 export class InviteModalComponent {
+  protected readonly icons = { Copy, Send };
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly tg = inject(TelegramService);

@@ -20,12 +20,12 @@
           </div>
           @if (s.hasBirthDate) {
             <button type="button" class="btn btn-secondary" [disabled]="certificateBusy()" (click)="downloadCertificate()">
-              <i class="ph ph-file-pdf" aria-hidden="true"></i> Сертификат PDF
+              <app-icon [icon]="icons.FileText" [size]="18" /> Сертификат PDF
             </button>
           }
           @if (s.subject.canEdit) {
             <button type="button" class="btn btn-primary" (click)="addForThisPerson()">
-              <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить
+              <app-icon [icon]="icons.Plus" [size]="18" /> Добавить
             </button>
           }
         </div>
@@ -43,20 +43,20 @@
               <div class="vx-stage">
                 <button type="button" class="vx-stage-head" [attr.aria-expanded]="isOpen(group.stage)" (click)="toggleStage(group.stage)">
                   @if (group.allDone) {
-                    <i class="ph-fill ph-check-circle vx-stage-icon vx-stage-icon-done" aria-hidden="true"></i>
+                    <app-icon [icon]="icons.CircleCheck" [size]="18" class="vx-stage-icon vx-stage-icon-done" />
                   } @else {
-                    <i class="ph ph-circle-dashed vx-stage-icon" aria-hidden="true"></i>
+                    <app-icon [icon]="icons.CircleDashed" [size]="18" class="vx-stage-icon" />
                   }
                   <span class="flex-fill">{{ stageLabel(group.stage) }}</span>
                   <span class="muted vx-stage-count">{{ doneCount(group.items) }} из {{ group.items.length }}</span>
-                  <i [class]="isOpen(group.stage) ? 'ph ph-caret-up' : 'ph ph-caret-down'" aria-hidden="true"></i>
+                  <app-icon [icon]="isOpen(group.stage) ? icons.ChevronUp : icons.ChevronDown" [size]="18" />
                 </button>
                 @if (isOpen(group.stage)) {
                   <div class="vx-dose-list">
                     @for (item of group.items; track itemKey(item)) {
                       <!-- div, а не button: внутри есть своя кнопка «Отметить сделанной», а кнопка в кнопке — невалидный HTML. -->
                       <div class="vx-dose" appClickable [class.vx-dose-current]="item.status === Status.DueSoon" (click)="openSeries(item)">
-                        <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
+                        <app-icon [icon]="statusIcon(item.status)" [size]="18" [style.color]="statusColor(item.status)" />
                         <div class="flex-fill min-width-0">
                           <div class="vx-dose-name">{{ item.seriesName }}</div>
                           <div class="muted vx-dose-sub">{{ item.label }}</div>
@@ -85,13 +85,13 @@
             @if (s.custom.length > 0) {
               <div class="vx-stage">
                 <div class="vx-stage-head vx-stage-head-static">
-                  <i class="ph ph-syringe vx-stage-icon" aria-hidden="true"></i>
+                  <app-icon [icon]="icons.Syringe" [size]="18" class="vx-stage-icon" />
                   <span class="flex-fill">Не из календаря</span>
                 </div>
                 <div class="vx-dose-list">
                   @for (item of s.custom; track itemKey(item)) {
                     <div class="vx-dose">
-                      <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
+                      <app-icon [icon]="statusIcon(item.status)" [size]="18" [style.color]="statusColor(item.status)" />
                       <div class="flex-fill min-width-0">
                         <div class="vx-dose-name">{{ item.seriesName }}</div>
                         <div class="muted vx-dose-sub">{{ statusLabel(item.status) }}</div>
@@ -99,7 +99,7 @@
                       <span class="muted vx-dose-date">{{ item.date ? preciseDateText(item.date, null) : '' }}</span>
                       @if (s.subject.canEdit) {
                         <button type="button" class="btn-icon" aria-label="Удалить" (click)="deleteCustom(item, $event)">
-                          <i class="ph ph-trash" aria-hidden="true"></i>
+                          <app-icon [icon]="icons.Trash2" [size]="18" />
                         </button>
                       }
                     </div>
@@ -116,7 +116,7 @@
                 <div class="vx-dose-list">
                   @for (item of group.items; track itemKey(item)) {
                     <button type="button" class="vx-dose" (click)="openSeries(item)">
-                      <i [class]="statusIcon(item.status)" [style.color]="statusColor(item.status)" aria-hidden="true"></i>
+                      <app-icon [icon]="statusIcon(item.status)" [size]="18" [style.color]="statusColor(item.status)" />
                       <div class="flex-fill min-width-0">
                         <div class="vx-dose-name">{{ item.seriesName }}</div>
                         <div class="muted vx-dose-sub">{{ item.label }}</div>
@@ -150,7 +150,7 @@
               @for (dose of d.doses; track dose.doseIndex) {
                 <div class="vx-timeline-row">
                   <div class="vx-timeline-marker">
-                    <i [class]="statusIcon(dose.status)" [style.color]="statusColor(dose.status)" aria-hidden="true"></i>
+                    <app-icon [icon]="statusIcon(dose.status)" [size]="18" [style.color]="statusColor(dose.status)" />
                   </div>
                   <div class="vx-timeline-body">
                     <div class="vx-timeline-head">
@@ -165,14 +165,14 @@
                       <div class="vx-timeline-files">
                         @for (f of dose.files; track f.id) {
                           <button type="button" class="vx-file-chip" (click)="openFiles(dose.files, $index)">
-                            <i class="ph ph-image" aria-hidden="true"></i> {{ f.fileName }}
+                            <app-icon [icon]="icons.Image" [size]="18" /> {{ f.fileName }}
                           </button>
                         }
                       </div>
                     }
                     @for (link of dose.diaryEntries; track link.at) {
                       <div class="vx-diary-link">
-                        <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+                        <app-icon [icon]="icons.NotebookPen" [size]="18" />
                         <div class="flex-fill min-width-0">
                           <div>{{ link.text }}</div>
                           <div class="muted vx-diary-link-date">из дневника</div>
@@ -192,7 +192,7 @@
 
             @if (d.reactionHint) {
               <div class="vx-note">
-                <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+                <app-icon [icon]="icons.NotebookPen" [size]="18" />
                 <span>{{ d.reactionHint }}</span>
               </div>
             }
@@ -208,7 +208,7 @@
             }
 
             <a class="vx-kb-link" [routerLink]="['/health/kb/vaccines']" [queryParams]="{ id: d.seriesCode }">
-              <i class="ph ph-book-open" aria-hidden="true"></i> О вакцине и противопоказаниях в справочнике
+              <app-icon [icon]="icons.BookOpen" [size]="18" /> О вакцине и противопоказаниях в справочнике
             </a>
           </div>
         }

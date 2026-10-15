@@ -1,7 +1,7 @@
 <div class="expandable" [class.open]="open">
   <button type="button" class="expandable-header" (click)="toggle()" [attr.aria-expanded]="open">
     <span class="expandable-title">{{ title }}{{ count !== null ? ' (' + count + ')' : '' }}</span>
-    <i class="ph ph-caret-down expandable-chevron" aria-hidden="true"></i>
+    <app-icon [icon]="icons.ChevronDown" [size]="18" class="expandable-chevron" />
   </button>
 
   <div class="expandable-body">

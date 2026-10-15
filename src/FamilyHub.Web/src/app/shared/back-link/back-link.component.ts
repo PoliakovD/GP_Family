@@ -1,11 +1,11 @@
 import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ChevronLeft } from 'lucide';
+import { ArrowLeft, ChevronLeft } from 'lucide';
 import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Редизайн v2.2 — «‹ Название раздела» вместо голой кнопки-иконки без подписи (была на экране
- * открытой записи — `<button class="btn-icon"><i class="ph ph-arrow-left"></i></button>`,
+ * открытой записи — `<button class="btn-icon"><app-icon [icon]="icons.ArrowLeft" [size]="18" /></button>`,
  * непонятно куда ведёт до клика). Читается как ссылка, не кнопка — тот же приём, что уже
  * применяется на «Семье» (family-details.component.html, «‹ Семьи»), только вынесен в
  * переиспользуемый компонент, а не инлайн-разметка: та же деталь-страница нужна и аптечке
@@ -38,6 +38,8 @@ import { IconComponent } from '../ui/icon/icon.component';
   styleUrl: './back-link.component.scss',
 })
 export class BackLinkComponent {
+  protected readonly icons = { ArrowLeft };
+
   readonly label = input.required<string>();
   readonly link = input<string | readonly unknown[] | null>(null);
   readonly iconOnly = input(false);

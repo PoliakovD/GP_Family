@@ -1,0 +1,5 @@
+// Лист «Настройки доступа»: запись → «Только я / Все семьи» → список семей с переключателями (settings-row).
+.ras { display: flex; flex-direction: column; gap: var(--space-4); }
+.ras-mode { width: 100%; > .seg-opt { flex: 1; justify-content: center; } }
+.ras-list { border: 1px solid var(--color-divider); }
+.ras-list .settings-row-title { flex: 1; }

@@ -1,3 +1,4 @@
+import type { IconNode as LucideIconData } from 'lucide';
 import {Injectable, signal} from '@angular/core';
 
 /** Контекстное действие в верхней строке каркаса — редизайн v2 (PR2). Топбар не знает про
@@ -5,7 +6,7 @@ import {Injectable, signal} from '@angular/core';
  * обязательно очищает его в ngOnDestroy (иначе оно "протечёт" на следующий экран без действия). */
 export interface PageAction {
     label: string;
-    icon?: string; // класс Phosphor-иконки, например "ph-bold ph-plus"
+    icon?: LucideIconData; // иконка Lucide слева от подписи
     handler: () => void;
 }
 

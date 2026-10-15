@@ -53,7 +53,7 @@
             @if (row.primary; as primary) {
               <button type="button" class="btn btn-secondary" [class.dr-hide-narrow]="row.link.tone === 'active'"
                       (click)="primary.run()">
-                <i [class]="primary.icon" aria-hidden="true"></i> {{ primary.label }}
+                <app-icon [icon]="primary.icon" [size]="18" />{{ primary.label }}
               </button>
             }
             <button type="button" class="btn btn-secondary dr-download" aria-label="Скачать PDF" title="Скачать PDF"
