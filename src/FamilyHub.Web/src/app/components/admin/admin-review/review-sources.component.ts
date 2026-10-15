@@ -146,11 +146,11 @@ export interface EnsureCacheRef {
     .x-p-s3-mb-s3 { padding: var(--space-3); margin-bottom: var(--space-3); }
 
     .review-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-    .review-source { padding: 8px 10px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper); }
+    .review-source { padding: 8px 10px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface); }
     .review-source-used { border-color: var(--color-accent); }
     .review-source-off { opacity: 0.6; }
     .review-source-head { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
-    .review-source-text { margin: 6px 0; font-size: 0.8235rem; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+    .review-source-text { margin: var(--space-2) 0; font: var(--text-caption); cursor: pointer; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
     .review-source-text-open { display: block; -webkit-line-clamp: unset; }
   `],
 })

@@ -92,8 +92,8 @@ import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading
 
     .kb-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .kb-history-item { padding-bottom: 10px; border-bottom: 1px solid var(--color-divider); }
-    .kb-history-before { color: var(--color-status-danger-text); white-space: pre-wrap; word-break: break-word; }
-    .kb-history-after { color: var(--color-status-ok-text); white-space: pre-wrap; word-break: break-word; }
+    .kb-history-before { color: var(--color-danger); white-space: pre-wrap; word-break: break-word; }
+    .kb-history-after { color: var(--color-success); white-space: pre-wrap; word-break: break-word; }
   `],
 })
 export class KbHistoryComponent implements OnChanges {

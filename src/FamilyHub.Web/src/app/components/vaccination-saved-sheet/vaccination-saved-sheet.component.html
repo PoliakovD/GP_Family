@@ -3,7 +3,7 @@
     <span class="vs-check"><app-icon [icon]="icons.Check" [size]="18" /></span>
     <div class="flex-fill min-width-0">
       <div class="vs-title">Прививка сохранена</div>
-      <div class="muted vs-sub">{{ info().item.seriesName }} · {{ dateText() }}</div>
+      <div class="form-hint vs-sub">{{ info().item.seriesName }} · {{ dateText() }}</div>
     </div>
   </div>
 
@@ -63,7 +63,7 @@
       />
     }
   } @else {
-    <p class="muted vs-text">О реакции подопечного можно записать в собственном дневнике, если вы за ним ведёте наблюдение.</p>
+    <p class="form-hint vs-text">О реакции подопечного можно записать в собственном дневнике, если вы за ним ведёте наблюдение.</p>
   }
 
   @if (quickKind() === null) {

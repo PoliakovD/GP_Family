@@ -1,7 +1,7 @@
 <form class="cf" (ngSubmit)="save()">
   <div class="cf-body">
     @if (loading()) {
-      <p class="muted">Загружаем курс…</p>
+      <p class="form-hint">Загружаем курс…</p>
     }
 
     @if (!isEdit() && subjectOptions().length > 1) {
@@ -33,9 +33,9 @@
 
     @if (source() === 'prescription' && !isEdit()) {
       @if (prescriptionsLoading()) {
-        <p class="muted">Ищем назначения…</p>
+        <p class="form-hint">Ищем назначения…</p>
       } @else if (visiblePrescriptions().length === 0) {
-        <p class="muted cf-hint">В приёмах врача за последние полгода нет назначений с лекарствами. Загрузите документ приёма или создайте курс вручную.</p>
+        <p class="form-hint cf-hint">В приёмах врача за последние полгода нет назначений с лекарствами. Загрузите документ приёма или создайте курс вручную.</p>
       } @else {
         <div class="cf-prescriptions">
           @for (v of visiblePrescriptions(); track v.recordId) {

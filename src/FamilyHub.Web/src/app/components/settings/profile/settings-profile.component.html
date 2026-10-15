@@ -160,6 +160,19 @@
       <p class="field-hint field-hint-error">Время кода истекло. Нажмите «Привязать Telegram» ещё раз, чтобы получить новый.</p>
     }
   </section>
+
+  <section class="section" aria-labelledby="sp-theme">
+    <h2 class="section-title" id="sp-theme">Оформление</h2>
+    <p class="section-text">Тема на этом устройстве. «Системная» следует настройке телефона или компьютера.</p>
+    <div class="seg sp-theme" role="radiogroup" aria-labelledby="sp-theme">
+      @for (opt of themeOptions; track opt.value) {
+        <label class="seg-opt">
+          <input type="radio" name="theme" [checked]="theme.preference() === opt.value" (change)="theme.set(opt.value)" />
+          <app-icon [icon]="opt.icon" [size]="18" />{{ opt.label }}
+        </label>
+      }
+    </div>
+  </section>
   </div>
 } @else {
   <app-loading-spinner />

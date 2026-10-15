@@ -16,24 +16,24 @@
   justify-content: center;
   gap: 8px;
   padding: 24px 32px;
-  background: var(--color-paper);
+  background: var(--color-surface);
   border-radius: var(--radius-lg);
-  color: var(--color-neutral-600);
+  color: var(--color-text-muted);
 }
 
 .text-preview-scroll {
   width: 100%;
   height: 100%;
   overflow: auto;
-  background: var(--color-paper);
+  background: var(--color-surface);
   border-radius: var(--radius-md);
   padding: 16px;
 }
 
 .text-preview-pre {
   margin: 0;
+  font: var(--text-badge);
   font-family: var(--font-mono);
-  font-size: 0.7647rem;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -42,7 +42,7 @@
 
 .text-preview-table {
   border-collapse: collapse;
-  font-size: 0.7647rem;
+  font: var(--text-badge);
 
   td {
     border: 1px solid var(--color-divider);

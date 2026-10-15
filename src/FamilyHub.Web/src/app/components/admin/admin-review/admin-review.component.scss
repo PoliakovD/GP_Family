@@ -32,7 +32,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--color-paper);
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -62,8 +62,8 @@
 }
 
 .inbox-row-low {
-  background: color-mix(in srgb, var(--color-status-danger) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--color-status-danger);
+  background: color-mix(in srgb, var(--color-danger) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-danger);
 }
 
 .inbox-row-active {

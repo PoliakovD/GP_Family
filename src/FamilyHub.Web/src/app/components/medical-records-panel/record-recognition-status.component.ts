@@ -33,7 +33,7 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
     @if (steps(); as steps) {
       <app-pipeline-progress [steps]="steps" />
       @if (recognizing()) {
-        <p class="muted mb-1">
+        <p class="form-hint mb-1">
           Обычно это занимает 1–3 минуты. Страницу можно закрыть — распознавание продолжится, а
           показатели появятся в этой записи.
         </p>

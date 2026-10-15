@@ -185,17 +185,17 @@
         <app-kb-card [card]="kbResponse.card" />
       } @else {
         @if (kbResponse.status === MedicationKbStatus.Pending || kbResponse.status === MedicationKbStatus.Running) {
-          <p class="muted">Справочник уточняется — обычно это занимает до минуты. Загляните сюда чуть позже.</p>
+          <p class="form-hint">Справочник уточняется — обычно это занимает до минуты. Загляните сюда чуть позже.</p>
         } @else if (kbResponse.status === MedicationKbStatus.UnderReview) {
-          <p class="muted">Информация об этом препарате на проверке у администратора — она появится здесь после одобрения.</p>
+          <p class="form-hint">Информация об этом препарате на проверке у администратора — она появится здесь после одобрения.</p>
         } @else if (kbResponse.status === MedicationKbStatus.Failed) {
-          <p class="muted">Не удалось найти информацию об этом препарате в открытых источниках.</p>
+          <p class="form-hint">Не удалось найти информацию об этом препарате в открытых источниках.</p>
         } @else {
-          <p class="muted">Информации об этом препарате в справочнике пока нет.</p>
+          <p class="form-hint">Информации об этом препарате в справочнике пока нет.</p>
         }
 
         @if (kbResponse.candidate) {
-          <p class="muted mb-2">
+          <p class="form-hint mb-2">
             Похоже на «{{ kbResponse.candidate.displayName }}» из справочника — но мы не уверены
             достаточно, чтобы показать это автоматически.
           </p>

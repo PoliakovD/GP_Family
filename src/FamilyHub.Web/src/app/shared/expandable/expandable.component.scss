@@ -14,13 +14,13 @@
 }
 
 .expandable-title {
-  font-size: 0.7647rem;
+  font: var(--text-badge);
   font-weight: 600;
 }
 
 .expandable-chevron {
   flex-shrink: 0;
-  font-size: 0.9412rem;
+  font: var(--text-body);
   transition: transform 0.25s ease;
 }
 

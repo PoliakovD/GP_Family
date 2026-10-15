@@ -24,7 +24,7 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
   template: `
     <app-modal [title]="title()" [open]="report() !== null" (closed)="closed.emit()">
       @if (ready(); as r) {
-        <p class="muted mb-2">
+        <p class="form-hint mb-2">
           Ссылка работает до {{ expires(r) }}. Врач откроет отчёт без регистрации; отозвать доступ можно в любой момент.
         </p>
         <div class="link-box mb-2">{{ url(r) }}</div>
@@ -38,14 +38,14 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
           <button type="button" class="btn btn-secondary btn-sm" (click)="closed.emit()">Готово</button>
         </div>
       } @else {
-        <p class="muted mb-2">{{ intro() }}</p>
+        <p class="form-hint mb-2">{{ intro() }}</p>
         <div class="seg mb-1" role="radiogroup" aria-label="Срок ссылки">
           @for (d of options; track d) {
             <button type="button" class="seg-opt dr-seg" role="radio" [class.active]="days() === d"
                     [attr.aria-checked]="days() === d" (click)="days.set(d)">{{ d }} дней</button>
           }
         </div>
-        <p class="muted mb-3">Ссылка будет работать до {{ preview() }}.</p>
+        <p class="form-hint mb-3">Ссылка будет работать до {{ preview() }}.</p>
         @if (error(); as e) {
           <div class="alert-danger mb-2" role="alert">{{ e }}</div>
         }
@@ -62,11 +62,11 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
   styles: `
     .link-box {
       padding: 8px 12px;
-      background: var(--color-paper);
+      background: var(--color-surface);
       border: 1px solid var(--color-divider);
       border-radius: var(--radius-md);
+      font: var(--text-body-sm);
       font-family: var(--font-mono);
-      font-size: var(--font-size-meta);
       word-break: break-all;
       user-select: all;
     }

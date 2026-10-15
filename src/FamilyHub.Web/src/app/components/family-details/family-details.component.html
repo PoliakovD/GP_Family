@@ -4,7 +4,7 @@
      своя шапка, вкладки, чат; без шапки каркаса и таб-бара (PageActionService.fullscreen). -->
 <div class="fd" [class.fd-fullscreen]="!isWide() && activeSubTab === 'chat' && family?.myStatus === MemberStatus.Active">
   @if (state.loading() && !family) {
-    <p class="muted">Загрузка…</p>
+    <p class="form-hint">Загрузка…</p>
   } @else if (!family) {
     <div class="card">
       <p class="mb-2">Семья не найдена — возможно, её удалили или вас исключили.</p>
@@ -106,7 +106,7 @@
           }
         </div>
       } @else {
-        <p class="muted">Чат станет доступен после подтверждения заявки администратором семьи.</p>
+        <p class="form-hint">Чат станет доступен после подтверждения заявки администратором семьи.</p>
       }
     }
 

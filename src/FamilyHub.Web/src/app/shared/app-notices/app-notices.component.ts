@@ -64,16 +64,16 @@ function readFlag(key: string): boolean {
       flex-wrap: wrap;
       margin-bottom: var(--space-2);
       padding: var(--space-3) var(--space-4);
-      background: var(--color-accent-100);
-      color: var(--color-accent-800);
+      background: var(--color-accent-soft);
+      color: var(--color-accent-hover);
       border-radius: var(--radius-md);
-      font-size: 0.8824rem;
+      font: var(--text-body-sm);
 
       > app-icon { flex: none; }
     }
     .app-notice-warn {
-      background: color-mix(in srgb, var(--color-status-warning) 14%, var(--color-paper));
-      color: var(--color-status-warning-text);
+      background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+      color: var(--color-warning);
     }
   `,
 })

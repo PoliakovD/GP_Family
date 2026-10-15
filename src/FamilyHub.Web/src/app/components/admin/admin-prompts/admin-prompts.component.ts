@@ -25,10 +25,10 @@ import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading
     styles: [`
     .x-text-caption { font: var(--text-caption); }
 
-      .prompt-diff { font-family: var(--font-mono); font-size: 0.8235rem;
+      .prompt-diff { font: var(--text-caption); font-family: var(--font-mono);
         white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; margin: 0; }
-      .prompt-diff-added { background: color-mix(in srgb, var(--color-status-ok-text) 14%, transparent); }
-      .prompt-diff-removed { background: color-mix(in srgb, var(--color-status-danger-text) 14%, transparent);
+      .prompt-diff-added { background: color-mix(in srgb, var(--color-success) 14%, transparent); }
+      .prompt-diff-removed { background: color-mix(in srgb, var(--color-danger) 14%, transparent);
         text-decoration: line-through; }
     `]
 })

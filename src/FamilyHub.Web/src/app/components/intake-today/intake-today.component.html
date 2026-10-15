@@ -137,7 +137,7 @@
               <span class="it-prn-text">
                 По необходимости: <strong>{{ p.drugName }}</strong>
                 @if (multiPerson()) { ({{ subjectName(p.subject) }}) }
-                <span class="muted"> · сегодня {{ p.takenToday }} из {{ p.maxPerDay }}</span>
+                <span class="form-hint"> · сегодня {{ p.takenToday }} из {{ p.maxPerDay }}</span>
               </span>
               @if (p.canAct) {
                 <button type="button" class="btn-link" [disabled]="busy() === p.courseId" (click)="takeAsNeeded(p)">Отметить приём</button>

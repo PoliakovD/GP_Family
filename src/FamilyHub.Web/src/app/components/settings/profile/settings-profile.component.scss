@@ -21,3 +21,13 @@
   .settings-hero { flex-wrap: wrap; }
   .sp-why { display: none; }
 }
+.sp-theme {
+  align-self: flex-start;
+  max-width: 100%;
+
+  @media (max-width: 639px) {
+    align-self: stretch;
+    > .seg-opt { flex: 1; justify-content: center; }
+    app-icon { display: none; }
+  }
+}

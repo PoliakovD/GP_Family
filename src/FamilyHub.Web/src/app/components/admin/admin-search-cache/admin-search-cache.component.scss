@@ -1,7 +1,7 @@
 // Ключ кэша под названием для людей — мелко и моноширинно, чтобы не путать их.
 .cache-key {
   display: block;
-  font-family: var(--font-mono);
   font: var(--text-caption);
-  color: var(--color-neutral-600);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
 }

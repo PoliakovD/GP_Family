@@ -1,4 +1,4 @@
-import { Globe, Send } from 'lucide';
+import { Globe, Monitor, Moon, Send, Sun } from 'lucide';
 import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 import { IconTileComponent } from '../../../shared/ui/icon-tile/icon-tile.component';
 import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
@@ -11,6 +11,9 @@ import { formatDayMonthYear } from '../../../shared/util/date-format';
 import { runBusy } from '../settings-task';
 import { PersonNameComponent } from '../../../shared/person-name/person-name.component';
 import { AvatarComponent } from '../../../shared/avatar/avatar.component';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import type { IconNode as LucideIconData } from 'lucide';
+import { ThemePreference, ThemeService } from '../../../services/theme.service';
 
 const LINK_POLL_INTERVAL_MS = 4000;
 
@@ -20,15 +23,21 @@ const LINK_POLL_INTERVAL_MS = 4000;
  */
 @Component({
     selector: 'app-settings-profile',
-    imports: [IconTileComponent, LoadingSpinnerComponent, FormsModule, DatePipe, PersonNameComponent, AvatarComponent],
+    imports: [IconTileComponent, LoadingSpinnerComponent, FormsModule, DatePipe, PersonNameComponent, AvatarComponent, IconComponent],
     templateUrl: './settings-profile.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-profile.component.scss'
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
-  protected readonly icons = { Globe, Send };
+  protected readonly icons = { Globe, Monitor, Moon, Send, Sun };
   protected readonly formatDayMonthYear = formatDayMonthYear;
   readonly auth = inject(AuthService);
+  protected readonly theme = inject(ThemeService);
+  protected readonly themeOptions: { value: ThemePreference; label: string; icon: LucideIconData }[] = [
+    { value: 'system', label: 'Системная', icon: Monitor },
+    { value: 'light', label: 'Светлая', icon: Sun },
+    { value: 'dark', label: 'Тёмная', icon: Moon },
+  ];
   private readonly toast = inject(ToastService);
 
   readonly busy = signal(false);

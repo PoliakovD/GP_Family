@@ -37,20 +37,20 @@
   padding: var(--space-3);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
-  background: var(--color-paper);
+  background: var(--color-surface);
 }
 
 .rd-hint {
   margin: 0 0 var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
   font: var(--text-caption);
 }
 
 .rd-warn {
   margin: 0 0 var(--space-2);
-  color: var(--color-status-danger-text);
+  color: var(--color-danger);
   font: var(--text-caption);
 }
 
@@ -66,11 +66,11 @@
   margin-bottom: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
 }
 
 .rd-confidence-low {
-  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
 }
 
 .rd-confidence-value {
@@ -99,7 +99,7 @@
   text-align: left;
   font: inherit;
   color: inherit;
-  background: var(--color-paper);
+  background: var(--color-surface);
   border-style: dashed;
 
   &:hover:not(:disabled) {
@@ -113,15 +113,15 @@
 
 .rd-choice-active {
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 }
 
 .rd-diff {
   margin-bottom: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-status-warning);
-  background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-paper));
+  border: 1px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
 }
 
 .rd-diff-row {
@@ -132,8 +132,8 @@
   margin-top: var(--space-1);
 }
 
-.rd-diff-before { color: var(--color-status-danger-text); }
-.rd-diff-after { color: var(--color-status-ok-text); }
+.rd-diff-before { color: var(--color-danger); }
+.rd-diff-after { color: var(--color-success); }
 
 .rd-provenance {
   display: grid;

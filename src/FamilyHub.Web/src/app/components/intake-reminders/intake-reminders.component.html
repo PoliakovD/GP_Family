@@ -5,18 +5,18 @@
       <button type="button" class="btn-link" (click)="load()">Повторить</button>
     </div>
   } @else if (loading() && !settings()) {
-    <p class="muted">Загружаем…</p>
+    <p class="form-hint">Загружаем…</p>
   } @else if (settings(); as s) {
     <p class="ir-intro">Повтор напоминания, порог пропуска и запас в аптечке задаются в каждом курсе — у разных лекарств они разные.</p>
 
     <section>
       <div class="ir-kicker">Кто узнает о моих пропусках</div>
-      <p class="muted ir-note" style="margin-top:-4px">
+      <p class="form-hint ir-note" style="margin-top:-4px">
         Выбранный человек заодно получает доступ на чтение к вашим курсам приёма — отдельно
         отозвать только доступ, оставив уведомления, можно в Настройках → «Кто видит моё здоровье».
       </p>
       @if (s.myWatchers.length === 0) {
-        <p class="muted ir-note">Пригласите близких в семью — и вы сможете выбрать, кому сообщать, если вы не отметили приём.</p>
+        <p class="form-hint ir-note">Пригласите близких в семью — и вы сможете выбрать, кому сообщать, если вы не отметили приём.</p>
       } @else {
         <ul class="ir-list">
           @for (w of s.myWatchers; track w.userId) {
@@ -36,7 +36,7 @@
     <section>
       <div class="ir-kicker">Я слежу за курсами</div>
       @if (s.watching.length === 0) {
-        <p class="muted ir-note">Пока не за кем: здесь появятся подопечные вашей семьи и близкие, которые выбрали вас наблюдателем.</p>
+        <p class="form-hint ir-note">Пока не за кем: здесь появятся подопечные вашей семьи и близкие, которые выбрали вас наблюдателем.</p>
       } @else {
         <ul class="ir-list">
           @for (w of s.watching; track w.kind + w.id) {
@@ -98,12 +98,12 @@
             <label>до <input class="input" type="time" [value]="quietTo()" (change)="quietTo.set($any($event.target).value); saveQuiet()" /></label>
           </div>
         }
-        <p class="ir-note muted">Уведомления приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
+        <p class="ir-note form-hint">Уведомления приходят, но без звука. В Telegram тихие часы пока не действуют.</p>
       </div>
     </section>
 
     @if (s.timeZoneId) {
-      <p class="ir-note muted"><app-icon [icon]="icons.Globe" [size]="18" /> Часовой пояс: {{ timeZoneLabel(s.timeZoneId) }} — время приёма считается в нём.</p>
+      <p class="ir-note form-hint"><app-icon [icon]="icons.Globe" [size]="18" /> Часовой пояс: {{ timeZoneLabel(s.timeZoneId) }} — время приёма считается в нём.</p>
     }
 
     <button type="button" class="btn btn-secondary ir-done" (click)="closed.emit()">Готово</button>

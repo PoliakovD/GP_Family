@@ -6,17 +6,14 @@ export interface SparklinePoint {
   flag: number; // IndicatorFlag
 }
 
-// Редизайн v2 — дублирует --color-status-* из styles.scss (канонический источник —
-// medications-panel.component.scss). Хардкод намеренный: SVG рисуется в TS, а
-// getComputedStyle() на каждый рендер спарклайна — лишний layout ради константы, которая
-// меняется на порядки реже, чем рендерится график (тот же приём, что PASSWORD_PATTERN
-// зеркалит PasswordRules). При смене любого --color-status-* — поправить и здесь.
+// Цвет точки по смыслу (DESIGN §1 п.2): вне нормы (ниже/выше/критично) — danger, норма — success,
+// нет оценки — muted. Токены — через [style.fill]: атрибут fill не понимает var().
 const FLAG_COLOR: Record<number, string> = {
-  0: '#9c36b5', // Unknown — было отдельным #adb5bd, теперь --color-status-none (третье расхождение)
-  1: '#f08c00', // Low — --color-status-warning
-  2: '#2f9e44', // Normal — --color-status-ok
-  3: '#f08c00', // High — --color-status-warning
-  4: '#e03131', // Critical — --color-status-danger
+  0: 'var(--color-text-muted)', // Unknown
+  1: 'var(--color-danger)', // Low
+  2: 'var(--color-success)', // Normal
+  3: 'var(--color-danger)', // High
+  4: 'var(--color-danger)', // Critical
 };
 
 const WIDTH = 240;
@@ -36,14 +33,14 @@ const PADDING = 6;
     @if (points().length > 0) {
       <svg [attr.viewBox]="'0 0 ' + width + ' ' + height" [attr.width]="width" [attr.height]="height" role="img" [attr.aria-label]="ariaLabel()">
         @if (points().length > 1) {
-          <polyline [attr.points]="polylinePoints()" fill="none" stroke="var(--color-accent)" stroke-width="1.5" />
+          <polyline [attr.points]="polylinePoints()" fill="none" [style.stroke]="'var(--color-text-secondary)'" stroke-width="1.5" />
         }
         @for (p of coords(); track $index) {
-          <circle [attr.cx]="p.x" [attr.cy]="p.y" r="3" [attr.fill]="p.color" />
+          <circle [attr.cx]="p.x" [attr.cy]="p.y" r="3" [style.fill]="p.color" />
         }
       </svg>
     } @else {
-      <span class="muted" style="font-size:0.7647rem">Недостаточно данных</span>
+      <span class="form-hint">Недостаточно данных</span>
     }
   `,
 })

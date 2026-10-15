@@ -1,6 +1,6 @@
 <div class="va">
   <div class="va-row">
-    <span class="muted va-label">Кому</span>
+    <span class="form-hint va-label">Кому</span>
     <div class="va-chips">
       @for (s of subjects(); track s.kind + s.id) {
         <button type="button" class="va-chip" [class.va-chip-selected]="s.kind === subjectKind() && s.id === subjectId()" (click)="selectSubject(s)">
@@ -14,15 +14,15 @@
   <div class="va-modes">
     <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'one'" (click)="setMode('one')">
       <app-icon [icon]="icons.Syringe" [size]="18" />
-      <div><div class="va-mode-title">Одна прививка</div><div class="muted va-mode-sub">сделали недавно</div></div>
+      <div><div class="va-mode-title">Одна прививка</div><div class="form-hint va-mode-sub">сделали недавно</div></div>
     </button>
     <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'bulk'" (click)="setMode('bulk')">
       <app-icon [icon]="icons.ListChecks" [size]="18" />
-      <div><div class="va-mode-title">Отметить по календарю</div><div class="muted va-mode-sub">прошлые, сразу много</div></div>
+      <div><div class="va-mode-title">Отметить по календарю</div><div class="form-hint va-mode-sub">прошлые, сразу много</div></div>
     </button>
     <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'certificate'" (click)="setMode('certificate')">
       <app-icon [icon]="icons.Camera" [size]="18" />
-      <div><div class="va-mode-title">Фото сертификата</div><div class="muted va-mode-sub">распознаем сами</div></div>
+      <div><div class="va-mode-title">Фото сертификата</div><div class="form-hint va-mode-sub">распознаем сами</div></div>
     </button>
   </div>
 
@@ -38,7 +38,7 @@
             @for (m of matches(); track m.code) {
               <button type="button" class="va-suggestion" (click)="pickSeries(m)">
                 <div class="va-suggestion-name">{{ m.name }}</div>
-                <div class="muted va-suggestion-sub">{{ m.group === Group.Epidemic ? 'по эпидпоказаниям' : m.diseases.join(', ') }}</div>
+                <div class="form-hint va-suggestion-sub">{{ m.group === Group.Epidemic ? 'по эпидпоказаниям' : m.diseases.join(', ') }}</div>
               </button>
             }
           </div>
@@ -51,7 +51,7 @@
           <input class="input" type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
         </div>
         <div class="flex-fill" style="flex:1.3">
-          <div class="form-label">Вакцина <span class="muted">— необязательно</span></div>
+          <div class="form-label">Вакцина <span class="form-hint">— необязательно</span></div>
           <input class="input" [ngModel]="vaccineName()" (ngModelChange)="vaccineName.set($event)" placeholder="Название препарата" />
         </div>
       </div>
@@ -76,7 +76,7 @@
 
   @if (mode() === 'bulk') {
     <div class="va-body">
-      <p class="muted va-bulk-hint">
+      <p class="form-hint va-bulk-hint">
         Отметьте, что точно было. Дату можно не указывать — достаточно «было». Если не помните — оставьте
         пустым, это не станет «просрочкой».
       </p>
@@ -92,7 +92,7 @@
               </button>
               <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
               @if (row.alreadyDone) {
-                <span class="muted va-cal-value">—</span>
+                <span class="form-hint va-cal-value">—</span>
               } @else {
                 <div class="va-cal-actions">
                   <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'unknown'" (click)="setChoice(row, 'unknown')">не помню</button>
@@ -117,7 +117,7 @@
               </button>
               <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
               @if (row.alreadyDone) {
-                <span class="muted va-cal-value">{{ row.doneDate ? row.doneDate.slice(0, 4) : '—' }}</span>
+                <span class="form-hint va-cal-value">{{ row.doneDate ? row.doneDate.slice(0, 4) : '—' }}</span>
               } @else if (choiceOf(row) === 'done') {
                 <input class="input va-cal-year" type="text" inputmode="numeric" maxlength="4" placeholder="год"
                        [ngModel]="yearOf(row)" (ngModelChange)="setYear(row, $event)" />
@@ -130,7 +130,7 @@
       }
 
       <div class="va-footer">
-        <span class="muted flex-fill">Отмечено {{ bulkCount() }}</span>
+        <span class="form-hint flex-fill">Отмечено {{ bulkCount() }}</span>
         <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
         <button type="button" class="btn btn-primary" [disabled]="busy() || bulkCount() === 0" (click)="submitBulk()">
           Сохранить {{ bulkCount() }}
@@ -160,10 +160,10 @@
       } @else if (certStage() === 'recognizing') {
         <div class="va-progress">
           <div class="va-progress-bar"><span [style.width.%]="certProgress()"></span></div>
-          <p class="muted">Загружаем и распознаём фото…</p>
+          <p class="form-hint">Загружаем и распознаём фото…</p>
         </div>
       } @else if (certStage() === 'review' || certStage() === 'saving') {
-        <p class="muted">
+        <p class="form-hint">
           Нашли {{ certItems().length }} записей. Распознано автоматически — сверьте с сертификатом,
           особенно строки с пометкой «проверьте».
         </p>
@@ -193,9 +193,9 @@
             </div>
           }
         </div>
-        <p class="muted va-bulk-hint">Фото сохранится как файл у каждой найденной прививки.</p>
+        <p class="form-hint va-bulk-hint">Фото сохранится как файл у каждой найденной прививки.</p>
         <div class="va-footer">
-          <span class="muted flex-fill">Отмечено {{ certChecked() }}</span>
+          <span class="form-hint flex-fill">Отмечено {{ certChecked() }}</span>
           <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
           <button type="button" class="btn btn-primary" [disabled]="certStage() === 'saving' || certChecked() === 0" (click)="confirmCertificate()">
             Сохранить {{ certChecked() }}

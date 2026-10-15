@@ -3,8 +3,8 @@
 // план перехода: docs/redesign/PLAN.md (фаза 1). Литералы цвета, кегля, отступов, радиусов и теней
 // в компонентах запрещены — только эти токены.
 //
-// Блок «Совместимость» ниже — старые имена (палитра «бумажной» темы v2), сведённые к новым ролям.
-// Они нужны, пока экраны не переведены (фаза 4), и удаляются её последним PR.
+// Тёмная тема — те же роли (mixin dark-tokens): по prefers-color-scheme либо data-theme на <html>
+// (выбор в «Профиль → Аккаунт → Оформление», ThemeService). Кегли — rem от html{font-size:100%}.
 // ============================================================================
 :root {
   color-scheme: light;
@@ -63,28 +63,28 @@
   --color-scrim: #17191C;
   --color-on-scrim: #FFFFFF;
 
-  // --- Типографика (DESIGN §2.3). Кегли в px, пока html{font-size} fluid (см. PLAN.md, п. 1.3) ---
+  // --- Типографика (DESIGN §2.3). Кегли в rem от html{font-size: 100%} — масштабируются системной настройкой ---
   --font-body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; // ключи, коды, промпты
   --font-heading: var(--font-body);
   --font-heading-weight: 600;
 
-  --text-display: 700 34px/1.15 var(--font-body);
-  --text-display-mobile: 700 28px/1.15 var(--font-body);
-  --text-metric-xl: 700 40px/1.05 var(--font-body);
-  --text-metric: 700 34px/1.1 var(--font-body);
-  --text-metric-mobile: 700 28px/1.1 var(--font-body);
-  --text-title: 600 19px/1.3 var(--font-body);
-  --text-title-mobile: 600 17px/1.3 var(--font-body);
-  --text-body-lg: 400 17px/1.5 var(--font-body);
-  --text-body: 400 16px/1.45 var(--font-body);
-  --text-body-sm: 400 15px/1.45 var(--font-body);
-  --text-caption: 400 14px/1.4 var(--font-body);
-  --text-micro: 600 12px/1.3 var(--font-body);
+  --text-display: 700 2.125rem/1.15 var(--font-body);
+  --text-display-mobile: 700 1.75rem/1.15 var(--font-body);
+  --text-metric-xl: 700 2.5rem/1.05 var(--font-body);
+  --text-metric: 700 2.125rem/1.1 var(--font-body);
+  --text-metric-mobile: 700 1.75rem/1.1 var(--font-body);
+  --text-title: 600 1.1875rem/1.3 var(--font-body);
+  --text-title-mobile: 600 1.0625rem/1.3 var(--font-body);
+  --text-body-lg: 400 1.0625rem/1.5 var(--font-body);
+  --text-body: 400 1rem/1.45 var(--font-body);
+  --text-body-sm: 400 0.9375rem/1.45 var(--font-body);
+  --text-caption: 400 0.875rem/1.4 var(--font-body);
+  --text-micro: 600 0.75rem/1.3 var(--font-body);
   --letter-spacing-display: -0.02em;
   // Производные (DESIGN §3): кнопки/вкладки — body-sm 600, бейджи — 13px 600.
-  --text-button: 600 15px/1.2 var(--font-body);
-  --text-badge: 600 13px/1.3 var(--font-body);
+  --text-button: 600 0.9375rem/1.2 var(--font-body);
+  --text-badge: 600 0.8125rem/1.3 var(--font-body);
   --control-height: 46px; // кнопки и поля; в тулбарах — --tap-min (44)
   --icon-size: 20px;      // DESIGN §2.7: 20 (в плитках 20–22)
   --icon-size-sm: 18px;   // в кнопках и строках действий
@@ -128,70 +128,11 @@
   --z-dialog: 600;    // подтверждение — всегда над любым окном
   --z-toast: 1000;    // уведомления
 
-  // ==========================================================================
-  // Совместимость: старые имена → новые роли. Удаляются в последнем PR фазы 4.
-  // ==========================================================================
-  --color-paper: var(--color-surface);
-  --color-control-border: var(--color-border);
-
-  --color-neutral-100: var(--color-surface-muted);
-  --color-neutral-200: var(--color-divider);
-  --color-neutral-300: var(--color-border);
-  --color-neutral-400: var(--color-border-dashed);
-  --color-neutral-500: var(--color-text-muted);
-  --color-neutral-600: var(--color-text-muted);
-  --color-neutral-700: var(--color-text-muted);
-  --color-neutral-800: var(--color-text-secondary);
-  --color-neutral-900: var(--color-text);
-
-  --color-accent-100: var(--color-accent-soft);
-  --color-accent-200: var(--color-accent-soft);
-  --color-accent-300: color-mix(in srgb, var(--color-accent) 35%, var(--color-surface));
-  --color-accent-400: color-mix(in srgb, var(--color-accent) 60%, var(--color-surface));
-  --color-accent-500: var(--color-accent);
-  --color-accent-600: var(--color-accent-hover);
-  --color-accent-700: var(--color-accent-hover);
-  --color-accent-800: var(--color-accent-hover);
-  --color-accent-900: var(--color-accent-hover);
-
-  // Пурпурный «второй акцент» служил ошибкам и счётчикам — по DESIGN §2.1 ошибки = danger.
-  --color-accent-2: var(--color-danger);
-  --color-accent-2-100: var(--color-danger-soft);
-  --color-accent-2-200: var(--color-danger-soft);
-  --color-accent-2-300: var(--color-danger);
-  --color-accent-2-400: var(--color-danger);
-  --color-accent-2-500: var(--color-danger);
-  --color-accent-2-600: var(--color-danger);
-  --color-accent-2-700: var(--color-danger);
-  --color-accent-2-800: var(--color-danger);
-  --color-accent-2-900: var(--color-danger);
-
-  --color-status-ok: var(--color-success);
-  --color-status-ok-text: var(--color-success);
-  --color-status-warning: var(--color-warning);
-  --color-status-warning-text: var(--color-warning);
-  --color-status-danger: var(--color-danger);
-  --color-status-danger-text: var(--color-danger);
-  --color-status-none: var(--color-text-muted);
-
-  --color-kind-symptom-text: var(--color-kind-symptom);
-  --color-kind-metric: var(--color-kind-measure);
-  --color-kind-wellbeing: var(--color-kind-mood);
-  --color-kind-wellbeing-text: var(--color-kind-mood);
-
-  --font-size-body: 1rem;
-  --font-size-meta: 0.8824rem;
-  --font-size-record-title: 1.1176rem;
-
-  --shadow-sm: none;
-  --shadow-md: var(--shadow-overlay);
-  --shadow-lg: var(--shadow-overlay);
 }
 
-// Тёмная тема (DESIGN §2.2). Пока только по явному data-theme="dark": на ещё не переведённых
-// экранах остались color-mix() и литералы, рассчитанные на светлый фон (PLAN.md, п. 1.1).
-// Системная тема (prefers-color-scheme) включается последним PR фазы 4.
-:root[data-theme="dark"] {
+// Тёмная тема (DESIGN §2.2): по системной настройке (prefers-color-scheme) либо явно выбранная в профиле
+// (data-theme на <html>, см. ThemeService). data-theme="light" принудительно оставляет светлую.
+@mixin dark-tokens {
   color-scheme: dark;
 
   --color-bg: #111315;
@@ -242,12 +183,18 @@
   --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { @include dark-tokens; }
+}
+
+:root[data-theme="dark"] { @include dark-tokens; }
+
 // Редизайн v2.1 — единственный источник fluid-масштабирования: 17px на ≤390px (мобильный кегль
 // не мельчает и не двигается с места), дальше растёт вместе с шириной вьюпорта и останавливается
 // на потолке 18.5px уже к ~1070px (то есть на любом обычном десктопе — не «разрастается» сверх
 // этого и на 2560px). clamp() не даёт уйти ниже 17px и на экранах уже 390px.
 html {
-  font-size: clamp(17px, 16.15px + 0.22vw, 18.5px);
+  font-size: 100%; // базовый кегль — системная настройка (16px по умолчанию), --text-* в rem
 }
 
 * {
@@ -258,8 +205,8 @@ body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
+  font: var(--text-body);
   font-family: var(--font-body);
-  font-size: var(--font-size-body);
   line-height: 1.45;
   font-weight: 400;
 }
@@ -275,13 +222,13 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0 0 var(--space-2);
 }
 
-h1 { font-size: 2.4706rem; }
-h2 { font-size: 1.8824rem; }
-h3 { font-size: 1.4706rem; }
-h4 { font-size: 1.1765rem; }
-h5 { font-size: 1rem; }
-h6 { font-size: 1rem; } // редизайн v2: было 15px
-
+h1 { font: var(--text-display); }
+h2 { font: var(--text-display-mobile); }
+h3 { font: var(--text-title); }
+h4 { font: var(--text-title-mobile); }
+h5 { font: var(--text-body); }
+h6 { font: var(--text-body); }
+h5, h6 { font-weight: 600; }
 p {
   margin: 0 0 var(--space-4);
 }
@@ -300,12 +247,6 @@ a {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
-.hr {
-  height: 1px;
-  border: 0;
-  margin: var(--space-5) 0;
-  background: var(--color-divider);
-}
 
 // ============================================================================
 // Кнопки (DESIGN §3 «Кнопки»). Одна primary на странице, редкие действия — в меню «⋯».
@@ -428,12 +369,6 @@ a {
 }
 
 // Иконочная кнопка на тёмной подложке (просмотр файла).
-.btn-icon-on-scrim {
-  color: var(--color-on-scrim);
-
-  &:hover { background: color-mix(in srgb, var(--color-on-scrim) 15%, transparent); }
-  &:active { background: color-mix(in srgb, var(--color-on-scrim) 25%, transparent); }
-}
 
 // Текстовая ссылка-кнопка (вторичное действие форм: «Отмена», «Повторить»). Используется сама
 // по себе, без .btn — поэтому свой сброс нативного вида <button>.
@@ -494,10 +429,6 @@ a {
   }
 }
 
-.btn-lg {
-  min-height: 52px;
-  padding: 0 var(--space-6);
-}
 
 // ============================================================================
 // Поля ввода (DESIGN §3 «Поля»). Ошибка — рамка и подсказка danger; поле связывается с подсказкой
@@ -728,7 +659,7 @@ select.input {
     height: 17px;
     border-radius: 50%;
     background: var(--color-on-scrim); // ручка переключателя — белая в обеих темах
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
     transition: transform 0.15s ease;
   }
 }
@@ -756,12 +687,6 @@ select.input {
 }
 
 // Вложенная карточка внутри surface (карточка анализа в чате) — единственный случай рамки.
-.card-nested {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
 
 // Список в карточке: заголовок секции + строки через divider с отступами 24 по бокам.
 .list-card {
@@ -784,14 +709,6 @@ select.input {
   @media (max-width: 639px) { padding: var(--space-4) var(--space-4) var(--space-1); }
 }
 
-.list-card > .list-row,
-.list-card-body > .list-row {
-  padding: var(--space-3) var(--space-6);
-
-  & + .list-row { border-top: 1px solid var(--color-divider); }
-
-  @media (max-width: 639px) { padding: var(--space-3) var(--space-4); }
-}
 
 // Строка-кнопка в list-card (справочник и т.п.): заголовок 16/600 + подпись 14 muted → шеврон; ≥ 56px.
 .list-row-btn {
@@ -897,16 +814,12 @@ select.input {
 }
 
 // Тени у карточек по DESIGN не используются; классы оставлены для совместимости (фаза 4 уберёт).
-.elev-sm { box-shadow: var(--shadow-sm); }
-.elev-md { box-shadow: var(--shadow-md); }
-.elev-lg { box-shadow: var(--shadow-lg); }
+.elev-md { box-shadow: var(--shadow-overlay); }
 
 // ============================================================================
 // Бейджи (DESIGN §3 «Бейдж»): пилюля 13/600, фон *-soft, текст — основной цвет статуса.
-// .tag — прежнее имя того же элемента (112 мест), .badge — новое; тона совпадают.
 // ============================================================================
-.badge,
-.tag {
+.badge {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -920,12 +833,11 @@ select.input {
   @media (max-width: 639px) { padding: 3px var(--space-2); }
 }
 
-.badge-neutral, .tag-neutral { background: var(--color-kind-note-soft); color: var(--color-text-secondary); }
-.badge-accent, .tag-accent { background: var(--color-accent-soft); color: var(--color-accent-hover); }
-.badge-danger, .tag-danger, .tag-accent-2 { background: var(--color-danger-soft); color: var(--color-danger); }
-.badge-warning, .tag-warning { background: var(--color-warning-soft); color: var(--color-warning); }
-.badge-success, .tag-ok { background: var(--color-success-soft); color: var(--color-success); }
-.tag-outline { background: transparent; border: 1px solid var(--color-accent); color: var(--color-accent); }
+.badge-neutral { background: var(--color-kind-note-soft); color: var(--color-text-secondary); }
+.badge-accent { background: var(--color-accent-soft); color: var(--color-accent-hover); }
+.badge-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge-success { background: var(--color-success-soft); color: var(--color-success); }
 
 // Чип-действие (DESIGN §3 «Чип»): пилюля 32px (на тач — 44) surface-muted + рамка, иконка 16 → текст
 // → опц. «×». Снимаемое состояние: «🔒 залочено — снять» в справочнике админки.
@@ -951,8 +863,7 @@ select.input {
 
 // Счётчик (DESIGN §3 «count-badge»): круг ≥ 20px, 12/600, danger (требует внимания) или accent
 // (непрочитанное), текст on-accent.
-.count-badge,
-.nav-badge {
+.count-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -992,20 +903,20 @@ select.input {
 .tone-warm { --tone-fg: var(--color-avatar-warm-text); --tone-bg: var(--color-avatar-warm); }
 
 // Строка таблицы очереди: ниже порога — красноватый фон, курсор клавиатурной навигации — рамка слева.
-.table tbody tr.row-danger { background: color-mix(in srgb, var(--color-status-danger) 8%, transparent); }
+.table tbody tr.row-danger { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
 .table tbody tr.row-cursor { box-shadow: inset 3px 0 0 var(--color-accent); }
 
 // Поле, отличающееся от текущей записи справочника (редактор payload в очереди «Одобрение»).
 .input-diff {
-  border-color: var(--color-status-warning);
-  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-surface));
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
 }
 
 // Поле без источника (модель не указала, откуда значение) — жёлтая подсветка, заметнее, чем .input-diff.
 .input-warn {
-  border-color: var(--color-status-warning);
-  background: color-mix(in srgb, var(--color-status-warning) 22%, var(--color-surface));
-  box-shadow: 0 0 0 1px var(--color-status-warning);
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 22%, var(--color-surface));
+  box-shadow: 0 0 0 1px var(--color-warning);
 }
 
 // §5 плана «живой конвейер» — глобальная копия shared/pipeline-progress/pipeline-progress.
@@ -1113,18 +1024,15 @@ select.input {
 // Утилиты — компактная замена Bootstrap-утилит, использующихся в шаблонах.
 // ============================================================================
 .d-flex { display: flex; }
-.d-block { display: block; }
 .d-inline-flex { display: inline-flex; }
 .flex-column { flex-direction: column; }
 .flex-fill { flex: 1 1 auto; }
 .flex-wrap { flex-wrap: wrap; }
-.flex-shrink-0 { flex-shrink: 0; }
 .align-items-center { align-items: center; }
 .align-items-start { align-items: flex-start; }
 .align-self-start { align-self: flex-start; }
 .justify-content-between { justify-content: space-between; }
 .justify-content-end { justify-content: flex-end; }
-.justify-content-center { justify-content: center; }
 
 .gap-1 { gap: var(--space-1); }
 .gap-2 { gap: var(--space-2); }
@@ -1136,20 +1044,12 @@ select.input {
 .mb-3 { margin-bottom: var(--space-4); }
 .mt-1 { margin-top: var(--space-1); }
 .mt-2 { margin-top: var(--space-2); }
-.mt-3 { margin-top: var(--space-4); }
-.me-2 { margin-right: var(--space-2); }
-.ms-2 { margin-left: var(--space-2); }
 // Ниже — классы, которые шаблоны уже использовали (Настройки, нижний лист, админка), но которых
 // здесь не было: отступы/обрезка тихо не применялись.
-.gap-4 { gap: var(--space-5); }
 .mb-4 { margin-bottom: var(--space-5); }
-.mt-4 { margin-top: var(--space-5); }
-.ms-auto { margin-left: auto; }
 .mx-auto { margin-left: auto; margin-right: auto; }
 .flex-grow-1 { flex-grow: 1; }
 
-.p-3 { padding: var(--space-4); }
-.py-2 { padding-top: var(--space-3); padding-bottom: var(--space-3); }
 
 .w-100 { width: 100%; }
 .text-pre-wrap { white-space: pre-wrap; }
@@ -1160,21 +1060,15 @@ select.input {
 .overflow-x-auto { overflow-x: auto; }
 .text-nowrap { white-space: nowrap; }
 .text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.text-decoration-none { text-decoration: none; }
-.text-danger { color: var(--color-status-danger-text); }
+.text-danger { color: var(--color-danger); }
 .text-center { text-align: center; }
-.text-end { text-align: right; }
-.text-muted { color: var(--color-neutral-600); }
-.text-primary { color: var(--color-accent); }
+.text-muted { color: var(--color-text-muted); }
 .fw-semibold { font-weight: 600; }
-.fw-normal { font-weight: 400; }
-.align-middle { vertical-align: middle; }
-.list-unstyled { list-style: none; margin: 0; padding: 0; }
 
 .form-label {
   display: block;
-  font-size: 0.8235rem; // было 12px
-  color: var(--color-neutral-700);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
   margin-bottom: var(--space-1);
 }
 
@@ -1194,32 +1088,8 @@ select.input {
 // ============================================================================
 // Совместимость с общими элементами шаблонов (мелкий хинт-текст, строка "имя + теги").
 // ============================================================================
-.muted {
-  color: var(--color-neutral-600);
-  font-size: 0.8235rem; // было 12px — основной вспомогательный текст приложения
-  margin: 0;
-}
-
 // Строка "название + теги" (списки семей и т.п.) — длинное название обрезается многоточием,
 // теги никогда не сжимаются и не уезжают за край экрана на узких мобильных вьюпортах.
-.name-with-tags {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-
-  strong {
-    font-family: var(--font-heading);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  > span:last-child {
-    flex-shrink: 0;
-  }
-}
 
 .alert-danger,
 .alert-info,
@@ -1342,14 +1212,14 @@ select.input {
   }
 
   app-icon {
-    color: var(--color-neutral-600);
+    color: var(--color-text-muted);
   }
 }
 
 .file-chip-name {
-  font-size: 0.7647rem;
+  font: var(--text-badge);
   line-height: 1.2;
-  color: var(--color-neutral-700);
+  color: var(--color-text-muted);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1376,7 +1246,7 @@ select.input {
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-scrim) 65%, transparent);
   color: var(--color-on-scrim);
-  font-size: 0.7059rem;
+  font: var(--text-micro);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -1391,7 +1261,7 @@ select.input {
   position: absolute;
   bottom: 3px;
   right: 3px;
-  font-size: 0.8235rem;
+  font: var(--text-caption);
   color: var(--color-accent);
   background: var(--color-bg);
   border-radius: 50%;
@@ -1771,7 +1641,7 @@ select.input {
   gap: var(--space-4);
   width: 100%;
   max-width: 440px;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-overlay);
 
   .auth-shell-wide & { max-width: 720px; }
 
@@ -1900,7 +1770,7 @@ select.input {
   right: var(--space-4);
   bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-banner);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
 
   @media (min-width: 1024px) {
     bottom: var(--space-4);
@@ -2016,6 +1886,7 @@ select.input {
 .form-section { display: flex; flex-direction: column; gap: var(--space-2); }
 .form-section > .form-label { margin: 0; }
 .form-section > .seg { align-self: flex-start; }
+// Вспомогательный текст 14 muted (подсказка под полем, подпись блока); бывший .muted.
 .form-hint { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
 
 // Карточка-переключатель («Распознать бланк»): текст + switch, фон accent-soft.

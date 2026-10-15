@@ -36,13 +36,13 @@
 <ng-template #detail let-s="s">
   <div class="kv-detail">
     @if (s.tradeNames.length > 0) {
-      <div class="muted">Вакцины: {{ s.tradeNames.join(', ') }}</div>
+      <div class="form-hint">Вакцины: {{ s.tradeNames.join(', ') }}</div>
     }
     @if (s.about) { <p>{{ s.about }}</p> }
     @if (s.contraindications) {
       <div>
         <div class="form-label">Противопоказания</div>
-        <p class="muted">{{ s.contraindications }}</p>
+        <p class="form-hint">{{ s.contraindications }}</p>
       </div>
     }
     @if (s.reactionHint) {
@@ -52,10 +52,10 @@
       </div>
     }
     @if (s.repeatEveryYears) {
-      <p class="muted">Ревакцинация каждые {{ s.repeatEveryYears }} лет.</p>
+      <p class="form-hint">Ревакцинация каждые {{ s.repeatEveryYears }} лет.</p>
     }
     @if (s.seasonal) {
-      <p class="muted">Сезонная прививка — актуальна ежегодно в свой сезон.</p>
+      <p class="form-hint">Сезонная прививка — актуальна ежегодно в свой сезон.</p>
     }
   </div>
 </ng-template>

@@ -21,7 +21,7 @@ import { IconComponent } from '../ui/icon/icon.component';
     template: `
     <app-modal title="Пригласить в семью" [open]="open()" (closed)="closed.emit()">
       @if (created(); as invite) {
-        <p class="muted mb-2">
+        <p class="form-hint mb-2">
           Ссылка готова. Отправьте её одному человеку
           @if (invite.maxUses > 1) { (сработает {{ invite.maxUses }} раз) } @else { — она сработает один раз }
           @if (invite.expiresAt) {, действует до {{ formatDate(invite.expiresAt) }}}.
@@ -55,7 +55,7 @@ import { IconComponent } from '../ui/icon/icon.component';
           <button class="btn btn-secondary btn-sm" [disabled]="creating()" (click)="create()">Создать ещё одну</button>
         </div>
       } @else {
-        <p class="muted mb-3">
+        <p class="form-hint mb-3">
           Ссылка-приглашение будет действовать одноразово. Отправьте её тому, кого хотите позвать — после
           перехода по ней человек попадёт в список заявок на вступление.
         </p>
@@ -72,11 +72,11 @@ import { IconComponent } from '../ui/icon/icon.component';
     // не получил бы её для копирования вручную.
     .invite-link {
       padding: 8px 12px;
-      background: var(--color-paper);
+      background: var(--color-surface);
       border: 1px solid var(--color-divider);
       border-radius: var(--radius-md);
+      font: var(--text-body-sm);
       font-family: var(--font-mono);
-      font-size: var(--font-size-meta);
       word-break: break-all;
       user-select: all;
     }

@@ -29,6 +29,7 @@ node visual/compare.mjs ../docs/redesign/screens/png .artifacts/shots/after .art
 |---|---|
 | `shots.mjs` | статический сервер + подмена API + снимки экранов из `SCREENS` (full-page) |
 | `fixtures.mjs` | `SCREENS` (имя, маршрут, `only: 'desktop' \| 'mobile'`) и ответы API |
+| `fixtures-admin.mjs` | экраны и ответы API админки (`admin-*`), подключены в `fixtures.mjs` |
 | `compare.mjs` | склейки «A \| B» одноимённых PNG из двух папок |
 
 ## Новый экран
@@ -48,3 +49,14 @@ node visual/compare.mjs ../docs/redesign/screens/png .artifacts/shots/after .art
 - Снимки могут отличаться на отдельные пиксели между прогонами (сглаживание шрифтов). Сравнивайте
   склейки глазами, а не `cmp`.
 - Это проверка вида, а не поведения. Сценарии с настоящим API — в `e2e/tests` (нужен стек).
+
+### Поля экрана
+
+- `only: 'desktop' | 'mobile'` — снимать одну ширину; `prepare(page, vp)` — клики перед снимком;
+  `spinner: true` — не ждать исчезновения спиннера.
+- `anon: true` — человек без сессии (`/api/auth/me` → 401): вход, приглашение, публичный отчёт.
+- `overrides: () => [[метод, регулярка, ответ]]` — свои ответы только для этого экрана (например,
+  активные фоновые задачи).
+
+Ответ фикстуры: объект — тело 200; `{ status: число, body }` — ответ с кодом; `{ rawText, contentType }` —
+не-JSON (HTML политики, PDF отчёта).

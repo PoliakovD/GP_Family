@@ -248,7 +248,7 @@
        шаринга не меняем), группа из одной записи открывает её шторку напрямую (см. openGroupAccess). -->
   @if (groupAccessPickerKey) {
     <app-bottom-sheet title="Изменить доступ" [open]="true" (closed)="closeGroupAccessPicker()">
-      <p class="muted mb-3">Доступ настраивается по каждой записи отдельно — выберите, какую открыть.</p>
+      <p class="form-hint mb-3">Доступ настраивается по каждой записи отдельно — выберите, какую открыть.</p>
       @for (group of groupedItems; track group.key) {
         @if (group.key === groupAccessPickerKey) {
           @for (r of group.records; track r.id) {

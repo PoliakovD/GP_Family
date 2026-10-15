@@ -110,17 +110,17 @@ import { ToastService } from '../../../shared/toast/toast.service';
     .rcp-list, .rcp-snippets { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 55vh; overflow-y: auto; }
     .rcp-cand {
       width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
-      border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper);
+      border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface);
       font: inherit; color: inherit; cursor: pointer;
     }
     .rcp-cand:hover { border-color: var(--color-accent); }
     .rcp-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
     .rcp-bulk { display: flex; gap: 8px; margin-bottom: 4px; }
-    .rcp-snippet { padding: 6px 8px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper); }
+    .rcp-snippet { padding: 6px 8px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface); }
     .rcp-snippet-off { opacity: 0.6; }
     .rcp-snippet-label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
     .rcp-snippet-title { display: block; margin-top: 2px; }
-    .rcp-snippet-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.8235rem; white-space: pre-wrap; }
+    .rcp-snippet-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font: var(--text-caption); white-space: pre-wrap; }
     .rcp-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   `],
 })

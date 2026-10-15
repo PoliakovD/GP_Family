@@ -1,4 +1,4 @@
-import { ApplicationConfig, LOCALE_ID, isDevMode, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, LOCALE_ID, inject, isDevMode, provideAppInitializer, provideZoneChangeDetection } from '@angular/core';
 import { registerLocaleData } from '@angular/common';
 import localeRu from '@angular/common/locales/ru';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration, withXhr } from '@angular/common/http';
@@ -7,6 +7,7 @@ import { AppTitleStrategy } from './services/app-title.strategy';
 import { provideServiceWorker } from '@angular/service-worker';
 import { authInterceptor } from './services/auth.interceptor';
 import { routes } from './app.routes';
+import { ThemeService } from './services/theme.service';
 
 /**
  * Этап 3 (гибридный доступ): SW нужен для PWA — офлайн-старт оболочки + установка на телефон
@@ -26,6 +27,8 @@ export const appConfig: ApplicationConfig = {
     { provide: LOCALE_ID, useValue: 'ru' },
     { provide: TitleStrategy, useClass: AppTitleStrategy },
     provideZoneChangeDetection({ eventCoalescing: true }),
+    // Выбранная в профиле тема (data-theme) — до первого рендера, чтобы не мигала светлая.
+    provideAppInitializer(() => { inject(ThemeService); }),
     // withXsrfConfiguration: CSRF-защита PWA-сессии сверх SameSite=Lax (см. аудит
     // module-review-2026-08-02/01-auth-identity.md, находка 4). Angular сам читает cookie
     // XSRF-TOKEN (выставляется только вместе с PWA-сессией, см. PwaSessionCookieWriter) и
