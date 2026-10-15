@@ -11,6 +11,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- NPOI 2.8+: бинарный релиз под OSMF EULA (бесплатно при выручке < $10k/год), без этого флага
+         NPOI.targets пишет warning на каждой сборке. Принято владельцем 2026-10-15. -->
+    <AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>
   </PropertyGroup>
 
 </Project>

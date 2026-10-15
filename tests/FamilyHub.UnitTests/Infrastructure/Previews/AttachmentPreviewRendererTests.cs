@@ -4,9 +4,7 @@ using FamilyHub.Infrastructure.Previews;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.PixelFormats;
+using FamilyHub.UnitTests.Infrastructure.Documents;
 using SkiaSharp;
 using Xunit;
 
@@ -55,7 +53,7 @@ public class AttachmentPreviewRendererTests
     public async Task RenderAsync_Tiff_ProducesThumbnailAndNormalizedPage()
     {
         // TIFF — браузер сам не отрисует, нужна нормализованная JPEG-страница (см. ImageDownscaler
-        // фолбэк на ImageSharp) в дополнение к миниатюре.
+        // фолбэк на LibTiff.Net) в дополнение к миниатюре.
         var sut = CreateSut();
         var tiff = CreateTiff(600, 400);
 
@@ -121,10 +119,10 @@ public class AttachmentPreviewRendererTests
         gotenberg.CallCount.Should().Be(0);
     }
 
-    // Регрессия к M7 (docs/security/security-audit-2026-10.md): фолбэк ImageSharp только для TIFF —
+    // Регрессия к M7 (docs/security/security-audit-2026-10.md): второй декодер вызывается только для TIFF —
     // испорченная «картинка» другого формата (PoC GHSA-gwg2-r3hj-4w44 — PNG с ICC) до него не доходит.
     [Fact]
-    public async Task RenderAsync_UndecodablePngBytes_DoesNotReachImageSharp_ReturnsUnsupported()
+    public async Task RenderAsync_UndecodablePngBytes_DoesNotReachTiffFallback_ReturnsUnsupported()
     {
         var sut = CreateSut();
         byte[] brokenPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D];
@@ -137,7 +135,7 @@ public class AttachmentPreviewRendererTests
     [Fact]
     public async Task RenderAsync_Heic_NoDecoderAvailable_ReturnsUnsupported()
     {
-        // Ни SkiaSharp (на Linux), ни ImageSharp не декодируют HEIC — тестовые "HEIC-байты" здесь
+        // Ни SkiaSharp (на Linux), ни TIFF-фолбэк не декодируют HEIC — тестовые "HEIC-байты" здесь
         // это вообще не валидное изображение, что и воспроизводит тот же NotSupportedException.
         var sut = CreateSut();
 
@@ -184,13 +182,8 @@ public class AttachmentPreviewRendererTests
         return data.ToArray();
     }
 
-    private static byte[] CreateTiff(int width, int height)
-    {
-        using var image = new Image<Rgba32>(width, height);
-        using var stream = new MemoryStream();
-        image.Save(stream, new TiffEncoder());
-        return stream.ToArray();
-    }
+    private static byte[] CreateTiff(int width, int height) =>
+        TiffTestFactory.CreateRgb(width, height, left: (0, 0, 0), right: (0, 0, 0));
 
     private static byte[] CreateOnePagePdf()
     {

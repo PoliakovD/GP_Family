@@ -1,9 +1,4 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using BitMiracle.LibTiff.Classic;
 using SkiaSharp;
 
 namespace FamilyHub.Infrastructure.Documents;
@@ -18,22 +13,27 @@ namespace FamilyHub.Infrastructure.Documents;
 /// SkiaSharp — основной декодер (быстрее, уже используется для JPEG/PNG/WEBP), но TIFF у него не
 /// декодируется в принципе (нет такого кодека в ядре Skia ни на одной платформе — SKBitmap.Decode
 /// тихо возвращает null, не бросает), а HEIC — только платформенно, через системный кодек,
-/// которого нет на Linux. Для TIFF есть безопасный фолбэк — SixLabors.ImageSharp: чисто
-/// управляемый декодер (Formats.Tiff — часть ядра пакета, без нативных musl-биндингов). Для HEIC такого
-/// фолбэка нет (декодирование требует HEVC-кодек, которого нет ни у SkiaSharp на Linux, ни у
-/// ImageSharp) — путь через UI это не задевает: фронт всегда конвертирует HEIC в JPEG перед
-/// отправкой (см. shared/util/image-compression.ts); прямая загрузка HEIC мимо веб-клиента
-/// (мобильное API) остаётся Failed/Unsupported с понятной причиной вместо тихого отказа.
+/// которого нет на Linux. Для TIFF есть фолбэк — BitMiracle.LibTiff.NET: чисто управляемый порт
+/// libtiff (без нативных musl-биндингов, лицензия BSD). Раньше фолбэком был SixLabors.ImageSharp,
+/// но его 2.x получил непатченные High-уязвимости, а 4.x требует лицензионный ключ (2026-10-15).
+/// Для HEIC фолбэка нет (декодирование требует HEVC-кодек, которого нет у SkiaSharp на Linux) —
+/// путь через UI это не задевает: фронт всегда конвертирует HEIC в JPEG перед отправкой (см.
+/// shared/util/image-compression.ts); прямая загрузка HEIC мимо веб-клиента (мобильное API)
+/// остаётся Failed/Unsupported с понятной причиной вместо тихого отказа.
 /// </summary>
 public static class ImageDownscaler
 {
-    /// <summary>Конфигурация только с TIFF-кодеком: даже если сигнатура совпала случайно, другие
-    /// декодеры ImageSharp сюда не подключатся.</summary>
-    private static readonly DecoderOptions TiffOnlyDecoderOptions = new()
+    /// <summary>Потолок размера TIFF до декодирования: растр читается целиком в int[] (4 байта на
+    /// пиксель), так что без потолка крошечный файл с заявленными огромными размерами — DoS по
+    /// памяти. 40 Мп ≈ 160 МБ — с запасом больше любого скана A4 в 600 dpi (~35 Мп).</summary>
+    private const long MaxTiffPixels = 40_000_000;
+
+    static ImageDownscaler()
     {
-        Configuration = new Configuration(new TiffConfigurationModule()),
-        SkipMetadata = true,
-    };
+        // По умолчанию LibTiff.Net пишет предупреждения и ошибки разбора в Console — для серверного
+        // процесса это мусор в stdout; о неуспехе сообщают коды возврата, их и проверяем.
+        Tiff.SetErrorHandler(new SilentTiffErrorHandler());
+    }
 
     public static DecodedImage Downscale(byte[] source, int maxDimension, int jpegQuality)
     {
@@ -44,16 +44,15 @@ public static class ImageDownscaler
         }
         catch (ArgumentNullException)
         {
-            // Наблюдаемая особенность этой версии SkiaSharp: для формата без кодека (TIFF всегда,
-            // HEIC без системного кодека) SKCodec.Create возвращает null, а внутренняя перегрузка
+            // Наблюдаемая особенность SkiaSharp: для формата без кодека (TIFF всегда, HEIC без
+            // системного кодека) SKCodec.Create возвращает null, а внутренняя перегрузка
             // SKBitmap.Decode(SKCodec) не проверяет это и бросает ArgumentNullException вместо
             // того, чтобы дать внешней SKBitmap.Decode(byte[]) вернуть null, как документировано.
             // Трактуем как обычный неуспех декодирования — тот же путь, что и настоящий null.
             original = null;
         }
 
-        if (original is null)
-            return DownscaleWithImageSharpFallback(source, maxDimension, jpegQuality);
+        original ??= DecodeTiffFallback(source);
 
         using (original)
         {
@@ -85,45 +84,39 @@ public static class ImageDownscaler
         }
     }
 
-    /// <summary>Покрывает TIFF (SkiaSharp его на Linux не декодирует вовсе). Для форматов, которые
-    /// не декодирует и ImageSharp (практически — только HEIC), бросает тот же
-    /// NotSupportedException, что раньше бросал только сам SkiaSharp-путь — вызывающий код
-    /// (DocumentTextExtractor/AttachmentPreviewRenderer) уже ловит именно этот тип.
+    /// <summary>Покрывает TIFF (SkiaSharp его не декодирует вовсе) — первую страницу многостраничного.
+    /// Для прочих форматов, которые не осилил SkiaSharp (практически — только HEIC), бросает
+    /// NotSupportedException — вызывающий код (DocumentTextExtractor/AttachmentPreviewRenderer)
+    /// ловит именно этот тип.
     ///
-    /// Только TIFF и без метаданных (аудит security-audit-2026-10, M7): так фолбэк сужен с тех пор, как
-    /// ImageSharp 2.x содержал неисправленную DoS через ICC-профиль (GHSA-gwg2-r3hj-4w44). С 4.1.2 она
-    /// исправлена, но сужение оставлено как защита в глубину — ради TIFF фолбэк и существует, а
-    /// SkipMetadata не создаёт ICC-профиль вовсе.</summary>
-    private static DecodedImage DownscaleWithImageSharpFallback(byte[] source, int maxDimension, int jpegQuality)
+    /// Только TIFF по сигнатуре (аудит security-audit-2026-10, M7): фолбэк существует ради TIFF, и
+    /// всё остальное, что не декодировал SkiaSharp (в том числе специально испорченные PNG/JPEG),
+    /// до второго декодера не доходит.</summary>
+    private static SKBitmap DecodeTiffFallback(byte[] source)
     {
         if (!IsTiff(source))
             throw new NotSupportedException("Не удалось декодировать изображение (неподдерживаемый формат).");
 
-        Image<Rgba32> image;
-        try
-        {
-            image = Image.Load<Rgba32>(TiffOnlyDecoderOptions, source);
-        }
-        catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException or ImageFormatException)
-        {
-            throw new NotSupportedException("Не удалось декодировать изображение (неподдерживаемый формат).", ex);
-        }
+        using var tiff = Tiff.ClientOpen("attachment.tif", "r", new MemoryStream(source, writable: false), new TiffStream())
+            ?? throw new NotSupportedException("Не удалось декодировать изображение (повреждённый TIFF).");
 
-        using (image)
-        {
-            var longSide = Math.Max(image.Width, image.Height);
-            if (longSide > maxDimension)
-            {
-                var scale = (double)maxDimension / longSide;
-                var targetWidth = Math.Max(1, (int)Math.Round(image.Width * scale));
-                var targetHeight = Math.Max(1, (int)Math.Round(image.Height * scale));
-                image.Mutate(x => x.Resize(targetWidth, targetHeight));
-            }
+        var width = tiff.GetField(TiffTag.IMAGEWIDTH)?[0].ToInt() ?? 0;
+        var height = tiff.GetField(TiffTag.IMAGELENGTH)?[0].ToInt() ?? 0;
+        if (width <= 0 || height <= 0)
+            throw new NotSupportedException("Не удалось декодировать изображение (повреждённый TIFF).");
+        if ((long)width * height > MaxTiffPixels)
+            throw new NotSupportedException("Изображение слишком большое.");
 
-            using var encoded = new MemoryStream();
-            image.Save(encoded, new JpegEncoder { Quality = jpegQuality });
-            return new DecodedImage(encoded.ToArray(), DocumentContentTypes.Jpeg);
-        }
+        // ReadRGBAImageOriented приводит любую фотометрию/сжатие/битность к 8-битному RGBA.
+        // Пиксель упакован как ABGR в int (R — младший байт), то есть в памяти little-endian это
+        // ровно байты R, G, B, A — раскладка SKColorType.Rgba8888.
+        var raster = new int[width * height];
+        if (!tiff.ReadRGBAImageOriented(width, height, raster, Orientation.TOPLEFT))
+            throw new NotSupportedException("Не удалось декодировать изображение (повреждённый TIFF).");
+
+        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+        System.Runtime.InteropServices.Marshal.Copy(raster, 0, bitmap.GetPixels(), raster.Length);
+        return bitmap;
     }
 
     /// <summary>Сигнатуры TIFF и BigTIFF: II*\0, MM\0*, II+\0, MM\0+.</summary>
@@ -131,4 +124,12 @@ public static class ImageDownscaler
         data.Length >= 4
         && ((data[0] == 'I' && data[1] == 'I' && data[3] == 0 && (data[2] == 42 || data[2] == 43))
             || (data[0] == 'M' && data[1] == 'M' && data[2] == 0 && (data[3] == 42 || data[3] == 43)));
+
+    private sealed class SilentTiffErrorHandler : TiffErrorHandler
+    {
+        public override void WarningHandler(Tiff tif, string method, string format, params object[] args) { }
+        public override void WarningHandlerExt(Tiff tif, object clientData, string method, string format, params object[] args) { }
+        public override void ErrorHandler(Tiff tif, string method, string format, params object[] args) { }
+        public override void ErrorHandlerExt(Tiff tif, object clientData, string method, string format, params object[] args) { }
+    }
 }

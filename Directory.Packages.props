@@ -72,13 +72,14 @@
     <PackageVersion Include="PDFtoImage" Version="5.2.1" />
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
-    <!-- 2.8.x больше не зависит от SixLabors.ImageSharp (перешёл на SkiaSharp). -->
+    <!-- 2.8.x больше не зависит от SixLabors.ImageSharp (перешёл на SkiaSharp). Бинарный релиз идёт
+         под OSMF EULA (плата мейнтейнерам только при выручке >= $10k/год; исходники — Apache 2.0) —
+         принято владельцем 2026-10-15, см. AcceptNPOIOSMFLicense в Directory.Build.props. -->
     <PackageVersion Include="NPOI" Version="2.8.1" />
-    <!-- 4.1.2 — первая версия с патчем High-уязвимостей 2.x (GHSA-j3p4-wp97-rph4, GHSA-j9gm-c75j-xc9q,
-         GHSA-jjfr-hcj7-qf5w) и Moderate (GHSA-gwg2-r3hj-4w44, GHSA-wmxv-xphr-5c9g). С 3.x пакет
-         распространяется под Six Labors Split License, а не Apache 2.0 — решение владельца, 2026-10-15.
-         Используется только как фолбэк-декодер TIFF в ImageDownscaler. -->
-    <PackageVersion Include="SixLabors.ImageSharp" Version="4.1.2" />
+    <!-- Фолбэк-декодер TIFF в ImageDownscaler (SkiaSharp TIFF не умеет). Заменил SixLabors.ImageSharp:
+         у 2.x непатченные High-уязвимости (GHSA-j3p4-wp97-rph4, GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w),
+         а 4.x требует лицензионный ключ на этапе сборки. LibTiff.Net — управляемый порт libtiff, BSD. -->
+    <PackageVersion Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
   </ItemGroup>
 
   <ItemGroup Label="Swagger">
