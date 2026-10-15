@@ -627,6 +627,10 @@ e2e модуля, счётчики аудита по файлам модуля.
    > `EmptyState`. История в шторке — значения с бейджами. Панель справки (`indicator-info`) сделана в 4.3b.
 5. **Отчёты для врача** — `doctor-reports-tab`, `doctor-report-form`, `doctor-report-link-dialog`:
    `.dr-fab` → `Fab`, `.dr-chip-*` → badge. E2E `19-doctor-report`, `22-doctor-report-mobile`.
+   > **Статус: выполнено (4.5.5).** H1 + пояснение; отчёты — один `list-card` (плитка PDF accent-soft с числом
+   > страниц → название + мета → бейдж «Ссылка активна» success / остальные neutral → действия); пустое —
+   > `EmptyState`; на телефоне — `app-fab` вместо полосы во всю ширину. Форма: подписи без CAPS, переключатели —
+   > surface-sunken radius-lg. e2e `22`: кнопка «Сформировать отчёт» по имени (была `.dr-fab`).
 6. **Справочник** — `kb-hub`, `kb-tab`, `kb-analyte-tab`, `kb-vaccines-tab`, `kb-card`: `.kv-search`
    → `SearchField`, `.kv-card` → card.
 

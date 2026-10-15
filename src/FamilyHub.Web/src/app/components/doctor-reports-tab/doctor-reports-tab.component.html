@@ -1,13 +1,13 @@
 <div class="dr-page">
   <div class="dr-head">
     <div class="dr-head-text">
-      <h4 class="mb-1">Отчёты для врача</h4>
-      <p class="muted mb-0">
+      <h1 class="dr-h1">Отчёты для врача</h1>
+      <p class="dr-lead">
         PDF с данными за период — вашими, близкого или питомца. Скачайте его или отправьте врачу ссылку — она перестанет работать в указанный срок.
       </p>
     </div>
     <button type="button" class="btn btn-primary dr-create" (click)="openForm()">
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Сформировать отчёт
+      <app-icon [icon]="icons.Plus" [size]="18" />Сформировать отчёт
     </button>
   </div>
 
@@ -19,22 +19,20 @@
   }
 
   @if (loading() && reports().length === 0) {
-    <p class="muted">Загружаем…</p>
+    <app-loading-spinner />
   } @else if (rows().length === 0 && !loadError()) {
-    <div class="dr-empty">
-      <i class="ph-duotone ph-file-pdf" aria-hidden="true"></i>
-      <h5>Пока нет отчётов</h5>
-      <p class="muted">
-        Соберите анализы, препараты, замеры и жалобы за период в один PDF — врачу будет проще увидеть картину за минуту.
-      </p>
-      <button type="button" class="btn btn-primary" (click)="openForm()">Сформировать первый отчёт</button>
-    </div>
+    <section class="card card-lg">
+      <app-empty-state [icon]="icons.FileText" title="Пока нет отчётов"
+        text="Соберите анализы, препараты, замеры и жалобы за период в один PDF — врачу будет проще увидеть картину за минуту.">
+        <button type="button" class="btn btn-primary" (click)="openForm()">Сформировать первый отчёт</button>
+      </app-empty-state>
+    </section>
   } @else {
-    <ul class="dr-list">
+    <ul class="list-card dr-list">
       @for (row of rows(); track row.report.id) {
         <li class="dr-row">
           <div class="dr-doc" aria-hidden="true">
-            <i class="ph-duotone ph-file-pdf"></i>
+            <app-icon [icon]="icons.FileText" />
             <span>{{ row.report.pageCount }} стр.</span>
           </div>
 
@@ -44,25 +42,23 @@
           </div>
 
           <div class="dr-status">
-            <span class="dr-chip" [class]="'dr-chip dr-chip-' + row.link.tone">
-              <i [class]="row.link.icon" aria-hidden="true"></i> {{ row.link.label }}
-            </span>
+            <span class="badge" [class]="linkBadge(row.link.tone)">{{ row.link.label }}</span>
             <div class="dr-caption">{{ row.link.caption }}</div>
           </div>
 
           <div class="dr-actions">
             @if (row.link.tone === 'active') {
-              <button type="button" class="btn btn-primary btn-sm dr-share" (click)="shareLink(row.report)">Поделиться</button>
+              <button type="button" class="btn btn-primary dr-share" (click)="shareLink(row.report)">Поделиться</button>
             }
             @if (row.primary; as primary) {
-              <button type="button" class="btn btn-secondary btn-sm" [class.dr-hide-narrow]="row.link.tone === 'active'"
+              <button type="button" class="btn btn-secondary" [class.dr-hide-narrow]="row.link.tone === 'active'"
                       (click)="primary.run()">
                 <i [class]="primary.icon" aria-hidden="true"></i> {{ primary.label }}
               </button>
             }
             <button type="button" class="btn btn-secondary dr-download" aria-label="Скачать PDF" title="Скачать PDF"
                     (click)="download(row.report)">
-              <i class="ph ph-download-simple" aria-hidden="true"></i>
+              <app-icon [icon]="icons.Download" [size]="18" />
               <span class="dr-download-text">Скачать PDF</span>
             </button>
             <app-action-menu [actions]="row.actions" label="Действия с отчётом" />
@@ -73,9 +69,7 @@
   }
 
   @if (!isWide()) {
-    <button type="button" class="btn btn-primary dr-fab" (click)="openForm()">
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Сформировать отчёт
-    </button>
+    <app-fab label="Сформировать отчёт" (activated)="openForm()" />
   }
 </div>
 

@@ -1,3 +1,8 @@
+import { Download, FileText, Plus } from 'lucide-angular';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { FabComponent } from '../../shared/ui/fab/fab.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
@@ -14,7 +19,8 @@ import { dayMonthFromIso, blocksLabel, linkView, LinkView, periodTitle, reportUr
 import { shareLink } from '../../shared/util/share-link';
 import { DoctorReportFormComponent } from '../doctor-report-form/doctor-report-form.component';
 import { DoctorReportLinkDialogComponent } from '../doctor-report-link-dialog/doctor-report-link-dialog.component';
-
+
+
 import { saveBlob } from '../../shared/util/save-blob';
 /** «Миша Поляков», «Барсик (кот) — питомец», «обо мне»; null — мой отчёт о себе. */
 function subjectLine(r: DoctorReport): string | null {
@@ -43,6 +49,7 @@ interface ReportRow {
 @Component({
   selector: 'app-doctor-reports-tab',
   imports: [
+    EmptyStateComponent, FabComponent, IconComponent, LoadingSpinnerComponent,
     ActionMenuComponent, BottomSheetComponent, DoctorReportFormComponent, DoctorReportLinkDialogComponent,
     FileViewerComponent, SidePanelComponent,
   ],
@@ -50,6 +57,13 @@ interface ReportRow {
   styleUrl: './doctor-reports-tab.component.scss',
 })
 export class DoctorReportsTabComponent implements OnInit {
+  protected readonly icons = { Download, FileText, Plus };
+
+  /** Статус ссылки бейджем (DESIGN §1): активна — success, истекла/отозвана/нет — neutral. */
+  protected linkBadge(tone: string): string {
+    return tone === 'active' ? 'badge-success' : 'badge-neutral';
+  }
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
