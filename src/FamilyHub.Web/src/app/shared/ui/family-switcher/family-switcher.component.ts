@@ -110,7 +110,7 @@ import { IconComponent } from '../icon/icon.component';
       flex-direction: column;
       padding: var(--space-1);
       background: var(--color-surface);
-      border: 1px solid var(--color-border);
+      border: 1px solid var(--color-divider);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-overlay);
       z-index: var(--z-dropdown);

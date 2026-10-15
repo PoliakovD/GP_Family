@@ -13,7 +13,7 @@
   height: 18px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--color-divider);
   border-top-color: var(--color-accent);
   animation: loading-spinner-rotate 0.7s linear infinite;
 }
