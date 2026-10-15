@@ -16,7 +16,7 @@ import { NotificationStateService } from '../../services/notification-state.serv
     <a routerLink="/notifications" class="btn btn-ghost btn-icon notification-bell" aria-label="Уведомления" title="Уведомления">
       <i class="ph ph-bell" aria-hidden="true"></i>
       @if (notifications.unread() > 0) {
-        <span class="notification-bell-badge">{{ notifications.unread() }}</span>
+        <span class="count-badge notification-bell-badge">{{ notifications.unread() }}</span>
       }
     </a>
   `,

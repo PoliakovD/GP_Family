@@ -33,11 +33,6 @@ const FILTERS: { value: KbChangeTargetValue | null; label: string }[] = [
       </div>
     </div>
   `,
-  styles: [`
-    .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-    .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
-    .seg-opt.active { color: var(--color-on-accent); background: var(--color-accent); }
-  `],
 })
 export class AdminChangesComponent {
   private readonly route = inject(ActivatedRoute);

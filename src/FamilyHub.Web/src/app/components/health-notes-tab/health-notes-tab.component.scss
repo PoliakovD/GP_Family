@@ -228,23 +228,6 @@
 // Нижний лист использует --color-bg, а форма по умолчанию рисует липкий футер на «бумаге».
 .dn-sheet { --dn-surface: var(--color-bg); }
 
-// Сегмент-фильтр собран из <button> (а не label+radio, как глобальный .seg-opt) — сбрасываем нативный
-// вид кнопки и повторяем глобальные разделитель/активное состояние.
-.seg-opt {
-  font: inherit;
-  font-size: 0.7647rem;
-  color: inherit;
-  background: transparent;
-  border: 0;
-
-  & + .seg-opt { border-left: 1px solid var(--color-divider); }
-
-  &.active {
-    color: var(--color-on-accent);
-    background: var(--color-accent);
-  }
-}
-
 // Узкие экраны — в конце файла, чтобы перебить базовые правила строки выше по каскаду.
 @media (max-width: 639px) {
   .dn-sub-inline, .dn-flag-inline { display: none; }

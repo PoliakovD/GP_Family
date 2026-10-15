@@ -18,7 +18,7 @@ import { IndicatorFlag } from '../../models/types';
   standalone: true,
   template: `
     @if (label(); as text) {
-      <span class="status-chip" [class]="chipClass()">
+      <span class="badge status-chip" [class]="chipClass()">
         @if (icon(); as ic) {
           <i [class]="ic" aria-hidden="true"></i>
         }
@@ -34,15 +34,15 @@ export class StatusChipComponent {
 
   chipClass(): string {
     switch (this.flag()) {
+      // DESIGN §1 п.2: вне нормы — только danger (warning — «скоро/выше рекомендуемого», не анализы).
       case IndicatorFlag.Low:
       case IndicatorFlag.High:
-        return 'status-chip-warning';
       case IndicatorFlag.Critical:
-        return 'status-chip-danger';
+        return 'badge-danger';
       case IndicatorFlag.Normal:
-        return 'status-chip-ok';
+        return 'badge-success';
       default:
-        return 'status-chip-unknown';
+        return 'badge-neutral';
     }
   }
 

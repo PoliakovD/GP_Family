@@ -277,6 +277,27 @@ Phosphor (3 веса целиком, 121 разная иконка, ~270 мес�
 
 ## Фаза 2. Базовые компоненты (DESIGN §3)
 
+> **Статус: выполнена.** Что сделано и чем отличается от плана:
+> - Глобальные классы в `styles.scss`: `.btn` (46px, 15/600; + `inverse`, `dashed`, `aria-pressed`, `btn-round`,
+>   `btn-icon-on-scrim`), `.input` (46px, `aria-invalid`, `:disabled`, плейсхолдер text-muted), `.search-input`,
+>   `.seg` (работает на label+radio и на button/a; `.seg-sunken`, `.seg-inverse`), `.card`/`.card-lg`/`.card-nested`/
+>   `.list-card`, `.badge` = `.tag` (тона на `*-soft`), `.count-badge`/`.dot-badge`, `.alert-warning`/`-success`,
+>   `.tone-*`, оверлеи на `radius-2xl` + `shadow-overlay`. 5 локальных копий сброса `.seg-opt` удалены.
+> - `shared/ui/`: `app-icon` (Lucide, своя обёртка: компонент пакета собран под Angular 13), `icon-tile`,
+>   `metric-card`, `task-row`, `nav-row`, `person-row`, `entry-row`, `pill-tabs`, `fab`, `appField`,
+>   `empty-state`, `stat-filter`, части чата (`chat-bubble/-system/-day/-record-card/-composer`).
+> - Обновлены: `Avatar` (палитра DESIGN, размеры xs–xl, вход `self`), `BackLink` (иконка Lucide, `iconOnly`),
+>   `StatusChip` (вне нормы — danger, а не warning), `ReferenceScale` (трек 8, маркер 6×18 с обводкой,
+>   3–97%), `Toast` (success/danger/inverse, кнопки 44px), `LoadingSpinner`, `BottomSheet`, `SidePanel`,
+>   счётчики колокольчика и фоновых задач.
+> - `AttentionCard` **не переписана**: её заменяет `TaskRow`, а подмена — это экран главной (фаза 4.1)
+>   и админки; переписывать компонент, который через одну фазу удаляется, смысла нет.
+> - Сегмент-контрол по умолчанию — surface + рамка: на `bg` утопленный контейнер не виден (DESIGN допускает оба).
+> - Витрина `/dev/ui` (только dev-сборка, `?theme=dark`), снимается стендом (`dev-ui` в `SCREENS`).
+> - Тесты: `shared/ui/ui-components.spec.ts` (aria-hidden/role у иконки, aria-label у FAB, aria-pressed,
+>   tablist/aria-selected, aria-invalid + aria-describedby + role=alert у поля).
+> - Известное до фазы 4: свой аватар на старых экранах не акцентный (им ещё не передают `self`).
+
 Цель — библиотека в `shared/ui/` (новые standalone-компоненты) и обновлённые глобальные классы
 в `styles.scss`. **В этой фазе экраны не переписываются.** Глобальные классы, которые и так
 используются повсюду, меняют вид сразу, а новые компоненты подключаются в фазе 4. Состояния

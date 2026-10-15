@@ -9,7 +9,8 @@ const FAMILY_ID = 'f-polyakov';
 const ME_ID = 'u-daniil';
 const VALERIA_ID = 'u-valeria';
 
-/** Экраны: name — имя файла, path — маршрут, only — только 'desktop' | 'mobile'. */
+/** Экраны: name — имя файла, path — маршрут, only — только 'desktop' | 'mobile',
+ *  spinner — на экране есть постоянный спиннер (не ждать, пока исчезнет). */
 export const SCREENS = [
   { name: 'home', path: '/home' },
   { name: 'health', path: '/health' },
@@ -21,6 +22,8 @@ export const SCREENS = [
   { name: 'notes', path: '/health/notes' },
   { name: 'doctor-reports', path: '/health/reports' },
   { name: 'medkits', path: '/health/medications' },
+  // Витрина компонентов (только dev-сборка, фаза 2 редизайна).
+  { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
 ];
 
 const ME = {

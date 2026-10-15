@@ -1,3 +1,4 @@
+import { isDevMode } from '@angular/core';
 import { Routes } from '@angular/router';
 import { authGuard, consentGuard, profileGuard, guestGuard } from './services/auth.guards';
 import { adminGuard } from './services/admin.guards';
@@ -442,6 +443,15 @@ export const routes: Routes = [
       ),
   },
   // Раньше любой неверный адрес молча уводил на Главную — человек не понимал, почему ссылка «не та».
+  // Витрина компонентов редизайна (docs/redesign/PLAN.md, фаза 2) — только в dev-сборке, без гардов
+  // и без оболочки: проверка вариантов/состояний в светлой и тёмной теме (?theme=dark).
+  ...(isDevMode()
+    ? [{
+        path: 'dev/ui',
+        title: 'Витрина UI',
+        loadComponent: () => import('./components/dev-ui/dev-ui.component').then((m) => m.DevUiComponent),
+      }]
+    : []),
   {
     path: '**',
     title: 'Страница не найдена',
