@@ -73,7 +73,7 @@ import { copyToClipboard } from '../util/clipboard';
       background: var(--color-paper);
       border: 1px solid var(--color-divider);
       border-radius: var(--radius-md);
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-size: var(--font-size-meta);
       word-break: break-all;
       user-select: all;

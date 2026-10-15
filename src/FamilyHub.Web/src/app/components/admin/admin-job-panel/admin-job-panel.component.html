@@ -1,10 +1,10 @@
 @if (loading()) {
-  <p class="text-muted">Загрузка…</p>
+  <app-loading-spinner />
 } @else if (detail()) {
   @let d = detail()!;
   <div class="mb-3">
     <div class="d-flex gap-2 mb-1 align-items-center flex-wrap">
-      <span class="tag" [class.tag-accent-2]="d.status === 'Failed'" [class.tag-accent]="d.status === 'Completed'">
+      <span class="badge" [class.badge-danger]="d.status === 'Failed'" [class.badge-success]="d.status === 'Completed'">
         {{ d.status | adminStatus }}
       </span>
       <strong>{{ d.displayName }}</strong>
@@ -23,7 +23,7 @@
     @if (d.origin || d.force) {
       <p class="text-muted mb-0">
         @if (d.origin) { Откуда: {{ originLabel(d.origin) }} }
-        @if (d.force) { · <span class="tag tag-neutral">принудительно</span> }
+        @if (d.force) { · <span class="badge badge-neutral">принудительно</span> }
       </p>
     }
     @if (d.provider || d.externalSearchAt) {
@@ -43,16 +43,16 @@
   @if (d.status === 'Failed') {
     <div class="alert-danger mb-3">
       <strong>{{ reasonLabel(d.failureReason) ?? 'Причина не определена' }}</strong>
-      @if (d.isTransientFailure) { <span class="tag tag-neutral">временный сбой — повторится сам</span> }
+      @if (d.isTransientFailure) { <span class="badge badge-neutral">временный сбой — повторится сам</span> }
       @if (d.error) {
-        <p class="mb-0" style="white-space: pre-wrap;">{{ d.error }}</p>
+        <p class="mb-0 text-pre-wrap">{{ d.error }}</p>
       }
     </div>
   }
 
   @if (d.searchCache) {
     @let cache = d.searchCache;
-    <div class="card-title" style="font-size: 0.8235rem;">
+    <div class="card-title x-text-caption">
       Сниппеты из кэша ({{ cache.snippets.length }})
     </div>
     <p class="text-muted mb-2">
@@ -79,11 +79,11 @@
               <td>
                 {{ s.domain ?? '—' }}
                 @if (overrideDraftFor(s.url) !== undefined) {
-                  <span class="tag tag-accent-2">черновик</span>
+                  <span class="badge badge-danger">черновик</span>
                 } @else if (s.override !== null) {
-                  <span class="tag tag-neutral">override={{ s.override ? 'вкл' : 'выкл' }}</span>
+                  <span class="badge badge-neutral">override={{ s.override ? 'вкл' : 'выкл' }}</span>
                 } @else if (s.isTrustedByDomain) {
-                  <span class="tag tag-accent">доверен</span>
+                  <span class="badge badge-neutral">доверен</span>
                 }
               </td>
               <td class="text-muted">
@@ -94,7 +94,7 @@
                   <button type="button" class="btn btn-secondary btn-sm"
                           [class.btn-primary]="trustDraft().has(s.domain)"
                           (click)="toggleTrustDomain(s.domain)">
-                    ✚ доверить домен
+                    <app-icon [icon]="icons.Plus" [size]="16" />доверить домен
                   </button>
                 }
               </td>

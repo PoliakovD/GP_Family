@@ -687,6 +687,13 @@ e2e модуля, счётчики аудита по файлам модуля.
 3. **Публичный отчёт** `public-report` (литералы `#2d2b2b`, `#e2e0df`, `#d97700`, аудит §5.1).
 4. **Админка** (26 экранов): по DESIGN §1 п.4 — плотные таблицы в карточках; `.seg-opt`-сбросы →
    `segmented`, `<button class="tag">` ×8 в `admin-catalog` → chip. Отдельный PR (или два).
+   > **Статус: выполнено (4.8.4).** Оболочка: знак + H1 + «Выйти», разделы `.seg`, страницы `.seg-sunken`.
+   > «Требует внимания» — `list-card` из `task-row` (старый `attention-card` удалён). `.table` без CAPS +
+   > `table-card`; сводки — `stat-grid`; фильтры — `toolbar`. `.tag*` → `badge-*` по смыслу во всём приложении
+   > (здоров/задано/найдено — success, ошибка — danger, метки — neutral; accent у статусов убран), кнопки
+   > «🔒 залочено — снять» → `chip` с Lucide. Phosphor, эмодзи-иконки, inline-стили и «Загрузка…» убраны;
+   > литералы в стилях → токены, `--font-mono`. Вход в админку — `app-auth-card`. Стенд: 32 экрана `admin-*`
+   > (`fixtures-admin.mjs`).
 5. **Финальная чистка (последний PR):** удалить старые токены-алиасы (`paper`, `neutral-*`,
    `accent-100…900`, `accent-2-*`, `status-*`, `kind-metric/wellbeing`), `@fontsource/source-serif-4`,
    `@phosphor-icons/web` (3 CSS из `angular.json`), неиспользуемые утилиты (аудит §1), слить

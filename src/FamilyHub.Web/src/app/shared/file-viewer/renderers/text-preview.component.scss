@@ -32,7 +32,7 @@
 
 .text-preview-pre {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.7647rem;
   line-height: 1.5;
   white-space: pre-wrap;

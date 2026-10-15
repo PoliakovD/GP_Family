@@ -1,97 +1,91 @@
-<div class="d-flex gap-2 align-items-center justify-content-end mb-2">
-  @if (loadedAt()) { <span class="text-muted">обновлено в {{ loadedAt() | date: 'HH:mm:ss' }}</span> }
-  <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load(true)">
-    <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновить
-  </button>
-</div>
+<div class="aa">
+  <div class="aa-toolbar">
+    @if (loadedAt()) { <span class="aa-muted">обновлено в {{ loadedAt() | date: 'HH:mm:ss' }}</span> }
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load(true)">
+      <app-icon [icon]="icons.RefreshCw" [size]="16" />Обновить
+    </button>
+  </div>
 
-@if (loading() && !attention()) {
-  <p class="text-muted">Загрузка…</p>
-} @else if (error()) {
-  <div class="alert-danger">{{ error() }}</div>
-} @else if (attention()) {
-  @let a = attention()!;
-  @if (a.reasons.length === 0 && a.droppedDomains.length === 0 && !a.webSearchPaused.isPaused && a.reviewQueue.total === 0) {
-    <div class="card">
-      <div class="card-body">
-        <p class="text-muted mb-0">Падений нет — конвейер обогащения работает штатно.</p>
+  @if (loading() && !attention()) {
+    <app-loading-spinner />
+  } @else if (error()) {
+    <div class="alert-danger" role="alert">{{ error() }}</div>
+  } @else if (attention()) {
+    @let a = attention()!;
+    @if (a.reasons.length === 0 && a.droppedDomains.length === 0 && !a.webSearchPaused.isPaused && a.reviewQueue.total === 0) {
+      <div class="card">
+        <app-empty-state [icon]="icons.CircleCheck" title="Падений нет" text="Конвейер обогащения работает штатно." />
       </div>
-    </div>
-  }
+    }
 
-  @if (a.webSearchPaused.isPaused) {
-    <app-web-search-banner [deferredTotal]="a.webSearchPaused.deferredTotal" />
-  }
+    @if (a.webSearchPaused.isPaused) {
+      <app-web-search-banner [deferredTotal]="a.webSearchPaused.deferredTotal" />
+    }
 
-  @if (a.reviewQueue.total > 0) {
-    <div class="mb-3">
-      <app-attention-card
-        icon="ph-duotone ph-hand-pointing"
-        color="var(--color-status-warning)"
-        title="Ждёт вашего решения"
-        [subtitle]="reviewSubtitle(a.reviewQueue)"
-      >
-        <div actions>
-          <button type="button" class="btn btn-primary btn-sm" (click)="openReview()">Открыть «Одобрение»</button>
-        </div>
-      </app-attention-card>
-    </div>
-  }
+    @if (a.reviewQueue.total > 0) {
+      <div class="list-card">
+        <app-task-row
+          [icon]="icons.Hand"
+          tone="warning"
+          title="Ждёт вашего решения"
+          [subtitle]="reviewSubtitle(a.reviewQueue)"
+          actionLabel="Открыть «Одобрение»"
+          [primary]="true"
+          (action)="openReview()"
+        />
+      </div>
+    }
 
-  @if (a.reasons.length > 0) {
-    <div class="d-flex justify-content-between mb-2" style="align-items: center; flex-wrap: wrap; gap: 8px;">
-      <div class="card-title" style="margin: 0;">Причины отказа</div>
-      @if (hasDuplicates()) {
-        <button type="button" class="btn btn-secondary btn-sm" [disabled]="dedupeBusy()" (click)="dedupeFailed()">
-          Схлопнуть дубли
-        </button>
-      }
-    </div>
-    <div class="mb-3" style="display: grid; gap: 8px;">
-      @for (r of a.reasons; track r.reason) {
-        <app-attention-card
-          icon="ph-duotone ph-warning-circle"
-          color="var(--color-status-danger)"
-          [title]="r.label"
-          [subtitle]="reasonSubtitle(r)"
-        >
-          <div actions>
-            <button type="button" class="btn btn-secondary btn-sm" (click)="openJobs(r.reason, r.byType)">
-              Открыть задачи
+    @if (a.reasons.length > 0) {
+      <section class="section" aria-labelledby="aa-reasons">
+        <div class="aa-section-head">
+          <h2 class="section-title" id="aa-reasons">Причины отказа</h2>
+          @if (hasDuplicates()) {
+            <button type="button" class="btn btn-secondary btn-sm" [disabled]="dedupeBusy()" (click)="dedupeFailed()">
+              Схлопнуть дубли
             </button>
-            @if (r.reason === 'Unclassified') {
-              <button type="button" class="btn btn-danger btn-sm" [disabled]="purgeBusy()" (click)="purgeUnclassified()">
-                Удалить все ({{ r.count }})
-              </button>
-            }
-          </div>
-        </app-attention-card>
-      }
-    </div>
-  }
+          }
+        </div>
+        <div class="list-card">
+          @for (r of a.reasons; track r.reason) {
+            <app-task-row [icon]="icons.CircleAlert" tone="danger" [title]="r.label" [subtitle]="reasonSubtitle(r)">
+              <div actions>
+                <button type="button" class="btn btn-secondary btn-sm" (click)="openJobs(r.reason, r.byType)">
+                  Открыть задачи
+                </button>
+                @if (r.reason === 'Unclassified') {
+                  <button type="button" class="btn btn-danger btn-sm" [disabled]="purgeBusy()" (click)="purgeUnclassified()">
+                    Удалить все ({{ r.count }})
+                  </button>
+                }
+              </div>
+            </app-task-row>
+          }
+        </div>
+      </section>
+    }
 
-  @if (a.droppedDomains.length > 0) {
-    <div class="card">
-      <div class="card-title">Чаще всего отбрасываются</div>
-      <div class="card-body">
-        <p class="text-muted mb-2">
+    @if (a.droppedDomains.length > 0) {
+      <section class="section" aria-labelledby="aa-domains">
+        <h2 class="section-title" id="aa-domains">Чаще всего отбрасываются</h2>
+        <p class="section-text">
           Эти домены встречаются в сниппетах Failed-задач («нет доверенных сниппетов»), но ещё не
           в списке доверенных — добавление разблокирует все задачи темы одним действием.
         </p>
-        <div class="table-responsive">
+        <div class="card table-card">
           <table class="table">
-            <thead><tr><th>Домен</th><th>Тема</th><th>Задач</th><th>Пример</th><th></th></tr></thead>
+            <thead><tr><th>Домен</th><th>Тема</th><th>Задач</th><th>Пример</th><th><span class="visually-hidden">Действие</span></th></tr></thead>
             <tbody>
               @for (d of a.droppedDomains; track d.domain + d.topic) {
                 <tr>
                   <td>{{ d.domain }}</td>
-                  <td class="text-muted">{{ topicLabel(d.topic) }}</td>
+                  <td class="aa-muted">{{ topicLabel(d.topic) }}</td>
                   <td>{{ d.jobCount }}</td>
-                  <td class="text-muted"><a [href]="d.sampleUrl" target="_blank" rel="noopener noreferrer">пример</a></td>
+                  <td><a [href]="d.sampleUrl" target="_blank" rel="noopener noreferrer">пример</a></td>
                   <td>
-                    <button type="button" class="btn btn-primary btn-sm" [disabled]="busyDomain() === d.domain"
+                    <button type="button" class="btn btn-secondary btn-sm text-nowrap" [disabled]="busyDomain() === d.domain"
                             (click)="trustAndRetry(d.domain, d.topic)">
-                      ✚ Доверить и перезапустить
+                      <app-icon [icon]="icons.Plus" [size]="16" />Доверить и перезапустить
                     </button>
                   </td>
                 </tr>
@@ -99,7 +93,7 @@
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+      </section>
+    }
   }
-}
+</div>

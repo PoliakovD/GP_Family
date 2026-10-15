@@ -168,9 +168,9 @@ export function verificationLabel(status: KbVerificationStatusValue, stale = fal
 
 /** Класс тега под статус: непроверенное и устаревшее — предупреждение, проверенное — зелёное. */
 export function verificationTagClass(status: KbVerificationStatusValue, stale = false): string {
-  if (status === KbVerificationStatus.AiUnverified) return 'tag-warning';
-  if (stale) return 'tag-warning';
-  return status === KbVerificationStatus.ManualKnowledge ? 'tag-accent' : 'tag-ok';
+  if (status === KbVerificationStatus.AiUnverified) return 'badge-warning';
+  if (stale) return 'badge-warning';
+  return status === KbVerificationStatus.ManualKnowledge ? 'badge-neutral' : 'badge-success';
 }
 
 const HISTORY_ACTION_LABELS: Record<string, string> = {

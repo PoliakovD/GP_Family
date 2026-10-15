@@ -16,6 +16,7 @@ import { AdminStatusPipe } from '../shared/admin-status.pipe';
 import { AdminTopicState } from '../shared/admin-topic-state';
 import { TopicSwitchComponent } from '../shared/topic-switch.component';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const WARMUP_POLL_INTERVAL_MS = 2000;
 
@@ -29,9 +30,10 @@ const WARMUP_POLL_INTERVAL_MS = 2000;
  */
 @Component({
     selector: 'app-admin-warmup',
-    imports: [FormsModule, DatePipe, AdminStatusPipe, TopicSwitchComponent, WebSearchBannerComponent],
+    imports: [FormsModule, DatePipe, AdminStatusPipe, TopicSwitchComponent, WebSearchBannerComponent, LoadingSpinnerComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './admin-warmup.component.html'
+    templateUrl: './admin-warmup.component.html',
+    styleUrl: './admin-warmup.component.scss',
 })
 export class AdminWarmupComponent implements OnInit, OnDestroy {
   private readonly api = inject(AdminApiService);

@@ -2,10 +2,14 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { AdminApiService, AdminAttention, PipelineJobType, ReviewQueueSummary, WebSearchTopic } from '../../../services/admin-api.service';
-import { AttentionCardComponent } from '../../../shared/attention-card/attention-card.component';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
+import { CircleAlert, CircleCheck, Hand, Plus, RefreshCw } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
+import { EmptyStateComponent } from '../../../shared/ui/empty-state/empty-state.component';
+import { TaskRowComponent } from '../../../shared/ui/task-row/task-row.component';
 
 /** byType-ключи (см. AdminAttentionService.BuildReasonsAsync на бэкенде) — тот же дискриминатор,
  * что PipelineJobType. */
@@ -28,11 +32,14 @@ const TYPE_LABELS: Record<string, string> = {
  */
 @Component({
     selector: 'app-admin-attention',
-    imports: [DatePipe, AttentionCardComponent, WebSearchBannerComponent],
+    imports: [DatePipe, WebSearchBannerComponent, IconComponent, LoadingSpinnerComponent, EmptyStateComponent, TaskRowComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './admin-attention.component.html'
+    templateUrl: './admin-attention.component.html',
+    styleUrl: './admin-attention.component.scss',
 })
 export class AdminAttentionComponent implements OnInit {
+  protected readonly icons = { CircleAlert, CircleCheck, Hand, Plus, RefreshCw };
+
   private readonly api = inject(AdminApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);

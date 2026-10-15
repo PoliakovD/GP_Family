@@ -4,7 +4,7 @@
 .inbox {
   display: grid;
   grid-template-columns: minmax(280px, 340px) 1fr;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: start;
 }
 
@@ -17,7 +17,7 @@
   max-height: calc(100vh - 220px);
   overflow-y: auto;
   position: sticky;
-  top: 8px;
+  top: var(--space-2);
 }
 
 @media (max-width: 900px) {
@@ -27,8 +27,8 @@
 .inbox-bulk {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -40,7 +40,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -53,8 +53,8 @@
 .inbox-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
   cursor: pointer;
 
@@ -85,13 +85,13 @@
 .inbox-row-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
   margin-top: 2px;
-  font-size: 0.7647rem;
+  font: var(--text-badge);
 }
 
 .inbox-row-query {
-  font-size: 0.7647rem;
+  font: var(--text-badge);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -103,8 +103,14 @@
 
 
 kbd {
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--color-divider);
-  border-radius: 4px;
-  font-size: 0.7rem;
+  border-radius: var(--radius-xs);
+  font: var(--text-micro);
 }
+
+// Бывшие inline-стили шаблона.
+.x-text-title { font: var(--text-title); }
+.x-w-auto { width: auto; }
+.x-p-s3 { padding: var(--space-3); }
+.x-mt-s4 { margin-top: var(--space-4); }

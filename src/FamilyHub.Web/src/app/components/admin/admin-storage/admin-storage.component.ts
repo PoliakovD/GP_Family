@@ -1,12 +1,13 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { AdminApiService, AdminStorageStats } from '../../../services/admin-api.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
     selector: 'app-admin-storage',
-    imports: [DatePipe, DecimalPipe],
+    imports: [DatePipe, DecimalPipe, LoadingSpinnerComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './admin-storage.component.html'
+    templateUrl: './admin-storage.component.html',
 })
 export class AdminStorageComponent implements OnInit {
   private readonly api = inject(AdminApiService);

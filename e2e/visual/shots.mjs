@@ -96,7 +96,9 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
       }
       // { rawText } — ответ не JSON (политика конфиденциальности отдаётся как HTML-текст).
       if (typeof result.rawText === 'string') return route.fulfill({ status: 200, contentType: result.contentType ?? 'text/html', body: result.rawText });
-      return route.fulfill({ status: result.status ?? 200, json: result.body ?? result });
+      // { status: число, body } — ответ с кодом (ошибка); иначе сам объект — тело 200 (у данных бывает своё поле status).
+      const wrapped = typeof result.status === 'number' && 'body' in result;
+      return route.fulfill({ status: wrapped ? result.status : 200, json: wrapped ? result.body : result });
     });
     // overrides — свои ответы только для этого экрана (как ROUTES): маршрут, добавленный позже, приоритетнее.
     for (const [m, re, res] of screen.overrides?.() ?? []) {

@@ -5,6 +5,8 @@
 // Неизвестный запрос → undefined → shots.mjs отвечает 404 и печатает его в конце прогона:
 // так видно, какую фикстуру добавить для нового экрана.
 
+import { ADMIN_SCREENS, ADMIN_ROUTES } from './fixtures-admin.mjs';
+
 const FAMILY_ID = 'f-polyakov';
 const ME_ID = 'u-daniil';
 const VALERIA_ID = 'u-valeria';
@@ -102,6 +104,7 @@ export const SCREENS = [
   { name: 'auth-privacy', path: '/privacy', anon: true },
   { name: 'auth-not-found', path: '/no-such-page' },
   { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
+  ...ADMIN_SCREENS,
 ];
 
 const ME = {
@@ -396,6 +399,7 @@ const SEARCH = [
 
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
+  ...ADMIN_ROUTES,
   ['GET', /^\/api\/auth\/me$/, ME],
   ['GET', /^\/api\/consents\/status$/, { accepted: true, version: '1' }],
   ['GET', /^\/api\/consents\/current$/, { version: '2026-03', text: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>' }],

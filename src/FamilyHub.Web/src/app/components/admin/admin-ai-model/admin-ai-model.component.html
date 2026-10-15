@@ -8,14 +8,14 @@
     </p>
 
     @if (modelLoading()) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (modelError()) {
       <div class="alert-danger">{{ modelError() }}</div>
     } @else {
       <p class="mb-2">
         Сейчас активна: <strong>{{ modelEffective() }}</strong>
         @if (!modelActive()) {
-          <span class="tag tag-neutral">по умолчанию (env)</span>
+          <span class="badge badge-neutral">по умолчанию (env)</span>
         }
       </p>
 
@@ -37,7 +37,7 @@
             }
           </select>
         } @else {
-          <input class="input" style="min-width: 320px;" placeholder="id модели (например, prism-ml/bonsai-27b)…"
+          <input class="input x-minw-320px" placeholder="id модели (например, prism-ml/bonsai-27b)…"
                  [ngModel]="modelSelected()" (ngModelChange)="modelSelected.set($event)" />
         }
         <button type="button" class="btn btn-primary btn-sm"
@@ -66,18 +66,18 @@
     </p>
 
     @if (reasoningLoading()) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (reasoningError()) {
       <div class="alert-danger">{{ reasoningError() }}</div>
     } @else {
       <p class="mb-2">
         Сейчас активен: <strong>{{ reasoningLabel(reasoningEffective()) }}</strong>
         @if (reasoningActive() === null) {
-          <span class="tag tag-neutral">по умолчанию (env)</span>
+          <span class="badge badge-neutral">по умолчанию (env)</span>
         }
       </p>
 
-      <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+      <div class="toolbar mb-2">
         <select class="input" aria-label="Уровень размышлений" [ngModel]="reasoningSelected()" (ngModelChange)="reasoningSelected.set($event)">
           @for (o of reasoningOptions; track o.value) {
             <option [ngValue]="o.value">{{ o.label }}</option>

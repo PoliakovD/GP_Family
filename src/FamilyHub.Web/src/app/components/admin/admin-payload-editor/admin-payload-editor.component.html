@@ -1,10 +1,10 @@
-<div class="d-flex justify-content-between mb-2" style="align-items: center; flex-wrap: wrap; gap: 8px;">
+<div class="d-flex justify-content-between mb-2 align-items-center flex-wrap gap-2">
   <div class="seg">
     <button type="button" class="seg-opt" [class.active]="mode() === 'form'" (click)="setMode('form')">Форма</button>
     <button type="button" class="seg-opt" [class.active]="mode() === 'json'" (click)="setMode('json')">JSON</button>
   </div>
   @if (unknownKeyCount > 0) {
-    <span class="tag tag-neutral">{{ unknownKeyCount }} неизвестных ключа сохранятся как есть</span>
+    <span class="badge badge-neutral">{{ unknownKeyCount }} неизвестных ключа сохранятся как есть</span>
   }
 </div>
 
@@ -47,7 +47,7 @@
               [ngModel]="calculationInstructions()" (ngModelChange)="calculationInstructions.set($event); markChanged('calculationInstructions')"></textarea>
 
     <label class="form-label">Что смотрят вместе</label>
-    <p class="text-muted mb-2" style="margin-top: -4px;">
+    <p class="text-muted mb-2 x-mt-neg-s1">
       Добавляется только поиском по справочнику — так ссылка гарантированно ведёт на реальную
       статью, а не на опечатку.
     </p>
@@ -55,32 +55,31 @@
       <div class="d-flex gap-1 mb-2 flex-wrap">
         @for (name of relatedNames(); track name) {
           @let match = relatedMatchFor(name);
-          <span class="tag" [class.tag-accent]="match?.id" [class.tag-neutral]="!match?.id">
+          <span class="badge" [class.badge-success]="match?.id" [class.badge-neutral]="!match?.id">
             @if (match?.id) {
               <button type="button" class="btn-link" (click)="openRelatedChip(name)">{{ name }}</button>
               @if (match?.specimenDisplayName) {
                 <span class="text-muted">&nbsp;({{ match?.specimenDisplayName }})</span>
               }
             } @else {
-              <span [title]="'Не найдено в справочнике — проверьте, не переименован ли показатель'">{{ name }} ⚠</span>
+              <span [title]="'Не найдено в справочнике — проверьте, не переименован ли показатель'">{{ name }} <app-icon class="text-warning-icon" [icon]="icons.TriangleAlert" [size]="14" /></span>
             }
-            <button type="button" class="btn-icon" style="padding: 0 2px;" aria-label="Убрать" (click)="removeRelated(name)">
-              <i class="ph ph-x" aria-hidden="true"></i>
+            <button type="button" class="btn-icon x-p-0-2px" aria-label="Убрать" (click)="removeRelated(name)">
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </span>
         }
       </div>
     }
-    <div style="position: relative;">
+    <div class="position-relative">
       <input class="input mb-1 w-100" placeholder="искать показатель для добавления…"
              [ngModel]="relatedSearchQuery()" (ngModelChange)="onRelatedSearchInput($event)" />
       @if (relatedSearchLoading()) {
         <p class="text-muted mb-2">Поиск…</p>
       } @else if (relatedSearchResults().length > 0) {
-        <div class="card elev-md mb-2" style="max-height: 220px; overflow-y: auto;">
+        <div class="card elev-md mb-2 x-maxh-220px-oy-auto">
           @for (item of relatedSearchResults(); track item.id) {
-            <button type="button" class="card-clickable d-flex justify-content-between"
-                    style="width: 100%; text-align: left; border: none; background: none; padding: 6px 10px;"
+            <button type="button" class="card-clickable d-flex justify-content-between w-100 x-ta-left-border-none-bg-none-p-s2-s3"
                     (click)="pickRelated(item)">
               <span>{{ item.displayName }}</span>
               <span class="text-muted">{{ item.specimenDisplayName }}</span>
@@ -92,7 +91,7 @@
     <div class="mb-2"></div>
 
     <div class="d-flex justify-content-between mb-2 align-items-center">
-      <div class="card-title" style="font-size: 0.8235rem;">Референсные диапазоны</div>
+      <div class="card-title x-text-caption">Референсные диапазоны</div>
       <button type="button" class="btn btn-secondary btn-sm" (click)="addRefRange()">+ Диапазон</button>
     </div>
     <div class="table-responsive mb-3">
@@ -106,8 +105,8 @@
         <tbody>
           @for (r of refRanges(); track $index) {
             <tr>
-              <td><input class="input" type="number" style="width: 64px;" [ngModel]="r.ageFrom" (ngModelChange)="updateRefRange($index, 'ageFrom', $event)" /></td>
-              <td><input class="input" type="number" style="width: 64px;" [ngModel]="r.ageTo" (ngModelChange)="updateRefRange($index, 'ageTo', $event)" /></td>
+              <td><input class="input x-w-64px" type="number" [ngModel]="r.ageFrom" (ngModelChange)="updateRefRange($index, 'ageFrom', $event)" /></td>
+              <td><input class="input x-w-64px" type="number" [ngModel]="r.ageTo" (ngModelChange)="updateRefRange($index, 'ageTo', $event)" /></td>
               <td>
                 <select class="input" [ngModel]="r.sex" (ngModelChange)="updateRefRange($index, 'sex', $event)">
                   <option value="">—</option>
@@ -115,9 +114,9 @@
                   <option value="female">жен</option>
                 </select>
               </td>
-              <td><input class="input" type="number" style="width: 72px;" [ngModel]="r.low" (ngModelChange)="updateRefRange($index, 'low', $event)" /></td>
-              <td><input class="input" type="number" style="width: 72px;" [ngModel]="r.high" (ngModelChange)="updateRefRange($index, 'high', $event)" /></td>
-              <td><input class="input" style="width: 64px;" [ngModel]="r.unit" (ngModelChange)="updateRefRange($index, 'unit', $event)" /></td>
+              <td><input class="input x-w-72px" type="number" [ngModel]="r.low" (ngModelChange)="updateRefRange($index, 'low', $event)" /></td>
+              <td><input class="input x-w-72px" type="number" [ngModel]="r.high" (ngModelChange)="updateRefRange($index, 'high', $event)" /></td>
+              <td><input class="input x-w-64px" [ngModel]="r.unit" (ngModelChange)="updateRefRange($index, 'unit', $event)" /></td>
               <td>
                 <select class="input" [ngModel]="r.normKind" (ngModelChange)="updateRefRange($index, 'normKind', $event)">
                   <option value="fixed">фикс.</option>
@@ -133,13 +132,13 @@
                   <option value="cyclePhase">фаза цикла</option>
                 </select>
               </td>
-              <td><input class="input" style="width: 100px;" [ngModel]="r.populationDetail" (ngModelChange)="updateRefRange($index, 'populationDetail', $event)" /></td>
-              <td><input class="input" style="width: 100px;" [ngModel]="r.sourceDomain" (ngModelChange)="updateRefRange($index, 'sourceDomain', $event)" /></td>
-              <td><input class="input" type="number" style="width: 56px;" [ngModel]="r.sourceRank" (ngModelChange)="updateRefRange($index, 'sourceRank', $event)" /></td>
+              <td><input class="input x-w-100px" [ngModel]="r.populationDetail" (ngModelChange)="updateRefRange($index, 'populationDetail', $event)" /></td>
+              <td><input class="input x-w-100px" [ngModel]="r.sourceDomain" (ngModelChange)="updateRefRange($index, 'sourceDomain', $event)" /></td>
+              <td><input class="input x-w-56px" type="number" [ngModel]="r.sourceRank" (ngModelChange)="updateRefRange($index, 'sourceRank', $event)" /></td>
               <td>
                 <div class="d-flex gap-1">
-                  <button type="button" class="btn-icon" aria-label="Дублировать диапазон" (click)="duplicateRefRange($index)"><i class="ph ph-copy" aria-hidden="true"></i></button>
-                  <button type="button" class="btn-icon" aria-label="Удалить диапазон" (click)="removeRefRange($index)"><i class="ph ph-trash" aria-hidden="true"></i></button>
+                  <button type="button" class="btn-icon" aria-label="Дублировать диапазон" (click)="duplicateRefRange($index)"><app-icon [icon]="icons.Copy" [size]="18" /></button>
+                  <button type="button" class="btn-icon" aria-label="Удалить диапазон" (click)="removeRefRange($index)"><app-icon [icon]="icons.Trash2" [size]="18" /></button>
                 </div>
               </td>
             </tr>
@@ -188,7 +187,7 @@
     </button>
   }
 } @else {
-  <textarea class="input mb-2" rows="16" style="width: 100%; font-family: monospace;"
+  <textarea class="input mb-2 w-100 font-mono" rows="16"
             [ngModel]="jsonDraft()" (ngModelChange)="jsonDraft.set($event)"></textarea>
   @if (jsonError()) {
     <p class="text-danger mb-2">{{ jsonError() }}</p>

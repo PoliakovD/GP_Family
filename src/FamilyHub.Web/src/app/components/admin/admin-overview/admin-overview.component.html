@@ -1,5 +1,5 @@
 @if (loading()) {
-  <p class="text-muted">Загрузка…</p>
+  <app-loading-spinner />
 } @else if (error()) {
   <div class="alert-danger">{{ error() }}</div>
 } @else {
@@ -7,14 +7,14 @@
     <div class="card mb-3">
       <div class="card-title">Пользователи</div>
       <div class="card-body">
-        <div class="d-flex gap-3 flex-wrap">
-          <div><strong>{{ d.users.total }}</strong><div class="text-muted">всего</div></div>
-          <div><strong>{{ d.users.both }}</strong><div class="text-muted">Telegram + PWA</div></div>
-          <div><strong>{{ d.users.telegramOnly }}</strong><div class="text-muted">только Telegram</div></div>
-          <div><strong>{{ d.users.pwaOnly }}</strong><div class="text-muted">только PWA</div></div>
-          <div><strong>{{ d.users.newLast7Days }}</strong><div class="text-muted">новые за 7д</div></div>
-          <div><strong>{{ d.users.newLast30Days }}</strong><div class="text-muted">новые за 30д</div></div>
-          <div><strong>{{ d.users.lockedOut }}</strong><div class="text-muted">заблокированы</div></div>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-value">{{ d.users.total }}</span><span class="stat-label">всего</span></div>
+          <div class="stat"><span class="stat-value">{{ d.users.both }}</span><span class="stat-label">Telegram + PWA</span></div>
+          <div class="stat"><span class="stat-value">{{ d.users.telegramOnly }}</span><span class="stat-label">только Telegram</span></div>
+          <div class="stat"><span class="stat-value">{{ d.users.pwaOnly }}</span><span class="stat-label">только PWA</span></div>
+          <div class="stat"><span class="stat-value">{{ d.users.newLast7Days }}</span><span class="stat-label">новые за 7д</span></div>
+          <div class="stat"><span class="stat-value">{{ d.users.newLast30Days }}</span><span class="stat-label">новые за 30д</span></div>
+          <div class="stat"><span class="stat-value">{{ d.users.lockedOut }}</span><span class="stat-label">заблокированы</span></div>
         </div>
       </div>
     </div>
@@ -22,10 +22,10 @@
     <div class="card mb-3">
       <div class="card-title">Семьи</div>
       <div class="card-body">
-        <div class="d-flex gap-3 flex-wrap">
-          <div><strong>{{ d.families.total }}</strong><div class="text-muted">всего</div></div>
-          <div><strong>{{ d.families.withActiveMembers }}</strong><div class="text-muted">с активными участниками</div></div>
-          <div><strong>{{ d.families.averageActiveMembers | number: '1.1-1' }}</strong><div class="text-muted">в среднем участников</div></div>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-value">{{ d.families.total }}</span><span class="stat-label">всего</span></div>
+          <div class="stat"><span class="stat-value">{{ d.families.withActiveMembers }}</span><span class="stat-label">с активными участниками</span></div>
+          <div class="stat"><span class="stat-value">{{ d.families.averageActiveMembers | number: '1.1-1' }}</span><span class="stat-label">в среднем участников</span></div>
         </div>
       </div>
     </div>
@@ -33,13 +33,13 @@
     <div class="card">
       <div class="card-title">Домен</div>
       <div class="card-body">
-        <div class="d-flex gap-3 flex-wrap">
-          <div><strong>{{ d.domain.medicalRecords }}</strong><div class="text-muted">мед. записей</div></div>
-          <div><strong>{{ d.domain.medications }}</strong><div class="text-muted">лекарств</div></div>
-          <div><strong>{{ d.domain.expiredMedications }}</strong><div class="text-muted">просрочено</div></div>
-          <div><strong>{{ d.domain.birthdays }}</strong><div class="text-muted">дней рождения</div></div>
-          <div><strong>{{ d.domain.attachments }}</strong><div class="text-muted">вложений</div></div>
-          <div><strong>{{ d.domain.familyDependents }}</strong><div class="text-muted">подопечных</div></div>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-value">{{ d.domain.medicalRecords }}</span><span class="stat-label">мед. записей</span></div>
+          <div class="stat"><span class="stat-value">{{ d.domain.medications }}</span><span class="stat-label">лекарств</span></div>
+          <div class="stat"><span class="stat-value">{{ d.domain.expiredMedications }}</span><span class="stat-label">просрочено</span></div>
+          <div class="stat"><span class="stat-value">{{ d.domain.birthdays }}</span><span class="stat-label">дней рождения</span></div>
+          <div class="stat"><span class="stat-value">{{ d.domain.attachments }}</span><span class="stat-label">вложений</span></div>
+          <div class="stat"><span class="stat-value">{{ d.domain.familyDependents }}</span><span class="stat-label">подопечных</span></div>
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { SidePanelComponent } from '../../../shared/side-panel/side-panel.compon
 import { ToastService } from '../../../shared/toast/toast.service';
 import { apiErrorCode } from '../shared/admin-errors';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /** Секрет, показанный один раз после «Сгенерировать». Живёт ТОЛЬКО в сигнале этого компонента. */
 interface RevealedSecret {
@@ -41,9 +42,10 @@ const ERROR_MESSAGES: Record<string, string> = {
  */
 @Component({
     selector: 'app-admin-credentials',
-    imports: [DatePipe, SidePanelComponent, AdminStatusPipe],
+    imports: [DatePipe, SidePanelComponent, AdminStatusPipe, LoadingSpinnerComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './admin-credentials.component.html'
+    templateUrl: './admin-credentials.component.html',
+    styleUrl: './admin-credentials.component.scss',
 })
 export class AdminCredentialsComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);

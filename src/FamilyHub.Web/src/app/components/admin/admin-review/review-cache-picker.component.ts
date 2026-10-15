@@ -35,7 +35,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
           <div class="rcp-head">
             <button type="button" class="btn btn-secondary btn-sm" (click)="back()">← К списку</button>
             <strong>{{ cand.normalizedName }}</strong>
-            @if (cand.specimen) { <span class="tag tag-neutral">{{ cand.specimen }}</span> }
+            @if (cand.specimen) { <span class="badge badge-neutral">{{ cand.specimen }}</span> }
           </div>
           @if (detailError()) {
             <div class="alert-danger">{{ detailError() }}</div>
@@ -51,11 +51,11 @@ import { ToastService } from '../../../shared/toast/toast.service';
                 <li class="rcp-snippet" [class.rcp-snippet-off]="!checked().has(s.url)">
                   <label class="rcp-snippet-label">
                     <input type="checkbox" [checked]="checked().has(s.url)" (change)="toggle(s.url)" />
-                    <span style="min-width: 0;">
+                    <span class="min-w-0">
                       @if (s.domain) {
-                        <span class="tag" [class.tag-ok]="s.isTrustedByDomain" [class.tag-warning]="!s.isTrustedByDomain">{{ s.domain }}</span>
+                        <span class="badge" [class.badge-success]="s.isTrustedByDomain" [class.badge-warning]="!s.isTrustedByDomain">{{ s.domain }}</span>
                       }
-                      @if (!s.enabled) { <span class="tag tag-neutral">выключен в источнике</span> }
+                      @if (!s.enabled) { <span class="badge badge-neutral">выключен в источнике</span> }
                       <strong class="rcp-snippet-title">{{ s.title || s.url }}</strong>
                       <span class="rcp-snippet-text">{{ s.text }}</span>
                     </span>
@@ -84,7 +84,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
                   <button type="button" class="rcp-cand" (click)="pick(c)">
                     <span>
                       <strong>{{ c.normalizedName }}</strong>
-                      @if (c.specimen) { <span class="tag tag-neutral">{{ c.specimen }}</span> }
+                      @if (c.specimen) { <span class="badge badge-neutral">{{ c.specimen }}</span> }
                     </span>
                     <span class="text-muted">
                       {{ c.snippetCount }} источн.@if (c.manualCount > 0) { · ручных {{ c.manualCount }} }
@@ -104,6 +104,8 @@ import { ToastService } from '../../../shared/toast/toast.service';
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
+    
+
     .rcp-hint { margin-top: 0; }
     .rcp-list, .rcp-snippets { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 55vh; overflow-y: auto; }
     .rcp-cand {

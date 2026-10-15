@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { AdminApiService, PipelineStep } from '../../../services/admin-api.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * «Настройки → Шаги пайплайна»: вкл/выкл необязательных шагов четырёх конвейеров (§2 плана).
@@ -17,7 +18,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
 @Component({
   selector: 'app-admin-pipeline-steps',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, LoadingSpinnerComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './admin-pipeline-steps.component.html',
 })

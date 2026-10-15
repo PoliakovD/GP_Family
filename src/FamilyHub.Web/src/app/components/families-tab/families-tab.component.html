@@ -87,10 +87,10 @@
           <i class="ph ph-caret-right" style="color:var(--color-neutral-600)" aria-hidden="true"></i>
         </div>
         <div class="d-flex align-items-center gap-2">
-          <span class="tag" [class.tag-accent]="family.myRole === FamilyRole.Admin" [class.tag-neutral]="family.myRole !== FamilyRole.Admin">
+          <span class="badge badge-neutral">
             {{ roleLabel(family.myRole) }}
           </span>
-          <span class="tag tag-neutral">{{ statusLabel(family.myStatus) }}</span>
+          <span class="badge badge-neutral">{{ statusLabel(family.myStatus) }}</span>
         </div>
       </a>
     }

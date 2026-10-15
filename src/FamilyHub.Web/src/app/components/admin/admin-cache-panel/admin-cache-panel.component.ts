@@ -6,6 +6,9 @@ import { KbHistoryComponent } from '../admin-review/kb-history.component';
 import { ApiError } from '../../../services/api-error';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
+import { Trash2 } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /** Одна строка редактируемой таблицы сниппетов — расширяет то, что отдаёт сервер, полем
  * originalUrl: null означает "добавлена локально, ещё не сохранена" — override для такой строки
@@ -55,12 +58,14 @@ export interface SearchCacheRowPatch {
  */
 @Component({
     selector: 'app-admin-cache-panel',
-    imports: [FormsModule, DatePipe, KbHistoryComponent],
+    imports: [FormsModule, DatePipe, KbHistoryComponent, IconComponent, LoadingSpinnerComponent],
     templateUrl: './admin-cache-panel.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-cache-panel.component.scss'
 })
 export class AdminCachePanelComponent implements OnChanges {
+  protected readonly icons = { Trash2 };
+
   @Input({ required: true }) cacheId!: string;
   @Input({ required: true }) topic!: WebSearchTopicValue;
   /** Эмитится после сохранения — список кэша обновляет строку (название, единицы, счётчик сниппетов). */

@@ -3,12 +3,14 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AdminApiService } from '../../../services/admin-api.service';
+import { AuthCardComponent } from '../../../shared/ui/auth-card/auth-card.component';
+import { FieldDirective } from '../../../shared/ui/field/field.directive';
 
 /** Форма входа в админ-панель (ADR-0009) — отдельный логин/пароль из Admin:User/Password (.env),
  * не связан с обычным PWA-аккаунтом. Живёт на admin.{PUBLIC_DOMAIN} за периметром WireGuard. */
 @Component({
     selector: 'app-admin-login',
-    imports: [FormsModule],
+    imports: [FormsModule, AuthCardComponent, FieldDirective],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-login.component.html'
 })

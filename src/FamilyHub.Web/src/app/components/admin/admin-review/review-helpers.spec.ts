@@ -104,10 +104,10 @@ describe('verification badge helpers (admin-only marker)', () => {
   });
 
   it('warns about unverified and stale records, greens verified ones', () => {
-    expect(verificationTagClass(KbVerificationStatus.AiUnverified)).toBe('tag-warning');
-    expect(verificationTagClass(KbVerificationStatus.AdminVerified, true)).toBe('tag-warning');
-    expect(verificationTagClass(KbVerificationStatus.AdminVerified)).toBe('tag-ok');
-    expect(verificationTagClass(KbVerificationStatus.ManualKnowledge)).toBe('tag-accent');
+    expect(verificationTagClass(KbVerificationStatus.AiUnverified)).toBe('badge-warning');
+    expect(verificationTagClass(KbVerificationStatus.AdminVerified, true)).toBe('badge-warning');
+    expect(verificationTagClass(KbVerificationStatus.AdminVerified)).toBe('badge-success');
+    expect(verificationTagClass(KbVerificationStatus.ManualKnowledge)).toBe('badge-neutral');
   });
 });
 

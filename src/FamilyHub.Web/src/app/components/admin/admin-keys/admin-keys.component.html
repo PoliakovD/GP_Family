@@ -1,5 +1,5 @@
 @if (loading()) {
-  <p class="text-muted">Загрузка…</p>
+  <app-loading-spinner />
 } @else if (error()) {
   <div class="alert-danger">{{ error() }}</div>
 } @else {
