@@ -19,11 +19,13 @@ test('хаб «Здоровье»: заголовок, группы плиток
     await expect(content.locator('.hh-tile-title, .hh-tool-title').getByText(label, { exact: true })).toBeVisible();
   }
 
-  // Группы — те же подписи, что и в сайдбаре (app.component.ts healthGroups).
+  // Подпункты «Здоровья» в сайдбаре — плоским списком: групповые заголовки по редизайну удалены
+  // (docs/redesign/DESIGN.md §3 «Навигация»), порядок — как в healthGroups (app.component.ts).
   const sidebar = page.locator('aside.app-sidebar');
-  for (const group of ['Каждый день', 'Медкарта', 'Инструменты']) {
-    await expect(sidebar.getByText(group, { exact: true })).toBeVisible();
+  for (const label of ['Приём лекарств', 'Дневник', 'Анализы', 'Приёмы врача', 'Прививки', 'Аптечка']) {
+    await expect(sidebar.locator('.app-sidebar-child').getByText(label, { exact: true })).toBeVisible();
   }
+  await expect(sidebar.getByText('Медкарта', { exact: true })).toHaveCount(0);
 
   await content.getByRole('link', { name: 'Анализы' }).click();
   await expect(page).toHaveURL(/health\/records\?person=me/);

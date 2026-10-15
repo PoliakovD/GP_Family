@@ -1,16 +1,18 @@
-<div class="d-flex align-items-center gap-2" [class.mb-3]="!compact">
-  <i class="ph ph-magnifying-glass" style="font-size:1.1765rem;color:var(--color-neutral-600)" aria-hidden="true"></i>
+<!-- DESIGN §3 «Поля»: поиск 46px, иконка 18px слева внутри поля; «Очистить» — внутри справа. -->
+<div class="search-input search-field" [class.mb-3]="!compact">
+  <app-icon [icon]="searchIcon" [size]="18" />
   <input
-    class="input flex-fill"
+    class="input"
     type="search"
     [placeholder]="placeholder"
+    [attr.aria-label]="placeholder"
     autocomplete="off"
     [ngModel]="value"
     (ngModelChange)="onInput($event)"
   />
   @if (value.length > 0) {
-    <button type="button" class="btn btn-icon btn-ghost" aria-label="Очистить" (click)="clear()">
-      <i class="ph-bold ph-x" aria-hidden="true"></i>
+    <button type="button" class="btn-icon search-field-clear" aria-label="Очистить поиск" (click)="clear()">
+      <app-icon [icon]="clearIcon" [size]="18" />
     </button>
   }
 </div>

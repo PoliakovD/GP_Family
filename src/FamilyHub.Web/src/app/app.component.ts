@@ -26,6 +26,10 @@ import { AppSearchComponent } from './components/app-search/app-search.component
 import { SearchFieldComponent } from './shared/search-field/search-field.component';
 import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdown/background-jobs-dropdown.component';
 import { NotificationBellComponent } from './shared/notification-bell/notification-bell.component';
+import { IconComponent } from './shared/ui/icon/icon.component';
+import { FamilySwitcherComponent } from './shared/ui/family-switcher/family-switcher.component';
+import { Heart, House, Search, User, Users, X, type LucideIconData } from 'lucide-angular';
+import { FamilyRole } from './models/types';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
@@ -56,7 +60,7 @@ interface SidebarGroup {
 interface SidebarItem {
   id: string;
   label: string;
-  icon: string;
+  icon: LucideIconData;
   /** Абсолютный путь; для «Семьи» вычисляется динамически (см. familyHref()). */
   path?: string;
   /** Плоский список — «Профиль». */
@@ -80,6 +84,8 @@ interface SidebarItem {
         SearchFieldComponent,
         BackgroundJobsDropdownComponent,
         NotificationBellComponent,
+        IconComponent,
+        FamilySwitcherComponent,
     ],
     templateUrl: './app.component.html'
 })
@@ -106,7 +112,8 @@ export class AppComponent implements OnInit {
    * проекте), второй параллельный механизм не заводим (см. .claude/patterns/frontend_web.md). */
   readonly isWide = computed(() => this.breakpoints.tier() === 'wide');
 
-  readonly familySwitcherOpen = signal(false);
+  /** Иконки каркаса (Lucide, DESIGN §2.7). */
+  readonly icons = { Heart, House, Search, User, Users, X };
   /** Мобильная шапка (макет «Screen - Health hub»): по умолчанию заголовок + иконка поиска +
    * колокольчик; клик по лупе разворачивает поле поиска на всю ширину строки вместо заголовка. */
   readonly mobileSearchOpen = signal(false);
@@ -128,12 +135,6 @@ export class AppComponent implements OnInit {
   readonly isHealthHubIndex = computed(() => this.currentUrl() === '/health');
   // Дни рождения — семейный раздел (ссылка из карточки на Главной и из поиска).
   readonly isFamilyActive = computed(() => this.currentUrl().startsWith('/families') || this.currentUrl().startsWith('/birthdays'));
-  /** Активный подпункт «Семьи» в сайдбаре — раньше текущая вкладка семьи не подсвечивалась. */
-  isFamilySubActive(tab: string): boolean {
-    const url = this.currentUrl();
-    const current = new URLSearchParams(url.split('?')[1] ?? '').get('tab') ?? this.familySubItems[0]?.tab;
-    return url.startsWith('/families/') && current === tab;
-  }
   readonly isSettingsActive = computed(() => this.currentUrl().startsWith('/settings'));
 
   /** Группы подпунктов «Здоровье» (редизайн хаба, макет «Screen - Health hub») — те же названия и
@@ -172,13 +173,13 @@ export class AppComponent implements OnInit {
    * см. PR2). «Уведомления» ушли из сайдбара в колокольчик топбара (app-notification-bell) —
    * пятого таба/пункта не заводим (см. .claude/uirework .../handoff-prompt.md). */
   readonly sidebarItems: SidebarItem[] = [
-    { id: 'home', label: 'Главная', icon: 'ph-house', path: '/home' },
-    { id: 'health', label: 'Здоровье', icon: 'ph-heartbeat', path: '/health', groups: this.healthGroups },
-    { id: 'family', label: 'Семья', icon: 'ph-users-three' }, // path вычисляется — см. familyHref()
+    { id: 'home', label: 'Главная', icon: House, path: '/home' },
+    { id: 'health', label: 'Здоровье', icon: Heart, path: '/health', groups: this.healthGroups },
+    { id: 'family', label: 'Семья', icon: Users }, // path вычисляется — см. familyHref()
     {
       id: 'settings',
       label: 'Профиль',
-      icon: 'ph-user',
+      icon: User,
       path: '/settings',
       children: [
         { path: '/settings/profile', label: 'Аккаунт' },
@@ -189,24 +190,22 @@ export class AppComponent implements OnInit {
     },
   ];
 
-  /** Семейные саб-пункты — фиксированные ярлыки, роут всегда на текущую выбранную семью с ?tab=. */
-  readonly familySubItems: { tab: string; label: string }[] = [
-    { tab: 'members', label: 'Участники' },
-    { tab: 'chat', label: 'Чат' },
-    { tab: 'medkits', label: 'Аптечки' },
-    { tab: 'birthdays', label: 'Дни рождения' },
-    { tab: 'dependents', label: 'Близкие и питомцы' },
-  ];
+  /** Счётчик «Здоровья» в свёрнутом сайдбаре — то, что требует действия (приёмы + прививки), danger. */
+  readonly healthAttention = computed(() => this.intake.attention() + this.vaccinations.attention());
+
+  /** Главная (сам экран, не /notifications) — в мобильной шапке вместо заголовка переключатель семьи. */
+  readonly isHomeIndex = computed(() => this.currentUrl().split('?')[0] === '/home');
+
+  /** Подпись под именем пользователя внизу сайдбара — роль в выбранной семье. */
+  readonly userRoleLabel = computed(() => {
+    const family = this.state.selectedFamily();
+    if (!family) return 'Без семьи';
+    return family.myRole === FamilyRole.Admin ? 'Админ семьи' : 'Участник семьи';
+  });
 
   /** Куда ведёт пункт «Семья» — решённый вопрос №1 плана редизайна: сразу в текущую выбранную
    * семью, а не на список. У нового пользователя без семей активных семей ещё нет — тогда
    * единственный осмысленный переход — список/создание. */
-  /** Бейдж «Чат» в саб-пунктах «Семьи» — непрочитанное именно выбранной семьи. */
-  readonly selectedFamilyChatUnread = computed(() => {
-    const family = this.state.selectedFamily();
-    return family ? (this.chat.unreadByFamily()[family.id] ?? 0) : 0;
-  });
-
   familyHref(): string {
     const family = this.state.selectedFamily();
     return family ? `/families/${family.id}` : '/families';
@@ -242,15 +241,6 @@ export class AppComponent implements OnInit {
     }
     return 'FamilyHub';
   });
-
-  toggleFamilySwitcher(): void {
-    this.familySwitcherOpen.update((v) => !v);
-  }
-
-  selectFamilyAndClose(id: string): void {
-    this.state.selectFamily(id);
-    this.familySwitcherOpen.set(false);
-  }
 
   /** Консервативный дефолт — скрыто, пока первая навигация не подтвердит обратное (без мигания). */
   private readonly onAuthRoute = signal(this.isAuthRoute(this.router.url));
@@ -424,7 +414,6 @@ export class AppComponent implements OnInit {
         this.onAuthRoute.set(this.isAuthRoute(e.urlAfterRedirects));
         this.currentUrl.set(e.urlAfterRedirects);
         this.mobileSearchOpen.set(false);
-        this.familySwitcherOpen.set(false);
         // Редизайн v2 — бейдж уведомлений: обновляем счётчик на каждой навигации (дёшево, один
         // COUNT-запрос), пока показан таб-бар/сайдбар — покрывает и "прочитано на другом
         // устройстве", не только markNotificationRead в этой же вкладке.

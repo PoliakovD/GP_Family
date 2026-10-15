@@ -1308,11 +1308,9 @@ button.tag,
 }
 
 // ============================================================================
-// Оболочка приложения — редизайн v2 (каркас навигации, PR2), таб-бар обновлён редизайном хаба
-// «Здоровье» (макет «Screen - Health hub»). Десктоп (≥1024px, BreakpointService.tier()==='wide') —
-// боковое меню с группами «Здоровья», колокольчик+аватар в топбаре. Узкие экраны — таб-бар ровно
-// из 4 пунктов (Главная/Здоровье/Семья/Профиль, без листа «Ещё» — он упразднён) и своя мобильная
-// шапка (.app-topbar-mobile) вместо всегда развёрнутого поля поиска.
+// Каркас приложения (DESIGN §3 «Навигация», §4). Десктоп ≥1024px (BreakpointService 'wide') —
+// сайдбар 248px + верхняя строка (поиск, колокольчик, действия страницы). Узкие экраны — мобильная
+// шапка (контролы 44px) и нижний таб-бар из 4 пунктов.
 // ============================================================================
 .app-shell {
   display: flex;
@@ -1321,235 +1319,140 @@ button.tag,
 }
 
 // ----------------------------------------------------------------------------
-// Боковое меню (десктоп)
+// Сайдбар: лого → переключатель семьи → пункты → пользователь внизу.
 // ----------------------------------------------------------------------------
 .app-sidebar {
-  --sidebar-w: 256px;
+  --sidebar-w: 248px;
   flex: none;
   width: var(--sidebar-w);
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
   height: 100vh;
   height: 100dvh;
   position: sticky;
   top: 0;
+  padding: var(--space-6) var(--space-4) var(--space-4);
   background: var(--color-surface);
-  border-right: 1px solid var(--color-divider);
+  border-right: 1px solid var(--color-border);
   overflow-y: auto;
 }
 
 .app-sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid var(--color-divider);
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 1.2353rem;
-  letter-spacing: -0.02em;
+  gap: var(--space-3);
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+  font: var(--text-title);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-display);
+}
 
-  i {
-    font-size: 1.3529rem;
-    color: var(--color-accent);
-    flex: none;
-  }
+.app-brand-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .app-sidebar-nav {
-  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-1);
 }
 
 .app-sidebar-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-left: 3px solid transparent;
-  color: var(--color-text);
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: var(--font-size-body);
-  min-height: var(--tap-min);
+  font: var(--text-body);
+  transition: background-color 0.15s ease;
 
-  i {
-    font-size: 1.2941rem;
-    color: var(--color-neutral-600);
-    flex: none;
-  }
+  app-icon { color: var(--color-text-secondary); }
 
-  &:hover {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  }
+  &:hover { background: var(--color-surface-muted); color: var(--color-text); }
 
   &.active {
-    background: var(--color-accent-100);
-    border-left-color: var(--color-accent);
-    color: var(--color-accent-800);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-hover);
     font-weight: 600;
 
-    i {
-      color: var(--color-accent);
-    }
+    app-icon { color: var(--color-accent-hover); }
   }
-}
-
-.app-sidebar-badge {
-  min-width: 20px;
-  padding: 1px 6px;
-  background: var(--color-accent-2);
-  color: var(--color-on-accent);
-  font: 700 12px/1.5 var(--font-heading);
-  text-align: center;
-  border-radius: var(--radius-pill);
 }
 
 .app-sidebar-children {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 2px 0 6px 26px;
-}
-
-// Редизайн хаба «Здоровье» — подзаголовок группы подпунктов («Каждый день»/«Медкарта»/
-// «Инструменты», см. app.component.ts healthGroups) — те же токены, что у .app-sidebar-kicker,
-// но без отступа сверху (первая группа сразу под пунктом «Здоровье», не под футером).
-.app-sidebar-group-label {
-  padding: 10px 12px 2px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7647rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-
-  &:first-child {
-    padding-top: 4px;
-  }
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 .app-sidebar-child {
-  padding: 7px 12px;
-  font-size: 0.8824rem;
-  color: var(--color-text);
-  text-decoration: none;
-  border-radius: var(--radius-md);
-  min-height: var(--tap-min);
   display: flex;
   align-items: center;
+  min-height: 38px;
+  padding: 0 var(--space-3) 0 46px;
+  border-radius: var(--radius-md);
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
 
-  &:hover {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  }
+  &:hover { background: var(--color-surface-muted); color: var(--color-text); }
 
   &.active {
-    color: var(--color-accent);
+    color: var(--color-accent-hover);
     font-weight: 600;
-    background: var(--color-paper);
   }
 }
 
-.app-sidebar-footer {
-  margin-top: auto;
-  padding: 16px;
-  border-top: 1px solid var(--color-divider);
+.app-sidebar-user {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  position: relative;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+
+  &:hover { background: var(--color-surface-muted); }
 }
 
-// Глобальная плашка «ИИ временно недоступен» (AiStatusService) — под топбаром, над контентом.
+.app-sidebar-user-text { display: flex; flex-direction: column; min-width: 0; }
+.app-sidebar-user-name { font: var(--text-body-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-sidebar-user-role { font: var(--text-caption); color: var(--color-text-muted); }
+
+// Глобальная плашка «ИИ временно недоступен» (AiStatusService) — над контентом страницы.
 .ai-banner {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 12px 16px;
-  background: color-mix(in srgb, var(--color-status-warning) 12%, var(--color-paper));
-  border: 1px solid color-mix(in srgb, var(--color-status-warning) 30%, var(--color-paper));
-  border-left: 4px solid var(--color-status-warning);
-  color: var(--color-status-warning-text);
-  font-size: var(--font-size-meta);
-  line-height: 1.45;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border-radius: var(--radius-lg);
+  font: var(--text-body-sm);
 
-  > i {
-    flex: none;
-    font-size: 1.4118rem;
-  }
-
-  strong {
-    font-weight: 600;
-  }
-}
-
-.app-sidebar-kicker {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7647rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-}
-
-.app-family-switch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  text-decoration: none;
-  cursor: pointer;
-  min-height: var(--tap-min);
-
-  i {
-    color: var(--color-neutral-600);
-    flex: none;
-  }
-}
-
-.app-family-switch-list {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(100% + 4px);
-  display: flex;
-  flex-direction: column;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-  z-index: var(--z-dropdown);
-}
-
-.app-family-switch-item {
-  padding: 10px 14px;
-  text-align: left;
-  background: none;
-  border: none;
-  color: var(--color-text);
-  text-decoration: none;
-  cursor: pointer;
-  font: inherit;
-  min-height: var(--tap-min);
-
-  & + .app-family-switch-item {
-    border-top: 1px solid var(--color-divider);
-  }
-
-  &:hover {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  }
+  > i { flex: none; font-size: var(--icon-size); }
+  strong { font-weight: 600; }
 }
 
 // ----------------------------------------------------------------------------
-// Основная колонка + верхняя строка (поиск + контекстное действие страницы)
+// Основная колонка + верхняя строка (десктоп): поиск, задачи в фоне, действия страницы, колокольчик.
 // ----------------------------------------------------------------------------
 .app-main {
   flex: 1;
@@ -1561,81 +1464,95 @@ button.tag,
 .app-topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-divider);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: calc(1200px + var(--space-10) * 2);
+  padding: var(--space-6) var(--space-10) 0;
+  margin: 0 auto;
 
-  // Поле поиска уступает место кнопкам действия: без min-width: 0 flex-элемент не сжимается меньше ширины
-  // своего input'а, и на телефоне (412px) шапка с двумя кнопками шире экрана — страница получает
-  // горизонтальный скролл, а мобильный Chrome раздувает layout-viewport.
+  // Поле поиска — до ~550px, остальное место отдаётся действиям. min-width: 0 — иначе flex-элемент
+  // не сжимается меньше ширины своего input'а.
   > app-search-field,
   > app-search {
-    flex: 1 1 0;
+    flex: 0 1 560px;
     min-width: 0;
+    margin-right: auto;
   }
 
   input { min-width: 0; }
+
+  // Колокольчик — иконочная кнопка на surface с рамкой (макет home-desktop).
+  app-notification-bell .btn-icon {
+    width: var(--control-height);
+    height: var(--control-height);
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
 }
 
 // ----------------------------------------------------------------------------
-// Мобильная шапка (редизайн хаба «Здоровье», макет «Screen - Health hub») — заголовок раздела +
-// иконка поиска + колокольчик, вместо поля поиска на всю ширину. Лупа временно подменяет заголовок
-// развёрнутым полем (app.component.ts mobileSearchOpen) — та же verstка-строка, что и десктопный
-// .app-topbar, просто другое содержимое.
+// Мобильная шапка: заголовок (или переключатель семьи на главной) + круглые кнопки поиска и
+// колокольчика. Лупа временно подменяет заголовок полем поиска (app.component.ts mobileSearchOpen).
 // ----------------------------------------------------------------------------
 .app-topbar-mobile {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-2);
+  min-height: calc(var(--tap-min) + var(--space-4));
+  padding: var(--space-2) var(--space-4);
   background: var(--color-bg);
-  border-bottom: 1px solid var(--color-divider);
   position: sticky;
   top: 0;
   z-index: 10;
-  min-height: calc(var(--tap-min) + 8px);
 
-  app-avatar {
-    flex: none;
-  }
+  app-avatar { flex: none; }
 
   > app-search-field,
   > app-search {
+    flex: 1;
     min-width: 0;
+  }
+
+  .btn-icon.btn-round,
+  app-notification-bell .btn-icon {
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
   }
 }
 
 .app-topbar-mobile-title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.2353rem;
-  letter-spacing: -0.015em;
+  font: var(--text-title);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-display);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+// Контент: десктоп — до 1200px, поля 40 (28 на узком десктопе); мобайл — 16 и ≥100px снизу под таб-бар.
 .app-content {
   flex: 1;
-  // 88px — высота таб-бара с запасом; плюс home indicator iPhone, иначе таб-бар (у которого свой
-  // safe-area padding) перекрывает последний блок контента.
-  padding: var(--space-4) var(--space-5) calc(88px + env(safe-area-inset-bottom, 0px));
-  overflow-y: auto;
+  width: 100%;
+  padding: var(--space-4) var(--space-4) calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
-// На десктопе нет нижнего таб-бара — резервировать под него 88px незачем.
 .app-shell-wide .app-content {
-  padding-bottom: var(--space-4);
+  max-width: calc(1200px + var(--space-10) * 2);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-10) var(--space-10);
+
+  @media (max-width: 1279px) { padding-inline: var(--space-7); }
+}
+
+.app-shell-wide .app-topbar {
+  @media (max-width: 1279px) { padding-inline: var(--space-7); }
 }
 
 // ----------------------------------------------------------------------------
-// Нижний таб-бар (узкие экраны) — редизайн хаба «Здоровье»: Главная/Здоровье/Семья/Профиль вместо
-// Главная/Здоровье/Семья/Ещё — «Профиль» ведёт прямо в /settings, лист «Ещё» упразднён,
-// «Уведомления» — колокольчик в мобильной шапке (.app-topbar-mobile), не пятый пункт.
+// Нижний таб-бар (<1024px): 4 пункта, 84px с safe-area, иконка в «пилюле» 56×30.
 // ----------------------------------------------------------------------------
 .tab-bar {
   position: fixed;
@@ -1643,25 +1560,54 @@ button.tag,
   left: 0;
   right: 0;
   display: flex;
+  min-height: 84px;
+  padding: var(--space-2) var(--space-2) max(var(--space-3), env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
-  border-top: 1px solid var(--color-divider);
+  border-top: 1px solid var(--color-border);
   z-index: var(--z-tabbar);
-  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-.tab-bar-more-icon {
+.tab-bar button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-1);
+  min-height: var(--tap-min);
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+
+  &.active { color: var(--color-accent-hover); }
+  &.active .tab-bar-icon { background: var(--color-accent-soft); }
+  &.active .tab-bar-label { font-weight: 600; }
+}
+
+.tab-bar-icon {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease;
 }
+
+.tab-bar-label { font: var(--text-micro); font-weight: 500; }
 
 .tab-bar-dot {
   position: absolute;
-  top: -1px;
-  right: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-accent-2);
+  top: 1px;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 // ============================================================================
@@ -1786,7 +1732,7 @@ button.tag,
   position: fixed;
   left: var(--space-4);
   right: var(--space-4);
-  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-banner);
   box-shadow: var(--shadow-lg);
 
@@ -1799,34 +1745,6 @@ button.tag,
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
-}
-
-.tab-bar button {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 8px 2px;
-  min-height: var(--tap-min); // редизайн v2
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--color-neutral-600);
-
-  i {
-    font-size: 1.2941rem; // редизайн v2: было 21px
-  }
-
-  span {
-    font-family: var(--font-heading);
-    font-size: 0.7647rem; // было 11px — подписи вкладок должны читаться без очков
-  }
-
-  &.active {
-    color: var(--color-accent);
-  }
 }
 
 // «Показать пароль» под полем — крупная тач-цель, не мелкая иконка внутри поля.

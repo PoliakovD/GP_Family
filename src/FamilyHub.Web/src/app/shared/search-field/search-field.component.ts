@@ -1,5 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Search, X } from 'lucide-angular';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Переиспользуемое поле поиска (лупа + инпут + кнопка «очистить») — единый вид на Главной и
@@ -14,8 +16,16 @@ import { FormsModule } from '@angular/forms';
  */
 @Component({
     selector: 'app-search-field',
-    imports: [FormsModule],
-    templateUrl: './search-field.component.html'
+    imports: [FormsModule, IconComponent],
+    templateUrl: './search-field.component.html',
+    styles: [`
+      :host { display: block; min-width: 0; }
+      .search-field { width: 100%; }
+      .search-field .input { padding-right: var(--tap-min); }
+      .search-field-clear { position: absolute; right: 1px; }
+      /* Нативный крестик type="search" дублирует наш. */
+      input::-webkit-search-cancel-button { display: none; }
+    `],
 })
 export class SearchFieldComponent {
   @Input() placeholder = 'Поиск…';
@@ -24,6 +34,9 @@ export class SearchFieldComponent {
    * каркаса), а не как первый элемент страницы над остальным контентом. */
   @Input() compact = false;
   @Output() readonly valueChange = new EventEmitter<string>();
+
+  protected readonly searchIcon = Search;
+  protected readonly clearIcon = X;
 
   onInput(value: string): void {
     this.value = value;
