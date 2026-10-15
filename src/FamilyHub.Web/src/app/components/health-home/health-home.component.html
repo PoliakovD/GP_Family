@@ -2,21 +2,21 @@
   <app-loading-spinner />
 } @else {
   <div class="hh-page">
-    <div class="hh-header">
+    <header class="hh-header">
       <app-avatar
         [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}"
         size="lg"
       />
       <div>
-        <h2 class="hh-title">Моё здоровье</h2>
+        <h1 class="hh-title">Моё здоровье</h1>
         <div class="hh-subtitle">
           {{ auth.me()?.firstName }}@if (ageLabel()) {, {{ ageLabel() }}} · здесь ваши данные, данные близких — внутри разделов
         </div>
       </div>
-    </div>
+    </header>
 
     @if (jobs.summary().extraction.total > 0) {
-      <div class="alert-info mb-3" role="status">
+      <div class="alert-info" role="status">
         <span class="pipeline-step-spinner" aria-hidden="true"></span>
         Распознаём документы: {{ jobs.summary().extraction.total }}. Показатели появятся в записях сами — можно пользоваться приложением дальше.
       </div>
@@ -24,24 +24,24 @@
 
     <!-- Сводка не загрузилась — раньше половина плиток молча оставалась пустой. -->
     @if (!summary()) {
-      <div class="alert-danger mb-3" role="alert">
+      <div class="alert-danger" role="alert">
         Не удалось загрузить сводку.
         <button type="button" class="btn-link" (click)="reload()">Повторить</button>
       </div>
     }
 
     <!-- Каждый день — то, что открывают ежедневно: две крупные плитки с действием внутри. -->
-    <div class="hh-group">
-      <div class="hh-group-label">Каждый день</div>
+    <section class="hh-group" aria-labelledby="hh-g1">
+      <h2 class="hh-group-label" id="hh-g1">Каждый день</h2>
       <div class="hh-everyday">
         <!-- Ссылка растянута на всю плитку, а кнопка «Отметить приём» — поверх неё, а не внутри
              (кнопка внутри ссылки — невалидно и путает скринридер). -->
         <div class="hh-tile hh-tile-big hh-tile-linked">
           <a class="hh-tile-stretch" routerLink="/health/intake" [queryParams]="{person: 'me'}" aria-label="Приём лекарств"></a>
           <div class="hh-tile-head">
-            <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+            <app-icon-tile [icon]="icons.Pill" tone="medication" size="sm" />
             <span class="hh-tile-title flex-fill">Приём лекарств</span>
-            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            <app-icon class="hh-arrow" [icon]="icons.ChevronRight" [size]="18" />
           </div>
           @if (summary()?.intake; as ik) {
             @if (ik.total > 0) {
@@ -77,9 +77,9 @@
 
         <a class="hh-tile hh-tile-big" routerLink="/health/notes">
           <div class="hh-tile-head">
-            <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+            <app-icon-tile [icon]="icons.NotebookPen" tone="measure" size="sm" />
             <span class="hh-tile-title flex-fill">Дневник</span>
-            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            <app-icon class="hh-arrow" [icon]="icons.ChevronRight" [size]="18" />
           </div>
           @if (summary()?.diary; as d) {
             @if (d.latestBloodPressure; as bp) {
@@ -95,7 +95,7 @@
             }
             @if (d.latestSymptom; as s) {
               <div class="hh-tile-next">
-                <i class="ph-duotone ph-lightning" aria-hidden="true"></i>
+                <app-icon [icon]="icons.Zap" [size]="18" class="hh-symptom-icon" />
                 <span class="flex-fill">
                   {{ dayWord(s.occurredAt) }}@if (s.title) {: {{ s.title }}}@if (s.severity) {, {{ s.severity }}/10}
                 </span>
@@ -109,18 +109,18 @@
           }
         </a>
       </div>
-    </div>
+    </section>
 
     <!-- Медкарта — история: анализы, приёмы врача, показатели, прививки. -->
-    <div class="hh-group">
-      <div class="hh-group-label">Медкарта</div>
+    <section class="hh-group" aria-labelledby="hh-g2">
+      <h2 class="hh-group-label" id="hh-g2">Медкарта</h2>
       <div class="hh-medcard">
         <a class="hh-tile" routerLink="/health/records" [queryParams]="{person: 'me'}">
           <div class="hh-tile-head">
-            <i class="ph-duotone ph-test-tube" aria-hidden="true"></i>
+            <app-icon-tile [icon]="icons.FlaskConical" tone="accent" size="sm" />
             <span class="hh-tile-title flex-fill">Анализы</span>
             @if (summary()?.analyses?.latest?.abnormalIndicatorCount; as n) {
-              <span class="hh-badge hh-badge-danger">{{ n }} вне нормы</span>
+              <span class="badge badge-danger">{{ n }} вне нормы</span>
             }
           </div>
           @if (summary()?.analyses; as a) {
@@ -136,7 +136,7 @@
 
         <a class="hh-tile" routerLink="/health/visits" [queryParams]="{person: 'me'}">
           <div class="hh-tile-head">
-            <i class="ph-duotone ph-stethoscope" aria-hidden="true"></i>
+            <app-icon-tile [icon]="icons.Stethoscope" tone="accent" size="sm" />
             <span class="hh-tile-title flex-fill">Приёмы врача</span>
           </div>
           @if (summary()?.visits; as v) {
@@ -152,7 +152,7 @@
 
         <a class="hh-tile" routerLink="/health/indicators" [queryParams]="{person: 'me'}">
           <div class="hh-tile-head">
-            <i class="ph-duotone ph-chart-line-up" aria-hidden="true"></i>
+            <app-icon-tile [icon]="icons.ChartLine" tone="accent" size="sm" />
             <span class="hh-tile-title flex-fill">Показатели</span>
           </div>
           @if (summary()?.indicators; as ind) {
@@ -177,10 +177,10 @@
 
         <a class="hh-tile" [routerLink]="vaccinationHref()">
           <div class="hh-tile-head">
-            <i class="ph-duotone ph-syringe" aria-hidden="true"></i>
+            <app-icon-tile [icon]="icons.Syringe" tone="accent" size="sm" />
             <span class="hh-tile-title flex-fill">Прививки</span>
             @if (summary()?.vaccinations?.nextDue; as due) {
-              <span class="hh-badge" [class]="'hh-badge-' + statusTone(due.status)">{{ statusLabel(due.status) }}</span>
+              <span class="badge" [class]="badgeClass(statusTone(due.status))">{{ statusLabel(due.status) }}</span>
             }
           </div>
           @if (summary()?.vaccinations; as v) {
@@ -196,51 +196,26 @@
           }
         </a>
       </div>
-    </div>
+    </section>
 
     <!-- Инструменты — редкое: аптечка, отчёты для врача, справочник. -->
-    <div class="hh-group">
-      <div class="hh-group-label">Инструменты</div>
-      <div class="hh-tools">
-        <a class="hh-tool-row" routerLink="/health/medications">
-          <i class="ph-duotone ph-first-aid-kit" aria-hidden="true"></i>
-          <div class="flex-fill">
-            <div class="hh-tool-title">Аптечка</div>
-            @if (summary()?.medkits; as m) {
-              @if (m.expired > 0) {
-                <div class="hh-tool-sub hh-tool-sub-warn">просрочено: {{ m.expired }}</div>
-              } @else if (m.expiring > 0) {
-                <div class="hh-tool-sub hh-tool-sub-warn">скоро истекает срок: {{ m.expiring }}</div>
-              }
+    <section class="hh-group" aria-labelledby="hh-g3">
+      <h2 class="hh-group-label" id="hh-g3">Инструменты</h2>
+      <div class="list-card hh-tools">
+        <app-nav-row link="/health/medications" title="Аптечка" [icon]="icons.BriefcaseMedical" tone="accent"
+                     subtitle="лекарства семьи и сроки годности">
+          @if (summary()?.medkits; as m) {
+            @if (m.expired > 0) {
+              <span class="badge badge-danger">просрочено: {{ m.expired }}</span>
+            } @else if (m.expiring > 0) {
+              <span class="badge badge-warning">скоро истекает: {{ m.expiring }}</span>
             }
-          </div>
-          <i class="ph ph-caret-right" aria-hidden="true"></i>
-        </a>
-
-        <a class="hh-tool-row" routerLink="/health/reports">
-          <i class="ph-duotone ph-file-text" aria-hidden="true"></i>
-          <div class="flex-fill">
-            <div class="hh-tool-title">Отчёты для врача</div>
-            <div class="hh-tool-sub">
-              @if (summary()?.reports?.activeLinks; as n) {
-                {{ n }} {{ pluralizeRu(n, 'ссылка активна', 'ссылки активны', 'ссылок активно') }}
-              } @else {
-                Нет активных ссылок
-              }
-            </div>
-          </div>
-          <i class="ph ph-caret-right" aria-hidden="true"></i>
-        </a>
-
-        <a class="hh-tool-row" routerLink="/health/kb">
-          <i class="ph-duotone ph-book-open" aria-hidden="true"></i>
-          <div class="flex-fill">
-            <div class="hh-tool-title">Справочник</div>
-            <div class="hh-tool-sub">лекарства и показатели</div>
-          </div>
-          <i class="ph ph-caret-right" aria-hidden="true"></i>
-        </a>
+          }
+        </app-nav-row>
+        <app-nav-row link="/health/reports" title="Отчёты для врача" [icon]="icons.FileText" tone="accent"
+                     [subtitle]="reportsSubtitle()" />
+        <app-nav-row link="/health/kb" title="Справочник" [icon]="icons.BookOpen" tone="accent" subtitle="лекарства и показатели" />
       </div>
-    </div>
+    </section>
   </div>
 }

@@ -593,6 +593,12 @@ e2e модуля, счётчики аудита по файлам модуля.
 1. **Хаб `/health`** — `components/health-hub/*`, `components/health-home/*`: переключатель «чьи
    данные» в шапке, блоки «Каждый день», «Медкарта», «Инструменты» (`nav-row`), «принять сейчас»
    (`.hh-take` → primary, сделано в фазе 0). E2E `15-health-hub-mobile`.
+   > **Статус: выполнено (4.5.1).** H1 34/28; заголовки групп 19/600 без CAPS; плитки — карточки surface без
+   > рамки с `icon-tile` (вид — тоном), «следующая доза» и симптом — плашка surface-sunken; бейджи — глобальный
+   > `badge` (прививка «скоро» — warning, «можно сделать» — neutral, DESIGN §1); «Инструменты» — `list-card` из
+   > `nav-row`, просрочка аптечки — бейдж danger. Телефон: всё в одну колонку (раньше страница была шире экрана).
+   > Переключателя «чьи данные» нет: сводка `/api/health/summary` только про пользователя — это новая функция,
+   > не редизайн. e2e `15-health-hub`: заголовки инструментов — `.nr-title`.
 2. **Приём лекарств** — `intake-page`, `intake-today`, `intake-courses`, `intake-course-card`,
    `intake-course-form`, `intake-reminders`: `.it-card/.ic-card` → `list-card`, `.it-empty = .ic-empty`
    → `EmptyState`, `.cf-chip` → pill/chip, `.cf-source-tile` → ChoiceTile. E2E `08`, `13-intake-form`.

@@ -1,5 +1,11 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import {
+  BookOpen, BriefcaseMedical, ChartLine, ChevronRight, FileText, FlaskConical, NotebookPen, Pill, Stethoscope, Syringe, Zap,
+} from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
+import { NavRowComponent } from '../../shared/ui/nav-row/nav-row.component';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { IntakeStateService } from '../../services/intake-state.service';
@@ -11,7 +17,7 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { DoseAction, HealthSummary, HealthSummaryIntake, HealthSummaryNextDose, VaccinationStatus } from '../../models/types';
 import { ageParts } from '../../shared/util/age';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { statusLabel, statusTone, windowToText } from '../../shared/util/vaccination-labels';
+import { type StatusTone, statusLabel, statusTone, windowToText } from '../../shared/util/vaccination-labels';
 import { formatDayMonth, formatDayMonthYear } from '../../shared/util/date-format';
 import { MONTHS_GEN } from '../../shared/util/birthday-date';
 
@@ -30,11 +36,26 @@ type DoseSquare = 'taken' | 'missed' | 'next' | 'upcoming';
  */
 @Component({
   selector: 'app-health-home',
-  imports: [RouterLink, AvatarComponent, TrendLineComponent, LoadingSpinnerComponent],
+  imports: [RouterLink, AvatarComponent, IconComponent, IconTileComponent, NavRowComponent, TrendLineComponent, LoadingSpinnerComponent],
   templateUrl: './health-home.component.html',
   styleUrl: './health-home.component.scss',
 })
 export class HealthHomeComponent implements OnInit {
+  protected readonly icons = {
+    BookOpen, BriefcaseMedical, ChartLine, ChevronRight, FileText, FlaskConical, NotebookPen, Pill, Stethoscope, Syringe, Zap,
+  };
+
+  /** Бейдж статуса прививки по DESIGN §1: «скоро» (DueSoon, тон accent в vaccination-labels) — warning,
+   * «можно сделать» (CanDo, тон warning) и нет данных — neutral; accent в бейджах не используется. */
+  protected badgeClass(tone: StatusTone): string {
+    return tone === 'ok' ? 'badge-success' : tone === 'accent' ? 'badge-warning' : 'badge-neutral';
+  }
+
+  protected readonly reportsSubtitle = computed(() => {
+    const n = this.summary()?.reports?.activeLinks ?? 0;
+    return n > 0 ? `${n} ${pluralizeRu(n, 'ссылка активна', 'ссылки активны', 'ссылок активно')}` : 'Нет активных ссылок';
+  });
+
   private readonly api = inject(ApiService);
   protected readonly auth = inject(AuthService);
   protected readonly intake = inject(IntakeStateService);
