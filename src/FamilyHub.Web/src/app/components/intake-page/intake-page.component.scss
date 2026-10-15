@@ -6,6 +6,14 @@
   gap: var(--space-5);
 }
 
+.ip-title {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 1023px) { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+}
+
 .ip-head {
   display: flex;
   align-items: center;
@@ -16,4 +24,4 @@
 .ip-new { margin-left: auto; }
 
 // Содержимое нижнего листа: форма длинная — листаем внутри листа, а не страницу под ним.
-.ip-sheet { max-height: 75vh; overflow-y: auto; padding-bottom: 8px; }
+.ip-sheet { max-height: 75vh; overflow-y: auto; padding-bottom: var(--space-2); }

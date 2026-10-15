@@ -1,132 +1,167 @@
-// Форма курса (макет «Screen - Medication schedule», «новый курс»). Живёт в side-panel / bottom-sheet.
+// Форма курса (side-panel / bottom-sheet). DESIGN §2.3, §3: подписи 14/600 без CAPS; выборы — пилюли, выбранная —
+// accent-soft с рамкой accent (не заливка); плитки-источники и карточки — radius-lg, мягкий фон вместо рамок.
 
 :host { display: block; }
 
 .cf { display: flex; flex-direction: column; min-height: 0; }
-.cf-body { display: flex; flex-direction: column; gap: 16px; padding-bottom: 16px; }
+.cf-body { display: flex; flex-direction: column; gap: var(--space-5); padding-bottom: var(--space-4); }
 
-.cf-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.cf-label {
-  font-size: 0.7647rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
+.cf-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.cf-label { font: var(--text-caption); font-weight: 600; color: var(--color-text-secondary); }
+.cf-small { font: var(--text-caption); color: var(--color-text-secondary); }
+.cf-hint { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
+
+.cf-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+
+  @media (max-width: 479px) { grid-template-columns: minmax(0, 1fr); }
+
+  // Сегмент («Еда: до / во время / после / не важно») в половину ширины не помещается — на всю строку.
+  > .cf-field:has(> .seg) { grid-column: 1 / -1; }
 }
-.cf-small { font-size: 0.8235rem; color: var(--color-neutral-700); }
-.cf-hint { margin: 0; font-size: 0.8235rem; color: var(--color-neutral-700); }
 
-.cf-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; @media (max-width: 479px) { grid-template-columns: minmax(0, 1fr); } }
+.cf-field > .seg { align-self: flex-start; }
 
-.cf-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+// Выбор-пилюля: «как часто», «для кого».
+.cf-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
 .cf-chip {
   min-height: var(--tap-min);
-  padding: 6px 13px;
-  font: inherit;
-  font-size: 0.8235rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font: var(--text-body-sm);
+  color: var(--color-text);
   cursor: pointer;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
 
-  &.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); font-weight: 600; }
+  &.active { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-hover); font-weight: 600; }
 }
 
-.cf-source { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+// «Из назначения / Вручную» — две плитки-выбора.
+.cf-source { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+
 .cf-source-tile {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: var(--tap-min);
-  padding: 12px 14px;
-  font: inherit;
+  gap: var(--space-3);
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  font: var(--text-body);
   text-align: left;
   cursor: pointer;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
 
-  i { font-size: 1.25rem; color: var(--color-neutral-700); }
+  i { font-size: var(--icon-size); color: var(--color-text-secondary); }
   span { display: flex; flex-direction: column; }
-  small { font-size: 0.7647rem; color: var(--color-neutral-600); }
-  &.active { background: var(--color-accent-100); border-color: var(--color-accent); i, strong { color: var(--color-accent-800); } small { color: var(--color-accent-700); } }
+  small { font: var(--text-caption); color: var(--color-text-muted); }
+
+  &.active {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+
+    i, strong { color: var(--color-accent-hover); }
+    small { color: var(--color-accent-hover); }
+  }
 }
 
-.cf-prescriptions { display: flex; flex-direction: column; gap: 10px; }
-.cf-visit { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--color-paper); border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); }
-.cf-visit-head { font-size: 0.7647rem; color: var(--color-neutral-600); }
+.cf-prescriptions { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.cf-visit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+
+.cf-visit-head { font: var(--text-caption); color: var(--color-text-muted); }
+
 .cf-rx {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   min-height: var(--tap-min);
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 0.9rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: var(--text-body-sm);
   text-align: left;
   cursor: pointer;
-  background: transparent;
-  border: 1px solid transparent;
 
-  &:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
-  &.active { background: var(--color-accent-100); border-color: var(--color-accent); }
-  i { font-size: 1.15rem; color: var(--color-accent); flex: none; }
-  .cf-rx-check { color: var(--color-accent); margin-left: auto; }
+  @media (hover: hover) { &:hover { background: var(--color-surface); } }
+  &.active { border-color: var(--color-accent); background: var(--color-accent-soft); }
+  i { flex: none; font-size: var(--icon-size); color: var(--color-kind-medication); }
+  .cf-rx-check { margin-left: auto; color: var(--color-accent-hover); }
 }
+
 .cf-rx-text { flex: 1; min-width: 0; }
 
 .cf-box {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  background: var(--color-paper);
-  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
 }
-.cf-inline { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 0.9rem; }
-.cf-result { font-size: 0.8529rem; color: var(--color-accent-800); }
 
-.cf-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cf-inline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); font: var(--text-body-sm); }
+.cf-result { font: var(--text-caption); font-weight: 600; color: var(--color-accent-hover); }
+
+.cf-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); }
+
 .cf-day {
   min-height: var(--tap-min);
-  font: inherit;
-  font-size: 0.8235rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font: var(--text-caption);
   cursor: pointer;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
 
-  &.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); font-weight: 600; }
+  &.active { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-hover); font-weight: 600; }
 }
 
-.cf-times { display: flex; flex-direction: column; gap: 8px; }
-.cf-time-row { display: flex; align-items: center; gap: 10px; }
-.cf-time { width: 118px; flex: none; }
+.cf-times { display: flex; flex-direction: column; gap: var(--space-2); }
+.cf-time-row { display: flex; align-items: center; gap: var(--space-2); }
+.cf-time { flex: none; width: 118px; }
 .cf-units { flex: 1; min-width: 0; }
-.cf-narrow { width: 84px; flex: none; }
+.cf-narrow { flex: none; width: 84px; }
 .cf-auto { width: auto; }
-.cf-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+.cf-add { display: inline-flex; align-items: center; gap: var(--space-1); align-self: flex-start; }
 
+// «Списывать из аптечки», «кто узнает о пропусках» — карточка-переключатель.
 .cf-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  background: var(--color-paper);
-  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
 }
-.cf-card-row { display: flex; align-items: center; gap: 11px; > i { font-size: 1.25rem; color: var(--color-accent); } }
+
+.cf-card-row { display: flex; align-items: center; gap: var(--space-3); > i { font-size: var(--icon-size); color: var(--color-text-secondary); } }
 .cf-card-text { flex: 1; min-width: 0; }
-.cf-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 0.9412rem; line-height: 1.25; }
-.cf-card-sub { font-size: 0.7647rem; color: var(--color-neutral-600); }
+.cf-card-title { font: var(--text-body); font-weight: 600; }
+.cf-card-sub { font: var(--text-caption); color: var(--color-text-muted); }
 
 .cf-warn {
   display: flex;
-  gap: 9px;
-  padding: 9px 11px;
-  font-size: 0.8235rem;
-  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-paper));
-  color: var(--color-status-warning-text);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  font: var(--text-caption);
+  color: var(--color-warning);
 
-  i { margin-top: 2px; color: var(--color-status-warning); }
-  &.ok { background: color-mix(in srgb, var(--color-status-ok) 9%, var(--color-paper)); color: var(--color-status-ok-text); i { color: var(--color-status-ok); } }
+  i { margin-top: 2px; }
+  &.ok { background: var(--color-success-soft); color: var(--color-success); }
 }
 
 .cf-foot {
@@ -134,14 +169,15 @@
   bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 0 4px;
-  background: var(--color-bg);
+  gap: var(--space-3);
+  padding: var(--space-4) 0 var(--space-1);
   border-top: 1px solid var(--color-divider);
+  background: var(--color-surface);
 }
-.cf-summary { display: flex; align-items: flex-start; gap: 10px; font-size: 0.8824rem; color: var(--color-accent-800); i { color: var(--color-accent); margin-top: 2px; } }
-.cf-actions { display: flex; gap: 12px; }
+
+.cf-summary { display: flex; align-items: flex-start; gap: var(--space-2); font: var(--text-body-sm); color: var(--color-accent-hover); i { margin-top: 2px; } }
+.cf-actions { display: flex; gap: var(--space-3); }
 .cf-save { flex: 1; }
 
 .cf-advanced-toggle { align-self: flex-start; }
-.cf-missing { margin: 0 16px 6px; }
+.cf-missing { margin: 0 var(--space-4) var(--space-1); }

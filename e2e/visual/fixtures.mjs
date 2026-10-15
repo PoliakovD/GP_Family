@@ -37,6 +37,11 @@ export const SCREENS = [
   { name: 'visits', path: '/health/visits' },
   { name: 'visit', path: '/health/visits/v-1' },
   { name: 'intake', path: '/health/intake' },
+  { name: 'intake-form', path: '/health/intake', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Новый курс' }).click();
+    await page.getByRole('radio', { name: /Вручную/ }).click();
+    await page.waitForTimeout(400);
+  } },
   { name: 'intake-course', path: '/health/intake/courses/c-1', only: 'mobile' },
   { name: 'vaccinations', path: '/health/vaccinations' },
   { name: 'vaccination-person', path: `/health/vaccinations/people/user/${ME_ID}/series/influenza`, only: 'mobile' },

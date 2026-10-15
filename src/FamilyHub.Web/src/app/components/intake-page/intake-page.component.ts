@@ -1,3 +1,5 @@
+import { Plus } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnInit, computed, effect, inject, input, untracked, viewChild } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { BreakpointService } from '../../services/breakpoint.service';
@@ -21,6 +23,7 @@ import { IntakeRemindersComponent } from '../intake-reminders/intake-reminders.c
 @Component({
   selector: 'app-intake-page',
   imports: [
+    IconComponent,
     BottomSheetComponent, IntakeCourseFormComponent, IntakeRemindersComponent, RouterLink, RouterLinkActive,
     RouterOutlet, SidePanelComponent, TrackDirtyDirective,
   ],
@@ -28,6 +31,7 @@ import { IntakeRemindersComponent } from '../intake-reminders/intake-reminders.c
   styleUrl: './intake-page.component.scss',
 })
 export class IntakePageComponent implements OnInit {
+  protected readonly plusIcon = Plus;
   private readonly router = inject(Router);
   private readonly breakpoints = inject(BreakpointService);
   protected readonly intake = inject(IntakeStateService);

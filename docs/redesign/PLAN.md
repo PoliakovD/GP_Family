@@ -602,6 +602,14 @@ e2e модуля, счётчики аудита по файлам модуля.
 2. **Приём лекарств** — `intake-page`, `intake-today`, `intake-courses`, `intake-course-card`,
    `intake-course-form`, `intake-reminders`: `.it-card/.ic-card` → `list-card`, `.it-empty = .ic-empty`
    → `EmptyState`, `.cf-chip` → pill/chip, `.cf-source-tile` → ChoiceTile. E2E `08`, `13-intake-form`.
+   > **Статус: выполнено (4.5.2).** H1 «Приём лекарств»; «Сегодня»: «Вся семья / люди» — `seg` с мини-аватарами,
+   > «сейчас» — карточка с рамкой accent 2px, приёмы — list-card (разделители 24, чекбокс 32/тап 44, radius-sm),
+   > боковые карточки без цветных полос слева (плитка-иконка danger/warning), «Неделя» без CAPS; пустое — `EmptyState`.
+   > Курсы: строки — карточки surface, выбранный — accent-soft + рамка, бейджи — `badge` (пропуск — danger, запас —
+   > warning, пауза — neutral); карточка курса — плитки surface-sunken, история с радиусами, подзаголовки без CAPS.
+   > Форма курса и напоминания: подписи без CAPS, выборы — пилюли accent-soft вместо заливки accent, плитки-источники
+   > radius-lg; сегмент «Еда» — на всю строку (не помещался). ChoiceTile отдельным компонентом не выносился:
+   > плитка-выбор есть только здесь. Иконки внутри формы и напоминаний (Phosphor) — без изменений.
 3. **Прививки** — `vaccinations-page`, `vaccinations-overview`, `vaccination-person`,
    `vaccination-add-modal`, `vaccination-saved-sheet`: `.vo-card` → card, 11px-кегли (`0.6471rem`)
    → `--text-micro` ≥ 12, `.va-cal-check` 22px → 44 тап-зона. E2E `14-vaccinations`.

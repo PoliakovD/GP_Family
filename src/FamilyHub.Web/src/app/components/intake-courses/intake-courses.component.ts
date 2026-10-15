@@ -1,3 +1,8 @@
+import { Archive, ChevronDown, ChevronUp, Eye, Pill } from 'lucide-angular';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
@@ -24,11 +29,12 @@ interface CourseGroup {
  */
 @Component({
   selector: 'app-intake-courses',
-  imports: [AvatarComponent, BackLinkComponent, IntakeCourseCardComponent, RouterLink],
+  imports: [EmptyStateComponent, IconComponent, IconTileComponent, LoadingSpinnerComponent, AvatarComponent, BackLinkComponent, IntakeCourseCardComponent, RouterLink],
   templateUrl: './intake-courses.component.html',
   styleUrl: './intake-courses.component.scss',
 })
 export class IntakeCoursesComponent {
+  protected readonly icons = { Archive, ChevronDown, ChevronUp, Eye, Pill };
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly breakpoints = inject(BreakpointService);
