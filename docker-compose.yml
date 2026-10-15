@@ -74,7 +74,7 @@ services:
   # broker+controller — этого достаточно для dev/single-instance; продовый кластер потребовал
   # бы отдельных controller-узлов и внешнего KAFKA_ADVERTISED_LISTENERS для каждого брокера.
   kafka:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:4.3.1
     restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
