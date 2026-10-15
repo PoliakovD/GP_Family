@@ -56,14 +56,14 @@
   <ItemGroup>
     <!-- ветка medicalrecords: декодирование вложений для OCR-конвейера анализов/выписок (Documents/) —
          текстовый слой PDF, рендер PDF-страниц без текстового слоя, офисные форматы, ресайз фото.
-         Версии и рационале пиннинга (SkiaSharp 2.88.8, NPOI/ImageSharp CVE) — см.
+         Версии и рационале пиннинга (единая линия SkiaSharp 3.119.x, LibTiff.Net вместо ImageSharp, лицензия NPOI) — см.
          Directory.Packages.props. -->
     <PackageReference Include="PdfPig" />
     <PackageReference Include="PDFtoImage" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="NPOI" />
-    <PackageReference Include="SixLabors.ImageSharp" />
+    <PackageReference Include="BitMiracle.LibTiff.NET" />
   </ItemGroup>
 
   <!-- Authorization/Authentication-абстракции (IAuthorizationHandler, ClaimsPrincipal-расширения и т.п.)

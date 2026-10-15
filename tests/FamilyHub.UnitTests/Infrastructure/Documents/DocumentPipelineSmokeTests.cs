@@ -43,6 +43,38 @@ public class DocumentPipelineSmokeTests
     }
 
     [Fact]
+    public void ImageDownscaler_Downscale_Tiff_DecodesWithCorrectChannelOrder()
+    {
+        // SkiaSharp TIFF не декодирует — путь идёт через фолбэк на LibTiff.Net, где растр из
+        // ReadRGBAImageOriented (ABGR в int) копируется в SKBitmap как Rgba8888. Перепутанные каналы
+        // или перевёрнутая ориентация молча дали бы «синий» скан вместо красного — проверяем цвет.
+        var source = TiffTestFactory.CreateRgb(1600, 400, left: (220, 20, 20), right: (20, 20, 220));
+
+        var result = ImageDownscaler.Downscale(source, maxDimension: 800, jpegQuality: 90);
+
+        result.ContentType.Should().Be(DocumentContentTypes.Jpeg);
+        using var decoded = SKBitmap.Decode(result.Bytes);
+        decoded.Width.Should().Be(800);
+        decoded.Height.Should().Be(200);
+        var left = decoded.GetPixel(100, 100);
+        var right = decoded.GetPixel(700, 100);
+        left.Red.Should().BeGreaterThan(180);
+        left.Blue.Should().BeLessThan(60);
+        right.Blue.Should().BeGreaterThan(180);
+        right.Red.Should().BeLessThan(60);
+    }
+
+    [Fact]
+    public void ImageDownscaler_Downscale_TruncatedTiff_ThrowsNotSupported()
+    {
+        var source = TiffTestFactory.CreateRgb(200, 200, left: (0, 0, 0), right: (0, 0, 0))[..16];
+
+        var act = () => ImageDownscaler.Downscale(source, maxDimension: 800, jpegQuality: 78);
+
+        act.Should().Throw<NotSupportedException>();
+    }
+
+    [Fact]
     public void PdfPageRasterizer_RasterizePages_RendersRequestedPageCount()
     {
         var pdf = CreateOnePagePdf();
@@ -71,8 +103,9 @@ public class DocumentPipelineSmokeTests
         using var bitmap = new SKBitmap(width, height);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.White);
-        using var paint = new SKPaint { Color = SKColors.Black, TextSize = 24 };
-        canvas.DrawText("Гемоглобин 118 г/л", 10, 40, paint);
+        using var paint = new SKPaint { Color = SKColors.Black };
+        using var font = new SKFont { Size = 24 };
+        canvas.DrawText("Гемоглобин 118 г/л", 10, 40, SKTextAlign.Left, font, paint);
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
         return data.ToArray();
@@ -84,8 +117,9 @@ public class DocumentPipelineSmokeTests
         using (var document = SKDocument.CreatePdf(stream))
         {
             using var canvas = document.BeginPage(400, 300);
-            using var paint = new SKPaint { Color = SKColors.Black, TextSize = 18 };
-            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, paint);
+            using var paint = new SKPaint { Color = SKColors.Black };
+            using var font = new SKFont { Size = 18 };
+            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, SKTextAlign.Left, font, paint);
             document.EndPage();
             document.Close();
         }

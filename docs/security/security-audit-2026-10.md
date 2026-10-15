@@ -315,6 +315,14 @@ initData, перехваченные один раз (логи, расширен
   поэтому ICC-профиль не создаётся. NPOI тоже тянет ImageSharp, но для извлечения текста DOCX/XLSX
   картинки не декодирует. Шаг CI оставит warning, пока пакет на 2.x. Решение по 4.x (лицензия)
   остаётся за владельцем.
+- **NuGet, 2026-10-15:** ✅ Исправлено. В ImageSharp 2.x нашлись три High (GHSA-j3p4-wp97-rph4,
+  GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w) и ещё Moderate GHSA-wmxv-xphr-5c9g, плюс транзитивный
+  `System.Security.Cryptography.Pkcs 10.0.0` (High GHSA-846f-f764-76mx) — CI покраснел. ImageSharp 4.1.2
+  отпал: сборка без лицензионного ключа Six Labors падает. ImageSharp убран из графа целиком:
+  NPOI → 2.8.1 (больше от него не зависит; OSMF EULA принята владельцем), за ним SkiaSharp → 3.119.4 и
+  PDFtoImage → 5.2.1; TIFF-фолбэк `ImageDownscaler` переписан на `BitMiracle.LibTiff.NET` (BSD) —
+  по-прежнему только по сигнатуре TIFF, плюс потолок 40 Мп до выделения растра. Pkcs закреплён на 10.0.13.
+  `dotnet list package --vulnerable --include-transitive` после этого пуст.
 - **npm:** `piscina` закреплён на 5.3.2 через `overrides` (critical закрыт). Осталось `vitest` 3 →
   `tinypool` 1.x и `@vitest/mocker` (2 critical, 2 moderate, только тест-раннер, атакующий ввод до них
   не доходит). Нужен мажорный апгрейд vitest вместе с проверкой совместимости
@@ -406,7 +414,7 @@ initData, перехваченные один раз (логи, расширен
 | **0. Немедленно** ✅ | 1–2 дня | **H2**: `RevokeAllForUserAsync` в reset + тест. **H1**: PoC; сеть `previews` (`internal: true`) для gotenberg; HTML/XML показывать как текст; закрепить версию Gotenberg | Тест H2 зелёный; PoC H1 после исправления не даёт исходящих запросов |
 | **1. Ближайший спринт** ✅ | ≤ 2 нед | **M1** валидатор push-endpoint и лимиты; **M2** `text/plain` + `CSP: sandbox` для вложений, magic bytes; **M3** `RequireHost` + блокировка + аудит входов; **M4** CSRF без fail-open; **M6** обязательный `auth_date`, TTL ≈1 ч | Интеграционные и unit-тесты на каждый пункт; `CaddyfileTests` не сломаны |
 | **2. Следующий спринт** ✅ | ≤ 1 мес | **M5** проверка `SessionId` в `OnTokenValidated`; **M7** pin SHA/digest, `permissions:`, Dependabot, `npm audit fix`, `dotnet list package --vulnerable` в CI; **L3/L5** сегментация сетей и доверие XFF только от Caddy; **L4** изоляция Kafka | В CI есть шаг скана зависимостей; `docker compose config` с новыми сетями; деплой по digest |
-| **3. Бэклог** | — | ~~L1, L2, L6, L7, L8~~ (сделано или принято). Осталось: TOTP и персистентные сессии админки, `__Host-` для cookie, сверка magic bytes, мажорный апгрейд vitest, решение по ImageSharp 4.x (лицензия), SASL для Kafka при росте | — |
+| **3. Бэклог** | — | ~~L1, L2, L6, L7, L8~~ (сделано или принято). Осталось: TOTP и персистентные сессии админки, `__Host-` для cookie, сверка magic bytes, мажорный апгрейд vitest, ~~решение по ImageSharp 4.x (лицензия)~~ (ImageSharp заменён на LibTiff.Net, 2026-10-15), SASL для Kafka при росте | — |
 
 После закрытия каждого этапа: отметить находки здесь как `✅ Исправлено (коммит/PR)` и обновить
 [threat-model.md](threat-model.md) и [access-matrix.md](access-matrix.md).

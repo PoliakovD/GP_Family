@@ -63,20 +63,23 @@
   </ItemGroup>
 
   <ItemGroup Label="Документы / изображения (конвейер распознавания)">
-    <!-- SkiaSharp НЕ пиннится на последнюю 3.x намеренно: PDFtoImage 4.1.1 скомпилирован против
-         SkiaSharp 2.88.8 (см. его .nuspec) — 3.x менял сигнатуры SKBitmap.Resize/SKImageInfo, и
-         принудительная унификация на 3.x рисковала бы MissingMethodException в рантайме внутри
-         чужой уже скомпилированной сборки. Явный пиннинг фиксирует то, что и так резолвится
-         транзитивно от PDFtoImage — чтобы версия не расползлась незаметно при будущем добавлении
-         другого пакета с более широким диапазоном. -->
+    <!-- SkiaSharp — одна мажорная линия 3.119.x на всё решение: PDFtoImage 5.2.1 собран против
+         SkiaSharp >= 3.119.2, NPOI 2.8.1 — против >= 3.119.4. На 4.x не поднимаем: PDFtoImage 5.3+
+         (единственный, кто собран под 4.x) нам не нужен, а NPOI на 4.x не проверялся — принудительная
+         унификация чужих уже скомпилированных сборок рискует MissingMethodException в рантайме.
+         Явный пиннинг — чтобы версия не расползлась при добавлении пакета с более широким диапазоном. -->
     <PackageVersion Include="PdfPig" Version="0.1.16" />
-    <PackageVersion Include="PDFtoImage" Version="4.1.1" />
-    <PackageVersion Include="SkiaSharp" Version="2.88.9" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.9" />
-    <PackageVersion Include="NPOI" Version="2.7.4" />
-    <!-- Явный пиннинг: NPOI 2.7.4 транзитивно тянет SixLabors.ImageSharp 2.1.10, у которого
-         известная DoS-уязвимость (NU1902, GHSA-rxmq-m78w-7wmc) — версия поднята до патченной. -->
-    <PackageVersion Include="SixLabors.ImageSharp" Version="2.1.13" />
+    <PackageVersion Include="PDFtoImage" Version="5.2.1" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.4" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
+    <!-- 2.8.x больше не зависит от SixLabors.ImageSharp (перешёл на SkiaSharp). Бинарный релиз идёт
+         под OSMF EULA (плата мейнтейнерам только при выручке >= $10k/год; исходники — Apache 2.0) —
+         принято владельцем 2026-10-15, см. AcceptNPOIOSMFLicense в Directory.Build.props. -->
+    <PackageVersion Include="NPOI" Version="2.8.1" />
+    <!-- Фолбэк-декодер TIFF в ImageDownscaler (SkiaSharp TIFF не умеет). Заменил SixLabors.ImageSharp:
+         у 2.x непатченные High-уязвимости (GHSA-j3p4-wp97-rph4, GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w),
+         а 4.x требует лицензионный ключ на этапе сборки. LibTiff.Net — управляемый порт libtiff, BSD. -->
+    <PackageVersion Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
   </ItemGroup>
 
   <ItemGroup Label="Swagger">
@@ -107,6 +110,9 @@
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
     <!-- SSH.NET 2023.0.0 (транзитивно через Testcontainers, только тесты) — GHSA-q939-rpr3-3284. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
+    <!-- System.Security.Cryptography.Pkcs 10.0.0 (транзитивно) — GHSA-846f-f764-76mx (High, DoS),
+         GHSA-2fmv-rv2c-59x7. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
 </Project>
