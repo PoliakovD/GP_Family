@@ -83,6 +83,15 @@ describe('IndicatorTableComponent', () => {
     expect(fixture.nativeElement.querySelectorAll('.indicator-card').length).toBe(1);
   });
 
+  it('status filter keeps only the matching group and says how many are hidden', () => {
+    const fixture = create([ind('a', 'Альбумин', IndicatorFlag.Normal), ind('b', 'Билирубин', IndicatorFlag.High)]);
+    fixture.componentRef.setInput('statusFilter', 'bad');
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('tr.indicator-row')) as HTMLElement[];
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining('Билирубин')]);
+    expect((fixture.nativeElement.querySelector('.it-filtered') as HTMLElement).textContent).toContain('ещё 1');
+  });
+
   it('adding a new indicator calls the API with a sanitized form and emits created', async () => {
     const fixture = create([]);
     const created = vi.fn();

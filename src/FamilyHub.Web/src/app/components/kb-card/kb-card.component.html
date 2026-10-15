@@ -1,5 +1,5 @@
 <div>
-  <h4 class="mb-1">{{ card().displayName }}</h4>
+  <h2 class="kc-title">{{ card().displayName }}</h2>
   @if (card().internationalName) {
     <p class="muted mb-2">МНН: {{ card().internationalName }}</p>
   }
@@ -7,7 +7,7 @@
   @if (card().tradeNames.length > 0) {
     <div class="d-flex flex-wrap gap-1 mb-2">
       @for (name of card().tradeNames; track name) {
-        <span class="tag tag-neutral">{{ name }}</span>
+        <span class="badge badge-neutral">{{ name }}</span>
       }
     </div>
   }

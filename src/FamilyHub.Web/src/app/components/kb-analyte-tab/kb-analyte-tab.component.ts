@@ -1,8 +1,9 @@
+import { ChevronRight } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { KbAnalyteCard, KbAnalyteListItem } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
@@ -24,12 +25,21 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
  * заставляя пользователя искать её заново в списке.
  */
 @Component({
-    selector: 'app-kb-analyte-tab',
-    imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './kb-analyte-tab.component.html'
+    selector: 'app-kb-analyte-tab',
+    imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
+    templateUrl: './kb-analyte-tab.component.html',
+  styles: [`
+    .kb-tab { display: flex; flex-direction: column; gap: var(--space-4); }
+    .kb-note { margin: 0; font: var(--text-body-sm); color: var(--color-text-muted); }
+    .kb-specimen { font-weight: 400; color: var(--color-text-muted); }
+    .kb-row { padding: var(--space-3) var(--space-6); }
+    .kb-row + .kb-row { border-top: 1px solid var(--color-divider); }
+    @media (max-width: 639px) { .kb-row { padding: var(--space-3) var(--space-4); } }
+  `],
 })
 export class KbAnalyteTabComponent implements OnInit, OnDestroy {
+  protected readonly chevron = ChevronRight;
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

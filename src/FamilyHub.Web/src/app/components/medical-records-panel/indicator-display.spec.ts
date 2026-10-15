@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { IndicatorFlag, RefSource } from '../../models/types';
 import type { IndicatorDto } from '../../models/types';
 import {
-  deviationFor, flagClass, indicatorReference, isCalculatedRef, isInferredRef, rowStatusClass, scaleBounds,
+  deviationAmount, deviationFor, indicatorReference, indicatorStatusGroup, indicatorSubtitle, isCalculatedRef,
+  isInferredRef, scaleBounds,
   scaleValue, sortIndicators, groupIndicatorsByPanel, NO_PANEL_LABEL,
 } from './indicator-display';
 
@@ -62,18 +63,27 @@ describe('groupIndicatorsByPanel', () => {
   });
 });
 
-describe('status classes', () => {
-  it('row: ok / bad / none for unknown', () => {
-    expect(rowStatusClass(ind())).toBe('indicator-row-ok');
-    expect(rowStatusClass(ind({ flag: IndicatorFlag.Critical }))).toBe('indicator-row-bad');
-    expect(rowStatusClass(ind({ flag: IndicatorFlag.Unknown }))).toBe('');
+describe('status groups', () => {
+  it('ok / bad / none for unknown', () => {
+    expect(indicatorStatusGroup(ind())).toBe('ok');
+    expect(indicatorStatusGroup(ind({ flag: IndicatorFlag.Low }))).toBe('bad');
+    expect(indicatorStatusGroup(ind({ flag: IndicatorFlag.Critical }))).toBe('bad');
+    expect(indicatorStatusGroup(ind({ flag: IndicatorFlag.Unknown }))).toBe('none');
   });
 
-  it('value cell', () => {
-    expect(flagClass(IndicatorFlag.Low)).toBe('indicator-flag-warning');
-    expect(flagClass(IndicatorFlag.Critical)).toBe('indicator-flag-danger');
-    expect(flagClass(IndicatorFlag.Normal)).toBe('indicator-flag-ok');
-    expect(flagClass(IndicatorFlag.Unknown)).toBe('indicator-flag-unknown');
+  it('deviation amount: distance past the violated bound, null inside the norm or without numbers', () => {
+    const bounds = { refLowText: '6.5', refHighText: '12.5' };
+    expect(deviationAmount(ind({ ...bounds, valueNumericText: '4.24' }))).toBe('2,26');
+    expect(deviationAmount(ind({ ...bounds, valueNumericText: '13' }))).toBe('0,5');
+    expect(deviationAmount(ind({ ...bounds, valueNumericText: '8' }))).toBeNull();
+    expect(deviationAmount(ind({ refLowText: null, refHighText: '5', valueNumericText: '7' }))).toBe('2');
+    expect(deviationAmount(ind({ ...bounds, valueNumericText: null }))).toBeNull();
+  });
+
+  it('subtitle: printed name first, otherwise the textual norm when there is no scale', () => {
+    expect(indicatorSubtitle(ind({ rawDisplayName: 'СОЭ по Панченкову', displayName: 'СОЭ' }))).toBe('СОЭ по Панченкову');
+    expect(indicatorSubtitle(ind({ rawDisplayName: null, refLowText: '1', refHighText: '2' }))).toBeNull();
+    expect(indicatorSubtitle(ind({ rawDisplayName: null, refLowText: null, refHighText: null, refText: 'отрицательно' }))).toBe('отрицательно');
   });
 });
 

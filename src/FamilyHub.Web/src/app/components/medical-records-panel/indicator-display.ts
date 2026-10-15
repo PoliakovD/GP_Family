@@ -3,7 +3,7 @@
 
 import { IndicatorFlag, RefSource } from '../../models/types';
 import type { IndicatorDto } from '../../models/types';
-import { formatDeviation } from '../../shared/reference-scale/reference-scale.component';
+import { formatDeviation, formatScaleNumber } from '../../shared/reference-scale/reference-scale.component';
 import { indicatorLabel as indicatorLabelOf } from '../../shared/util/indicator-name';
 import { specimenLabel } from '../../shared/util/specimen';
 
@@ -58,27 +58,32 @@ export function groupIndicatorsByPanel(items: readonly IndicatorDto[]): Indicato
   return groups;
 }
 
-/** Подсветка строки по статусу — зелёная/красная, ровно два состояния (не градация
- * Low/High/Critical) — тот же принцип, что палочка на шкале (см. reference-scale). */
-export function rowStatusClass(ind: IndicatorDto): string {
-  if (ind.flag === IndicatorFlag.Normal) return 'indicator-row-ok';
-  if (ind.flag === IndicatorFlag.Unknown) return '';
-  return 'indicator-row-bad';
+/** Счётчик-фильтр в шапке записи: вне нормы / в норме / без нормы (DESIGN §3 «Анализ»). */
+export type IndicatorStatusFilter = 'bad' | 'ok' | 'none';
+
+export function indicatorStatusGroup(ind: IndicatorDto): IndicatorStatusFilter {
+  if (ind.flag === IndicatorFlag.Normal) return 'ok';
+  if (ind.flag === IndicatorFlag.Unknown) return 'none';
+  return 'bad';
 }
 
-/** Только окраска ячейки «Значение» — подпись статуса рендерит <app-status-chip>. */
-export function flagClass(flag: number): string {
-  switch (flag) {
-    case IndicatorFlag.Low:
-    case IndicatorFlag.High:
-      return 'indicator-flag-warning';
-    case IndicatorFlag.Critical:
-      return 'indicator-flag-danger';
-    case IndicatorFlag.Normal:
-      return 'indicator-flag-ok';
-    default:
-      return 'indicator-flag-unknown';
-  }
+/** Насколько значение вышло за границу нормы — «4», «2,26» для бейджа «↑ выше на 4»; null — в норме
+ * или сравнить не с чем (нет числа или нужной границы). */
+export function deviationAmount(ind: IndicatorDto): string | null {
+  const v = scaleValue(ind);
+  if (v === null || Number.isNaN(v)) return null;
+  const low = ind.refLowText ? parseFloat(ind.refLowText) : null;
+  const high = ind.refHighText ? parseFloat(ind.refHighText) : null;
+  if (low !== null && v < low) return formatScaleNumber(low - v);
+  if (high !== null && v > high) return formatScaleNumber(v - high);
+  return null;
+}
+
+/** Подпись под названием показателя: как он напечатан в бланке («СОЭ по Панченкову»), а если шкалы
+ * нет — норма текстом; null — подписи нет. */
+export function indicatorSubtitle(ind: IndicatorDto): string | null {
+  if (ind.rawDisplayName && ind.rawDisplayName !== ind.displayName) return ind.rawDisplayName;
+  return scaleBounds(ind) ? null : indicatorReference(ind);
 }
 
 /** Норма текстом: «3,5–5,0», «< 5», «> 1» или качественная (refText). null — нормы нет. */

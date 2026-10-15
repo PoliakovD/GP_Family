@@ -12,14 +12,15 @@ export interface AvatarPerson {
 /** 6 пар фон/текст из уже существующих тональных рамп styles.scss — новых цветов не вводится.
  * Цвет — детерминированный хэш ключа, НЕ пол: `User.Gender` nullable (заполнен не у всех), а
  * в ТЗ редизайна нет явного требования кодировать им пол на аватаре. */
+// DESIGN §2.1: остальные участники — циклически из мягких фонов с соответствующим тёмным текстом.
 const PALETTE: readonly (readonly [string, string])[] = [
-  ['var(--color-accent-200)', 'var(--color-accent-800)'],
-  ['var(--color-accent-2-200)', 'var(--color-accent-2-800)'],
-  ['var(--color-neutral-200)', 'var(--color-neutral-800)'],
-  ['var(--color-accent-100)', 'var(--color-accent-700)'],
-  ['var(--color-accent-2-100)', 'var(--color-accent-2-700)'],
-  ['var(--color-neutral-100)', 'var(--color-neutral-700)'],
+  ['var(--color-avatar-warm)', 'var(--color-avatar-warm-text)'],
+  ['var(--color-accent-soft)', 'var(--color-accent-hover)'],
+  ['var(--color-kind-sleep-soft)', 'var(--color-kind-sleep)'],
+  ['var(--color-success-soft)', 'var(--color-success)'],
 ];
+// Свой аватар — акцентный.
+const SELF: readonly [string, string] = ['var(--color-accent)', 'var(--color-on-accent)'];
 
 /** Простой строковый хэш (не криптографический) — достаточно для равномерного распределения
  * по 6 цветам палитры. */
@@ -52,7 +53,10 @@ function hashString(value: string): number {
 })
 export class AvatarComponent {
   readonly person = input.required<AvatarPerson>();
-  readonly size = input<'sm' | 'md' | 'lg'>('md');
+  /** xs 24 · sm 32 (чат) · md 40 · lg 44 (person-row) · xl 56 (шапка семьи). */
+  readonly size = input<'xs' | 'sm' | 'md' | 'lg' | 'xl'>('md');
+  /** Свой аватар — акцентный (DESIGN §2.1). */
+  readonly self = input(false);
 
   readonly initials = computed(() => {
     const { firstName, lastName } = this.person();
@@ -62,5 +66,5 @@ export class AvatarComponent {
     return combined || '?';
   });
 
-  readonly colors = computed(() => PALETTE[hashString(this.person().key) % PALETTE.length]);
+  readonly colors = computed(() => (this.self() ? SELF : PALETTE[hashString(this.person().key) % PALETTE.length]));
 }

@@ -1,228 +1,167 @@
-// Статья справочника по показателю — оформление по макету «Показатели анализа и справка».
-// Контейнер (боковая панель / bottom-sheet / полноэкранный мобильный вид) даёт название; сама
-// статья — вертикальный стек блоков с равным ритмом.
+// Справка по показателю (DESIGN §3 «Анализ»): контейнер (боковая панель / полноэкранный вид на телефоне)
+// даёт название; статья — вертикальный стек блоков. Статус несут бейдж и маркер шкалы, не цвет числа.
 
 .kb-article {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
   min-width: 0;
 }
 
 .kb-specimen {
-  margin: -8px 0 -6px;
-  color: var(--color-neutral-600);
-  font-size: var(--font-size-meta);
+  margin-bottom: calc(var(--space-2) * -1);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 }
 
-// --- Текущее значение: отдельная рамка со шкалой ---
+// --- Текущее значение: утопленная плашка со шкалой ---
 
 .kb-value-frame {
-  padding: 16px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
 }
 
 .kb-value-row {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-bottom: 6px;
+  gap: var(--space-2);
 }
 
 .kb-value {
-  font-family: var(--font-heading);
-  font-size: 1.8824rem;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--color-status-ok-text);
+  font: var(--text-metric-mobile);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }
 
-.kb-value-bad {
-  color: var(--color-status-danger-text);
-}
-
-.kb-value-unit {
-  color: var(--color-neutral-700);
-  font-size: 1rem;
-}
-
-.kb-value-chip {
-  margin-left: auto;
-}
+.kb-value-unit { font: var(--text-body-sm); color: var(--color-text-muted); }
+.kb-value-chip { margin-left: auto; align-self: center; }
 
 .kb-value-norm,
 .kb-value-deviation,
 .kb-value-context {
-  color: var(--color-neutral-600);
-  font-size: var(--font-size-meta);
+  font: var(--text-caption);
+  color: var(--color-text-secondary);
 }
 
-.kb-value-norm {
-  margin-top: 2px;
-}
+.kb-value-deviation { font-weight: 600; color: var(--color-danger); }
+.kb-value-context { color: var(--color-text-muted); }
 
-.kb-value-deviation {
-  color: var(--color-status-danger-text);
-}
+// --- Правка показателя ---
 
-.kb-value-context {
-  margin-top: 6px;
-  font-size: 0.8235rem;
-}
+.kb-edit-actions { display: flex; gap: var(--space-2); margin: calc(var(--space-2) * -1) 0; }
+.kb-edit-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.kb-edit-row { display: flex; gap: var(--space-2); > .input { flex: 1; min-width: 0; } }
 
-// --- Секции ---
+// --- Секции: заголовок 16/600 без CAPS (DESIGN §2.3) ---
 
-.kb-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.kb-section { display: flex; flex-direction: column; gap: var(--space-2); }
 
-// Заголовок секции («Что это», «Нормы», «На что влияет») — раньше 0.5882rem (≈10px) в общем
-// .card-kicker, на глаз не читалось.
 .kb-section-title {
   margin: 0;
-  color: var(--color-neutral-700);
-  font-family: var(--font-heading);
-  font-size: 0.8824rem;
+  font: var(--text-body);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: var(--color-text);
 }
 
-.kb-text {
+.kb-text,
+.kb-effect {
   margin: 0;
-  font-size: 0.9706rem;
-  line-height: 1.55;
-  color: var(--color-neutral-900);
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
   text-wrap: pretty;
 }
+
+.kb-note { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
 
 // --- Нормы: иконка группы + подпись + диапазон ---
 
 .kb-norm-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 13px;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font: var(--text-body-sm);
 
   i {
     flex: none;
     width: 20px;
     text-align: center;
-    font-size: 1.1765rem;
-    color: var(--color-neutral-600);
+    font-size: var(--icon-size);
+    color: var(--color-text-muted);
   }
 }
 
-.kb-norm-label {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.9412rem;
-}
-
-.kb-norm-value {
-  flex: none;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.9412rem;
-  white-space: nowrap;
-}
+.kb-norm-label { flex: 1; min-width: 0; }
+.kb-norm-value { flex: none; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 // Строка, подходящая полу и возрасту пациента.
 .kb-norm-row-match {
-  background: var(--color-accent-100);
-  color: var(--color-accent-800);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
 
-  i {
-    color: var(--color-accent);
-  }
+  i { color: var(--color-accent-hover); }
 }
 
-.kb-norm-source {
-  color: var(--color-neutral-600);
-  font-size: 0.8235rem;
-}
+.kb-norm-source { font: var(--text-caption); color: var(--color-text-muted); }
 
-// --- «На что влияет»: абзацы «ниже/выше нормы» со стрелкой ---
+// --- «На что влияет»: «ниже/выше нормы» со стрелкой ---
 
 .kb-effect {
   display: flex;
-  gap: 10px;
-  margin: 4px 0 0;
-  padding-left: 4px;
-  font-size: 0.9706rem;
-  line-height: 1.5;
+  gap: var(--space-2);
 
-  i {
-    flex: none;
-    margin-top: 4px;
-    font-size: 1rem;
-    color: var(--color-status-danger-text);
-  }
-
-  strong {
-    font-weight: 600;
-  }
+  app-icon { flex: none; margin-top: 2px; color: var(--color-danger); }
+  strong { font-weight: 600; color: var(--color-text); }
 }
 
-// --- «Что смотрят вместе»: выделенная плашка с полоской ---
+// --- «Что смотрят вместе» ---
 
 .kb-related {
-  padding: 14px 16px;
-  background: var(--color-accent-100);
-  border-left: 3px solid var(--color-accent);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-soft);
 }
 
 .kb-related-title {
-  margin: 0 0 8px;
-  color: var(--color-accent-800);
-  font-family: var(--font-heading);
-  font-size: 0.9412rem;
+  margin: 0 0 var(--space-2);
+  font: var(--text-body);
   font-weight: 600;
+  color: var(--color-accent-hover);
 }
 
-.kb-related-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
+.kb-related-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 .kb-related-chip {
-  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--space-3);
   border: 0;
-  background: var(--color-paper);
-  color: var(--color-accent-800);
-  font-family: inherit;
-  font-size: 0.8824rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-accent-hover);
+  font: var(--text-caption);
+  font-weight: 600;
 }
 
 .kb-related-chip-link {
   cursor: pointer;
 
-  &:hover {
-    background: var(--color-accent-200);
-  }
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
 }
 
-// --- Кнопки внизу: на всю ширину компонента ---
+.kb-related-chip-off { color: var(--color-text-muted); font-weight: 400; }
 
-.kb-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
+// --- Кнопки внизу: на всю ширину ---
 
-.kb-dynamics {
-  padding-top: 4px;
-}
+.kb-actions { display: flex; flex-direction: column; gap: var(--space-2); }
+.kb-dynamics { padding-top: var(--space-1); }
 
-.kb-disclaimer {
-  margin: 0;
-  color: var(--color-neutral-600);
-  font-size: 0.8235rem;
-  line-height: 1.5;
-  text-wrap: pretty;
-}
+.kb-disclaimer { margin: 0; font: var(--text-caption); color: var(--color-text-muted); text-wrap: pretty; }

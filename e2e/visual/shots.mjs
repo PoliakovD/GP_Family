@@ -107,7 +107,7 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
     await page.goto(base + screen.path);
     await page.waitForLoadState('networkidle');
     // Ждём, пока уйдут спиннеры «Загрузка…», иначе снимок зависит от тайминга.
-    await page.waitForFunction(() => !document.querySelector('app-loading-spinner'), null, { timeout: 10_000 })
+    if (!screen.spinner) await page.waitForFunction(() => !document.querySelector('app-loading-spinner'), null, { timeout: 10_000 })
       .catch(() => console.warn(`[${screen.name}-${vpName}] спиннер не исчез за 10 с — снимок как есть`));
     if (screen.prepare) await screen.prepare(page, vpName);
     await page.evaluate(() => document.fonts.ready);

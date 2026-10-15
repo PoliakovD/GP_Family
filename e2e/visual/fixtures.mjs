@@ -9,18 +9,66 @@ const FAMILY_ID = 'f-polyakov';
 const ME_ID = 'u-daniil';
 const VALERIA_ID = 'u-valeria';
 
-/** Экраны: name — имя файла, path — маршрут, only — только 'desktop' | 'mobile'. */
+/** Экраны: name — имя файла, path — маршрут, only — только 'desktop' | 'mobile',
+ *  spinner — на экране есть постоянный спиннер (не ждать, пока исчезнет). */
 export const SCREENS = [
   { name: 'home', path: '/home' },
   { name: 'health', path: '/health' },
   { name: 'family', path: `/families/${FAMILY_ID}` },
+  { name: 'family-members', path: `/families/${FAMILY_ID}?tab=members` },
+  { name: 'family-medkits', path: `/families/${FAMILY_ID}?tab=medkits`, only: 'desktop' },
+  { name: 'family-birthdays', path: `/families/${FAMILY_ID}?tab=birthdays`, only: 'desktop' },
+  { name: 'family-dependents', path: `/families/${FAMILY_ID}?tab=dependents`, only: 'mobile' },
+  { name: 'record', path: '/health/records/r-blood' },
+  { name: 'record-open', path: '/health/records/r-blood', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('button', { name: /вне нормы/ }).click();
+    await page.getByRole('button', { name: 'Резюме для врача' }).click();
+    await page.getByRole('button', { name: 'Бланк', exact: true }).click();
+    await page.waitForTimeout(300);
+  } },
+  { name: 'indicator', path: '/health/records/r-blood?indicator=wbc', only: 'mobile' },
+  { name: 'indicator-panel', path: '/health/records/r-blood', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('cell', { name: /Лейкоциты/ }).click();
+    await page.waitForTimeout(400);
+  } },
+  { name: 'record-add', path: '/health/records/new' },
+  { name: 'records-batch', path: '/health/records/batch' },
+  { name: 'records', path: '/health/records' },
+  { name: 'visits', path: '/health/visits' },
+  { name: 'visit', path: '/health/visits/v-1' },
+  { name: 'indicators', path: '/health/indicators' },
+  { name: 'kb', path: '/health/kb/medications' },
+  { name: 'kb-indicators', path: '/health/kb/indicators', only: 'desktop' },
+  { name: 'kb-vaccines', path: '/health/kb/vaccines' },
   { name: 'intake', path: '/health/intake' },
+  { name: 'intake-form', path: '/health/intake', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Новый курс' }).click();
+    await page.getByRole('radio', { name: /Вручную/ }).click();
+    await page.waitForTimeout(400);
+  } },
   { name: 'intake-course', path: '/health/intake/courses/c-1', only: 'mobile' },
   { name: 'vaccinations', path: '/health/vaccinations' },
+  { name: 'vaccination-add', path: '/health/vaccinations', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Добавить прививку' }).click();
+    await page.getByRole('button', { name: /Отметить по календарю/ }).click();
+    await page.waitForTimeout(400);
+  } },
   { name: 'vaccination-person', path: `/health/vaccinations/people/user/${ME_ID}/series/influenza`, only: 'mobile' },
   { name: 'notes', path: '/health/notes' },
+  { name: 'notes-form', path: '/health/notes', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Добавить запись' }).first().click();
+    await page.waitForTimeout(500);
+  } },
+  { name: 'notes-form-metric', path: '/health/notes', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Добавить запись' }).first().click();
+    await page.getByRole('radio', { name: 'Замер' }).click();
+    await page.waitForTimeout(400);
+  } },
   { name: 'doctor-reports', path: '/health/reports' },
   { name: 'medkits', path: '/health/medications' },
+  { name: 'medkit', path: '/health/medications/mk1' },
+  // Витрина компонентов (только dev-сборка, фаза 2 редизайна).
+  { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
 ];
 
 const ME = {
@@ -203,6 +251,74 @@ const DOCTOR_REPORTS = [{
   subjectKind: 0, subjectId: null, subjectName: null, subjectIsPet: false, createdByName: 'Даниил Поляков', canManage: true,
 }];
 
+const VALERIA_AUTHOR = { userId: VALERIA_ID, lastName: 'Полякова', firstName: 'Валерия', middleName: null };
+const DANIIL_AUTHOR = { userId: ME_ID, lastName: 'Поляков', firstName: 'Даниил', middleName: null };
+const chatMsg = (id, author, text, createdAt, extra = {}) => ({
+  id, familyId: FAMILY_ID, author, text, createdAt, editedAt: null, deleted: false, replyTo: null,
+  attachments: [], reactions: [], links: [], canEdit: author === DANIIL_AUTHOR, canDelete: author === DANIIL_AUTHOR, ...extra,
+});
+// Новые — первыми (как отдаёт API, компонент разворачивает).
+const CHAT_PAGE = {
+  items: [
+    chatMsg('m3', VALERIA_AUTHOR, 'Покажи врачу лейкоциты, они заметно упали.', '2026-10-14T06:31:00Z'),
+    chatMsg('m2', DANIIL_AUTHOR, 'Ещё нет, на этой неделе запишусь. Скинул свежий анализ:', '2026-10-14T06:20:00Z', {
+      links: [{ kind: 0, entityId: 'r-blood', accessible: true, title: 'Развернутый анализ крови', subtitle: '3 октября · 6 вне нормы', routeKind: 0 }],
+    }),
+    chatMsg('m1', VALERIA_AUTHOR, 'Даня, ты записался на прививку от гриппа? Нужно до конца ноября.', '2026-10-14T06:12:00Z'),
+  ],
+  nextCursor: null,
+};
+
+// Анализ крови из макета analysis-desktop: 6 вне нормы, 13 в норме, 1 без нормы в бланке (гемоглобин —
+// DESIGN > макет: «норма не указана» → без нормы, не «в норме»).
+const IND = (id, pos, name, raw, unit, low, high, flag, extra = {}) => ({
+  id, analyteKey: id, displayName: name, flag, refSource: low === null ? 0 : 1, specimenKbId: 'blood',
+  specimenDisplayName: 'Кровь', position: pos, valueRaw: raw, unit, refLowText: low, refHighText: high,
+  refText: null, recordDate: '2026-10-03', medicalRecordId: 'r-blood', valueNumericText: raw.replace(',', '.'),
+  kbAnalyteId: id, rawDisplayName: null, enrichmentPending: false, enrichmentQueueAhead: 0,
+  enrichmentWaitingForAi: false, panelLabel: null, ...extra,
+});
+const INDICATORS = [
+  IND('esr', 1, 'СОЭ', '6', 'мм/ч', '0', '2', 3, { rawDisplayName: 'СОЭ по Панченкову' }),
+  IND('wbc', 2, 'Лейкоциты', '4,24', '×10⁹/л', '6.5', '12.5', 1),
+  IND('rbc', 3, 'Эритроциты', '5,49', '×10¹²/л', '3.3', '4.9', 3),
+  IND('neut', 4, 'Нейтрофилы', '2,28', '×10⁹/л', '40.8', '70.39', 1),
+  IND('lymph', 5, 'Лимфоциты', '40', '%', '17', '38', 3),
+  IND('eos', 6, 'Эозинофилы', '1', '%', '0.04', '0.44', 3),
+  IND('hgb', 7, 'Гемоглобин', '164', 'г/л', null, null, 0),
+  IND('plt', 8, 'Тромбоциты', '245', '×10⁹/л', '150', '400', 2),
+  IND('hct', 9, 'Гематокрит', '44', '%', '40', '48', 2),
+  IND('mcv', 10, 'Средний объём эритроцита', '88', 'фл', '80', '100', 2),
+  IND('mch', 11, 'Среднее содержание Hb', '30', 'пг', '27', '34', 2),
+  IND('mchc', 12, 'Средняя концентрация Hb', '340', 'г/л', '300', '380', 2),
+  IND('rdw', 13, 'Ширина распределения эритроцитов', '12,8', '%', '11.5', '14.5', 2),
+  IND('mono', 14, 'Моноциты', '7', '%', '3', '11', 2),
+  IND('baso', 15, 'Базофилы', '0,5', '%', '0', '1', 2),
+  IND('mpv', 16, 'Средний объём тромбоцита', '9,8', 'фл', '7.4', '10.4', 2),
+  IND('pct', 17, 'Тромбокрит', '0,24', '%', '0.15', '0.4', 2),
+  IND('pdw', 18, 'Ширина распределения тромбоцитов', '13', '%', '10', '17', 2),
+  IND('ret', 19, 'Ретикулоциты', '1,1', '%', '0.5', '1.5', 2),
+  IND('band', 20, 'Палочкоядерные', '3', '%', '1', '6', 2),
+];
+const RECORD = (id, title, date, extra = {}) => ({
+  id, ownerUserId: ME_ID, kind: 0, personName: 'Поляков Даниил', recordDate: date, doctor: null, title,
+  description: null, extractionStatus: 2, createdAt: `${date}T09:00:00Z`, hiddenFamilyIds: [],
+  familyDependentId: null, targetUserId: null, attachmentCount: 1, unrecognizedAttachmentCount: 0,
+  indicatorCount: 20, abnormalIndicatorCount: 6, normalIndicatorCount: 13, specimenKbId: 'blood',
+  specimenDisplayName: 'Кровь', specimenHint: null, kindIsAutoDetected: false, pendingSpecimenText: null, ...extra,
+});
+const R_BLOOD = RECORD('r-blood', 'Развернутый анализ крови', '2026-10-03');
+const RECORDS = [
+  R_BLOOD,
+  RECORD('r-bio', 'Биохимия крови', '2026-08-12', { indicatorCount: 9, abnormalIndicatorCount: 1, normalIndicatorCount: 8 }),
+  RECORD('r-urine', 'Общий анализ мочи', '2026-06-20', { indicatorCount: 11, abnormalIndicatorCount: 0, normalIndicatorCount: 11,
+    specimenKbId: 'urine', specimenDisplayName: 'Моча' }),
+];
+const VISITS = [
+  RECORD('v-1', 'Терапевт', '2026-09-18', { kind: 1, doctor: 'Иванова Мария Петровна', indicatorCount: 0,
+    abnormalIndicatorCount: 0, normalIndicatorCount: 0, specimenKbId: '', specimenDisplayName: null }),
+];
+
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
   ['GET', /^\/api\/auth\/me$/, ME],
@@ -218,10 +334,87 @@ const ROUTES = [
   ['GET', /^\/api\/notifications\/unread-count$/, { count: 2 }],
   ['GET', /^\/api\/health\/summary$/, HEALTH_SUMMARY],
   ['GET', /^\/api\/medical-records\/shares$/, [FAMILY_ID]],
-  ['GET', /^\/api\/health-shares\/shared-with-me$/, []],
+  ['GET', /^\/api\/attachments\/limits$/, { maxFileSizeBytes: 20971520, maxFilesPerRecord: 10 }],
+  ['GET', /^\/api\/medical-records\/doctors$/, ['Иванова Мария Петровна']],
+  ['GET', /^\/api\/medical-records\/extraction-limits$/, { maxBatchDocuments: 10, maxActiveJobs: 3, activeNow: 0, dailyQuota: 30, usedToday: 2, resetsAt: '2026-10-15T00:00:00Z' }],
+  ['GET', /^\/api\/medical-records$/, (_m, q) => {
+    const items = q.get('kind') === 'visit' ? VISITS : RECORDS;
+    return { items, totalCount: items.length, page: 1, pageSize: 20 };
+  }],
+  ['GET', /^\/api\/medical-records\/r-blood$/, R_BLOOD],
+  ['GET', /^\/api\/medical-records\/v-1$/, VISITS[0]],
+  ['GET', /^\/api\/medical-records\/v-1\/conclusion$/, {
+    diagnosis: 'ОРВИ, лёгкое течение', anamnesis: 'Насморк и температура 37,5 три дня.', proceduresPerformed: null,
+    recommendations: 'Обильное питьё, контроль через неделю.',
+    prescribedMedications: [{ name: 'Нурофен', dosageInstructions: '200 мг при температуре выше 38,5', kbMedicationId: null }],
+  }],
+  ['GET', /^\/api\/medical-records\/[^/]+\/indicators$/, INDICATORS],
+  ['GET', /^\/api\/medical-records\/[^/]+\/indicators\/[^/]+\/history$/, [
+    { recordDate: '2026-04-10', valueRaw: '5,9', valueNumericText: '5.9', flag: 1, medicalRecordId: 'r-old' },
+    { recordDate: '2026-07-02', valueRaw: '5,1', valueNumericText: '5.1', flag: 1, medicalRecordId: 'r-bio' },
+    { recordDate: '2026-10-03', valueRaw: '4,24', valueNumericText: '4.24', flag: 1, medicalRecordId: 'r-blood' },
+  ]],
+  ['GET', /^\/api\/kb\/medications$/, { hasMore: false, items: [
+    { id: 'kb-nurofen', displayName: 'Нурофен', purpose: 'Обезболивающее и жаропонижающее (ибупрофен).' },
+    { id: 'kb-omeprazol', displayName: 'Омепразол', purpose: 'Снижает кислотность желудка.' },
+    { id: 'kb-d3', displayName: 'Витамин D3', purpose: 'Восполняет дефицит витамина D.' },
+    { id: 'kb-mg', displayName: 'Магний B6', purpose: null },
+  ] }],
+  ['GET', /^\/api\/kb\/analytes$/, { hasMore: false, items: [
+    { id: 'wbc', displayName: 'Лейкоциты', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: 'Белые клетки крови, защищают организм от инфекций.' },
+    { id: 'esr', displayName: 'СОЭ', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: 'Скорость оседания эритроцитов — маркер воспаления.' },
+    { id: 'glu', displayName: 'Глюкоза', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: null },
+  ] }],
+  ['GET', /^\/api\/indicators$/, [
+    ...INDICATORS.slice(0, 12).map((i) => ({
+      analyteKey: i.analyteKey, displayName: i.displayName, specimenKbId: 'blood', specimenDisplayName: 'Кровь',
+      valueRaw: i.valueRaw, unit: i.unit, flag: i.flag, lastRecordDate: '2026-10-03', familyDependentId: null,
+      targetUserId: null, patientName: 'Поляков Даниил',
+    })),
+    { analyteKey: 'glu', displayName: 'Глюкоза', specimenKbId: 'blood', specimenDisplayName: 'Кровь', valueRaw: '5,1',
+      unit: 'ммоль/л', flag: 2, lastRecordDate: '2026-08-12', familyDependentId: null, targetUserId: VALERIA_ID,
+      patientName: 'Полякова Валерия' },
+  ]],
+  ['GET', /^\/api\/indicators\/([^/]+)\/article$/, (m) => ({
+    indicator: INDICATORS.find((i) => i.id === m[1]) ?? INDICATORS[1],
+    patient: { ageYears: 29, sex: 0 }, matchedRefRangeIndex: 0, historyAvailable: true,
+    article: {
+      id: 'wbc', displayName: 'Лейкоциты', specimenKbId: 'blood', specimenDisplayName: 'Кровь', loincCode: '6690-2',
+      defaultUnit: '×10⁹/л', plainExplanation: 'Белые клетки крови, защищают организм от инфекций.',
+      whyMeasured: 'Показывают, есть ли воспаление или инфекция.',
+      highMeans: 'Бывает при инфекциях и воспалениях.', lowMeans: 'Бывает после вирусных инфекций и при приёме некоторых лекарств.',
+      refRanges: [{ ageFrom: 18, ageTo: null, sex: null, low: 4, high: 9, unit: '×10⁹/л', normKind: 0, population: 0, populationDetail: null, sourceDomain: null }],
+      related: [], source: 'Справочник FamilyHub', updatedAt: '2026-09-01T00:00:00Z',
+    },
+  })],
+  ['GET', /^\/api\/medical-records\/[^/]+\/attachments$/, [
+    { id: 'a1', fileName: 'oak-03-10.pdf', contentType: 'application/pdf', sizeBytes: 182000, uploadedAt: '2026-10-03T09:00:00Z',
+      extractedAt: '2026-10-03T09:02:00Z', previewStatus: 3 },
+  ]],
+  ['GET', /^\/api\/medical-records\/[^/]+\/summary$/, {
+    plainSummary: 'Повышены СОЭ, эритроциты и лимфоциты, снижены лейкоциты и нейтрофилы.',
+    deviations: [{ name: 'СОЭ', meaning: 'может говорить о воспалении' }],
+    questionsForDoctor: ['Нужно ли пересдать общий анализ крови через месяц?'], disclaimer: 'Не является диагнозом.',
+  }],
+  ['GET', /^\/api\/medical-records\/[^/]+\/extraction$/, {
+    status: 2, stage: 5, indicatorCount: 20, error: null, totalFiles: 1, processedFiles: 1,
+    createdAt: '2026-10-03T09:00:00Z', completedAt: '2026-10-03T09:02:00Z', queuePosition: 0, waitingForAi: false,
+  }],
+  ['GET', /^\/api\/health-shares\/shared-with-me$/, [{ ownerUserId: VALERIA_ID, name: 'Валерия', categories: 4 }]],
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],
   ['GET', /^\/api\/families\/[^/]+\/dependents$/, []],
+  ['GET', /^\/api\/families\/[^/]+\/birthdays$/, [
+    { id: 'b1', familyId: FAMILY_ID, personName: 'Мама Дани (Алёна)', date: '1977-11-24', source: 0 },
+    { id: 'b2', familyId: FAMILY_ID, personName: 'Папа Дани (Олег)', date: '1975-01-03', source: 0 },
+    { id: 'b3', familyId: FAMILY_ID, personName: 'Валерия Полякова', date: '1998-03-14', source: 1 },
+  ]],
+  ['GET', /^\/api\/chat\/config$/, {
+    maxTextLength: 4000, maxFilesPerMessage: 5, maxFileSizeBytes: 10485760, maxLinksPerMessage: 3,
+    reactions: ['👍', '❤️', '🙏', '😊'], allowedContentTypes: ['image/jpeg', 'image/png', 'application/pdf'],
+  }],
+  ['GET', /^\/api\/families\/[^/]+\/chat\/messages$/, CHAT_PAGE],
+  ['POST', /^\/api\/families\/[^/]+\/chat\/read$/, { status: 204, body: {} }],
   ['GET', /^\/api\/medication-courses\/today$/, INTAKE_TODAY],
   ['GET', /^\/api\/medication-courses$/, [COURSE]],
   ['GET', /^\/api\/medication-courses\/c-1$/, {
@@ -234,12 +427,32 @@ const ROUTES = [
     cells: ['10', '11', '12', '13', '14'].map((d) => ({ date: `2026-10-${d}`, time: '09:00', scheduledAt: `2026-10-${d}T09:00:00+03:00`, outcome: d === '14' ? 1 : 2, doseId: `c-1-${d}` })),
   }],
   ['GET', /^\/api\/vaccinations\/overview$/, VACC_OVERVIEW],
-  ['GET', /^\/api\/vaccinations\/catalog$/, []],
+  ['GET', /^\/api\/vaccinations\/catalog$/, [
+    { code: 'influenza', name: 'Грипп', shortName: 'Грипп', group: 1, diseases: ['Грипп'], doses: [], tradeNames: ['Совигрипп', 'Ультрикс'],
+      about: 'Ежегодная прививка перед сезоном гриппа.', contraindications: null, reactionHint: 'Возможны слабость и температура до 37,5.',
+      repeatEveryYears: null, seasonal: true, closedByDisease: false },
+    { code: 'dtp', name: 'Дифтерия, столбняк', shortName: 'АДС-М', group: 0, diseases: ['Дифтерия', 'Столбняк'], doses: [], tradeNames: ['АДС-М'],
+      about: null, contraindications: null, reactionHint: null, repeatEveryYears: 10, seasonal: false, closedByDisease: false },
+    { code: 'mmr', name: 'Корь, краснуха, паротит', shortName: 'КПК', group: 0, diseases: ['Корь', 'Краснуха', 'Паротит'], doses: [], tradeNames: ['Вактривир'],
+      about: null, contraindications: null, reactionHint: null, repeatEveryYears: null, seasonal: false, closedByDisease: true },
+  ]],
   ['GET', /^\/api\/vaccinations\/people\/user\/[^/]+$/, VACC_PERSON],
   ['GET', /^\/api\/vaccinations\/people\/user\/[^/]+\/series\/[^/]+$/, VACC_SERIES],
   ['GET', /^\/api\/health-notes$/, HEALTH_NOTES],
+  ['GET', /^\/api\/health-notes\/recent$/, []],
   ['GET', /^\/api\/health-notes\/catalog$/, HEALTH_NOTE_CATALOG],
   ['GET', /^\/api\/doctor-reports$/, DOCTOR_REPORTS],
+  ['GET', /^\/api\/medkits\/mk1$/, { id: 'mk1', familyId: FAMILY_ID, name: 'Тестовая', createdByUserId: ME_ID, createdAt: '2026-08-25T10:00:00Z', medicationCount: 7 }],
+  ['GET', /^\/api\/medkits\/mk1\/medications$/, [
+    ['m1', 'Суматриптан', '2023-02-01', { type: 'таблетки', dose: '50 мг', quantity: '2 шт.' }],
+    ['m2', 'Нурофен', '2026-11-01', { type: 'таблетки', dose: '200 мг', quantity: '10 шт.', instructions: 'При боли, не чаще 3 раз в день' }],
+    ['m3', 'Омепразол', '2027-06-30', { type: 'капсулы', dose: '20 мг', quantity: '14 шт.' }],
+    ['m4', 'Витамин D3', '2027-03-01', { type: 'капли', dose: '500 МЕ' }],
+    ['m5', 'Магний B6', '2027-01-15', { quantity: '4 таблетки' }],
+    ['m6', 'Бинт стерильный', null, {}],
+    ['m7', 'Хлоргексидин', '2028-05-01', { type: 'раствор', dose: '0,05 %' }],
+  ].map(([id, name, expiryDate, data]) => ({ id, medkitId: 'mk1', familyId: FAMILY_ID, name, expiryDate, data,
+    createdByUserId: ME_ID, createdAt: '2026-08-25T10:00:00Z', enrichmentPending: false, enrichmentQueueAhead: 0 }))],
   ['GET', /^\/api\/families\/[^/]+\/medkits$/, [
     { id: 'mk1', familyId: FAMILY_ID, name: 'Тестовая', createdByUserId: ME_ID, createdAt: '2026-08-25T10:00:00Z', medicationCount: 7 },
   ]],

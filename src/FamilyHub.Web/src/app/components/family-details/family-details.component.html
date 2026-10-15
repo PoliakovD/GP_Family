@@ -1,162 +1,132 @@
-<div>
-    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-        <app-back-link label="Семьи" [link]="['/families']" />
-
-        @if (family && family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-            <app-action-menu [actions]="deleteFamilyMenuActions" label="Действия с семьёй" />
-        }
+<!-- Семья и чат (DESIGN §3 «Чат семьи», макеты family-chat-desktop / family-chat-mobile). Десктоп: шапка
+     (плитка семьи, H1, «N участников · вы админ», «Пригласить», «⋯») → вкладки-пилюли (чат первым) → на
+     вкладке чата: чат (2/3) + колонка «Участники» и «Заявки» (1/3). Мобайл, вкладка чата: полноэкранно —
+     своя шапка, вкладки, чат; без шапки каркаса и таб-бара (PageActionService.fullscreen). -->
+<div class="fd" [class.fd-fullscreen]="!isWide() && activeSubTab === 'chat' && family?.myStatus === MemberStatus.Active">
+  @if (state.loading() && !family) {
+    <p class="muted">Загрузка…</p>
+  } @else if (!family) {
+    <div class="card">
+      <p class="mb-2">Семья не найдена — возможно, её удалили или вас исключили.</p>
+      <a class="btn btn-secondary" routerLink="/families">Все семьи</a>
     </div>
-
-    <div class="mb-3">
-        @if (state.loading() && !family) {
-            <span class="muted">Загрузка…</span>
-        } @else if (family) {
-            <h3 class="family-name mb-1">{{ family.name }}</h3>
-            <div class="d-flex gap-2">
-                <span class="tag" [class.tag-accent]="family.myRole === FamilyRole.Admin" [class.tag-neutral]="family.myRole !== FamilyRole.Admin">
-                    {{ roleLabel(family.myRole) }}
-                </span>
-                <span class="tag tag-neutral">{{ statusLabel(family.myStatus) }}</span>
-            </div>
-        } @else {
-            <span class="muted">Семья не найдена — возможно, её удалили или вас исключили.</span>
-            <a class="btn btn-secondary btn-sm mt-2" routerLink="/families">Все семьи</a>
+  } @else {
+    <header class="fd-head">
+      @if (!isWide() && activeSubTab === 'chat') {
+        <app-back-link label="назад" [iconOnly]="true" (activated)="goBack()" />
+      }
+      <span class="fd-mark" aria-hidden="true">{{ familyInitial(family.name) }}</span>
+      <div class="fd-title-block">
+        <h1 class="fd-title">{{ family.name }}</h1>
+        <p class="fd-sub">{{ familySubtitle }}</p>
+      </div>
+      <div class="fd-actions">
+        @if (isAdmin) {
+          <button type="button" class="btn btn-secondary fd-invite" (click)="openInviteModal()">
+            <app-icon [icon]="icons.Link" [size]="18" />Пригласить
+          </button>
+          <app-action-menu [actions]="deleteFamilyMenuActions" label="Действия с семьёй" />
         }
-    </div>
+      </div>
+    </header>
 
-    <!-- Заявка ещё не подтверждена — раньше был только серый тег, и человек не понимал, почему пусто. -->
-    @if (family && family.myStatus !== MemberStatus.Active) {
-        <div class="alert-info mb-3" role="status">
-            Администратор семьи ещё не подтвердил вашу заявку. Аптечка, дни рождения и участники станут
-            доступны сразу после подтверждения.
-        </div>
+    @if (family.myStatus !== MemberStatus.Active) {
+      <div class="alert-info" role="status">
+        Администратор семьи ещё не подтвердил вашу заявку. Аптечка, дни рождения и участники станут
+        доступны сразу после подтверждения.
+      </div>
     }
 
-    @if (family) {
-        <div class="seg mb-3">
-            @for (t of subTabs; track t.id) {
-                <label class="seg-opt">
-                    <input type="radio" name="familySubTab" [checked]="activeSubTab === t.id" (change)="selectSubTab(t.id)" />
-                    {{ t.label }}
-                    @if (t.id === 'chat' && chatUnread() > 0) {
-                        <span class="app-sidebar-badge" [attr.aria-label]="'непрочитанных: ' + chatUnread()">{{ chatUnread() }}</span>
-                    }
-                </label>
-            }
-        </div>
+    <app-pill-tabs class="fd-tabs" [tabs]="pillTabs" [value]="activeSubTab" (valueChange)="selectSubTab($event)" label="Разделы семьи" />
 
-        @if (activeSubTab === 'members') {
-            @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-                <div class="card mb-3">
-                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                        <div class="card-kicker" style="margin:0">Заявки на вступление</div>
-                        @if (pendingMembers) {
-                            <span class="muted" style="font-size:0.7647rem">{{ pendingMembers.length }}</span>
-                        }
-                    </div>
-
-                    @if (pendingMembers === undefined) {
-                        <p class="muted mb-0">Загрузка…</p>
-                    } @else if (pendingMembers.length === 0) {
-                        <p class="muted mb-0">Заявок нет.</p>
-                    }
-                    @for (p of pendingMembers; track p.userId) {
-                        <div class="pending-row d-flex justify-content-between align-items-center gap-2 mb-1">
-                            <span class="pending-name">
-                                <app-person-name [person]="p" />
-                                @if (p.username) {
-                                    <span class="text-muted">&#64;{{ p.username }}</span>
-                                }
-                            </span>
-                            <span class="d-flex gap-1 flex-shrink-0">
-                                <button class="btn btn-primary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleApprove(p.userId)">
-                                    Принять
-                                </button>
-                                <button class="btn btn-secondary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleReject(p.userId)">
-                                    Отклонить
-                                </button>
-                            </span>
-                        </div>
-                    }
-                </div>
-
-                <app-invite-modal [familyId]="id" [open]="showInviteModal" (closed)="closeInviteModal()" />
-            }
-
-            <div class="card-kicker mb-2">Участники · {{ family.currentMembers?.length ?? 0 }}</div>
-            <div class="d-flex flex-column gap-2">
-                @for (m of family.currentMembers ?? []; track m.id) {
-                    <div class="card family-member-card">
-                        <app-avatar [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" size="lg" />
-                        <div class="flex-fill" style="min-width:0">
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <span class="card-title" style="font-size:1.1176rem"><app-person-name [person]="m" /></span>
-                                <span class="tag" [class.tag-accent]="m.role === FamilyRole.Admin" [class.tag-neutral]="m.role !== FamilyRole.Admin">
-                                    {{ roleLabel(m.role) }}
-                                </span>
-                                @if (m.id === auth.me()?.userId) {
-                                    <span class="tag tag-neutral">это вы</span>
-                                }
-                            </div>
-                            <div class="muted" style="font-size:0.8235rem">
-                                @if (m.username) {
-                                    &#64;{{ m.username }} ·
-                                }
-                                в семье с {{ m.joinedAt | date:'dd MMMM yyyy' }}
-                            </div>
-                            @if (m.id === auth.me()?.userId) {
-                                <div class="d-flex align-items-center gap-2 flex-wrap mt-1" style="font-size:0.8235rem">
-                                    <span class="muted">
-                                        {{ hasSharedWithThisFamily() ? 'Свои анализы открыл(а) этой семье' : 'Анализы этой семье не открыты' }}
-                                    </span>
-                                    <a routerLink="/health/records" style="font-size:0.7647rem">Настроить доступ</a>
-                                </div>
-                            }
-                        </div>
-                        <!-- Не на своей карточке: раньше админ мог «выгнать» себя и получал ошибку. -->
-                        @if (family.myRole === FamilyRole.Admin && m.id !== auth.me()?.userId) {
-                            <button class="btn btn-ghost btn-sm text-nowrap" (click)="removeMember(m.id)">Исключить</button>
-                        }
-                    </div>
-                }
-
-                <!-- Ссылку создаёт только админ (модалка живёт в админ-блоке выше) — у участника кнопка
-                     раньше ничего не делала. -->
-                @if (family.myRole === FamilyRole.Admin && family.myStatus === MemberStatus.Active) {
-                    <div class="card family-member-card family-invite-tile">
-                        <span class="family-invite-icon"><i class="ph-bold ph-plus" aria-hidden="true"></i></span>
-                        <div class="flex-fill">
-                            <div class="card-title" style="font-size:1.0588rem">Пригласить в семью</div>
-                            <div class="muted" style="font-size:0.8235rem">
-                                Одноразовая ссылка. Человек попадёт в заявки — вы подтверждаете вручную.
-                            </div>
-                        </div>
-                        <button class="btn btn-secondary text-nowrap" (click)="openInviteModal()">Создать ссылку</button>
-                    </div>
-                } @else {
-                    <p class="muted mb-0">Пригласить нового человека может администратор семьи — попросите его прислать ссылку.</p>
-                }
-            </div>
-        }
-
-        @if (activeSubTab === 'chat') {
-            @if (family.myStatus === MemberStatus.Active) {
-                <app-family-chat [familyId]="id" [isAdmin]="family.myRole === FamilyRole.Admin" />
-            } @else {
-                <p class="muted">Чат станет доступен после подтверждения заявки администратором семьи.</p>
-            }
-        }
-
-        @if (activeSubTab === 'medkits') {
-            <app-medkits-panel [familyId]="id"/>
-        }
-
-        @if (activeSubTab === 'birthdays') {
-            <app-birthdays-panel [familyId]="id"/>
-        }
-
-        @if (activeSubTab === 'dependents') {
-            <app-dependents-panel [familyId]="id"/>
-        }
+    @if (isAdmin) {
+      <app-invite-modal [familyId]="id" [open]="showInviteModal" (closed)="closeInviteModal()" />
     }
+
+    <!-- Карточка «Участники» — и колонка рядом с чатом, и содержимое вкладки «Участники». -->
+    <ng-template #membersCard let-wide="wide">
+      <section class="card fd-members" [class.card-lg]="wide" aria-labelledby="fd-members-title">
+        <div class="fd-card-head">
+          <h2 class="card-title" id="fd-members-title">Участники</h2>
+          <span class="card-meta">{{ family.currentMembers?.length ?? 0 }}</span>
+        </div>
+        @for (m of family.currentMembers ?? []; track m.id) {
+          <app-person-row [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" [name]="memberName(m)"
+                          [role]="memberMeta(m)" [self]="m.id === auth.me()?.userId">
+            @if (isAdmin && m.id !== auth.me()?.userId) {
+              <app-action-menu [actions]="memberActions(m.id)" [label]="'Действия: ' + memberName(m)" />
+            }
+          </app-person-row>
+        }
+        <div class="fd-access" [class.fd-access-on]="hasSharedWithThisFamily()">
+          <app-icon [icon]="hasSharedWithThisFamily() ? icons.Check : icons.Lock" [size]="18" />
+          <span class="flex-fill">{{ hasSharedWithThisFamily() ? 'Ваши анализы открыты семье' : 'Ваши анализы семье не открыты' }}</span>
+          <a routerLink="/health/records">Доступ</a>
+        </div>
+        @if (!isAdmin && family.myStatus === MemberStatus.Active) {
+          <p class="fd-note">Пригласить нового человека может администратор семьи — попросите его прислать ссылку.</p>
+        }
+      </section>
+    </ng-template>
+
+    <!-- «Заявки» — только админу. -->
+    <ng-template #requestsCard>
+      <section class="card fd-requests" aria-labelledby="fd-requests-title">
+        <div class="fd-card-head">
+          <h2 class="card-title" id="fd-requests-title">Заявки</h2>
+          @if (pendingMembers) { <span class="card-meta">{{ pendingMembers.length }}</span> }
+        </div>
+        @if (pendingMembers === undefined) {
+          <p class="fd-note">Загрузка…</p>
+        } @else if (pendingMembers.length === 0) {
+          <p class="fd-note">Новых заявок нет. По ссылке человек попадёт сюда — вы подтвердите вручную.</p>
+        }
+        @for (p of pendingMembers; track p.userId) {
+          <app-person-row [person]="{key: p.userId, firstName: p.firstName, lastName: p.lastName}" [name]="memberName(p)"
+                          [role]="p.username ? '@' + p.username : 'Хочет вступить'">
+            <span class="fd-request-actions">
+              <button type="button" class="btn btn-primary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleApprove(p.userId)">Принять</button>
+              <button type="button" class="btn btn-secondary btn-sm" [disabled]="busyRequests.has(p.userId)" (click)="handleReject(p.userId)">Отклонить</button>
+            </span>
+          </app-person-row>
+        }
+        <button type="button" class="btn btn-dashed" (click)="openInviteModal()">Создать ссылку-приглашение</button>
+      </section>
+    </ng-template>
+
+    @if (activeSubTab === 'chat') {
+      @if (family.myStatus === MemberStatus.Active) {
+        <div class="fd-chat-layout">
+          <app-family-chat class="fd-chat" [familyId]="id" [isAdmin]="family.myRole === FamilyRole.Admin" />
+          @if (isWide()) {
+            <aside class="fd-side" aria-label="Участники и заявки">
+              <ng-container *ngTemplateOutlet="membersCard; context: { wide: false }" />
+              @if (isAdmin) { <ng-container *ngTemplateOutlet="requestsCard" /> }
+            </aside>
+          }
+        </div>
+      } @else {
+        <p class="muted">Чат станет доступен после подтверждения заявки администратором семьи.</p>
+      }
+    }
+
+    @if (activeSubTab === 'members') {
+      <div class="fd-members-layout">
+        <ng-container *ngTemplateOutlet="membersCard; context: { wide: true }" />
+        @if (isAdmin) { <ng-container *ngTemplateOutlet="requestsCard" /> }
+      </div>
+    }
+
+    @if (activeSubTab === 'medkits') {
+      <app-medkits-panel [familyId]="id"/>
+    }
+
+    @if (activeSubTab === 'birthdays') {
+      <app-birthdays-panel [familyId]="id"/>
+    }
+
+    @if (activeSubTab === 'dependents') {
+      <app-dependents-panel [familyId]="id"/>
+    }
+  }
 </div>

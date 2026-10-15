@@ -2,7 +2,7 @@
   @if (!pageAction.immersive()) {
     <!-- Редизайн хаба «Здоровье» — собственный заголовок раздела: h3 хаба, под которым раньше стоял
          этот блок, убран (навигация теперь через плитки хаба и сайдбар, см. health-hub.component). -->
-    <h3 class="mb-1">Приём лекарств</h3>
+    <h1 class="ip-title">Приём лекарств</h1>
     <div class="ip-head">
       <div class="seg" role="tablist" aria-label="Раздел приёма лекарств">
         <a class="seg-opt" role="tab" routerLink="./" routerLinkActive="active"
@@ -12,7 +12,7 @@
         </a>
       </div>
       <button type="button" class="btn btn-primary ip-new" (click)="newCourse()">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Новый курс
+        <app-icon [icon]="plusIcon" [size]="18" />Новый курс
       </button>
     </div>
   }

@@ -4,14 +4,14 @@
     <button type="button" class="btn-link" (click)="load(courseId())">Повторить</button>
   </div>
 } @else if (loading() && !detail()) {
-  <p class="muted">Загружаем…</p>
+  <app-loading-spinner />
 } @else if (detail(); as d) {
   @if (summary(); as s) {
     <article class="cc">
       <header class="cc-head">
-        <i class="ph-duotone ph-pill cc-pill" aria-hidden="true"></i>
+        <app-icon-tile [icon]="icons.Pill" tone="medication" />
         <div class="cc-head-text">
-          <h4 class="cc-name">{{ s.drugName }}</h4>
+          <h2 class="cc-name">{{ s.drugName }}</h2>
           <div class="cc-sub">
             {{ subjectName(s.subject) }}@if (s.isWatching) { · вы следите}
             @if (sourceText(); as src) {
@@ -21,8 +21,8 @@
               <a class="cc-link" [routerLink]="['/health/visits', source.recordId]">открыть приём врача</a>
             }
           </div>
-          @if (s.status === Status.Paused) { <span class="tag tag-neutral">Приостановлен</span> }
-          @if (s.status === Status.Completed) { <span class="tag tag-neutral">Завершён</span> }
+          @if (s.status === Status.Paused) { <span class="badge badge-neutral">Приостановлен</span> }
+          @if (s.status === Status.Completed) { <span class="badge badge-neutral">Завершён</span> }
         </div>
         @if (s.canEdit && s.status !== Status.Completed) {
           <button type="button" class="btn btn-secondary" (click)="edit()">Изменить</button>
@@ -58,7 +58,7 @@
       @if (s.schedule.mode !== Mode.AsNeeded) {
         <section>
           <div class="cc-section-head">
-            <span class="cc-kicker">История приёмов</span>
+            <h3 class="cc-kicker">История приёмов</h3>
             <span class="cc-adherence">{{ adherenceText() }}</span>
           </div>
           <div class="cc-grid-wrap">
@@ -91,7 +91,7 @@
 
       <section>
         <div class="cc-section-head">
-          <span class="cc-kicker">Напоминания</span>
+          <h3 class="cc-kicker">Напоминания</h3>
           @if (s.canEdit) {
             <button type="button" class="btn-link" (click)="openReminders()">Настроить</button>
           }
@@ -104,7 +104,7 @@
       </section>
 
       @if (footnote(); as note) {
-        <p class="cc-foot"><i class="ph ph-notebook" aria-hidden="true"></i> {{ note }}</p>
+        <p class="cc-foot"><app-icon [icon]="icons.NotebookPen" [size]="18" />{{ note }}</p>
       }
     </article>
   }

@@ -8,7 +8,7 @@
       (click)="toggle()"
     >
       <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
-      <span class="background-jobs-trigger-badge">{{ jobs.totalActive() }}</span>
+      <span class="count-badge count-badge-accent background-jobs-trigger-badge">{{ jobs.totalActive() }}</span>
     </button>
 
     @if (isWide && open()) {

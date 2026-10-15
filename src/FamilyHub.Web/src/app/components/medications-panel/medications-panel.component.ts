@@ -7,7 +7,12 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { formatDayMonthYear } from '../../shared/util/date-format';
 import { compressImage } from '../../shared/util/image-compression';
-import { expiryClass, expiryLabel } from '../../shared/util/expiry';
+import { expiryBadge, expiryClass, expiryLabel } from '../../shared/util/expiry';
+import { BookOpen, BriefcaseMedical, Pill, Plus } from 'lucide';
+import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { matchesQuery } from '../../shared/util/local-filter';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
@@ -50,7 +55,7 @@ let nextInstanceId = 0;
 
 @Component({
     selector: 'app-medications-panel',
-    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
+    imports: [ActionMenuComponent, EmptyStateComponent, FormsModule, IconComponent, IconTileComponent, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
     templateUrl: './medications-panel.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medications-panel.component.scss'
@@ -265,6 +270,35 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   medicationEnrichmentTitle(item: Medication): string {
     return enrichmentStatusTitle(
       item.enrichmentQueueAhead, 'Справочник пока не знает этот препарат — идёт фоновый поиск');
+  }
+
+  protected readonly icons = { BookOpen, BriefcaseMedical, Pill, Plus };
+  protected readonly expiryBadge = expiryBadge;
+
+  /** «кол-во: 10 шт. · до 1 ноября 2026 · таблетки · 200 мг» — всё, что известно, одной строкой. */
+  medSubtitle(item: Medication): string {
+    const parts: string[] = [];
+    const qty = this.quantityOf(item);
+    if (qty) parts.push(`кол-во: ${qty}`);
+    if (item.expiryDate) parts.push(`до ${formatDayMonthYear(item.expiryDate)}`);
+    for (const row of this.dataEntries(item)) parts.push(row.value);
+    return parts.join(' · ');
+  }
+
+  /** Меню «⋯» строки — кэш по id, чтобы ActionMenu не получал новый массив на каждой проверке. */
+  private readonly actionsCache = new Map<string, ActionMenuItem[]>();
+
+  medActions(item: Medication): ActionMenuItem[] {
+    let actions = this.actionsCache.get(item.id);
+    if (!actions) {
+      actions = [
+        { label: 'Справка о препарате', handler: () => this.openKb(item) },
+        { label: 'Изменить', handler: () => this.startEdit(item) },
+        { label: 'Удалить', danger: true, handler: () => void this.handleDelete(item) },
+      ];
+      this.actionsCache.set(item.id, actions);
+    }
+    return actions;
   }
 
   dataEntries(item: Medication): DataRow[] {

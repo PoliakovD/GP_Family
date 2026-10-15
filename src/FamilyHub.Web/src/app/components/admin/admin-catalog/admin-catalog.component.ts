@@ -37,17 +37,11 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
  * единственным, теперь ветка на случай схемы/полей вне формы).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-admin-catalog',
     imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, KbHistoryComponent, VerificationBadgeComponent],
     templateUrl: './admin-catalog.component.html',
     styleUrl: './admin-catalog.component.scss',
-    // Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
-    changeDetection: ChangeDetectionStrategy.Eager,
-    styles: [`
-      .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-      .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
-      .seg-opt.active, .seg-opt.active:hover { color: var(--color-on-accent); background: var(--color-accent); }
-    `]
 })
 export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
   private readonly payloadEditors = viewChildren(AdminPayloadEditorComponent);

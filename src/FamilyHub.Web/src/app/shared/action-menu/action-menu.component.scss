@@ -7,9 +7,12 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 200px;
-  background: var(--color-paper);
-  border-radius: var(--radius-md);
+  min-width: 220px;
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
   overflow: hidden;
   z-index: var(--z-dropdown);
 }
@@ -20,12 +23,12 @@
   gap: 10px;
   width: 100%;
   min-height: var(--tap-min);
-  padding: 10px 16px;
+  padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
+  border-radius: var(--radius-md);
   text-align: left;
-  font: inherit;
-  font-size: 0.8824rem;
+  font: var(--text-body-sm);
   color: var(--color-text);
   cursor: pointer;
 

@@ -1,5 +1,7 @@
 import { Component, computed, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ArrowDown, ArrowUp, ChartLine, Pencil, Trash2 } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import type {
   IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto, PatientContextDto, UpdateIndicatorRequest,
 } from '../../models/types';
@@ -32,7 +34,7 @@ export interface IndicatorInfoReading {
  */
 @Component({
     selector: 'app-indicator-info',
-    imports: [FormsModule, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
+    imports: [FormsModule, IconComponent, ReferenceScaleComponent, StatusChipComponent, SparklineComponent, ExpandableComponent],
     templateUrl: './indicator-info.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './indicator-info.component.scss'
@@ -127,6 +129,7 @@ export class IndicatorInfoComponent {
   );
 
   readonly IndicatorFlag = IndicatorFlag;
+  protected readonly icons = { ArrowDown, ArrowUp, ChartLine, Pencil, Trash2 };
   readonly normGroupIcon = normGroupIcon;
   readonly normGroupLabel = normGroupLabel;
   readonly normValueLabel = normValueLabel;

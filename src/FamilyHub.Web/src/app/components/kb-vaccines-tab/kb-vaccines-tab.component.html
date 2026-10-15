@@ -1,19 +1,20 @@
 @if ((vaccinations.catalog() ?? []).length === 0) {
   <app-loading-spinner />
 } @else {
-  <input class="input kv-search" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Поиск по названию или инфекции" />
+  <app-search-field class="kv-search" placeholder="Поиск по названию или инфекции" [compact]="true"
+                    [value]="query()" (valueChange)="query.set($event)" />
 
   <div class="kv-grid">
     @for (s of items(); track s.code) {
       <button type="button" class="kv-card" (click)="open(s.code)">
         <div class="kv-card-title">{{ s.name }}</div>
-        <div class="muted kv-card-sub">{{ groupLabel[s.group] }}</div>
+        <div class="kv-card-sub">{{ groupLabel[s.group] }}</div>
         @if (s.diseases.length > 1) {
-          <div class="muted kv-card-diseases">{{ s.diseases.join(', ') }}</div>
+          <div class="kv-card-diseases">{{ s.diseases.join(', ') }}</div>
         }
       </button>
     } @empty {
-      <p class="muted">Ничего не найдено.</p>
+      <p class="kv-empty">Ничего не найдено.</p>
     }
   </div>
 }
@@ -46,7 +47,7 @@
     }
     @if (s.reactionHint) {
       <div class="kv-note">
-        <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
+        <app-icon [icon]="noteIcon" [size]="18" />
         <span>{{ s.reactionHint }}</span>
       </div>
     }

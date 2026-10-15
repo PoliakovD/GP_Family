@@ -1,7 +1,6 @@
 import { Component, OnInit, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { formatDayMonthYear } from '../../shared/util/date-format';
 import { StatusChipComponent } from '../../shared/status-chip/status-chip.component';
 import { IndicatorFlag } from '../../models/types';
@@ -9,8 +8,10 @@ import type { IndicatorHistoryPoint, MyIndicatorSummary } from '../../models/typ
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
-import type { AvatarPerson } from '../../shared/avatar/avatar.component';
+import { AvatarComponent, type AvatarPerson } from '../../shared/avatar/avatar.component';
+import { ChartLine, ChevronRight, Plus } from 'lucide';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { specimenLabel } from '../../shared/util/specimen';
 import { buildPatientOptions, type PatientOption } from '../../shared/util/patient-options';
 import { shortenDisplayName, personAvatarPartsFromName } from '../../shared/util/person-name';
@@ -30,12 +31,13 @@ const ALL_PATIENTS_KEY = 'all';
  */
 @Component({
     selector: 'app-indicators-tab',
-    imports: [StatusChipComponent, ClickableDirective, LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent, RouterLink],
+    imports: [AvatarComponent, EmptyStateComponent, IconComponent, StatusChipComponent, LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, RouterLink],
     templateUrl: './indicators-tab.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './indicators-tab.component.scss'
 })
 export class IndicatorsTabComponent implements OnInit {
+  protected readonly icons = { ChartLine, ChevronRight, Plus };
   protected readonly formatDayMonthYear = formatDayMonthYear;
   private readonly api = inject(ApiService);
   private readonly state = inject(FamilyStateService);

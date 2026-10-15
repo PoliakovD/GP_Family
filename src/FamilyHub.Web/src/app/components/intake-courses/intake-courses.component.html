@@ -2,22 +2,21 @@
   @if (showList()) {
     <div class="ic-list">
       @if (intake.courses() === null) {
-        <p class="muted">Загружаем…</p>
+        <app-loading-spinner />
       } @else if (groups().length === 0 && (archive()?.length ?? 0) === 0) {
-        <div class="ic-empty">
-          <i class="ph-duotone ph-pill" aria-hidden="true"></i>
-          <h5>Курсов пока нет</h5>
-          <p class="muted">Создайте курс из назначения врача или вручную.</p>
-          <button type="button" class="btn btn-primary" (click)="newCourse()">Создать курс</button>
-        </div>
+        <section class="card card-lg">
+          <app-empty-state [icon]="icons.Pill" title="Курсов пока нет" text="Создайте курс из назначения врача или вручную.">
+            <button type="button" class="btn btn-primary" (click)="newCourse()">Создать курс</button>
+          </app-empty-state>
+        </section>
       }
 
       @for (g of groups(); track g.subject.id) {
         <section>
           <div class="ic-group-head">
             <app-avatar [person]="person(g.subject)" size="sm" />
-            <h5>{{ g.subject.isSelf ? 'Я' : g.subject.name }}</h5>
-            @if (g.watching) { <span class="ic-watching"><i class="ph-fill ph-eye" aria-hidden="true"></i> вы следите</span> }
+            <h3>{{ g.subject.isSelf ? 'Я' : g.subject.name }}</h3>
+            @if (g.watching) { <span class="ic-watching"><app-icon [icon]="icons.Eye" [size]="16" />вы следите</span> }
             <span class="ic-rule"></span>
           </div>
           <ul class="ic-courses">
@@ -27,17 +26,17 @@
                    [class.selected]="id() === c.id" [class.miss]="c.missedToday"
                    [class.prn]="c.schedule.mode === Mode.AsNeeded" [class.paused]="c.status === Status.Paused">
                   <div class="ic-course-top">
-                    <i [class]="c.schedule.mode === Mode.AsNeeded ? 'ph-duotone ph-first-aid' : 'ph-duotone ph-pill'" aria-hidden="true"></i>
+                    <app-icon-tile [icon]="icons.Pill" tone="medication" size="sm" />
                     <div class="ic-course-text">
                       <div class="ic-course-name">{{ c.drugName }}</div>
                       <div class="ic-course-sub">{{ detailLine(c) }}</div>
                     </div>
                     @if (c.missedToday) {
-                      <span class="ic-badge ic-badge-miss">пропуск сегодня</span>
+                      <span class="badge badge-danger">пропуск сегодня</span>
                     } @else if (c.status === Status.Paused) {
-                      <span class="ic-badge">на паузе</span>
+                      <span class="badge badge-neutral">на паузе</span>
                     } @else if (stockBadge(c); as badge) {
-                      <span class="ic-badge ic-badge-stock" [attr.title]="stockTitle(c)">{{ badge }}</span>
+                      <span class="badge badge-warning" [attr.title]="stockTitle(c)">{{ badge }}</span>
                     }
                   </div>
                   @if (c.schedule.mode !== Mode.AsNeeded && c.totalDays !== null) {
@@ -53,9 +52,9 @@
 
       @if (intake.courses() !== null) {
         <button type="button" class="ic-archive" [attr.aria-expanded]="archiveOpen()" (click)="toggleArchive()">
-          <i class="ph ph-archive" aria-hidden="true"></i>
+          <app-icon [icon]="icons.Archive" [size]="18" />
           <span>Завершённые курсы@if (archive(); as a) { · {{ a.length }}}</span>
-          <i [class]="archiveOpen() ? 'ph ph-caret-up' : 'ph ph-caret-down'" aria-hidden="true"></i>
+          <app-icon [icon]="archiveOpen() ? icons.ChevronUp : icons.ChevronDown" [size]="18" />
         </button>
         @if (archiveOpen()) {
           <ul class="ic-courses">
@@ -63,7 +62,7 @@
               <li>
                 <a class="ic-course paused" [routerLink]="['/health/intake/courses', c.id]" [class.selected]="id() === c.id">
                   <div class="ic-course-top">
-                    <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+                    <app-icon-tile [icon]="icons.Pill" tone="neutral" size="sm" />
                     <div class="ic-course-text">
                       <div class="ic-course-name">{{ c.drugName }}</div>
                       <div class="ic-course-sub">{{ subjectName(c.subject) }} · {{ detailLine(c) }}</div>
@@ -72,7 +71,7 @@
                 </a>
               </li>
             } @empty {
-              <li class="muted ic-none">Завершённых курсов нет.</li>
+              <li class="ic-none">Завершённых курсов нет.</li>
             }
           </ul>
         }

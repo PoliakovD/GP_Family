@@ -28,7 +28,9 @@ import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.com
 import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { Camera, Eye, Info, Plus, SlidersHorizontal, X } from 'lucide';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import type { ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
@@ -42,6 +44,7 @@ import { buildPatientOptions, type PatientOption } from '../../shared/util/patie
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
 import { ExtractionPoller } from './extraction-poller';
+import type { IndicatorStatusFilter } from './indicator-display';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import { RecordEditSheetComponent } from './record-edit-sheet.component';
@@ -103,7 +106,7 @@ let nextInstanceId = 0;
     imports: [
         NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent,
-        AvatarComponent, PersonChipComponent, BackLinkComponent, InfiniteScrollSentinelComponent,
+        AvatarComponent, BackLinkComponent, EmptyStateComponent, IconComponent, InfiniteScrollSentinelComponent,
         IndicatorInfoComponent, IndicatorInfoPanelComponent,
         RecordAccessSheetComponent, RecordEditSheetComponent, RecordDetailBodyComponent, RecordDetailHeaderComponent,
         RecordListCardComponent,
@@ -113,6 +116,7 @@ let nextInstanceId = 0;
     styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
+  protected readonly icons = { Camera, Eye, Info, Plus, SlidersHorizontal, X };
   readonly kind = input.required<MedicalRecordKind>();
 
   /** Редизайн v3 — «одиночный режим» (PR6 плана): мобильный экран открытой записи
@@ -166,6 +170,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // конструкторе, ветка recordId).
   filesOpen = false;
   summaryOpen = false;
+  /** Нажатый счётчик-фильтр «вне нормы / в норме / без нормы» в шапке записи. */
+  statusFilter: IndicatorStatusFilter | null = null;
 
   // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
   // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
@@ -319,6 +325,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.pageAction.setImmersive(true);
         this.filesOpen = false;
         this.summaryOpen = false;
+        this.statusFilter = null;
         void this.refresh();
         return;
       }

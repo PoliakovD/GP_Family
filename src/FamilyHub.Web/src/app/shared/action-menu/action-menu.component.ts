@@ -2,6 +2,8 @@ import { Component, ElementRef, HostListener, inject, input, signal, ChangeDetec
 import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
+import { IconComponent } from '../ui/icon/icon.component';
+import { Ellipsis } from 'lucide';
 
 /** Один пункт меню «…» — редизайн v2. Не более того, что уже умеют существующие
  * `.btn`/иконки Phosphor — специально не вводится отдельная "опасное действие" разметка сверх
@@ -22,12 +24,13 @@ export interface ActionMenuItem {
  */
 @Component({
     selector: 'app-action-menu',
-    imports: [BottomSheetComponent],
+    imports: [BottomSheetComponent, IconComponent],
     templateUrl: './action-menu.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './action-menu.component.scss'
 })
 export class ActionMenuComponent {
+  protected readonly ellipsis = Ellipsis;
   private readonly overlays = inject(OverlayStackService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly host = inject(ElementRef<HTMLElement>);

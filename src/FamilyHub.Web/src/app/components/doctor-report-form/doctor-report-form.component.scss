@@ -1,54 +1,36 @@
-// Форма отчёта для врача (макет «Screen - Doctor report»).
+// Форма отчёта для врача: период, что включить (переключатели), низ с кнопками. Подписи без CAPS (DESIGN §2.3).
 
 :host { display: block; }
 
 .dr-form { display: flex; flex-direction: column; min-height: 100%; }
+.dr-body { display: flex; flex: 1; flex-direction: column; gap: var(--space-5); }
+.dr-field { display: flex; flex-direction: column; gap: var(--space-2); }
 
-.dr-body { display: flex; flex-direction: column; gap: var(--space-5); flex: 1; }
+.dr-label { font: var(--text-caption); font-weight: 600; color: var(--color-text-secondary); }
+.dr-optional { font-weight: 400; color: var(--color-text-muted); }
 
-.dr-field { display: flex; flex-direction: column; gap: 7px; }
+.dr-hint { font: var(--text-caption); color: var(--color-text-muted); }
+.dr-hint-icon { display: flex; align-items: flex-start; gap: var(--space-2); i { margin-top: 2px; color: var(--color-accent-hover); } }
+.dr-hint-warn { color: var(--color-danger); }
 
-.dr-label {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7647rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-}
+.dr-dates { display: flex; align-items: center; gap: var(--space-3); }
+.dr-dash { color: var(--color-text-muted); }
 
-.dr-optional { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--color-neutral-600); }
+.dr-group-title { margin-top: var(--space-1); font: var(--text-caption); font-weight: 600; color: var(--color-text-secondary); }
 
-.dr-hint { font-size: 0.7647rem; color: var(--color-neutral-600); }
-.dr-hint-icon { display: flex; align-items: flex-start; gap: 8px; i { color: var(--color-accent); margin-top: 2px; } }
-.dr-hint-warn { color: var(--color-status-danger-text); }
-
-.dr-dates { display: flex; align-items: center; gap: 10px; }
-.dr-dash { color: var(--color-neutral-600); }
-
-// Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio).
-.dr-seg { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-.dr-seg + .dr-seg { border-left: 1px solid var(--color-divider); }
-.dr-seg.active { color: var(--color-on-accent); background: var(--color-accent); }
-
-.dr-group-title { margin-top: 4px; font-size: 0.7647rem; color: var(--color-neutral-600); }
-
-.dr-toggles {
-  background: var(--color-paper);
-  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
-}
+.dr-toggles { overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface-sunken); }
 
 .dr-toggle {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--space-3);
   min-height: var(--tap-min);
-  padding: 8px 14px;
-  font-size: 0.8824rem;
+  padding: var(--space-2) var(--space-4);
+  font: var(--text-body-sm);
   cursor: pointer;
 
-  & + & { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
-  i { font-size: 1.15rem; color: var(--color-accent); }
+  & + & { border-top: 1px solid var(--color-divider); }
+  i { font-size: var(--icon-size); color: var(--color-text-secondary); }
   span:not(.switch):not(.switch-knob) { flex: 1; }
 }
 
@@ -62,9 +44,9 @@
   gap: var(--space-2);
   margin-top: var(--space-5);
   padding: var(--space-4) 0 var(--space-1);
-  background: var(--dr-surface, var(--color-paper));
   border-top: 1px solid var(--color-divider);
+  background: var(--dr-surface, var(--color-surface));
 }
 
-.dr-privacy { font-size: 0.7647rem; color: var(--color-neutral-600); }
+.dr-privacy { font: var(--text-caption); color: var(--color-text-muted); }
 .dr-actions { display: flex; gap: var(--space-2); .btn-primary { flex: 1; } }

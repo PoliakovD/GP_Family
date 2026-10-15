@@ -1,48 +1,37 @@
 <ng-template #formContent>
-  <div class="record-add-header">
+  <div class="side-sheet-head">
     <div>
-      <div class="record-add-kicker">Новая запись</div>
-      <h3 class="mb-0">{{ labels.addButtonLabel }}</h3>
+      <div class="side-sheet-kicker">Новая запись</div>
+      <h2 class="side-sheet-title">{{ labels.addButtonLabel }}</h2>
     </div>
     <button type="button" class="btn-icon" aria-label="Закрыть" (click)="cancel()">
-      <i class="ph ph-x" aria-hidden="true"></i>
+      <app-icon [icon]="icons.X" />
     </button>
   </div>
 
-  <div class="record-add-body">
+  <div class="side-sheet-body">
     @if (error) {
-      <div class="alert-danger mb-2">{{ error }}</div>
+      <div class="alert-danger" role="alert">{{ error }}</div>
     }
 
-    <div class="mb-3">
-      <div class="form-label">{{ labels.ownerLabel }}</div>
-      <div class="d-flex flex-wrap gap-2">
+    <div class="form-section">
+      <div class="form-label" id="ra-who">{{ labels.ownerLabel }}</div>
+      <div class="seg" role="group" [attr.aria-labelledby]="'ra-who'">
         @for (opt of patientOptions; track opt.key) {
-          @if (opt.shortLabel) {
-            <button type="button" class="person-chip-btn" (click)="selectedPatientKey = opt.key">
-              <app-person-chip
-                [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
-                [shortLabel]="opt.shortLabel"
-                [fullLabel]="opt.label"
-                [selected]="selectedPatientKey === opt.key"
-              />
-            </button>
-          } @else {
-            <button
-              type="button"
-              class="tag"
-              [class.tag-accent]="selectedPatientKey === opt.key"
-              style="cursor:pointer;border:none;font:inherit"
-              (click)="selectedPatientKey = opt.key"
-            >
+          <button type="button" class="seg-opt" [class.active]="selectedPatientKey === opt.key"
+                  [attr.aria-pressed]="selectedPatientKey === opt.key" [title]="opt.label" (click)="selectedPatientKey = opt.key">
+            @if (opt.shortLabel) {
+              <app-avatar size="xs" [person]="{key: opt.key, firstName: opt.avatarFirstName ?? opt.shortLabel, lastName: opt.avatarLastName ?? null}" />
+              {{ opt.shortLabel }}
+            } @else {
               {{ opt.label }}
-            </button>
-          }
+            }
+          </button>
         }
       </div>
     </div>
 
-    <div class="mb-3">
+    <div class="form-section">
       <div class="form-label">Файлы</div>
       <div class="file-chip-grid">
         @for (pf of pendingFiles; track pf.file.name + pf.file.size; let i = $index) {
@@ -50,7 +39,7 @@
                а кнопка в кнопке невалидна (браузер закрыл бы внешний тег раньше времени). -->
           <div
             class="file-chip"
-            style="cursor:pointer"
+           
             role="button"
             tabindex="0"
             [attr.title]="pf.file.name"
@@ -60,18 +49,18 @@
             @if (pf.previewUrl) {
               <img [src]="pf.previewUrl" alt="" />
             } @else {
-              <i class="ph ph-file-text" aria-hidden="true"></i>
+              <app-icon [icon]="icons.FileText" [size]="20" />
               <span class="file-chip-name">{{ pf.file.name }}</span>
             }
             <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="$event.stopPropagation(); removePendingFile(i)">
-              <i class="ph-bold ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="14" [strokeWidth]="2.5" />
             </button>
           </div>
         }
         @if (canAddMorePendingFiles()) {
           <label class="file-chip file-chip-add" [attr.for]="fileInputId">
-            <i class="ph ph-upload-simple" aria-hidden="true"></i>
-            <span>Файлы</span>
+            <app-icon [icon]="icons.Upload" [size]="20" />
+            <span>Добавить</span>
           </label>
         }
       </div>
@@ -84,20 +73,20 @@
         (change)="onPendingFilesSelected($event)"
       />
       @if (attachmentLimits; as limits) {
-        <div class="muted mb-2">
+        <p class="form-hint">
           Фото (JPG, PNG, HEIC), PDF, Word или Excel — до {{ limits.maxFilesPerRecord }} файлов,
           {{ (limits.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый. Несколько страниц одного бланка — сюда же.
-        </div>
+        </p>
       }
     </div>
 
     <!-- Редизайн v3 (PR7) — тумблер стоит сразу при прикреплении файлов, а не отдельной ручной
          кнопкой «Распознать» после сохранения: пользователь заранее понимает, что показатели
          заполнятся сами. -->
-    <div class="record-add-recognize mb-3">
-      <div class="flex-fill">
-        <div style="font-weight:600">Распознать бланк</div>
-        <div class="muted">Название, дата и показатели заполнятся сами за 1–3 минуты после сохранения — потом сверьте их с бланком.</div>
+    <div class="toggle-card">
+      <div class="toggle-card-text">
+        <span class="toggle-card-title">Распознать бланк</span>
+        <span class="toggle-card-sub">Название, дата и показатели заполнятся сами за 1–3 минуты после сохранения — потом сверьте их с бланком.</span>
       </div>
       <label class="switch">
         <input type="checkbox" [(ngModel)]="autoRecognize" aria-label="Распознать бланк" />
@@ -105,13 +94,16 @@
       </label>
     </div>
 
-    <label class="form-label">Дата</label>
-    <input class="input mb-3" type="date" [(ngModel)]="form.recordDate" />
+    <div class="form-section">
+      <label class="form-label" for="ra-date">Дата</label>
+      <input id="ra-date" class="input" type="date" [(ngModel)]="form.recordDate" />
+    </div>
 
     <app-expandable title="Врач и заметка — необязательно">
-      <label class="form-label">Врач</label>
+      <label class="form-label" for="ra-doctor">Врач</label>
       <input
-        class="input mb-2"
+        id="ra-doctor"
+        class="input mb-3"
         [attr.list]="doctorsDatalistId"
         [(ngModel)]="form.doctor"
         [placeholder]="labels.doctorPlaceholder"
@@ -122,13 +114,13 @@
         }
       </datalist>
 
-      <label class="form-label">Описание</label>
-      <textarea class="input" [(ngModel)]="form.description" [placeholder]="labels.descriptionPlaceholder" rows="2"></textarea>
+      <label class="form-label" for="ra-desc">Описание</label>
+      <textarea id="ra-desc" class="input" [(ngModel)]="form.description" [placeholder]="labels.descriptionPlaceholder" rows="2"></textarea>
     </app-expandable>
   </div>
 
-  <div class="record-add-footer">
-    <button class="btn btn-primary flex-fill" [disabled]="saving || !form.recordDate" (click)="handleSubmit()">
+  <div class="side-sheet-foot">
+    <button class="btn btn-primary" [disabled]="saving || !form.recordDate" (click)="handleSubmit()">
       {{ saving ? 'Сохраняем…' : labels.addButtonLabel }}
     </button>
     <button type="button" class="btn btn-ghost" [disabled]="saving" (click)="cancel()">Отмена</button>
@@ -136,13 +128,13 @@
 </ng-template>
 
 @if (isWide) {
-  <div class="overlay-backdrop record-add-backdrop" (click)="cancel()">
-    <aside class="record-add-panel" (click)="$event.stopPropagation()">
+  <div class="overlay-backdrop side-sheet-backdrop" (click)="cancel()">
+    <aside class="side-sheet" (click)="$event.stopPropagation()">
       <ng-container *ngTemplateOutlet="formContent" />
     </aside>
   </div>
 } @else {
-  <div class="record-add-fullscreen">
+  <div class="side-sheet-fullscreen">
     <ng-container *ngTemplateOutlet="formContent" />
   </div>
 }

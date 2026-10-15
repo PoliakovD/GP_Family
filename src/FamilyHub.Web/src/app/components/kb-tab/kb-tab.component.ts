@@ -1,6 +1,7 @@
+import { ChevronRight } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { KbListItem, KbMedicationCard } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
@@ -16,12 +17,21 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
  * см. SearchService).
  */
 @Component({
-    selector: 'app-kb-tab',
-    imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './kb-tab.component.html'
+    selector: 'app-kb-tab',
+    imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
+    templateUrl: './kb-tab.component.html',
+  styles: [`
+    .kb-tab { display: flex; flex-direction: column; gap: var(--space-4); }
+    .kb-note { margin: 0; font: var(--text-body-sm); color: var(--color-text-muted); }
+    .kb-specimen { font-weight: 400; color: var(--color-text-muted); }
+    .kb-row { padding: var(--space-3) var(--space-6); }
+    .kb-row + .kb-row { border-top: 1px solid var(--color-divider); }
+    @media (max-width: 639px) { .kb-row { padding: var(--space-3) var(--space-4); } }
+  `],
 })
 export class KbTabComponent implements OnInit {
+  protected readonly chevron = ChevronRight;
   private readonly api = inject(ApiService);
 
   loading = true;

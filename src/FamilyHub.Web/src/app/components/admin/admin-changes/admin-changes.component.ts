@@ -17,6 +17,7 @@ const FILTERS: { value: KbChangeTargetValue | null; label: string }[] = [
  * URL (?target=), чтобы ссылку можно было переслать.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-admin-changes',
   imports: [KbHistoryComponent],
   template: `
@@ -33,12 +34,6 @@ const FILTERS: { value: KbChangeTargetValue | null; label: string }[] = [
       </div>
     </div>
   `,
-  changeDetection: ChangeDetectionStrategy.Eager,
-  styles: [`
-    .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-    .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
-    .seg-opt.active { color: var(--color-on-accent); background: var(--color-accent); }
-  `],
 })
 export class AdminChangesComponent {
   private readonly route = inject(ActivatedRoute);

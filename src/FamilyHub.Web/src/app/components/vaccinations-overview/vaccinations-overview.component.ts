@@ -1,3 +1,5 @@
+import { Bell, ChevronRight } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnInit, effect, inject, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
@@ -17,13 +19,14 @@ import { todayLocal } from '../../shared/util/intake-labels';
  * у кого срок скоро или уже прошёл) и «Семья» (полоса done/скоро/можно/нет данных на человека).
  */
 @Component({
-  selector: 'app-vaccinations-overview',
-  imports: [AvatarComponent, LoadingSpinnerComponent, RouterLink],
-  templateUrl: './vaccinations-overview.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
+  selector: 'app-vaccinations-overview',
+  imports: [IconComponent, AvatarComponent, LoadingSpinnerComponent, RouterLink],
+  templateUrl: './vaccinations-overview.component.html',
   styleUrl: './vaccinations-overview.component.scss',
 })
 export class VaccinationsOverviewComponent implements OnInit {
+  protected readonly icons = { Bell, ChevronRight };
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   protected readonly vaccinations = inject(VaccinationStateService);
