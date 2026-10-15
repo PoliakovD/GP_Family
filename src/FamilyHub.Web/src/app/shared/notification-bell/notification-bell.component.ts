@@ -1,5 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Bell } from 'lucide-angular';
+import { IconComponent } from '../ui/icon/icon.component';
 import { NotificationStateService } from '../../services/notification-state.service';
 
 /**
@@ -11,10 +13,10 @@ import { NotificationStateService } from '../../services/notification-state.serv
 @Component({
   selector: 'app-notification-bell',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, IconComponent],
   template: `
-    <a routerLink="/notifications" class="btn btn-ghost btn-icon notification-bell" aria-label="Уведомления" title="Уведомления">
-      <i class="ph ph-bell" aria-hidden="true"></i>
+    <a routerLink="/notifications" class="btn btn-icon notification-bell" aria-label="Уведомления" title="Уведомления">
+      <app-icon [icon]="bell" />
       @if (notifications.unread() > 0) {
         <span class="count-badge notification-bell-badge">{{ notifications.unread() }}</span>
       }
@@ -24,4 +26,5 @@ import { NotificationStateService } from '../../services/notification-state.serv
 })
 export class NotificationBellComponent {
   readonly notifications = inject(NotificationStateService);
+  protected readonly bell = Bell;
 }
