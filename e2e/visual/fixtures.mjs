@@ -73,6 +73,23 @@ export const SCREENS = [
   { name: 'settings-security', path: '/settings/security', only: 'desktop' },
   { name: 'settings-notifications', path: '/settings/notifications' },
   { name: 'settings-data', path: '/settings/data' },
+  // Вход и онбординг (4.8.1). anon — /api/auth/me отвечает 401, как у человека без сессии.
+  { name: 'auth-login', path: '/login', anon: true },
+  { name: 'auth-register', path: '/login', anon: true, prepare: async (page) => {
+    await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  } },
+  { name: 'auth-reset', path: '/login', anon: true, only: 'mobile', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Забыли пароль?' }).click();
+  } },
+  { name: 'auth-join', path: '/join/visual-code', anon: true },
+  { name: 'auth-join-bad', path: '/join/bad-code', anon: true, only: 'mobile' },
+  { name: 'auth-telegram-bind', path: '/telegram-bind', anon: true, only: 'mobile' },
+  { name: 'auth-telegram-expired', path: '/telegram-expired', anon: true, only: 'mobile' },
+  { name: 'auth-profile-setup', path: '/profile-setup' },
+  { name: 'auth-consent', path: '/consent' },
+  { name: 'auth-consent-text', path: '/consent-text', anon: true },
+  { name: 'auth-privacy', path: '/privacy', anon: true },
+  { name: 'auth-not-found', path: '/no-such-page' },
   { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
 ];
 
@@ -328,6 +345,10 @@ const VISITS = [
 const ROUTES = [
   ['GET', /^\/api\/auth\/me$/, ME],
   ['GET', /^\/api\/consents\/status$/, { accepted: true, version: '1' }],
+  ['GET', /^\/api\/consents\/current$/, { version: '2026-03', text: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>' }],
+  ['GET', /^\/api\/legal\/privacy-policy$/, { rawText: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>'.replace('Согласие на обработку персональных данных', 'Политика конфиденциальности') }],
+  ['GET', /^\/api\/invites\/visual-code\/preview$/, { familyName: 'Поляковы', inviterName: 'Валерия Полякова' }],
+  ['GET', /^\/api\/invites\/bad-code\/preview$/, { status: 409, body: { code: 'expired' } }],
   ['GET', /^\/api\/ai\/status$/, { available: true }],
   ['GET', /^\/api\/families$/, FAMILIES],
   ['GET', /^\/api\/home\/summary$/, HOME_SUMMARY],

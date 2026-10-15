@@ -460,6 +460,8 @@ a {
 // Кнопка, визуально неотличимая от инлайновой ссылки ВНУТРИ фразы (наследует шрифт текста).
 // Нужна там, где переход на отдельный роут потерял бы состояние формы (LoginComponent.showLegalText).
 .link-inline {
+  display: inline; // внутри строки текста (согласия) переносится как текст, а не блоком
+  text-align: inherit;
   background: none;
   border: none;
   padding: 0;
@@ -1176,7 +1178,7 @@ button.tag,
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  font-size: 0.8235rem;
+  font: var(--text-body-sm);
   cursor: pointer;
 
   input[type="checkbox"] {
@@ -1668,7 +1670,8 @@ button.tag,
 }
 
 // ============================================================================
-// Экран входа/регистрации — без хедера и таб-бара приложения (см. authGuard/showTabs).
+// Экраны без оболочки (DESIGN §4): вход, регистрация, привязка Telegram, приглашение, согласие —
+// shared/ui/auth-card. Карточка 440px по центру; на шаге входа слева — .login-intro.
 // ============================================================================
 .auth-shell {
   min-height: 100vh;
@@ -1676,47 +1679,101 @@ button.tag,
   display: flex;
   align-items: center;
   justify-content: center;
-  // gap/wrap не влияют на страницы с одним ребёнком (telegram-bind, consent-gate — им
-  // всё ещё центрируют одну карточку): нужны только LoginComponent на шаге 'login', где
-  // рядом с карточкой появляется .login-intro. wrap вместо media-query — на узких экранах
-  // .login-intro не помещается в строку с карточкой (min-width ниже) и сама переносится
-  // выше неё, ровно то расположение «текст над формой», которое нужно на мобильных.
-  gap: var(--space-8);
-  flex-wrap: wrap;
-  padding: var(--space-5);
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-5);
+
+  // Телефон: карточка сверху (форма — главное действие), вводный текст под ней.
+  @media (max-width: 899px) {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--space-8);
+    padding: var(--space-6) var(--space-4) var(--space-10);
+  }
 }
 
 .auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
+  box-shadow: var(--shadow-md);
+
+  .auth-shell-wide & { max-width: 720px; }
+
+  // Телефон: карточка на фоне без «парящей» тени.
+  @media (max-width: 639px) { box-shadow: none; }
 }
 
 .auth-brand {
-  text-align: center;
-  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--text-title);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-display);
+  color: var(--color-text);
 }
 
-// Вводный блок слева от формы входа (только шаг 'login' — на шагах регистрации/кода
-// отвлекающий текст не нужен, там и так самое важное действие — форма).
+.auth-title {
+  margin: var(--space-2) 0 0;
+  font: var(--text-display-mobile);
+  letter-spacing: var(--letter-spacing-display);
+  color: var(--color-text);
+}
+
+.auth-lead {
+  margin: 0;
+  font: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+// Форма внутри карточки: поля (appField) и кнопки — одним вертикальным ритмом, без mb-* утилит.
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.auth-text {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--color-text-muted);
+}
+
+// Вводный блок рядом с формой входа (только шаг 'login').
 .login-intro {
-  flex: 1 1 340px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
   max-width: 420px;
-  padding: var(--space-3) 0;
+
+  @media (max-width: 899px) {
+    order: 1;
+    width: 100%;
+    max-width: 440px;
+    gap: var(--space-4);
+  }
 }
 
 .login-intro-title {
-  margin: var(--space-1) 0 var(--space-5);
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.4706rem;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
   color: var(--color-text);
+
+  @media (max-width: 899px) { font: var(--text-title); }
 }
 
 .login-intro-features {
   list-style: none;
-  margin: 0 0 var(--space-5);
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -1725,59 +1782,36 @@ button.tag,
 
 .login-intro-features li {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: 0.8235rem;
-  line-height: 1.4;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--text-body);
   color: var(--color-text);
-}
 
-.login-intro-features i {
-  flex: none;
-  font-size: 1.1765rem;
-  color: var(--color-accent);
-  margin-top: 1px;
+  @media (max-width: 899px) { font: var(--text-body-sm); }
 }
 
 .login-intro-note {
   margin: 0;
-  font-size: 0.7647rem;
-  line-height: 1.5;
-  color: var(--color-neutral-600);
+  font: var(--text-body-sm);
+  color: var(--color-text-muted);
 }
 
-// Мобильный список: несёт ту же информацию компактнее, вместо .login-intro-features
-// с описанием каждого пункта фразой — иначе на узком экране блок выше формы слишком
-// длинный (см. итоговый совет: не перегружать страницу входа).
-@media (max-width: 640px) {
-  .login-intro {
-    max-width: none;
-    text-align: center;
-  }
+// Полный текст документа (политика, согласие) — HTML с бэкенда через [innerHTML].
+.doc-page {
+  max-width: 720px;
+  margin: var(--space-6) auto;
+}
 
-  .login-intro-title {
-    font-size: 1.2353rem;
-  }
+.prose {
+  font: var(--text-body);
+  color: var(--color-text);
 
-  .login-intro-features {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--space-4) var(--space-5);
-  }
-
-  .login-intro-features li {
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.7647rem;
-    max-width: 88px;
-    text-align: center;
-  }
-
-  .login-intro-features i {
-    margin-top: 0;
-  }
+  h1, h2 { margin: 0 0 var(--space-4); font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+  h3 { margin: var(--space-6) 0 var(--space-2); font: var(--text-title); }
+  p, ul, ol { margin: 0 0 var(--space-3); }
+  ul, ol { padding-left: var(--space-6); }
+  li + li { margin-top: var(--space-1); }
+  > :last-child { margin-bottom: 0; }
 }
 
 // ============================================================================
@@ -1806,8 +1840,9 @@ button.tag,
 
 // «Показать пароль» под полем — крупная тач-цель, не мелкая иконка внутри поля.
 .password-toggle {
-  min-height: 36px;
-  font-size: 0.8235rem;
+  align-self: flex-start;
+  min-height: var(--tap-min);
+  font: var(--text-caption);
 }
 
 // ============================================================================
@@ -1898,6 +1933,11 @@ button.tag,
 }
 
 // Поле формы с подписью сверху и подсказкой снизу.
+// Поле формы (shared/ui/field, appField): подпись → контрол → подсказки, ритм 4px.
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.field > .form-label { margin: 0; }
+.field > .field-hint { margin-top: 0; }
+
 .form-section { display: flex; flex-direction: column; gap: var(--space-2); }
 .form-section > .form-label { margin: 0; }
 .form-section > .seg { align-self: flex-start; }

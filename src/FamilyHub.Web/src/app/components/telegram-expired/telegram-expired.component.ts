@@ -1,5 +1,6 @@
 import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { TelegramService } from '../../services/telegram.service';
+import { AuthCardComponent } from '../../shared/ui/auth-card/auth-card.component';
 
 /**
  * Mini App открыт дольше, чем живёт его initData (Telegram:MaxInitDataAge, 1 ч — аудит
@@ -9,21 +10,14 @@ import { TelegramService } from '../../services/telegram.service';
  */
 @Component({
   selector: 'app-telegram-expired',
+  imports: [AuthCardComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
-    <div class="auth-shell">
-      <div class="card auth-card elev-md">
-        <div class="auth-brand">
-          <div class="card-kicker">FamilyHub</div>
-          <h2 class="card-title mb-0">Сессия устарела</h2>
-        </div>
-        <p class="text-muted mb-3">
-          Приложение было открыто слишком долго. Для защиты ваших данных закройте его
-          и откройте заново из чата с ботом — все данные на месте.
-        </p>
-        <button type="button" class="btn btn-primary btn-block" (click)="close()">Закрыть приложение</button>
-      </div>
-    </div>
+    <app-auth-card
+      title="Сессия устарела"
+      lead="Приложение было открыто слишком долго. Для защиты ваших данных закройте его и откройте заново из чата с ботом — все данные на месте.">
+      <button type="button" class="btn btn-primary btn-block" (click)="close()">Закрыть приложение</button>
+    </app-auth-card>
   `,
 })
 export class TelegramExpiredComponent {

@@ -677,6 +677,11 @@ e2e модуля, счётчики аудита по файлам модуля.
 
 1. **Вход и онбординг:** `login`, `telegram-bind`, `telegram-expired`, `join-invite`, `profile-setup`,
    `consent-gate`, `consent-text`, `privacy`, `not-found`. E2E `01`, `06`, `18`.
+   > **Статус: выполнено (4.8.1).** Общий `app-auth-card` (знак FamilyHub + H1 + пояснение) вместо шести
+   > копий «kicker + card-title»; формы на `appField` и `auth-form` без `mb-*`; вводный блок входа — плитки
+   > Lucide вместо Phosphor, на телефоне под формой. Политика и текст согласия — `doc-page` + `prose`
+   > (без inline-стилей), 404 — `empty-state`. «Загрузка…» → спиннер. Тексты, id полей и кнопки e2e
+   > не менялись. Стенд: экраны `auth-*` (`anon: true` — без сессии).
 2. **Уведомления, поиск:** `notifications-tab`, `app-search` (`.app-search-dropdown` → Popover),
    `shared/notification-bell`, `shared/background-jobs-dropdown`.
 3. **Публичный отчёт** `public-report` (литералы `#2d2b2b`, `#e2e0df`, `#d97700`, аудит §5.1).

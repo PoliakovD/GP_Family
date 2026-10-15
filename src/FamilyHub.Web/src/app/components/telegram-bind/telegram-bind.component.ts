@@ -6,6 +6,8 @@ import { AuthService } from '../../services/auth.service';
 import { ResendCooldown } from '../../shared/util/resend-cooldown';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { TelegramService } from '../../services/telegram.service';
+import { AuthCardComponent } from '../../shared/ui/auth-card/auth-card.component';
+import { FieldDirective } from '../../shared/ui/field/field.directive';
 
 type Step = 'email' | 'code';
 
@@ -22,7 +24,7 @@ type Step = 'email' | 'code';
  */
 @Component({
     selector: 'app-telegram-bind',
-    imports: [FormsModule],
+    imports: [AuthCardComponent, FieldDirective, FormsModule],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './telegram-bind.component.html'
 })

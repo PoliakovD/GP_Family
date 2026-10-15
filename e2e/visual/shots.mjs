@@ -94,8 +94,12 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
         unmatched.add(`${req.method()} ${url.pathname}`);
         return route.fulfill({ status: 404, json: { title: 'нет фикстуры' } });
       }
+      // { rawText } — ответ не JSON (политика конфиденциальности отдаётся как HTML-текст).
+      if (typeof result.rawText === 'string') return route.fulfill({ status: 200, contentType: 'text/html', body: result.rawText });
       return route.fulfill({ status: result.status ?? 200, json: result.body ?? result });
     });
+    // anon — экран для человека без сессии (вход, приглашение): маршрут, добавленный позже, приоритетнее.
+    if (screen.anon) await context.route('**/api/auth/me', (route) => route.fulfill({ status: 401, json: {} }));
     // Всё внешнее (шрифты/аналитика/проверки связи) — не ходим в сеть: снимок не должен зависеть от неё.
     await context.route((url) => !url.href.startsWith(base), (route) => route.abort());
     // SignalR чата: без сервера просто падает в «нет соединения» — не мешает снимку.
