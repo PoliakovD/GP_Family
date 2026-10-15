@@ -198,8 +198,9 @@ public class AttachmentPreviewRendererTests
         using (var document = SKDocument.CreatePdf(stream))
         {
             using var canvas = document.BeginPage(400, 300);
-            using var paint = new SKPaint { Color = SKColors.Black, TextSize = 18 };
-            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, paint);
+            using var paint = new SKPaint { Color = SKColors.Black };
+            using var font = new SKFont { Size = 18 };
+            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, SKTextAlign.Left, font, paint);
             document.EndPage();
             document.Close();
         }

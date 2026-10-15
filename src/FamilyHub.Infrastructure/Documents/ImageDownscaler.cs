@@ -1,4 +1,5 @@
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Tiff;
 using SixLabors.ImageSharp.PixelFormats;
@@ -18,8 +19,7 @@ namespace FamilyHub.Infrastructure.Documents;
 /// декодируется в принципе (нет такого кодека в ядре Skia ни на одной платформе — SKBitmap.Decode
 /// тихо возвращает null, не бросает), а HEIC — только платформенно, через системный кодек,
 /// которого нет на Linux. Для TIFF есть безопасный фолбэк — SixLabors.ImageSharp: чисто
-/// управляемый декодер (Formats.Tiff — часть ядра пакета, без нативных musl-биндингов), уже
-/// используется транзитивно через NPOI и проверен в этом же alpine-контейнере. Для HEIC такого
+/// управляемый декодер (Formats.Tiff — часть ядра пакета, без нативных musl-биндингов). Для HEIC такого
 /// фолбэка нет (декодирование требует HEVC-кодек, которого нет ни у SkiaSharp на Linux, ни у
 /// ImageSharp) — путь через UI это не задевает: фронт всегда конвертирует HEIC в JPEG перед
 /// отправкой (см. shared/util/image-compression.ts); прямая загрузка HEIC мимо веб-клиента
@@ -27,6 +27,14 @@ namespace FamilyHub.Infrastructure.Documents;
 /// </summary>
 public static class ImageDownscaler
 {
+    /// <summary>Конфигурация только с TIFF-кодеком: даже если сигнатура совпала случайно, другие
+    /// декодеры ImageSharp сюда не подключатся.</summary>
+    private static readonly DecoderOptions TiffOnlyDecoderOptions = new()
+    {
+        Configuration = new Configuration(new TiffConfigurationModule()),
+        SkipMetadata = true,
+    };
+
     public static DecodedImage Downscale(byte[] source, int maxDimension, int jpegQuality)
     {
         SKBitmap? original;
@@ -60,7 +68,8 @@ public static class ImageDownscaler
                     var targetInfo = new SKImageInfo(
                         Math.Max(1, (int)Math.Round(original.Width * scale)),
                         Math.Max(1, (int)Math.Round(original.Height * scale)));
-                    resized = original.Resize(targetInfo, SKFilterQuality.Medium)
+                    // Эквивалент прежнего SKFilterQuality.Medium (устарел в SkiaSharp 3).
+                    resized = original.Resize(targetInfo, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear))
                         ?? throw new NotSupportedException("Не удалось изменить размер изображения.");
                     scaled = resized;
                 }
@@ -81,11 +90,10 @@ public static class ImageDownscaler
     /// NotSupportedException, что раньше бросал только сам SkiaSharp-путь — вызывающий код
     /// (DocumentTextExtractor/AttachmentPreviewRenderer) уже ловит именно этот тип.
     ///
-    /// Только TIFF и без метаданных (аудит security-audit-2026-10, M7): у ImageSharp 2.x есть
-    /// неисправленная DoS через разбор встроенного ICC-профиля (GHSA-gwg2-r3hj-4w44, патч только в 4.1.2
-    /// под другой лицензией). Раньше сюда попадал любой формат, который не осилил SkiaSharp (в том
-    /// числе специально испорченный PNG/JPEG с ICC — ровно PoC advisory), и метаданные разбирались.
-    /// Ради TIFF фолбэк и существует, а IgnoreMetadata не создаёт ICC-профиль вовсе.</summary>
+    /// Только TIFF и без метаданных (аудит security-audit-2026-10, M7): так фолбэк сужен с тех пор, как
+    /// ImageSharp 2.x содержал неисправленную DoS через ICC-профиль (GHSA-gwg2-r3hj-4w44). С 4.1.2 она
+    /// исправлена, но сужение оставлено как защита в глубину — ради TIFF фолбэк и существует, а
+    /// SkipMetadata не создаёт ICC-профиль вовсе.</summary>
     private static DecodedImage DownscaleWithImageSharpFallback(byte[] source, int maxDimension, int jpegQuality)
     {
         if (!IsTiff(source))
@@ -94,7 +102,7 @@ public static class ImageDownscaler
         Image<Rgba32> image;
         try
         {
-            image = Image.Load<Rgba32>(source, new TiffDecoder { IgnoreMetadata = true });
+            image = Image.Load<Rgba32>(TiffOnlyDecoderOptions, source);
         }
         catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException or ImageFormatException)
         {

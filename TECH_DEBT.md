@@ -208,8 +208,9 @@ guard-навигации без кеша) и по NAT с общим IP.
 
 ### 10. Заморожённые зависимости
 См. таблицу в `.claude/research/frontend-toolchain-and-e2e.md`: MassTransit 8.5.x (не 9) и
-FluentAssertions 6.12.x (не 8) — коммерческие лицензии; NPOI 2.7.4 ↔ SkiaSharp 2.88 ↔ PDFtoImage 4.x —
-обновлять только вместе (NPOI 2.8 требует SkiaSharp 3); ImageSharp 2.1.13 закреплён как патченная версия.
+FluentAssertions 6.12.x (не 8) — коммерческие лицензии; NPOI 2.8.1 ↔ SkiaSharp 3.119.x ↔ PDFtoImage 5.2.x —
+обновлять только вместе (PDFtoImage 5.3+ требует SkiaSharp 4); ImageSharp 4.1.x — Six Labors Split License
+(принята владельцем 2026-10-15, бесплатна для open source и компаний с выручкой < $1M).
 Тесты-зависимости с мажорами позади: NSubstitute, Testcontainers, xunit runner, coverlet.
 
 ### 14. `Deploy` — только вручную

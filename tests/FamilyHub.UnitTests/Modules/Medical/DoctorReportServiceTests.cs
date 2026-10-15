@@ -70,8 +70,9 @@ public class DoctorReportServiceTests : SqliteTestBase
             for (var i = 0; i < 2; i++)
             {
                 using var canvas = document.BeginPage(400, 300);
-                using var paint = new SKPaint { Color = SKColors.Black, TextSize = 18 };
-                canvas.DrawText($"page {i}", 20, 40, paint);
+                using var paint = new SKPaint { Color = SKColors.Black };
+                using var font = new SKFont { Size = 18 };
+                canvas.DrawText($"page {i}", 20, 40, SKTextAlign.Left, font, paint);
                 document.EndPage();
             }
             document.Close();

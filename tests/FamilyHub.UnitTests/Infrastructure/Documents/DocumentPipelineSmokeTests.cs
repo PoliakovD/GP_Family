@@ -71,8 +71,9 @@ public class DocumentPipelineSmokeTests
         using var bitmap = new SKBitmap(width, height);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.White);
-        using var paint = new SKPaint { Color = SKColors.Black, TextSize = 24 };
-        canvas.DrawText("Гемоглобин 118 г/л", 10, 40, paint);
+        using var paint = new SKPaint { Color = SKColors.Black };
+        using var font = new SKFont { Size = 24 };
+        canvas.DrawText("Гемоглобин 118 г/л", 10, 40, SKTextAlign.Left, font, paint);
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
         return data.ToArray();
@@ -84,8 +85,9 @@ public class DocumentPipelineSmokeTests
         using (var document = SKDocument.CreatePdf(stream))
         {
             using var canvas = document.BeginPage(400, 300);
-            using var paint = new SKPaint { Color = SKColors.Black, TextSize = 18 };
-            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, paint);
+            using var paint = new SKPaint { Color = SKColors.Black };
+            using var font = new SKFont { Size = 18 };
+            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, SKTextAlign.Left, font, paint);
             document.EndPage();
             document.Close();
         }

@@ -56,7 +56,7 @@
   <ItemGroup>
     <!-- ветка medicalrecords: декодирование вложений для OCR-конвейера анализов/выписок (Documents/) —
          текстовый слой PDF, рендер PDF-страниц без текстового слоя, офисные форматы, ресайз фото.
-         Версии и рационале пиннинга (SkiaSharp 2.88.8, NPOI/ImageSharp CVE) — см.
+         Версии и рационале пиннинга (единая линия SkiaSharp 3.119.x, ImageSharp 4.x и её лицензия) — см.
          Directory.Packages.props. -->
     <PackageReference Include="PdfPig" />
     <PackageReference Include="PDFtoImage" />
