@@ -37,6 +37,9 @@ export const SCREENS = [
   { name: 'visits', path: '/health/visits' },
   { name: 'visit', path: '/health/visits/v-1' },
   { name: 'indicators', path: '/health/indicators' },
+  { name: 'kb', path: '/health/kb/medications' },
+  { name: 'kb-indicators', path: '/health/kb/indicators', only: 'desktop' },
+  { name: 'kb-vaccines', path: '/health/kb/vaccines' },
   { name: 'intake', path: '/health/intake' },
   { name: 'intake-form', path: '/health/intake', prepare: async (page) => {
     await page.getByRole('button', { name: 'Новый курс' }).click();
@@ -350,6 +353,17 @@ const ROUTES = [
     { recordDate: '2026-07-02', valueRaw: '5,1', valueNumericText: '5.1', flag: 1, medicalRecordId: 'r-bio' },
     { recordDate: '2026-10-03', valueRaw: '4,24', valueNumericText: '4.24', flag: 1, medicalRecordId: 'r-blood' },
   ]],
+  ['GET', /^\/api\/kb\/medications$/, { hasMore: false, items: [
+    { id: 'kb-nurofen', displayName: 'Нурофен', purpose: 'Обезболивающее и жаропонижающее (ибупрофен).' },
+    { id: 'kb-omeprazol', displayName: 'Омепразол', purpose: 'Снижает кислотность желудка.' },
+    { id: 'kb-d3', displayName: 'Витамин D3', purpose: 'Восполняет дефицит витамина D.' },
+    { id: 'kb-mg', displayName: 'Магний B6', purpose: null },
+  ] }],
+  ['GET', /^\/api\/kb\/analytes$/, { hasMore: false, items: [
+    { id: 'wbc', displayName: 'Лейкоциты', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: 'Белые клетки крови, защищают организм от инфекций.' },
+    { id: 'esr', displayName: 'СОЭ', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: 'Скорость оседания эритроцитов — маркер воспаления.' },
+    { id: 'glu', displayName: 'Глюкоза', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: null },
+  ] }],
   ['GET', /^\/api\/indicators$/, [
     ...INDICATORS.slice(0, 12).map((i) => ({
       analyteKey: i.analyteKey, displayName: i.displayName, specimenKbId: 'blood', specimenDisplayName: 'Кровь',
@@ -412,7 +426,15 @@ const ROUTES = [
     cells: ['10', '11', '12', '13', '14'].map((d) => ({ date: `2026-10-${d}`, time: '09:00', scheduledAt: `2026-10-${d}T09:00:00+03:00`, outcome: d === '14' ? 1 : 2, doseId: `c-1-${d}` })),
   }],
   ['GET', /^\/api\/vaccinations\/overview$/, VACC_OVERVIEW],
-  ['GET', /^\/api\/vaccinations\/catalog$/, []],
+  ['GET', /^\/api\/vaccinations\/catalog$/, [
+    { code: 'influenza', name: 'Грипп', shortName: 'Грипп', group: 1, diseases: ['Грипп'], doses: [], tradeNames: ['Совигрипп', 'Ультрикс'],
+      about: 'Ежегодная прививка перед сезоном гриппа.', contraindications: null, reactionHint: 'Возможны слабость и температура до 37,5.',
+      repeatEveryYears: null, seasonal: true, closedByDisease: false },
+    { code: 'dtp', name: 'Дифтерия, столбняк', shortName: 'АДС-М', group: 0, diseases: ['Дифтерия', 'Столбняк'], doses: [], tradeNames: ['АДС-М'],
+      about: null, contraindications: null, reactionHint: null, repeatEveryYears: 10, seasonal: false, closedByDisease: false },
+    { code: 'mmr', name: 'Корь, краснуха, паротит', shortName: 'КПК', group: 0, diseases: ['Корь', 'Краснуха', 'Паротит'], doses: [], tradeNames: ['Вактривир'],
+      about: null, contraindications: null, reactionHint: null, repeatEveryYears: null, seasonal: false, closedByDisease: true },
+  ]],
   ['GET', /^\/api\/vaccinations\/people\/user\/[^/]+$/, VACC_PERSON],
   ['GET', /^\/api\/vaccinations\/people\/user\/[^/]+\/series\/[^/]+$/, VACC_SERIES],
   ['GET', /^\/api\/health-notes$/, HEALTH_NOTES],

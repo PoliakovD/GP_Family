@@ -10,7 +10,13 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 @Component({
     selector: 'app-kb-hub',
     imports: [RouterLink, RouterLinkActive, RouterOutlet],
-    templateUrl: './kb-hub.component.html'
+    templateUrl: './kb-hub.component.html',
+    styles: [`
+      .kb { display: flex; flex-direction: column; gap: var(--space-5); }
+      .kb-title { margin: 0; font: var(--text-display); letter-spacing: var(--letter-spacing-display); }
+      .kb-sections { align-self: flex-start; }
+      @media (max-width: 1023px) { .kb-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); } }
+    `],
 })
 export class KbHubComponent {
   readonly sections: { path: string; label: string }[] = [

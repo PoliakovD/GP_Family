@@ -1,3 +1,6 @@
+import { NotebookPen } from 'lucide-angular';
+import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -17,11 +20,12 @@ import { GROUP_LABEL } from '../../shared/util/vaccination-labels';
  */
 @Component({
   selector: 'app-kb-vaccines-tab',
-  imports: [BottomSheetComponent, FormsModule, LoadingSpinnerComponent, NgTemplateOutlet, SidePanelComponent],
+  imports: [BottomSheetComponent, FormsModule, IconComponent, SearchFieldComponent, LoadingSpinnerComponent, NgTemplateOutlet, SidePanelComponent],
   templateUrl: './kb-vaccines-tab.component.html',
   styleUrl: './kb-vaccines-tab.component.scss',
 })
 export class KbVaccinesTabComponent implements OnInit, OnDestroy {
+  protected readonly noteIcon = NotebookPen;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly breakpoints = inject(BreakpointService);

@@ -10,7 +10,8 @@ import type { KbMedicationCard } from '../../models/types';
 @Component({
     selector: 'app-kb-card',
     imports: [DatePipe],
-    templateUrl: './kb-card.component.html'
+    templateUrl: './kb-card.component.html',
+    styles: [`.kc-title { margin: 0 0 var(--space-2); font: var(--text-title); }`],
 })
 export class KbCardComponent {
   readonly card = input.required<KbMedicationCard>();
