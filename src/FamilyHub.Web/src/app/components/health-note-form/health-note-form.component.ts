@@ -1,5 +1,9 @@
 import { Component, OnInit, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CirclePlus, FileText } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
+import { HEALTH_KIND_UI, WELLBEING_ICON } from '../../shared/util/health-note-icons';
 import { ApiError, ApiService } from '../../services/api.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import { todayLocal } from '../../shared/util/intake-labels';
@@ -19,11 +23,14 @@ import {
  */
 @Component({
   selector: 'app-health-note-form',
-  imports: [FormsModule],
+  imports: [FormsModule, IconComponent, IconTileComponent],
   templateUrl: './health-note-form.component.html',
   styleUrl: './health-note-form.component.scss',
 })
 export class HealthNoteFormComponent implements OnInit {
+  protected readonly kindUi = HEALTH_KIND_UI;
+  protected readonly moodIcon = WELLBEING_ICON;
+  protected readonly icons = { CirclePlus, FileText };
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
 

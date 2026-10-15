@@ -1,8 +1,8 @@
 <form class="dn-form" (ngSubmit)="save()">
   <div class="dn-body">
     @if (isEdit()) {
-      <div class="dn-edit-head" [style.--kind-color]="kindMeta(kind()).color">
-        <i class="ph-fill" [class]="'ph-' + kindMeta(kind()).icon" aria-hidden="true"></i>
+      <div class="dn-edit-head" [class]="'dn-edit-head tone-' + kindUi[kind()].tone">
+        <app-icon-tile [icon]="kindUi[kind()].icon" [tone]="kindUi[kind()].tone" size="sm" />
         <span>{{ kindMeta(kind()).label }}</span>
       </div>
     } @else {
@@ -10,14 +10,13 @@
         @for (k of kinds; track k.kind) {
           <button
             type="button"
-            class="dn-kind"
+            [class]="'dn-kind tone-' + kindUi[k.kind].tone"
             role="radio"
             [class.active]="kind() === k.kind"
             [attr.aria-checked]="kind() === k.kind"
-            [style.--kind-color]="k.color"
             (click)="selectKind(k.kind)"
           >
-            <i [class]="(kind() === k.kind ? 'ph-fill' : 'ph-duotone') + ' ph-' + k.icon" aria-hidden="true"></i>
+            <app-icon [icon]="kindUi[k.kind].icon" [size]="20" />
             <span>{{ k.label }}</span>
           </button>
         }
@@ -118,7 +117,7 @@
               </div>
             } @else {
               <button type="button" class="dn-add-row" (click)="addPulse.set(true)">
-                <i class="ph ph-plus-circle" aria-hidden="true"></i>
+                <app-icon [icon]="icons.CirclePlus" [size]="18" />
                 <span>Добавить пульс к этому замеру</span>
               </button>
             }
@@ -134,7 +133,7 @@
               <button type="button" class="dn-mood" role="radio"
                       [class.active]="score() === l.score" [attr.aria-checked]="score() === l.score"
                       (click)="score.set(l.score)">
-                <i [class]="(score() === l.score ? 'ph-fill' : 'ph') + ' ph-' + l.icon" aria-hidden="true"></i>
+                <app-icon [icon]="moodIcon[l.score]" [size]="28" />
                 <span>{{ l.label }}</span>
               </button>
             }
@@ -195,7 +194,7 @@
           <span class="dn-sublabel" id="dn-q-label">Качество</span>
           <div class="seg" role="radiogroup" aria-labelledby="dn-q-label">
             @for (q of sleepQualities; track q.value) {
-              <button type="button" class="seg-opt dn-seg" role="radio"
+              <button type="button" class="seg-opt" role="radio"
                       [class.active]="quality() === q.value" [attr.aria-checked]="quality() === q.value"
                       (click)="quality.set(q.value)">{{ q.label }}</button>
             }
@@ -211,7 +210,7 @@
                     [ngModel]="text()" (ngModelChange)="text.set($event)" name="note"></textarea>
         </div>
         <label class="dn-toggle-row">
-          <i class="ph ph-file-text" aria-hidden="true"></i>
+          <app-icon [icon]="icons.FileText" [size]="18" />
           <span>Включить в «Вопросы к врачу» в следующем отчёте</span>
           <span class="switch">
             <input type="checkbox" [checked]="includeInDoctorQuestions()"

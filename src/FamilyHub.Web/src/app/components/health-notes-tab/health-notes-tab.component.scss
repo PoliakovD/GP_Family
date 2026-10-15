@@ -1,242 +1,96 @@
-// Страница «Дневник» (макет «Screen - Diary»). Цвет типа записи — в --kind-color на строке.
+// Дневник самочувствия (DESIGN §3–4, макеты diary-desktop / diary-mobile). Карточки, строки, пилюли, FAB —
+// из библиотеки; здесь раскладка, полосы самочувствия и линия тренда в карточке метрики.
 
 .dn-page {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  max-width: 940px;
 }
 
 .dn-head {
   display: flex;
-  align-items: flex-end;
-  gap: var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
+  gap: var(--space-4);
 }
 
-.dn-head-text { flex: 1; min-width: 220px; }
+.dn-head-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+
+.dn-title {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+}
 
 .dn-privacy {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.8824rem;
-  color: var(--color-neutral-700);
-
-  i { color: var(--color-neutral-600); }
+  gap: var(--space-2);
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--color-text-muted);
 }
 
-// ---- Сводка ----
+.dn-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+
+// ---- Метрики ----
 .dn-tiles {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-
-  // На узких экранах плитки листаются вбок (как в макете), а не ломают вёрстку.
-  @media (max-width: 1023px) {
-    display: flex;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
 }
 
-.dn-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 14px 16px 12px;
-  background: var(--color-paper);
-  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+// Линия тренда — справа от числа (макет), цвет вида «замер» (accent — только действия).
+.dn-metric { position: relative; }
 
-  @media (max-width: 1023px) { flex: none; width: 200px; }
+.dn-trend {
+  position: absolute;
+  top: var(--space-12);
+  right: var(--space-5);
+  width: 110px;
+  --trend-color: var(--color-kind-measure);
 }
-
-.dn-tile-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.7941rem;
-  color: var(--color-neutral-700);
-
-  i { font-size: 1.05rem; color: var(--color-kind-metric); }
-}
-
-.dn-tile-name { flex: 1; }
-.dn-tile-stamp {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--color-neutral-600);
-  white-space: nowrap;
-}
-
-.dn-tile-value {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-
-  strong { font-family: var(--font-heading); font-size: 1.5rem; line-height: 1; }
-  span { font-size: 0.7647rem; color: var(--color-neutral-600); white-space: nowrap; }
-}
-
-.dn-tile-caption { font-size: 0.7647rem; color: var(--color-neutral-600); }
-.dn-tile-caption-warn { color: var(--color-status-danger-text); font-weight: 600; }
 
 .dn-bars {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--space-1);
   height: 38px;
 }
 
 .dn-bar {
   flex: 1;
-  background: var(--color-kind-wellbeing);
+  border-radius: var(--radius-xs);
+  background: var(--color-kind-mood);
 }
 
-// ---- Фильтр и поиск ----
-.dn-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.dn-search { flex: 1; min-width: 200px; max-width: 320px; }
+// ---- Фильтры, поиск ----
+.dn-search { max-width: 290px; }
 
 // ---- Лента ----
-.dn-feed { display: flex; flex-direction: column; gap: 18px; }
+.dn-feed { display: flex; flex-direction: column; gap: var(--space-5); }
+.dn-day-group { display: flex; flex-direction: column; gap: var(--space-3); }
 
 .dn-day {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 8px;
-
-  h5 { margin: 0; }
-}
-
-.dn-day-sub { font-size: 0.8235rem; color: var(--color-neutral-600); }
-
-.dn-day-rule {
-  flex: 1;
-  align-self: center;
-  height: 1px;
-  background: var(--color-divider);
-}
-
-.dn-list {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  background: var(--color-paper);
-  border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
-}
+  font: var(--text-body-lg);
+  color: var(--color-text-muted);
 
-.dn-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 52px;
-  padding: 4px 4px 4px 16px;
-  box-shadow: inset 3px 0 0 var(--kind-color);
-
-  & + & { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
-
-  @media (max-width: 639px) { gap: 10px; padding-left: 12px; }
-}
-
-.dn-time {
-  flex: none;
-  width: 46px;
-  font-size: 0.8235rem;
-  color: var(--color-neutral-600);
-
-  @media (max-width: 639px) { display: none; }
-}
-
-// Узкие экраны: время уезжает во вторую строку под названием (как в макете), колонка времени скрыта.
-.dn-sub-stacked { display: none; }
-
-
-.dn-icon { flex: none; font-size: 1.3rem; color: var(--kind-color); }
-
-.dn-row-main {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 0;
-  font: inherit;
-  text-align: left;
-  color: inherit;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  // Одна строка с многоточием на десктопе (как в макете); на узких — см. медиа-блок ниже.
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dn-row-title { font-family: var(--font-heading); font-weight: 600; font-size: 0.97rem; }
-.dn-row-sub { font-size: 0.8235rem; color: var(--color-neutral-600); }
-.dn-flag { margin-left: 6px; color: var(--color-neutral-600); }
-
-.dn-badge {
-  flex: none;
-  padding: 3px 10px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7941rem;
-  color: var(--color-kind-symptom-text);
-  background: color-mix(in srgb, var(--color-kind-symptom) 12%, var(--color-paper));
+  strong { font-weight: 600; color: var(--color-text); }
 }
 
 .dn-older { align-self: flex-start; }
+.dn-older-note { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
 
-.dn-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 40px 20px;
-  text-align: center;
-  background: var(--color-paper);
-  border: 1px dashed var(--color-border-dashed);
-
-  i { font-size: 2.4rem; color: var(--color-neutral-600); }
-  h5, p { margin: 0; }
-  p { max-width: 420px; }
-}
-
-// Плавающая кнопка над нижним таб-баром (узкие экраны) + запас под неё в конце ленты.
-.dn-fab {
-  position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: calc(78px + env(safe-area-inset-bottom, 0px));
-  z-index: var(--z-fab);
-  box-shadow: var(--shadow-md);
-}
-
+// Телефон (макет diary-mobile): метрики по две, без линии тренда; «В отчёт для врача» — иконкой; поиск во всю ширину.
 @media (max-width: 1023px) {
-  .dn-page { padding-bottom: 72px; }
-  .dn-add { display: none; }
-}
-
-// Нижний лист использует --color-bg, а форма по умолчанию рисует липкий футер на «бумаге».
-.dn-sheet { --dn-surface: var(--color-bg); }
-
-// Узкие экраны — в конце файла, чтобы перебить базовые правила строки выше по каскаду.
-@media (max-width: 639px) {
-  .dn-sub-inline, .dn-flag-inline { display: none; }
-  .dn-sub-stacked { display: block; }
-  .dn-row-main { white-space: normal; }
-  .dn-row-title {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
+  .dn-page { gap: var(--space-4); }
+  .dn-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+  .dn-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  .dn-trend { display: none; }
+  .dn-report { width: var(--control-height); padding: 0; justify-content: center; }
+  .dn-report-label { display: none; }
+  .dn-search { max-width: none; }
+  .dn-feed { padding-bottom: calc(var(--space-12) + var(--space-4)); } // FAB не закрывает последнюю строку
 }

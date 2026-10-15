@@ -41,6 +41,15 @@ export const SCREENS = [
   { name: 'vaccinations', path: '/health/vaccinations' },
   { name: 'vaccination-person', path: `/health/vaccinations/people/user/${ME_ID}/series/influenza`, only: 'mobile' },
   { name: 'notes', path: '/health/notes' },
+  { name: 'notes-form', path: '/health/notes', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Добавить запись' }).first().click();
+    await page.waitForTimeout(500);
+  } },
+  { name: 'notes-form-metric', path: '/health/notes', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Добавить запись' }).first().click();
+    await page.getByRole('radio', { name: 'Замер' }).click();
+    await page.waitForTimeout(400);
+  } },
   { name: 'doctor-reports', path: '/health/reports' },
   { name: 'medkits', path: '/health/medications' },
   // Витрина компонентов (только dev-сборка, фаза 2 редизайна).
@@ -355,7 +364,7 @@ const ROUTES = [
     status: 2, stage: 5, indicatorCount: 20, error: null, totalFiles: 1, processedFiles: 1,
     createdAt: '2026-10-03T09:00:00Z', completedAt: '2026-10-03T09:02:00Z', queuePosition: 0, waitingForAi: false,
   }],
-  ['GET', /^\/api\/health-shares\/shared-with-me$/, []],
+  ['GET', /^\/api\/health-shares\/shared-with-me$/, [{ ownerUserId: VALERIA_ID, name: 'Валерия', categories: 4 }]],
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],
   ['GET', /^\/api\/families\/[^/]+\/dependents$/, []],
@@ -386,6 +395,7 @@ const ROUTES = [
   ['GET', /^\/api\/vaccinations\/people\/user\/[^/]+$/, VACC_PERSON],
   ['GET', /^\/api\/vaccinations\/people\/user\/[^/]+\/series\/[^/]+$/, VACC_SERIES],
   ['GET', /^\/api\/health-notes$/, HEALTH_NOTES],
+  ['GET', /^\/api\/health-notes\/recent$/, []],
   ['GET', /^\/api\/health-notes\/catalog$/, HEALTH_NOTE_CATALOG],
   ['GET', /^\/api\/doctor-reports$/, DOCTOR_REPORTS],
   ['GET', /^\/api\/families\/[^/]+\/medkits$/, [

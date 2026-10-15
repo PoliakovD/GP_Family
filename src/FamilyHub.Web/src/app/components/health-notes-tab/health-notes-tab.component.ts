@@ -7,7 +7,16 @@ import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/ac
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { TrackDirtyDirective, confirmDiscard } from '../../shared/util/track-dirty.directive';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { FileText, Lock, NotebookPen, Plus, type LucideIconData } from 'lucide-angular';
+import { HEALTH_KIND_UI as KIND_UI } from '../../shared/util/health-note-icons';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { EntryRowComponent } from '../../shared/ui/entry-row/entry-row.component';
+import { FabComponent } from '../../shared/ui/fab/fab.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { MetricCardComponent } from '../../shared/ui/metric-card/metric-card.component';
+import { PillTabsComponent, type PillTab } from '../../shared/ui/pill-tabs/pill-tabs.component';
+import type { Tone } from '../../shared/ui/tone';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { SidePanelComponent } from '../../shared/side-panel/side-panel.component';
 import { ToastService } from '../../shared/toast/toast.service';
@@ -19,20 +28,31 @@ import {
 } from '../../models/types';
 import {
   HEALTH_KINDS, NoteDescription, dayHeading, dayKey, describeNote, formatClock, formatNumber,
-  kindMeta, metricValueText, wellbeingLevel,
+  metricValueText, wellbeingLevel,
 } from '../../shared/util/health-note-labels';
 import { HealthNoteFormComponent } from '../health-note-form/health-note-form.component';
 
 const DAY_MS = 86_400_000;
 const PAGE_DAYS = 30;
 
+/** Предупреждение по давлению/пульсу → короткий бейдж + пояснение под числом (макет diary-desktop). */
+function splitWarning(warning: string): { badge: string; caption: string } {
+  const bp = /^(выше|ниже) рекомендуемого \((\d+\/\d+)\) — (.+)$/.exec(warning);
+  if (bp) {
+    return { badge: `${bp[1]} рекомендуемого`, caption: `Рекомендуемо ${bp[1] === 'выше' ? 'до' : 'от'} ${bp[2]} — ${bp[3]}` };
+  }
+  const [head, tail] = warning.split(' — ');
+  return { badge: head, caption: tail ?? '' };
+}
+
 interface FeedItem {
   note: HealthNote;
   desc: NoteDescription;
   time: string;
-  icon: string;
-  color: string;
-  flagged: boolean;
+  icon: LucideIconData;
+  tone: Tone;
+  /** Подпись строки: подзаголовок записи и «в вопросы к врачу», если запись отмечена. */
+  subtitle: string | null;
   actions: ActionMenuItem[];
 }
 
@@ -53,8 +73,8 @@ interface MetricTile {
   values: number[];
   band: [number, number] | null;
   caption: string;
-  /** Значение вне общепринятых ориентиров (vitalsWarning) — подпись выделяется цветом. */
-  warn: boolean;
+  /** Бейдж warning — давление/пульс вне рекомендуемого (DESIGN §1: warning — «выше рекомендуемого»). */
+  badge: string | null;
 }
 
 interface WellbeingTile {
@@ -80,7 +100,8 @@ function quantile(sorted: number[], q: number): number {
 @Component({
   selector: 'app-health-notes-tab',
   imports: [
-    ActionMenuComponent, BottomSheetComponent, HealthNoteFormComponent, PersonChipComponent, RouterLink,
+    ActionMenuComponent, BottomSheetComponent, EmptyStateComponent, EntryRowComponent, FabComponent,
+    HealthNoteFormComponent, IconComponent, LoadingSpinnerComponent, MetricCardComponent, PillTabsComponent, RouterLink,
     SearchFieldComponent, SidePanelComponent, TrackDirtyDirective, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
@@ -94,6 +115,12 @@ export class HealthNotesTabComponent implements OnInit {
   protected readonly auth = inject(AuthService);
 
   protected readonly kinds = HEALTH_KINDS;
+  protected readonly icons = { FileText, Lock, NotebookPen, Plus };
+  /** Фильтры-пилюли: «Все» + виды записей; id — строка (вид числом). */
+  protected readonly filterTabs: PillTab[] = [
+    { id: 'all', label: 'Все' },
+    ...HEALTH_KINDS.map((k) => ({ id: String(k.kind), label: k.filterLabel })),
+  ];
 
   readonly notes = signal<HealthNote[]>([]);
   readonly catalog = signal<HealthNoteCatalog | null>(null);
@@ -136,18 +163,19 @@ export class HealthNotesTabComponent implements OnInit {
       if (kind !== null && note.kind !== kind) continue;
       const desc = describeNote(note, metrics);
       if (q && !`${desc.title} ${desc.subtitle} ${note.text ?? ''}`.toLowerCase().includes(q)) continue;
-      const meta = kindMeta(note.kind);
+      const ui = KIND_UI[note.kind] ?? KIND_UI[HealthNoteKind.Note];
+      const sub = [desc.subtitle, note.includeInDoctorQuestions ? 'в вопросы к врачу' : ''].filter(Boolean).join(' · ');
       const item: FeedItem = {
         note,
         desc,
         time: formatClock(note.occurredAt),
-        icon: meta.icon,
-        color: meta.color,
-        flagged: note.includeInDoctorQuestions,
+        icon: ui.icon,
+        tone: ui.tone,
+        subtitle: sub || null,
         // Грант Diary — только на чтение (ADR-0017): чужую запись не правим и не удаляем.
         actions: readOnly ? [] : [
-          { label: 'Изменить', icon: 'ph ph-pencil-simple', handler: () => this.openForm(note) },
-          { label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.remove(note) },
+          { label: 'Изменить', handler: () => this.openForm(note) },
+          { label: 'Удалить', danger: true, handler: () => void this.remove(note) },
         ],
       };
       const key = dayKey(note.occurredAt);
@@ -176,6 +204,12 @@ export class HealthNotesTabComponent implements OnInit {
 
   protected setFilter(kind: HealthNoteKind | null): void {
     this.filter.set(kind);
+  }
+
+  protected readonly filterId = computed(() => { const f = this.filter(); return f === null ? 'all' : String(f); });
+
+  protected setFilterId(id: string): void {
+    this.setFilter(id === 'all' ? null : (Number(id) as HealthNoteKind));
   }
 
   /** Переключение чипа «Я» / «{имя}» над лентой (ADR-0017) — null возвращает к своему дневнику. */
@@ -310,8 +344,9 @@ export class HealthNotesTabComponent implements OnInit {
     const warning = vitalsWarning(code, latest, latestNote.metric.value2);
 
     let caption: string;
+    let badge: string | null = null;
     if (warning) {
-      caption = warning;
+      ({ badge, caption } = splitWarning(warning));
     } else if (code === 'weight') {
       const first = month[0]?.v;
       const delta = first === undefined ? 0 : Math.round((latest - first) * 10) / 10;
@@ -338,7 +373,7 @@ export class HealthNotesTabComponent implements OnInit {
       values: window,
       band: code === 'weight' ? null : band,
       caption,
-      warn: warning !== null,
+      badge,
     };
   }
 
