@@ -1,0 +1,47 @@
+// Лента уведомлений: H1 + фильтр → группы по дням (section) → list-card строк (плитка по смыслу, текст, шеврон).
+
+.nt { display: flex; flex-direction: column; gap: var(--space-6); max-width: 820px; }
+.nt-head { display: flex; flex-direction: column; gap: var(--space-4); }
+.nt-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+
+.nt-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+
+  & + .nt-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--space-6);
+    right: var(--space-6);
+    border-top: 1px solid var(--color-divider);
+  }
+
+  > .list-row-chevron { align-self: center; }
+}
+
+.nt-row-clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
+  &:focus-visible { outline-offset: -2px; }
+}
+
+.nt-text { display: flex; flex: 1; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.nt-title-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.nt-title { font: var(--text-body); font-weight: 600; color: var(--color-text); }
+.nt-row:not(.nt-row-unread) .nt-title { font-weight: 400; }
+.nt-type { font: var(--text-caption); color: var(--color-text-muted); }
+.nt-body { margin: 0; font: var(--text-body-sm); color: var(--color-text); }
+.nt-read { align-self: flex-start; margin: var(--space-1) 0 0 calc(-1 * var(--space-3)); } // текст кнопки — по краю текста строки
+
+@media (max-width: 1023px) { .nt-h1 { display: none; } }
+
+@media (max-width: 639px) {
+  .nt-row { padding: var(--space-3) var(--space-4); }
+  .nt-row + .nt-row::before { left: var(--space-4); right: var(--space-4); }
+}

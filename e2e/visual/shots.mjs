@@ -98,6 +98,11 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
       if (typeof result.rawText === 'string') return route.fulfill({ status: 200, contentType: 'text/html', body: result.rawText });
       return route.fulfill({ status: result.status ?? 200, json: result.body ?? result });
     });
+    // overrides — свои ответы только для этого экрана (как ROUTES): маршрут, добавленный позже, приоритетнее.
+    for (const [m, re, res] of screen.overrides?.() ?? []) {
+      await context.route((u) => re.test(u.pathname), (route) => route.request().method() === m
+        ? route.fulfill({ json: res }) : route.fallback());
+    }
     // anon — экран для человека без сессии (вход, приглашение): маршрут, добавленный позже, приоритетнее.
     if (screen.anon) await context.route('**/api/auth/me', (route) => route.fulfill({ status: 401, json: {} }));
     // Всё внешнее (шрифты/аналитика/проверки связи) — не ходим в сеть: снимок не должен зависеть от неё.

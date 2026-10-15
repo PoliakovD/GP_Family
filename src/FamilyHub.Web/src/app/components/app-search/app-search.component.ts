@@ -7,6 +7,10 @@ import { SearchResultItem, SearchResultType } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
+import { BookOpenText, BriefcaseMedical, Cake, ChevronRight, HeartPulse, Search, Stethoscope } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 
 const TYPE_LABEL: Record<number, string> = {
   [SearchResultType.Medication]: 'Лекарство',
@@ -16,12 +20,12 @@ const TYPE_LABEL: Record<number, string> = {
   [SearchResultType.Visit]: 'Приём врача',
 };
 
-const TYPE_ICON: Record<number, string> = {
-  [SearchResultType.Medication]: 'ph-duotone ph-first-aid-kit',
-  [SearchResultType.Kb]: 'ph-duotone ph-book-open-text',
-  [SearchResultType.Record]: 'ph-duotone ph-heartbeat',
-  [SearchResultType.Birthday]: 'ph-fill ph-cake',
-  [SearchResultType.Visit]: 'ph-duotone ph-stethoscope',
+const TYPE_ICON: Record<number, LucideIconData> = {
+  [SearchResultType.Medication]: BriefcaseMedical,
+  [SearchResultType.Kb]: BookOpenText,
+  [SearchResultType.Record]: HeartPulse,
+  [SearchResultType.Birthday]: Cake,
+  [SearchResultType.Visit]: Stethoscope,
 };
 
 /** Значения чипов-фильтров — 'all' убирает параметр types вовсе (см. api.service.ts). */
@@ -54,12 +58,14 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
  */
 @Component({
     selector: 'app-search',
-    imports: [ClickableDirective, LoadingSpinnerComponent, SearchFieldComponent],
+    imports: [IconComponent, IconTileComponent, ClickableDirective, LoadingSpinnerComponent, SearchFieldComponent],
     templateUrl: './app-search.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './app-search.component.scss'
 })
 export class AppSearchComponent {
+  protected readonly chevron = ChevronRight;
+
   private readonly overlays = inject(OverlayStackService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
@@ -99,8 +105,8 @@ export class AppSearchComponent {
     return TYPE_LABEL[type] ?? 'Результат';
   }
 
-  typeIcon(type: number): string {
-    return TYPE_ICON[type] ?? 'ph-duotone ph-magnifying-glass';
+  typeIcon(type: number): LucideIconData {
+    return TYPE_ICON[type] ?? Search;
   }
 
   isNavigable(item: SearchResultItem): boolean {

@@ -73,6 +73,14 @@ export const SCREENS = [
   { name: 'settings-security', path: '/settings/security', only: 'desktop' },
   { name: 'settings-notifications', path: '/settings/notifications' },
   { name: 'settings-data', path: '/settings/data' },
+  // Уведомления, поиск, фоновые задачи (4.8.2).
+  { name: 'notifications', path: '/notifications' },
+  { name: 'search', path: '/home', only: 'desktop', prepare: async (page) => {
+    await page.locator('.app-search input').fill('Ибу');
+    await page.waitForTimeout(600);
+  } },
+  { name: 'jobs', path: '/home', only: 'desktop', overrides: () => [['GET', /^\/api\/jobs\/active-summary$/, ACTIVE_JOBS]],
+    prepare: async (page) => { await page.getByRole('button', { name: 'Фоновые процессы' }).click(); } },
   // Вход и онбординг (4.8.1). anon — /api/auth/me отвечает 401, как у человека без сессии.
   { name: 'auth-login', path: '/login', anon: true },
   { name: 'auth-register', path: '/login', anon: true, prepare: async (page) => {
@@ -341,6 +349,29 @@ const VISITS = [
     abnormalIndicatorCount: 0, normalIndicatorCount: 0, specimenKbId: '', specimenDisplayName: null }),
 ];
 
+const job = (jobId, label, extra = {}) => ({ jobId, label, recordId: null, recordKind: null, createdAt: '2026-10-14T09:30:00+03:00',
+  isRunning: false, waitingForAi: false, queueAhead: 0, ...extra });
+const ACTIVE_JOBS = {
+  extraction: { total: 2, items: [job('j1', 'Анализ мочи — 12 окт.', { recordId: 'r-blood', recordKind: 0, isRunning: true }), job('j2', 'Бланк УЗИ', { queueAhead: 1 })] },
+  labAnalyte: { total: 1, items: [job('j3', 'Ферритин')] },
+  medication: emptyJobs, visitMedication: emptyJobs,
+};
+const NOTE = (id, type, title, body, createdAt, isRead, kind = null, related = 'r-blood') => ({
+  id, type, title, body, createdAt, isRead, readAt: null, relatedEntityKind: kind, relatedEntityId: related });
+const NOTIFICATIONS = [
+  NOTE('n1', 11, 'Пропущен приём: Аторвастатин', 'Вечерний приём в 21:00 не отмечен.', '2026-10-14T08:10:00+03:00', false, 3, 'dose-1'),
+  NOTE('n2', 7, 'Анализ крови распознан', 'Развернутый анализ крови — 20 показателей, 6 вне нормы.', '2026-10-14T07:45:00+03:00', false, 0),
+  NOTE('n3', 17, 'Валерия: «Купила витамин D»', 'Сообщение в чате семьи «Поляковы».', '2026-10-13T19:20:00+03:00', true, 8, 'fam'),
+  NOTE('n4', 0, 'Ибупрофен: срок годности истекает', 'Аптечка «Дом» — годен до 31 октября.', '2026-10-13T09:00:00+03:00', true),
+  NOTE('n5', 13, 'Скоро прививка: грипп', 'Ежегодная вакцинация — рекомендуем до конца октября.', '2026-10-10T09:00:00+03:00', true),
+];
+const SEARCH = [
+  { type: 0, id: 's1', title: 'Ибупрофен 200 мг', snippet: null, score: 1, birthday: null,
+    medication: { familyId: 'fam', familyName: 'Поляковы', medkitId: 'mk', medkitName: 'Дом', expiryDate: '2026-10-31' } },
+  { type: 1, id: 's2', title: 'Ибупрофен', snippet: 'НПВС: обезболивающее, жаропонижающее', score: 0.8, birthday: null, medication: null },
+  { type: 2, id: 's3', title: 'Развернутый анализ крови', snippet: '3 октября · 6 вне нормы', score: 0.5, birthday: null, medication: null },
+];
+
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
   ['GET', /^\/api\/auth\/me$/, ME],
@@ -358,6 +389,8 @@ const ROUTES = [
   ['GET', /^\/api\/medication-courses\/attention-count$/, { count: 0 }],
   ['GET', /^\/api\/vaccinations\/attention-count$/, { count: 2 }],
   ['GET', /^\/api\/notifications\/unread-count$/, { count: 2 }],
+  ['GET', /^\/api\/notifications$/, NOTIFICATIONS],
+  ['GET', /^\/api\/search$/, { items: SEARCH, page: 1, pageSize: 15, totalCount: 3 }],
   ['GET', /^\/api\/health\/summary$/, HEALTH_SUMMARY],
   ['GET', /^\/api\/medical-records\/shares$/, [FAMILY_ID]],
   ['GET', /^\/api\/attachments\/limits$/, { maxFileSizeBytes: 20971520, maxFilesPerRecord: 10 }],

@@ -1,4 +1,10 @@
+import {
+  Bell, BellRing, BookOpenText, Cake, CircleAlert, FileText, LogOut, MessageCircle, NotebookPen, Package, Pill,
+  Syringe, UserCheck, WandSparkles,
+} from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 import { NotificationType } from '../../models/types';
+import type { Tone } from '../ui/tone';
 
 /**
  * Подписи и иконки по FamilyHub.Domain.Enums.NotificationType. Общее для ленты оповещений
@@ -30,33 +36,51 @@ export const NOTIFICATION_TYPE_LABEL: Record<number, string> = {
   [NotificationType.FamilyChatMessage]: 'Новое сообщение в чате семьи',
 };
 
-export const NOTIFICATION_TYPE_ICON: Record<number, string> = {
-  [NotificationType.MedicationExpiringSoon]: 'ph-duotone ph-warning-circle',
-  [NotificationType.MedicationExpired]: 'ph-duotone ph-warning-circle',
-  [NotificationType.BirthdayUpcoming]: 'ph-duotone ph-cake',
-  [NotificationType.MemberLeft]: 'ph-duotone ph-sign-out',
-  [NotificationType.MemberApproved]: 'ph-duotone ph-user-check',
-  [NotificationType.MedicalRecordShared]: 'ph-duotone ph-file-text',
-  [NotificationType.MedicationEnriched]: 'ph-duotone ph-book-open-text',
-  [NotificationType.MedicalDocumentExtracted]: 'ph-duotone ph-magic-wand',
-  [NotificationType.MedicalDocumentExtractionFailed]: 'ph-duotone ph-warning-circle',
-  [NotificationType.MedicationEnrichmentFailed]: 'ph-duotone ph-warning-circle',
-  [NotificationType.MedicationDoseDue]: 'ph-duotone ph-pill',
-  [NotificationType.MedicationDoseMissed]: 'ph-duotone ph-bell-ringing',
-  [NotificationType.MedicationStockLow]: 'ph-duotone ph-package',
-  [NotificationType.VaccinationDue]: 'ph-duotone ph-syringe',
-  [NotificationType.VaccinationOverdue]: 'ph-duotone ph-syringe',
-  [NotificationType.VaccinationWellbeingCheck]: 'ph-duotone ph-notebook',
-  [NotificationType.DoctorReportAboutYou]: 'ph-duotone ph-file-pdf',
-  [NotificationType.FamilyChatMessage]: 'ph-duotone ph-chat-circle-text',
+export const NOTIFICATION_TYPE_ICON: Record<number, LucideIconData> = {
+  [NotificationType.MedicationExpiringSoon]: CircleAlert,
+  [NotificationType.MedicationExpired]: CircleAlert,
+  [NotificationType.BirthdayUpcoming]: Cake,
+  [NotificationType.MemberLeft]: LogOut,
+  [NotificationType.MemberApproved]: UserCheck,
+  [NotificationType.MedicalRecordShared]: FileText,
+  [NotificationType.MedicationEnriched]: BookOpenText,
+  [NotificationType.MedicalDocumentExtracted]: WandSparkles,
+  [NotificationType.MedicalDocumentExtractionFailed]: CircleAlert,
+  [NotificationType.MedicationEnrichmentFailed]: CircleAlert,
+  [NotificationType.MedicationDoseDue]: Pill,
+  [NotificationType.MedicationDoseMissed]: BellRing,
+  [NotificationType.MedicationStockLow]: Package,
+  [NotificationType.VaccinationDue]: Syringe,
+  [NotificationType.VaccinationOverdue]: Syringe,
+  [NotificationType.VaccinationWellbeingCheck]: NotebookPen,
+  [NotificationType.DoctorReportAboutYou]: FileText,
+  [NotificationType.FamilyChatMessage]: MessageCircle,
+};
+
+/** Тон плитки по смыслу (DESIGN §1): danger — просрочено/пропущено/ошибка, warning — скоро,
+ * success — готово; остальное — neutral. «Можно сделать прививку» — neutral, как в vaccination-labels. */
+export const NOTIFICATION_TYPE_TONE: Record<number, Tone> = {
+  [NotificationType.MedicationExpired]: 'danger',
+  [NotificationType.MedicalDocumentExtractionFailed]: 'danger',
+  [NotificationType.MedicationEnrichmentFailed]: 'danger',
+  [NotificationType.MedicationDoseMissed]: 'danger',
+  [NotificationType.MedicationExpiringSoon]: 'warning',
+  [NotificationType.MedicationStockLow]: 'warning',
+  [NotificationType.VaccinationDue]: 'warning',
+  [NotificationType.MemberApproved]: 'success',
+  [NotificationType.MedicalDocumentExtracted]: 'success',
 };
 
 export function notificationTypeLabel(type: number): string {
   return NOTIFICATION_TYPE_LABEL[type] ?? 'Оповещение';
 }
 
-export function notificationTypeIcon(type: number): string {
-  return NOTIFICATION_TYPE_ICON[type] ?? 'ph-duotone ph-bell';
+export function notificationTypeIcon(type: number): LucideIconData {
+  return NOTIFICATION_TYPE_ICON[type] ?? Bell;
+}
+
+export function notificationTypeTone(type: number): Tone {
+  return NOTIFICATION_TYPE_TONE[type] ?? 'neutral';
 }
 
 /** Группировка по разделу (редизайн v3, PR8 — "Аптечка"/"Семья"/"Доступ к записям" вместо

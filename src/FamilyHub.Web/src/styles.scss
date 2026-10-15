@@ -819,6 +819,19 @@ select.input {
 .list-row-sub { font: var(--text-caption); color: var(--color-text-muted); }
 .list-row-chevron { flex: none; color: var(--color-text-muted); }
 
+// Поповер (DESIGN §3): всплывающая панель у поля/кнопки — поиск, фоновые задачи. Позиция — у компонента.
+.popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  z-index: var(--z-popover);
+}
+
 // Горизонтальная прокрутка для широких таблиц внутри узкой карточки.
 .table-responsive {
   max-width: 100%;
@@ -1533,8 +1546,9 @@ button.tag,
 
   input { min-width: 0; }
 
-  // Колокольчик — иконочная кнопка на surface с рамкой (макет home-desktop).
-  app-notification-bell .btn-icon {
+  // Колокольчик и фоновые задачи — иконочные кнопки на surface с рамкой (макет home-desktop).
+  app-notification-bell .btn-icon,
+  app-background-jobs-dropdown .btn-icon {
     width: var(--control-height);
     height: var(--control-height);
     background: var(--color-surface);
@@ -1567,7 +1581,8 @@ button.tag,
   }
 
   .btn-icon.btn-round,
-  app-notification-bell .btn-icon {
+  app-notification-bell .btn-icon,
+  app-background-jobs-dropdown .btn-icon {
     border-radius: var(--radius-pill);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
