@@ -1,3 +1,7 @@
+import { BriefcaseMedical, ChevronDown, ChevronRight, Plus } from 'lucide-angular';
+import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { Component, OnInit, effect, inject, input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -13,11 +17,27 @@ import { pluralizeRu } from '../../shared/util/pluralize';
 
 @Component({
     selector: 'app-medkits-panel',
-    imports: [ClickableDirective, FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
+    imports: [ActionMenuComponent, IconComponent, IconTileComponent, ClickableDirective, FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
     templateUrl: './medkits-panel.component.html',
     styleUrl: './medkits-panel.component.scss'
 })
 export class MedkitsPanelComponent implements OnInit {
+  protected readonly icons = { BriefcaseMedical, ChevronDown, ChevronRight, Plus };
+  private readonly actionsCache = new Map<string, ActionMenuItem[]>();
+
+  /** «⋯» аптечки (DESIGN §3: редкие действия — в меню); кэш по id — стабильный массив для ActionMenu. */
+  protected medkitActions(item: Medkit): ActionMenuItem[] {
+    let a = this.actionsCache.get(item.id);
+    if (!a) {
+      a = [
+        { label: 'Переименовать', handler: () => this.startEdit(item) },
+        { label: 'Удалить', danger: true, handler: () => void this.handleDelete(item.id) },
+      ];
+      this.actionsCache.set(item.id, a);
+    }
+    return a;
+  }
+
   readonly familyId = input.required<string>();
 
   /** Редизайн v2.2 — на вкладке «Аптечка» (medications-tab) строка аптечки уводит на отдельную

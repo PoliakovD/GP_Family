@@ -66,6 +66,7 @@ export const SCREENS = [
   } },
   { name: 'doctor-reports', path: '/health/reports' },
   { name: 'medkits', path: '/health/medications' },
+  { name: 'medkit', path: '/health/medications/mk1' },
   // Витрина компонентов (только dev-сборка, фаза 2 редизайна).
   { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
 ];
@@ -441,6 +442,17 @@ const ROUTES = [
   ['GET', /^\/api\/health-notes\/recent$/, []],
   ['GET', /^\/api\/health-notes\/catalog$/, HEALTH_NOTE_CATALOG],
   ['GET', /^\/api\/doctor-reports$/, DOCTOR_REPORTS],
+  ['GET', /^\/api\/medkits\/mk1$/, { id: 'mk1', familyId: FAMILY_ID, name: 'Тестовая', createdByUserId: ME_ID, createdAt: '2026-08-25T10:00:00Z', medicationCount: 7 }],
+  ['GET', /^\/api\/medkits\/mk1\/medications$/, [
+    ['m1', 'Суматриптан', '2023-02-01', { type: 'таблетки', dose: '50 мг', quantity: '2 шт.' }],
+    ['m2', 'Нурофен', '2026-11-01', { type: 'таблетки', dose: '200 мг', quantity: '10 шт.', instructions: 'При боли, не чаще 3 раз в день' }],
+    ['m3', 'Омепразол', '2027-06-30', { type: 'капсулы', dose: '20 мг', quantity: '14 шт.' }],
+    ['m4', 'Витамин D3', '2027-03-01', { type: 'капли', dose: '500 МЕ' }],
+    ['m5', 'Магний B6', '2027-01-15', { quantity: '4 таблетки' }],
+    ['m6', 'Бинт стерильный', null, {}],
+    ['m7', 'Хлоргексидин', '2028-05-01', { type: 'раствор', dose: '0,05 %' }],
+  ].map(([id, name, expiryDate, data]) => ({ id, medkitId: 'mk1', familyId: FAMILY_ID, name, expiryDate, data,
+    createdByUserId: ME_ID, createdAt: '2026-08-25T10:00:00Z', enrichmentPending: false, enrichmentQueueAhead: 0 }))],
   ['GET', /^\/api\/families\/[^/]+\/medkits$/, [
     { id: 'mk1', familyId: FAMILY_ID, name: 'Тестовая', createdByUserId: ME_ID, createdAt: '2026-08-25T10:00:00Z', medicationCount: 7 },
   ]],
