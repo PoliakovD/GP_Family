@@ -1621,6 +1621,13 @@ button.tag,
   @media (max-width: 1279px) { padding-inline: var(--space-7); }
 }
 
+// Экран без оболочки (вход, публичный отчёт, админка): раскладку и поля задаёт сам экран.
+.app-shell.app-shell-bare .app-content {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
 .app-shell-wide .app-topbar {
   @media (max-width: 1279px) { padding-inline: var(--space-7); }
 }
@@ -1813,6 +1820,7 @@ button.tag,
 
 // Полный текст документа (политика, согласие) — HTML с бэкенда через [innerHTML].
 .doc-page {
+  width: calc(100% - var(--space-4) * 2);
   max-width: 720px;
   margin: var(--space-6) auto;
 }

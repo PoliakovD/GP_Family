@@ -95,7 +95,7 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
         return route.fulfill({ status: 404, json: { title: 'нет фикстуры' } });
       }
       // { rawText } — ответ не JSON (политика конфиденциальности отдаётся как HTML-текст).
-      if (typeof result.rawText === 'string') return route.fulfill({ status: 200, contentType: 'text/html', body: result.rawText });
+      if (typeof result.rawText === 'string') return route.fulfill({ status: 200, contentType: result.contentType ?? 'text/html', body: result.rawText });
       return route.fulfill({ status: result.status ?? 200, json: result.body ?? result });
     });
     // overrides — свои ответы только для этого экрана (как ROUTES): маршрут, добавленный позже, приоритетнее.

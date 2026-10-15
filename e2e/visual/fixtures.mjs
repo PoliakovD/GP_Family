@@ -81,6 +81,9 @@ export const SCREENS = [
   } },
   { name: 'jobs', path: '/home', only: 'desktop', overrides: () => [['GET', /^\/api\/jobs\/active-summary$/, ACTIVE_JOBS]],
     prepare: async (page) => { await page.getByRole('button', { name: 'Фоновые процессы' }).click(); } },
+  // Публичный отчёт для врача (4.8.3) — без сессии.
+  { name: 'public-report', path: '/r/visual-token', anon: true },
+  { name: 'public-report-gone', path: '/r/gone-token', anon: true, only: 'mobile' },
   // Вход и онбординг (4.8.1). anon — /api/auth/me отвечает 401, как у человека без сессии.
   { name: 'auth-login', path: '/login', anon: true },
   { name: 'auth-register', path: '/login', anon: true, prepare: async (page) => {
@@ -349,6 +352,25 @@ const VISITS = [
     abnormalIndicatorCount: 0, normalIndicatorCount: 0, specimenKbId: '', specimenDisplayName: null }),
 ];
 
+// Минимальный одностраничный PDF (A4) для просмотрщика публичного отчёта: латиница Helvetica + полосы-«таблица».
+function samplePdf() {
+  const lines = ['BT /F1 20 Tf 56 770 Td (Doctor report) Tj ET', 'BT /F1 11 Tf 56 748 Td (Polyakov D. S. - 01.04.2026 - 14.10.2026) Tj ET'];
+  for (let i = 0; i < 14; i++) {
+    const y = 700 - i * 34;
+    lines.push(`0.94 0.94 0.92 rg 56 ${y} 483 26 re f`, `0.2 0.2 0.2 rg BT /F1 10 Tf 64 ${y + 9} Td (Indicator ${i + 1}) Tj ET`);
+  }
+  const stream = lines.join('\n');
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objs.map((o, i) => { const at = pdf.length; pdf += `${i + 1} 0 obj\n${o}\nendobj\n`; return at; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return pdf;
+}
+
 const job = (jobId, label, extra = {}) => ({ jobId, label, recordId: null, recordKind: null, createdAt: '2026-10-14T09:30:00+03:00',
   isRunning: false, waitingForAi: false, queueAhead: 0, ...extra });
 const ACTIVE_JOBS = {
@@ -378,6 +400,12 @@ const ROUTES = [
   ['GET', /^\/api\/consents\/status$/, { accepted: true, version: '1' }],
   ['GET', /^\/api\/consents\/current$/, { version: '2026-03', text: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>' }],
   ['GET', /^\/api\/legal\/privacy-policy$/, { rawText: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>'.replace('Согласие на обработку персональных данных', 'Политика конфиденциальности') }],
+  ['GET', /^\/api\/public\/doctor-reports\/visual-token$/, { patientName: 'Поляков Даниил Сергеевич', sex: 'М', age: 31,
+    birthDate: '1995-08-25', periodFrom: '2026-04-01', periodTo: '2026-10-14', createdAt: '2026-10-14T09:00:00+03:00',
+    expiresAt: '2026-10-21T09:00:00+03:00', pageCount: 4, isPet: false,
+    sections: ['Анализы вне нормы', 'Динамика показателей', 'Приём лекарств', 'Дневник самочувствия'] }],
+  ['GET', /^\/api\/public\/doctor-reports\/visual-token\/pdf$/, () => ({ rawText: samplePdf(), contentType: 'application/pdf' })],
+  ['GET', /^\/api\/public\/doctor-reports\/gone-token$/, { status: 404, body: { code: 'not_found' } }],
   ['GET', /^\/api\/invites\/visual-code\/preview$/, { familyName: 'Поляковы', inviterName: 'Валерия Полякова' }],
   ['GET', /^\/api\/invites\/bad-code\/preview$/, { status: 409, body: { code: 'expired' } }],
   ['GET', /^\/api\/ai\/status$/, { available: true }],

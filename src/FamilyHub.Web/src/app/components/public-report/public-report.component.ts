@@ -6,6 +6,11 @@ import { PdfPreviewComponent } from '../../shared/file-viewer/renderers/pdf-prev
 import { ZoomPanTransform } from '../../shared/file-viewer/zoom-pan';
 
 import { saveBlob } from '../../shared/util/save-blob';
+import { CircleAlert, Clock, Download, Heart, Minus, Plus, TriangleAlert } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+
 type State = 'loading' | 'ready' | 'gone' | 'error';
 
 const ZOOM_STEPS = [1, 1.25, 1.5, 2];
@@ -21,12 +26,14 @@ const dmy = (date: string) => date.split('-').reverse().join('.');
  */
 @Component({
   selector: 'app-public-report',
-  imports: [PdfPreviewComponent],
+  imports: [IconComponent, EmptyStateComponent, LoadingSpinnerComponent, PdfPreviewComponent],
   templateUrl: './public-report.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './public-report.component.scss',
 })
 export class PublicReportComponent implements OnInit, OnDestroy {
+  protected readonly icons = { CircleAlert, Clock, Download, Heart, Minus, Plus, TriangleAlert };
+
   private readonly api = inject(ApiService);
   private readonly meta = inject(Meta);
 
