@@ -11,13 +11,13 @@ test('настройки: аккаунт, безопасность, оповещ
   await expect(page).toHaveURL(/settings\/security/);
   await expect(page.getByText(/Пароль и активные сессии/)).toBeVisible();
 
-  await page.getByRole('link', { name: 'Оповещения' }).first().click();
+  await page.getByRole('link', { name: 'Уведомления', exact: true }).first().click();
   await expect(page).toHaveURL(/settings\/notifications/);
   // Термин «push» убран из интерфейса — «уведомления на этом устройстве».
   await expect(page.getByText(/Уведомления на этом устройстве выключены/)).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Пора принять лекарство: на устройство' })).toBeChecked();
 
-  await page.getByRole('link', { name: 'Данные и приватность' }).first().click();
+  await page.getByRole('link', { name: 'Данные и доступ' }).first().click();
   await expect(page).toHaveURL(/settings\/data/);
   await expect(page.getByText('Выгрузить мои данные (zip)')).toBeVisible();
   await expect(page.getByText('Удаление аккаунта')).toBeVisible();

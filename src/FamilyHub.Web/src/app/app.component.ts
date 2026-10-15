@@ -185,8 +185,8 @@ export class AppComponent implements OnInit {
       children: [
         { path: '/settings/profile', label: 'Аккаунт' },
         { path: '/settings/security', label: 'Безопасность' },
-        { path: '/settings/notifications', label: 'Оповещения' },
-        { path: '/settings/data', label: 'Данные и приватность' },
+        { path: '/settings/notifications', label: 'Уведомления' },
+        { path: '/settings/data', label: 'Данные и доступ' },
       ],
     },
   ];

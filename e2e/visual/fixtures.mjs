@@ -68,6 +68,11 @@ export const SCREENS = [
   { name: 'medkits', path: '/health/medications' },
   { name: 'medkit', path: '/health/medications/mk1' },
   // Витрина компонентов (только dev-сборка, фаза 2 редизайна).
+  { name: 'settings', path: '/settings' },
+  { name: 'settings-profile', path: '/settings/profile' },
+  { name: 'settings-security', path: '/settings/security', only: 'desktop' },
+  { name: 'settings-notifications', path: '/settings/notifications' },
+  { name: 'settings-data', path: '/settings/data' },
   { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
 ];
 
@@ -400,6 +405,12 @@ const ROUTES = [
     status: 2, stage: 5, indicatorCount: 20, error: null, totalFiles: 1, processedFiles: 1,
     createdAt: '2026-10-03T09:00:00Z', completedAt: '2026-10-03T09:02:00Z', queuePosition: 0, waitingForAi: false,
   }],
+  ['GET', /^\/api\/auth\/sessions$/, [
+    { id: 's1', lastSeenAt: '2026-10-14T08:40:00Z', expiresAt: '2026-11-13T08:40:00Z', ipAddress: '85.140.1.10', device: 'Chrome · macOS', isCurrent: true },
+    { id: 's2', lastSeenAt: '2026-10-12T19:05:00Z', expiresAt: '2026-11-11T19:05:00Z', ipAddress: '85.140.1.22', device: 'Safari · iPhone', isCurrent: false },
+  ]],
+  ['GET', /^\/api\/health-shares\/mine$/, [{ viewerUserId: VALERIA_ID, name: 'Валерия', categories: 1 }]],
+  ['GET', /^\/api\/notifications\/preferences$/, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((type) => ({ type, pushEnabled: type % 3 !== 2, telegramEnabled: false }))],
   ['GET', /^\/api\/health-shares\/shared-with-me$/, [{ ownerUserId: VALERIA_ID, name: 'Валерия', categories: 4 }]],
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],

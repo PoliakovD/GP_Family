@@ -1,78 +1,80 @@
 @if (auth.me(); as me) {
   <!-- Редизайн v3, PR8 — герой-блок (аватар+ФИО+метаданные) вместо строки через «·»; контент
      выровнен по левому краю, max-width как на остальных экранах (не карточка по центру). -->
-  <div class="settings-hero mb-4">
-    <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="lg" />
-    <div class="flex-fill" style="min-width:0">
-      <h2 class="mb-1"><app-person-name [person]="me" styleOverride="full" /></h2>
-      <div class="muted">
+  <div class="sp">
+  <h1 class="page-title sp-h1">Аккаунт</h1>
+  <div class="settings-hero">
+    <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="xl" [self]="true" />
+    <div class="settings-hero-text">
+      <h2 class="settings-hero-name"><app-person-name [person]="me" styleOverride="full" /></h2>
+      <div class="settings-hero-meta">
         @if (me.username) { &#64;{{ me.username }} · }
         {{ me.provider === 'email' ? 'вход через браузер (PWA)' : 'вход через Telegram' }}
       </div>
     </div>
     @if (!editingProfile()) {
-      <button type="button" class="btn btn-secondary btn-sm" (click)="startEditProfile()">Изменить</button>
+      <button type="button" class="btn btn-secondary" (click)="startEditProfile()">Изменить</button>
     }
   </div>
 
   @if (editingProfile()) {
-    <section class="mb-4">
-      <form (ngSubmit)="saveProfile()">
+    <section class="card card-lg sp-form-card">
+      <form class="sp-form" (ngSubmit)="saveProfile()">
         <label class="form-label" for="profile-last-name">Фамилия</label>
         <input
-          id="profile-last-name" class="input mb-2" type="text" name="lastName"
+          id="profile-last-name" class="input" type="text" name="lastName"
           [(ngModel)]="profileForm.lastName" required autocomplete="family-name" />
 
         <label class="form-label" for="profile-first-name">Имя</label>
         <input
-          id="profile-first-name" class="input mb-2" type="text" name="firstName"
+          id="profile-first-name" class="input" type="text" name="firstName"
           [(ngModel)]="profileForm.firstName" required autocomplete="given-name" />
 
         <label class="form-label" for="profile-middle-name">Отчество (необязательно)</label>
         <input
-          id="profile-middle-name" class="input mb-2" type="text" name="middleName"
+          id="profile-middle-name" class="input" type="text" name="middleName"
           [(ngModel)]="profileForm.middleName" autocomplete="additional-name" />
 
         <label class="form-label" for="profile-birth-date">Дата рождения</label>
         <input
-          id="profile-birth-date" class="input mb-2" type="date" name="birthDate"
+          id="profile-birth-date" class="input" type="date" name="birthDate"
           [(ngModel)]="profileForm.birthDate" required autocomplete="bday" />
 
         <label class="form-label" for="profile-gender">Пол</label>
-        <select id="profile-gender" class="input mb-2" name="gender" [(ngModel)]="profileForm.gender" required>
+        <select id="profile-gender" class="input" name="gender" [(ngModel)]="profileForm.gender" required>
           <option [ngValue]="0">Мужской</option>
           <option [ngValue]="1">Женский</option>
         </select>
 
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-primary btn-sm" [disabled]="busy()">Сохранить</button>
-          <button type="button" class="btn btn-secondary btn-sm" (click)="editingProfile.set(false)">Отмена</button>
+        <div class="sp-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="busy()">Сохранить</button>
+          <button type="button" class="btn btn-secondary" (click)="editingProfile.set(false)">Отмена</button>
         </div>
       </form>
     </section>
   } @else {
     <!-- Редизайн v3, PR8 — «Данные аккаунта» списком пар вместо строки через «·»; у даты
        рождения/пола объяснение, зачем они здесь (персональные нормы в анализах). -->
-    <section class="mb-4">
-      <div class="card-kicker mb-2">Данные аккаунта</div>
-      <div class="card" style="padding:0">
-        <div class="settings-data-row">
-          <span class="settings-data-label">ФИО</span>
-          <span class="flex-fill"><app-person-name [person]="me" styleOverride="full" /></span>
+    <section class="section" aria-labelledby="sp-data">
+      <h2 class="section-title" id="sp-data">Данные аккаунта</h2>
+      <div class="list-card">
+        <div class="settings-row">
+          <span class="settings-row-label">ФИО</span>
+          <span class="settings-row-value"><app-person-name [person]="me" styleOverride="full" /></span>
         </div>
-        <div class="settings-data-row">
-          <span class="settings-data-label">Дата рождения</span>
-          <span class="flex-fill">{{ me.birthDate ? formatDayMonthYear(me.birthDate) : '—' }}</span>
-          <span class="muted" style="font-size:0.7647rem">нужна для норм в анализах</span>
+        <div class="settings-row">
+          <span class="settings-row-label">Дата рождения</span>
+          <span class="settings-row-value">{{ me.birthDate ? formatDayMonthYear(me.birthDate) : '—' }}</span>
+          <span class="settings-row-sub sp-why">нужна для норм в анализах</span>
         </div>
-        <div class="settings-data-row">
-          <span class="settings-data-label">Пол</span>
-          <span class="flex-fill">{{ me.gender === 1 ? 'Женский' : 'Мужской' }}</span>
-          <span class="muted" style="font-size:0.7647rem">нужен для норм в анализах</span>
+        <div class="settings-row">
+          <span class="settings-row-label">Пол</span>
+          <span class="settings-row-value">{{ me.gender === 1 ? 'Женский' : 'Мужской' }}</span>
+          <span class="settings-row-sub sp-why">нужен для норм в анализах</span>
         </div>
-        <div class="settings-data-row">
-          <span class="settings-data-label">Email</span>
-          <span class="flex-fill">{{ me.email ?? '—' }}</span>
+        <div class="settings-row">
+          <span class="settings-row-label">Email</span>
+          <span class="settings-row-value">{{ me.email ?? '—' }}</span>
         </div>
       </div>
     </section>
@@ -80,41 +82,42 @@
 
   <!-- Редизайн v3, PR8 — «Способы входа»: браузер (всегда активен) + Telegram в одном блоке
      (было — Telegram отдельным разделом внизу страницы). -->
-  <section class="mb-4">
-    <div class="card-kicker mb-2">Способы входа</div>
-    <div class="settings-login-method mb-2">
-      <i class="ph-duotone ph-globe" aria-hidden="true"></i>
-      <div class="flex-fill">
-        <div style="font-weight:600">Браузер · email и пароль</div>
-        <div class="muted" style="font-size:0.8235rem">{{ me.provider === 'email' ? 'Используется сейчас' : (me.hasPassword ? 'Доступен' : 'Не привязан') }}</div>
+  <section class="section" aria-labelledby="sp-login">
+    <h2 class="section-title" id="sp-login">Способы входа</h2>
+    <div class="list-card">
+    <div class="settings-row">
+      <app-icon-tile [icon]="icons.Globe" tone="accent" size="sm" />
+      <div class="settings-row-text">
+        <div class="settings-row-title">Браузер · email и пароль</div>
+        <div class="settings-row-sub">{{ me.provider === 'email' ? 'Используется сейчас' : (me.hasPassword ? 'Доступен' : 'Не привязан') }}</div>
       </div>
       @if (me.provider === 'email') {
-        <span class="tag tag-accent">активен</span>
+        <span class="badge badge-success">активен</span>
       }
     </div>
 
     @if (!me.email) {
       @switch (linkStep()) {
         @case ('idle') {
-          <form (ngSubmit)="startLinkEmail()" class="settings-login-method">
-            <div class="flex-fill">
+          <form (ngSubmit)="startLinkEmail()" class="settings-row">
+            <div class="settings-row-text sp-form">
               <label class="form-label" for="link-email">Email</label>
-              <input id="link-email" class="input mb-2" type="email" name="linkEmail" [(ngModel)]="linkEmail" required />
+              <input id="link-email" class="input" type="email" name="linkEmail" [(ngModel)]="linkEmail" required />
               <button type="submit" class="btn btn-primary" [disabled]="busy()">Отправить код</button>
             </div>
           </form>
         }
         @case ('code') {
-          <form (ngSubmit)="confirmLinkEmail()" class="settings-login-method">
-            <div class="flex-fill">
+          <form (ngSubmit)="confirmLinkEmail()" class="settings-row">
+            <div class="settings-row-text sp-form">
               <label class="form-label" for="link-code">Код из письма</label>
               <input
-                id="link-code" class="input mb-2" type="text" name="linkCode"
+                id="link-code" class="input" type="text" name="linkCode"
                 [(ngModel)]="linkCode" required inputmode="numeric" maxlength="6" />
 
               <label class="form-label" for="link-password">Пароль (минимум 8 симв., строчная и заглавная буквы, цифра)</label>
               <input
-                id="link-password" class="input mb-2" type="password" name="linkPassword"
+                id="link-password" class="input" type="password" name="linkPassword"
                 [(ngModel)]="linkPassword" required minlength="8" maxlength="100"
                 autocomplete="new-password" />
 
@@ -125,37 +128,39 @@
       }
     }
 
-    <div class="settings-login-method">
-      <i class="ph-duotone ph-telegram-logo" aria-hidden="true"></i>
-      <div class="flex-fill">
-        <div style="font-weight:600">Telegram</div>
+    <div class="settings-row">
+      <app-icon-tile [icon]="icons.Send" tone="accent" size="sm" />
+      <div class="settings-row-text">
+        <div class="settings-row-title">Telegram</div>
         @if (me.hasTelegram) {
-          <div class="muted" style="font-size:0.8235rem">{{ me.tgUsername ? '@' + me.tgUsername : 'Привязан' }}</div>
+          <div class="settings-row-sub">{{ me.tgUsername ? '@' + me.tgUsername : 'Привязан' }}</div>
         } @else if (me.provider === 'email') {
-          <div class="muted" style="font-size:0.8235rem">
+          <div class="settings-row-sub">
             Не привязан. После привязки можно входить через бота и Mini App; если этот Telegram
             уже писал боту, данные объединятся с текущим аккаунтом.
           </div>
         }
       </div>
       @if (me.hasTelegram) {
-        <span class="tag tag-accent">привязан</span>
+        <span class="badge badge-success">привязан</span>
       } @else if (me.provider === 'email') {
         @if (telegramLink(); as link) {
-          <a class="btn btn-primary btn-sm" [href]="link.deepLink" target="_blank" rel="noopener">Открыть Telegram</a>
+          <a class="btn btn-primary" [href]="link.deepLink" target="_blank" rel="noopener">Открыть Telegram</a>
         } @else {
-          <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="startLinkTelegram()">
+          <button type="button" class="btn btn-primary" [disabled]="busy()" (click)="startLinkTelegram()">
             Привязать
           </button>
         }
       }
     </div>
+    </div>
     @if (telegramLink(); as link) {
-      <p class="muted mt-1 mb-0">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения в Telegram…</p>
+      <p class="section-text">Код действителен до {{ link.expiresAt | date: 'HH:mm' }}. Ждём подтверждения в Telegram…</p>
     } @else if (linkExpired()) {
-      <p class="field-hint field-hint-error mt-1 mb-0">Время кода истекло. Нажмите «Привязать Telegram» ещё раз, чтобы получить новый.</p>
+      <p class="field-hint field-hint-error">Время кода истекло. Нажмите «Привязать Telegram» ещё раз, чтобы получить новый.</p>
     }
   </section>
+  </div>
 } @else {
-  <p>Загрузка…</p>
+  <app-loading-spinner />
 }

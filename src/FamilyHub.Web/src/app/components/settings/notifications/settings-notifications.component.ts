@@ -1,3 +1,6 @@
+import { Bell, BellOff } from 'lucide';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../services/auth.service';
@@ -28,12 +31,13 @@ function isStandalone(): boolean {
 
 @Component({
     selector: 'app-settings-notifications',
-    imports: [FormsModule],
+    imports: [IconComponent, LoadingSpinnerComponent, FormsModule],
     templateUrl: './settings-notifications.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-notifications.component.scss'
 })
 export class SettingsNotificationsComponent implements OnInit {
+  protected readonly icons = { Bell, BellOff };
   readonly auth = inject(AuthService);
   readonly push = inject(PushNotificationService);
   readonly tg = inject(TelegramService);

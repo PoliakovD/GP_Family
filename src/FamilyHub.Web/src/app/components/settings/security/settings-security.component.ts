@@ -1,3 +1,7 @@
+import { Circle, CircleCheck, LogOut, Smartphone } from 'lucide';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../../shared/ui/icon-tile/icon-tile.component';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,12 +17,13 @@ import { PASSWORD_PATTERN, describeSettingsError, runBusy } from '../settings-ta
  */
 @Component({
     selector: 'app-settings-security',
-    imports: [FormsModule, DatePipe, RouterLink],
+    imports: [IconComponent, IconTileComponent, LoadingSpinnerComponent, FormsModule, DatePipe, RouterLink],
     templateUrl: './settings-security.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-security.component.scss'
 })
 export class SettingsSecurityComponent implements OnInit {
+  protected readonly icons = { Circle, CircleCheck, LogOut, Smartphone };
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
