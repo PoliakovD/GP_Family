@@ -613,6 +613,13 @@ e2e модуля, счётчики аудита по файлам модуля.
 3. **Прививки** — `vaccinations-page`, `vaccinations-overview`, `vaccination-person`,
    `vaccination-add-modal`, `vaccination-saved-sheet`: `.vo-card` → card, 11px-кегли (`0.6471rem`)
    → `--text-micro` ≥ 12, `.va-cal-check` 22px → 44 тап-зона. E2E `14-vaccinations`.
+   > **Статус: выполнено (4.5.3).** Цвета статусов (`shared/util/vaccination-labels.ts`) по DESIGN §1:
+   > «скоро» — warning (было accent), «можно сделать» — neutral (было warning; не danger — «просрочка не страшна»),
+   > сделано — success; хаб «Здоровье» читает те же тона. Обзор: H1, секции 19/600 без CAPS, карточки «Стоит
+   > запланировать» без цветной полосы сверху — статус бейджем; «Семья» — list-card с прогресс-полосой (radius-pill).
+   > График человека: этапы — карточки surface, строки с разделителями 20, текущая — warning-soft; деталь серии —
+   > карточка radius-2xl, заголовок 28. Модалки: кегли ≥ 12, чекбокс календаря 28 (тап-зона 44), выборы —
+   > accent-soft, сертификат «проверьте» — warning-soft. Иконки статусов внутри графика (Phosphor) — без изменений.
 4. **Показатели** — `indicators-tab`, `indicator-info` (панель 392px → Drawer). E2E `04`.
 5. **Отчёты для врача** — `doctor-reports-tab`, `doctor-report-form`, `doctor-report-link-dialog`:
    `.dr-fab` → `Fab`, `.dr-chip-*` → badge. E2E `19-doctor-report`, `22-doctor-report-mobile`.

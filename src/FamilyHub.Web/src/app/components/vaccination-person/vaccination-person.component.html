@@ -9,7 +9,7 @@
         <div class="vx-header">
           <app-avatar [person]="{ key: s.subject.id, firstName: s.subject.name }" size="md" />
           <div class="flex-fill min-width-0">
-            <h3 class="mb-0">{{ s.subject.isSelf ? 'Я' : s.subject.name }}</h3>
+            <h2 class="vx-title">{{ s.subject.isSelf ? 'Я' : s.subject.name }}</h2>
             <div class="muted vx-header-meta">
               @if (ageDisplay(); as age) { {{ age }} · } @if (s.hasBirthDate) {
                 {{ doneCount(s.byAge) }} из {{ s.byAge.length }} по календарю
@@ -19,12 +19,12 @@
             </div>
           </div>
           @if (s.hasBirthDate) {
-            <button type="button" class="btn btn-secondary btn-sm" [disabled]="certificateBusy()" (click)="downloadCertificate()">
+            <button type="button" class="btn btn-secondary" [disabled]="certificateBusy()" (click)="downloadCertificate()">
               <i class="ph ph-file-pdf" aria-hidden="true"></i> Сертификат PDF
             </button>
           }
           @if (s.subject.canEdit) {
-            <button type="button" class="btn btn-primary btn-sm" (click)="addForThisPerson()">
+            <button type="button" class="btn btn-primary" (click)="addForThisPerson()">
               <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить
             </button>
           }
@@ -43,7 +43,7 @@
               <div class="vx-stage">
                 <button type="button" class="vx-stage-head" [attr.aria-expanded]="isOpen(group.stage)" (click)="toggleStage(group.stage)">
                   @if (group.allDone) {
-                    <i class="ph-fill ph-check-circle vx-stage-icon" style="color: var(--color-status-ok)" aria-hidden="true"></i>
+                    <i class="ph-fill ph-check-circle vx-stage-icon vx-stage-icon-done" aria-hidden="true"></i>
                   } @else {
                     <i class="ph ph-circle-dashed vx-stage-icon" aria-hidden="true"></i>
                   }
@@ -64,16 +64,16 @@
                         @if (item.status === Status.Done || item.status === Status.HadDisease) {
                           <span class="muted vx-dose-date">{{ preciseDateText(item.date, null) }}</span>
                         } @else if (item.status === Status.DueSoon) {
-                          <span class="vx-dose-when vx-dose-when-soon">{{ windowToText(item.windowTo) }}</span>
-                          <button type="button" class="btn btn-primary btn-sm" [disabled]="busyKey() === itemKey(item)" (click)="quickMarkDone(item, $event)">
+                          <span class="badge badge-warning">{{ windowToText(item.windowTo) }}</span>
+                          <button type="button" class="btn btn-primary" [disabled]="busyKey() === itemKey(item)" (click)="quickMarkDone(item, $event)">
                             Отметить сделанной
                           </button>
                         } @else if (item.status === Status.CanDo) {
-                          <span class="vx-dose-when vx-dose-when-can">можно сделать</span>
+                          <span class="badge badge-neutral">можно сделать</span>
                         } @else if (item.status === Status.Upcoming) {
                           <span class="muted vx-dose-date">{{ windowToText(item.windowTo) }}</span>
                         } @else {
-                          <span class="vx-dose-when vx-dose-when-nodata">нет данных</span>
+                          <span class="badge badge-neutral">нет данных</span>
                         }
                       </div>
                     }
@@ -144,7 +144,7 @@
         } @else if (seriesDetail(); as d) {
           <div class="vx-series">
             <div class="vx-series-kicker">Прививка · {{ s.subject.isSelf ? 'Я' : s.subject.name }}</div>
-            <h4 class="mb-0">{{ d.seriesName }}</h4>
+            <h2 class="vx-series-title">{{ d.seriesName }}</h2>
 
             <div class="vx-timeline">
               @for (dose of d.doses; track dose.doseIndex) {
@@ -180,7 +180,7 @@
                       </div>
                     }
                     @if (dose.status === Status.DueSoon || dose.status === Status.CanDo) {
-                      <button type="button" class="btn btn-primary btn-sm" [disabled]="busyKey() === (d.seriesCode + ':' + dose.doseIndex)"
+                      <button type="button" class="btn btn-primary" [disabled]="busyKey() === (d.seriesCode + ':' + dose.doseIndex)"
                               (click)="quickMarkDone({ seriesCode: d.seriesCode, doseIndex: dose.doseIndex, label: dose.label, seriesName: d.seriesName, seriesShortName: d.seriesName, group: d.group, stage: '', status: dose.status, windowFrom: dose.windowFrom, windowTo: dose.windowTo, recordId: dose.recordId, date: dose.date, isRepeat: false }, $event)">
                         Отметить «{{ dose.label }}»
                       </button>

@@ -45,10 +45,9 @@ export class HealthHomeComponent implements OnInit {
     BookOpen, BriefcaseMedical, ChartLine, ChevronRight, FileText, FlaskConical, NotebookPen, Pill, Stethoscope, Syringe, Zap,
   };
 
-  /** Бейдж статуса прививки по DESIGN §1: «скоро» (DueSoon, тон accent в vaccination-labels) — warning,
-   * «можно сделать» (CanDo, тон warning) и нет данных — neutral; accent в бейджах не используется. */
+  /** Бейдж статуса прививки (тоны — vaccination-labels, DESIGN §1). */
   protected badgeClass(tone: StatusTone): string {
-    return tone === 'ok' ? 'badge-success' : tone === 'accent' ? 'badge-warning' : 'badge-neutral';
+    return tone === 'ok' ? 'badge-success' : tone === 'warning' ? 'badge-warning' : 'badge-neutral';
   }
 
   protected readonly reportsSubtitle = computed(() => {

@@ -1,3 +1,5 @@
+import { Bell, ChevronRight } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnInit, effect, inject, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
@@ -18,11 +20,12 @@ import { todayLocal } from '../../shared/util/intake-labels';
  */
 @Component({
   selector: 'app-vaccinations-overview',
-  imports: [AvatarComponent, LoadingSpinnerComponent, RouterLink],
+  imports: [IconComponent, AvatarComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './vaccinations-overview.component.html',
   styleUrl: './vaccinations-overview.component.scss',
 })
 export class VaccinationsOverviewComponent implements OnInit {
+  protected readonly icons = { Bell, ChevronRight };
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   protected readonly vaccinations = inject(VaccinationStateService);

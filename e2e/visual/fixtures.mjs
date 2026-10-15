@@ -44,6 +44,11 @@ export const SCREENS = [
   } },
   { name: 'intake-course', path: '/health/intake/courses/c-1', only: 'mobile' },
   { name: 'vaccinations', path: '/health/vaccinations' },
+  { name: 'vaccination-add', path: '/health/vaccinations', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Добавить прививку' }).click();
+    await page.getByRole('button', { name: /Отметить по календарю/ }).click();
+    await page.waitForTimeout(400);
+  } },
   { name: 'vaccination-person', path: `/health/vaccinations/people/user/${ME_ID}/series/influenza`, only: 'mobile' },
   { name: 'notes', path: '/health/notes' },
   { name: 'notes-form', path: '/health/notes', prepare: async (page) => {
