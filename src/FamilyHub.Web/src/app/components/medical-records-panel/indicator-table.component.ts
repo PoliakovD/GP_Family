@@ -8,9 +8,12 @@ import { StatusChipComponent } from '../../shared/status-chip/status-chip.compon
 import { ToastService } from '../../shared/toast/toast.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
+import { Plus } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import {
-  type IndicatorSortMode, deviationFor, flagClass, indicatorLabel, indicatorReference, isCalculatedRef, isInferredRef,
-  groupIndicatorsByPanel, rowStatusClass, scaleBounds, scaleValue, sortIndicators,
+  type IndicatorSortMode, type IndicatorStatusFilter, deviationAmount, indicatorLabel, indicatorReference,
+  indicatorStatusGroup, indicatorSubtitle, isCalculatedRef, isInferredRef, groupIndicatorsByPanel, scaleBounds,
+  scaleValue, sortIndicators,
 } from './indicator-display';
 import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
 
@@ -23,7 +26,7 @@ import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
 @Component({
   selector: 'app-indicator-table',
   standalone: true,
-  imports: [ClickableDirective, FormsModule, NgTemplateOutlet, ReferenceScaleComponent, StatusChipComponent],
+  imports: [ClickableDirective, FormsModule, IconComponent, NgTemplateOutlet, ReferenceScaleComponent, StatusChipComponent],
   templateUrl: './indicator-table.component.html',
   styleUrl: './indicator-table.component.scss',
 })
@@ -32,6 +35,8 @@ export class IndicatorTableComponent {
   readonly indicators = input.required<readonly IndicatorDto[]>();
   /** Десктоп — таблица; иначе компактные карточки. */
   readonly wide = input(false);
+  /** Счётчик-фильтр из шапки записи; null — все показатели. */
+  readonly statusFilter = input<IndicatorStatusFilter | null>(null);
 
   readonly open = output<IndicatorDto>();
   readonly created = output<void>();
@@ -41,7 +46,21 @@ export class IndicatorTableComponent {
 
   /** Индикаторов обычно от единиц до пары десятков — сортируем на каждый пересчёт без мемоизации. */
   readonly sortMode = signal<IndicatorSortMode>('abnormal');
-  readonly sorted = computed(() => sortIndicators(this.indicators(), this.sortMode()));
+  private readonly visible = computed(() => {
+    const filter = this.statusFilter();
+    return filter ? this.indicators().filter((i) => indicatorStatusGroup(i) === filter) : this.indicators();
+  });
+  readonly sorted = computed(() => sortIndicators(this.visible(), this.sortMode()));
+  /** Сколько показателей скрыто фильтром — подсказка под таблицей. */
+  readonly filteredOut = computed(() => this.indicators().length - this.visible().length);
+
+  /** short — на телефоне: три полные подписи не помещаются в 390px. */
+  protected readonly sortOptions: { value: IndicatorSortMode; label: string; short: string }[] = [
+    { value: 'abnormal', label: 'Сначала отклонения', short: 'Отклонения' },
+    { value: 'form', label: 'Как в бланке', short: 'Как в бланке' },
+    { value: 'alpha', label: 'По алфавиту', short: 'А–Я' },
+  ];
+  protected readonly icons = { Plus };
   /** Блоки по разделам бланка — только «Как в бланке»: в других режимах порядок уже не бланковый,
    * и подзаголовки разрезали бы список случайным образом. */
   readonly groups = computed(() => this.sortMode() === 'form'
@@ -52,9 +71,8 @@ export class IndicatorTableComponent {
   form: UpdateIndicatorRequest = emptyIndicatorForm();
   saving = false;
 
-  protected readonly rowStatusClass = rowStatusClass;
-  protected readonly deviationFor = deviationFor;
-  protected readonly flagClass = flagClass;
+  protected readonly deviationAmount = deviationAmount;
+  protected readonly indicatorSubtitle = indicatorSubtitle;
   protected readonly indicatorReference = indicatorReference;
   protected readonly scaleBounds = scaleBounds;
   protected readonly scaleValue = scaleValue;

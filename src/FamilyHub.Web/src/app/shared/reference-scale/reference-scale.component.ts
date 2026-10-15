@@ -6,6 +6,8 @@ const SIZE = {
   // DESIGN §3 «Анализ»: трек 8px, маркер 6×18 (в мини-варианте пропорционально меньше).
   full: { width: 300, height: 40, padding: 12, trackHeight: 8, stickWidth: 6, stickHeight: 18 },
   mini: { width: 170, height: 20, padding: 8, trackHeight: 6, stickWidth: 4, stickHeight: 14 },
+  // Строка таблицы показателей и мобильная карточка (макет analysis-desktop): трек 8, маркер 6×18.
+  row: { width: 300, height: 22, padding: 4, trackHeight: 8, stickWidth: 6, stickHeight: 18 },
 };
 
 /**
@@ -14,12 +16,12 @@ const SIZE = {
  * (строка "Текущее значение") и таблицей показателей без необходимости монтировать SVG.
  */
 export function formatDeviation(value: number, low: number | null, high: number | null): string | null {
-  if (low !== null && value < low) return `ниже нормы на ${formatNumber(low - value)}`;
-  if (high !== null && value > high) return `выше нормы на ${formatNumber(value - high)}`;
+  if (low !== null && value < low) return `ниже нормы на ${formatScaleNumber(low - value)}`;
+  if (high !== null && value > high) return `выше нормы на ${formatScaleNumber(value - high)}`;
   return null;
 }
 
-function formatNumber(n: number): string {
+export function formatScaleNumber(n: number): string {
   // До двух знаков, без хвостовых нулей — "0,8", не "0,80"; запятая — русская локаль отображения.
   return (Math.round(n * 100) / 100).toString().replace('.', ',');
 }
@@ -56,8 +58,10 @@ function formatNumber(n: number): string {
       @if (labels()) {
         <!-- Подписи — HTML-оверлей с left в % поверх SVG: текст внутри SVG не масштабируется
              как надо и хуже читается на маленьких размерах. -->
-        <div class="rs-wrap" [style.width.px]="g.width" style="max-width:100%">
+        <div class="rs-wrap" [class.rs-wrap-novalue]="!valueLabel()" [style.width.px]="g.width" style="max-width:100%">
+          @if (valueLabel()) {
           <div class="rs-value" [class.rs-value-bad]="isBad()" [style.left.%]="g.valueLabelPct">{{ valueText() }}</div>
+          }
           <ng-container *ngTemplateOutlet="chart; context: { g: g }" />
           <div class="rs-bounds">
             <span [style.left.%]="g.normX1 / g.width * 100">{{ lowText() }}</span>
@@ -97,6 +101,7 @@ function formatNumber(n: number): string {
 
     // Подписи: мелко, но читаемо (12px) — границы нормы приглушённые, значение — цветом статуса.
     .rs-wrap { position: relative; padding: 15px 0; }
+    .rs-wrap-novalue { padding-top: 0; }
     .rs-wrap svg { display: block; width: 100%; height: auto; }
     .rs-value, .rs-bounds span {
       position: absolute;
@@ -118,9 +123,11 @@ export class ReferenceScaleComponent {
   readonly low = input.required<number | null>();
   readonly high = input.required<number | null>();
   readonly unit = input<string | null>(null);
-  readonly variant = input<'full' | 'mini'>('full');
+  readonly variant = input<'full' | 'mini' | 'row'>('full');
   /** Подписи: границы нормы слева/справа под зоной и само значение над засечкой. */
   readonly labels = input(false);
+  /** Подпись значения над маркером (при labels) — в таблице показателей значение уже в своей колонке. */
+  readonly valueLabel = input(true);
 
   /** IndicatorFlag — только для цвета палочки; сама зона нормы всегда зелёная (это она задаёт
    * "что такое норма", а не текущий статус значения). Ровно два состояния — см. докстринг класса. */
@@ -134,15 +141,15 @@ export class ReferenceScaleComponent {
 
   readonly valueText = computed(() => {
     const v = this.value();
-    return v === null ? '' : formatNumber(v);
+    return v === null ? '' : formatScaleNumber(v);
   });
   readonly lowText = computed(() => {
     const low = this.low();
-    return low === null ? '' : formatNumber(low);
+    return low === null ? '' : formatScaleNumber(low);
   });
   readonly highText = computed(() => {
     const high = this.high();
-    return high === null ? '' : formatNumber(high);
+    return high === null ? '' : formatScaleNumber(high);
   });
 
   readonly deviationLabel = computed(() => {

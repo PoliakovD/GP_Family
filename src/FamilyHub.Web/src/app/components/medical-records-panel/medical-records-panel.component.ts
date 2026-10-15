@@ -42,6 +42,7 @@ import { buildPatientOptions, type PatientOption } from '../../shared/util/patie
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
 import { ExtractionPoller } from './extraction-poller';
+import type { IndicatorStatusFilter } from './indicator-display';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import { RecordEditSheetComponent } from './record-edit-sheet.component';
@@ -165,6 +166,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // конструкторе, ветка recordId).
   filesOpen = false;
   summaryOpen = false;
+  /** Нажатый счётчик-фильтр «вне нормы / в норме / без нормы» в шапке записи. */
+  statusFilter: IndicatorStatusFilter | null = null;
 
   // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
   // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
@@ -318,6 +321,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.pageAction.setImmersive(true);
         this.filesOpen = false;
         this.summaryOpen = false;
+        this.statusFilter = null;
         void this.refresh();
         return;
       }

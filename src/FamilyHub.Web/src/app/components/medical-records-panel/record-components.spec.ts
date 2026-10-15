@@ -1,8 +1,10 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExtractionJobStatus, ExtractionStage, ExtractionStatus, MedicalRecordKind } from '../../models/types';
 import type { ExtractionStatusResponse, MedicalRecord } from '../../models/types';
+import { BreakpointService } from '../../services/breakpoint.service';
 import { RecordDetailHeaderComponent } from './record-detail-header.component';
 import { RecordListCardComponent } from './record-list-card.component';
 import { RecordRecognitionStatusComponent } from './record-recognition-status.component';
@@ -33,7 +35,9 @@ describe('record-display', () => {
 });
 
 describe('record UI components', () => {
-  beforeEach(() => TestBed.configureTestingModule({ providers: [provideRouter([])] }));
+  beforeEach(() => TestBed.configureTestingModule({
+    providers: [provideRouter([]), { provide: BreakpointService, useValue: { tier: signal('wide') } }],
+  }));
 
   it('list card shows chips and emits open on row click', () => {
     const fixture = TestBed.createComponent(RecordListCardComponent);
@@ -72,17 +76,17 @@ describe('record UI components', () => {
     expect(text(el)).toContain('Распознано не всё');
   });
 
-  it('detail header: back only while loading; owner actions only for the owner', () => {
+  it('detail header: back only while loading; edit/delete in «⋯» only for the owner', () => {
     const fixture = TestBed.createComponent(RecordDetailHeaderComponent);
     fixture.componentRef.setInput('backLabel', 'Анализы');
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('.record-detail-actions')).toBeNull();
+    expect(el.querySelector('.rd-actions')).toBeNull();
 
     fixture.componentRef.setInput('record', record());
     fixture.componentRef.setInput('accessLabel', 'Только вы');
     fixture.detectChanges();
-    expect(el.querySelector('[aria-label="Удалить"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Действия с записью"]')).toBeNull();
     expect(text(el)).toContain('Только вы');
     expect(text(el)).toContain('без нормы в бланке');
 
@@ -90,7 +94,24 @@ describe('record UI components', () => {
     fixture.detectChanges();
     const removed = vi.fn();
     fixture.componentInstance.remove.subscribe(removed);
-    (el.querySelector('[aria-label="Удалить"]') as HTMLElement).click();
+    (el.querySelector('[aria-label="Действия с записью"]') as HTMLElement).click();
+    fixture.detectChanges();
+    const del = Array.from(el.querySelectorAll('.action-menu-item')).find((b) => b.textContent!.trim() === 'Удалить');
+    (del as HTMLElement).click();
     expect(removed).toHaveBeenCalled();
+  });
+
+  it('detail header: a pressed counter becomes the status filter, pressing again clears it', () => {
+    const fixture = TestBed.createComponent(RecordDetailHeaderComponent);
+    fixture.componentRef.setInput('backLabel', 'Анализы');
+    fixture.componentRef.setInput('record', record());
+    fixture.detectChanges();
+    const bad = (fixture.nativeElement as HTMLElement).querySelector('.record-status-tile-bad button') as HTMLElement;
+    bad.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.statusFilter()).toBe('bad');
+    expect(bad.getAttribute('aria-pressed')).toBe('true');
+    bad.click();
+    expect(fixture.componentInstance.statusFilter()).toBeNull();
   });
 });

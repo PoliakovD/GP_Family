@@ -102,6 +102,8 @@
     <app-record-detail-header
       [record]="items[0]"
       [backLabel]="labels.title"
+      [wide]="isWide"
+      [(statusFilter)]="statusFilter"
       [filesOpen]="filesOpen"
       [summaryOpen]="summaryOpen"
       [hasSummary]="items[0] ? hasSummarySection(items[0]) : false"
@@ -144,6 +146,7 @@
           [indicators]="indicatorsOf(only.id)"
           [conclusion]="conclusionByRecord[only.id]"
           [wide]="isWide"
+          [statusFilter]="statusFilter"
           (recognize)="handleRecognize(only)"
           (clarifySpecimen)="openEditSheet(only, $event)"
           (filesChanged)="refresh()"

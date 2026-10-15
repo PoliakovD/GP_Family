@@ -203,6 +203,8 @@ loading и empty. Focus-visible: `outline: 2px solid var(--color-accent); outlin
 Пилюля, 12–14px/600, паддинг 4×10 (моб. 3×8). Варианты: `danger`, `warning`, `success`,
 `accent`, `neutral` — фон `*-soft`, текст основной цвет статуса.
 Счётчик (`count-badge`): мин. 20–22px круг, 12px/600, danger или accent, текст on-accent.
+Чип мета-данных (`meta-chip`): пилюля surface на bg, 32px, 15px, опц. мини-аватар 24 слева;
+`meta-chip-accent` — «Видна семье» (accent-soft). На мобайле ряд чипов — строка текстом через «·».
 
 ### Карточки
 - `card` — surface, radius-xl/2xl, паддинг 20–24, без рамки и тени.

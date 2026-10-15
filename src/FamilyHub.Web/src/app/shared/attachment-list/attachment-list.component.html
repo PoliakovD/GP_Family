@@ -1,11 +1,11 @@
+<!-- Файлы записи (раскрываются кнопкой «Бланк»/«Файлы» в шапке; заголовок — у карточки вокруг). -->
 <div class="attachment-list">
-  <div class="card-kicker mb-0">Файлы</div>
 
   @if (loading) {
     <app-loading-spinner />
   } @else {
     @if (error) {
-      <div class="alert-danger mb-0" style="font-size:0.7647rem">{{ error }}</div>
+      <div class="alert-danger" role="alert">{{ error }}</div>
     }
 
     <div class="file-chip-grid">
@@ -13,7 +13,6 @@
         <button
           type="button"
           class="file-chip"
-          style="cursor:pointer;font:inherit"
           [attr.title]="a.fileName"
           (click)="openViewer(i)"
         >
@@ -30,8 +29,8 @@
       }
       @if (canAddMore()) {
         <label class="file-chip file-chip-add" for="attachment-list-input-{{ recordId }}">
-          <i class="ph ph-paperclip" aria-hidden="true"></i>
-          <span>Прикрепить</span>
+          <app-icon [icon]="icons.Paperclip" [size]="20" />
+          <span>Добавить</span>
         </label>
       }
     </div>
@@ -47,7 +46,7 @@
     />
 
     @if (limits; as l) {
-      <div class="muted" style="font-size:0.7647rem">
+      <div class="attachment-note">
         До {{ l.maxFilesPerRecord }} файлов, {{ (l.maxFileSizeBytes / 1024 / 1024).toFixed(0) }} МБ каждый
         @if (remainingSlots(); as room) {
           — осталось {{ room }}
@@ -62,7 +61,7 @@
     }
 
     @if (attachments.length === 0 && !uploading) {
-      <p class="muted mb-0" style="font-size:0.7647rem">Файлов пока нет.</p>
+      <p class="attachment-note">Файлов пока нет.</p>
     }
   }
 </div>

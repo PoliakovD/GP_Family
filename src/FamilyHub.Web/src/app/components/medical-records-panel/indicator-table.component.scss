@@ -1,151 +1,177 @@
-// Перенесено из medical-records-panel.component.scss вместе с таблицей показателей.
+// Показатели записи (DESIGN §3 «Анализ»). Карточка — .list-card, сортировка — .seg-sunken, бейдж —
+// app-status-chip, шкала — app-reference-scale; здесь таблица и мобильные строки.
 
-// Цвет значения показателя (ячейка "Значение") — редизайн v2: канонизировано из --color-status-*
-// (единый источник — medications-panel.component.scss), было отдельным #d47a00 для warning
-// (расхождение с indicators-tab, который использовал #f08c00 — теперь оба совпадают). Статус
-// (ячейка "Статус") больше не красится этими классами — см. <app-status-chip> в шаблоне.
-// Все веса подняты до 700 (было 400/600) — по обратной связи значения должны "брать на себя"
-// внимание в таблице, не теряться на фоне остального текста карточки.
-.indicator-flag-ok { color: var(--color-status-ok-text); font-weight: 700; }
-.indicator-flag-warning { color: var(--color-status-warning-text); font-weight: 700; }
-.indicator-flag-danger { color: var(--color-status-danger-text); font-weight: 700; }
-.indicator-flag-unknown { color: var(--color-neutral-700); font-weight: 700; }
+.it-head {
+  flex-wrap: wrap;
+  padding-bottom: var(--space-4);
+}
 
 .indicators-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.7647rem;
   table-layout: fixed;
 
   th, td {
     text-align: left;
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--color-divider);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    vertical-align: middle;
+    padding: var(--space-4) var(--space-3);
+    border-top: 1px solid var(--color-divider);
+
+    &:first-child { padding-left: var(--space-6); }
+    &:last-child { padding-right: var(--space-6); }
   }
 
-  // Контрастнее прежнего neutral-600 — заголовки терялись на фоне карточки.
+  // Шапка — surface-muted, 13/600 muted, без CAPS.
   th {
-    color: var(--color-text);
-    font-weight: 700;
-    font-size: 0.7647rem;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
+    padding-block: var(--space-3);
+    background: var(--color-surface-muted);
+    font: var(--text-badge);
+    color: var(--color-text-muted);
   }
 
-  // Явные доли ширины (table-layout:fixed берёт их из первой строки — thead) — иначе с fixed-
-  // раскладкой все колонки получили бы поровну места независимо от содержимого. Редизайн v2.2 —
-  // таблица стала 4-колоночной (карандаш/корзина переехали в панель справки, колонка ∅ убрана);
-  // раньше здесь по ошибке было 6 правил nth-child на 5 колонок, реально занято было 88% —
-  // колонка шкалы досталась заметно больше места под расширенный SIZE.mini (см. reference-scale).
-  th:nth-child(1), td:nth-child(1) { width: 34%; }
-  th:nth-child(2), td:nth-child(2) { width: 16%; }
-  th:nth-child(3), td:nth-child(3) { width: 34%; }
-  th:nth-child(4), td:nth-child(4) { width: 16%; }
+  th:nth-child(1) { width: 32%; }
+  th:nth-child(2) { width: 17%; }
+  th:nth-child(3) { width: 31%; }
+  th:nth-child(4) { width: 20%; }
 }
 
-// Подсветка строки по статусу — зелёная/красная, тот же принцип, что палочка на шкале (только
-// два состояния, не по градации Low/High/Critical). 7% — заметно мягче, чем 22% у чипов списка:
-// здесь это фон целой строки, а не маленький бейдж.
-.indicator-row-ok td {
-  background: color-mix(in srgb, var(--color-status-ok) 7%, var(--color-paper));
-}
-
-.indicator-row-bad td {
-  background: color-mix(in srgb, var(--color-status-danger) 7%, var(--color-paper));
-}
-
-// Значение показателя — крупнее и контрастнее соседних колонок, это главное число в строке.
-.indicator-value-cell {
-  font-size: 0.8235rem;
-  white-space: nowrap;
-}
-
-.indicator-flag-cell {
-  white-space: nowrap;
-}
-
-.indicator-edit-row td {
-  background: var(--color-bg);
-  overflow: visible;
-}
-
-// Строка показателя раскрывается по клику (короткое нормализованное имя в ячейке, полное имя из
-// бланка — под ним, UX-редизайн) — курсор и лёгкая подсветка дают понять, что строка кликабельна.
 .indicator-row {
   cursor: pointer;
 
-  // На td, не на tr — редизайн v2.2 добавил свой background на td у indicator-row-ok/-bad
-  // (окраска строки по статусу), а background строки-родителя (tr) под ним не видно вовсе.
-  &:hover td {
-    background: color-mix(in srgb, var(--color-text) 4%, transparent);
-  }
+  @media (hover: hover) { &:hover td { background: var(--color-surface-muted); } }
 }
 
-// Редизайн v2.2 — компактная карточка показателя на узких экранах вместо строки таблицы (той же
-// нет смысла ужимать в table-responsive — четыре колонки на 390px нечитаемы). Подсветка по
-// статусу — те же классы, что у строки таблицы (rowStatusClass), только фон на весь блок, не td.
+.it-name {
+  display: block;
+  font: var(--text-body);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.it-sub {
+  display: block;
+  margin-top: 2px;
+  font: var(--text-badge);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.it-value {
+  font: var(--text-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.it-unit {
+  margin-left: var(--space-1);
+  font: var(--text-badge);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.indicator-value-cell,
+.indicator-flag-cell { white-space: nowrap; }
+
+.it-noscale {
+  font: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+
+.it-enrich { margin-top: var(--space-1); }
+
+// Подзаголовок раздела бланка («Лейкоцитарная формула») в режиме «Как в бланке».
+.indicators-table .indicator-panel-row td {
+  background: var(--color-surface-muted);
+  font: var(--text-badge);
+  color: var(--color-text-secondary);
+  padding-block: var(--space-2);
+}
+
+// Мобайл: строки-карточки внутри list-card, разделённые divider.
+.it-cards { display: flex; flex-direction: column; }
+
 .indicator-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: stretch;
+  gap: var(--space-2);
   width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  background: var(--color-paper);
-  cursor: pointer;
+  padding: var(--space-4);
+  border: 0;
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-surface);
   font: inherit;
   color: inherit;
+  text-align: left;
+  cursor: pointer;
 
-  &.indicator-row-ok { background: color-mix(in srgb, var(--color-status-ok) 7%, var(--color-paper)); }
-  &.indicator-row-bad { background: color-mix(in srgb, var(--color-status-danger) 7%, var(--color-paper)); }
+  &:active { background: var(--color-surface-muted); }
+  app-status-chip { align-self: flex-start; }
 }
 
 .indicator-card-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-3);
+
+  .it-name { min-width: 0; }
 }
 
-// Бэйдж «рассчитано ИИ» (RefSource.KbCalculated) — норма посчитана локальной LLM по методике из
-// справочника под возраст/пол пациента, не фиксированный диапазон и не напечатана в бланке.
-// Мобильная карточка показателя: пояснение к норме от ИИ словами (hover-подсказки на телефоне нет).
+.it-value-wrap { flex: none; white-space: nowrap; }
+
+.indicator-panel-heading {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-surface-muted);
+  font: var(--text-badge);
+  color: var(--color-text-secondary);
+}
+
+// Норма от ИИ на телефоне — словами.
 .indicator-ai-ref {
-  margin-top: 2px;
-  font-size: 0.7647rem;
-  color: var(--color-accent-700);
+  font: var(--text-caption);
+  color: var(--color-accent-hover);
 
-  .badge-ai { margin-left: 0; margin-right: 4px; }
+  .badge-ai { margin-left: 0; margin-right: var(--space-1); }
 }
 
+// «ИИ» — норма рассчитана или предположена моделью, не напечатана в бланке.
 .badge-ai {
   display: inline-block;
-  margin-left: 4px;
-  padding: 0 4px;
+  margin-right: var(--space-1);
+  padding: 0 var(--space-1);
   border-radius: var(--radius-xs);
-  background: var(--color-accent-100);
-  color: var(--color-accent-700);
-  font-size: 0.7059rem;
-  font-weight: 600;
-  line-height: 1.6;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+  font: var(--text-micro);
   vertical-align: middle;
 }
 
-// Подзаголовок раздела бланка («Общий анализ крови», «Лейкоцитарная формула») в режиме «Как в бланке».
-.indicators-table .indicator-panel-row td {
-  padding-top: 12px;
-  color: var(--color-text);
-  font-weight: 700;
-  background: var(--color-neutral-100);
+.it-filtered {
+  margin: 0;
+  padding: var(--space-3) var(--space-6);
+  border-top: 1px solid var(--color-divider);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 }
 
-.indicator-panel-heading {
-  margin-top: 6px;
-  font-weight: 700;
-  font-size: 0.8235rem;
-  color: var(--color-text);
+.it-foot {
+  padding: var(--space-4) var(--space-6) var(--space-5);
+  border-top: 1px solid var(--color-divider);
+}
+
+.it-add { align-self: flex-start; }
+
+.it-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.it-form-row { display: flex; gap: var(--space-2); > * { flex: 1; min-width: 0; } }
+.it-form-actions { display: flex; gap: var(--space-2); }
+
+@media (max-width: 1023px) {
+  .it-head .seg { width: 100%; }
+  .it-head .seg-opt { flex: 1; padding-inline: var(--space-2); }
+  .it-filtered, .it-foot { padding-inline: var(--space-4); }
+  .it-foot { padding-bottom: var(--space-4); }
 }

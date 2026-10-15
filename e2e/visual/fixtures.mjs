@@ -19,6 +19,16 @@ export const SCREENS = [
   { name: 'family-medkits', path: `/families/${FAMILY_ID}?tab=medkits`, only: 'desktop' },
   { name: 'family-birthdays', path: `/families/${FAMILY_ID}?tab=birthdays`, only: 'desktop' },
   { name: 'family-dependents', path: `/families/${FAMILY_ID}?tab=dependents`, only: 'mobile' },
+  { name: 'record', path: '/health/records/r-blood' },
+  { name: 'record-open', path: '/health/records/r-blood', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('button', { name: /вне нормы/ }).click();
+    await page.getByRole('button', { name: 'Резюме для врача' }).click();
+    await page.getByRole('button', { name: 'Бланк', exact: true }).click();
+    await page.waitForTimeout(300);
+  } },
+  { name: 'records', path: '/health/records' },
+  { name: 'visits', path: '/health/visits' },
+  { name: 'visit', path: '/health/visits/v-1' },
   { name: 'intake', path: '/health/intake' },
   { name: 'intake-course', path: '/health/intake/courses/c-1', only: 'mobile' },
   { name: 'vaccinations', path: '/health/vaccinations' },
@@ -228,6 +238,56 @@ const CHAT_PAGE = {
   nextCursor: null,
 };
 
+// Анализ крови из макета analysis-desktop: 6 вне нормы, 13 в норме, 1 без нормы в бланке (гемоглобин —
+// DESIGN > макет: «норма не указана» → без нормы, не «в норме»).
+const IND = (id, pos, name, raw, unit, low, high, flag, extra = {}) => ({
+  id, analyteKey: id, displayName: name, flag, refSource: low === null ? 0 : 1, specimenKbId: 'blood',
+  specimenDisplayName: 'Кровь', position: pos, valueRaw: raw, unit, refLowText: low, refHighText: high,
+  refText: null, recordDate: '2026-10-03', medicalRecordId: 'r-blood', valueNumericText: raw.replace(',', '.'),
+  kbAnalyteId: id, rawDisplayName: null, enrichmentPending: false, enrichmentQueueAhead: 0,
+  enrichmentWaitingForAi: false, panelLabel: null, ...extra,
+});
+const INDICATORS = [
+  IND('esr', 1, 'СОЭ', '6', 'мм/ч', '0', '2', 3, { rawDisplayName: 'СОЭ по Панченкову' }),
+  IND('wbc', 2, 'Лейкоциты', '4,24', '×10⁹/л', '6.5', '12.5', 1),
+  IND('rbc', 3, 'Эритроциты', '5,49', '×10¹²/л', '3.3', '4.9', 3),
+  IND('neut', 4, 'Нейтрофилы', '2,28', '×10⁹/л', '40.8', '70.39', 1),
+  IND('lymph', 5, 'Лимфоциты', '40', '%', '17', '38', 3),
+  IND('eos', 6, 'Эозинофилы', '1', '%', '0.04', '0.44', 3),
+  IND('hgb', 7, 'Гемоглобин', '164', 'г/л', null, null, 0),
+  IND('plt', 8, 'Тромбоциты', '245', '×10⁹/л', '150', '400', 2),
+  IND('hct', 9, 'Гематокрит', '44', '%', '40', '48', 2),
+  IND('mcv', 10, 'Средний объём эритроцита', '88', 'фл', '80', '100', 2),
+  IND('mch', 11, 'Среднее содержание Hb', '30', 'пг', '27', '34', 2),
+  IND('mchc', 12, 'Средняя концентрация Hb', '340', 'г/л', '300', '380', 2),
+  IND('rdw', 13, 'Ширина распределения эритроцитов', '12,8', '%', '11.5', '14.5', 2),
+  IND('mono', 14, 'Моноциты', '7', '%', '3', '11', 2),
+  IND('baso', 15, 'Базофилы', '0,5', '%', '0', '1', 2),
+  IND('mpv', 16, 'Средний объём тромбоцита', '9,8', 'фл', '7.4', '10.4', 2),
+  IND('pct', 17, 'Тромбокрит', '0,24', '%', '0.15', '0.4', 2),
+  IND('pdw', 18, 'Ширина распределения тромбоцитов', '13', '%', '10', '17', 2),
+  IND('ret', 19, 'Ретикулоциты', '1,1', '%', '0.5', '1.5', 2),
+  IND('band', 20, 'Палочкоядерные', '3', '%', '1', '6', 2),
+];
+const RECORD = (id, title, date, extra = {}) => ({
+  id, ownerUserId: ME_ID, kind: 0, personName: 'Поляков Даниил', recordDate: date, doctor: null, title,
+  description: null, extractionStatus: 2, createdAt: `${date}T09:00:00Z`, hiddenFamilyIds: [],
+  familyDependentId: null, targetUserId: null, attachmentCount: 1, unrecognizedAttachmentCount: 0,
+  indicatorCount: 20, abnormalIndicatorCount: 6, normalIndicatorCount: 13, specimenKbId: 'blood',
+  specimenDisplayName: 'Кровь', specimenHint: null, kindIsAutoDetected: false, pendingSpecimenText: null, ...extra,
+});
+const R_BLOOD = RECORD('r-blood', 'Развернутый анализ крови', '2026-10-03');
+const RECORDS = [
+  R_BLOOD,
+  RECORD('r-bio', 'Биохимия крови', '2026-08-12', { indicatorCount: 9, abnormalIndicatorCount: 1, normalIndicatorCount: 8 }),
+  RECORD('r-urine', 'Общий анализ мочи', '2026-06-20', { indicatorCount: 11, abnormalIndicatorCount: 0, normalIndicatorCount: 11,
+    specimenKbId: 'urine', specimenDisplayName: 'Моча' }),
+];
+const VISITS = [
+  RECORD('v-1', 'Терапевт', '2026-09-18', { kind: 1, doctor: 'Иванова Мария Петровна', indicatorCount: 0,
+    abnormalIndicatorCount: 0, normalIndicatorCount: 0, specimenKbId: '', specimenDisplayName: null }),
+];
+
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
   ['GET', /^\/api\/auth\/me$/, ME],
@@ -243,6 +303,34 @@ const ROUTES = [
   ['GET', /^\/api\/notifications\/unread-count$/, { count: 2 }],
   ['GET', /^\/api\/health\/summary$/, HEALTH_SUMMARY],
   ['GET', /^\/api\/medical-records\/shares$/, [FAMILY_ID]],
+  ['GET', /^\/api\/attachments\/limits$/, { maxFileSizeBytes: 20971520, maxFilesPerRecord: 10 }],
+  ['GET', /^\/api\/medical-records\/doctors$/, ['Иванова Мария Петровна']],
+  ['GET', /^\/api\/medical-records\/extraction-limits$/, { maxFiles: 10, maxFileSizeBytes: 20971520 }],
+  ['GET', /^\/api\/medical-records$/, (_m, q) => {
+    const items = q.get('kind') === 'DoctorVisit' || q.get('kind') === '1' ? VISITS : RECORDS;
+    return { items, totalCount: items.length, page: 1, pageSize: 20 };
+  }],
+  ['GET', /^\/api\/medical-records\/r-blood$/, R_BLOOD],
+  ['GET', /^\/api\/medical-records\/v-1$/, VISITS[0]],
+  ['GET', /^\/api\/medical-records\/v-1\/conclusion$/, {
+    diagnosis: 'ОРВИ, лёгкое течение', anamnesis: 'Насморк и температура 37,5 три дня.', proceduresPerformed: null,
+    recommendations: 'Обильное питьё, контроль через неделю.',
+    prescribedMedications: [{ name: 'Нурофен', dosageInstructions: '200 мг при температуре выше 38,5', kbMedicationId: null }],
+  }],
+  ['GET', /^\/api\/medical-records\/[^/]+\/indicators$/, INDICATORS],
+  ['GET', /^\/api\/medical-records\/[^/]+\/attachments$/, [
+    { id: 'a1', fileName: 'oak-03-10.pdf', contentType: 'application/pdf', sizeBytes: 182000, uploadedAt: '2026-10-03T09:00:00Z',
+      extractedAt: '2026-10-03T09:02:00Z', previewStatus: 3 },
+  ]],
+  ['GET', /^\/api\/medical-records\/[^/]+\/summary$/, {
+    plainSummary: 'Повышены СОЭ, эритроциты и лимфоциты, снижены лейкоциты и нейтрофилы.',
+    deviations: [{ name: 'СОЭ', meaning: 'может говорить о воспалении' }],
+    questionsForDoctor: ['Нужно ли пересдать общий анализ крови через месяц?'], disclaimer: 'Не является диагнозом.',
+  }],
+  ['GET', /^\/api\/medical-records\/[^/]+\/extraction$/, {
+    status: 2, stage: 5, indicatorCount: 20, error: null, totalFiles: 1, processedFiles: 1,
+    createdAt: '2026-10-03T09:00:00Z', completedAt: '2026-10-03T09:02:00Z', queuePosition: 0, waitingForAi: false,
+  }],
   ['GET', /^\/api\/health-shares\/shared-with-me$/, []],
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],
