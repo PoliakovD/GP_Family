@@ -3,7 +3,7 @@
        ссылка «‹ Здоровье» ведёт обратно на хаб; таб «Здоровье» снизу остаётся активным (см.
        app.component.ts isHealthActive). На хабе (индекс) и в immersive-режиме (открытая запись)
        ссылка не нужна: на хабе мы уже там, в immersive — свою шапку рисует сама деталь-страница. -->
-  @if (!pageAction.immersive() && !isWide() && !isHubIndex()) {
+  @if (!pageAction.immersive() && !pageAction.fullscreen() && !isWide() && !isHubIndex()) {
     <app-back-link label="Здоровье" (activated)="goToHub()" />
   }
 

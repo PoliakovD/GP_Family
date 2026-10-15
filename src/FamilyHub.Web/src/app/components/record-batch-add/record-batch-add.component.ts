@@ -11,7 +11,10 @@ import { buildPatientOptions, type PatientOption } from '../../shared/util/patie
 import { ACCEPTED_ATTACHMENT_TYPES, formatMb } from '../../shared/util/attachment-upload';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath } from '../../shared/util/medical-record-labels';
 import { FileViewerComponent } from '../../shared/file-viewer/file-viewer.component';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { Check, CircleMinus, FileText, LoaderCircle, TriangleAlert, Upload, X } from 'lucide-angular';
+import { AvatarComponent } from '../../shared/avatar/avatar.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { PageActionService } from '../../services/page-action.service';
 
 type BatchItemStatus = 'pending' | 'creating' | 'uploading' | 'queued' | 'failed' | 'skipped';
 
@@ -44,11 +47,13 @@ let nextInstanceId = 0;
  */
 @Component({
     selector: 'app-record-batch-add',
-    imports: [NgTemplateOutlet, FileViewerComponent, PersonChipComponent],
+    imports: [NgTemplateOutlet, AvatarComponent, FileViewerComponent, IconComponent],
     templateUrl: './record-batch-add.component.html',
     styleUrl: './record-batch-add.component.scss'
 })
 export class RecordBatchAddComponent implements OnInit, OnDestroy {
+  protected readonly icons = { Check, CircleMinus, FileText, LoaderCircle, TriangleAlert, Upload, X };
+  private readonly pageAction = inject(PageActionService);
   readonly kind = input.required<MedicalRecordKind>();
 
   private readonly api = inject(ApiService);
@@ -111,11 +116,14 @@ export class RecordBatchAddComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Телефон: форма на весь экран — без шапки каркаса и таб-бара (DESIGN §3 «side-sheet»).
+    if (!this.isWide) this.pageAction.setFullscreen(true);
     void this.api.getAttachmentLimits().then((limits) => (this.attachmentLimits = limits));
     void this.api.getExtractionLimits().then((limits) => (this.extractionLimits = limits));
   }
 
   ngOnDestroy(): void {
+    this.pageAction.setFullscreen(false);
     this.clearItems();
   }
 

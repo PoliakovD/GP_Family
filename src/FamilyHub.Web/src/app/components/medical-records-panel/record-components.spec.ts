@@ -39,7 +39,7 @@ describe('record UI components', () => {
     providers: [provideRouter([]), { provide: BreakpointService, useValue: { tier: signal('wide') } }],
   }));
 
-  it('list card shows chips and emits open on row click', () => {
+  it('list row shows the subtitle and status and emits open on click', () => {
     const fixture = TestBed.createComponent(RecordListCardComponent);
     fixture.componentRef.setInput('record', record({ doctor: 'Петрова' } as never));
     fixture.detectChanges();
@@ -49,7 +49,7 @@ describe('record UI components', () => {
     expect(text(el)).toContain('Врач: Петрова');
     const opened = vi.fn();
     fixture.componentInstance.open.subscribe(opened);
-    (el.querySelector('.record-card-row') as HTMLElement).click();
+    (el.querySelector('.rl-main') as HTMLElement).click();
     expect(opened).toHaveBeenCalled();
   });
 

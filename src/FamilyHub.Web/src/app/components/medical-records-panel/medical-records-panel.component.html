@@ -1,16 +1,16 @@
-<div>
+<div class="rp" [class.rp-list]="!recordId()">
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger" role="alert">{{ error }}</div>
   }
   @if (info) {
-    <div class="alert-info mb-2">{{ info }}</div>
+    <div class="alert-info" role="status">{{ info }}</div>
   }
   @if (person() === 'me' && !personHintDismissed && !recordId()) {
-    <div class="alert-info mb-2 d-flex align-items-start gap-2">
-      <i class="ph ph-info" aria-hidden="true"></i>
-      <span class="flex-fill">Из хаба раздел открывается на вас. Остальных выберите в фильтре.</span>
+    <div class="alert-info rp-hint">
+      <app-icon [icon]="icons.Info" [size]="18" />
+      <span class="flex-fill">Из хаба раздел открывается на вас. Остальных выберите выше.</span>
       <button type="button" class="btn-icon" (click)="dismissPersonHint()" aria-label="Скрыть подсказку">
-        <i class="ph ph-x" aria-hidden="true"></i>
+        <app-icon [icon]="icons.X" [size]="18" />
       </button>
     </div>
   }
@@ -20,30 +20,40 @@
        разворачивает форму инлайн (см. PR7 плана). -->
 
   @if (!recordId()) {
-    <!-- Редизайн v2.1 — заголовок экрана + краткая сводка переехали сюда из Page-обёртки
-         (medical-records-tab/doctor-visits-tab печатали голый <h3>): экран сам знает счётчики,
-         обёртке незачем их дублировать отдельным запросом. Только в списочном режиме — в
-         экране записи заголовок даёт его шапка. -->
-    <h3 class="mb-1">{{ labels.title }}</h3>
-    @if (!loading && totalCount > 0) {
-      <p class="muted mb-3" style="font-size:var(--font-size-meta)">
-        {{ totalCount }} {{ pluralizeRu(totalCount, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
-        @if (items.length === totalCount) {
-          · {{ groupedItems.length }} {{ pluralizeRu(groupedItems.length, 'человек', 'человека', 'человек') }}
-        }
-        . {{ labels.accessHintLabel }}
-      </p>
-    }
+    <!-- Шапка раздела (DESIGN §4): H1 + сводка; ниже — «чьи записи» (segmented) и «Фильтры». Поиск — в
+         верхней строке каркаса (PageActionService.pageSearch), «Добавить» — там же (кнопка страницы). -->
+    <header class="rp-head">
+      <h1 class="rp-title">{{ labels.title }}</h1>
+      @if (!loading && totalCount > 0) {
+        <p class="rp-sub">
+          {{ totalCount }} {{ pluralizeRu(totalCount, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}@if (items.length === totalCount) {
+            · {{ groupedItems.length }} {{ pluralizeRu(groupedItems.length, 'человек', 'человека', 'человек') }}}.
+          {{ labels.accessHintLabel }}
+        </p>
+      }
+    </header>
 
-    <!-- Редизайн v2.1 — поле поиска переехало в топбар каркаса целиком (см.
-         PageActionService.pageSearch в конструкторе/ngOnInit), было полем прямо тут, под
-         заголовком экрана. «Фильтры» остаются на экране — это не текстовый поиск. -->
-    <div class="d-flex gap-2 mb-2 justify-content-end">
+    <div class="rp-toolbar">
+      <div class="seg rp-people" role="group" aria-label="Чьи записи">
+        @for (opt of filterPatientOptions; track opt.key) {
+          <button type="button" class="seg-opt" [class.active]="filters.patientKey === opt.key"
+                  [attr.aria-pressed]="filters.patientKey === opt.key" [title]="opt.label"
+                  (click)="selectPatientFilter(opt.key)">
+            @if (opt.shortLabel) {
+              <app-avatar size="xs" [person]="{key: opt.key, firstName: opt.avatarFirstName ?? opt.shortLabel, lastName: opt.avatarLastName ?? null}" />
+              {{ opt.shortLabel }}
+            } @else {
+              {{ opt.label }}
+            }
+          </button>
+        }
+      </div>
       <div class="filters-anchor" #filtersAnchor>
-        <button type="button" class="btn btn-secondary text-nowrap" (click)="filtersOpen = !filtersOpen">
-          <i class="ph ph-funnel" aria-hidden="true"></i> Фильтры
+        <button type="button" class="btn btn-secondary text-nowrap rp-filter-btn" aria-label="Фильтры" [attr.aria-expanded]="filtersOpen"
+                (click)="filtersOpen = !filtersOpen">
+          <app-icon [icon]="icons.SlidersHorizontal" [size]="18" /><span class="rp-filter-label">Фильтры</span>
           @if (activeFilterCount > 0) {
-            <span class="tag tag-accent" style="margin-left:6px">{{ activeFilterCount }}</span>
+            <span class="count-badge count-badge-accent">{{ activeFilterCount }}</span>
           }
         </button>
 
@@ -62,26 +72,27 @@
     }
 
     <ng-template #filterFields>
-      <div class="d-flex flex-wrap gap-2 mb-2">
-        <div class="flex-fill" style="min-width:130px">
-          <label class="form-label">С даты</label>
-          <input class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
+      <div class="rp-filter-dates">
+        <div>
+          <label class="form-label" for="rp-from">С даты</label>
+          <input id="rp-from" class="input" type="date" [(ngModel)]="filters.from" (ngModelChange)="onFilterChange()" />
         </div>
-        <div class="flex-fill" style="min-width:130px">
-          <label class="form-label">По дату</label>
-          <input class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
+        <div>
+          <label class="form-label" for="rp-to">По дату</label>
+          <input id="rp-to" class="input" type="date" [(ngModel)]="filters.to" (ngModelChange)="onFilterChange()" />
         </div>
       </div>
-      <label class="form-label">Врач</label>
+      <label class="form-label" for="rp-doctor">Врач</label>
       <input
-        class="input mb-2"
+        id="rp-doctor"
+        class="input"
         [attr.list]="doctorsDatalistId"
         [(ngModel)]="filters.doctor"
         (ngModelChange)="onFilterChange()"
         placeholder="Начните вводить имя врача…"
       />
       @if (activeFilterCount > 0) {
-        <button type="button" class="btn btn-ghost btn-sm" (click)="resetFilters()">Сбросить фильтры</button>
+        <button type="button" class="btn btn-ghost" (click)="resetFilters()">Сбросить фильтры</button>
       }
     </ng-template>
   }
@@ -159,102 +170,57 @@
     }
   } @else {
 
-  <!-- Редизайн v2 — фильтр по человеку прямо наверху экрана (было — только внутри "Фильтры");
-       редизайн v2.1 — настоящие люди (не «Все») показаны компактным app-person-chip (аватар +
-       короткое имя) вместо длинного ФИО с семьёй в скобках, полное — в тултипе при наведении. -->
-  <div class="d-flex flex-wrap gap-2 mb-2">
-    @for (opt of filterPatientOptions; track opt.key) {
-      @if (opt.shortLabel) {
-        <button type="button" class="person-chip-btn" (click)="selectPatientFilter(opt.key)">
-          <app-person-chip
-            [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
-            [shortLabel]="opt.shortLabel"
-            [fullLabel]="opt.label"
-            [selected]="filters.patientKey === opt.key"
-          />
-        </button>
-      } @else {
-        <button
-          type="button"
-          class="tag"
-          [class.tag-accent]="filters.patientKey === opt.key"
-          style="cursor:pointer;border:none;font:inherit"
-          (click)="selectPatientFilter(opt.key)"
-        >
-          {{ opt.label }}
-        </button>
-      }
-    }
-  </div>
-
   @if (loading) {
     <app-loading-spinner />
   } @else {
     @for (group of groupedItems; track group.key) {
-      <!-- Редизайн v2 — группа = человек: аватар, имя, "N анализов · последний {дата}", доступ
-           словами на уровне группы (не под каждой записью), таймлайн записей по датам внутри. -->
-      <div class="record-group mb-3">
+      <!-- Группа = человек (list-card): аватар, имя, «N анализов · последний …», доступ словами на уровне
+           группы, ниже — строки записей (новые сверху). -->
+      <section class="list-card record-group" [attr.aria-label]="group.personName">
         <div class="record-group-header">
           <app-avatar
             [person]="{key: group.key, firstName: personAvatarParts(group.personName).firstName, lastName: personAvatarParts(group.personName).lastName}"
-            size="lg"
+            size="md"
             [title]="group.personName"
           />
-          <div class="flex-fill" style="min-width:0">
-            <!-- Редизайн v3 — короткое имя всегда (не полное ФИО), контрастнее; полное ФИО —
-                 только в native-тултипе при наведении (см. PR5.5 плана). -->
-            <div class="card-title" style="font-size:1.1176rem" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</div>
-            <div class="muted" style="font-size:0.8235rem">
+          <div class="rp-group-text">
+            <h2 class="card-title" [title]="group.personName">{{ shortenDisplayName(group.personName) }}</h2>
+            <span class="rp-group-sub">
               {{ group.records.length }} {{ pluralizeRu(group.records.length, labels.countNounOne, labels.countNounFew, labels.countNounMany) }}
               · последний {{ formatDayMonthYear(group.records[0].recordDate) }}
-            </div>
-          </div>
-          <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:0.7647rem">
-            <span class="d-flex align-items-center gap-1" style="color:var(--color-accent)">
-              <i class="ph-duotone ph-eye" aria-hidden="true"></i> {{ groupAccessLabel(group) }}
             </span>
+          </div>
+          <div class="rp-group-access">
+            <span class="rp-access-label"><app-icon [icon]="icons.Eye" [size]="16" />{{ groupAccessLabel(group) }}</span>
             @if (groupCanChangeAccess(group)) {
               <button type="button" class="btn-link" (click)="openGroupAccess(group)">Изменить доступ</button>
             }
           </div>
         </div>
 
-        <div class="record-timeline">
-          @for (item of group.records; track item.id) {
-            <div class="record-timeline-row">
-              <!-- Редизайн v3 — вместо сырого "гггг-мм-дд" двухстрочный бейдж: крупнее/контрастнее
-                   день+месяц, мельче/приглушённо год снизу (см. PR5.7 плана). -->
-              <div class="record-timeline-date">
-                <div class="record-timeline-day">{{ formatDayMonth(item.recordDate) }}</div>
-                <div class="record-timeline-year">{{ formatYear(item.recordDate) }}</div>
-              </div>
-              <div class="record-timeline-rail"><span class="record-timeline-dot"></span></div>
-
-              <app-record-list-card
-                [record]="item"
-                [wide]="isWide"
-                [actions]="recordMenuActions(item)"
-                [steps]="pipelineStepsByRecord[item.id]"
-                [recognizing]="recognizingRecordIds.has(item.id)"
-                [status]="extractionStatusByRecord[item.id]"
-                (open)="openRecord(item)"
-                (recognize)="handleRecognize(item)"
-              />
-            </div>
-          }
-        </div>
-      </div>
+        @for (item of group.records; track item.id) {
+          <app-record-list-card
+            [record]="item"
+            [wide]="isWide"
+            [actions]="recordMenuActions(item)"
+            [steps]="pipelineStepsByRecord[item.id]"
+            [recognizing]="recognizingRecordIds.has(item.id)"
+            [status]="extractionStatusByRecord[item.id]"
+            (open)="openRecord(item)"
+            (recognize)="handleRecognize(item)"
+          />
+        }
+      </section>
     }
 
     @if (items.length === 0 && totalCount === 0) {
-      <div class="card records-empty">
-        <i class="ph-duotone ph-camera" aria-hidden="true"></i>
-        <h3 class="card-title mb-1">{{ labels.emptyLabel }}</h3>
-        <p class="muted mb-2">{{ labels.emptyHint }}</p>
-        <button type="button" class="btn btn-primary" (click)="openCreate()">
-          <i class="ph-bold ph-plus" aria-hidden="true"></i> {{ labels.addButtonLabel }}
-        </button>
-      </div>
+      <section class="card card-lg">
+        <app-empty-state [icon]="icons.Camera" [title]="labels.emptyLabel" [text]="labels.emptyHint">
+          <button type="button" class="btn btn-primary" (click)="openCreate()">
+            <app-icon [icon]="icons.Plus" [size]="18" />{{ labels.addButtonLabel }}
+          </button>
+        </app-empty-state>
+      </section>
     }
 
     <!-- Редизайн v2 — бесконечная прокрутка вместо нумерованных страниц: группировка по
@@ -262,9 +228,7 @@
          пассивная обратная связь, не элемент управления. На in-memory пути (поиск/врач) сервер
          и так уже отдал всё за один раз (см. usingTextFilter) — сентинел не нужен. -->
     @if (items.length > 0) {
-      <div class="muted mb-2" style="font-size:0.7647rem;text-align:center">
-        Показано {{ items.length }} из {{ totalCount }}
-      </div>
+      <p class="rp-shown">Показано {{ items.length }} из {{ totalCount }}</p>
     }
     @if (hasMore()) {
       <app-infinite-scroll-sentinel (visible)="loadMore()" />

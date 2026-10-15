@@ -1,4 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { X } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 /**
  * Обёртка боковой панели справки (десктоп, `tier()==='wide'`) — редизайн v2, PR4. Тот же приём
@@ -11,16 +13,17 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 @Component({
   selector: 'app-indicator-info-panel',
   standalone: true,
+  imports: [IconComponent],
   template: `
     <div class="overlay-backdrop indicator-info-backdrop" (click)="closed.emit()">
       <aside class="indicator-info-panel" (click)="$event.stopPropagation()">
         <div class="indicator-info-panel-header">
           <div class="indicator-info-panel-heading">
             <div class="indicator-info-panel-kicker">Справочник FamilyHub</div>
-            <h4 class="mb-0">{{ title }}</h4>
+            <h2 class="indicator-info-panel-title">{{ title }}</h2>
           </div>
           <button type="button" class="btn-icon" aria-label="Закрыть" (click)="closed.emit()">
-            <i class="ph ph-x" aria-hidden="true"></i>
+            <app-icon [icon]="closeIcon" />
           </button>
         </div>
         <div class="indicator-info-panel-body">
@@ -32,6 +35,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
   styleUrl: './indicator-info-panel.component.scss',
 })
 export class IndicatorInfoPanelComponent {
+  protected readonly closeIcon = X;
   @Input() title = 'Справка';
   @Output() readonly closed = new EventEmitter<void>();
 }

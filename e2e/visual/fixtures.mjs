@@ -26,6 +26,13 @@ export const SCREENS = [
     await page.getByRole('button', { name: 'Бланк', exact: true }).click();
     await page.waitForTimeout(300);
   } },
+  { name: 'indicator', path: '/health/records/r-blood?indicator=wbc', only: 'mobile' },
+  { name: 'indicator-panel', path: '/health/records/r-blood', only: 'desktop', prepare: async (page) => {
+    await page.getByRole('cell', { name: /Лейкоциты/ }).click();
+    await page.waitForTimeout(400);
+  } },
+  { name: 'record-add', path: '/health/records/new' },
+  { name: 'records-batch', path: '/health/records/batch' },
   { name: 'records', path: '/health/records' },
   { name: 'visits', path: '/health/visits' },
   { name: 'visit', path: '/health/visits/v-1' },
@@ -305,9 +312,9 @@ const ROUTES = [
   ['GET', /^\/api\/medical-records\/shares$/, [FAMILY_ID]],
   ['GET', /^\/api\/attachments\/limits$/, { maxFileSizeBytes: 20971520, maxFilesPerRecord: 10 }],
   ['GET', /^\/api\/medical-records\/doctors$/, ['Иванова Мария Петровна']],
-  ['GET', /^\/api\/medical-records\/extraction-limits$/, { maxFiles: 10, maxFileSizeBytes: 20971520 }],
+  ['GET', /^\/api\/medical-records\/extraction-limits$/, { maxBatchDocuments: 10, maxActiveJobs: 3, activeNow: 0, dailyQuota: 30, usedToday: 2, resetsAt: '2026-10-15T00:00:00Z' }],
   ['GET', /^\/api\/medical-records$/, (_m, q) => {
-    const items = q.get('kind') === 'DoctorVisit' || q.get('kind') === '1' ? VISITS : RECORDS;
+    const items = q.get('kind') === 'visit' ? VISITS : RECORDS;
     return { items, totalCount: items.length, page: 1, pageSize: 20 };
   }],
   ['GET', /^\/api\/medical-records\/r-blood$/, R_BLOOD],
@@ -318,6 +325,23 @@ const ROUTES = [
     prescribedMedications: [{ name: 'Нурофен', dosageInstructions: '200 мг при температуре выше 38,5', kbMedicationId: null }],
   }],
   ['GET', /^\/api\/medical-records\/[^/]+\/indicators$/, INDICATORS],
+  ['GET', /^\/api\/medical-records\/[^/]+\/indicators\/[^/]+\/history$/, [
+    { recordDate: '2026-04-10', valueRaw: '5,9', valueNumericText: '5.9', flag: 1, medicalRecordId: 'r-old' },
+    { recordDate: '2026-07-02', valueRaw: '5,1', valueNumericText: '5.1', flag: 1, medicalRecordId: 'r-bio' },
+    { recordDate: '2026-10-03', valueRaw: '4,24', valueNumericText: '4.24', flag: 1, medicalRecordId: 'r-blood' },
+  ]],
+  ['GET', /^\/api\/indicators\/([^/]+)\/article$/, (m) => ({
+    indicator: INDICATORS.find((i) => i.id === m[1]) ?? INDICATORS[1],
+    patient: { ageYears: 29, sex: 0 }, matchedRefRangeIndex: 0, historyAvailable: true,
+    article: {
+      id: 'wbc', displayName: 'Лейкоциты', specimenKbId: 'blood', specimenDisplayName: 'Кровь', loincCode: '6690-2',
+      defaultUnit: '×10⁹/л', plainExplanation: 'Белые клетки крови, защищают организм от инфекций.',
+      whyMeasured: 'Показывают, есть ли воспаление или инфекция.',
+      highMeans: 'Бывает при инфекциях и воспалениях.', lowMeans: 'Бывает после вирусных инфекций и при приёме некоторых лекарств.',
+      refRanges: [{ ageFrom: 18, ageTo: null, sex: null, low: 4, high: 9, unit: '×10⁹/л', normKind: 0, population: 0, populationDetail: null, sourceDomain: null }],
+      related: [], source: 'Справочник FamilyHub', updatedAt: '2026-09-01T00:00:00Z',
+    },
+  })],
   ['GET', /^\/api\/medical-records\/[^/]+\/attachments$/, [
     { id: 'a1', fileName: 'oak-03-10.pdf', contentType: 'application/pdf', sizeBytes: 182000, uploadedAt: '2026-10-03T09:00:00Z',
       extractedAt: '2026-10-03T09:02:00Z', previewStatus: 3 },

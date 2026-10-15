@@ -581,6 +581,9 @@ select.input {
   border-radius: var(--radius-md);
 }
 
+// Сегмент с мини-аватаром («чьи записи»): аватар 24 ближе к краю.
+.seg-opt > app-avatar:first-child { margin-left: calc(var(--space-2) * -1); }
+
 // Внутри карточки (surface): контейнер «утоплен», без рамки — как сортировка в макете анализа.
 .seg-sunken {
   background: var(--color-surface-sunken);
@@ -1798,3 +1801,95 @@ button.tag,
     scroll-behavior: auto !important;
   }
 }
+
+// ============================================================================
+// Боковая панель формы (DESIGN §3 «Боковая панель»): десктоп — оверлей справа 560px, телефон — весь экран
+// без шапки каркаса и таб-бара. Шапка (подпись + заголовок + «×») → прокручиваемое тело → низ с кнопками.
+// ============================================================================
+.side-sheet-backdrop {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+.side-sheet,
+.side-sheet-fullscreen {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--color-surface);
+}
+
+.side-sheet {
+  width: min(560px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  box-shadow: var(--shadow-overlay);
+}
+
+.side-sheet-fullscreen {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.side-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-divider);
+
+  > :first-child { flex: 1; min-width: 0; }
+}
+
+.side-sheet-kicker { font: var(--text-caption); font-weight: 600; color: var(--color-text-muted); }
+
+.side-sheet-title {
+  margin: 0;
+  font: var(--text-title);
+  overflow-wrap: anywhere;
+}
+
+.side-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+.side-sheet-foot {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-6) max(var(--space-4), env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-surface);
+
+  .btn-primary { flex: 1; }
+}
+
+@media (max-width: 639px) {
+  .side-sheet-head { padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4); }
+  .side-sheet-body { padding: var(--space-4); }
+  .side-sheet-foot { padding-inline: var(--space-4); }
+}
+
+// Поле формы с подписью сверху и подсказкой снизу.
+.form-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.form-section > .form-label { margin: 0; }
+.form-section > .seg { align-self: flex-start; }
+.form-hint { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
+
+// Карточка-переключатель («Распознать бланк»): текст + switch, фон accent-soft.
+.toggle-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-soft);
+}
+
+.toggle-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.toggle-card-title { font: var(--text-body); font-weight: 600; color: var(--color-text); }
+.toggle-card-sub { font: var(--text-caption); color: var(--color-text-secondary); }
+

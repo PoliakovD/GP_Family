@@ -28,7 +28,9 @@ import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.com
 import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { Camera, Eye, Info, Plus, SlidersHorizontal, X } from 'lucide-angular';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import type { ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
@@ -104,7 +106,7 @@ let nextInstanceId = 0;
     imports: [
         NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent,
-        AvatarComponent, PersonChipComponent, BackLinkComponent, InfiniteScrollSentinelComponent,
+        AvatarComponent, BackLinkComponent, EmptyStateComponent, IconComponent, InfiniteScrollSentinelComponent,
         IndicatorInfoComponent, IndicatorInfoPanelComponent,
         RecordAccessSheetComponent, RecordEditSheetComponent, RecordDetailBodyComponent, RecordDetailHeaderComponent,
         RecordListCardComponent,
@@ -113,6 +115,7 @@ let nextInstanceId = 0;
     styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
+  protected readonly icons = { Camera, Eye, Info, Plus, SlidersHorizontal, X };
   readonly kind = input.required<MedicalRecordKind>();
 
   /** Редизайн v3 — «одиночный режим» (PR6 плана): мобильный экран открытой записи

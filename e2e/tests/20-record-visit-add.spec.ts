@@ -36,7 +36,8 @@ test('анализ из формы: файл без распознавания �
   await expect(page.getByText(/20 мая 2026/).first()).toBeVisible();
   await expect(page.getByText('Врач: Сидорова Анна Петровна')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Открыть' }).click();
+  // Вся строка записи — кнопка (DESIGN §3 «Строки»).
+  await page.getByRole('button', { name: /20 мая 2026/ }).click();
   await expect(page).toHaveURL(/\/health\/records\/[0-9a-f-]{36}$/);
   await expect(page.getByText('Плановый осмотр')).toBeVisible();
   await expect(page.getByRole('main')).toContainText('Сидорова А.П.');
@@ -64,7 +65,7 @@ test('приём врача из формы: файл без распознав�
   await expect(page.getByText(/11 апреля 2026/).first()).toBeVisible();
   await expect(page.getByText('Врач: Терапевт Смирнова')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Открыть' }).click();
+  await page.getByRole('button', { name: /11 апреля 2026/ }).click();
   await expect(page).toHaveURL(/\/health\/visits\/[0-9a-f-]{36}$/);
   await expect(page.getByText('ОРВИ, контроль через неделю')).toBeVisible();
 

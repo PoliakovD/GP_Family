@@ -8,7 +8,7 @@ test('запись анализа: список → открытая запис�
   await openAs(page, tgId, '/health/records');
   await expect(page.getByText('Общий анализ крови').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Открыть' }).first().click();
+  await page.getByRole('button', { name: /Общий анализ крови/ }).first().click();
   await expect(page).toHaveURL(/\/health\/records\/[0-9a-f-]{36}/);
 
   // Открытая запись: заголовок, ссылка назад, действия и мета-строка с врачом «Фамилия И.О.».
