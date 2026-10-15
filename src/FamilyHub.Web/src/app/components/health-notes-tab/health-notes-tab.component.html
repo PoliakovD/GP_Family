@@ -27,7 +27,7 @@
     <div class="d-flex gap-2 flex-wrap mb-2">
       <button type="button" class="person-chip-btn" (click)="selectOwner(null)">
         <app-person-chip
-          [avatarPerson]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}"
+          [avatarPerson]="{key: auth.me()?.userId ?? 'me', firstName: $safeNavigationMigration(auth.me()?.firstName), lastName: $safeNavigationMigration(auth.me()?.lastName)}"
           shortLabel="Я" fullLabel="Мой дневник" [selected]="!isReadOnly()"
         />
       </button>

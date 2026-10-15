@@ -1,5 +1,5 @@
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
-import {Component, Input, OnDestroy, OnInit, effect, inject} from '@angular/core';
+import {Component, Input, OnDestroy, OnInit, effect, inject, ChangeDetectionStrategy} from '@angular/core';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {ApiService, ApiError} from '../../services/api.service';
@@ -33,6 +33,7 @@ type FamilySubTab = 'members' | 'chat' | 'medkits' | 'birthdays' | 'dependents';
         DatePipe, InviteModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent, BackLinkComponent,
     ],
     templateUrl: './family-details.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './family-details.component.scss'
 })
 export class FamilyDetailsComponent implements OnInit, OnDestroy {

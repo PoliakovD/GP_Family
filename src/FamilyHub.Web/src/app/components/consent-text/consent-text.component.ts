@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from '../../services/auth.service';
 
@@ -13,6 +13,7 @@ import { AuthService } from '../../services/auth.service';
 @Component({
   selector: 'app-consent-text',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="card" style="max-width: 720px; margin: 1.5rem auto; padding: 1.5rem;">
       @if (html(); as content) {

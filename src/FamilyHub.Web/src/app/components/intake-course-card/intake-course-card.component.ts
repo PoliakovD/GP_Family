@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { IntakeStateService } from '../../services/intake-state.service';
@@ -37,6 +37,7 @@ const MISSED_LABELS: Record<number, string> = { 30: '30 минут', 60: 'час
   selector: 'app-intake-course-card',
   imports: [ActionMenuComponent, RouterLink],
   templateUrl: './intake-course-card.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-course-card.component.scss',
 })
 export class IntakeCourseCardComponent {

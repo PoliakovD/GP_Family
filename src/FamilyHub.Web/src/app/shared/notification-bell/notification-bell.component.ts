@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NotificationStateService } from '../../services/notification-state.service';
 
@@ -20,6 +20,7 @@ import { NotificationStateService } from '../../services/notification-state.serv
       }
     </a>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-bell.component.scss',
 })
 export class NotificationBellComponent {

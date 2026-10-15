@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, signal, untracked } from '@angular/core';
+import { Component, OnInit, effect, inject, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { VaccinationStateService } from '../../services/vaccination-state.service';
@@ -20,6 +20,7 @@ import { todayLocal } from '../../shared/util/intake-labels';
   selector: 'app-vaccinations-overview',
   imports: [AvatarComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './vaccinations-overview.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccinations-overview.component.scss',
 })
 export class VaccinationsOverviewComponent implements OnInit {

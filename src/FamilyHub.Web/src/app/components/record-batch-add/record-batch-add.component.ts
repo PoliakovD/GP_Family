@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -46,6 +46,7 @@ let nextInstanceId = 0;
     selector: 'app-record-batch-add',
     imports: [NgTemplateOutlet, FileViewerComponent, PersonChipComponent],
     templateUrl: './record-batch-add.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-batch-add.component.scss'
 })
 export class RecordBatchAddComponent implements OnInit, OnDestroy {

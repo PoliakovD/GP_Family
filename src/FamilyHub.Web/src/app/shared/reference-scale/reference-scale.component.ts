@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import { IndicatorFlag } from '../../models/types';
 
 const SIZE = {
@@ -81,6 +81,7 @@ function formatNumber(n: number): string {
       </svg>
     </ng-template>
   `,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
     .rs-track { fill: var(--color-neutral-200); }
     .rs-norm { fill: color-mix(in srgb, var(--color-status-ok) 32%, var(--color-neutral-200)); }

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -109,6 +109,7 @@ let nextInstanceId = 0;
         RecordListCardComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
@@ -632,7 +633,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeForFilters(event: KeyboardEvent): void {
+  onEscapeForFilters(event: Event): void {
     if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }

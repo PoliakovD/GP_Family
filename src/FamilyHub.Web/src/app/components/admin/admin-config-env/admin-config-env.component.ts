@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AdminApiService, AdminConfig, ConfigItem, ConfigSource } from '../../../services/admin-api.service';
 
 const SOURCE_LABELS: Record<ConfigSource, { label: string; tag: string }> = {
@@ -20,6 +20,7 @@ const SOURCE_LABELS: Record<ConfigSource, { label: string; tag: string }> = {
 @Component({
   selector: 'app-admin-config-env',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './admin-config-env.component.html',
 })
 export class AdminConfigEnvComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, AdminRelatedAnalyteMatch, KbAnalyteListItem } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
@@ -114,6 +114,7 @@ const EMPTY_REF_RANGE = (): RefRangeRow => ({
     imports: [FormsModule],
     templateUrl: './admin-payload-editor.component.html',
     // Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
       .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
       .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }

@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -18,6 +18,7 @@ export function extractInviteCode(raw: string): string {
 @Component({
     selector: 'app-families-tab',
     imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './families-tab.component.html'
 })
 export class FamiliesTabComponent {

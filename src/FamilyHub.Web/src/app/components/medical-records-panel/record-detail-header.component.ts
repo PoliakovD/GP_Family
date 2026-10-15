@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { MedicalRecordKind } from '../../models/types';
 import type { MedicalRecord } from '../../models/types';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
@@ -18,6 +18,7 @@ import { recordPersonKey, recordShortName, unknownIndicatorCount } from './recor
   standalone: true,
   imports: [AvatarComponent, BackLinkComponent],
   templateUrl: './record-detail-header.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './record-detail-header.component.scss',
 })
 export class RecordDetailHeaderComponent {

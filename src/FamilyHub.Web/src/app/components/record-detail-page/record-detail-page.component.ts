@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { MedicalRecordKind } from '../../models/types';
 import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-records-panel.component';
 
@@ -13,6 +13,7 @@ import { MedicalRecordsPanelComponent } from '../medical-records-panel/medical-r
 @Component({
     selector: 'app-record-detail-page',
     imports: [MedicalRecordsPanelComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `<app-medical-records-panel [kind]="Kind.Analysis" [recordId]="id()" [firstReview]="firstReview()" />`
 })
 export class RecordDetailPageComponent {

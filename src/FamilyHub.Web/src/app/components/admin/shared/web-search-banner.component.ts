@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input } from '@angular/core';
+import { Component, OnInit, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { WebSearchValveStore } from './web-search-valve.store';
@@ -12,6 +12,7 @@ import { WebSearchValveStore } from './web-search-valve.store';
 @Component({
     selector: 'app-web-search-banner',
     imports: [DatePipe, RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `
     @if (store.valve(); as valve) {
       @if (valve.isPaused) {

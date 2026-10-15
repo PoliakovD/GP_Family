@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -19,6 +19,7 @@ import { GROUP_LABEL } from '../../shared/util/vaccination-labels';
   selector: 'app-kb-vaccines-tab',
   imports: [BottomSheetComponent, FormsModule, LoadingSpinnerComponent, NgTemplateOutlet, SidePanelComponent],
   templateUrl: './kb-vaccines-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kb-vaccines-tab.component.scss',
 })
 export class KbVaccinesTabComponent implements OnInit, OnDestroy {

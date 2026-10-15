@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 
 const IOS_HINT_DISMISSED_KEY = 'familyhub.iosInstallHintDismissed';
@@ -52,6 +52,7 @@ function readFlag(key: string): boolean {
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .app-notice {
       display: flex;

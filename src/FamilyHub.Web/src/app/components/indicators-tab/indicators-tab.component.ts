@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input } from '@angular/core';
+import { Component, OnInit, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
@@ -32,6 +32,7 @@ const ALL_PATIENTS_KEY = 'all';
     selector: 'app-indicators-tab',
     imports: [StatusChipComponent, ClickableDirective, LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, PersonChipComponent, RouterLink],
     templateUrl: './indicators-tab.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './indicators-tab.component.scss'
 })
 export class IndicatorsTabComponent implements OnInit {

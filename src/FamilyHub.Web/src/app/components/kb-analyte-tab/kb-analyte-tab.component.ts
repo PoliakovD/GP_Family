@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -26,6 +26,7 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
 @Component({
     selector: 'app-kb-analyte-tab',
     imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './kb-analyte-tab.component.html'
 })
 export class KbAnalyteTabComponent implements OnInit, OnDestroy {

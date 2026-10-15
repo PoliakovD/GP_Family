@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, CredentialKind, CredentialsStatus } from '../../../services/admin-api.service';
 import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
@@ -42,6 +42,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 @Component({
     selector: 'app-admin-credentials',
     imports: [DatePipe, SidePanelComponent, AdminStatusPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-credentials.component.html'
 })
 export class AdminCredentialsComponent implements OnInit, HasUnsavedChanges {

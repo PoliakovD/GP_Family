@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * Обёртка боковой панели справки (десктоп, `tier()==='wide'`) — редизайн v2, PR4. Тот же приём
@@ -29,6 +29,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       </aside>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './indicator-info-panel.component.scss',
 })
 export class IndicatorInfoPanelComponent {

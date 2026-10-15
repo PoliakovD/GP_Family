@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MedicalRecordKind } from '../../models/types';
 import type {
@@ -19,6 +19,7 @@ import { RecordRecognitionStatusComponent } from './record-recognition-status.co
   standalone: true,
   imports: [AttachmentListComponent, IndicatorTableComponent, RecordRecognitionStatusComponent, RouterLink],
   templateUrl: './record-detail-body.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .ai-summary-note {
       display: flex;

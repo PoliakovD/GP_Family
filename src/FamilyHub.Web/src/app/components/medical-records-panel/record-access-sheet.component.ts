@@ -1,4 +1,4 @@
-import { Component, inject, input, output } from '@angular/core';
+import { Component, inject, input, output, ChangeDetectionStrategy } from '@angular/core';
 import type { MedicalRecord } from '../../models/types';
 import { ApiError, ApiService } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -17,6 +17,7 @@ import { isOnlyMe, isVisibleToFamily } from './record-access';
   selector: 'app-record-access-sheet',
   standalone: true,
   imports: [BottomSheetComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './record-access-sheet.component.html',
 })
 export class RecordAccessSheetComponent {

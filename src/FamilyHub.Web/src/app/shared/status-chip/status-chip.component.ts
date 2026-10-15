@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { IndicatorFlag } from '../../models/types';
 
 /**
@@ -26,6 +26,7 @@ import { IndicatorFlag } from '../../models/types';
       </span>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './status-chip.component.scss',
 })
 export class StatusChipComponent {

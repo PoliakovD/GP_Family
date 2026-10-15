@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, NavigationError } from '@angular/router';
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
@@ -80,6 +80,7 @@ interface SidebarItem {
         BackgroundJobsDropdownComponent,
         NotificationBellComponent,
     ],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {

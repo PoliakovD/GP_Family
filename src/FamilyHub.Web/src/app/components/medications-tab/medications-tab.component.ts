@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -14,6 +14,7 @@ import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component'
 @Component({
     selector: 'app-medications-tab',
     imports: [ClickableDirective, MedkitsPanelComponent, LoadingSpinnerComponent, RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './medications-tab.component.html'
 })
 export class MedicationsTabComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { ExtractionJobStatus, ExtractionStatus } from '../../models/types';
 import type { ExtractionStatusResponse, MedicalRecord } from '../../models/types';
 import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
@@ -55,6 +55,7 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: contents; }
 

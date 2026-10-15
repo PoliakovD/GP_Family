@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { KbChangeTarget, KbChangeTargetValue } from '../../../services/admin-api.service';
 import { KbHistoryComponent } from '../admin-review/kb-history.component';
@@ -33,6 +33,7 @@ const FILTERS: { value: KbChangeTargetValue | null; label: string }[] = [
       </div>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
     .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }

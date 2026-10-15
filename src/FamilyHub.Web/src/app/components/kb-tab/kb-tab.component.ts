@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { KbListItem, KbMedicationCard } from '../../models/types';
@@ -18,6 +18,7 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
 @Component({
     selector: 'app-kb-tab',
     imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './kb-tab.component.html'
 })
 export class KbTabComponent implements OnInit {

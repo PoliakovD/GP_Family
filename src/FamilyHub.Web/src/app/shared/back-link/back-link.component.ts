@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 /**
@@ -27,6 +27,7 @@ import { RouterLink } from '@angular/router';
       </button>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './back-link.component.scss',
 })
 export class BackLinkComponent {

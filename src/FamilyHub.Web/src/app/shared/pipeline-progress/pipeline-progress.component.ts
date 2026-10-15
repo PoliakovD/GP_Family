@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 
 export interface PipelineStep {
   id: string;
@@ -22,6 +22,7 @@ export interface PipelineStep {
   selector: 'app-pipeline-progress',
   standalone: true,
   templateUrl: './pipeline-progress.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pipeline-progress.component.scss',
 })
 export class PipelineProgressComponent {

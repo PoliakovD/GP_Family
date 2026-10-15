@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { describeFile, formatFileSize } from '../../util/file-type';
 import { LoadingSpinnerComponent } from '../../loading-spinner/loading-spinner.component';
 
@@ -9,6 +9,7 @@ import { LoadingSpinnerComponent } from '../../loading-spinner/loading-spinner.c
     selector: 'app-unsupported-preview',
     imports: [LoadingSpinnerComponent],
     templateUrl: './unsupported-preview.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './unsupported-preview.component.scss'
 })
 export class UnsupportedPreviewComponent {

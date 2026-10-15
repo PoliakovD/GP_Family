@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -15,6 +15,7 @@ import { PASSWORD_PATTERN, describeSettingsError, runBusy } from '../settings-ta
     selector: 'app-settings-security',
     imports: [FormsModule, DatePipe, RouterLink],
     templateUrl: './settings-security.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-security.component.scss'
 })
 export class SettingsSecurityComponent implements OnInit {

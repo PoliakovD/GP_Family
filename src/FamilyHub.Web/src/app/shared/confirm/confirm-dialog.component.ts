@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, ViewChild, effect, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, effect, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ConfirmService } from './confirm.service';
 import { OverlayA11y } from '../util/overlay-a11y';
 import { OverlayStackService } from '../util/overlay-stack.service';
@@ -7,6 +7,7 @@ import { OverlayStackService } from '../util/overlay-stack.service';
   selector: 'app-confirm-dialog',
   standalone: true,
   templateUrl: './confirm-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './confirm-dialog.component.scss',
 })
 export class ConfirmDialogComponent {
@@ -37,7 +38,7 @@ export class ConfirmDialogComponent {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
+  onEscape(event: Event): void {
     if (this.confirm.request() && this.overlays.claimEscape(this, event)) this.confirm.resolve(false);
   }
 

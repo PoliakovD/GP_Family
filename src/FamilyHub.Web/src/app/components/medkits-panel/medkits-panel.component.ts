@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -15,6 +15,7 @@ import { pluralizeRu } from '../../shared/util/pluralize';
     selector: 'app-medkits-panel',
     imports: [ClickableDirective, FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
     templateUrl: './medkits-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medkits-panel.component.scss'
 })
 export class MedkitsPanelComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, output, signal } from '@angular/core';
+import { Component, OnInit, inject, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiError, ApiService } from '../../services/api.service';
 import { IntakeStateService } from '../../services/intake-state.service';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
@@ -21,6 +21,7 @@ const DEFAULT_QUIET_TO = '07:00';
   selector: 'app-intake-reminders',
   imports: [AvatarComponent],
   templateUrl: './intake-reminders.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-reminders.component.scss',
 })
 export class IntakeRemindersComponent implements OnInit {

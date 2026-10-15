@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 /**
@@ -15,6 +15,7 @@ import { FormsModule } from '@angular/forms';
 @Component({
     selector: 'app-search-field',
     imports: [FormsModule],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './search-field.component.html'
 })
 export class SearchFieldComponent {

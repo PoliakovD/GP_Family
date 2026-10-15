@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { IndicatorDto, UpdateIndicatorRequest } from '../../models/types';
@@ -25,6 +25,7 @@ import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
   standalone: true,
   imports: [ClickableDirective, FormsModule, NgTemplateOutlet, ReferenceScaleComponent, StatusChipComponent],
   templateUrl: './indicator-table.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './indicator-table.component.scss',
 })
 export class IndicatorTableComponent {

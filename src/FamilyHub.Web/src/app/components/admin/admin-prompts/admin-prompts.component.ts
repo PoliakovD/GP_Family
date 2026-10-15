@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, PromptSlot, PromptVersion } from '../../../services/admin-api.service';
@@ -20,6 +20,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
     selector: 'app-admin-prompts',
     imports: [FormsModule, DatePipe, JsonPipe],
     templateUrl: './admin-prompts.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
       .prompt-diff { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8235rem;
         white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; margin: 0; }

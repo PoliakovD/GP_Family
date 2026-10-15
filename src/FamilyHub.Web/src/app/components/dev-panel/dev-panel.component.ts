@@ -1,4 +1,4 @@
-import { Component, inject, isDevMode } from '@angular/core';
+import { Component, inject, isDevMode, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DevLoggerService } from '../../services/dev-logger.service';
 
@@ -6,6 +6,7 @@ import { DevLoggerService } from '../../services/dev-logger.service';
     selector: 'app-dev-panel',
     imports: [FormsModule],
     templateUrl: './dev-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './dev-panel.component.scss'
 })
 export class DevPanelComponent {

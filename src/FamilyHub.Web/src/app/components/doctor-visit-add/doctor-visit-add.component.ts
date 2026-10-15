@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { MedicalRecordKind } from '../../models/types';
 import { RecordAddComponent } from '../record-add/record-add.component';
 
@@ -7,6 +7,7 @@ import { RecordAddComponent } from '../record-add/record-add.component';
 @Component({
     selector: 'app-doctor-visit-add',
     imports: [RecordAddComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `<app-record-add [kind]="Kind.DoctorVisit" />`
 })
 export class DoctorVisitAddComponent {

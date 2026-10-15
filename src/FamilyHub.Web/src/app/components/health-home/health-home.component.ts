@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -32,6 +32,7 @@ type DoseSquare = 'taken' | 'missed' | 'next' | 'upcoming';
   selector: 'app-health-home',
   imports: [RouterLink, AvatarComponent, TrendLineComponent, LoadingSpinnerComponent],
   templateUrl: './health-home.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-home.component.scss',
 })
 export class HealthHomeComponent implements OnInit {
