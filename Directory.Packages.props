@@ -31,9 +31,9 @@
     <!-- 8.5.1 — последняя версия под Apache-2.0 (v9, апрель 2025, ушла на коммерческую лицензию —
          та же история, что и с MediatR). MassTransit.EntityFrameworkCore собран против EF Core
          9.0.1, но резолвится с нашим пиннингом 10.0.9 без конфликтов (см. ADR-0006). -->
-    <PackageVersion Include="MassTransit" Version="8.5.10" />
+    <PackageVersion Include="MassTransit" Version="9.2.3" />
     <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.10" />
-    <PackageVersion Include="MassTransit.Kafka" Version="8.5.10" />
+    <PackageVersion Include="MassTransit.Kafka" Version="9.2.3" />
     <!-- Явная версия (не только транзитивная через MassTransit.Kafka) — Confluent.Kafka.Admin
          используется напрямую для явного создания топиков при старте (ADR-0007), и в
          IntegrationTests для raw-проб-консьюмера (KafkaBridgeFlowTests). -->
