@@ -79,6 +79,12 @@
   --text-caption: 400 14px/1.4 var(--font-body);
   --text-micro: 600 12px/1.3 var(--font-body);
   --letter-spacing-display: -0.02em;
+  // Производные (DESIGN §3): кнопки/вкладки — body-sm 600, бейджи — 13px 600.
+  --text-button: 600 15px/1.2 var(--font-body);
+  --text-badge: 600 13px/1.3 var(--font-body);
+  --control-height: 46px; // кнопки и поля; в тулбарах — --tap-min (44)
+  --icon-size: 20px;      // DESIGN §2.7: 20 (в плитках 20–22)
+  --icon-size-sm: 18px;   // в кнопках и строках действий
 
   // --- Отступы: шкала кратна 4 (DESIGN §2.4) ---
   --space-1: 4px;
@@ -299,27 +305,28 @@ a {
 }
 
 // ============================================================================
-// Кнопки
+// Кнопки (DESIGN §3 «Кнопки»). Одна primary на странице, редкие действия — в меню «⋯».
 // ============================================================================
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   cursor: pointer;
   text-decoration: none;
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 0.8824rem; // редизайн v2: было 14px
-  line-height: 1.2;
+  font: var(--text-button);
   color: var(--color-text);
   background: transparent;
   border: 1px solid transparent;
-  padding: var(--space-3) calc(var(--space-4) * 1.2);
+  padding: 0 var(--space-5);
   border-radius: var(--radius-md);
-  min-height: var(--tap-min); // редизайн v2 — цель по высоте интерактивных элементов
+  min-height: var(--control-height);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
-  &:disabled {
+  i { font-size: var(--icon-size-sm); }
+
+  &:disabled,
+  &[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;
   }
@@ -329,86 +336,127 @@ a {
   background: var(--color-accent);
   color: var(--color-on-accent);
 
-  &:hover { background: var(--color-accent-600); }
-  &:active { background: var(--color-accent-700); }
+  &:hover:not(:disabled) { background: var(--color-accent-hover); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent-hover) 88%, var(--color-text)); }
+}
+
+// Главное действие в строке задачи («Разобрать»): тёмная кнопка, не путается с primary страницы.
+.btn-inverse {
+  background: var(--color-inverse);
+  color: var(--color-on-accent);
+
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-inverse) 88%, var(--color-surface)); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-inverse) 78%, var(--color-surface)); }
 }
 
 .btn-secondary {
-  border-color: var(--color-control-border); // было divider (≈1.4:1) — кнопка не читалась как кнопка
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
 
-  &:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
-}
-
-.btn-danger {
-  border-color: var(--color-accent-2);
-  color: var(--color-accent-2);
-
-  &:hover { background: color-mix(in srgb, var(--color-accent-2) 10%, transparent); }
+  &:hover:not(:disabled) { background: var(--color-surface-muted); border-color: var(--color-border-dashed); }
+  &:active:not(:disabled) { background: var(--color-divider); }
 }
 
 .btn-ghost {
-  color: var(--color-accent);
-  padding-inline: var(--space-1);
+  color: var(--color-text-secondary);
+  padding-inline: var(--space-3);
 
-  &:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
-  &:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: var(--color-text); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-text) 12%, transparent); }
 }
 
-// Сброс нативного вида — .btn-icon часто ставят БЕЗ .btn (шапка, панели), и тогда браузер рисовал
-// свою серую кнопку с рамкой.
+// «Пригласить», «Создать ссылку» — добавление чего-то нового в список.
+.btn-dashed {
+  background: transparent;
+  border: 1px dashed var(--color-border-dashed);
+  color: var(--color-accent-hover);
+
+  &:hover:not(:disabled) { background: var(--color-accent-soft); border-color: var(--color-accent); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); }
+}
+
+// Только необратимые действия в подтверждении и в меню «⋯».
+.btn-danger {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-danger);
+
+  &:hover:not(:disabled) { background: var(--color-danger-soft); border-color: var(--color-danger); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 18%, var(--color-surface)); }
+}
+
+// Переключатель-кнопка (toggle): aria-pressed вместо локальных .active.
+.btn[aria-pressed="true"],
+.btn.active {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent-hover);
+}
+
+// Иконочная кнопка: квадрат 44–46, обязателен aria-label. Сброс нативного вида — .btn-icon часто
+// ставят без .btn (шапка, панели), и тогда браузер рисовал свою серую кнопку с рамкой.
 .btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--tap-min); // редизайн v2: было 36px
+  width: var(--tap-min);
   height: var(--tap-min);
+  min-height: var(--tap-min);
   padding: 0;
+  border-radius: var(--radius-md);
 
   // Только без .btn — иначе сброс перебил бы фон .btn-danger/.btn-secondary у «btn btn-icon …».
   &:not(.btn) {
     font: inherit;
-    color: inherit;
+    color: var(--color-text-secondary);
     background: transparent;
     border: 0;
-    border-radius: var(--radius-md);
     cursor: pointer;
   }
 
   @media (hover: hover) {
-    &:not(.btn):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+    &:not(.btn):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); }
+  }
+
+  // Шапка на мобайле: круглая кнопка на surface.
+  &.btn-round {
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
   }
 }
 
-// Текстовая ссылка-кнопка (вторичное действие форм: "Назад", "Отмена" и т.п.) — без фона и
-// рамки, в отличие от .btn-ghost не имеет hover-подложки, только подчёркивание. В отличие от
-// .btn/.btn-secondary/… используется САМА ПО СЕБЕ, без базового класса .btn — поэтому в отличие
-// от них ей нужен собственный сброс нативного вида <button> (фон/рамка/курсор/шрифт), иначе
-// поверх подчёркивания остаётся системная рамка кнопки браузера.
+// Иконочная кнопка на тёмной подложке (просмотр файла).
+.btn-icon-on-scrim {
+  color: var(--color-on-scrim);
+
+  &:hover { background: color-mix(in srgb, var(--color-on-scrim) 15%, transparent); }
+  &:active { background: color-mix(in srgb, var(--color-on-scrim) 25%, transparent); }
+}
+
+// Текстовая ссылка-кнопка (вторичное действие форм: «Отмена», «Повторить»). Используется сама
+// по себе, без .btn — поэтому свой сброс нативного вида <button>.
 .btn-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-1);
   background: none;
   border: none;
   cursor: pointer;
-  font-family: var(--font-heading);
-  font-size: 0.8824rem; // было 13px — «Назад», «Отмена», «Повторить» читались с трудом
+  font: var(--text-button);
   color: var(--color-accent);
   padding: var(--space-1) 0;
-  min-height: var(--tap-min); // было ≈25px по высоте — промахи пальцем
+  min-height: var(--tap-min);
   text-decoration: underline;
   text-underline-offset: 3px;
 
-  &:hover { color: var(--color-accent-700); }
+  &:hover { color: var(--color-accent-hover); }
   &:disabled { text-decoration: none; cursor: not-allowed; opacity: 0.6; }
 }
 
-// Кнопка, визуально неотличимая от обычной инлайновой ссылки ВНУТРИ фразы (в отличие от
-// .btn-link это не отдельный элемент действия, а слово в предложении — наследует размер/шрифт
-// окружающего текста). Нужна там, где раньше стояла <a routerLink target="_blank">, но переход
-// на отдельный роут рискует потерять состояние текущей формы (см. LoginComponent.showLegalText —
-// в PWA standalone-режиме на части браузеров target="_blank" для ссылки на тот же origin
-// открывает не новую вкладку, а навигацию в том же окне).
+// Кнопка, визуально неотличимая от инлайновой ссылки ВНУТРИ фразы (наследует шрифт текста).
+// Нужна там, где переход на отдельный роут потерял бы состояние формы (LoginComponent.showLegalText).
 .link-inline {
   background: none;
   border: none;
@@ -420,7 +468,7 @@ a {
   text-underline-offset: 2px;
   cursor: pointer;
 
-  &:hover { color: var(--color-accent-700); }
+  &:hover { color: var(--color-accent-hover); }
 }
 
 .btn-block {
@@ -428,117 +476,160 @@ a {
   margin-top: var(--space-2);
 }
 
-// Компактный размер кнопки — как маленькие кнопки в карточках дэка (padding 5/10, 12px).
-// Редизайн v2: намеренно НЕ наследует --tap-min — используется в плотных строках таблиц/
-// инлайн-редакторов, где 44px разорвал бы вёрстку (см. риск Р1 плана редизайна).
+// Компактная кнопка — только плотные строки таблиц/инлайн-редакторов (на тач-экране всё равно 44).
 .btn-sm {
-  padding: 5px 10px;
-  font-size: 0.7647rem;
+  padding: 0 var(--space-3);
+  font: var(--text-caption);
+  font-weight: 600;
   min-height: 36px;
 
-  // На телефоне плотность важна меньше, чем попадание пальцем (36px — частые промахи).
+  &.btn-icon { width: 36px; height: 36px; }
+
   @media (pointer: coarse) {
     min-height: var(--tap-min);
+    &.btn-icon { width: var(--tap-min); height: var(--tap-min); }
   }
 }
 
-// Укрупнённый размер — для одиночного акцентного CTA шага (например, "Открыть Telegram").
 .btn-lg {
-  padding: 12px 20px;
-  font-size: 0.9412rem;
+  min-height: 52px;
+  padding: 0 var(--space-6);
 }
 
 // ============================================================================
-// Поля ввода
+// Поля ввода (DESIGN §3 «Поля»). Ошибка — рамка и подсказка danger; поле связывается с подсказкой
+// через aria-describedby (директива appField, shared/ui/field).
 // ============================================================================
 .input {
   width: 100%;
-  min-height: var(--tap-min); // редизайн v2: было 36px
-  padding: 6px 10px;
-  font: inherit;
-  // Не меньше 16px: iOS Safari/PWA при фокусе на поле с шрифтом < 16px увеличивает страницу и не
-  // возвращает масштаб (было 0.8824rem = 15px).
-  font-size: max(16px, 0.9412rem);
+  min-height: var(--control-height);
+  padding: var(--space-2) var(--space-4);
+  // Не меньше 16px: iOS Safari/PWA при фокусе на поле с шрифтом < 16px увеличивает страницу.
+  font: var(--text-body);
   color: var(--color-text);
   caret-color: var(--color-accent);
   background: var(--color-surface);
-  border: 1px solid var(--color-control-border);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  transition: border-color 0.15s ease;
+
+  &:hover:not(:disabled) { border-color: var(--color-border-dashed); }
 
   &:focus-visible {
     border-color: var(--color-accent);
     outline-offset: 0;
   }
 
-  &::placeholder {
-    color: #7d7979; // было neutral-500 (≈2.4:1) — плейсхолдер читается, но светлее введённого текста
+  &::placeholder { color: var(--color-text-muted); }
+
+  &:disabled {
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+
+  &[aria-invalid="true"],
+  &.is-invalid {
+    border-color: var(--color-danger);
   }
 }
 
 textarea.input {
-  min-height: 90px;
+  min-height: 96px;
+  padding-block: var(--space-3);
   resize: vertical;
 }
 
 select.input {
   cursor: pointer;
-  // Нативная стрелка/раскрывающийся список остаются — сбрасываем только то, что конфликтует
-  // с общей рамкой/фоном .input, не трогаем appearance (нет темово-независимого способа
-  // нарисовать свою стрелку без хардкода цвета, а нативная и так согласуется с --color-surface).
   color: var(--color-text);
 }
 
+// Поиск: иконка 18px слева внутри поля (обёртка .search-input > иконка + input.input).
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  > i, > app-icon {
+    position: absolute;
+    left: var(--space-4);
+    font-size: var(--icon-size-sm);
+    color: var(--color-text-muted);
+    pointer-events: none;
+  }
+
+  > .input { padding-left: calc(var(--space-4) + var(--icon-size-sm) + var(--space-2)); }
+}
+
 // ============================================================================
-// Сегмент-контрол (радио-переключатель в виде группы кнопок)
+// Сегмент-контрол (DESIGN §3 «segmented»): контейнер surface + рамка (на bg) или surface-sunken
+// (.seg-sunken — внутри карточки), сегменты 36px, активный — surface + тень (на sunken) / accent-soft. Работает и на <label>+radio, и на <button>/<a> (.active или aria-pressed/-selected).
+// Длинные ярлыки — горизонтальная прокрутка внутри контрола.
 // ============================================================================
-// Редизайн v2 — горизонтальная прокрутка вместо overflow:hidden, консолидировано из 4 разных
-// копий одного и того же фикса (health-hub/family-details/settings/admin-hub.component.scss) —
-// длинные русские ярлыки в 3-5 вкладок не гарантированно влезают в узкий экран (360px), см.
-// .claude/patterns/frontend_web.md «Хаб-паттерн». Один источник вместо пятого дубля.
 .seg {
   display: inline-flex;
+  gap: 2px;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--color-control-border);
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+// Внутри карточки (surface): контейнер «утоплен», без рамки — как сортировка в макете анализа.
+.seg-sunken {
+  background: var(--color-surface-sunken);
+  border-color: transparent;
 }
 
 .seg-opt {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  font-size: 0.7647rem;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  min-height: 36px;
+  font: var(--text-button);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-decoration: none;
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
-  min-height: var(--tap-min); // редизайн v2 — только высота тач-цели; кегль/перенос — в PR2
+  border-radius: var(--radius-sm);
 
-  & + .seg-opt {
-    border-left: 1px solid var(--color-divider);
-  }
+  // <button>/<a> в роли сегмента — сброс нативного вида (раньше копировался в 5 компонентах).
+  background: transparent;
+  border: 0;
 
-  &:has(input:checked) {
-    background: var(--color-accent);
-    color: var(--color-on-accent);
-  }
+  @media (pointer: coarse) { min-height: 40px; }
 
-  // :not(.active) — иначе hover перебивает фон активной кнопки-сегмента (у неё нет input:checked),
-  // а светлый текст .active остаётся и становится нечитаемым.
-  // (hover: hover) — на тач-экранах hover «залипает» после тапа. Второе правило
-  // `&:not(.active):hover` (без проверки input:checked) убрано: оно перебивало фон выбранного
-  // radio-сегмента, и светлый текст пропадал на светлом фоне.
   @media (hover: hover) {
-    &:not(:has(input:checked)):not(.active):hover {
-      background: color-mix(in srgb, var(--color-text) 7%, transparent);
+    &:not(.active):not([aria-pressed="true"]):not([aria-selected="true"]):not(:has(input:checked)):hover {
+      color: var(--color-text);
+      background: color-mix(in srgb, var(--color-text) 5%, transparent);
     }
+  }
+
+  &:has(input:checked),
+  &.active,
+  &[aria-pressed="true"],
+  &[aria-selected="true"] {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+    font-weight: 600;
+    box-shadow: var(--shadow-segment);
   }
 
   &:has(input:focus-visible) {
     outline: 2px solid var(--color-accent);
     outline-offset: -2px;
   }
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 
   input {
     position: absolute;
@@ -547,12 +638,27 @@ select.input {
     height: 0;
     pointer-events: none;
   }
+}
 
-  // Ссылочный вариант (routerLink/routerLinkActive, а не radio) — хаб «Здоровье» и подобные
-  // роутинговые сегмент-контролы: та же визуальная схема, что и у input:checked выше.
-  &.active {
-    background: var(--color-accent);
+// На утопленном контейнере активный сегмент — белый «поднятый».
+.seg-sunken .seg-opt {
+  &:has(input:checked),
+  &.active,
+  &[aria-pressed="true"],
+  &[aria-selected="true"] {
+    background: var(--color-surface);
+  }
+}
+
+// «Чьи данные» (Я / Близкие): активный — inverse.
+.seg-inverse .seg-opt {
+  &:has(input:checked),
+  &.active,
+  &[aria-pressed="true"],
+  &[aria-selected="true"] {
+    background: var(--color-inverse);
     color: var(--color-on-accent);
+    box-shadow: none;
   }
 }
 
@@ -584,6 +690,8 @@ select.input {
     height: 0;
     pointer-events: none;
 
+    &:disabled + .switch-knob { opacity: 0.5; cursor: not-allowed; }
+
     &:checked + .switch-knob {
       background: var(--color-accent);
 
@@ -603,7 +711,7 @@ select.input {
   position: absolute;
   inset: 0;
   border-radius: 11px;
-  background: var(--color-neutral-300);
+  background: var(--color-border-dashed);
   transition: background 0.15s ease;
 
   &::after {
@@ -621,101 +729,193 @@ select.input {
 }
 
 // ============================================================================
-// Карточки
+// Карточки (DESIGN §3 «Карточки»): surface, radius-xl, без рамки и тени.
 // ============================================================================
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-5);
   border-radius: var(--radius-xl);
-  background: var(--color-surface); // DESIGN §2.6: на bg — без рамки и тени
+  background: var(--color-surface);
+
+  @media (max-width: 639px) { padding: var(--space-4); }
 }
 
-// Горизонтальная прокрутка для широких таблиц внутри узкой .card (UX-редизайн) — использовался в
-// разметке медицинского модуля и раньше, но класс нигде не был определён: таблица показателей
-// просто распирала viewport на узких экранах вместо прокрутки внутри себя.
+// Крупная карточка-секция.
+.card-lg {
+  padding: var(--space-6);
+  border-radius: var(--radius-2xl);
+
+  @media (max-width: 639px) { padding: var(--space-4); }
+}
+
+// Вложенная карточка внутри surface (карточка анализа в чате) — единственный случай рамки.
+.card-nested {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+// Список в карточке: заголовок секции + строки через divider с отступами 24 по бокам.
+.list-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.list-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-2);
+
+  h2, h3, .card-title { margin: 0; }
+
+  @media (max-width: 639px) { padding: var(--space-4) var(--space-4) var(--space-1); }
+}
+
+.list-card > .list-row,
+.list-card-body > .list-row {
+  padding: var(--space-3) var(--space-6);
+
+  & + .list-row { border-top: 1px solid var(--color-divider); }
+
+  @media (max-width: 639px) { padding: var(--space-3) var(--space-4); }
+}
+
+// Горизонтальная прокрутка для широких таблиц внутри узкой карточки.
 .table-responsive {
   max-width: 100%;
   overflow-x: auto;
 }
 
-// Карточка-результат поиска, ведущая на экран раздела (этап 3) — визуальный намёк на клик.
+// Карточка-ссылка целиком.
 .card-clickable {
   cursor: pointer;
+  transition: background-color 0.15s ease;
 
-  &:active {
-    opacity: 0.85;
-  }
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
+  &:active { background: var(--color-surface-muted); }
 }
 
+// Подпись над заголовком. CAPS с разрядкой по DESIGN §2.3 не используются.
 .card-kicker {
-  font-family: var(--font-heading);
-  font-size: 0.7647rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-accent);
+  font: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .card-title {
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: var(--font-size-record-title); // редизайн v2: было 17px
-  line-height: 1.2;
+  font: var(--text-title);
+  color: var(--color-text);
+
+  @media (max-width: 639px) { font: var(--text-title-mobile); }
 }
 
 .card-body {
   margin: 0;
-  font-size: 0.8824rem; // редизайн v2: было 13px
-  opacity: 0.8;
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
   flex: 1;
 }
 
 .card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.7647rem; // редизайн v2: было 11px
-  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  gap: var(--space-2);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 }
 
+// Тени у карточек по DESIGN не используются; классы оставлены для совместимости (фаза 4 уберёт).
 .elev-sm { box-shadow: var(--shadow-sm); }
 .elev-md { box-shadow: var(--shadow-md); }
 .elev-lg { box-shadow: var(--shadow-lg); }
 
 // ============================================================================
-// Теги / пилюли
+// Бейджи (DESIGN §3 «Бейдж»): пилюля 13/600, фон *-soft, текст — основной цвет статуса.
+// .tag — прежнее имя того же элемента (112 мест), .badge — новое; тона совпадают.
 // ============================================================================
+.badge,
 .tag {
   display: inline-flex;
   align-items: center;
-  font-size: 0.7647rem; // редизайн v2: было 11px
-  letter-spacing: 0.02em;
-  padding: 3px 10px;
+  gap: var(--space-1);
+  font: var(--text-badge);
+  padding: var(--space-1) 10px;
   border-radius: var(--radius-pill);
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-800);
+  background: var(--color-kind-note-soft);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+
+  @media (max-width: 639px) { padding: 3px var(--space-2); }
 }
 
-.tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
-.tag-accent-2 { background: var(--color-accent-2-100); color: var(--color-accent-2-800); }
-.tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
+.badge-neutral, .tag-neutral { background: var(--color-kind-note-soft); color: var(--color-text-secondary); }
+.badge-accent, .tag-accent { background: var(--color-accent-soft); color: var(--color-accent-hover); }
+.badge-danger, .tag-danger, .tag-accent-2 { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge-warning, .tag-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge-success, .tag-ok { background: var(--color-success-soft); color: var(--color-success); }
 .tag-outline { background: transparent; border: 1px solid var(--color-accent); color: var(--color-accent); }
 
-// Очередь «Одобрение» (ADR-0018): уверенность модели ниже порога — красный, достаточная — зелёный.
-// Фон — смесь статусного цвета с --color-paper, текст — тёмный вариант токена (читается в обеих темах).
-.tag-danger {
-  background: color-mix(in srgb, var(--color-status-danger) 16%, var(--color-paper));
-  color: var(--color-status-danger-text);
+// Тег-кнопка (фильтр/выбор, до фазы 4) — та же пилюля, но с тач-зоной и состояниями.
+button.tag,
+.tag-button {
+  border: 1px solid transparent;
+  cursor: pointer;
+  min-height: 32px;
+
+  @media (pointer: coarse) { min-height: var(--tap-min); }
+  &:hover { border-color: currentColor; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
-.tag-ok {
-  background: color-mix(in srgb, var(--color-status-ok) 16%, var(--color-paper));
-  color: var(--color-status-ok-text);
+
+// Счётчик (DESIGN §3 «count-badge»): круг ≥ 20px, 12/600, danger (требует внимания) или accent
+// (непрочитанное), текст on-accent.
+.count-badge,
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  background: var(--color-danger);
+  color: var(--color-on-accent);
 }
-.tag-warning {
-  background: color-mix(in srgb, var(--color-status-warning) 18%, var(--color-paper));
-  color: var(--color-status-warning-text);
+
+.count-badge-accent { background: var(--color-accent); }
+
+// Точка-индикатор (новые сообщения у «Семьи» в таб-баре).
+.dot-badge {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
 }
+
+// Тоны (shared/ui/tone.ts): пара --tone-fg / --tone-bg для icon-tile, строк и фильтров.
+.tone-neutral { --tone-fg: var(--color-text-secondary); --tone-bg: var(--color-kind-note-soft); }
+.tone-accent { --tone-fg: var(--color-accent-hover); --tone-bg: var(--color-accent-soft); }
+.tone-danger { --tone-fg: var(--color-danger); --tone-bg: var(--color-danger-soft); }
+.tone-warning { --tone-fg: var(--color-warning); --tone-bg: var(--color-warning-soft); }
+.tone-success { --tone-fg: var(--color-success); --tone-bg: var(--color-success-soft); }
+.tone-measure { --tone-fg: var(--color-kind-measure); --tone-bg: var(--color-kind-measure-soft); }
+.tone-mood { --tone-fg: var(--color-kind-mood); --tone-bg: var(--color-kind-mood-soft); }
+.tone-sleep { --tone-fg: var(--color-kind-sleep); --tone-bg: var(--color-kind-sleep-soft); }
+.tone-note { --tone-fg: var(--color-kind-note); --tone-bg: var(--color-kind-note-soft); }
+.tone-symptom { --tone-fg: var(--color-kind-symptom); --tone-bg: var(--color-kind-symptom-soft); }
+.tone-medication { --tone-fg: var(--color-kind-medication); --tone-bg: var(--color-kind-medication-soft); }
+.tone-warm { --tone-fg: var(--color-avatar-warm-text); --tone-bg: var(--color-avatar-warm); }
 
 // Строка таблицы очереди: ниже порога — красноватый фон, курсор клавиатурной навигации — рамка слева.
 .table tbody tr.row-danger { background: color-mix(in srgb, var(--color-status-danger) 8%, transparent); }
@@ -732,21 +932,6 @@ select.input {
   border-color: var(--color-status-warning);
   background: color-mix(in srgb, var(--color-status-warning) 22%, var(--color-surface));
   box-shadow: 0 0 0 1px var(--color-status-warning);
-}
-
-// Бейдж-счётчик в пункте меню (админ-хаб).
-.nav-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 0.7059rem;
-  font-weight: 600;
-  background: var(--color-status-danger);
-  color: var(--color-on-accent);
 }
 
 // §5 плана «живой конвейер» — глобальная копия shared/pipeline-progress/pipeline-progress.
@@ -916,21 +1101,22 @@ select.input {
   }
 }
 
-.alert-danger {
-  background: var(--color-accent-2-100);
-  color: var(--color-accent-2-800);
+.alert-danger,
+.alert-info,
+.alert-warning,
+.alert-success {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  font-size: 0.8824rem; // ошибки — не мельче 15px
+  font: var(--text-body-sm); // ошибки — не мельче 15px
 }
 
-.alert-info {
-  background: var(--color-accent-100);
-  color: var(--color-accent-800);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  font-size: 0.8824rem;
-}
+.alert-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.alert-info { background: var(--color-accent-soft); color: var(--color-accent-hover); }
+.alert-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.alert-success { background: var(--color-success-soft); color: var(--color-success); }
 
 // ============================================================================
 // Форма с чекбоксом (согласие на регистрации, cookie-баннер) — чекбокс сверху строки
@@ -954,14 +1140,16 @@ select.input {
 }
 
 .field-hint {
-  display: block;
-  font-size: 0.8235rem; // было 11px — а это в том числе ошибки валидации
-  margin-top: 3px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  font: var(--text-caption);
+  margin-top: var(--space-1);
 }
 
-.field-hint-error { color: var(--color-accent-2-700); font-weight: 600; }
-.field-hint-ok { color: var(--color-accent-700); }
-.field-hint-muted { color: var(--color-neutral-600); }
+.field-hint-error { color: var(--color-danger); font-weight: 600; }
+.field-hint-ok { color: var(--color-success); }
+.field-hint-muted { color: var(--color-text-muted); }
 
 // ============================================================================
 // Общий оверлей для модалок и диалогов подтверждения (shared/modal, shared/confirm).
@@ -969,7 +1157,7 @@ select.input {
 .overlay-backdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent);
+  background: color-mix(in srgb, var(--color-scrim) 55%, transparent);
   z-index: var(--z-overlay);
   display: flex;
   align-items: center;
@@ -978,16 +1166,18 @@ select.input {
 }
 
 .overlay-card {
-  background: var(--color-bg);
+  background: var(--color-surface);
   color: var(--color-text);
-  border-radius: var(--radius-lg);
-  padding: 16px;
+  border-radius: var(--radius-2xl);
+  padding: var(--space-6);
   width: 100%;
   max-width: 400px;
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
+
+  @media (max-width: 639px) { padding: var(--space-5); }
 
   // Карточка получает фокус программно (OverlayA11y) — рамка вокруг всего окна не нужна.
   &:focus { outline: none; }

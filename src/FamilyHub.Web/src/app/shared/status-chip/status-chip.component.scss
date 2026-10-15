@@ -1,34 +1,4 @@
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  font-size: 0.7059rem;
-  font-weight: 700;
-  white-space: nowrap;
-
-  i {
-    font-size: 0.7059rem;
-  }
-}
-
-.status-chip-ok {
-  background: color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));
-  color: var(--color-status-ok-text);
-}
-
-.status-chip-warning {
-  background: color-mix(in srgb, var(--color-status-warning) 14%, var(--color-paper));
-  color: var(--color-status-warning-text);
-}
-
-.status-chip-danger {
-  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));
-  color: var(--color-status-danger-text);
-}
-
-.status-chip-unknown {
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-700);
+// Вид — глобальный .badge (styles.scss); здесь только иконка-стрелка.
+.status-chip i {
+  font-size: 0.9em;
 }

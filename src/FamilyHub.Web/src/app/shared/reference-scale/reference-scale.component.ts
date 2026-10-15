@@ -3,8 +3,9 @@ import { Component, computed, input } from '@angular/core';
 import { IndicatorFlag } from '../../models/types';
 
 const SIZE = {
-  full: { width: 300, height: 40, padding: 12, trackHeight: 10 },
-  mini: { width: 170, height: 20, padding: 8, trackHeight: 6 },
+  // DESIGN §3 «Анализ»: трек 8px, маркер 6×18 (в мини-варианте пропорционально меньше).
+  full: { width: 300, height: 40, padding: 12, trackHeight: 8, stickWidth: 6, stickHeight: 18 },
+  mini: { width: 170, height: 20, padding: 8, trackHeight: 6, stickWidth: 4, stickHeight: 14 },
 };
 
 /**
@@ -35,6 +36,10 @@ function formatNumber(n: number): string {
  * явному запросу «бордоватая или темно зеленоватая», не по градации Low/High/Critical. Клип за
  * пределы домена больше не рисует отдельную стрелку — палочка у края читается как «за пределами»
  * без специального случая (см. geometry() — просто clamp позиции).
+ *
+ * Редизайн «Гибрид A+B» (DESIGN §3 «Анализ»): трек 8px, зона нормы — центральные 50% ширины
+ * (домен low−span/2…high+span/2), маркер 6×18 цвета статуса с обводкой, положение ограничено 3–97%;
+ * «норма не указана» — нейтральный маркер.
  *
  * Подписи (labels=true) — границы нормы под краями зелёной зоны и значение над засечкой: без них
  * на шкале не видно, какие именно числа она изображает.
@@ -77,15 +82,18 @@ function formatNumber(n: number): string {
         <rect [attr.x]="g.normX1" [attr.y]="g.trackY" [attr.width]="g.normWidth" [attr.height]="g.trackHeight"
               [attr.rx]="g.trackHeight / 2" class="rs-norm" />
         <rect [attr.x]="g.stickX" [attr.y]="g.stickY" [attr.width]="g.stickWidth" [attr.height]="g.stickHeight"
-              rx="1.5" [class]="stickClass()" />
+              [attr.rx]="g.stickWidth / 2" [class]="stickClass()" />
       </svg>
     </ng-template>
   `,
     styles: [`
-    .rs-track { fill: var(--color-neutral-200); }
-    .rs-norm { fill: color-mix(in srgb, var(--color-status-ok) 32%, var(--color-neutral-200)); }
-    .rs-stick-ok { fill: var(--color-status-ok-text); }
-    .rs-stick-bad { fill: var(--color-status-danger-text); }
+    .rs-track { fill: var(--color-range-track); }
+    .rs-norm { fill: var(--color-range-ok); }
+    /* Маркер — цвет статуса с обводкой цветом поверхности (отделяет его от зелёной зоны). */
+    .rs-stick-ok, .rs-stick-bad, .rs-stick-unknown { stroke: var(--color-surface); stroke-width: 2; paint-order: stroke; }
+    .rs-stick-ok { fill: var(--color-success); }
+    .rs-stick-bad { fill: var(--color-danger); }
+    .rs-stick-unknown { fill: var(--color-text-muted); }
 
     // Подписи: мелко, но читаемо (12px) — границы нормы приглушённые, значение — цветом статуса.
     .rs-wrap { position: relative; padding: 15px 0; }
@@ -93,14 +101,16 @@ function formatNumber(n: number): string {
     .rs-value, .rs-bounds span {
       position: absolute;
       transform: translateX(-50%);
-      font-size: 0.7059rem;
+      font: var(--text-micro);
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
       line-height: 1;
       white-space: nowrap;
     }
-    .rs-value { top: 0; font-weight: 600; color: var(--color-status-ok-text); }
-    .rs-value-bad { color: var(--color-status-danger-text); }
+    .rs-value { top: 0; font-weight: 600; color: var(--color-success); }
+    .rs-value-bad { color: var(--color-danger); }
     .rs-bounds { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; }
-    .rs-bounds span { color: var(--color-neutral-600); }
+    .rs-bounds span { color: var(--color-text-muted); }
   `]
 })
 export class ReferenceScaleComponent {
@@ -119,7 +129,8 @@ export class ReferenceScaleComponent {
   // Unknown («нет нормы») — не отклонение: раньше рисовался красной палочкой и пугал зря.
   readonly isBad = computed(() => this.flag() !== IndicatorFlag.Normal && this.flag() !== IndicatorFlag.Unknown);
 
-  readonly stickClass = computed(() => (this.isBad() ? 'rs-stick-bad' : 'rs-stick-ok'));
+  readonly stickClass = computed(() =>
+    this.isBad() ? 'rs-stick-bad' : this.flag() === IndicatorFlag.Unknown ? 'rs-stick-unknown' : 'rs-stick-ok');
 
   readonly valueText = computed(() => {
     const v = this.value();
@@ -146,11 +157,9 @@ export class ReferenceScaleComponent {
     const value = this.value();
     if (low === null || high === null) return null;
 
-    const { width, height, padding, trackHeight } = SIZE[this.variant()];
+    const { width, height, padding, trackHeight, stickWidth, stickHeight } = SIZE[this.variant()];
     const mid = height / 2;
     const innerWidth = width - padding * 2;
-    const stickWidth = 3;
-    const stickHeight = trackHeight + 6; // нависает по 3px над/под треком с обеих сторон
 
     const span = high - low || Math.abs(high) || 1; // low===high — вырожденный случай, не деление на 0
     const domainLow = low - span * 0.5;
@@ -163,8 +172,11 @@ export class ReferenceScaleComponent {
     const normX2 = toX(high);
 
     const v = value ?? low; // нет значения (не должно случиться на практике) — палочка на границе, не крах
-    // Клип за пределы домена — просто прижимаем к краю трека (без отдельной стрелки, см. докстринг).
-    const stickCenterX = Math.min(Math.max(toX(v), padding + stickWidth / 2), width - padding - stickWidth / 2);
+    // Клип за пределы домена — прижимаем к краю трека: положение маркера ограничено 3–97% ширины
+    // трека (DESIGN §3), чтобы он не «прилипал» к скруглению.
+    const minX = padding + innerWidth * 0.03;
+    const maxX = padding + innerWidth * 0.97;
+    const stickCenterX = Math.min(Math.max(toX(v), minX), maxX);
 
     return {
       width, height, pad: padding,

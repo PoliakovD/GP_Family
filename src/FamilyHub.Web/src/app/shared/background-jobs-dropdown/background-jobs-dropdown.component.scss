@@ -7,19 +7,11 @@
   position: relative;
 }
 
+// Вид — глобальный .count-badge (styles.scss); здесь только позиция на иконке.
 .background-jobs-trigger-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--color-accent-2);
-  color: var(--color-on-accent);
-  font-size: 0.7647rem;
-  line-height: 16px;
-  text-align: center;
+  top: -4px;
+  right: -4px;
 }
 
 .background-jobs-popover {
@@ -30,8 +22,9 @@
   max-width: 340px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--color-paper);
-  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
   z-index: var(--z-dropdown);
   padding: 8px 0;
 }

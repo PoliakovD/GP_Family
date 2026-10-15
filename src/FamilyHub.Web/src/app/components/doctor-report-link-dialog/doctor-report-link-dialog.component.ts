@@ -67,9 +67,6 @@ import { shareLink } from '../../shared/util/share-link';
       word-break: break-all;
       user-select: all;
     }
-    .dr-seg { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-    .dr-seg + .dr-seg { border-left: 1px solid var(--color-divider); }
-    .dr-seg.active { color: var(--color-on-accent); background: var(--color-accent); }
   `,
 })
 export class DoctorReportLinkDialogComponent {

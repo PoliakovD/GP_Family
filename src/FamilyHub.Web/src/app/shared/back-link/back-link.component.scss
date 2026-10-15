@@ -1,23 +1,25 @@
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-1);
   border: none;
   background: transparent;
   padding: 0;
-  min-height: var(--tap-min); // главный путь «назад» на мобиле — был ≈23px по высоте
+  min-height: var(--tap-min); // главный путь «назад» на мобиле
   cursor: pointer;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: var(--font-size-meta);
+  font: var(--text-button);
   color: var(--color-accent);
   text-decoration: none;
 
-  &:hover {
-    text-decoration: underline;
-  }
+  &:hover { color: var(--color-accent-hover); text-decoration: underline; text-underline-offset: 3px; }
+}
 
-  i {
-    font-size: 1.1em;
-  }
+// Мобильная шапка: круглая иконочная кнопка 44px.
+.back-link-icon {
+  justify-content: center;
+  width: var(--tap-min);
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+
+  &:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); text-decoration: none; }
 }

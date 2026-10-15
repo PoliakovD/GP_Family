@@ -26,10 +26,6 @@
 .dr-dates { display: flex; align-items: center; gap: 10px; }
 .dr-dash { color: var(--color-neutral-600); }
 
-// Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio).
-.dr-seg { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-.dr-seg + .dr-seg { border-left: 1px solid var(--color-divider); }
-.dr-seg.active { color: var(--color-on-accent); background: var(--color-accent); }
 
 .dr-group-title { margin-top: 4px; font-size: 0.7647rem; color: var(--color-neutral-600); }
 

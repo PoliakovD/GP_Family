@@ -2,11 +2,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px 0;
-  color: var(--color-neutral-600);
-  font-family: var(--font-body);
-  font-size: 0.7647rem;
+  gap: var(--space-2);
+  padding: var(--space-6) 0;
+  color: var(--color-text-muted);
+  font: var(--text-caption);
 }
 
 .loading-spinner-circle {
@@ -14,7 +13,7 @@
   height: 18px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 2px solid var(--color-divider);
+  border: 2px solid var(--color-border);
   border-top-color: var(--color-accent);
   animation: loading-spinner-rotate 0.7s linear infinite;
 }
