@@ -58,6 +58,9 @@
   --space-2: 10px;
   --space-3: 15px;
   --space-4: 20px;
+  // Шаг новой шкалы (кратной 4, docs/redesign/DESIGN.md §2.4) — заведён заранее: на него уже
+  // ссылался обзор прививок, и gap там молча не применялся. В фазе 1 значение не меняется.
+  --space-5: 20px;
   --space-6: 30px;
   --space-8: 40px;
 
@@ -1128,7 +1131,7 @@ select.input {
   font-size: 0.7647rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-neutral-500);
+  color: var(--color-neutral-600);
 
   &:first-child {
     padding-top: 4px;

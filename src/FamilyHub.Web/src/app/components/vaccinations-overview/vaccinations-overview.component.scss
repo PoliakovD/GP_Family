@@ -59,7 +59,7 @@
 
   &:first-child { border-top: none; }
   &:hover { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
-  > i { color: var(--color-neutral-500); flex: none; }
+  > i { color: var(--color-neutral-600); flex: none; }
 }
 
 .vo-person-body { flex: 1; min-width: 0; }

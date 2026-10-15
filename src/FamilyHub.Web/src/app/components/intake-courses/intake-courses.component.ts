@@ -1,3 +1,4 @@
+import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
@@ -23,7 +24,7 @@ interface CourseGroup {
  */
 @Component({
   selector: 'app-intake-courses',
-  imports: [AvatarComponent, IntakeCourseCardComponent, RouterLink],
+  imports: [AvatarComponent, BackLinkComponent, IntakeCourseCardComponent, RouterLink],
   templateUrl: './intake-courses.component.html',
   styleUrl: './intake-courses.component.scss',
 })

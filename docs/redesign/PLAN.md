@@ -1,0 +1,520 @@
+# План редизайна FamilyHub.Web
+
+Источник правды — [`DESIGN.md`](DESIGN.md). Инвентарь текущего UI — [`ui-audit.md`](ui-audit.md)
+(ссылки вида «аудит §4.1» ведут туда). Эталонные макеты — [`screens/png/`](screens/png/).
+Пути ниже даны от `src/FamilyHub.Web/src/` (`styles.scss`, `index.html`) и от `src/FamilyHub.Web/src/app/` (всё остальное).
+
+**Правило:** одна фаза — один PR (фаза 4 — один PR на модуль). Редизайн не смешивается с изменением
+логики. Если макет и DESIGN.md расходятся, прав DESIGN.md. Такие места помечены **⚠ DESIGN > макет**
+и сведены в раздел «Расхождения макет vs DESIGN.md» в конце.
+
+---
+
+## Эталонные макеты
+
+Экспорт `screens/FamilyHub — направления редизайна.html` — самораспаковывающийся бандл
+(`__bundler/manifest` с 8 gzip+base64 HTML-документами). После распаковки страница содержит
+8 `<section class="board">`: в каждой `<h2>` с подписью и `<iframe>` с экраном. Рендер
+воспроизводится скриптом [`scripts/render-mockups.mjs`](scripts/render-mockups.mjs).
+
+| Файл | Подпись на холсте | Размер |
+|---|---|---|
+| `home-desktop.png` | Главная · десктоп | 1440×1000 |
+| `home-mobile.png` | Главная · мобайл | 390×844 |
+| `family-chat-desktop.png` | Семья и чат · десктоп | 1440×1000 |
+| `family-chat-mobile.png` | Чат семьи · мобайл | 390×844 |
+| `analysis-desktop.png` | Анализ · десктоп | 1440×1000 |
+| `analysis-mobile.png` | Анализ · мобайл | 390×844 |
+| `diary-desktop.png` | Дневник · десктоп | **1440×1054** |
+| `diary-mobile.png` | Дневник · мобайл | 390×844 |
+
+Замечания по файлу:
+- **Экранов «A ·», «B ·», «C ·» в этом экспорте нет.** В манифесте ровно 8 документов, все
+  с `<title>` «Гибрид — …», других подписей на холсте нет. Отфильтровывать было нечего.
+- У «Дневник · десктоп» контент выше рамки (1054 при iframe 1000), поэтому на холсте низ
+  обрезан на 54px. В PNG iframe растянут до полной высоты, и последняя строка ленты видна целиком.
+- Шрифт Onest в бандле встроен, PNG отрисованы им, а не fallback-шрифтом.
+
+---
+
+## Как проверяем каждую фазу
+
+1. **Скриншоты до/после.** Стенд `e2e/visual/` (сделан в фазе 0, см. `e2e/visual/README.md`):
+   собранный фронт раздаётся статикой, а `/api/**` отвечает Playwright из фикстур
+   `e2e/visual/fixtures.mjs`. Бэкенд, Docker и .NET не нужны. Данные совпадают с макетами: семья
+   «Поляковы», просроченное лекарство, анализ крови с 6 показателями вне нормы, прививка от гриппа,
+   дневник за 1–4 октября; «сегодня» зафиксировано на 14.10.2026. Снимаются экраны из `SCREENS`
+   на 1440×1000 и 390×844 (deviceScaleFactor 1, как у PNG макетов), full-page, в
+   `e2e/.artifacts/shots/<метка>/<экран>-<desktop|mobile>.png`. «До» — сборка базового коммита
+   (`SPA_DIR` → её `wwwroot`), «после» — сборка ветки. Склейки «до | после» делает
+   `e2e/visual/compare.mjs`. Снимки прикладываются к PR, в репозиторий не коммитятся. Новый
+   экран — строка в `SCREENS`, недостающие запросы стенд печатает списком в конце прогона.
+   Ограничение: на мобильных full-page снимках фиксированный таб-бар оказывается посередине
+   длинной страницы (это особенность full-page съёмки, а не вёрстки).
+2. **Сравнение с макетом.** Для 4 экранов, у которых есть макет, PR содержит склейку
+   «макет | после» (`compare.mjs` с папкой `docs/redesign/screens/png/`). Попиксельный diff
+   не используется, потому что данные и шрифтовой рендер отличаются. Сверяются размеры, отступы,
+   цвета и иерархия. Отдельно проверяются вычисленные стили ключевых элементов
+   (`getComputedStyle`: высота кнопок/строк, кегль, радиус, цвет) против таблиц DESIGN.md.
+3. **Регрессии.** `npm run build`, `npm test` (vitest), полный `e2e` (`cd e2e && npm test`, нужен
+   стек: Docker + .NET — там, где он доступен).
+   E2E ищут элементы по тексту и ролям, поэтому переименование классов их не ломает.
+   Тексты кнопок при редизайне меняются, и вместе с ними правятся сценарии.
+4. **Счётчики аудита.** `node docs/ui-audit-scripts/values.mjs` и `classes.mjs` до/после: число
+   литералов (цвет, кегль, отступ, радиус) в затронутых файлах должно падать, а не расти.
+5. **Доступность.** Контраст новых пар цветов считается в PR формулой WCAG. Клавиатурный обход
+   изменённого экрана: фокус-кольцо видно везде. Тап-зоны ≥ 44px проверяются тем же скриптом
+   (`docs/ui-audit-scripts/tap.mjs`).
+
+---
+
+## Фаза 0. Быстрые баги из аудита
+
+> **Статус: выполнена.** Что отличилось от плана при реализации:
+> - `neutral-500` нашёлся ещё в 5 местах вне SCSS (не было в аудите): `shared/util/vaccination-labels.ts`
+>   (цвет иконок статуса прививки), `record-access-sheet.component.html`, `app-search.component.html`,
+>   `families-tab.component.html` (инлайн-стили иконок). Тоже заменены на `neutral-600`.
+> - `.hh-badge-danger` (белый на `status-danger`) давал 4,0:1 — переведён на мягкую подложку вместе с остальными.
+>   Для тона бейджа прививки добавлена `statusTone()` рядом с `statusColor()`.
+> - `BackLinkComponent` получил необязательный вход `link` (рисует `<a routerLink>`): «‹ Семьи» в
+>   `family-details` — настоящая ссылка, превращать её в кнопку было бы хуже.
+> - Проверка «до/после» — на стенде с фикстурами (`e2e/visual/`), а не на полном стеке: в облачном
+>   окружении нет Docker и .NET. Полный `e2e` нужно прогнать там, где стек есть.
+
+Цель — починить явные дефекты до смены дизайна, без визуальной перестройки. PR маленький и
+безопасный, его можно вливать сразу.
+
+| # | Баг | Где | Исправление |
+|---|---|---|---|
+| 0.1 | `var(--space-5)` не определён, `gap` в обзоре прививок не применяется (аудит §5.1) | `components/vaccinations-overview/vaccinations-overview.component.scss:5` | Добавить в `:root` `--space-5: 20px`. Значение сразу совпадает с новой шкалой DESIGN §2.4, так что фаза 1 его не сдвинет. Пока `--space-4` тоже 20px, но это ненадолго. |
+| 0.2 | `--color-accent-dark` не определён, срабатывает fallback | `components/home/home.component.scss:31` (`:hover` ссылки) | Заменить на `var(--color-accent-700)`, ближайшую тёмную ступень (сейчас hover визуально не отличается от default). В фазе 1 это значение станет `--color-accent-hover`. |
+| 0.3 | `<button class="back-link">` без стилей, рисуется нативной кнопкой (аудит §4.1) | `components/vaccination-person/vaccination-person.component.html:138` | Заменить на `<app-back-link [label]="…" (activated)="backToList()">` и добавить импорт `BackLinkComponent` в `vaccination-person.component.ts`. Заодно убрать дубль `.back-link` в `components/intake-courses/intake-courses.component.scss:25` вместе с разметкой (тоже перевести на `BackLinkComponent`), а ссылку «‹ Семьи» `btn btn-ghost` в `family-details.component.html:3` перевести на `BackLinkComponent` с навигацией. |
+| 0.4 | Белый текст на зелёном (`status-ok`, 3,45:1) | `components/health-home/health-home.component.scss:188–192` (`.hh-take`), `components/intake-today/intake-today.component.scss:69–76` (`.it-take`, включая hover с `#000`) | По DESIGN §2.1 «Принять дозу» = primary: оба заменить на `btn btn-primary`, а локальные классы оставить только для раскладки. Оба варианта приводятся к 44px (`.hh-take` сейчас 32px). |
+| 0.5 | Белый текст на статусном фоне в бейдже | `components/health-home/health-home.component.scss:228–238` (`.hh-badge`, фон из `statusColor()` в `health-home.component.html:183` и `.hh-badge-danger`) | Фон `color-mix(status 14%, paper)`, текст `--color-status-*-text`, по образцу `.tag-*`. `[style.background]` в шаблоне заменить на `[class]` с модификатором. На warning сейчас 2,48:1, после правки ≥ 4,5:1. |
+| 0.6 | `neutral-500` (#9b9797, 2,6–2,8:1) как цвет текста и смысловых иконок | текст: `styles.scss:1131`, `health-home.component.scss:134`, `health-note-form.component.scss:102/225`, `health-notes-tab.component.scss:71`, `doctor-report-form.component.scss:20/27/34`, `vaccination-person.component.scss:85`; иконки: `family-chat:221` (замок «закрыто»), `health-home:72/279`, `medkits-panel:46` (шевроны), `health-notes-tab:208`, `doctor-reports-tab:70`, `vaccinations-overview:62`, `vaccination-saved-sheet:53`, `vaccination-person:48` | Везде заменить на `--color-neutral-600` (5,4:1). У смысловых иконок порог 3:1, и neutral-500 его тоже не проходит. Сюда же `styles.scss:1131` (`.app-sidebar-group-label`, текст): заменить сейчас, хотя сами групповые заголовки удаляются в фазе 3. |
+
+Не входит в фазу 0, хотя похоже: `.it-box.ok` (белая галочка на зелёном) — это иконка, а не текст,
+и 3,45:1 проходит порог 3:1 для не-текста. `.dn-scale-btn.active` / `.dn-seg.active` (`#fff` на
+kind-цветах) переделываются в фазе 4 вместе с дневником.
+
+**Также в PR фазы 0** (инструменты, не продуктовый код):
+- Стенд `e2e/visual/` (`shots.mjs`, `fixtures.mjs`, `compare.mjs`, README), см. «Как проверяем каждую фазу». Без него «до/после» в фазах 1+ снимать нечем.
+- Блок правил из DESIGN.md §6 в корневой `CLAUDE.md` (сейчас файла нет).
+
+**Файлы:** `styles.scss`, `components/vaccinations-overview/*.scss`, `components/home/home.component.scss`,
+`components/vaccination-person/*`, `components/intake-courses/*`, `components/family-details/family-details.component.html`,
+`components/health-home/*`, `components/intake-today/*.scss`, 11 SCSS из 0.6, `e2e/visual/*`, `CLAUDE.md`.
+
+**Риски:** минимальные. `.hh-take` вырастает с 32 до 44px и может раздвинуть строку «принять сейчас»
+на хабе. Смена цвета кнопки с зелёного на синий — заметное изменение, его стоит упомянуть в описании PR.
+
+**Проверка:** скриншоты `/health/vaccinations` (gap между блоками), `/health/vaccinations/people/…`
+на 390 (кнопка «‹ Я»), `/health` и `/health/intake` (кнопки «Принять», бейджи сроков), `/home` (hover
+ссылки), `/health/notes`, `/families/:id`; e2e `08-medication-intake`, `14-vaccinations`, `10-family`.
+
+---
+
+## Фаза 1. Токены, шрифт, шкала отступов
+
+Цель — новые значения в `:root` и тёмная тема **без изменения разметки**. Старые имена токенов
+временно остаются алиасами на новые, чтобы 1 000+ существующих `var(--color-*)` продолжали работать.
+
+### 1.1. Цвета
+
+Новые токены из DESIGN §2.1 добавляются в `styles.scss :root` как есть. Старые переводятся
+в алиасы. Карта:
+
+| Старый токен (использований) | Становится | Комментарий |
+|---|---|---|
+| `--color-bg` (37) | `#F5F5F2` | — |
+| `--color-paper` (124) | алиас → `--color-surface` (`#FFFFFF`) | карточки |
+| `--color-surface` (12, «хром»: таб-бар, `.seg`, инпуты) | ⚠ **конфликт имён**: в DESIGN `surface` — это белые карточки | сначала codemod: 12 старых `var(--color-surface)` → `var(--color-surface-sunken)`, только потом переопределение |
+| `--color-divider` (125) | `#EEEFEB` | раньше было 16% текста, станет светлее |
+| `--color-control-border` (3) | алиас → `--color-border` | — |
+| `--color-text` (67) | `#17191C` | — |
+| `--color-neutral-600` (105), `-700` (40) | алиас → `--color-text-muted` | рампа neutral остаётся до фазы 4, потом удаляется |
+| `--color-neutral-800` / `-900` | `--color-text-secondary` / `--color-text` | — |
+| `--color-accent` (166) | `#2456C8` | cyan → синий: самая заметная глобальная смена |
+| `--color-accent-100…900` | `100/200` → `accent-soft`, `600/700/800` → `accent-hover` | остальные ступени удаляются в фазе 4 |
+| `--color-accent-2*` (пурпурный, 28 всего) | в роли «ошибка» → `--color-danger` | DESIGN §2.1: пурпур удаляется |
+| `--color-status-danger` / `-text` | `--color-danger` | — |
+| `--color-status-warning` (41, ярко-оранжевый) | `--color-warning` (`#8A5300`, тёмный) | ⚠ полосы и точки станут коричневыми. Где статус-цвет служит заливкой, а не текстом, перейти на `*-soft` или оставить временный `--color-warning-solid` до фазы 4 |
+| `--color-status-ok` / `-text` | `--color-success` | — |
+| `--color-status-none` (4, фиолетовый) | `--color-text-muted` + `neutral`-бейдж | в DESIGN «без нормы» нейтральный |
+| `--color-kind-metric/wellbeing/sleep/note` | `--color-kind-measure/mood/sleep/note` (+`-soft`) | — |
+| `--color-kind-symptom`, `--color-kind-medication` | ⚠ **в DESIGN нет**, хотя в макете дневника есть фильтры «Симптомы» и «Лекарства» | по правилу DESIGN §6 сначала добавить пары `-symptom` / `-medication` (+`-soft`) в DESIGN.md §2.1, потом в `:root`. Симптом не красный: красный в анализах означает «вне нормы» |
+| 23 × `#fff` в компонентах | `--color-on-accent` | список в аудите §5.1 |
+| `index.html` `theme-color`, `services/telegram.service.ts` (`#f3f2f2`) | `#F5F5F2` / тёмный `#111315` | читать из CSS-переменной |
+
+Тёмная тема: `:root[data-theme="dark"]` и `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {…} }`
+со значениями из DESIGN §2.2; `color-scheme: light dark`. Переключатель темы в UI в эту фазу
+не входит (только системная тема). `colorScheme` из Telegram выставляет `data-theme` в `telegram.service.ts`.
+До фазы 4 тёмную тему держать **за флагом** (`data-theme` выставляется только явно), иначе 74
+`color-mix()` и литералы на `#2d2b2b`/`#000` (аудит §5.1) дадут нечитаемые места на ещё не
+переведённых экранах.
+
+Новые токены: `--shadow-segment`, `--shadow-fab`, `--shadow-overlay` (DESIGN §2.6). Старые
+`--shadow-sm/md/lg` становятся алиасами: `lg` → `overlay`, а `sm/md` на карточках удаляются в
+фазе 2 (по DESIGN карточки без тени).
+
+### 1.2. Шрифт Onest
+
+- Зависимость `@fontsource/onest` (400/500/600/700; пакет режет шрифт на subset'ы с `unicode-range`,
+  кириллица входит), подключение в `angular.json → styles` вместо `@fontsource/source-serif-4`.
+  Шрифт self-hosted: файлы woff2 попадают в бандл, внешнего CDN нет.
+- `--font-body` / `--font-heading` → `'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif`.
+- `ngsw-config.json`: проверить, что woff2 попадают в prefetch/lazy-группу ассетов.
+- Удаление Source Serif из `package.json` переносится в фазу 4 (последний PR), пока пакет
+  не мешает. Phosphor остаётся до решения об иконках (п. 1.6).
+
+### 1.3. Типографика: корневой кегль
+
+Сейчас `html { font-size: clamp(17px, …, 18.5px) }` и **431 литерал `N rem`** в компонентах
+(аудит §5.2, 1rem = 17px). DESIGN задаёт кегли в px от базы 16.
+
+- Новые токены `--text-display … --text-micro` (DESIGN §2.3) объявляются **в px** и пока
+  используются только новым кодом.
+- `html { font-size }` в фазе 1 **не трогать**. Переход на 16px сразу уменьшил бы все 431 rem-литерал
+  на 6–14% (на десктопе 18,5 → 16) на ещё не переведённых экранах.
+- По мере перевода модулей в фазе 4 rem-литералы заменяются токенами. В последнем PR фазы 4
+  `html { font-size: 100% }`, а токены можно перевести в rem от 16, чтобы работал системный
+  масштаб шрифта.
+- `body { line-height }` 1,55 → 1,45 (DESIGN `--text-body`). Сдвиг строк в длинных текстах примерно
+  на 1,6px, это допустимо.
+- Глобальные `h1…h6` (`styles.scss:155–167`) пока не трогать, их заменят классы/компоненты фазы 2.
+
+### 1.4. Шкала отступов `--space-*` → кратная 4
+
+Текущие → новые значения и сколько мест сдвинется, если просто переопределить значения:
+
+| Токен | Было | Станет | Δ | Использований (файлов) |
+|---|---|---|---|---|
+| `--space-1` | 5 | 4 | −1 | 12 (5) |
+| `--space-2` | 10 | 8 | −2 | 40 (6) |
+| `--space-3` | 15 | 12 | **−3** | 35 (11) |
+| `--space-4` | 20 | 16 | **−4** | 25 (13) |
+| `--space-5` | 20 (с фазы 0) | 20 | 0 | 1 (1) |
+| `--space-6` | 30 | 24 | **−6** | 2 (2) |
+| `--space-7` | — | 28 | новый | 0 |
+| `--space-8` | 40 | 32 | **−8** | 0 |
+| `--space-10`, `--space-12` | — | 40, 48 | новые | 0 |
+
+Всего 115 мест в 18 файлах, из них 57 — в самом `styles.scss` (`.btn`, `.card`, `.seg`,
+утилиты `.mb-*`/`.gap-*`, каркас). Именно там сдвиг будет виден на всех экранах: `.card` gap
+10 → 8, padding 15 → 12, `.mb-3` 15 → 12 и т.д.
+
+**Компенсация — переименование вместо переопределения.** В том же PR codemod заменяет каждое
+использование на токен **новой** шкалы, ближайший к **старому** пикселю, и только потом меняет значения:
+
+| Старое использование | Старое px | Заменяется на | Новое px | Остаточный Δ |
+|---|---|---|---|---|
+| `var(--space-1)` | 5 | `var(--space-1)` | 4 | −1 |
+| `var(--space-2)` | 10 | `var(--space-2)` или `var(--space-3)` по месту (gap → 8, padding → 12) | 8 / 12 | ±2 |
+| `var(--space-3)` | 15 | `var(--space-4)` | 16 | +1 |
+| `var(--space-4)` | 20 | `var(--space-5)` | 20 | 0 |
+| `var(--space-6)` | 30 | `var(--space-8)` (`--space-7` = 28 там, где важна плотность) | 32 / 28 | ±2 |
+| `var(--space-8)` | 40 | `var(--space-10)` | 40 | 0 |
+
+После этого видимый сдвиг ≤ 2px, а скриншоты до/после фазы 1 по раскладке почти совпадают
+(меняются цвета и шрифт). Утилиты `.mb-1…6`, `.gap-*`, `.p-3` в `styles.scss` переводятся так же.
+864 литерала отступов вне токенов (аудит §5.3) в фазе 1 **не трогаем**: они не зависят от
+шкалы и переходят на токены в фазе 4.
+
+### 1.5. Радиусы
+
+| Токен | Было | Станет | Использований |
+|---|---|---|---|
+| `--radius-sm` | 1px | 10px | 8 |
+| `--radius-md` | 2px | 12px | 41 |
+| `--radius-lg` | 4px | 14px | 9 |
+| `--radius-xs`, `-xl`, `-2xl`, `-pill` | — | 6 / 20 / 22 / 999 | новые |
+
+Это **сознательная** глобальная смена: старая эстетика «острых углов» (аудит, «Радиусы»)
+отменяется дизайном. Риски: `.tag` использует `calc(md * 0.75)` и станет 9px (заменить на
+`--radius-pill`); `radius-lg` у модалок и шторок станет 14px вместо 4 (нормально). Литералы-fallback
+`var(--radius-sm, 4px/6px)` (аудит §5.1) убираются. Карточки `.card` получают `--radius-xl`.
+
+### 1.6. Иконки — решение в этой фазе, миграция в фазе 2/4
+
+DESIGN §2.7 требует выбрать одну библиотеку. Макет нарисован линейными иконками stroke 1.8/1.9
+(стиль Lucide). **Рекомендация:** Lucide (`lucide-angular`, tree-shaking по импорту) и один
+компонент-обёртка `<app-icon name size>` с `stroke-width: 1.8`, `aria-hidden` по умолчанию.
+Phosphor (3 веса целиком, 121 разная иконка, ~270 мест) удаляется в последнем PR фазы 4.
+В фазе 1 только решение и добавление зависимости.
+
+**Файлы фазы 1:** `styles.scss`, `angular.json`, `package.json` / `package-lock.json`, `index.html`,
+`services/telegram.service.ts`, `ngsw-config.json`, 18 файлов с `var(--space-*)` (codemod), 6 файлов
+со старым `var(--color-surface)` (12 мест), 23 `#fff` → `--color-on-accent`, `DESIGN.md` (kind-symptom/medication).
+
+**Риски:**
+- Смена акцента (cyan → синий), шрифта (serif → Onest), фона, радиусов и цвета warning одновременно
+  меняет вид **всех** ~70 экранов. Это ожидаемо, но PR большой визуально, и ревьюить его нужно по скриншотам, а не по diff.
+- Пары цветов, которые раньше проходили контраст, могут перестать проходить: `color-mix(text N%)`
+  на белом surface, warning-заливки с белым текстом. Прогнать контраст по скриншотам ключевых экранов.
+- Onest шире Source Serif на тех же кеглях, поэтому возможны переносы в узких местах (кнопки
+  таб-бара, сегменты, бейджи на 390). Проверить скриншотами мобильных экранов.
+- Тёмная тема за флагом, иначе ломаются непереведённые экраны.
+
+**Проверка:** полный набор скриншотов (все экраны из спеки, 1440 + 390) до/после. Раскладка
+совпадает с точностью ±2px, а меняются цвета, шрифт и радиусы. Контрольный список контраста
+по DESIGN §2.1. Ручная проверка `data-theme="dark"` на главной (только чтобы токены применились).
+
+---
+
+## Фаза 2. Базовые компоненты (DESIGN §3)
+
+Цель — библиотека в `shared/ui/` (новые standalone-компоненты) и обновлённые глобальные классы
+в `styles.scss`. **В этой фазе экраны не переписываются.** Глобальные классы, которые и так
+используются повсюду, меняют вид сразу, а новые компоненты подключаются в фазе 4. Состояния
+у каждого: default / hover / pressed / focus-visible / disabled (+ loading / empty, где уместно).
+Витрина для проверки — dev-only маршрут `/dev/ui` (за `devMode`, как `DevPanel`), где все
+варианты в обеих темах.
+
+| Компонент DESIGN §3 | Основа: переиспользовать / переписать | Какие дубли из аудита заменяет |
+|---|---|---|
+| Кнопки `primary / secondary / ghost / danger / icon` | **Переиспользовать** `.btn*` из `styles.scss` (343 использования): поменять высоту (46, в тулбарах 44), радиус, кегль 15/600, цвета. Добавить `:active` у secondary/danger, `.btn[aria-pressed=true]` для toggle | `.hh-take`, `.it-take` (если не убраны в фазе 0), `.toast-action`, `.btn.active` (`record-detail-header.scss:22`), override `.btn-icon` в `file-viewer.scss:74` (вариант «icon на тёмном») |
+| `inverse`, `dashed` | Новые модификаторы `.btn-inverse`, `.btn-dashed` | `.dr-chip-none` (dashed), локальные «Пригласить» |
+| `fab` | Новый компонент `FabComponent` (60px, radius 20, `--shadow-fab`, bottom 100px, только <1024) | `.dr-fab` (`doctor-reports-tab.scss:76`) и `.dn-fab` (`health-notes-tab.scss:214`), построчные копии |
+| `danger` | `.btn-danger`: текст danger вместо пурпурной заливки | `ActionMenu` пункт «Удалить» (accent-2) |
+| Поля `input / search` | **Переиспользовать** `.input` (208 полей): 46px, радиус md, рамка border, 16px, `:disabled`, `[aria-invalid]` → danger. `SearchField` переписать: иконка 18 слева, на мобайле раскрывается из иконочной кнопки | `.dn-search`, `.kv-search`, `.composer-input`; ошибки `.field-hint-error` → danger (аудит §4.10); плейсхолдер `#7d7979` |
+| Field (label + hint + error) | Новая директива/обёртка `app-field`: связывает `aria-describedby`/`aria-invalid` | `.dr-field`, `.dn-field`, `.cf-field`, `.input-warn/.input-diff` |
+| `badge` | **Переписать** `.tag*` (112 мест) под пилюлю 12–14/600, padding 4×10 (моб. 3×8), тона danger/warning/success/accent/neutral на `*-soft`. `StatusChip` перевести на те же классы | `StatusChip`, `.dr-chip-*`, `.ic-badge`, `.dn-badge`, `.home-ok-chip`, `.badge-ai`, `.hh-badge` (аудит §4.2) |
+| `count-badge` | Новый класс `.count-badge` (min 20–22, 12/600, danger или accent, on-accent) | `.nav-badge`, `.app-sidebar-badge`, `.notification-bell-badge`, `.background-jobs-trigger-badge` (13px в 16px-кружке), `.tab-bar-dot` (точка) |
+| `card` | **Переиспользовать** `.card`: surface, radius-xl, padding 20–24 (моб. 16), без рамки и тени. `.card-title` → `--text-title` | 15 локальных карточек (аудит §4.3) заменяются по мере фазы 4 |
+| `metric-card` | Новый `MetricCardComponent` (подпись → число tabular → бейдж/подпись; целиком ссылка) | `.hh-tile-value*`, `.dn-tile-*`, `.record-status-tile-*`, `.cc-tile-*`, метрики главной |
+| `list-card` | Класс `.list-card` (заголовок + строки с `divider`, отступы 24) | `.ic-card`, `.it-card`, контейнеры строк |
+| `icon-tile` | Новый `IconTileComponent` (40–44, radius-lg, `*-soft` + иконка тона) | плитки в `AttentionCard`, `.hh-tile` иконки, `dn-row` иконки |
+| `task-row` | Новый `TaskRowComponent` (десктоп: кнопка inverse/secondary; моб.: шеврон, строка-ссылка). Переписывает `AttentionCard` | `AttentionCard` (`border-left 4px` удаляется), `.inbox-row` |
+| `nav-row` | Новый `NavRowComponent` (≥ 56px, иконка → текст+подпись → шеврон) | `.settings-*-row` ×4, `.settings-menu-row`, `.hh-tile` в «Инструментах», `.vs-action` |
+| `person-row` | Новый `PersonRowComponent` (аватар 44, имя 16/600, роль 14 muted, «⋯», точка «в сети» 11px) | `.family-member-card`, строки участников, `.app-family-switch-item` |
+| `entry-row` | Новый `EntryRowComponent` (время 48 tabular → icon-tile → текст → «⋯»; моб.: время в подпись) | `.dn-row` + цветные полосы `inset 3px` (аудит §4.3) |
+| `tabs-pill` | Новый `PillTabsComponent` (40–42, активная inverse, счётчик внутри, гориз. скролл) | вкладки `family-details`, фильтры дневника `.dn-chip`, часть `.seg` с длинными ярлыками |
+| `segmented` | **Переписать** `.seg/.seg-opt`: один вариант для `<label>+radio` и для `<button>` | 5 локальных сбросов `.seg-opt` (admin-catalog, admin-changes, admin-payload-editor, admin-review, health-notes-tab), `.dr-seg`, `.dn-seg` |
+| `BackLink` | **Переиспользовать** `shared/back-link/`: шеврон 18, 15/600 accent, высота 44; добавить вход `routerLink` (сейчас только `(activated)`) и мобильный вариант «иконка в шапке» | локальные «Назад» (убраны в фазе 0) |
+| Avatar | **Переиспользовать** `shared/avatar/`: размеры 32/36/44, палитра из DESIGN §2.1 (свой — accent, остальные циклично из 4 soft) | `.msg-avatar` (чат), `.it-avatar` |
+| Чат: пузыри, системное, разделитель дня, карточка записи, композер | Новые части в `shared/ui/chat/`, сам `family-chat` переписывается в фазе 4 | `.chip` чата, `.msg-*` |
+| Анализ: счётчик-фильтр, шкала нормы | Счётчик = `button[aria-pressed]` (рамка 2px статуса + soft). `ReferenceScale` **переписать** под DESIGN: трек 8px, норма — центральные 50%, маркер 6×18 с белой обводкой, clamp 3–97%, подписи 12px | `.record-status-tile-*`; цвета маркера (сейчас «тёмно-зелёный/бордо», `reference-scale.component.ts`) → цвет статуса |
+
+Вне DESIGN §3, но нужны для фазы 4, поэтому делаются здесь по «ближайшему паттерну»: Dialog /
+Sheet / Drawer (сведение 7 оверлеев, аудит §4.4) на `--radius-2xl` и `--shadow-overlay`;
+`EmptyState` (7 способов → 1, текст по DESIGN §5); `Spinner`; `Alert` (+ warning/success, которых
+нет, аудит §4.9); `Toast` (успех → success, ошибка → danger).
+
+**Файлы:** `styles.scss` (разделы «Кнопки», «Поля», «Сегмент-контрол», «Карточки», «Теги»,
+«Таблицы»), новые `shared/ui/*` (fab, field, metric-card, icon-tile, task-row, nav-row, person-row,
+entry-row, pill-tabs, count-badge, chat/*, icon), переписываемые `shared/back-link`, `shared/avatar`,
+`shared/status-chip`, `shared/reference-scale`, `shared/search-field`, `shared/attention-card`,
+`shared/modal`, `shared/bottom-sheet`, `shared/side-panel`, `shared/toast`, `shared/confirm`.
+
+**Риски:**
+- `.btn` растёт с 44 до 46px, `.btn-sm` и плотные таблицы админки надо проверить отдельно
+  (сознательное исключение «sm 36px» из аудита §4.1 сохраняется только в таблицах).
+- `.tag` применяется и к кнопкам (`<button class="tag">` ×15). Новые бейджи только для отображения,
+  поэтому кнопки-теги до фазы 4 сохраняют старый класс, переименованный в `.tag-button`.
+- `ReferenceScale` с «нормой в центре 50%» меняет геометрию шкалы (сейчас масштаб по значениям):
+  снять скриншоты `indicator-info`, `indicators-tab`, `indicator-table`.
+- `AttentionCard` используется и в админке (`admin-attention`). Проверить её отдельно.
+
+**Проверка:** витрина `/dev/ui` на 1440 и 390, светлая и тёмная (скриншоты в PR). Скриншоты
+экранов, где глобальные классы видны массово: `/home`, `/health`, `/settings`, `/admin/attention`,
+форма записи. Unit-тесты компонентов (vitest) на aria-атрибуты: `aria-pressed`, `aria-label` у icon,
+`aria-invalid`/`aria-describedby` у Field.
+
+---
+
+## Фаза 3. Каркас: сайдбар, переключатель семьи, таб-бар, BackLink
+
+Файлы: `app.component.html` (253 строки), `app.component.ts`, `styles.scss` (раздел «Оболочка
+приложения», `styles.scss:1016–1370`: `.app-*`, `.tab-bar*`), `shared/notification-bell`,
+`components/app-search`, `services/breakpoint.service.ts` (не меняется, 1024 совпадает с DESIGN).
+
+| Что | Сейчас | По DESIGN §3 «Навигация» / макетам |
+|---|---|---|
+| Ширина сайдбара | `--sidebar-w: 256px` | 248px, surface, рамка справа |
+| Переключатель семьи | внизу, в `.app-sidebar-footer` под CAPS-«Текущая семья» | **сверху**, под лого; 52px, surface-muted, рамка, плитка-аватар семьи (`avatar-warm`), подпись «Семья» + название, шеврон ⌃⌄; список — общий Popover из фазы 2 |
+| Пункты | `.app-sidebar-link` | 46px, radius-md, активный — accent-soft + accent-hover 600 |
+| Подпункты | группы с CAPS-заголовками `.app-sidebar-group-label` | 38px, отступ 46px, активный — accent-hover 600, **групповые заголовки удаляются**; «Здоровье»: Приём лекарств, Дневник, Анализы, Приёмы врача, Показатели, Прививки, Аптечка |
+| Бейджи | `.app-sidebar-badge` (accent-2, 1px радиус) | `count-badge`: требует внимания — danger, непрочитанные чата — accent |
+| Низ сайдбара | переключатель семьи | пользователь: аватар 36 + имя + роль («Админ семьи») |
+| Топбар десктопа | `.app-topbar`: поиск, колокольчик, аватар | **Решено** («Расхождения», п. 1): поиск + колокольчик на всех страницах, «Добавить» — только на главной (кнопка страницы, не каркаса). Аватар из топбара уходит — пользователь внизу сайдбара |
+| Мобильная шапка | `.app-topbar-mobile` с заголовком | Главная: пилюля-переключатель семьи + иконки поиска и колокольчика (круглые 44). Внутренние экраны: BackLink-иконка + заголовок + действия |
+| Таб-бар | 4 пункта, `.tab-bar-dot` accent-2 | 84px с safe-area, иконка в пилюле 56×30 (активная accent-soft), подпись 12px, точка у «Семьи» (accent); скрывается на полноэкранном чате |
+| Отступ контента | — | десктоп: max-width 1000–1200, padding 28–40; моб.: 16, низ ≥ 100px под таб-бар |
+| BackLink | компонент из фазы 2 | десктоп: в шапке страницы над H1; моб.: иконочная кнопка в шапке |
+
+**Риски:**
+- Перенос переключателя семьи наверх меняет порядок фокуса и e2e (`07-mobile-nav`, `10-family`,
+  `13-mobile-screens`, `15-health-hub-mobile`). Сценарии обновить в этом же PR.
+- Скрытие таб-бара на чате завязано на маршрут/вкладку `?tab=chat`: нужен сигнал в `AppComponent`,
+  и это не должно стать «изменением логики» больше необходимого.
+- Удаление групп в подменю «Здоровье» убирает визуальное деление (Каждый день / Медкарта / Инструменты),
+  которое на хабе остаётся (DESIGN §4).
+- Safe-area (`env(safe-area-inset-bottom)`) проверить в standalone-PWA и в Telegram WebView.
+
+**Проверка:** скриншоты каркаса на всех 4 разделах (1440 + 390) и сравнение сайдбара/таб-бара
+с `home-desktop.png`, `analysis-desktop.png`, `diary-desktop.png`, `home-mobile.png`,
+`analysis-mobile.png`. Отдельно — `family-chat-mobile.png` (таб-бара нет). Клавиатурный обход
+сайдбара, `aria-current="page"` у активного пункта.
+
+---
+
+## Фаза 4. Экраны по модулям
+
+Каждый модуль — отдельный PR. Внутри: замена локальных карточек/строк/бейджей на компоненты
+фазы 2, литералы → токены (rem-кегли → `--text-*`, отступы → `--space-*`, `color-mix` → `*-soft`/
+`divider`), `h1` на каждой странице (аудит §4.7). Иконки модуля переводятся на `<app-icon>`.
+Проверка у всех: скриншоты маршрутов модуля 1440 + 390 до/после, склейка с макетом (если он есть),
+e2e модуля, счётчики аудита по файлам модуля.
+
+### 4.1. Главная (`/home`) — эталон `home-desktop.png`, `home-mobile.png`
+
+Файлы: `components/home/*`, `shared/attention-card` (→ `TaskRow`), `shared/invite-modal`,
+`components/birthdays-panel` (блок ДР). Порядок (**решено**, «Расхождения», п. 2) — как в макетах: десктоп — приветствие (H1 display) + дата
+→ 3 `metric-card` → «Требует внимания» (2/3) | «Семья» с входом в чат + «Дни рождения» (1/3);
+мобайл — приветствие → «Требует внимания» (task-row с шевронами) → метрики 2 в ряд → ДР одной строкой.
+- Порядок блоков на десктопе и мобайле разный — это намеренно (DESIGN §4): на десктопе «Требует
+  внимания» крупнее всего и держит фокус, на мобайле места мало, и он идёт первым. Одна разметка,
+  порядок меняется через CSS `order` / grid-области на <1024px, без дублирования блоков.
+- ⚠ **DESIGN > макет:** бейдж давления на мобайле подписан «выше нормы», на десктопе «выше
+  рекомендуемого». По DESIGN §2.1 warning означает «выше рекомендуемого», а «вне нормы» — danger.
+  Везде «выше рекомендуемого».
+- ⚠ В макете десктопа нет пользователя внизу сайдбара. По DESIGN он есть (сделан в фазе 3).
+- `/birthdays` (аудит, ⚠ дубль): ссылку «Все дни рождения» вести на `/families/:id?tab=birthdays`,
+  маршрут оставить редиректом (удаление — отдельным PR, это логика).
+
+Риски: `--color-accent-dark` уже убран в фазе 0. В `home` 14 inline-`style` (аудит §3.4). E2E `01-onboarding` заканчивается на главной.
+
+### 4.2. Семья и чат (`/families/:id`) — эталон `family-chat-desktop.png`, `family-chat-mobile.png`
+
+Файлы: `components/family-details/*`, `components/family-chat/*`, `components/families-tab/*`,
+`components/dependents-panel/*`, `components/birthdays-panel/*`, `components/birthdays-tab/*`,
+`components/medkits-panel/*` (только вкладка), `shared/infinite-scroll-sentinel`.
+Шапка: аватар семьи 56 (`avatar-warm`) + H1 + «N участника · вы админ», справа «Пригласить»
+(secondary) + «⋯». `tabs-pill`: Чат (счётчик) / Участники / Аптечки / Дни рождения / Близкие
+и питомцы. Десктоп: чат (flex 2) + колонка «Участники» (person-row, строка «Ваши анализы открыты
+семье · Доступ») + «Заявки» (dashed «Создать ссылку-приглашение»). Мобайл: полноэкранный чат без
+таб-бара, шапка «‹ · аватар · Поляковы / Валерия в сети · ⋯».
+- ⚠ **DESIGN > макет:** H1 в макете 30px, DESIGN `--text-display` = 34px. Берём 34.
+- ⚠ **DESIGN > макет:** заголовки карточек «Участники»/«Заявки» 18px, DESIGN `--text-title` = 19px.
+- ⚠ **DESIGN > макет:** радиус вложенной карточки анализа в чате 16px, такого токена нет. Берём `--radius-lg` (14).
+- Макет не показывает остальные вкладки (Участники, Аптечки, ДР, Близкие). Делаем из `person-row`,
+  `list-card`, `nav-row` по DESIGN §3.
+- Риски: «в сети» требует данных присутствия. Если их нет на бэкенде, точку и «в сети» **не
+  добавляем** (это изменение логики), а в PR отмечаем как follow-up. Чат с `InfiniteScrollSentinel`
+  при смене высоты композера/шапки — проверить автоскролл вниз. E2E `02-family-invite`, `10-family`.
+
+### 4.3. Анализы (`/health/records…`, `/health/visits…`) — эталон `analysis-desktop.png`, `analysis-mobile.png`
+
+Файлы: `components/medical-records-panel/*` (32 файла: `indicator-table`, `record-detail-header`,
+`record-detail-body`, `record-list-card`, `record-access-sheet`, `record-edit-sheet`,
+`record-recognition-status`), `components/medical-records-tab`, `record-detail-page`, `record-add*`,
+`record-batch-add*`, `doctor-visit-*`, `components/indicator-info/*`, `shared/reference-scale`,
+`shared/status-chip`, `shared/attachment-list`, `shared/pipeline-progress`.
+Деталь: BackLink «‹ Анализы» → H1 → чипы (персона, дата, материал, «Видна семье» accent-soft) →
+3 счётчика-фильтра → карточка «Показатели» с `segmented` сортировки и таблицей (Показатель /
+Результат / Где относительно нормы / Статус). Справа сверху «Бланк», «Доступ» (secondary),
+«Резюме для врача» (primary), «⋯». Мобайл: строки-карточки (название + значение, шкала, бейдж).
+- ⚠ **DESIGN > макет:** в строке «Гемоглобин» написано «Норма в бланке не указана», но бейдж
+  «норма» (success). По DESIGN §3 «Анализ» это категория «без нормы»: бейдж `neutral`, строка
+  учитывается в счётчике «без нормы», а не «в норме».
+- ⚠ **DESIGN > макет:** инициалы в мини-аватаре чипа «Даниил» 11px, ниже минимума 12px (DESIGN §2.3).
+- ⚠ **DESIGN > макет:** H1 32px → 34; заголовок «Показатели» 18 → 19; счётчики на мобайле
+  радиус 16 → `--radius-xl` (20).
+- Удалить розовую/зелёную заливку строк (`indicator-table.component.scss:52,103`, DESIGN §3).
+- Риски: самый тяжёлый модуль (5 `LoadingSpinner`, 3 `BottomSheet`, локальные `record-add-panel`
+  ×2 и `filters-popover`). Если PR выходит слишком большим, делить на 4.3a «деталь записи» и
+  4.3b «список, добавление, приёмы врача». Логика сортировки «Сначала отклонения / Как в бланке /
+  По алфавиту» и фильтров уже есть, меняется только вид. E2E `03-records`, `04-indicators`,
+  `05-ai-unavailable`, `20-record-visit-add`.
+
+### 4.4. Дневник (`/health/notes`) — эталон `diary-desktop.png`, `diary-mobile.png`
+
+Файлы: `components/health-notes-tab/*`, `components/health-note-form/*`, `shared/trend-line`,
+`shared/sparkline` (TS-литералы цветов, аудит §5.1). Шапка: H1 «Дневник самочувствия» + «🔒 Видите
+только вы · N записей за 30 дней»; справа `segmented` «Я / Близкие» (активный inverse), «В отчёт для
+врача» (secondary), «+ Запись» (primary). Две `metric-card` (давление с трендом, пульс) →
+`tabs-pill`-фильтры → поиск → группы по дням (заголовок «4 октября **воскресенье**») → `entry-row`
+в `list-card`. Мобайл: FAB вместо «+ Запись», время в подписи строки.
+- ⚠ **DESIGN > макет:** фильтры «Симптомы», «Лекарства» требуют kind-токенов, которых в DESIGN нет.
+  Добавляются в DESIGN.md в фазе 1 (п. 1.1).
+- ⚠ **DESIGN > макет:** бейдж давления на мобайле «выше нормы» → «выше рекомендуемого».
+- ⚠ Линия тренда в макете нарисована акцентом. По DESIGN accent — только действия/навигация, поэтому
+  берём `--color-kind-measure` (давление — это замер).
+- ⚠ H1 32 → 34px. Контент десктопа выше 1000px (см. «Эталонные макеты»), это нормально: страница скроллится.
+- Удалить цветные полосы слева (`inset 3px`, DESIGN §2.6), `.dn-fab` → `Fab`, `.dn-empty` → `EmptyState`,
+  `#fff` на kind-цветах в `.dn-scale-btn`/`.dn-seg` → on-accent только там, где контраст ≥ 4,5.
+- Риски: форма записи (`HealthNoteForm`) открывается в sheet/panel и используется ещё в
+  `vaccination-saved-sheet`, поэтому проверить оба входа. E2E `11-health-sections`.
+
+### 4.5. Остальное «Здоровье»
+
+Отдельные PR по подмодулям, без макетов, по DESIGN §3–4 и паттернам 4.1–4.4:
+1. **Хаб `/health`** — `components/health-hub/*`, `components/health-home/*`: переключатель «чьи
+   данные» в шапке, блоки «Каждый день», «Медкарта», «Инструменты» (`nav-row`), «принять сейчас»
+   (`.hh-take` → primary, сделано в фазе 0). E2E `15-health-hub-mobile`.
+2. **Приём лекарств** — `intake-page`, `intake-today`, `intake-courses`, `intake-course-card`,
+   `intake-course-form`, `intake-reminders`: `.it-card/.ic-card` → `list-card`, `.it-empty = .ic-empty`
+   → `EmptyState`, `.cf-chip` → pill/chip, `.cf-source-tile` → ChoiceTile. E2E `08`, `13-intake-form`.
+3. **Прививки** — `vaccinations-page`, `vaccinations-overview`, `vaccination-person`,
+   `vaccination-add-modal`, `vaccination-saved-sheet`: `.vo-card` → card, 11px-кегли (`0.6471rem`)
+   → `--text-micro` ≥ 12, `.va-cal-check` 22px → 44 тап-зона. E2E `14-vaccinations`.
+4. **Показатели** — `indicators-tab`, `indicator-info` (панель 392px → Drawer). E2E `04`.
+5. **Отчёты для врача** — `doctor-reports-tab`, `doctor-report-form`, `doctor-report-link-dialog`:
+   `.dr-fab` → `Fab`, `.dr-chip-*` → badge. E2E `19-doctor-report`, `22-doctor-report-mobile`.
+6. **Справочник** — `kb-hub`, `kb-tab`, `kb-analyte-tab`, `kb-vaccines-tab`, `kb-card`: `.kv-search`
+   → `SearchField`, `.kv-card` → card.
+
+### 4.6. Аптечка (`/health/medications`, `/health/medications/:id`)
+
+Файлы: `medications-tab`, `medkit-detail-page`, `medkits-panel`, `medications-panel`
+(`.medication-card` с `border-left 4px` → строка + бейдж срока; `.step-spinner` → Spinner;
+`photo-tile` и `.photo-remove` → IconButton). Сроки годности: danger «просрочено», warning
+«скоро истекает», success «в порядке» (DESIGN §1 п.2). E2E `09-medkit`.
+
+### 4.7. Профиль (`/settings…`)
+
+Файлы: `components/settings/*` (`settings-menu`, `profile`, `security`, `notifications`, `data`):
+`.settings-*-row` ×4 → `nav-row` / `person-row`, `.settings-push-banner` и `.settings-menu-push-banner`
+→ один `Alert`. Попутно выровнять подписи пунктов меню с заголовками роутов («Уведомления» /
+«Оповещения», «Данные и доступ» / «Данные и приватность», аудит §2). Это текст, не логика. Здесь же
+переключатель темы «Системная / Светлая / Тёмная» (снимает флаг из фазы 1, если к этому
+моменту все экраны переведены). E2E `12-settings-notifications`, `18-pwa-password-reset`.
+
+### 4.8. Прочее
+
+1. **Вход и онбординг:** `login`, `telegram-bind`, `telegram-expired`, `join-invite`, `profile-setup`,
+   `consent-gate`, `consent-text`, `privacy`, `not-found`. E2E `01`, `06`, `18`.
+2. **Уведомления, поиск:** `notifications-tab`, `app-search` (`.app-search-dropdown` → Popover),
+   `shared/notification-bell`, `shared/background-jobs-dropdown`.
+3. **Публичный отчёт** `public-report` (литералы `#2d2b2b`, `#e2e0df`, `#d97700`, аудит §5.1).
+4. **Админка** (26 экранов): по DESIGN §1 п.4 — плотные таблицы в карточках; `.seg-opt`-сбросы →
+   `segmented`, `<button class="tag">` ×8 в `admin-catalog` → chip. Отдельный PR (или два).
+5. **Финальная чистка (последний PR):** удалить старые токены-алиасы (`paper`, `neutral-*`,
+   `accent-100…900`, `accent-2-*`, `status-*`, `kind-metric/wellbeing`), `@fontsource/source-serif-4`,
+   `@phosphor-icons/web` (3 CSS из `angular.json`), неиспользуемые утилиты (аудит §1), слить
+   `.muted`/`.text-muted`. `html { font-size: 100% }`, `--text-*` перевести в rem. Тёмная тема
+   включается по системной настройке. Удалить `FamilyHub Redesign - standalone.html` из корня
+   и обновить шапку-комментарий `styles.scss`, которая на него ссылается.
+   `DevPanel` не трогаем (аудит §2, «Служебное»).
+
+---
+
+## Расхождения макет vs DESIGN.md и открытые вопросы
+
+Везде делаем по DESIGN.md. Пункты 1–2 решены владельцем продукта и внесены в DESIGN.md §4.
+
+| # | Где | Макет | DESIGN.md / решение |
+|---|---|---|---|
+| 1 | Топбар десктопа | Поиск + колокольчик + «Добавить» есть только на главной. На семье, анализе и дневнике топбара нет | **Решено:** поиск и колокольчик — на всех страницах десктопа, «Добавить» — только на главной. Внесено в DESIGN §4. |
+| 2 | Главная, мобайл | «Требует внимания» выше метрик | **Решено:** макеты верны оба. Десктоп — метрики сверху, «Требует внимания» ниже, но крупнее (фокус на нём); мобайл — сначала «Требует внимания». DESIGN §4 уточнён. |
+| 3 | Бейдж давления, моб. (главная, дневник) | «выше нормы» (warning) | «выше рекомендуемого» (§2.1) |
+| 4 | Анализ, «Гемоглобин» | «Норма в бланке не указана» + бейдж «норма» | «без нормы», neutral (§3 «Анализ») |
+| 5 | H1 | 30 (семья), 32 (анализ, дневник) | `--text-display` 34px (моб. 26–28) |
+| 6 | Заголовки карточек | 18px | `--text-title` 19px (моб. 17) |
+| 7 | Мини-аватар в чипе персоны | 11px | минимум 12px (§2.3) |
+| 8 | Радиусы | 13 (icon-tile моб.), 16 (карточка в чате, счётчики моб.), 18 (карточки моб.), 8, 11 | только токены §2.5: 14 / 20 / 22 / 12 / 10 |
+| 9 | Иконки | stroke 2 / 2,2 / 2,5 у шевронов, отправки и галочки | stroke 1,8 (моб. навигация 1,9), §2.7 |
+| 10 | Сайдбар | Пользователь внизу есть только на «Семья и чат». Переключатель семьи с шевроном ⌃⌄ на главной и в семье, без шеврона на анализе и дневнике | Пользователь внизу всегда. Переключатель везде одинаковый (52px, surface-muted, рамка, с шевроном — это контрол) |
+| 11 | Линия тренда давления | accent | accent только для действий → `--color-kind-measure` |
+| 12 | Дневник: «Симптомы», «Лекарства» | есть фильтры | kind-токенов нет → добавить в DESIGN.md (фаза 1) |
+| 13 | Метрика на мобайле | 24px (счётчики анализа) | `--text-metric` моб. 26–28 |

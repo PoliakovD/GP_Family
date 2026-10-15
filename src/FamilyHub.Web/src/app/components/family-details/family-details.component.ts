@@ -1,3 +1,4 @@
+import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import {Component, Input, OnDestroy, OnInit, effect, inject} from '@angular/core';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
@@ -29,7 +30,7 @@ type FamilySubTab = 'members' | 'chat' | 'medkits' | 'birthdays' | 'dependents';
     selector: 'app-family-details',
     imports: [
         RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent, FamilyChatComponent,
-        DatePipe, InviteModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent,
+        DatePipe, InviteModalComponent, PersonNameComponent, AvatarComponent, ActionMenuComponent, BackLinkComponent,
     ],
     templateUrl: './family-details.component.html',
     styleUrl: './family-details.component.scss'

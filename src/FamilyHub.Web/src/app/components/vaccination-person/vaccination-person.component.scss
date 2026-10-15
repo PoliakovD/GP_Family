@@ -45,7 +45,7 @@
 }
 .vx-stage-head-static { cursor: default; }
 
-.vx-stage-icon { font-size: 1.1765rem; color: var(--color-neutral-500); flex: none; }
+.vx-stage-icon { font-size: 1.1765rem; color: var(--color-neutral-600); flex: none; }
 .vx-stage-count { font-size: 0.7647rem; flex: none; }
 
 .vx-dose-list {
@@ -82,7 +82,7 @@
 .vx-dose-when { font: 600 0.7647rem var(--font-heading); flex: none; }
 .vx-dose-when-soon { color: var(--color-accent-800); }
 .vx-dose-when-can { color: var(--color-status-warning-text); }
-.vx-dose-when-nodata { color: var(--color-neutral-500); }
+.vx-dose-when-nodata { color: var(--color-neutral-600); }
 
 .vx-detail {
   min-width: 0;

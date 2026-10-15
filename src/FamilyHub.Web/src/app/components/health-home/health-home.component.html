@@ -61,7 +61,7 @@
                   <span class="hh-tile-next-time">{{ next.localTime }}</span>
                   <span class="flex-fill">{{ next.drugName }}</span>
                   @if (next.canAct) {
-                    <button type="button" class="hh-take" [disabled]="busyDose()" (click)="takeDose(next, $event)">
+                    <button type="button" class="btn btn-primary hh-take" [disabled]="busyDose()" (click)="takeDose(next, $event)">
                       Отметить приём
                     </button>
                   }
@@ -180,7 +180,7 @@
             <i class="ph-duotone ph-syringe" aria-hidden="true"></i>
             <span class="hh-tile-title flex-fill">Прививки</span>
             @if (summary()?.vaccinations?.nextDue; as due) {
-              <span class="hh-badge" [style.background]="statusColor(due.status)">{{ statusLabel(due.status) }}</span>
+              <span class="hh-badge" [class]="'hh-badge-' + statusTone(due.status)">{{ statusLabel(due.status) }}</span>
             }
           </div>
           @if (summary()?.vaccinations; as v) {

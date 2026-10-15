@@ -135,9 +135,7 @@
     @if (showDetail()) {
       <div class="vx-detail">
         @if (!isWide()) {
-          <button type="button" class="back-link" (click)="backToList()">
-            <i class="ph ph-caret-left" aria-hidden="true"></i> {{ s.subject.isSelf ? 'Я' : s.subject.name }}
-          </button>
+          <app-back-link [label]="s.subject.isSelf ? 'Я' : s.subject.name" (activated)="backToList()" />
         }
         @if (seriesLoading()) {
           <app-loading-spinner />

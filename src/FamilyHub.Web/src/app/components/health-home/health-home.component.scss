@@ -69,7 +69,7 @@
   }
 
   > i:last-child {
-    color: var(--color-neutral-500);
+    color: var(--color-neutral-600);
     flex: none;
   }
 }
@@ -131,7 +131,7 @@
 
 .hh-tile-total {
   font-size: 0.7647rem;
-  color: var(--color-neutral-500);
+  color: var(--color-neutral-600);
 }
 
 .hh-dose-squares {
@@ -185,21 +185,10 @@
   flex: none;
 }
 
+// «Отметить приём» — .btn.btn-primary (44px, акцент), а не зелёная 32px-кнопка с белым текстом
+// на --color-status-ok (3,45:1). Здесь только раскладка.
 .hh-take {
-  padding: 6px 12px;
-  background: var(--color-status-ok);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font: 600 0.7941rem var(--font-heading);
-  cursor: pointer;
-  min-height: 32px;
   flex: none;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
 }
 
 .hh-trend {
@@ -225,16 +214,38 @@
   }
 }
 
+// Статусный бейдж плитки — мягкая подложка + тёмный текст тона (как глобальные .tag-*): белый
+// текст на сплошном статусном цвете не дотягивал до 4,5:1 (warning 2,5:1, ok 3,45:1, danger 4,0:1).
 .hh-badge {
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 0.7647rem;
-  color: #fff;
   flex: none;
 }
 
 .hh-badge-danger {
-  background: var(--color-status-danger);
+  background: color-mix(in srgb, var(--color-status-danger) 16%, var(--color-paper));
+  color: var(--color-status-danger-text);
+}
+
+.hh-badge-ok {
+  background: color-mix(in srgb, var(--color-status-ok) 16%, var(--color-paper));
+  color: var(--color-status-ok-text);
+}
+
+.hh-badge-warning {
+  background: color-mix(in srgb, var(--color-status-warning) 18%, var(--color-paper));
+  color: var(--color-status-warning-text);
+}
+
+.hh-badge-accent {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.hh-badge-neutral {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
 }
 
 // ── «Инструменты» — три узкие строки, три колонки на десктопе ───────────────
@@ -276,7 +287,7 @@
   }
 
   > i:last-child {
-    color: var(--color-neutral-500);
+    color: var(--color-neutral-600);
     flex: none;
   }
 }
