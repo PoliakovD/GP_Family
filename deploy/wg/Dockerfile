@@ -19,7 +19,7 @@ RUN go mod download && \
     go mod verify && \
     go build -ldflags '-linkmode external -extldflags "-fno-PIC -static"' -v -o /usr/bin
 
-FROM alpine:3.19 AS tools
+FROM alpine:3.24 AS tools
 # Зафиксируйте конкретный тег/коммит после первой успешной сборки — "master" воспроизводим
 # только на момент сборки, не навсегда (тот же принцип, что и AMNEZIAWG_GO_COMMIT выше).
 ARG AWGTOOLS_COMMIT=master
@@ -28,7 +28,7 @@ RUN apk add --no-cache git build-base linux-headers && \
     cd /amneziawg-tools && git checkout ${AWGTOOLS_COMMIT} && \
     cd src && make
 
-FROM alpine:3.19
+FROM alpine:3.24
 
 # openresolv — даёт /sbin/resolvconf: awg-quick (linux.bash) вызывает его для DNS = из
 # [Interface]-секции конфига; без пакета команда не найдена, awg-quick падает и откатывает
