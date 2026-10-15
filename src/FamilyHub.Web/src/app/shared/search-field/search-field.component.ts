@@ -1,6 +1,6 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Search, X } from 'lucide-angular';
+import { Search, X } from 'lucide';
 import { IconComponent } from '../ui/icon/icon.component';
 
 /**
@@ -15,6 +15,7 @@ import { IconComponent } from '../ui/icon/icon.component';
  * DebouncedSearch.onQueryChange() / локальный matchesQuery()).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-search-field',
     imports: [FormsModule, IconComponent],
     templateUrl: './search-field.component.html',

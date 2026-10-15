@@ -41,7 +41,7 @@ FamilyHub.Api                 — composition root (Program.cs), семьи/ин
 FamilyHub.Modules.Medical     — аптечка, анализы, вложения (зависит только от Domain+Infra)
 FamilyHub.Modules.Birthdays   — дни рождения (зависит только от Domain+Infra)
 FamilyHub.TelegramBot        — Telegram-бот отдельным процессом, без доступа к БД (ADR-0008)
-FamilyHub.Web                 — Angular 20 SPA (PWA + Telegram Mini App), собирается в FamilyHub.Api/wwwroot
+FamilyHub.Web                 — Angular 22 SPA (PWA + Telegram Mini App), собирается в FamilyHub.Api/wwwroot
 ```
 
 Каждый модуль (`*.Modules.*`) — отдельный csproj с одним статическим методом расширения

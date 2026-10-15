@@ -1,6 +1,6 @@
 import {
-  Activity, Angry, Frown, Laugh, Meh, Moon, PenLine, Pill, Smile, Zap, type LucideIconData,
-} from 'lucide-angular';
+  Activity, Angry, Frown, Laugh, Meh, Moon, PenLine, Pill, Smile, Zap, type IconNode as LucideIconData,
+} from 'lucide';
 import { HealthNoteKind } from '../../models/types';
 import type { Tone } from '../ui/tone';
 

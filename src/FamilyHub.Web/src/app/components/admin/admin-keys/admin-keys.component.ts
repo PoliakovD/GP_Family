@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, AdminKeyRings, RotationStatus } from '../../../services/admin-api.service';
 import { ApiError } from '../../../services/api.service';
@@ -19,6 +19,7 @@ const POLL_INTERVAL_MS = 2000;
 @Component({
     selector: 'app-admin-keys',
     imports: [DatePipe, AdminStatusPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-keys.component.html'
 })
 export class AdminKeysComponent implements OnInit, OnDestroy {

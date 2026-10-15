@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api.service';
 
 /**
@@ -12,6 +12,7 @@ import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api
   selector: 'app-admin-security-stats',
   imports: [DatePipe],
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (loading()) {
       <p class="text-muted">Загрузка…</p>

@@ -1,5 +1,5 @@
-import { Component, computed, input, output } from '@angular/core';
-import { ChevronRight, FlaskConical, Stethoscope } from 'lucide-angular';
+import { Component, computed, input, output, ChangeDetectionStrategy } from '@angular/core';
+import { ChevronRight, FlaskConical, Stethoscope } from 'lucide';
 import { MedicalRecordKind } from '../../models/types';
 import type { ExtractionStatusResponse, MedicalRecord } from '../../models/types';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
@@ -16,6 +16,7 @@ import { RecordRecognitionStatusComponent } from './record-recognition-status.co
  * запись; под строкой — блок распознавания. Разделители строк рисует list-card родителя.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-record-list-card',
   standalone: true,
   imports: [ActionMenuComponent, IconComponent, IconTileComponent, RecordRecognitionStatusComponent],

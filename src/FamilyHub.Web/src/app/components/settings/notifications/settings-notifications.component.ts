@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../services/auth.service';
 import { ApiService, ApiError } from '../../../services/api.service';
@@ -30,6 +30,7 @@ function isStandalone(): boolean {
     selector: 'app-settings-notifications',
     imports: [FormsModule],
     templateUrl: './settings-notifications.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-notifications.component.scss'
 })
 export class SettingsNotificationsComponent implements OnInit {

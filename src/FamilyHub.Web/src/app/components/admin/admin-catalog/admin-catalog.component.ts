@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject, signal, viewChildren } from '@angular/core';
+import { Component, HostListener, OnInit, inject, signal, viewChildren, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -37,6 +37,7 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
  * единственным, теперь ветка на случай схемы/полей вне формы).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-admin-catalog',
     imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, KbHistoryComponent, VerificationBadgeComponent],
     templateUrl: './admin-catalog.component.html',

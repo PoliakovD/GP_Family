@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, OnDestroy, Output, inject } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, OnDestroy, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * Невидимый маркер конца списка (редизайн v2, «Анализы» — бесконечная прокрутка вместо
@@ -11,6 +11,7 @@ import { AfterViewInit, Component, ElementRef, EventEmitter, OnDestroy, Output, 
   selector: 'app-infinite-scroll-sentinel',
   standalone: true,
   template: '',
+  changeDetection: ChangeDetectionStrategy.Eager,
   host: { style: 'display:block;height:1px' },
 })
 export class InfiniteScrollSentinelComponent implements AfterViewInit, OnDestroy {

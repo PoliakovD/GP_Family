@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Renderer2, effect, inject, input } from '@angular/core';
-import type { LucideIconData } from 'lucide-angular';
+import type { IconNode as LucideIconData } from 'lucide';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -7,9 +7,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * Иконка Lucide (DESIGN §2.7: линейные, stroke 1.8, скруглённые концы, 20px). Одна библиотека на
  * всё приложение — Phosphor уходит последним PR фазы 4.
  *
- * Данные иконки импортируются поимённо (`import { House } from 'lucide-angular'`) — в бандл
- * попадают только используемые. Своя обёртка, а не компонент пакета: тот собран под Angular 13
- * (NgModule), а здесь нужны только SVG-узлы из данных.
+ * Данные иконки импортируются поимённо (`import { House } from 'lucide'`) — в бандл
+ * попадают только используемые. Пакет — ванильный `lucide` (только данные иконок): `lucide-angular`
+ * не поддерживает Angular 22, а его компонент и не нужен — SVG-узлы собирает эта обёртка.
  *
  * Без `label` иконка декоративная (aria-hidden) — подпись несёт соседний текст или aria-label
  * кнопки. С `label` — role="img" и aria-label (иконка — единственный носитель смысла).

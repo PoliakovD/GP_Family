@@ -1,7 +1,7 @@
-import { NotebookPen } from 'lucide-angular';
+import { NotebookPen } from 'lucide';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -19,6 +19,7 @@ import { GROUP_LABEL } from '../../shared/util/vaccination-labels';
  * конкретную серию (та же точка входа, что у kb-analyte-tab — «О вакцине в справочнике»).
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-kb-vaccines-tab',
   imports: [BottomSheetComponent, FormsModule, IconComponent, SearchFieldComponent, LoadingSpinnerComponent, NgTemplateOutlet, SidePanelComponent],
   templateUrl: './kb-vaccines-tab.component.html',

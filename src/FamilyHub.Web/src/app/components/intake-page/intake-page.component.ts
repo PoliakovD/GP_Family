@@ -1,6 +1,6 @@
-import { Plus } from 'lucide-angular';
+import { Plus } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
-import { Component, OnInit, computed, effect, inject, input, untracked, viewChild } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, input, untracked, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { IntakeStateService } from '../../services/intake-state.service';
@@ -21,6 +21,7 @@ import { IntakeRemindersComponent } from '../intake-reminders/intake-reminders.c
  * (кнопка «Начать курс» в приёме врача).
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-intake-page',
   imports: [
     IconComponent,

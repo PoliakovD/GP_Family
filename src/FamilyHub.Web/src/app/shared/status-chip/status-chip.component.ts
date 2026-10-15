@@ -1,5 +1,5 @@
-import { Component, computed, input } from '@angular/core';
-import { ArrowDown, ArrowUp, TriangleAlert, type LucideIconData } from 'lucide-angular';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { ArrowDown, ArrowUp, TriangleAlert, type IconNode as LucideIconData } from 'lucide';
 import { IndicatorFlag } from '../../models/types';
 import { IconComponent } from '../ui/icon/icon.component';
 
@@ -13,6 +13,7 @@ import { IconComponent } from '../ui/icon/icon.component';
  * себя списки и справка), а с `showUnknown` — нейтральный «без нормы» (строка таблицы показателей).
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-status-chip',
   standalone: true,
   imports: [IconComponent],

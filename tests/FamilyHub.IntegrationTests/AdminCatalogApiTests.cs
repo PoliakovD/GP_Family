@@ -373,7 +373,10 @@ public class AdminCatalogApiTests(AdminWebFactory factory)
         var blood = await SeedSpecimenDirectAsync($"кровь{Guid.NewGuid():N}");
         var urine = await SeedSpecimenDirectAsync($"моча{Guid.NewGuid():N}");
         var serum = await SeedSpecimenDirectAsync($"сыворотка{Guid.NewGuid():N}");
-        var name = $"белок{Guid.NewGuid():N}";
+        // Ключ сразу в текущей форме: успешная смена биоматериала ставит LabAnalyteKbRekeyJob, и сырой
+        // «белок<hex>» (кириллица + латиница из GUID) он перекеивал бы параллельно со вторым PUT — двойник
+        // переставал находиться точным ключом, и вместо 409 изредка приходил 200.
+        var name = LabAnalyteNormalizer.RenormalizeKey($"белок{Guid.NewGuid():N}");
         var id = await SeedLabAnalyteForSpecimenAsync(name, "Белок", blood);
         var twin = await SeedLabAnalyteForSpecimenAsync(name, "Белок в моче", urine);
 

@@ -1,5 +1,5 @@
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
-import {Component, Input, OnDestroy, OnInit, computed, effect, inject, signal} from '@angular/core';
+import {Component, Input, OnDestroy, OnInit, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import {Location} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
@@ -29,11 +29,12 @@ import {BreakpointService} from '../../services/breakpoint.service';
 import {PageActionService} from '../../services/page-action.service';
 import {pluralizeRu} from '../../shared/util/pluralize';
 import {formatPersonName} from '../../shared/util/person-name';
-import {Check, Link, Lock} from 'lucide-angular';
+import {Check, Link, Lock} from 'lucide';
 
 type FamilySubTab = 'members' | 'chat' | 'medkits' | 'birthdays' | 'dependents';
 
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-family-details',
     imports: [
         RouterLink, MedkitsPanelComponent, BirthdaysPanelComponent, DependentsPanelComponent, FamilyChatComponent,

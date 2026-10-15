@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { House } from 'lucide-angular';
+import { House } from 'lucide';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FabComponent } from './fab/fab.component';
 import { FieldDirective } from './field/field.directive';

@@ -1,6 +1,6 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Hourglass, Sparkles } from 'lucide-angular';
+import { Hourglass, Sparkles } from 'lucide';
 import { MedicalRecordKind } from '../../models/types';
 import type {
   ExtractionStatusResponse, IndicatorDto, MedicalRecord, RecordSummaryResponse, VisitConclusion,
@@ -22,6 +22,7 @@ import { RecordRecognitionStatusComponent } from './record-recognition-status.co
   standalone: true,
   imports: [AttachmentListComponent, IconComponent, IndicatorTableComponent, RecordRecognitionStatusComponent, RouterLink],
   templateUrl: './record-detail-body.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .rdb { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
     .rdb-text { margin: 0; font: var(--text-body); color: var(--color-text); }

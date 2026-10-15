@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -23,6 +23,7 @@ type Step = 'email' | 'code';
 @Component({
     selector: 'app-telegram-bind',
     imports: [FormsModule],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './telegram-bind.component.html'
 })
 export class TelegramBindComponent implements HasPendingCodeEntry, OnDestroy {

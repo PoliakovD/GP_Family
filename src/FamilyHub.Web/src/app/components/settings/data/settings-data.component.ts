@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -16,6 +16,7 @@ import { TelegramService } from '../../../services/telegram.service';
     selector: 'app-settings-data',
     imports: [FormsModule, RouterLink],
     templateUrl: './settings-data.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-data.component.scss',
 })
 export class SettingsDataComponent implements OnInit {

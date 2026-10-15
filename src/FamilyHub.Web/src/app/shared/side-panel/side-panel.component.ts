@@ -2,6 +2,7 @@ import {
   inject,
   Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output,
   SimpleChanges, ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { OverlayA11y } from '../util/overlay-a11y';
 import { OverlayStackService } from '../util/overlay-stack.service';
@@ -62,6 +63,7 @@ import { OverlayStackService } from '../util/overlay-stack.service';
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './side-panel.component.scss',
 })
 export class SidePanelComponent implements OnChanges, OnDestroy {

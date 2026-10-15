@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { Plus, type LucideIconData } from 'lucide-angular';
+import { Plus, type IconNode as LucideIconData } from 'lucide';
 import { IconComponent } from '../icon/icon.component';
 
 /**

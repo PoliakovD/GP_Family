@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, AdminRelatedAnalyteMatch, KbAnalyteListItem } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
@@ -110,6 +110,7 @@ const EMPTY_REF_RANGE = (): RefRangeRow => ({
  *   тихо теряет текст.
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-admin-payload-editor',
     imports: [FormsModule],
     templateUrl: './admin-payload-editor.component.html',

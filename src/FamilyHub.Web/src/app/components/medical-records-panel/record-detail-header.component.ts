@@ -1,5 +1,5 @@
-import { Component, computed, input, model, output } from '@angular/core';
-import { Eye, FileText, Link, Lock } from 'lucide-angular';
+import { Component, computed, input, model, output, ChangeDetectionStrategy } from '@angular/core';
+import { Eye, FileText, Link, Lock } from 'lucide';
 import { MedicalRecordKind } from '../../models/types';
 import type { MedicalRecord } from '../../models/types';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
@@ -18,6 +18,7 @@ import { recordPersonKey, recordShortName, unknownIndicatorCount } from './recor
  * биоматериал · доступ) и счётчики-фильтры «вне нормы / в норме / без нормы».
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-record-detail-header',
   standalone: true,
   imports: [ActionMenuComponent, AvatarComponent, BackLinkComponent, IconComponent, StatFilterComponent],

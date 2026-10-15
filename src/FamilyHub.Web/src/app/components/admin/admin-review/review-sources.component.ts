@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -140,6 +140,7 @@ export interface EnsureCacheRef {
       }
     </ul>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .review-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .review-source { padding: 8px 10px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper); }

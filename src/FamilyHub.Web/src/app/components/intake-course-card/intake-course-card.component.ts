@@ -1,5 +1,5 @@
-import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
-import { NotebookPen, Pill } from 'lucide-angular';
+import { Component, computed, effect, inject, input, output, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
+import { NotebookPen, Pill } from 'lucide';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
@@ -38,6 +38,7 @@ const MISSED_LABELS: Record<number, string> = { 30: '30 минут', 60: 'час
  * курсом — изменить, приостановить/возобновить, завершить, удалить.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-intake-course-card',
   imports: [IconComponent, IconTileComponent, LoadingSpinnerComponent, ActionMenuComponent, RouterLink],
   templateUrl: './intake-course-card.component.html',

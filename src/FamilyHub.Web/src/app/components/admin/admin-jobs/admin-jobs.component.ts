@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -40,6 +40,7 @@ const JOB_TYPES: { value: PipelineJobType; label: string }[] = [
 @Component({
     selector: 'app-admin-jobs',
     imports: [FormsModule, DatePipe, SidePanelComponent, AdminJobPanelComponent, AdminStatusPipe, WebSearchBannerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-jobs.component.html'
 })
 export class AdminJobsComponent implements OnInit, OnDestroy {

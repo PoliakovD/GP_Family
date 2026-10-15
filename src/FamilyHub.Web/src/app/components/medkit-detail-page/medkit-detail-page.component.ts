@@ -1,5 +1,5 @@
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
-import { Component, OnDestroy, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnDestroy, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -21,6 +21,7 @@ import { pluralizeRu } from '../../shared/util/pluralize';
  * шапка с «Изменить»/«Удалить» самой аптечки, переехавшими с уже неактуальной строки списка.
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-medkit-detail-page',
     imports: [ActionMenuComponent, FormsModule, BackLinkComponent, ModalComponent, LoadingSpinnerComponent, MedicationsPanelComponent],
     templateUrl: './medkit-detail-page.component.html',

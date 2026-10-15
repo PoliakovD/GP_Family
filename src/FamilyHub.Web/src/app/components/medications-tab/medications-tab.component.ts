@@ -1,7 +1,7 @@
-import { ChevronRight } from 'lucide-angular';
+import { ChevronRight } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { formatDayMonthYear } from '../../shared/util/date-format';
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -14,6 +14,7 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component';
 
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-medications-tab',
     imports: [IconComponent, MedkitsPanelComponent, LoadingSpinnerComponent, RouterLink],
     templateUrl: './medications-tab.component.html',

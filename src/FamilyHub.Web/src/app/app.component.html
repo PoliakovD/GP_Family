@@ -63,7 +63,7 @@
       </nav>
 
       <a class="app-sidebar-user" routerLink="/settings" aria-label="Профиль и настройки">
-        <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="md" [self]="true" />
+        <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: $safeNavigationMigration(auth.me()?.firstName), lastName: $safeNavigationMigration(auth.me()?.lastName)}" size="md" [self]="true" />
         <span class="app-sidebar-user-text">
           <span class="app-sidebar-user-name">{{ auth.me()?.firstName }} {{ auth.me()?.lastName }}</span>
           <span class="app-sidebar-user-role">{{ userRoleLabel() }}</span>
@@ -141,7 +141,7 @@
               <app-family-switcher variant="pill" />
               <span class="flex-fill"></span>
             } @else if (isHealthHubIndex()) {
-              <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="sm" [self]="true" />
+              <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: $safeNavigationMigration(auth.me()?.firstName), lastName: $safeNavigationMigration(auth.me()?.lastName)}" size="sm" [self]="true" />
               <div class="app-topbar-mobile-title flex-fill">Моё здоровье</div>
             } @else {
               <div class="app-topbar-mobile-title flex-fill">{{ mobileTitle() }}</div>

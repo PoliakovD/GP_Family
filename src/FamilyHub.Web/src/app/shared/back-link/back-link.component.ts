@@ -1,6 +1,6 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ChevronLeft } from 'lucide-angular';
+import { ChevronLeft } from 'lucide';
 import { IconComponent } from '../ui/icon/icon.component';
 
 /**
@@ -34,6 +34,7 @@ import { IconComponent } from '../ui/icon/icon.component';
       </button>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './back-link.component.scss',
 })
 export class BackLinkComponent {

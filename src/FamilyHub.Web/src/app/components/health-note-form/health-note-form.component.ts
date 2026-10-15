@@ -1,6 +1,6 @@
-import { Component, OnInit, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, WritableSignal, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CirclePlus, FileText } from 'lucide-angular';
+import { CirclePlus, FileText } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { HEALTH_KIND_UI, WELLBEING_ICON } from '../../shared/util/health-note-icons';
@@ -25,6 +25,7 @@ import {
   selector: 'app-health-note-form',
   imports: [FormsModule, IconComponent, IconTileComponent],
   templateUrl: './health-note-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-note-form.component.scss',
 })
 export class HealthNoteFormComponent implements OnInit {

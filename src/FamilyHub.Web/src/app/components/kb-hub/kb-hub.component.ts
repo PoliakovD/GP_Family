@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 /**
@@ -8,6 +8,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
  * содержимого; indicators — новый справочник показателей (kb-analyte-tab).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-kb-hub',
     imports: [RouterLink, RouterLinkActive, RouterOutlet],
     templateUrl: './kb-hub.component.html',

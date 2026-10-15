@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Check, ChevronDown, ChevronsUpDown, Plus } from 'lucide-angular';
+import { Check, ChevronDown, ChevronsUpDown, Plus } from 'lucide';
 import { FamilyStateService } from '../../../services/family-state.service';
 import { IconComponent } from '../icon/icon.component';
 

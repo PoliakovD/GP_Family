@@ -4,7 +4,7 @@
   <div class="hh-page">
     <header class="hh-header">
       <app-avatar
-        [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}"
+        [person]="{key: auth.me()?.userId ?? 'me', firstName: $safeNavigationMigration(auth.me()?.firstName), lastName: $safeNavigationMigration(auth.me()?.lastName)}"
         size="lg"
       />
       <div>

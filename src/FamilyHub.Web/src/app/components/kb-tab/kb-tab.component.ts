@@ -1,6 +1,6 @@
-import { ChevronRight } from 'lucide-angular';
+import { ChevronRight } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { KbListItem, KbMedicationCard } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
@@ -17,6 +17,7 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
  * см. SearchService).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-kb-tab',
     imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
     templateUrl: './kb-tab.component.html',

@@ -1,5 +1,5 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { X } from 'lucide-angular';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
+import { X } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 /**
@@ -11,6 +11,7 @@ import { IconComponent } from '../../shared/ui/icon/icon.component';
  * и одинаково работает и в `medical-records-panel`, и в `kb-analyte-tab`.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-indicator-info-panel',
   standalone: true,
   imports: [IconComponent],

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, model, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ArrowRight, ChevronRight, Plus, type LucideIconData } from 'lucide-angular';
+import { ArrowRight, ChevronRight, Plus, type IconNode as LucideIconData } from 'lucide';
 import { AvatarComponent, AvatarPerson } from '../../avatar/avatar.component';
 import { IconComponent } from '../icon/icon.component';
 import { IconTileComponent } from '../icon-tile/icon-tile.component';

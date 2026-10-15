@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 
 /** Минимум данных для отрисовки — редизайн v2. `key` — стабильный идентификатор человека
  * (userId/dependentId), а не имя: цвет выбирается хэшем по нему, чтобы не менялся при
@@ -48,6 +48,7 @@ function hashString(value: string): number {
       [style.color]="colors()[1]"
     >{{ initials() }}</span>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './avatar.component.scss',
 })
 export class AvatarComponent {

@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { AvatarComponent, type AvatarPerson } from '../avatar/avatar.component';
 
 /**
@@ -22,6 +22,7 @@ import { AvatarComponent, type AvatarPerson } from '../avatar/avatar.component';
       <span class="person-chip-label">{{ shortLabel() }}</span>
     </span>
   `,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './person-chip.component.scss'
 })
 export class PersonChipComponent {

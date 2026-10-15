@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import type { KbMedicationCard } from '../../models/types';
 
@@ -8,6 +8,7 @@ import type { KbMedicationCard } from '../../models/types';
  * (kb-tab), и в «Аптечке» (действие «Справка» у конкретного медикамента).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-kb-card',
     imports: [DatePipe],
     templateUrl: './kb-card.component.html',

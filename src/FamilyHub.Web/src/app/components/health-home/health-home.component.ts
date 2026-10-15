@@ -1,8 +1,8 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   BookOpen, BriefcaseMedical, ChartLine, ChevronRight, FileText, FlaskConical, NotebookPen, Pill, Stethoscope, Syringe, Zap,
-} from 'lucide-angular';
+} from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { NavRowComponent } from '../../shared/ui/nav-row/nav-row.component';
@@ -38,6 +38,7 @@ type DoseSquare = 'taken' | 'missed' | 'next' | 'upcoming';
   selector: 'app-health-home',
   imports: [RouterLink, AvatarComponent, IconComponent, IconTileComponent, NavRowComponent, TrendLineComponent, LoadingSpinnerComponent],
   templateUrl: './health-home.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-home.component.scss',
 })
 export class HealthHomeComponent implements OnInit {

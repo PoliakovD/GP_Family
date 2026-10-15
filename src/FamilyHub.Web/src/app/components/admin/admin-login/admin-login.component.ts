@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -9,6 +9,7 @@ import { AdminApiService } from '../../../services/admin-api.service';
 @Component({
     selector: 'app-admin-login',
     imports: [FormsModule],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-login.component.html'
 })
 export class AdminLoginComponent {

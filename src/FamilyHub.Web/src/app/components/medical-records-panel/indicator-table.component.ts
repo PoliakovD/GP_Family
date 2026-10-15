@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { IndicatorDto, UpdateIndicatorRequest } from '../../models/types';
@@ -8,7 +8,7 @@ import { StatusChipComponent } from '../../shared/status-chip/status-chip.compon
 import { ToastService } from '../../shared/toast/toast.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { enrichmentStatusTitle } from '../../shared/util/enrichment-status-text';
-import { Plus } from 'lucide-angular';
+import { Plus } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import {
   type IndicatorSortMode, type IndicatorStatusFilter, deviationAmount, indicatorLabel, indicatorReference,
@@ -28,6 +28,7 @@ import { emptyIndicatorForm, sanitizeIndicatorForm } from './indicator-form';
   standalone: true,
   imports: [ClickableDirective, FormsModule, IconComponent, NgTemplateOutlet, ReferenceScaleComponent, StatusChipComponent],
   templateUrl: './indicator-table.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './indicator-table.component.scss',
 })
 export class IndicatorTableComponent {

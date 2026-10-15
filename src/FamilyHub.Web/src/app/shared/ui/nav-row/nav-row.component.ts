@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { ChevronRight, type LucideIconData } from 'lucide-angular';
+import { ChevronRight, type IconNode as LucideIconData } from 'lucide';
 import { IconComponent } from '../icon/icon.component';
 import { IconTileComponent } from '../icon-tile/icon-tile.component';
 import { Tone } from '../tone';

@@ -1,4 +1,4 @@
-import { Component, effect, inject, input, output, signal } from '@angular/core';
+import { Component, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { formatDayMonthYear } from '../util/date-format';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -64,6 +64,7 @@ import { copyToClipboard } from '../util/clipboard';
       }
     </app-modal>
   `,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: `
     // Саму ссылку показываем текстом: на десктопе с navigator.share пользователь иначе никогда
     // не получил бы её для копирования вручную.

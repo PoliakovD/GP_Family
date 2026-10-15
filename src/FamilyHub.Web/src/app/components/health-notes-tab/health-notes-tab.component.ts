@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -7,7 +7,7 @@ import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/ac
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { TrackDirtyDirective, confirmDiscard } from '../../shared/util/track-dirty.directive';
-import { FileText, Lock, NotebookPen, Plus, type LucideIconData } from 'lucide-angular';
+import { FileText, Lock, NotebookPen, Plus, type IconNode as LucideIconData } from 'lucide';
 import { HEALTH_KIND_UI as KIND_UI } from '../../shared/util/health-note-icons';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
@@ -105,6 +105,7 @@ function quantile(sorted: number[], q: number): number {
     SearchFieldComponent, SidePanelComponent, TrackDirtyDirective, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-notes-tab.component.scss',
 })
 export class HealthNotesTabComponent implements OnInit {

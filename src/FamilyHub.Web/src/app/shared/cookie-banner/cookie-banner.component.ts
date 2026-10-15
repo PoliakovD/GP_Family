@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { CookieConsentService } from './cookie-consent.service';
@@ -12,6 +12,7 @@ import { CookieConsentService } from './cookie-consent.service';
 @Component({
     selector: 'app-cookie-banner',
     imports: [RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './cookie-banner.component.html'
 })
 export class CookieBannerComponent {

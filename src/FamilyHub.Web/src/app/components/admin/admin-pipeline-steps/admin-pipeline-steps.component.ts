@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, PipelineStep } from '../../../services/admin-api.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
@@ -18,6 +18,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
   selector: 'app-admin-pipeline-steps',
   standalone: true,
   imports: [DatePipe],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './admin-pipeline-steps.component.html',
 })
 export class AdminPipelineStepsComponent implements OnInit {

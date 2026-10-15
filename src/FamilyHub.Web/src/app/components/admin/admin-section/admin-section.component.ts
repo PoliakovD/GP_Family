@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 export interface AdminTab {
@@ -15,6 +15,7 @@ export interface AdminTab {
 @Component({
     selector: 'app-admin-section',
     imports: [RouterLink, RouterLinkActive, RouterOutlet],
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `
     <div class="seg mb-3">
       @for (t of tabs; track t.path) {

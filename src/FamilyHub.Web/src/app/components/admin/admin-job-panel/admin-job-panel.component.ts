@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import {
@@ -38,6 +38,7 @@ const ORIGIN_LABELS: Record<string, string> = {
 @Component({
     selector: 'app-admin-job-panel',
     imports: [DatePipe, RouterLink, AdminStatusPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-job-panel.component.html'
 })
 export class AdminJobPanelComponent implements OnChanges, OnDestroy {

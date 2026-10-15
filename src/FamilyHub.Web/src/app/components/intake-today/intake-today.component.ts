@@ -1,8 +1,8 @@
-import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
-  BellRing, Check, Minus, Moon, Package, Pill, Sun, Sunrise, X, type LucideIconData,
-} from 'lucide-angular';
+  BellRing, Check, Minus, Moon, Package, Pill, Sun, Sunrise, X, type IconNode as LucideIconData,
+} from 'lucide';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
@@ -55,6 +55,7 @@ const REFRESH_MS = 60_000;
   selector: 'app-intake-today',
   imports: [ActionMenuComponent, AvatarComponent, EmptyStateComponent, IconComponent, IconTileComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './intake-today.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-today.component.scss',
 })
 export class IntakeTodayComponent implements OnInit, OnDestroy {

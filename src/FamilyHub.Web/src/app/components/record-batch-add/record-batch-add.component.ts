@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -11,7 +11,7 @@ import { buildPatientOptions, type PatientOption } from '../../shared/util/patie
 import { ACCEPTED_ATTACHMENT_TYPES, formatMb } from '../../shared/util/attachment-upload';
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath } from '../../shared/util/medical-record-labels';
 import { FileViewerComponent } from '../../shared/file-viewer/file-viewer.component';
-import { Check, CircleMinus, FileText, LoaderCircle, TriangleAlert, Upload, X } from 'lucide-angular';
+import { Check, CircleMinus, FileText, LoaderCircle, TriangleAlert, Upload, X } from 'lucide';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { PageActionService } from '../../services/page-action.service';
@@ -49,6 +49,7 @@ let nextInstanceId = 0;
     selector: 'app-record-batch-add',
     imports: [NgTemplateOutlet, AvatarComponent, FileViewerComponent, IconComponent],
     templateUrl: './record-batch-add.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-batch-add.component.scss'
 })
 export class RecordBatchAddComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnDestroy, OnInit, Output, effect, inject, input } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, OnInit, Output, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication, MedicationKbResponse } from '../../models/types';
@@ -8,7 +8,7 @@ import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { formatDayMonthYear } from '../../shared/util/date-format';
 import { compressImage } from '../../shared/util/image-compression';
 import { expiryBadge, expiryClass, expiryLabel } from '../../shared/util/expiry';
-import { BookOpen, BriefcaseMedical, Pill, Plus } from 'lucide-angular';
+import { BookOpen, BriefcaseMedical, Pill, Plus } from 'lucide';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
@@ -57,6 +57,7 @@ let nextInstanceId = 0;
     selector: 'app-medications-panel',
     imports: [ActionMenuComponent, EmptyStateComponent, FormsModule, IconComponent, IconTileComponent, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
     templateUrl: './medications-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medications-panel.component.scss'
 })
 export class MedicationsPanelComponent implements OnInit, OnDestroy {

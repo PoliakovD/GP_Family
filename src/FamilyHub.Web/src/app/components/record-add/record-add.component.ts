@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { confirmDiscard } from '../../shared/util/track-dirty.directive';
@@ -16,7 +16,7 @@ import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '.
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { FileViewerComponent } from '../../shared/file-viewer/file-viewer.component';
-import { FileText, Upload, X } from 'lucide-angular';
+import { FileText, Upload, X } from 'lucide';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { PageActionService } from '../../services/page-action.service';
@@ -49,6 +49,7 @@ let nextInstanceId = 0;
     selector: 'app-record-add',
     imports: [FormsModule, NgTemplateOutlet, AvatarComponent, ExpandableComponent, FileViewerComponent, IconComponent],
     templateUrl: './record-add.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-add.component.scss'
 })
 export class RecordAddComponent implements OnInit, OnDestroy {

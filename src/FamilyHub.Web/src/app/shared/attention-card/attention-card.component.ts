@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * Каркас карточки «Требует внимания» (редизайн v2, Главная) — цветная полоса слева по
@@ -24,6 +24,7 @@ import { Component, input } from '@angular/core';
       </div>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './attention-card.component.scss',
 })
 export class AttentionCardComponent {

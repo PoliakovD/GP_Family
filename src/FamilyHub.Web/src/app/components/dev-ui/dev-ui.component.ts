@@ -4,7 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import {
   Bell, BriefcaseMedical, Calendar, ChevronRight, FileText, FlaskConical, Heart, HeartPulse, House, Link,
   Moon, NotebookPen, Pill, Plus, Search, Smile, Syringe, Users, Zap,
-} from 'lucide-angular';
+} from 'lucide';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';

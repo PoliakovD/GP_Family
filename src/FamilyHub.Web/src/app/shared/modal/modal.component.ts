@@ -1,6 +1,7 @@
 import {
   Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild,
   inject,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { OverlayA11y } from '../util/overlay-a11y';
 import { OverlayStackService } from '../util/overlay-stack.service';
@@ -11,6 +12,7 @@ let nextModalId = 0;
   selector: 'app-modal',
   standalone: true,
   templateUrl: './modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './modal.component.scss',
 })
 export class ModalComponent implements OnChanges, OnDestroy {
@@ -46,7 +48,7 @@ export class ModalComponent implements OnChanges, OnDestroy {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
+  onEscape(event: Event): void {
     if (this.open && this.overlays.claimEscape(this, event)) this.closed.emit();
   }
 

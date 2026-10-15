@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -17,6 +17,7 @@ const MONTHS_GEN = [
 @Component({
     selector: 'app-notifications-tab',
     imports: [ClickableDirective, FormsModule, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './notifications-tab.component.html'
 })
 export class NotificationsTabComponent implements OnInit {

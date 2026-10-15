@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 
 const W = 200;
 const H = 40;
@@ -26,6 +26,7 @@ const PAD_Y = 5;
       }
     </svg>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     :host { display: block; }
     .trend-line { width: 100%; height: 38px; display: block; overflow: visible; }

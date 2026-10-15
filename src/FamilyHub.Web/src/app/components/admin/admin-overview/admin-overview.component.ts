@@ -1,10 +1,11 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { AdminApiService, AdminOverview } from '../../../services/admin-api.service';
 
 @Component({
     selector: 'app-admin-overview',
     imports: [DecimalPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-overview.component.html'
 })
 export class AdminOverviewComponent implements OnInit {

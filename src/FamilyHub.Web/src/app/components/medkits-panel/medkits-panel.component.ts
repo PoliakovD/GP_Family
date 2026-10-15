@@ -1,8 +1,8 @@
-import { BriefcaseMedical, ChevronDown, ChevronRight, Plus } from 'lucide-angular';
+import { BriefcaseMedical, ChevronDown, ChevronRight, Plus } from 'lucide';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -16,6 +16,7 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { pluralizeRu } from '../../shared/util/pluralize';
 
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-medkits-panel',
     imports: [ActionMenuComponent, IconComponent, IconTileComponent, ClickableDirective, FormsModule, MedicationsPanelComponent, ModalComponent, LoadingSpinnerComponent],
     templateUrl: './medkits-panel.component.html',

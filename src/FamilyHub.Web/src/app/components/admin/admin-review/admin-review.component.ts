@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -44,6 +44,7 @@ const INBOX_MAX_TAKE = 500;
   selector: 'app-admin-review',
   imports: [FormsModule, DatePipe, ReviewDetailComponent, ReviewConfigComponent],
   templateUrl: './admin-review.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-review.component.scss',
 })
 export class AdminReviewComponent implements OnInit {

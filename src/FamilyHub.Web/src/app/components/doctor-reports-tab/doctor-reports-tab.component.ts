@@ -1,9 +1,9 @@
-import { Download, FileText, Plus } from 'lucide-angular';
+import { Download, FileText, Plus } from 'lucide';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { FabComponent } from '../../shared/ui/fab/fab.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -47,6 +47,7 @@ interface ReportRow {
  * удалить и не выдать новую — это решает автор.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-doctor-reports-tab',
   imports: [
     EmptyStateComponent, FabComponent, IconComponent, LoadingSpinnerComponent,

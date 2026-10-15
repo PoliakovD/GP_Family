@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -28,7 +28,7 @@ import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.com
 import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
-import { Camera, Eye, Info, Plus, SlidersHorizontal, X } from 'lucide-angular';
+import { Camera, Eye, Info, Plus, SlidersHorizontal, X } from 'lucide';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
@@ -112,6 +112,7 @@ let nextInstanceId = 0;
         RecordListCardComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
@@ -639,7 +640,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeForFilters(event: KeyboardEvent): void {
+  onEscapeForFilters(event: Event): void {
     if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }

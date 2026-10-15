@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
@@ -18,6 +18,7 @@ let nextInstanceId = 0;
 @Component({
     selector: 'app-birthdays-panel',
     imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './birthdays-panel.component.html'
 })
 export class BirthdaysPanelComponent implements OnInit {

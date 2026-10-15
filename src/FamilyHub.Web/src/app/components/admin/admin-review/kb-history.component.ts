@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import {
   AdminApiService,
@@ -84,6 +84,7 @@ import { HistoryDiffLine, diffSnapshots, historyActionLabel, historyTargetLabel 
       }
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .kb-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .kb-history-item { padding-bottom: 10px; border-bottom: 1px solid var(--color-divider); }

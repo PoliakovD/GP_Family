@@ -1,6 +1,6 @@
-import { ChevronRight } from 'lucide-angular';
+import { ChevronRight } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -25,6 +25,7 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
  * заставляя пользователя искать её заново в списке.
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-kb-analyte-tab',
     imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, IndicatorInfoComponent, IndicatorInfoPanelComponent],
     templateUrl: './kb-analyte-tab.component.html',

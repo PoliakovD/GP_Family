@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 @Component({
   selector: 'app-privacy',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="card" style="max-width: 720px; margin: 1.5rem auto; padding: 1.5rem;">
       @if (html(); as content) {

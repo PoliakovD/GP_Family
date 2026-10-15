@@ -1,7 +1,8 @@
-import { ArrowRight, Check, MessageCircle, Paperclip, Plus } from 'lucide-angular';
+import { ArrowRight, Check, MessageCircle, Paperclip, Plus } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import {
   Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked, viewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -75,6 +76,7 @@ const COMPRESSIBLE = new Set(['image/jpeg', 'image/png', 'image/webp']);
     InfiniteScrollSentinelComponent, IconComponent,
   ],
   templateUrl: './family-chat.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './family-chat.component.scss',
 })
 export class FamilyChatComponent implements OnInit, OnDestroy {

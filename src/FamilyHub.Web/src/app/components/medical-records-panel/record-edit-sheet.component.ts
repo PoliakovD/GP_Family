@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, input, output } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MedicalRecordKind } from '../../models/types';
 import type { GlobalSpecimenDto, MedicalRecord, UpdateMedicalRecordRequest, UserSpecimen } from '../../models/types';
@@ -20,6 +20,7 @@ import type { MedicalRecordKindLabels } from '../../shared/util/medical-record-l
   selector: 'app-record-edit-sheet',
   standalone: true,
   imports: [FormsModule, BottomSheetComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './record-edit-sheet.component.html',
 })
 export class RecordEditSheetComponent implements OnInit, OnDestroy {

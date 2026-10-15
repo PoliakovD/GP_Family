@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ToastService } from '../toast/toast.service';
 import { AttachmentPreviewStatus, type Attachment, type AttachmentLimits } from '../../models/types';
@@ -7,7 +7,7 @@ import { describeFile } from '../util/file-type';
 import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.component';
 import { FileViewerComponent } from '../file-viewer/file-viewer.component';
 import { IconComponent } from '../ui/icon/icon.component';
-import { Paperclip } from 'lucide-angular';
+import { Paperclip } from 'lucide';
 
 /**
  * Секция «Файлы» прямо в раскрытой карточке записи (редизайн — раньше список вложений жил в
@@ -24,6 +24,7 @@ import { Paperclip } from 'lucide-angular';
     selector: 'app-attachment-list',
     imports: [LoadingSpinnerComponent, FileViewerComponent, IconComponent],
     templateUrl: './attachment-list.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './attachment-list.component.scss'
 })
 export class AttachmentListComponent implements OnChanges {

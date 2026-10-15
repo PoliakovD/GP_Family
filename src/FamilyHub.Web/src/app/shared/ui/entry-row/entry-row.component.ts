@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import type { LucideIconData } from 'lucide-angular';
+import type { IconNode as LucideIconData } from 'lucide';
 import { IconTileComponent } from '../icon-tile/icon-tile.component';
 import { Tone } from '../tone';
 

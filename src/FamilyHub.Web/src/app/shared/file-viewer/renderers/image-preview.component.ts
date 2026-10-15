@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import type { ZoomPanTransform } from '../zoom-pan';
 
 /** Чисто презентационный — зум/панорама/поворот считает ZoomPanController в file-viewer.component
@@ -8,6 +8,7 @@ import type { ZoomPanTransform } from '../zoom-pan';
   selector: 'app-image-preview',
   standalone: true,
   templateUrl: './image-preview.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './image-preview.component.scss',
 })
 export class ImagePreviewComponent {

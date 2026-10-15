@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, NavigationError } from '@angular/router';
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
@@ -28,7 +28,7 @@ import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdo
 import { NotificationBellComponent } from './shared/notification-bell/notification-bell.component';
 import { IconComponent } from './shared/ui/icon/icon.component';
 import { FamilySwitcherComponent } from './shared/ui/family-switcher/family-switcher.component';
-import { Heart, House, Search, User, Users, X, type LucideIconData } from 'lucide-angular';
+import { Heart, House, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
 import { FamilyRole } from './models/types';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
@@ -87,6 +87,7 @@ interface SidebarItem {
         IconComponent,
         FamilySwitcherComponent,
     ],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {

@@ -1,9 +1,9 @@
-import { Component, ElementRef, HostListener, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
 import { IconComponent } from '../ui/icon/icon.component';
-import { Ellipsis } from 'lucide-angular';
+import { Ellipsis } from 'lucide';
 
 /** Один пункт меню «…» — редизайн v2. Не более того, что уже умеют существующие
  * `.btn`/иконки Phosphor — специально не вводится отдельная "опасное действие" разметка сверх
@@ -26,6 +26,7 @@ export interface ActionMenuItem {
     selector: 'app-action-menu',
     imports: [BottomSheetComponent, IconComponent],
     templateUrl: './action-menu.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './action-menu.component.scss'
 })
 export class ActionMenuComponent {
@@ -60,7 +61,7 @@ export class ActionMenuComponent {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
+  onEscape(event: Event): void {
     if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.open() && this.isWide) this.open.set(false);
   }

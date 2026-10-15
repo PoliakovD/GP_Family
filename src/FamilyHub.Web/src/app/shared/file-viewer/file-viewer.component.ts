@@ -1,6 +1,7 @@
 import {
   Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output,
   SimpleChanges, ViewChild, inject,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { ApiService } from '../../services/api.service';
@@ -50,6 +51,7 @@ const PREVIEW_POLL_INTERVAL_MS = 1500;
     selector: 'app-file-viewer',
     imports: [NgTemplateOutlet, ImagePreviewComponent, PdfPreviewComponent, TextPreviewComponent, UnsupportedPreviewComponent],
     templateUrl: './file-viewer.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './file-viewer.component.scss'
 })
 export class FileViewerComponent implements OnChanges, OnDestroy {

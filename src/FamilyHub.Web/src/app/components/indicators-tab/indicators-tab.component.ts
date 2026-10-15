@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input } from '@angular/core';
+import { Component, OnInit, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { formatDayMonthYear } from '../../shared/util/date-format';
@@ -9,7 +9,7 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { SparklineComponent, SparklinePoint } from '../../shared/sparkline/sparkline.component';
 import { AvatarComponent, type AvatarPerson } from '../../shared/avatar/avatar.component';
-import { ChartLine, ChevronRight, Plus } from 'lucide-angular';
+import { ChartLine, ChevronRight, Plus } from 'lucide';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { specimenLabel } from '../../shared/util/specimen';
@@ -33,6 +33,7 @@ const ALL_PATIENTS_KEY = 'all';
     selector: 'app-indicators-tab',
     imports: [AvatarComponent, EmptyStateComponent, IconComponent, StatusChipComponent, LoadingSpinnerComponent, BottomSheetComponent, SparklineComponent, RouterLink],
     templateUrl: './indicators-tab.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './indicators-tab.component.scss'
 })
 export class IndicatorsTabComponent implements OnInit {

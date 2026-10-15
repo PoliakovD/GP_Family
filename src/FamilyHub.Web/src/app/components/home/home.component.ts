@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -22,8 +22,8 @@ import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.com
 import { Tone } from '../../shared/ui/tone';
 import {
   BellOff, BriefcaseMedical, Cake, CircleCheck, FlaskConical, Link, MessageCircle, Syringe, UserPlus,
-  type LucideIconData,
-} from 'lucide-angular';
+  type IconNode as LucideIconData,
+} from 'lucide';
 
 const MONTHS_GEN = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -71,6 +71,7 @@ interface HomeTask {
  * заявкам/ДР/пушу здесь на клиенте.
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-home',
     imports: [
       RouterLink, LoadingSpinnerComponent, InviteModalComponent, IconComponent, MetricCardComponent, TaskRowComponent,
