@@ -1,37 +1,24 @@
-<div>
-  <!-- Редизайн хаба «Здоровье» — собственный заголовок раздела (см. intake-page для того же приёма). -->
-  <h3 class="mb-1">Показатели</h3>
+<!-- Показатели (DESIGN §3–4): H1 → «чьи» (seg с мини-аватарами) → list-card строк: название + «кто · материал ·
+     дата» → значение (цвет текста) и бейдж статуса → шеврон. Статус несёт бейдж, не цвет числа. -->
+<div class="ix">
+  <h1 class="ix-title">Показатели</h1>
 
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger" role="alert">{{ error }}</div>
   }
 
-  <!-- Редизайн v2.1 — тот же вид фильтра по человеку, что на «Анализах»/«Врачах» (было —
-       сегментированный контрол .seg с полным ФИО, вложенный бордер плохо сочетался бы с
-       прямоугольником app-person-chip). -->
   @if (!loading && items.length > 0 && patientFilterOptions.length > 2) {
-    <div class="d-flex flex-wrap gap-2 mb-3">
+    <div class="seg ix-people" role="group" aria-label="Чьи показатели">
       @for (opt of patientFilterOptions; track opt.key) {
-        @if (opt.shortLabel) {
-          <button type="button" class="person-chip-btn" (click)="setPatientFilter(opt.key)">
-            <app-person-chip
-              [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
-              [shortLabel]="opt.shortLabel"
-              [fullLabel]="opt.label"
-              [selected]="patientFilterKey === opt.key"
-            />
-          </button>
-        } @else {
-          <button
-            type="button"
-            class="tag"
-            [class.tag-accent]="patientFilterKey === opt.key"
-            style="cursor:pointer;border:none;font:inherit"
-            (click)="setPatientFilter(opt.key)"
-          >
+        <button type="button" class="seg-opt" [class.active]="patientFilterKey === opt.key"
+                [attr.aria-pressed]="patientFilterKey === opt.key" [title]="opt.label" (click)="setPatientFilter(opt.key)">
+          @if (opt.shortLabel) {
+            <app-avatar size="xs" [person]="{key: opt.key, firstName: opt.avatarFirstName ?? opt.shortLabel, lastName: opt.avatarLastName ?? null}" />
+            {{ opt.shortLabel }}
+          } @else {
             {{ opt.label }}
-          </button>
-        }
+          }
+        </button>
       }
     </div>
   }
@@ -40,42 +27,34 @@
     <app-loading-spinner />
   } @else if (items.length === 0) {
     <!-- Раньше отсылали к кнопке «Распознать», которой при автораспознавании уже нет. -->
-    <div class="card">
-      <h3 class="card-title mb-1">Показателей пока нет</h3>
-      <p class="muted mb-2">
-        Они появятся сами, когда вы добавите анализ: каждый показатель будет здесь с динамикой по датам.
-      </p>
-      <a class="btn btn-primary align-self-start" routerLink="/health/records/new">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить анализ
-      </a>
-    </div>
+    <section class="card card-lg">
+      <app-empty-state [icon]="icons.ChartLine" title="Показателей пока нет"
+        text="Они появятся сами, когда вы добавите анализ: каждый показатель будет здесь с динамикой по датам.">
+        <a class="btn btn-primary" routerLink="/health/records/new">
+          <app-icon [icon]="icons.Plus" [size]="18" />Добавить анализ
+        </a>
+      </app-empty-state>
+    </section>
   } @else {
-    @for (item of filteredItems; track item.analyteKey + ':' + item.specimenKbId + ':' + itemPatientKey(item)) {
-      <div class="card mb-2 card-clickable" appClickable (click)="openDetail(item)">
-        <div class="d-flex align-items-center justify-content-between gap-2">
-          <div>
-            <strong class="card-title">{{ item.displayName }}</strong>
-            <div class="card-meta d-flex align-items-center gap-2 flex-wrap">
-              <app-person-chip
-                [avatarPerson]="itemAvatarPerson(item)"
-                [shortLabel]="shortenDisplayName(item.patientName)"
-                [fullLabel]="item.patientName"
-              />
-              <span>{{ specimenLabel(item) }} · {{ formatDayMonthYear(item.lastRecordDate) }}</span>
-            </div>
-          </div>
-          <div class="text-end" style="white-space:nowrap">
-            <div [class]="flagClass(item.flag)" style="font-size:0.8824rem;font-weight:600">
-              {{ item.valueRaw }}{{ item.unit ? ' ' + item.unit : '' }}
-            </div>
-            <!-- Раньше отклонение было видно только по цвету числа. -->
-            <app-status-chip [flag]="item.flag" />
-          </div>
-        </div>
-      </div>
-    } @empty {
-      <p class="muted">У этого пациента пока нет показателей.</p>
-    }
+    <div class="list-card ix-list">
+      @for (item of filteredItems; track item.analyteKey + ':' + item.specimenKbId + ':' + itemPatientKey(item)) {
+        <button type="button" class="ix-row" (click)="openDetail(item)">
+          <span class="ix-text">
+            <span class="ix-name">{{ item.displayName }}</span>
+            <span class="ix-sub" [title]="item.patientName">
+              {{ shortenDisplayName(item.patientName) }} · {{ specimenLabel(item) }} · {{ formatDayMonthYear(item.lastRecordDate) }}
+            </span>
+          </span>
+          <span class="ix-value">
+            <span class="ix-number">{{ item.valueRaw }}</span>@if (item.unit) {<span class="ix-unit">{{ item.unit }}</span>}
+          </span>
+          <app-status-chip class="ix-status" [flag]="item.flag" [showUnknown]="true" />
+          <app-icon class="ix-chevron" [icon]="icons.ChevronRight" [size]="18" />
+        </button>
+      } @empty {
+        <p class="ix-note">У этого человека пока нет показателей.</p>
+      }
+    </div>
   }
 
   <app-bottom-sheet
@@ -86,9 +65,9 @@
     @if (detailLoading) {
       <app-loading-spinner />
     } @else if (detailError) {
-      <div class="alert-danger mb-0">{{ detailError }}</div>
+      <div class="alert-danger" role="alert">{{ detailError }}</div>
     } @else if (history.length > 0) {
-      <div class="mb-3">
+      <div class="ix-spark">
         <app-sparkline [points]="sparklinePoints" />
       </div>
       <table class="indicator-history-table">
@@ -102,7 +81,7 @@
           @for (p of history; track p.recordDate + p.medicalRecordId) {
             <tr>
               <td>{{ formatDayMonthYear(p.recordDate) }}</td>
-              <td [class]="flagClass(p.flag)">{{ p.valueRaw }}</td>
+              <td><span class="ix-number-sm">{{ p.valueRaw }}</span> <app-status-chip [flag]="p.flag" /></td>
             </tr>
           }
         </tbody>

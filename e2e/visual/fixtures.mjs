@@ -36,6 +36,7 @@ export const SCREENS = [
   { name: 'records', path: '/health/records' },
   { name: 'visits', path: '/health/visits' },
   { name: 'visit', path: '/health/visits/v-1' },
+  { name: 'indicators', path: '/health/indicators' },
   { name: 'intake', path: '/health/intake' },
   { name: 'intake-form', path: '/health/intake', prepare: async (page) => {
     await page.getByRole('button', { name: 'Новый курс' }).click();
@@ -348,6 +349,16 @@ const ROUTES = [
     { recordDate: '2026-04-10', valueRaw: '5,9', valueNumericText: '5.9', flag: 1, medicalRecordId: 'r-old' },
     { recordDate: '2026-07-02', valueRaw: '5,1', valueNumericText: '5.1', flag: 1, medicalRecordId: 'r-bio' },
     { recordDate: '2026-10-03', valueRaw: '4,24', valueNumericText: '4.24', flag: 1, medicalRecordId: 'r-blood' },
+  ]],
+  ['GET', /^\/api\/indicators$/, [
+    ...INDICATORS.slice(0, 12).map((i) => ({
+      analyteKey: i.analyteKey, displayName: i.displayName, specimenKbId: 'blood', specimenDisplayName: 'Кровь',
+      valueRaw: i.valueRaw, unit: i.unit, flag: i.flag, lastRecordDate: '2026-10-03', familyDependentId: null,
+      targetUserId: null, patientName: 'Поляков Даниил',
+    })),
+    { analyteKey: 'glu', displayName: 'Глюкоза', specimenKbId: 'blood', specimenDisplayName: 'Кровь', valueRaw: '5,1',
+      unit: 'ммоль/л', flag: 2, lastRecordDate: '2026-08-12', familyDependentId: null, targetUserId: VALERIA_ID,
+      patientName: 'Полякова Валерия' },
   ]],
   ['GET', /^\/api\/indicators\/([^/]+)\/article$/, (m) => ({
     indicator: INDICATORS.find((i) => i.id === m[1]) ?? INDICATORS[1],
