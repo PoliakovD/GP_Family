@@ -11,6 +11,7 @@ import { Tone } from '../tone';
  *
  * На узком экране (<1024) кнопки нет: вместо неё шеврон, а вся строка — ссылка (`link`) или, если
  * ссылки нет, кнопка с текстом действия в aria-label. Действие — `link` (переход) или `(action)`.
+ * Несколько действий — контентом `<div actions>…</div>` (на мобайле — под текстом строки).
  */
 @Component({
   selector: 'app-task-row',
@@ -21,7 +22,7 @@ import { Tone } from '../tone';
     <app-icon-tile [icon]="icon()" [tone]="tone()" />
     <div class="tr-text">
       @if (link(); as href) {
-        <a class="tr-title tr-stretch" [routerLink]="href">{{ title() }}</a>
+        <a class="tr-title tr-stretch" [routerLink]="href" [queryParams]="queryParams()">{{ title() }}</a>
       } @else {
         <span class="tr-title">{{ title() }}</span>
       }
@@ -30,7 +31,7 @@ import { Tone } from '../tone';
     @if (actionLabel(); as label) {
       @if (link(); as href) {
         <a class="btn tr-action" [class.btn-inverse]="primary()" [class.btn-secondary]="!primary()"
-           [routerLink]="href" tabindex="-1" aria-hidden="true">{{ label }}</a>
+           [routerLink]="href" [queryParams]="queryParams()" tabindex="-1" aria-hidden="true">{{ label }}</a>
       } @else {
         <button type="button" class="btn tr-action" [class.btn-inverse]="primary()" [class.btn-secondary]="!primary()"
                 (click)="action.emit()">{{ label }}</button>
@@ -40,6 +41,8 @@ import { Tone } from '../tone';
       }
     }
     @if (link()) { <app-icon class="tr-chevron" [icon]="chevron" [size]="18" /> }
+    <!-- Несколько действий (заявка: «Принять» / «Отклонить») — своими кнопками; на мобайле под текстом. -->
+    <div class="tr-custom"><ng-content select="[actions]" /></div>
   `,
   styles: [`
     :host {
@@ -57,12 +60,17 @@ import { Tone } from '../tone';
     .tr-title { font: var(--text-body); font-weight: 600; color: var(--color-text); text-decoration: none; }
     .tr-sub { font: var(--text-caption); color: var(--color-text-muted); }
     .tr-action { flex: none; }
+    .tr-custom { display: flex; flex: none; gap: var(--space-2); }
+    .tr-custom:empty { display: none; }
     .tr-chevron, .tr-chevron-btn { display: none; color: var(--color-text-muted); }
 
     /* На десктопе ссылка — заголовок и кнопка; фокус получает заголовок (кнопка-дубль скрыта от AT). */
     @media (max-width: 1023px) {
       :host { gap: var(--space-3); padding: var(--space-3) var(--space-4); min-height: 64px; }
       .tr-action { display: none; }
+      :host { flex-wrap: wrap; }
+      .tr-custom { flex-basis: 100%; padding-left: calc(40px + var(--space-3)); }
+      .tr-custom > * { flex: 1; }
       .tr-chevron, .tr-chevron-btn { display: inline-flex; flex: none; }
       /* Вся строка — ссылка: псевдоэлемент растягивает область нажатия заголовка. */
       .tr-stretch::after { content: ''; position: absolute; inset: 0; }
@@ -80,6 +88,7 @@ export class TaskRowComponent {
   /** Главное действие списка — тёмная (inverse) кнопка; остальные строки — secondary. */
   readonly primary = input(false);
   readonly link = input<string | readonly unknown[] | null>(null);
+  readonly queryParams = input<Record<string, string> | null>(null);
   readonly action = output<void>();
 
   protected readonly chevron = ChevronRight;
