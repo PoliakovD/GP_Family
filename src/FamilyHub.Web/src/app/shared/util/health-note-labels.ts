@@ -13,20 +13,16 @@ export interface HealthKindMeta {
   label: string;
   /** Мн. число — для фильтра ленты («Симптомы»). */
   filterLabel: string;
-  /** Имя иконки Phosphor без префикса `ph-`. */
-  icon: string;
-  /** CSS-цвет типа (токен --color-kind-*). */
-  color: string;
 }
 
 /** Порядок — как в макете: и для выбора типа в форме, и для фильтра ленты. */
 export const HEALTH_KINDS: HealthKindMeta[] = [
-  { kind: HealthNoteKind.Symptom, label: 'Симптом', filterLabel: 'Симптомы', icon: 'lightning', color: 'var(--color-kind-symptom)' },
-  { kind: HealthNoteKind.Metric, label: 'Замер', filterLabel: 'Замеры', icon: 'heartbeat', color: 'var(--color-kind-metric)' },
-  { kind: HealthNoteKind.Wellbeing, label: 'Самочувствие', filterLabel: 'Самочувствие', icon: 'smiley', color: 'var(--color-kind-wellbeing)' },
-  { kind: HealthNoteKind.MedicationIntake, label: 'Лекарство', filterLabel: 'Лекарства', icon: 'pill', color: 'var(--color-kind-medication)' },
-  { kind: HealthNoteKind.Sleep, label: 'Сон', filterLabel: 'Сон', icon: 'moon-stars', color: 'var(--color-kind-sleep)' },
-  { kind: HealthNoteKind.Note, label: 'Заметка', filterLabel: 'Заметки', icon: 'note-pencil', color: 'var(--color-kind-note)' },
+  { kind: HealthNoteKind.Symptom, label: 'Симптом', filterLabel: 'Симптомы' },
+  { kind: HealthNoteKind.Metric, label: 'Замер', filterLabel: 'Замеры' },
+  { kind: HealthNoteKind.Wellbeing, label: 'Самочувствие', filterLabel: 'Самочувствие' },
+  { kind: HealthNoteKind.MedicationIntake, label: 'Лекарство', filterLabel: 'Лекарства' },
+  { kind: HealthNoteKind.Sleep, label: 'Сон', filterLabel: 'Сон' },
+  { kind: HealthNoteKind.Note, label: 'Заметка', filterLabel: 'Заметки' },
 ];
 
 export function kindMeta(kind: HealthNoteKind): HealthKindMeta {
@@ -52,16 +48,14 @@ export const WELLBEING_FACTOR_LABELS: Record<string, string | undefined> = {
 export interface WellbeingLevel {
   score: number;
   label: string;
-  /** Имя иконки Phosphor без префикса `ph-`. */
-  icon: string;
 }
 
 export const WELLBEING_LEVELS: WellbeingLevel[] = [
-  { score: 1, label: 'Ужасно', icon: 'smiley-x-eyes' },
-  { score: 2, label: 'Плохо', icon: 'smiley-sad' },
-  { score: 3, label: 'Так себе', icon: 'smiley-meh' },
-  { score: 4, label: 'Хорошо', icon: 'smiley' },
-  { score: 5, label: 'Отлично', icon: 'smiley-wink' },
+  { score: 1, label: 'Ужасно' },
+  { score: 2, label: 'Плохо' },
+  { score: 3, label: 'Так себе' },
+  { score: 4, label: 'Хорошо' },
+  { score: 5, label: 'Отлично' },
 ];
 
 export function wellbeingLevel(score: number): WellbeingLevel {

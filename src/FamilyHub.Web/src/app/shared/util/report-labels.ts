@@ -5,6 +5,8 @@ import { MONTHS_NOM, parseLocalBirthDate } from './birthday-date';
 import { formatDayMonth } from './date-format';
 import { dayKey } from './health-note-labels';
 import { pluralizeRu } from './pluralize';
+import { FileText, Link, Timer, Unlink } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 
 /** Сроки публичной ссылки — те же значения принимает бэкенд (DoctorReportService.AllowedShareDays). */
 export const SHARE_DAY_OPTIONS = [7, 14, 30] as const;
@@ -50,8 +52,8 @@ export type LinkTone = 'active' | 'expired' | 'revoked' | 'none';
 export interface LinkView {
   tone: LinkTone;
   label: string;
-  /** Класс иконки Phosphor целиком. */
-  icon: string;
+  /** Иконка Lucide. */
+  icon: LucideIconData;
   caption: string;
 }
 
@@ -63,7 +65,7 @@ export function linkView(report: DoctorReport): LinkView {
       return {
         tone: 'active',
         label: 'Ссылка активна',
-        icon: 'ph-fill ph-link-simple',
+        icon: Link,
         caption: `до ${link.expiresAt ? dayMonthFromIso(link.expiresAt) : '—'} · ${
           link.viewCount === 0 ? 'ещё не открывали' : `открыта ${timesLabel(link.viewCount)}`}`,
       };
@@ -71,17 +73,17 @@ export function linkView(report: DoctorReport): LinkView {
       return {
         tone: 'expired',
         label: 'Ссылка истекла',
-        icon: 'ph ph-clock-countdown',
+        icon: Timer,
         caption: link.expiresAt ? dayMonthFromIso(link.expiresAt) : '',
       };
     case DoctorReportLinkStatus.Revoked:
       return {
         tone: 'revoked',
         label: 'Доступ отозван',
-        icon: 'ph ph-link-break',
+        icon: Unlink,
         caption: link.revokedAt ? `вами, ${dayMonthFromIso(link.revokedAt)}` : 'вами',
       };
     default:
-      return { tone: 'none', label: 'Только PDF', icon: 'ph ph-file-pdf', caption: 'ссылка не создавалась' };
+      return { tone: 'none', label: 'Только PDF', icon: FileText, caption: 'ссылка не создавалась' };
   }
 }

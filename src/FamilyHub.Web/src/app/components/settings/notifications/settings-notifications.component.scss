@@ -1,48 +1,44 @@
-// Редизайн v3, PR8 — сгруппированные секции + выделенный push-баннер вместо плоской таблицы.
-.settings-push-banner {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 18px;
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-paper));
-  border-left: 4px solid var(--color-accent);
+// «Уведомления»: H1 → выключатель устройства (alert success/warning) → разделы — list-card строк
+// «тип → устройство → Telegram» с шапкой колонок 13/600 без CAPS.
 
-  &.off {
-    background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-paper));
-    border-left-color: var(--color-status-warning);
-  }
+.sn { display: flex; flex-direction: column; gap: var(--space-5); max-width: 820px; }
+.sn-sections { display: flex; flex-direction: column; gap: var(--space-5); }
 
-  i {
-    font-size: 1.5294rem;
-  }
-}
+.sn-push { display: flex; align-items: center; gap: var(--space-3); app-icon { flex: none; } }
+.sn-push-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; span { font: var(--text-caption); color: var(--color-text-secondary); } }
 
 .settings-notification-header,
 .settings-notification-row {
   display: grid;
-  grid-template-columns: 1fr 90px 90px;
+  grid-template-columns: 1fr 96px 96px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 
-  > *:nth-child(2), > *:nth-child(3) {
-    justify-self: center;
-  }
+  > *:nth-child(2), > *:nth-child(3) { justify-self: center; }
 }
 
-.settings-notification-header {
-  padding: 0 18px 8px;
-  font-size: 0.7647rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-  border-bottom: 1px solid var(--color-divider);
-  margin-bottom: 16px;
-}
+.settings-notification-header { padding: 0 var(--space-6); }
 
 .settings-notification-row {
-  padding: 13px 18px;
+  position: relative;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-6);
+  font: var(--text-body);
 
-  & + .settings-notification-row {
+  & + .settings-notification-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--space-6);
+    right: var(--space-6);
     border-top: 1px solid var(--color-divider);
   }
+}
+
+@media (max-width: 1023px) { .sn-h1 { display: none; } }
+
+@media (max-width: 639px) {
+  .settings-notification-header,
+  .settings-notification-row { grid-template-columns: 1fr 72px 72px; padding-inline: var(--space-4); font: var(--text-body-sm); }
+  .settings-notification-row + .settings-notification-row::before { left: var(--space-4); right: var(--space-4); }
 }

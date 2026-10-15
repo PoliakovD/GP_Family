@@ -22,6 +22,7 @@ import {
   reviewOriginLabel,
   reviewStageLabel,
 } from './review-helpers';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 type StageFilter = 'all' | ReviewStage;
 
@@ -42,7 +43,7 @@ const INBOX_MAX_TAKE = 500;
  */
 @Component({
   selector: 'app-admin-review',
-  imports: [FormsModule, DatePipe, ReviewDetailComponent, ReviewConfigComponent],
+  imports: [FormsModule, DatePipe, ReviewDetailComponent, ReviewConfigComponent, LoadingSpinnerComponent],
   templateUrl: './admin-review.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-review.component.scss',

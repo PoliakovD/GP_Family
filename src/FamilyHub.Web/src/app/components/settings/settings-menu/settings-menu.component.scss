@@ -1,31 +1,31 @@
-.settings-menu-row {
+// Профиль на телефоне: H1, человек, баннер «уведомления выключены», разделы — list-card из nav-row.
+
+.sm { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.sm-title { margin: 0; font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+
+.sm-person { display: flex; align-items: center; gap: var(--space-4); }
+.sm-person-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sm-name { font: var(--text-title); }
+.sm-username { font: var(--text-body-sm); color: var(--color-text-muted); }
+
+// Баннер-ссылка: вся плашка ведёт в «Уведомления».
+.sm-push {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: var(--tap-min);
-  padding: 14px 16px;
-  color: var(--color-text);
+  gap: var(--space-3);
+  text-decoration: none;
 
-  & + .settings-menu-row {
-    border-top: 1px solid var(--color-divider);
-  }
-
-  i:first-child {
-    font-size: 1.1765rem;
-    color: var(--color-neutral-700);
-  }
+  app-icon { flex: none; }
 }
 
-.settings-menu-push-banner {
+.sm-push-text {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-paper));
-  border-left: 3px solid var(--color-status-warning);
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 
-  i {
-    font-size: 1.4118rem;
-    color: var(--color-status-warning);
-  }
+  strong { font-weight: 600; }
+  span { font: var(--text-caption); color: var(--color-text-secondary); }
 }

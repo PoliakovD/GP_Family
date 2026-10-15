@@ -10,29 +10,26 @@
 // Вид — глобальный .count-badge (styles.scss); здесь только позиция на иконке.
 .background-jobs-trigger-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-1));
 }
 
+// Вид — глобальный .popover; здесь только позиция и размер.
 .background-jobs-popover {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--space-2));
   right: 0;
-  min-width: 280px;
-  max-width: 340px;
+  width: 340px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-overlay);
-  z-index: var(--z-dropdown);
-  padding: 8px 0;
 }
 
 .background-jobs-section {
-  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
 
   & + .background-jobs-section {
+    padding-top: var(--space-3);
     border-top: 1px solid var(--color-divider);
   }
 }
@@ -40,38 +37,35 @@
 .background-jobs-section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px 4px;
-  font-size: 0.7647rem;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  font: var(--text-caption);
   font-weight: 600;
-  color: var(--color-neutral-600);
+  color: var(--color-text);
 }
 
+// Отступ слева = плитка (32) + gap, чтобы задачи стояли под текстом заголовка.
 .background-jobs-item {
   display: block;
   width: 100%;
   min-height: var(--tap-min);
-  padding: 8px 16px 8px 40px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-10);
   background: none;
   border: none;
+  border-radius: var(--radius-md);
   text-align: left;
-  font: inherit;
-  font-size: 0.8235rem;
+  font: var(--text-body-sm);
   color: var(--color-text);
   cursor: pointer;
 
-  &:hover:not(.non-interactive) {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  @media (hover: hover) {
+    &:hover:not(.non-interactive) { background: var(--color-surface-muted); }
   }
 
   &.non-interactive {
     cursor: default;
-    color: var(--color-neutral-600);
+    color: var(--color-text-muted);
   }
-}
-
-.background-jobs-item-sheet {
-  padding-left: 16px;
 }
 
 .background-jobs-item-label {
@@ -85,13 +79,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: 2px;
-  font-size: 0.7647rem;
-  font-style: italic;
-  color: var(--color-neutral-600);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 }
 
 .background-jobs-more {
-  padding: 4px 16px 4px 40px;
-  font-size: 0.7647rem;
-  color: var(--color-neutral-600);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-10);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 }

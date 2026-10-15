@@ -17,6 +17,8 @@ import { ImagePreviewComponent } from './renderers/image-preview.component';
 import { PdfPreviewComponent } from './renderers/pdf-preview.component';
 import { TextPreviewComponent } from './renderers/text-preview.component';
 import { UnsupportedPreviewComponent } from './renderers/unsupported-preview.component';
+import { ChevronLeft, ChevronRight, Download, Printer, RefreshCw, X, ZoomIn, ZoomOut } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 const PREVIEW_POLL_INTERVAL_MS = 1500;
 
@@ -49,12 +51,14 @@ const PREVIEW_POLL_INTERVAL_MS = 1500;
  */
 @Component({
     selector: 'app-file-viewer',
-    imports: [NgTemplateOutlet, ImagePreviewComponent, PdfPreviewComponent, TextPreviewComponent, UnsupportedPreviewComponent],
+    imports: [NgTemplateOutlet, ImagePreviewComponent, PdfPreviewComponent, TextPreviewComponent, UnsupportedPreviewComponent, IconComponent],
     templateUrl: './file-viewer.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './file-viewer.component.scss'
 })
 export class FileViewerComponent implements OnChanges, OnDestroy {
+  protected readonly icons = { ChevronLeft, ChevronRight, Download, Printer, RefreshCw, X, ZoomIn, ZoomOut };
+
   @Input() open = false;
   @Input() attachments: Attachment[] = [];
   @Input() activeIndex = 0;

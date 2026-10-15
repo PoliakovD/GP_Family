@@ -1,42 +1,41 @@
 <app-bottom-sheet title="Настройки доступа" [open]="true" (closed)="closed.emit()">
-  <p class="muted mb-3">{{ record().title ?? record().personName }} · {{ formatDayMonthYear(record().recordDate) }}</p>
+  <div class="ras">
+    <p class="form-hint">{{ record().title ?? record().personName }} · {{ formatDayMonthYear(record().recordDate) }}</p>
 
-  <div class="seg w-100 mb-3">
-    <label class="seg-opt" style="flex:1;justify-content:center">
-      <input type="radio" name="accessMode" [checked]="isOnlyMe()" (change)="setAccessMode(true, $any($event.target))" />
-      <i class="ph ph-lock-simple" aria-hidden="true"></i> Только я
-    </label>
-    <label class="seg-opt" style="flex:1;justify-content:center">
-      <input type="radio" name="accessMode" [checked]="!isOnlyMe()" (change)="setAccessMode(false, $any($event.target))" />
-      <i class="ph ph-users-three" aria-hidden="true"></i> Все семьи
-    </label>
-  </div>
-
-  @if (state.activeFamilies().length > 0) {
-    <div class="card-kicker mb-2">Скрыть от отдельных семей</div>
-    <div class="d-flex flex-column">
-      @for (f of state.activeFamilies(); track f.id) {
-        <div class="d-flex align-items-center gap-2" style="padding:9px 0;border-bottom:1px solid var(--color-divider)">
-          <i
-            class="ph-duotone ph-house"
-            style="font-size:1.1765rem"
-            [style.color]="isVisibleToFamily(f.id) ? 'var(--color-accent)' : 'var(--color-neutral-600)'"
-            aria-hidden="true"
-          ></i>
-          <span class="flex-fill" style="font-size:0.8235rem">{{ f.name }}</span>
-          <label class="switch">
-            <input
-              type="checkbox"
-              [checked]="isVisibleToFamily(f.id)"
-              [attr.aria-label]="'Доступ семье «' + f.name + '»'"
-              (change)="setFamilyAccess(f.id, $any($event.target).checked, $any($event.target))"
-            />
-            <span class="switch-knob"></span>
-          </label>
-        </div>
-      }
+    <div class="seg seg-sunken ras-mode" role="radiogroup" aria-label="Кто видит запись">
+      <label class="seg-opt">
+        <input type="radio" name="accessMode" [checked]="isOnlyMe()" (change)="setAccessMode(true, $any($event.target))" />
+        <app-icon [icon]="icons.Lock" [size]="18" />Только я
+      </label>
+      <label class="seg-opt">
+        <input type="radio" name="accessMode" [checked]="!isOnlyMe()" (change)="setAccessMode(false, $any($event.target))" />
+        <app-icon [icon]="icons.UsersRound" [size]="18" />Все семьи
+      </label>
     </div>
-  } @else {
-    <p class="muted mb-0">Нет ни одной активной семьи, чтобы расшарить доступ.</p>
-  }
+
+    @if (state.activeFamilies().length > 0) {
+      <section class="form-section" aria-labelledby="ras-families">
+        <h3 class="form-label" id="ras-families">Скрыть от отдельных семей</h3>
+        <div class="list-card ras-list">
+          @for (f of state.activeFamilies(); track f.id) {
+            <div class="settings-row">
+              <app-icon-tile [icon]="icons.House" size="sm" />
+              <span class="settings-row-title">{{ f.name }}</span>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  [checked]="isVisibleToFamily(f.id)"
+                  [attr.aria-label]="'Доступ семье «' + f.name + '»'"
+                  (change)="setFamilyAccess(f.id, $any($event.target).checked, $any($event.target))"
+                />
+                <span class="switch-knob"></span>
+              </label>
+            </div>
+          }
+        </div>
+      </section>
+    } @else {
+      <p class="form-hint">Нет ни одной активной семьи, чтобы расшарить доступ.</p>
+    }
+  </div>
 </app-bottom-sheet>

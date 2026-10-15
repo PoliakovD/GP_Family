@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, input, output, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
-import { NotebookPen, Pill } from 'lucide';
+import { BellOff, BellRing, Flag, NotebookPen, Package, Pause, Pill, Play, Trash2, Users } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
@@ -130,25 +131,25 @@ export class IntakeCourseCardComponent {
     const d = this.detail();
     const s = this.summary();
     if (!d || !s) return [];
-    const lines: { icon: string; text: string }[] = [];
+    const lines: { icon: LucideIconData; text: string }[] = [];
     if (s.schedule.mode === DoseScheduleMode.AsNeeded) {
-      lines.push({ icon: 'ph ph-bell-slash', text: 'Без напоминаний — приём отмечается вручную на странице «Сегодня»' });
+      lines.push({ icon: BellOff, text: 'Без напоминаний — приём отмечается вручную на странице «Сегодня»' });
     } else {
       lines.push({
-        icon: 'ph ph-bell-ringing',
+        icon: BellRing,
         text: d.repeatAfterMinutes ? `Уведомление в момент приёма, повтор через ${d.repeatAfterMinutes} мин` : 'Уведомление в момент приёма',
       });
       const watchers = d.watchers.filter((w) => w.notifyMissed || w.receiveReminders).map((w) => w.name);
       if (watchers.length > 0) {
         lines.push({
-          icon: 'ph ph-users',
+          icon: Users,
           text: s.subject.kind === 'dependent'
             ? `Напоминания получают: ${watchers.join(', ')}`
             : `Сообщить ${watchers.join(', ')}, если не отмечу за ${MISSED_LABELS[d.missedAfterMinutes] ?? d.missedAfterMinutes + ' мин'}`,
         });
       }
     }
-    if (s.writeOffEnabled) lines.push({ icon: 'ph ph-package', text: `Предупредить, когда останется на ${daysText(d.lowStockDays)}` });
+    if (s.writeOffEnabled) lines.push({ icon: Package, text: `Предупредить, когда останется на ${daysText(d.lowStockDays)}` });
     return lines;
   });
 
@@ -202,10 +203,10 @@ export class IntakeCourseCardComponent {
     const d = this.detail();
     if (!s || !d || !s.canEdit) return [];
     const items: ActionMenuItem[] = [];
-    if (s.status === CourseStatus.Active) items.push({ label: 'Приостановить', icon: 'ph ph-pause', handler: () => void this.pause() });
-    if (s.status === CourseStatus.Paused) items.push({ label: 'Возобновить', icon: 'ph ph-play', handler: () => void this.resume() });
-    if (s.status !== CourseStatus.Completed) items.push({ label: 'Завершить', icon: 'ph ph-flag-checkered', handler: () => void this.complete() });
-    if (d.canDelete) items.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.remove() });
+    if (s.status === CourseStatus.Active) items.push({ label: 'Приостановить', icon: Pause, handler: () => void this.pause() });
+    if (s.status === CourseStatus.Paused) items.push({ label: 'Возобновить', icon: Play, handler: () => void this.resume() });
+    if (s.status !== CourseStatus.Completed) items.push({ label: 'Завершить', icon: Flag, handler: () => void this.complete() });
+    if (d.canDelete) items.push({ label: 'Удалить', icon: Trash2, danger: true, handler: () => void this.remove() });
     return items;
   });
 

@@ -71,7 +71,7 @@
   }
 
   @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
-  > i:first-child { flex: none; font-size: var(--icon-size); }
+  > app-icon:first-child { flex: none; }
 }
 
 .vx-dose-current { background: var(--color-warning-soft); }
@@ -94,7 +94,7 @@
 
 .vx-timeline { display: flex; flex-direction: column; margin-top: var(--space-4); }
 .vx-timeline-row { display: flex; gap: var(--space-3); }
-.vx-timeline-marker { display: flex; flex: none; flex-direction: column; align-items: center; > i { font-size: var(--icon-size); } }
+.vx-timeline-marker { display: flex; flex: none; flex-direction: column; align-items: center; }
 .vx-timeline-body { flex: 1; min-width: 0; padding-bottom: var(--space-4); }
 .vx-timeline-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-2); font: var(--text-caption); color: var(--color-text-muted); }
 .vx-timeline-label { font: var(--text-body); font-weight: 600; color: var(--color-text); }
@@ -114,7 +114,7 @@
   color: inherit;
   cursor: pointer;
 
-  > i { color: var(--color-accent-hover); }
+  > app-icon { color: var(--color-accent-hover); }
 }
 
 .vx-diary-link {
@@ -127,7 +127,7 @@
   background: var(--color-surface-sunken);
   font: var(--text-caption);
 
-  > i { margin-top: 1px; color: var(--color-kind-note); }
+  > app-icon { margin-top: 1px; color: var(--color-kind-note); }
 }
 
 .vx-diary-link-date { font: var(--text-caption); color: var(--color-text-muted); }
@@ -143,7 +143,7 @@
   background: var(--color-surface-sunken);
   font: var(--text-body-sm);
 
-  > i { flex: none; margin-top: 1px; color: var(--color-text-muted); }
+  > app-icon { flex: none; margin-top: 1px; color: var(--color-text-muted); }
 }
 
 .vx-info { margin-top: var(--space-4); font: var(--text-body-sm); color: var(--color-text-secondary); p { margin: var(--space-2) 0 0; } }

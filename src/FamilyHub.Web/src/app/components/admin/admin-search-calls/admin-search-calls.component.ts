@@ -17,6 +17,7 @@ import { OUTCOME_OPTIONS, outcomeKeyLabel, outcomeLabel } from '../shared/admin-
 import { AdminTopicState } from '../shared/admin-topic-state';
 import { TopicSwitchComponent } from '../shared/topic-switch.component';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /** WebSearchCallLog.JobKind → тип задачи на странице «Задачи». */
 const JOB_KIND_TYPES: Record<string, string> = {
@@ -35,9 +36,10 @@ const JOB_KIND_TYPES: Record<string, string> = {
  */
 @Component({
     selector: 'app-admin-search-calls',
-    imports: [FormsModule, DatePipe, DecimalPipe, RouterLink, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent],
+    imports: [FormsModule, DatePipe, DecimalPipe, RouterLink, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent, LoadingSpinnerComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
-    templateUrl: './admin-search-calls.component.html'
+    templateUrl: './admin-search-calls.component.html',
+    styleUrl: './admin-search-calls.component.scss',
 })
 export class AdminSearchCallsComponent implements OnInit {
   private readonly api = inject(AdminApiService);

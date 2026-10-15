@@ -56,7 +56,7 @@
   text-align: left;
   cursor: pointer;
 
-  i { font-size: var(--icon-size); color: var(--color-text-secondary); }
+  app-icon { color: var(--color-text-secondary); }
   span { display: flex; flex-direction: column; }
   small { font: var(--text-caption); color: var(--color-text-muted); }
 
@@ -64,7 +64,7 @@
     border-color: var(--color-accent);
     background: var(--color-accent-soft);
 
-    i, strong { color: var(--color-accent-hover); }
+    app-icon, strong { color: var(--color-accent-hover); }
     small { color: var(--color-accent-hover); }
   }
 }
@@ -97,7 +97,7 @@
 
   @media (hover: hover) { &:hover { background: var(--color-surface); } }
   &.active { border-color: var(--color-accent); background: var(--color-accent-soft); }
-  i { flex: none; font-size: var(--icon-size); color: var(--color-kind-medication); }
+  app-icon { flex: none; color: var(--color-kind-medication); }
   .cf-rx-check { margin-left: auto; color: var(--color-accent-hover); }
 }
 
@@ -146,7 +146,7 @@
   background: var(--color-surface-sunken);
 }
 
-.cf-card-row { display: flex; align-items: center; gap: var(--space-3); > i { font-size: var(--icon-size); color: var(--color-text-secondary); } }
+.cf-card-row { display: flex; align-items: center; gap: var(--space-3); > app-icon { color: var(--color-text-secondary); } }
 .cf-card-text { flex: 1; min-width: 0; }
 .cf-card-title { font: var(--text-body); font-weight: 600; }
 .cf-card-sub { font: var(--text-caption); color: var(--color-text-muted); }
@@ -160,7 +160,7 @@
   font: var(--text-caption);
   color: var(--color-warning);
 
-  i { margin-top: 2px; }
+  app-icon { margin-top: 2px; }
   &.ok { background: var(--color-success-soft); color: var(--color-success); }
 }
 
@@ -175,7 +175,7 @@
   background: var(--color-surface);
 }
 
-.cf-summary { display: flex; align-items: flex-start; gap: var(--space-2); font: var(--text-body-sm); color: var(--color-accent-hover); i { margin-top: 2px; } }
+.cf-summary { display: flex; align-items: flex-start; gap: var(--space-2); font: var(--text-body-sm); color: var(--color-accent-hover); app-icon { margin-top: 2px; } }
 .cf-actions { display: flex; gap: var(--space-3); }
 .cf-save { flex: 1; }
 

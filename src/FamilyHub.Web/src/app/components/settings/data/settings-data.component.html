@@ -1,32 +1,36 @@
-<section class="mb-2">
-  <h3>Мои данные</h3>
-  <p class="mb-2">
-    <a routerLink="/privacy">Политика конфиденциальности</a>
+<div class="sd">
+<h1 class="page-title sd-h1">Данные и доступ</h1>
+
+<section class="section" aria-labelledby="sd-mine">
+  <h2 class="section-title" id="sd-mine">Мои данные</h2>
+  <p class="section-text">
+    Выгрузка всего, что вы добавили, одним архивом. Как мы обращаемся с данными —
+    <a routerLink="/privacy">политика конфиденциальности</a>.
   </p>
-  <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="exportData()">
-    Выгрузить мои данные (zip)
+  <button type="button" class="btn btn-secondary sd-left" [disabled]="busy()" (click)="exportData()">
+    <app-icon [icon]="icons.Download" [size]="18" />Выгрузить мои данные (zip)
   </button>
 </section>
 
-<section class="mb-2">
-  <h3>Кто видит моё здоровье</h3>
-  <p class="muted mb-2">
+<section class="section" aria-labelledby="sd-share">
+  <h2 class="section-title" id="sd-share">Кто видит моё здоровье</h2>
+  <p class="section-text">
     Доступ на чтение к дневнику, приёму лекарств и прививкам — по одному переключателю на
     категорию, для взрослого ребёнка, который наблюдает за пожилым родителем, например. Анализы и
     приёмы врача настраиваются отдельно, в самом разделе «Анализы» («Доступ» → семья).
   </p>
   @if (sharesLoading()) {
-    <p class="muted">Загружаем…</p>
+    <app-loading-spinner />
   } @else if (shares().length === 0) {
-    <p class="muted">Делиться пока не с кем — доступ можно дать активным членам ваших семей.</p>
+    <p class="section-text">Делиться пока не с кем — доступ можно дать активным членам ваших семей.</p>
   } @else {
-    <div class="settings-share-header">
+    <div class="settings-share-header matrix-head">
       <span>Человек</span>
       <span class="text-center">Приём лекарств</span>
       <span class="text-center">Прививки</span>
       <span class="text-center">Дневник</span>
     </div>
-    <div class="card" style="padding:0">
+    <div class="list-card">
       @for (grant of shares(); track grant.viewerUserId) {
         <div class="settings-share-row">
           <span>{{ grant.name }}</span>
@@ -66,20 +70,23 @@
   }
 </section>
 
-<section class="mb-2">
-  <h3>Удаление аккаунта</h3>
-  <p class="muted mb-2">
+<section class="section" aria-labelledby="sd-del">
+  <h2 class="section-title" id="sd-del">Удаление аккаунта</h2>
+  <p class="section-text">
     Безвозвратно удаляет аккаунт, медицинские записи, файлы и отзывает согласие на
     обработку персональных данных.
   </p>
   @if (!deleteConfirmVisible()) {
-    <button class="btn btn-danger" (click)="deleteConfirmVisible.set(true)">Удалить аккаунт…</button>
+    <button class="btn btn-danger sd-left" (click)="deleteConfirmVisible.set(true)">Удалить аккаунт…</button>
   } @else {
     <label class="form-label" for="delete-confirm">Введите «УДАЛИТЬ» для подтверждения</label>
-    <input id="delete-confirm" class="input mb-2" type="text" name="deleteConfirm" [(ngModel)]="deleteConfirmText" />
-    <button class="btn btn-danger" [disabled]="!deleteConfirmed || busy()" (click)="deleteAccount()">
-      Удалить навсегда
-    </button>
-    <button class="btn-link" (click)="deleteConfirmVisible.set(false)">Отмена</button>
+    <input id="delete-confirm" class="input sd-confirm-input" type="text" name="deleteConfirm" [(ngModel)]="deleteConfirmText" />
+    <div class="sd-confirm">
+      <button class="btn btn-danger" [disabled]="!deleteConfirmed || busy()" (click)="deleteAccount()">
+        Удалить навсегда
+      </button>
+      <button class="btn btn-ghost" (click)="deleteConfirmVisible.set(false)">Отмена</button>
+    </div>
   }
 </section>
+</div>

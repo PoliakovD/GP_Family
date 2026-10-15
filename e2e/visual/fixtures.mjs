@@ -5,6 +5,8 @@
 // Неизвестный запрос → undefined → shots.mjs отвечает 404 и печатает его в конце прогона:
 // так видно, какую фикстуру добавить для нового экрана.
 
+import { ADMIN_SCREENS, ADMIN_ROUTES } from './fixtures-admin.mjs';
+
 const FAMILY_ID = 'f-polyakov';
 const ME_ID = 'u-daniil';
 const VALERIA_ID = 'u-valeria';
@@ -68,7 +70,41 @@ export const SCREENS = [
   { name: 'medkits', path: '/health/medications' },
   { name: 'medkit', path: '/health/medications/mk1' },
   // Витрина компонентов (только dev-сборка, фаза 2 редизайна).
+  { name: 'settings', path: '/settings' },
+  { name: 'settings-profile', path: '/settings/profile' },
+  { name: 'settings-security', path: '/settings/security', only: 'desktop' },
+  { name: 'settings-notifications', path: '/settings/notifications' },
+  { name: 'settings-data', path: '/settings/data' },
+  // Уведомления, поиск, фоновые задачи (4.8.2).
+  { name: 'notifications', path: '/notifications' },
+  { name: 'search', path: '/home', only: 'desktop', prepare: async (page) => {
+    await page.locator('.app-search input').fill('Ибу');
+    await page.waitForTimeout(600);
+  } },
+  { name: 'jobs', path: '/home', only: 'desktop', overrides: () => [['GET', /^\/api\/jobs\/active-summary$/, ACTIVE_JOBS]],
+    prepare: async (page) => { await page.getByRole('button', { name: 'Фоновые процессы' }).click(); } },
+  // Публичный отчёт для врача (4.8.3) — без сессии.
+  { name: 'public-report', path: '/r/visual-token', anon: true },
+  { name: 'public-report-gone', path: '/r/gone-token', anon: true, only: 'mobile' },
+  // Вход и онбординг (4.8.1). anon — /api/auth/me отвечает 401, как у человека без сессии.
+  { name: 'auth-login', path: '/login', anon: true },
+  { name: 'auth-register', path: '/login', anon: true, prepare: async (page) => {
+    await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  } },
+  { name: 'auth-reset', path: '/login', anon: true, only: 'mobile', prepare: async (page) => {
+    await page.getByRole('button', { name: 'Забыли пароль?' }).click();
+  } },
+  { name: 'auth-join', path: '/join/visual-code', anon: true },
+  { name: 'auth-join-bad', path: '/join/bad-code', anon: true, only: 'mobile' },
+  { name: 'auth-telegram-bind', path: '/telegram-bind', anon: true, only: 'mobile' },
+  { name: 'auth-telegram-expired', path: '/telegram-expired', anon: true, only: 'mobile' },
+  { name: 'auth-profile-setup', path: '/profile-setup' },
+  { name: 'auth-consent', path: '/consent' },
+  { name: 'auth-consent-text', path: '/consent-text', anon: true },
+  { name: 'auth-privacy', path: '/privacy', anon: true },
+  { name: 'auth-not-found', path: '/no-such-page' },
   { name: 'dev-ui', path: '/dev/ui', spinner: true }, // спиннер — часть витрины
+  ...ADMIN_SCREENS,
 ];
 
 const ME = {
@@ -319,10 +355,63 @@ const VISITS = [
     abnormalIndicatorCount: 0, normalIndicatorCount: 0, specimenKbId: '', specimenDisplayName: null }),
 ];
 
+// Минимальный одностраничный PDF (A4) для просмотрщика публичного отчёта: латиница Helvetica + полосы-«таблица».
+function samplePdf() {
+  const lines = ['BT /F1 20 Tf 56 770 Td (Doctor report) Tj ET', 'BT /F1 11 Tf 56 748 Td (Polyakov D. S. - 01.04.2026 - 14.10.2026) Tj ET'];
+  for (let i = 0; i < 14; i++) {
+    const y = 700 - i * 34;
+    lines.push(`0.94 0.94 0.92 rg 56 ${y} 483 26 re f`, `0.2 0.2 0.2 rg BT /F1 10 Tf 64 ${y + 9} Td (Indicator ${i + 1}) Tj ET`);
+  }
+  const stream = lines.join('\n');
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objs.map((o, i) => { const at = pdf.length; pdf += `${i + 1} 0 obj\n${o}\nendobj\n`; return at; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return pdf;
+}
+
+const job = (jobId, label, extra = {}) => ({ jobId, label, recordId: null, recordKind: null, createdAt: '2026-10-14T09:30:00+03:00',
+  isRunning: false, waitingForAi: false, queueAhead: 0, ...extra });
+const ACTIVE_JOBS = {
+  extraction: { total: 2, items: [job('j1', 'Анализ мочи — 12 окт.', { recordId: 'r-blood', recordKind: 0, isRunning: true }), job('j2', 'Бланк УЗИ', { queueAhead: 1 })] },
+  labAnalyte: { total: 1, items: [job('j3', 'Ферритин')] },
+  medication: emptyJobs, visitMedication: emptyJobs,
+};
+const NOTE = (id, type, title, body, createdAt, isRead, kind = null, related = 'r-blood') => ({
+  id, type, title, body, createdAt, isRead, readAt: null, relatedEntityKind: kind, relatedEntityId: related });
+const NOTIFICATIONS = [
+  NOTE('n1', 11, 'Пропущен приём: Аторвастатин', 'Вечерний приём в 21:00 не отмечен.', '2026-10-14T08:10:00+03:00', false, 3, 'dose-1'),
+  NOTE('n2', 7, 'Анализ крови распознан', 'Развернутый анализ крови — 20 показателей, 6 вне нормы.', '2026-10-14T07:45:00+03:00', false, 0),
+  NOTE('n3', 17, 'Валерия: «Купила витамин D»', 'Сообщение в чате семьи «Поляковы».', '2026-10-13T19:20:00+03:00', true, 8, 'fam'),
+  NOTE('n4', 0, 'Ибупрофен: срок годности истекает', 'Аптечка «Дом» — годен до 31 октября.', '2026-10-13T09:00:00+03:00', true),
+  NOTE('n5', 13, 'Скоро прививка: грипп', 'Ежегодная вакцинация — рекомендуем до конца октября.', '2026-10-10T09:00:00+03:00', true),
+];
+const SEARCH = [
+  { type: 0, id: 's1', title: 'Ибупрофен 200 мг', snippet: null, score: 1, birthday: null,
+    medication: { familyId: 'fam', familyName: 'Поляковы', medkitId: 'mk', medkitName: 'Дом', expiryDate: '2026-10-31' } },
+  { type: 1, id: 's2', title: 'Ибупрофен', snippet: 'НПВС: обезболивающее, жаропонижающее', score: 0.8, birthday: null, medication: null },
+  { type: 2, id: 's3', title: 'Развернутый анализ крови', snippet: '3 октября · 6 вне нормы', score: 0.5, birthday: null, medication: null },
+];
+
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
+  ...ADMIN_ROUTES,
   ['GET', /^\/api\/auth\/me$/, ME],
   ['GET', /^\/api\/consents\/status$/, { accepted: true, version: '1' }],
+  ['GET', /^\/api\/consents\/current$/, { version: '2026-03', text: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>' }],
+  ['GET', /^\/api\/legal\/privacy-policy$/, { rawText: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>'.replace('Согласие на обработку персональных данных', 'Политика конфиденциальности') }],
+  ['GET', /^\/api\/public\/doctor-reports\/visual-token$/, { patientName: 'Поляков Даниил Сергеевич', sex: 'М', age: 31,
+    birthDate: '1995-08-25', periodFrom: '2026-04-01', periodTo: '2026-10-14', createdAt: '2026-10-14T09:00:00+03:00',
+    expiresAt: '2026-10-21T09:00:00+03:00', pageCount: 4, isPet: false,
+    sections: ['Анализы вне нормы', 'Динамика показателей', 'Приём лекарств', 'Дневник самочувствия'] }],
+  ['GET', /^\/api\/public\/doctor-reports\/visual-token\/pdf$/, () => ({ rawText: samplePdf(), contentType: 'application/pdf' })],
+  ['GET', /^\/api\/public\/doctor-reports\/gone-token$/, { status: 404, body: { code: 'not_found' } }],
+  ['GET', /^\/api\/invites\/visual-code\/preview$/, { familyName: 'Поляковы', inviterName: 'Валерия Полякова' }],
+  ['GET', /^\/api\/invites\/bad-code\/preview$/, { status: 409, body: { code: 'expired' } }],
   ['GET', /^\/api\/ai\/status$/, { available: true }],
   ['GET', /^\/api\/families$/, FAMILIES],
   ['GET', /^\/api\/home\/summary$/, HOME_SUMMARY],
@@ -332,6 +421,8 @@ const ROUTES = [
   ['GET', /^\/api\/medication-courses\/attention-count$/, { count: 0 }],
   ['GET', /^\/api\/vaccinations\/attention-count$/, { count: 2 }],
   ['GET', /^\/api\/notifications\/unread-count$/, { count: 2 }],
+  ['GET', /^\/api\/notifications$/, NOTIFICATIONS],
+  ['GET', /^\/api\/search$/, { items: SEARCH, page: 1, pageSize: 15, totalCount: 3 }],
   ['GET', /^\/api\/health\/summary$/, HEALTH_SUMMARY],
   ['GET', /^\/api\/medical-records\/shares$/, [FAMILY_ID]],
   ['GET', /^\/api\/attachments\/limits$/, { maxFileSizeBytes: 20971520, maxFilesPerRecord: 10 }],
@@ -400,6 +491,12 @@ const ROUTES = [
     status: 2, stage: 5, indicatorCount: 20, error: null, totalFiles: 1, processedFiles: 1,
     createdAt: '2026-10-03T09:00:00Z', completedAt: '2026-10-03T09:02:00Z', queuePosition: 0, waitingForAi: false,
   }],
+  ['GET', /^\/api\/auth\/sessions$/, [
+    { id: 's1', lastSeenAt: '2026-10-14T08:40:00Z', expiresAt: '2026-11-13T08:40:00Z', ipAddress: '85.140.1.10', device: 'Chrome · macOS', isCurrent: true },
+    { id: 's2', lastSeenAt: '2026-10-12T19:05:00Z', expiresAt: '2026-11-11T19:05:00Z', ipAddress: '85.140.1.22', device: 'Safari · iPhone', isCurrent: false },
+  ]],
+  ['GET', /^\/api\/health-shares\/mine$/, [{ viewerUserId: VALERIA_ID, name: 'Валерия', categories: 1 }]],
+  ['GET', /^\/api\/notifications\/preferences$/, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((type) => ({ type, pushEnabled: type % 3 !== 2, telegramEnabled: false }))],
   ['GET', /^\/api\/health-shares\/shared-with-me$/, [{ ownerUserId: VALERIA_ID, name: 'Валерия', categories: 4 }]],
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],

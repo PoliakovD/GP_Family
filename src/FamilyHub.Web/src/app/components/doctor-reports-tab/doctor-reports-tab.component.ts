@@ -1,4 +1,5 @@
 import { Download, FileText, Plus } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { FabComponent } from '../../shared/ui/fab/fab.component';
@@ -22,6 +23,7 @@ import { DoctorReportLinkDialogComponent } from '../doctor-report-link-dialog/do
 
 
 import { saveBlob } from '../../shared/util/save-blob';
+import { Copy, Eye, History, Link, Trash2, Unlink } from 'lucide';
 /** «Миша Поляков», «Барсик (кот) — питомец», «обо мне»; null — мой отчёт о себе. */
 function subjectLine(r: DoctorReport): string | null {
   if (!r.canManage) return 'обо мне';
@@ -35,7 +37,7 @@ interface ReportRow {
   meta: string;
   link: LinkView;
   /** null — основного действия нет (пациент не может выдать ссылку на чужой отчёт). */
-  primary: { label: string; icon: string; run: () => void } | null;
+  primary: { label: string; icon: LucideIconData; run: () => void } | null;
   actions: ActionMenuItem[];
 }
 
@@ -149,20 +151,20 @@ export class DoctorReportsTabComponent implements OnInit {
     const active = report.link.status === DoctorReportLinkStatus.Active;
     const manage = report.canManage;
     const primary = active
-      ? { label: 'Копировать ссылку', icon: 'ph ph-copy', run: () => void this.copyLink(report) }
+      ? { label: 'Копировать ссылку', icon: Copy, run: () => void this.copyLink(report) }
       : manage
         ? {
             label: report.link.status === DoctorReportLinkStatus.None ? 'Создать ссылку' : 'Новая ссылка',
-            icon: 'ph ph-link-simple',
+            icon: Link,
             run: () => this.openLinkDialog(report),
           }
         : null;
 
     const actions: ActionMenuItem[] = [
-      { label: 'Открыть PDF', icon: 'ph ph-eye', handler: () => void this.openPdf(report) },
-      ...(active && manage ? [{ label: 'Продлить ссылку', icon: 'ph ph-clock-clockwise', handler: () => this.openLinkDialog(report) }] : []),
-      ...(active ? [{ label: 'Отозвать доступ', icon: 'ph ph-link-break', danger: true, handler: () => void this.revoke(report) }] : []),
-      ...(manage ? [{ label: 'Удалить отчёт', icon: 'ph ph-trash', danger: true, handler: () => void this.remove(report) }] : []),
+      { label: 'Открыть PDF', icon: Eye, handler: () => void this.openPdf(report) },
+      ...(active && manage ? [{ label: 'Продлить ссылку', icon: History, handler: () => this.openLinkDialog(report) }] : []),
+      ...(active ? [{ label: 'Отозвать доступ', icon: Unlink, danger: true, handler: () => void this.revoke(report) }] : []),
+      ...(manage ? [{ label: 'Удалить отчёт', icon: Trash2, danger: true, handler: () => void this.remove(report) }] : []),
     ];
 
     return { report, title: periodTitle(report.periodFrom, report.periodTo), meta, link, primary, actions };

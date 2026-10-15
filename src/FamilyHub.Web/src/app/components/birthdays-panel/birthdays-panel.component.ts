@@ -12,16 +12,20 @@ import {
   birthdayUrgencyLabel,
   parseLocalBirthDate,
 } from '../../shared/util/birthday-date';
+import { Cake } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 let nextInstanceId = 0;
 
 @Component({
     selector: 'app-birthdays-panel',
-    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
+    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, IconComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './birthdays-panel.component.html'
 })
 export class BirthdaysPanelComponent implements OnInit {
+  protected readonly icons = { Cake };
+
   readonly familyId = input.required<string>();
 
   private readonly api = inject(ApiService);

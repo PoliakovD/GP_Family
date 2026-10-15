@@ -100,7 +100,7 @@
 | `--tap-min: 44px` | `styles.scss` | 33 использования |
 | Глобальные компонентные классы (`.btn*`, `.card*`, `.tag*`, `.input`, `.seg`, `.switch`, `.alert-*`, `.table`, `.overlay-*`, `.file-chip*`) | `styles.scss` | Высоко (см. §3) |
 | Утилиты в духе Bootstrap (`.d-flex`, `.mb-2`, `.gap-2`, `.text-muted`…) | `styles.scss` | Высоко: `.mb-2` 254, `.d-flex` 180. Не используются: `.hr`, `.btn-lg`, `.row-danger`, `.row-cursor`, `.d-block`, `.justify-content-center`, `.me-2`, `.ms-2`, `.p-3`, `.py-2`, `.text-primary`, `.fw-normal`, `.align-middle` |
-| Источник дизайна | `FamilyHub Redesign - standalone.html` в корне репо (дэк, из которого портированы токены) | — |
+| Источник дизайна | `FamilyHub Redesign - standalone.html` (дэк, из которого портированы токены; удалён из репо в 4.8.5 — источник правды теперь DESIGN.md) | — |
 
 ---
 

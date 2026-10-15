@@ -18,11 +18,11 @@
       (ngModelChange)="onSpecimenQueryInput($event)"
       (blur)="resolveSpecimen()" />
     @if (checkingSpecimen) {
-      <div class="muted mb-2" style="font-size:0.7647rem">Проверяем источник…</div>
+      <div class="form-hint mb-2" style="font-size:0.7647rem">Проверяем источник…</div>
     } @else if (specimenError) {
       <div class="alert-danger mb-2" style="font-size:0.7647rem">{{ specimenError }}</div>
     } @else if (specimenCheckDeferred) {
-      <div class="muted mb-2" style="font-size:0.7647rem">
+      <div class="form-hint mb-2" style="font-size:0.7647rem">
         ИИ недоступен — название сохранится и будет проверено автоматически, когда он вернётся.
       </div>
     } @else {

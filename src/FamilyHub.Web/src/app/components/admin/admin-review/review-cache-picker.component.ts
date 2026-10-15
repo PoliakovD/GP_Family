@@ -35,7 +35,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
           <div class="rcp-head">
             <button type="button" class="btn btn-secondary btn-sm" (click)="back()">← К списку</button>
             <strong>{{ cand.normalizedName }}</strong>
-            @if (cand.specimen) { <span class="tag tag-neutral">{{ cand.specimen }}</span> }
+            @if (cand.specimen) { <span class="badge badge-neutral">{{ cand.specimen }}</span> }
           </div>
           @if (detailError()) {
             <div class="alert-danger">{{ detailError() }}</div>
@@ -51,11 +51,11 @@ import { ToastService } from '../../../shared/toast/toast.service';
                 <li class="rcp-snippet" [class.rcp-snippet-off]="!checked().has(s.url)">
                   <label class="rcp-snippet-label">
                     <input type="checkbox" [checked]="checked().has(s.url)" (change)="toggle(s.url)" />
-                    <span style="min-width: 0;">
+                    <span class="min-w-0">
                       @if (s.domain) {
-                        <span class="tag" [class.tag-ok]="s.isTrustedByDomain" [class.tag-warning]="!s.isTrustedByDomain">{{ s.domain }}</span>
+                        <span class="badge" [class.badge-success]="s.isTrustedByDomain" [class.badge-warning]="!s.isTrustedByDomain">{{ s.domain }}</span>
                       }
-                      @if (!s.enabled) { <span class="tag tag-neutral">выключен в источнике</span> }
+                      @if (!s.enabled) { <span class="badge badge-neutral">выключен в источнике</span> }
                       <strong class="rcp-snippet-title">{{ s.title || s.url }}</strong>
                       <span class="rcp-snippet-text">{{ s.text }}</span>
                     </span>
@@ -84,7 +84,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
                   <button type="button" class="rcp-cand" (click)="pick(c)">
                     <span>
                       <strong>{{ c.normalizedName }}</strong>
-                      @if (c.specimen) { <span class="tag tag-neutral">{{ c.specimen }}</span> }
+                      @if (c.specimen) { <span class="badge badge-neutral">{{ c.specimen }}</span> }
                     </span>
                     <span class="text-muted">
                       {{ c.snippetCount }} источн.@if (c.manualCount > 0) { · ручных {{ c.manualCount }} }
@@ -104,21 +104,23 @@ import { ToastService } from '../../../shared/toast/toast.service';
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
+    
+
     .rcp-hint { margin-top: 0; }
     .rcp-list, .rcp-snippets { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 55vh; overflow-y: auto; }
     .rcp-cand {
       width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
-      border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper);
+      border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface);
       font: inherit; color: inherit; cursor: pointer;
     }
     .rcp-cand:hover { border-color: var(--color-accent); }
     .rcp-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
     .rcp-bulk { display: flex; gap: 8px; margin-bottom: 4px; }
-    .rcp-snippet { padding: 6px 8px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper); }
+    .rcp-snippet { padding: 6px 8px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface); }
     .rcp-snippet-off { opacity: 0.6; }
     .rcp-snippet-label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
     .rcp-snippet-title { display: block; margin-top: 2px; }
-    .rcp-snippet-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.8235rem; white-space: pre-wrap; }
+    .rcp-snippet-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font: var(--text-caption); white-space: pre-wrap; }
     .rcp-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   `],
 })

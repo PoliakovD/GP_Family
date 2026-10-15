@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AdminApiService, EnrichmentReviewConfigRequest } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { parseThreshold } from './review-helpers';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /** Значения по умолчанию — те же, что EnrichmentReviewConfig.Default*MinConfidence на бэкенде. */
 export const REVIEW_CONFIG_DEFAULTS: EnrichmentReviewConfigRequest = {
@@ -30,7 +31,7 @@ interface ConfigRow {
  */
 @Component({
   selector: 'app-review-config',
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, LoadingSpinnerComponent],
   template: `
     <div class="card">
       <div class="card-title">Пороги уверенности ИИ</div>
@@ -41,7 +42,7 @@ interface ConfigRow {
           пока админ не одобрит или не поправит его.
         </p>
         @if (loading()) {
-          <p class="text-muted">Загрузка…</p>
+          <app-loading-spinner />
         } @else if (error()) {
           <div class="alert-danger">{{ error() }}</div>
         } @else {
@@ -55,7 +56,7 @@ interface ConfigRow {
                     <div class="review-threshold">
                       <input type="range" min="0" max="1" step="0.05" [attr.aria-label]="row.title + ': порог запроса'"
                              [ngModel]="value(row.query)" (ngModelChange)="set(row.query, $event)" [name]="row.query + 'r'" />
-                      <input class="input" type="number" min="0" max="1" step="0.05" style="width: 80px;"
+                      <input class="input x-w-80px" type="number" min="0" max="1" step="0.05"
                              [ngModel]="value(row.query)" (ngModelChange)="set(row.query, $event)" [name]="row.query + 'n'" />
                     </div>
                   </td>
@@ -63,7 +64,7 @@ interface ConfigRow {
                     <div class="review-threshold">
                       <input type="range" min="0" max="1" step="0.05" [attr.aria-label]="row.title + ': порог результата'"
                              [ngModel]="value(row.result)" (ngModelChange)="set(row.result, $event)" [name]="row.result + 'r'" />
-                      <input class="input" type="number" min="0" max="1" step="0.05" style="width: 80px;"
+                      <input class="input x-w-80px" type="number" min="0" max="1" step="0.05"
                              [ngModel]="value(row.result)" (ngModelChange)="set(row.result, $event)" [name]="row.result + 'n'" />
                     </div>
                   </td>
@@ -74,7 +75,7 @@ interface ConfigRow {
           @if (invalid()) {
             <p class="text-danger">Каждый порог должен быть числом от 0 до 1.</p>
           }
-          <div class="d-flex gap-2" style="align-items: center; flex-wrap: wrap;">
+          <div class="d-flex gap-2 align-items-center flex-wrap">
             <button type="button" class="btn btn-primary btn-sm" [disabled]="busy() || invalid()" (click)="save()">Сохранить</button>
             <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="resetDefaults()">По умолчанию (70% / 80%)</button>
             @if (updatedAt()) { <span class="text-muted">Сохранено {{ updatedAt() | date: 'dd.MM.yyyy HH:mm' }}</span> }
@@ -85,6 +86,8 @@ interface ConfigRow {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
+    .x-w-80px { width: 80px; }
+
     .review-threshold { display: flex; align-items: center; gap: 8px; }
     .review-threshold input[type='range'] { flex: 1; min-width: 100px; accent-color: var(--color-accent); }
   `],

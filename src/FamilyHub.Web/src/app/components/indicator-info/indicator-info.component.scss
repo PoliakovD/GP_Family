@@ -89,11 +89,10 @@
   border-radius: var(--radius-md);
   font: var(--text-body-sm);
 
-  i {
+  app-icon {
     flex: none;
     width: 20px;
     text-align: center;
-    font-size: var(--icon-size);
     color: var(--color-text-muted);
   }
 }
@@ -106,7 +105,7 @@
   background: var(--color-accent-soft);
   color: var(--color-accent-hover);
 
-  i { color: var(--color-accent-hover); }
+  app-icon { color: var(--color-accent-hover); }
 }
 
 .kb-norm-source { font: var(--text-caption); color: var(--color-text-muted); }

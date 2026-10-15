@@ -17,14 +17,18 @@ export interface AdminTab {
     imports: [RouterLink, RouterLinkActive, RouterOutlet],
     changeDetection: ChangeDetectionStrategy.Eager,
     template: `
-    <div class="seg mb-3">
+    <nav class="seg seg-sunken admin-tabs" aria-label="Страницы раздела">
       @for (t of tabs; track t.path) {
-        <a class="seg-opt" [routerLink]="[t.path]" routerLinkActive="active">{{ t.label }}</a>
+        <a class="seg-opt" [routerLink]="[t.path]" routerLinkActive="active" ariaCurrentWhenActive="page">{{ t.label }}</a>
       }
-    </div>
+    </nav>
 
     <router-outlet></router-outlet>
-  `
+  `,
+  styles: [`
+    :host { display: flex; flex-direction: column; gap: var(--space-4); }
+    .admin-tabs { align-self: flex-start; max-width: 100%; }
+  `],
 })
 export class AdminSectionComponent {
   readonly tabs: AdminTab[] = inject(ActivatedRoute).snapshot.data['tabs'] ?? [];

@@ -29,7 +29,7 @@ import {BreakpointService} from '../../services/breakpoint.service';
 import {PageActionService} from '../../services/page-action.service';
 import {pluralizeRu} from '../../shared/util/pluralize';
 import {formatPersonName} from '../../shared/util/person-name';
-import {Check, Link, Lock} from 'lucide';
+import { Check, Link, Lock, Trash2, UserMinus } from 'lucide';
 
 type FamilySubTab = 'members' | 'chat' | 'medkits' | 'birthdays' | 'dependents';
 
@@ -162,7 +162,7 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
 
     get deleteFamilyMenuActions(): ActionMenuItem[] {
         return [
-            {label: 'Удалить семью', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDeleteFamily()},
+            {label: 'Удалить семью', icon: Trash2, danger: true, handler: () => void this.handleDeleteFamily()},
         ];
     }
 
@@ -215,7 +215,7 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
     memberActions(memberId: string): ActionMenuItem[] {
         let actions = this.memberActionsCache.get(memberId);
         if (!actions) {
-            actions = [{label: 'Исключить из семьи', icon: 'ph ph-user-minus', danger: true, handler: () => void this.removeMember(memberId)}];
+            actions = [{label: 'Исключить из семьи', icon: UserMinus, danger: true, handler: () => void this.removeMember(memberId)}];
             this.memberActionsCache.set(memberId, actions);
         }
         return actions;

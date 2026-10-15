@@ -30,7 +30,7 @@ const PAD_Y = 5;
   styles: [`
     :host { display: block; }
     .trend-line { width: 100%; height: 38px; display: block; overflow: visible; }
-    .trend-band { fill: var(--color-accent-100); }
+    .trend-band { fill: var(--color-accent-soft); }
     .trend-path { fill: none; stroke: var(--trend-color, var(--color-accent)); stroke-width: 2; vector-effect: non-scaling-stroke; }
     .trend-dot { fill: var(--trend-color, var(--color-accent)); }
   `],

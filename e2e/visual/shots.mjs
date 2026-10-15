@@ -94,8 +94,19 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
         unmatched.add(`${req.method()} ${url.pathname}`);
         return route.fulfill({ status: 404, json: { title: 'нет фикстуры' } });
       }
-      return route.fulfill({ status: result.status ?? 200, json: result.body ?? result });
+      // { rawText } — ответ не JSON (политика конфиденциальности отдаётся как HTML-текст).
+      if (typeof result.rawText === 'string') return route.fulfill({ status: 200, contentType: result.contentType ?? 'text/html', body: result.rawText });
+      // { status: число, body } — ответ с кодом (ошибка); иначе сам объект — тело 200 (у данных бывает своё поле status).
+      const wrapped = typeof result.status === 'number' && 'body' in result;
+      return route.fulfill({ status: wrapped ? result.status : 200, json: wrapped ? result.body : result });
     });
+    // overrides — свои ответы только для этого экрана (как ROUTES): маршрут, добавленный позже, приоритетнее.
+    for (const [m, re, res] of screen.overrides?.() ?? []) {
+      await context.route((u) => re.test(u.pathname), (route) => route.request().method() === m
+        ? route.fulfill({ json: res }) : route.fallback());
+    }
+    // anon — экран для человека без сессии (вход, приглашение): маршрут, добавленный позже, приоритетнее.
+    if (screen.anon) await context.route('**/api/auth/me', (route) => route.fulfill({ status: 401, json: {} }));
     // Всё внешнее (шрифты/аналитика/проверки связи) — не ходим в сеть: снимок не должен зависеть от неё.
     await context.route((url) => !url.href.startsWith(base), (route) => route.abort());
     // SignalR чата: без сервера просто падает в «нет соединения» — не мешает снимку.

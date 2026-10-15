@@ -1,62 +1,43 @@
-<h3 class="mb-3">Профиль</h3>
+<!-- Профиль на телефоне (DESIGN §3–4): H1 → человек → «уведомления выключены» (alert-warning) → разделы
+     list-card из nav-row → «Выйти». На десктопе разделы — подпункты сайдбара, этот экран не показывается. -->
+<div class="sm">
+  <h1 class="sm-title">Профиль</h1>
 
-@if (auth.me(); as me) {
-  <div class="d-flex align-items-center gap-3 mb-3">
-    <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="lg" />
-    <div>
-      <div class="card-title" style="font-size:1.1765rem">{{ formatPersonName(me, 'full') }}</div>
-      @if (me.username) {
-        <div class="muted">&#64;{{ me.username }}</div>
-      }
-    </div>
-  </div>
-
-  @if (push.isSupported && !push.isSubscribed()) {
-    <a class="settings-menu-push-banner mb-3" routerLink="/settings/notifications" style="text-decoration:none;color:inherit">
-      <i class="ph-duotone ph-bell-slash" aria-hidden="true"></i>
-      <div class="flex-fill">
-        <div style="font-weight:600">Уведомления выключены</div>
-        <div class="muted">Напоминания о лекарствах не приходят. Нажмите, чтобы включить.</div>
+  @if (auth.me(); as me) {
+    <div class="sm-person">
+      <app-avatar [person]="{key: me.userId, firstName: me.firstName, lastName: me.lastName}" size="xl" [self]="true" />
+      <div class="sm-person-text">
+        <span class="sm-name">{{ formatPersonName(me, 'full') }}</span>
+        @if (me.username) {
+          <span class="sm-username">&#64;{{ me.username }}</span>
+        }
       </div>
-      <i class="ph ph-caret-right" aria-hidden="true"></i>
-    </a>
+    </div>
+
+    @if (push.isSupported && !push.isSubscribed()) {
+      <a class="alert-warning sm-push" routerLink="/settings/notifications">
+        <app-icon [icon]="icons.BellOff" />
+        <span class="sm-push-text">
+          <strong>Уведомления выключены</strong>
+          <span>Напоминания о лекарствах не приходят. Нажмите, чтобы включить.</span>
+        </span>
+        <app-icon [icon]="icons.ChevronRight" [size]="18" />
+      </a>
+    }
   }
-}
 
-<div class="card" style="padding:0">
-  <a class="settings-menu-row" routerLink="/settings/profile">
-    <i class="ph ph-user" aria-hidden="true"></i>
-    <span class="flex-fill">Аккаунт</span>
-    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
-  </a>
-  <a class="settings-menu-row" routerLink="/settings/security">
-    <i class="ph ph-lock-simple" aria-hidden="true"></i>
-    <span class="flex-fill">Безопасность</span>
-    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
-  </a>
-  <a class="settings-menu-row" routerLink="/settings/notifications">
-    <i class="ph ph-bell" aria-hidden="true"></i>
-    <span class="flex-fill">Оповещения</span>
-    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
-  </a>
-  <!-- Telegram — отдельной строкой на мобильном корне (быстрый доступ к привязке), но ведёт на
-       ту же «Аккаунт», где живёт блок «Способы входа» — на десктопе Telegram туда же встроен
-       (см. Screen - Profile settings.dc.html, расхождение мобильного/десктопного мокапа принято
-       как есть). -->
-  <a class="settings-menu-row" routerLink="/settings/profile">
-    <i class="ph ph-telegram-logo" aria-hidden="true"></i>
-    <span class="flex-fill">Telegram</span>
-    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
-  </a>
-  <a class="settings-menu-row" routerLink="/settings/data">
-    <i class="ph ph-database" aria-hidden="true"></i>
-    <span class="flex-fill">Данные и приватность</span>
-    <i class="ph ph-caret-right muted" aria-hidden="true"></i>
-  </a>
+  <nav class="list-card" aria-label="Разделы профиля">
+    <app-nav-row link="/settings/profile" title="Аккаунт" subtitle="Имя, дата рождения, способы входа" [icon]="icons.User" tone="accent" />
+    <app-nav-row link="/settings/security" title="Безопасность" subtitle="Пароль и активные сессии" [icon]="icons.Lock" tone="accent" />
+    <app-nav-row link="/settings/notifications" title="Уведомления" subtitle="Что и куда присылать" [icon]="icons.Bell" tone="accent" />
+    <!-- Telegram — быстрый доступ к привязке; ведёт в «Аккаунт», где блок «Способы входа». -->
+    <app-nav-row link="/settings/profile" title="Telegram" subtitle="Вход через бота и Mini App" [icon]="icons.Send" tone="accent" />
+    <app-nav-row link="/settings/data" title="Данные и доступ" subtitle="Кто видит моё здоровье, выгрузка, удаление" [icon]="icons.Database" tone="accent" />
+  </nav>
+
+  @if (auth.me()?.provider === 'email') {
+    <button type="button" class="btn btn-secondary btn-block" (click)="logout()">
+      <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
+    </button>
+  }
 </div>
-
-@if (auth.me()?.provider === 'email') {
-  <button type="button" class="btn btn-secondary btn-block mt-3" (click)="logout()">
-    <i class="ph ph-sign-out" aria-hidden="true"></i> Выйти
-  </button>
-}

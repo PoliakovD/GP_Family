@@ -21,6 +21,8 @@ import { todayLocal } from '../../shared/util/intake-labels';
 
 import { saveBlob } from '../../shared/util/save-blob';
 import { TelegramService } from '../../services/telegram.service';
+import { BookOpen, ChevronDown, ChevronUp, CircleCheck, CircleDashed, FileText, Image, NotebookPen, Plus, Syringe, Trash2 } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 const STAGE_ORDER = ['0-1', '1-2', '2-6', '6-7', '14+', 'adult', 'epidemic', 'closed'];
 
 interface StageGroup {
@@ -37,12 +39,14 @@ interface StageGroup {
  */
 @Component({
   selector: 'app-vaccination-person',
-  imports: [ClickableDirective, AvatarComponent, BackLinkComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
+  imports: [ClickableDirective, AvatarComponent, BackLinkComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink, IconComponent],
   templateUrl: './vaccination-person.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-person.component.scss',
 })
 export class VaccinationPersonComponent {
+  protected readonly icons = { BookOpen, ChevronDown, ChevronUp, CircleCheck, CircleDashed, FileText, Image, NotebookPen, Plus, Syringe, Trash2 };
+
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);

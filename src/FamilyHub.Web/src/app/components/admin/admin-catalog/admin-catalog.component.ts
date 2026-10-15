@@ -23,6 +23,9 @@ import { AdminPayloadEditorComponent, PayloadSaveEvent } from '../admin-payload-
 import { KbHistoryComponent } from '../admin-review/kb-history.component';
 import { joinAliasLines, splitAliasLines } from '../admin-review/review-helpers';
 import { VerificationBadgeComponent } from '../shared/verification-badge.component';
+import { Lock } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const PAGE_SIZE = 20;
 
@@ -39,11 +42,13 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
 @Component({
     changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-admin-catalog',
-    imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, KbHistoryComponent, VerificationBadgeComponent],
+    imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, KbHistoryComponent, VerificationBadgeComponent, IconComponent, LoadingSpinnerComponent],
     templateUrl: './admin-catalog.component.html',
     styleUrl: './admin-catalog.component.scss',
 })
 export class AdminCatalogComponent implements OnInit, HasUnsavedChanges {
+  protected readonly icons = { Lock };
+
   private readonly payloadEditors = viewChildren(AdminPayloadEditorComponent);
 
   private readonly api = inject(AdminApiService);

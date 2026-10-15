@@ -6,7 +6,7 @@
         <!-- Явная кнопка «Назад» (не просто иконка) — на десктопе нет ни жеста, ни аппаратной
              «назад», а иконка-крестик читается как «закрыть», а не «вернуться». -->
         <button type="button" class="btn btn-ghost btn-sm text-nowrap" (click)="requestClose()">
-          <i class="ph ph-caret-left" aria-hidden="true"></i> Назад
+          <app-icon [icon]="icons.ChevronLeft" [size]="18" /> Назад
         </button>
         <h5 class="mb-0 flex-grow-1 text-truncate">{{ title }}</h5>
       </div>

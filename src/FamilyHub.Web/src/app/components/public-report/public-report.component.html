@@ -1,10 +1,13 @@
 <div class="pr-page">
   <header class="pr-bar">
-    <span class="pr-brand">FamilyHub</span>
-    <span class="pr-sub">· {{ report()?.isPet ? 'отчёт для ветеринара' : 'отчёт пациента для врача' }}</span>
+    <span class="pr-brand">
+      <span class="app-brand-mark" aria-hidden="true"><app-icon [icon]="icons.Heart" [size]="20" [strokeWidth]="2" /></span>
+      FamilyHub
+    </span>
+    <span class="pr-sub">{{ report()?.isPet ? 'Отчёт для ветеринара' : 'Отчёт пациента для врача' }}</span>
     @if (state() === 'ready') {
       <button type="button" class="btn btn-primary pr-download-top" (click)="download()">
-        <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Скачать PDF
+        <app-icon [icon]="icons.Download" [size]="18" />Скачать PDF
       </button>
     }
   </header>
@@ -14,11 +17,11 @@
       @if (report(); as r) {
         <main class="pr-main">
           <aside class="pr-side">
-            <section class="pr-card">
-              <div class="pr-kicker">{{ r.isPet ? 'Питомец' : 'Пациент' }}</div>
-              <div class="pr-name">{{ r.patientName }}</div>
+            <section class="card pr-card" aria-labelledby="pr-patient">
+              <span class="pr-kicker">{{ r.isPet ? 'Питомец' : 'Пациент' }}</span>
+              <h1 class="pr-name" id="pr-patient">{{ r.patientName }}</h1>
               @if (birthLine(r); as line) {
-                <div class="pr-muted">{{ line }}</div>
+                <span class="pr-muted">{{ line }}</span>
               }
               <dl class="pr-facts">
                 <div><dt>Период</dt><dd>{{ period(r) }}</dd></div>
@@ -27,14 +30,14 @@
               </dl>
             </section>
 
-            <div class="pr-warning" role="note">
-              <i class="ph-fill ph-warning" aria-hidden="true"></i>
+            <div class="alert-warning" role="note">
+              <app-icon [icon]="icons.TriangleAlert" [size]="18" />
               <span>{{ r.isPet ? 'Сформировано владельцем' : 'Сформировано пациентом или его близкими' }} в приложении. Не является официальным медицинским документом.</span>
             </div>
 
             @if (r.sections.length > 0) {
-              <section class="pr-card pr-toc">
-                <div class="pr-kicker">Содержание</div>
+              <section class="card pr-card pr-toc" aria-labelledby="pr-toc">
+                <h2 class="pr-kicker" id="pr-toc">Содержание</h2>
                 <ol>
                   @for (s of r.sections; track s) {
                     <li>{{ s }}</li>
@@ -48,9 +51,9 @@
             <div class="pr-viewer-tools">
               <span class="pr-muted">{{ r.pageCount > 0 ? r.pageCount + ' стр.' : '' }}</span>
               <div class="pr-zoom">
-                <button type="button" class="btn btn-secondary btn-icon" aria-label="Уменьшить" (click)="zoom(-1)"><i class="ph ph-minus" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Уменьшить" (click)="zoom(-1)"><app-icon [icon]="icons.Minus" /></button>
                 <span class="pr-zoom-label">{{ zoomLabel() }}</span>
-                <button type="button" class="btn btn-secondary btn-icon" aria-label="Увеличить" (click)="zoom(1)"><i class="ph ph-plus" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Увеличить" (click)="zoom(1)"><app-icon [icon]="icons.Plus" /></button>
               </div>
             </div>
             @if (pdfUrl(); as url) {
@@ -63,29 +66,28 @@
 
         <div class="pr-bottom-bar">
           <button type="button" class="btn btn-primary btn-block" (click)="download()">
-            <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Скачать отчёт PDF
+            <app-icon [icon]="icons.Download" [size]="18" />Скачать отчёт PDF
           </button>
         </div>
       }
     }
     @case ('gone') {
       <main class="pr-gone">
-        <span class="pr-gone-icon"><i class="ph-duotone ph-clock-countdown" aria-hidden="true"></i></span>
-        <h2>Ссылка больше не работает</h2>
-        <p>Срок доступа к отчёту истёк или пациент отозвал доступ. Попросите пациента отправить новую ссылку.</p>
-        <p class="pr-muted">Данные пациента на этой странице не показываются</p>
+        <app-empty-state
+          [icon]="icons.Clock"
+          title="Ссылка больше не работает"
+          text="Срок доступа к отчёту истёк или пациент отозвал доступ. Попросите пациента отправить новую ссылку. Данные пациента на этой странице не показываются." />
       </main>
     }
     @case ('error') {
       <main class="pr-gone">
-        <span class="pr-gone-icon"><i class="ph-duotone ph-warning-circle" aria-hidden="true"></i></span>
-        <h2>Не удалось открыть отчёт</h2>
-        <p>Проверьте соединение и попробуйте ещё раз.</p>
-        <button type="button" class="btn btn-secondary" (click)="reload()">Повторить</button>
+        <app-empty-state [icon]="icons.CircleAlert" title="Не удалось открыть отчёт" text="Проверьте соединение и попробуйте ещё раз.">
+          <button type="button" class="btn btn-secondary" (click)="reload()">Повторить</button>
+        </app-empty-state>
       </main>
     }
     @default {
-      <main class="pr-gone"><p class="pr-muted">Открываем отчёт…</p></main>
+      <main class="pr-gone"><app-loading-spinner text="Открываем отчёт…" /></main>
     }
   }
 </div>

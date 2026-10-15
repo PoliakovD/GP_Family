@@ -2,6 +2,8 @@ import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, injec
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, AdminRelatedAnalyteMatch, KbAnalyteListItem } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { Copy, Trash2, TriangleAlert, X } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
 
 const RELATED_SEARCH_DEBOUNCE_MS = 300;
 
@@ -112,10 +114,13 @@ const EMPTY_REF_RANGE = (): RefRangeRow => ({
 @Component({
     changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-admin-payload-editor',
-    imports: [FormsModule],
+    imports: [FormsModule, IconComponent],
     templateUrl: './admin-payload-editor.component.html',
+    styleUrl: './admin-payload-editor.component.scss',
 })
 export class AdminPayloadEditorComponent implements OnChanges {
+  protected readonly icons = { Copy, Trash2, TriangleAlert, X };
+
   @Input({ required: true }) schema!: PayloadEditorSchema;
   @Input() payloadJson = '{}';
   @Input() busy = false;

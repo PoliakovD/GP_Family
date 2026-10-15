@@ -6,6 +6,8 @@ import {
 } from '../../models/types';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { DEFAULT_SHARE_DAYS, SHARE_DAY_OPTIONS, expiryPreview } from '../../shared/util/report-labels';
+import { ChartLine, FileText, HeartPulse, NotebookPen, Pill, Sparkles, Stethoscope, Syringe, Zap } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 type PeriodPreset = 1 | 3 | 6 | 12 | 'custom';
 
@@ -32,12 +34,14 @@ function monthsAgo(months: number, now: Date): Date {
  */
 @Component({
   selector: 'app-doctor-report-form',
-  imports: [FormsModule],
+  imports: [FormsModule, IconComponent],
   templateUrl: './doctor-report-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './doctor-report-form.component.scss',
 })
 export class DoctorReportFormComponent implements OnInit, OnDestroy {
+  protected readonly icons = { ChartLine, FileText, HeartPulse, NotebookPen, Pill, Sparkles, Stethoscope, Syringe, Zap };
+
   private readonly api = inject(ApiService);
 
   /** Открыто из дневника («В отчёт для врача»): блоки дневника включены сразу. */

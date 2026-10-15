@@ -1,19 +1,22 @@
 <div class="admin-shell" [class.admin-shell-wide]="wide()">
-  <div class="d-flex justify-content-between mb-3 align-items-center">
-    <h1 class="mb-0">Админ-панель</h1>
-    <button type="button" class="btn btn-secondary btn-sm" (click)="logout()">Выйти</button>
-  </div>
+  <header class="admin-head">
+    <span class="app-brand-mark" aria-hidden="true"><app-icon [icon]="icons.ShieldCheck" [size]="20" [strokeWidth]="2" /></span>
+    <h1 class="admin-title">Админ-панель</h1>
+    <button type="button" class="btn btn-secondary admin-logout" (click)="logout()">
+      <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
+    </button>
+  </header>
 
-  <div class="seg mb-3">
+  <nav class="seg admin-nav" aria-label="Разделы админки">
     @for (s of sections; track s.path) {
-      <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active">
+      <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active" ariaCurrentWhenActive="page">
         {{ s.label }}
         @if (s.path === 'review' && reviewQueue.total() > 0) {
-          <span class="nav-badge" [attr.aria-label]="reviewQueue.total() + ' ждут решения'">{{ reviewQueue.total() }}</span>
+          <span class="count-badge" [attr.aria-label]="reviewQueue.total() + ' ждут решения'">{{ reviewQueue.total() }}</span>
         }
       </a>
     }
-  </div>
+  </nav>
 
   <router-outlet></router-outlet>
 </div>

@@ -1,5 +1,5 @@
 @if (loading()) {
-  <p class="text-muted">Загрузка…</p>
+  <app-loading-spinner />
 } @else if (error()) {
   <div class="alert-danger">{{ error() }}</div>
 } @else {
@@ -14,11 +14,11 @@
     <div class="card mb-3">
       <div class="card-title">Место</div>
       <div class="card-body">
-        <div class="d-flex gap-3 flex-wrap">
-          <div><strong>{{ toMib(d.bucketSizeBytes) | number: '1.1-1' }} МиБ</strong><div class="text-muted">бакет MinIO ({{ d.bucketObjectCount }} объектов)</div></div>
-          <div><strong>{{ toMib(d.attachmentsSizeBytesInDb) | number: '1.1-1' }} МиБ</strong><div class="text-muted">по БД, открытый размер ({{ d.attachmentsCountInDb }} вложений)</div></div>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-value">{{ toMib(d.bucketSizeBytes) | number: '1.1-1' }} МиБ</span><span class="stat-label">бакет MinIO ({{ d.bucketObjectCount }} объектов)</span></div>
+          <div class="stat"><span class="stat-value">{{ toMib(d.attachmentsSizeBytesInDb) | number: '1.1-1' }} МиБ</span><span class="stat-label">по БД, открытый размер ({{ d.attachmentsCountInDb }} вложений)</span></div>
         </div>
-        <p class="text-muted mb-0" style="margin-top: 0.5rem;">
+        <p class="text-muted mb-0 mt-2">
           Размер бакета больше размера в БД — это ожидаемо: в БД хранится размер исходного файла,
           в бакете лежит зашифрованный блоб (шифротекст длиннее открытого текста).
         </p>
@@ -31,12 +31,12 @@
         @if (d.reconciliation.orphanedBlobs === 0 && d.reconciliation.brokenAttachments === 0) {
           <p class="mb-0">Расхождений не найдено.</p>
         } @else {
-          <div class="d-flex gap-3 flex-wrap">
+          <div class="stat-grid">
             @if (d.reconciliation.orphanedBlobs > 0) {
-              <div><strong>{{ d.reconciliation.orphanedBlobs }}</strong><div class="text-muted">осиротевших блобов (нет строки в БД)</div></div>
+              <div class="stat"><span class="stat-value">{{ d.reconciliation.orphanedBlobs }}</span><span class="stat-label">осиротевших блобов (нет строки в БД)</span></div>
             }
             @if (d.reconciliation.brokenAttachments > 0) {
-              <div><strong>{{ d.reconciliation.brokenAttachments }}</strong><div class="text-muted">битых вложений (нет блоба в хранилище)</div></div>
+              <div class="stat"><span class="stat-value">{{ d.reconciliation.brokenAttachments }}</span><span class="stat-label">битых вложений (нет блоба в хранилище)</span></div>
             }
           </div>
         }

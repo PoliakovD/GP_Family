@@ -1,26 +1,23 @@
-<div class="auth-shell">
-  <div class="card auth-card elev-md">
-    <div class="auth-brand">
-      <div class="card-kicker">FamilyHub</div>
-      <h2 class="card-title mb-0">Админ-панель</h2>
-    </div>
+<app-auth-card title="Админ-панель" lead="Отдельный вход для администраторов FamilyHub.">
+  @if (error()) {
+    <div class="alert-danger" role="alert">{{ error() }}</div>
+  }
 
-    @if (error()) {
-      <div class="alert-danger">{{ error() }}</div>
-    }
-
-    <form (ngSubmit)="login()">
+  <form class="auth-form" (ngSubmit)="login()">
+    <div appField>
       <label class="form-label" for="admin-user">Логин</label>
       <input
-        id="admin-user" class="input mb-2" type="text" name="user"
+        id="admin-user" class="input" type="text" name="user"
         [(ngModel)]="user" required autocomplete="username" />
+    </div>
 
+    <div appField>
       <label class="form-label" for="admin-password">Пароль</label>
       <input
-        id="admin-password" class="input mb-3" type="password" name="password"
+        id="admin-password" class="input" type="password" name="password"
         [(ngModel)]="password" required autocomplete="current-password" />
+    </div>
 
-      <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
-    </form>
-  </div>
-</div>
+    <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Войти</button>
+  </form>
+</app-auth-card>

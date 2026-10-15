@@ -14,8 +14,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.7647rem;
-  color: var(--color-neutral-600);
+  font: var(--text-badge);
+  color: var(--color-text-muted);
   animation: pipeline-step-enter 0.2s ease-out;
 }
 
@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7647rem;
+  font: var(--text-badge);
 }
 
 .step-done .pipeline-step-icon {
@@ -39,7 +39,7 @@
 }
 
 .step-error {
-  color: var(--color-accent-2-700, #aa0b56);
+  color: var(--color-danger);
 }
 
 .pipeline-step-spinner {

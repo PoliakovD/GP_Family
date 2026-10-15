@@ -7,11 +7,16 @@ import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
 import { relatedKindBasePath } from '../util/related-kind-route';
 import { pluralizeRu } from '../util/pluralize';
 import type { ActiveJobItem, ActiveJobsGroup } from '../../models/types';
+import { NgTemplateOutlet } from '@angular/common';
+import { FileSearch, FlaskConical, Pill, RefreshCw } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
+import { IconTileComponent } from '../ui/icon-tile/icon-tile.component';
 
 /** Одна секция выпадающего списка — заголовок + иконка конвейера + сама группа (§4 плана). */
 interface JobSection {
   title: string;
-  icon: string;
+  icon: LucideIconData;
   group: ActiveJobsGroup;
 }
 
@@ -26,7 +31,7 @@ interface JobSection {
  */
 @Component({
     selector: 'app-background-jobs-dropdown',
-    imports: [BottomSheetComponent],
+    imports: [BottomSheetComponent, NgTemplateOutlet, IconComponent, IconTileComponent],
     templateUrl: './background-jobs-dropdown.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './background-jobs-dropdown.component.scss'
@@ -38,15 +43,17 @@ export class BackgroundJobsDropdownComponent {
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
 
+  protected readonly icons = { RefreshCw };
+
   readonly open = signal(false);
 
   readonly sections = computed<JobSection[]>(() => {
     const s = this.jobs.summary();
     return [
-      { title: 'Распознаём документы', icon: 'ph-file-magnifying-glass', group: s.extraction },
-      { title: 'Уточняем нормы показателей', icon: 'ph-flask', group: s.labAnalyte },
-      { title: 'Ищем описание препаратов', icon: 'ph-pill', group: s.medication },
-      { title: 'Проверяем назначенные препараты', icon: 'ph-pill', group: s.visitMedication },
+      { title: 'Распознаём документы', icon: FileSearch, group: s.extraction },
+      { title: 'Уточняем нормы показателей', icon: FlaskConical, group: s.labAnalyte },
+      { title: 'Ищем описание препаратов', icon: Pill, group: s.medication },
+      { title: 'Проверяем назначенные препараты', icon: Pill, group: s.visitMedication },
     ].filter((section) => section.group.total > 0);
   });
 

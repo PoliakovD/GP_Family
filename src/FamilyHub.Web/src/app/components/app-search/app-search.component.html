@@ -7,8 +7,8 @@
   />
 
   @if (search.query.trim().length > 0) {
-    <div class="app-search-dropdown elev-lg">
-      <div class="seg mb-2">
+    <div class="popover app-search-dropdown" role="region" aria-label="Результаты поиска">
+      <div class="seg seg-sunken as-filter" role="radiogroup" aria-label="Что искать">
         @for (chip of filterChips; track chip.value) {
           <label class="seg-opt">
             <input
@@ -23,40 +23,38 @@
       </div>
 
       @if (search.error) {
-        <div class="alert-danger mb-2">{{ search.error }}</div>
+        <div class="alert-danger" role="alert">{{ search.error }}</div>
       }
 
       @if (search.loading) {
         <app-loading-spinner text="Ищем…" />
       } @else {
-        @for (item of search.items; track item.type + ':' + item.id) {
-          <div class="card mb-2" [class.card-clickable]="isNavigable(item)" [appClickable]="isNavigable(item)" (click)="open(item)">
-            <div class="d-flex align-items-start gap-2">
-              <i [class]="typeIcon(item.type)" style="font-size:1.1765rem;color:var(--color-accent)" aria-hidden="true"></i>
-              <div class="flex-fill">
-                <div class="name-with-tags mb-1">
-                  <strong class="card-title">{{ item.title }}</strong>
-                  <span class="tag">{{ typeLabel(item.type) }}</span>
-                </div>
-                @if (item.medication) {
-                  <p class="muted mb-0">{{ item.medication.familyName }} · {{ item.medication.medkitName }}</p>
-                }
-                @if (item.birthday) {
-                  <p class="muted mb-0">{{ item.birthday.familyName }} · {{ item.birthday.date }}</p>
-                }
-                @if (item.snippet) {
-                  <p class="muted mb-0">{{ item.snippet }}</p>
+        @if (search.items.length > 0) {
+          <div class="as-list">
+            @for (item of search.items; track item.type + ':' + item.id) {
+              <div class="as-row" [class.as-row-link]="isNavigable(item)" [appClickable]="isNavigable(item)" (click)="open(item)">
+                <app-icon-tile [icon]="typeIcon(item.type)" size="sm" />
+                <span class="list-row-text">
+                  <span class="list-row-title">{{ item.title }}</span>
+                  <span class="list-row-sub">
+                    {{ typeLabel(item.type) }}
+                    @if (item.medication) { · {{ item.medication.familyName }} · {{ item.medication.medkitName }} }
+                    @if (item.birthday) { · {{ item.birthday.familyName }} · {{ item.birthday.date }} }
+                  </span>
+                  @if (item.snippet) {
+                    <span class="list-row-sub">{{ item.snippet }}</span>
+                  }
+                </span>
+                @if (isNavigable(item)) {
+                  <app-icon class="list-row-chevron" [icon]="chevron" [size]="18" />
                 }
               </div>
-              @if (isNavigable(item)) {
-                <i class="ph ph-caret-right" style="color:var(--color-neutral-600)" aria-hidden="true"></i>
-              }
-            </div>
+            }
           </div>
         }
 
         @if (search.searched && search.items.length === 0) {
-          <p class="muted mb-0">Ничего не найдено.</p>
+          <p class="as-empty">Ничего не найдено.</p>
         }
       }
     </div>

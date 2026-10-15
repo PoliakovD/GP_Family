@@ -1,31 +1,45 @@
-// «Кто видит моё здоровье» (ADR-0017) — тот же грид-приём, что у матрицы Push/Telegram в
-// settings-notifications.component.scss, только четыре колонки вместо трёх (человек + 3 категории).
+// «Данные и доступ»: выгрузка → «Кто видит моё здоровье» (list-card матрицы человек × категория) → удаление.
+
+.sd { display: flex; flex-direction: column; gap: var(--space-6); max-width: 820px; }
+.sd-left { align-self: flex-start; }
+.sd-confirm-input { max-width: 320px; }
+.sd-confirm { display: flex; gap: var(--space-2); }
+
+// «Кто видит моё здоровье» (ADR-0017): человек + три категории.
 .settings-share-header,
 .settings-share-row {
   display: grid;
-  grid-template-columns: 1fr 90px 90px 90px;
+  grid-template-columns: 1fr 96px 96px 96px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 
-  > *:nth-child(2), > *:nth-child(3), > *:nth-child(4) {
-    justify-self: center;
-  }
+  > *:nth-child(2), > *:nth-child(3), > *:nth-child(4) { justify-self: center; text-align: center; }
 }
 
-.settings-share-header {
-  padding: 0 18px 8px;
-  font-size: 0.7647rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-  border-bottom: 1px solid var(--color-divider);
-  margin-bottom: 16px;
-}
+.settings-share-header { padding: 0 var(--space-6); }
 
 .settings-share-row {
-  padding: 13px 18px;
+  position: relative;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-6);
+  font: var(--text-body);
+  font-weight: 600;
 
-  & + .settings-share-row {
+  & + .settings-share-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--space-6);
+    right: var(--space-6);
     border-top: 1px solid var(--color-divider);
   }
+}
+
+@media (max-width: 1023px) { .sd-h1 { display: none; } }
+
+@media (max-width: 639px) {
+  .settings-share-header,
+  .settings-share-row { grid-template-columns: 1fr 64px 64px 64px; padding-inline: var(--space-4); }
+  .settings-share-row { font: var(--text-body-sm); font-weight: 600; }
+  .settings-share-row + .settings-share-row::before { left: var(--space-4); right: var(--space-4); }
 }

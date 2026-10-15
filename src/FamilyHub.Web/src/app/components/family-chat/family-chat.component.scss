@@ -219,7 +219,7 @@
   cursor: pointer;
 
   // Иконка в плитке (DESIGN §3 «Карточка записи в чате»).
-  > i {
+  > app-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -229,7 +229,6 @@
     border-radius: var(--radius-md);
     background: var(--color-accent-soft);
     color: var(--color-accent-hover);
-    font-size: var(--icon-size);
   }
 }
 
@@ -240,7 +239,7 @@
   &.locked {
     cursor: default;
 
-    > i {
+    > app-icon {
       background: var(--color-surface-sunken);
       color: var(--color-text-muted);
     }
@@ -266,7 +265,7 @@
   font: var(--text-body-sm);
   font-weight: 600;
 
-  .muted {
+  .form-hint {
     font: var(--text-caption);
   }
 }

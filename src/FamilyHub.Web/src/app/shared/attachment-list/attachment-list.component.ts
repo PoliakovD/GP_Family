@@ -7,7 +7,7 @@ import { describeFile } from '../util/file-type';
 import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.component';
 import { FileViewerComponent } from '../file-viewer/file-viewer.component';
 import { IconComponent } from '../ui/icon/icon.component';
-import { Paperclip } from 'lucide';
+import { CircleCheck, Paperclip } from 'lucide';
 
 /**
  * Секция «Файлы» прямо в раскрытой карточке записи (редизайн — раньше список вложений жил в
@@ -28,7 +28,7 @@ import { Paperclip } from 'lucide';
     styleUrl: './attachment-list.component.scss'
 })
 export class AttachmentListComponent implements OnChanges {
-  protected readonly icons = { Paperclip };
+  protected readonly icons = { CircleCheck, Paperclip };
   @Input({ required: true }) recordId!: string;
   /** Emitted после успешной/частичной загрузки — счётчики на MedicalRecord (attachmentCount и
    * т.п.) устарели, родитель должен перечитать запись (см. medical-records-panel.refresh()). */

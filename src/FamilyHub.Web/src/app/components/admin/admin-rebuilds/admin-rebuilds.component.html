@@ -9,7 +9,7 @@
     </p>
 
     @if (rebuildLoading() && !rebuild()) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (rebuildError()) {
       <div class="alert-danger mb-3">{{ rebuildError() }}</div>
     } @else {
@@ -84,7 +84,7 @@
     @if (batchJob('indicator-flags'); as b) {
       <p class="mb-2" [class.text-muted]="!b.active">
         Показателей без нормы сейчас: {{ b.remaining }} из {{ b.total }}.
-        @if (b.active) { <span class="tag tag-accent">идёт обработка</span> }
+        @if (b.active) { <span class="badge badge-neutral">идёт обработка</span> }
       </p>
     }
     <button type="button" class="btn btn-secondary btn-sm" [disabled]="recomputeBusy()" (click)="recomputeIndicatorFlags()">
@@ -105,7 +105,7 @@
     @if (batchJob('cache-units'); as b) {
       <p class="mb-2" [class.text-muted]="!b.active">
         Строк кэша без единиц: {{ b.remaining }} из {{ b.total }}.
-        @if (b.active) { <span class="tag tag-accent">идёт обработка</span> }
+        @if (b.active) { <span class="badge badge-neutral">идёт обработка</span> }
       </p>
     }
     <div class="d-flex gap-2 align-items-center flex-wrap">
@@ -132,7 +132,7 @@
     @if (batchJob('reenrich'); as b) {
       <p class="mb-2" [class.text-muted]="!b.active">
         Статей со старой схемой: {{ b.remaining }} из {{ b.total }}.
-        @if (b.active) { <span class="tag tag-accent">идёт обработка</span> }
+        @if (b.active) { <span class="badge badge-neutral">идёт обработка</span> }
       </p>
     }
     <button type="button" class="btn btn-secondary btn-sm" [disabled]="reenrichBusy()" (click)="reenrichLabAnalytes()">

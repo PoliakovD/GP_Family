@@ -45,6 +45,7 @@ import {
   reviewStageLabel,
   splitAliasLines,
 } from './review-helpers';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /** Что произошло в карточке — родитель (Inbox) убирает задачу из очереди и открывает следующую. */
 export interface ReviewActed {
@@ -66,10 +67,7 @@ type SearchChoice = { type: 'paid' } | { type: 'own' } | { type: 'twin'; cacheId
  */
 @Component({
   selector: 'app-review-detail',
-  imports: [
-    FormsModule, DatePipe, AdminPayloadEditorComponent, ReviewSourcesComponent, ReviewCachePickerComponent, KbHistoryComponent,
-    VerificationBadgeComponent,
-  ],
+  imports: [FormsModule, DatePipe, AdminPayloadEditorComponent, ReviewSourcesComponent, ReviewCachePickerComponent, KbHistoryComponent, VerificationBadgeComponent, LoadingSpinnerComponent],
   templateUrl: './review-detail.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './review-detail.component.scss',

@@ -1,4 +1,7 @@
-// Единая точка правды по "что это за файл" для чипов/списка вложений/вьюера — иконка Phosphor +
+import { File, FileImage, FileSpreadsheet, FileText } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
+
+// Единая точка правды по "что это за файл" для чипов/списка вложений/вьюера — иконка Lucide +
 // человекочитаемая подпись типа + формат размера. ACCEPTED_ATTACHMENT_TYPES (attachment-upload.ts)
 // остаётся отдельным списком (что можно ЗАГРУЗИТЬ) — этот модуль только про отображение.
 
@@ -6,8 +9,8 @@ export type FileKind = 'image' | 'pdf' | 'office-word' | 'office-excel' | 'text'
 
 export interface FileTypeInfo {
   kind: FileKind;
-  /** Класс Phosphor-иконки (без веса — вызывающий код сам решает ph/ph-bold/ph-duotone). */
-  icon: string;
+  /** Иконка Lucide для чипа/списка/вьюера. */
+  icon: LucideIconData;
   /** Короткая подпись типа для карточки «Скачать» (не путать с contentType). */
   label: string;
 }
@@ -26,14 +29,14 @@ const TEXT_TYPES = new Set(['text/plain', 'text/csv', 'application/xml', 'text/x
 export function describeFile(contentType: string, fileName: string): FileTypeInfo {
   const ct = contentType.toLowerCase();
 
-  if (ct === 'application/pdf') return { kind: 'pdf', icon: 'ph-file-pdf', label: 'PDF' };
-  if (IMAGE_TYPES.has(ct)) return { kind: 'image', icon: 'ph-file-image', label: 'Изображение' };
-  if (WORD_TYPES.has(ct)) return { kind: 'office-word', icon: 'ph-file-doc', label: 'Документ Word' };
-  if (EXCEL_TYPES.has(ct)) return { kind: 'office-excel', icon: 'ph-file-xls', label: 'Таблица Excel' };
-  if (TEXT_TYPES.has(ct)) return { kind: 'text', icon: 'ph-file-text', label: 'Текст' };
+  if (ct === 'application/pdf') return { kind: 'pdf', icon: FileText, label: 'PDF' };
+  if (IMAGE_TYPES.has(ct)) return { kind: 'image', icon: FileImage, label: 'Изображение' };
+  if (WORD_TYPES.has(ct)) return { kind: 'office-word', icon: FileText, label: 'Документ Word' };
+  if (EXCEL_TYPES.has(ct)) return { kind: 'office-excel', icon: FileSpreadsheet, label: 'Таблица Excel' };
+  if (TEXT_TYPES.has(ct)) return { kind: 'text', icon: FileText, label: 'Текст' };
 
   const extension = fileName.includes('.') ? fileName.split('.').pop()!.toUpperCase() : null;
-  return { kind: 'other', icon: 'ph-file', label: extension ?? 'Файл' };
+  return { kind: 'other', icon: File, label: extension ?? 'Файл' };
 }
 
 /** КБ/МБ по размеру, а не всегда МБ — formatMb (attachment-upload.ts) остаётся для лимитов

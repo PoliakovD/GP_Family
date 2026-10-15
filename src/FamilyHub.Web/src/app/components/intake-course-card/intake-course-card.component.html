@@ -98,7 +98,7 @@
         </div>
         <ul class="cc-reminders">
           @for (r of reminders(); track r.text) {
-            <li><i [class]="r.icon" aria-hidden="true"></i><span>{{ r.text }}</span></li>
+            <li><app-icon [icon]="r.icon" [size]="18" /><span>{{ r.text }}</span></li>
           }
         </ul>
       </section>

@@ -1,45 +1,37 @@
-// Редизайн v3, PR8 — Пароль/Устройства в две колонки на широких экранах вместо трёх
-// последовательных секций во всю ширину; на узких — стек (было и остаётся стеком по умолчанию).
-.settings-security-columns {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
+// «Безопасность»: H1 + пояснение → «Пароль» (карточка с живым чек-листом) | «Устройства» (list-card сессий) →
+// Telegram → «Выйти». На широких — две колонки.
+
+.ss { display: flex; flex-direction: column; gap: var(--space-6); }
+.ss-head { display: flex; flex-direction: column; gap: var(--space-1); }
+.ss-form { display: flex; flex-direction: column; gap: var(--space-2); .form-label { margin: var(--space-2) 0 0; } .btn { margin-top: var(--space-3); align-self: flex-start; } }
+.ss-count { margin-left: var(--space-1); font: var(--text-body); color: var(--color-text-muted); }
+.ss-sessions { margin: 0; padding: 0; list-style: none; }
+.ss-sessions .settings-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ss-left { align-self: flex-start; }
+.ss-confirm { display: flex; gap: var(--space-2); }
+
+.settings-security-columns { display: flex; flex-direction: column; gap: var(--space-6); }
 
 @media (min-width: 1024px) {
-  .settings-security-columns {
-    flex-direction: row;
-    align-items: flex-start;
-  }
+  .settings-security-columns { flex-direction: row; align-items: flex-start; }
+  .settings-security-col-password { flex: none; width: 380px; }
+  .settings-security-col-devices { flex: 1; min-width: 0; }
+}
 
-  .settings-security-col-password {
-    width: 380px;
-    flex: none;
-  }
-
-  .settings-security-col-devices {
-    flex: 1;
-    min-width: 0;
-  }
+@media (max-width: 1023px) {
+  .ss-h1 { display: none; } // на телефоне заголовок уже в шапке каркаса
 }
 
 .settings-password-checklist {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.7941rem;
-  color: var(--color-neutral-600);
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 
-  li {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  li.done {
-    color: var(--color-status-ok-text);
-  }
+  li { display: flex; align-items: center; gap: var(--space-2); }
+  li.done { color: var(--color-success); }
 }

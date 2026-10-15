@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from '../../services/auth.service';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * Публичная страница ТЕКСТА согласия на обработку ПДн (без формы принятия) — до этого коммита
@@ -13,15 +14,16 @@ import { AuthService } from '../../services/auth.service';
 @Component({
   selector: 'app-consent-text',
   standalone: true,
+  imports: [LoadingSpinnerComponent],
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
-    <div class="card" style="max-width: 720px; margin: 1.5rem auto; padding: 1.5rem;">
+    <article class="card card-lg doc-page">
       @if (html(); as content) {
-        <div [innerHTML]="content"></div>
+        <div class="prose" [innerHTML]="content"></div>
       } @else {
-        <p>Загрузка…</p>
+        <app-loading-spinner />
       }
-    </div>
+    </article>
   `,
 })
 export class ConsentTextComponent implements OnInit {

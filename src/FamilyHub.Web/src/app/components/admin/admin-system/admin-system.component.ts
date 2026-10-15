@@ -1,10 +1,11 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, AdminSystemStats } from '../../../services/admin-api.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 @Component({
     selector: 'app-admin-system',
-    imports: [DatePipe],
+    imports: [DatePipe, LoadingSpinnerComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-system.component.html'
 })

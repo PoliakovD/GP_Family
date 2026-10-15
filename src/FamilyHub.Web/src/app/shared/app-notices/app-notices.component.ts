@@ -1,5 +1,7 @@
 import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
+import { CircleArrowUp, Share, Smartphone, WifiOff } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 const IOS_HINT_DISMISSED_KEY = 'familyhub.iosInstallHintDismissed';
 
@@ -25,26 +27,27 @@ function readFlag(key: string): boolean {
  */
 @Component({
   selector: 'app-notices',
+  imports: [IconComponent],
   standalone: true,
   template: `
     @if (offline()) {
       <div class="app-notice app-notice-warn" role="status">
-        <i class="ph ph-wifi-slash" aria-hidden="true"></i>
+        <app-icon [icon]="icons.WifiOff" [size]="18" />
         <span class="flex-fill">Нет интернета. Показываем то, что уже загружено, но новые изменения не сохранятся, пока связь не вернётся.</span>
       </div>
     }
     @if (updateReady()) {
       <div class="app-notice" role="status">
-        <i class="ph ph-arrow-circle-up" aria-hidden="true"></i>
+        <app-icon [icon]="icons.CircleArrowUp" [size]="18" />
         <span class="flex-fill">Вышла новая версия FamilyHub.</span>
         <button type="button" class="btn btn-primary btn-sm" (click)="reload()">Обновить</button>
       </div>
     }
     @if (showIosHint()) {
       <div class="app-notice" role="note">
-        <i class="ph ph-device-mobile" aria-hidden="true"></i>
+        <app-icon [icon]="icons.Smartphone" [size]="18" />
         <span class="flex-fill">
-          Установите FamilyHub на iPhone: нажмите «Поделиться» <i class="ph ph-export" aria-hidden="true"></i>
+          Установите FamilyHub на iPhone: нажмите «Поделиться» <app-icon [icon]="icons.Share" [size]="18" />
           внизу Safari → «На экран «Домой»». Так приложение откроется одним касанием и сможет присылать
           напоминания о лекарствах.
         </span>
@@ -61,20 +64,22 @@ function readFlag(key: string): boolean {
       flex-wrap: wrap;
       margin-bottom: var(--space-2);
       padding: var(--space-3) var(--space-4);
-      background: var(--color-accent-100);
-      color: var(--color-accent-800);
+      background: var(--color-accent-soft);
+      color: var(--color-accent-hover);
       border-radius: var(--radius-md);
-      font-size: 0.8824rem;
+      font: var(--text-body-sm);
 
-      > i { font-size: 1.25rem; flex: none; }
+      > app-icon { flex: none; }
     }
     .app-notice-warn {
-      background: color-mix(in srgb, var(--color-status-warning) 14%, var(--color-paper));
-      color: var(--color-status-warning-text);
+      background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+      color: var(--color-warning);
     }
   `,
 })
 export class AppNoticesComponent {
+  protected readonly icons = { CircleArrowUp, Share, Smartphone, WifiOff };
+
   private readonly sw = inject(SwUpdate);
 
   readonly offline = signal(typeof navigator !== 'undefined' && navigator.onLine === false);

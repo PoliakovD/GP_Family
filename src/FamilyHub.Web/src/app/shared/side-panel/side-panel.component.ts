@@ -6,6 +6,8 @@ import {
 } from '@angular/core';
 import { OverlayA11y } from '../util/overlay-a11y';
 import { OverlayStackService } from '../util/overlay-stack.service';
+import { X } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Обобщение `indicator-info-panel` (см. её docstring) на произвольную ширину — структурная
@@ -39,6 +41,7 @@ import { OverlayStackService } from '../util/overlay-stack.service';
  */
 @Component({
   selector: 'app-side-panel',
+  imports: [IconComponent],
   standalone: true,
   template: `
     @if (open) {
@@ -53,7 +56,7 @@ import { OverlayStackService } from '../util/overlay-stack.service';
           <div class="side-panel-header">
             <h4 class="mb-0">{{ title }}</h4>
             <button type="button" class="btn-icon" aria-label="Закрыть" (click)="closed.emit()">
-              <i class="ph ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </div>
           <div class="side-panel-body">
@@ -67,6 +70,8 @@ import { OverlayStackService } from '../util/overlay-stack.service';
   styleUrl: './side-panel.component.scss',
 })
 export class SidePanelComponent implements OnChanges, OnDestroy {
+  protected readonly icons = { X };
+
   @Input() open = false;
   @Input() title = '';
   /** Любое валидное CSS-значение width — карточке задачи/справочника нужно больше, чем 392px

@@ -1,17 +1,17 @@
 <div class="chat card">
     <div class="chat-feed" #scroller (scroll)="onScroll()" role="log" aria-live="polite" aria-label="Сообщения чата семьи">
         @if (loading()) {
-            <p class="muted chat-empty">Загрузка…</p>
+            <p class="form-hint chat-empty">Загрузка…</p>
         } @else if (loadError()) {
             <div class="chat-empty">
-                <p class="muted mb-2">{{ loadError() }}</p>
+                <p class="form-hint mb-2">{{ loadError() }}</p>
                 <button class="btn btn-secondary btn-sm" type="button" (click)="retry()">Повторить</button>
             </div>
         } @else {
             @if (hasOlder()) {
                 <app-infinite-scroll-sentinel (visible)="loadOlder()" />
                 @if (loadingOlder()) {
-                    <p class="muted chat-older">Загружаем историю…</p>
+                    <p class="form-hint chat-older">Загружаем историю…</p>
                 }
             }
 
@@ -19,7 +19,7 @@
                 <div class="chat-empty">
                     <app-icon class="chat-empty-icon" [icon]="icons.MessageCircle" [size]="28" />
                     <p class="mb-1">Здесь пока тихо.</p>
-                    <p class="muted mb-0">Напишите первым — сообщение увидят все участники семьи.</p>
+                    <p class="form-hint mb-0">Напишите первым — сообщение увидят все участники семьи.</p>
                 </div>
             }
 
@@ -44,7 +44,7 @@
 
                         <div class="bubble" [class.deleted]="row.message.deleted">
                             @if (row.message.deleted) {
-                                <span class="muted"><i class="ph ph-prohibit" aria-hidden="true"></i> Сообщение удалено</span>
+                                <span class="form-hint"><app-icon [icon]="icons.Ban" [size]="18" /> Сообщение удалено</span>
                             } @else {
                                 @if (row.message.replyTo; as reply) {
                                     <button type="button" class="reply-quote" (click)="scrollToMessage(reply.id)">
@@ -55,7 +55,7 @@
                                             } @else if (reply.snippet) {
                                                 {{ reply.snippet }}
                                             } @else if (reply.attachmentCount > 0) {
-                                                <i class="ph ph-paperclip" aria-hidden="true"></i> Вложение
+                                                <app-icon [icon]="icons.Paperclip" [size]="18" /> Вложение
                                             } @else {
                                                 Ссылка
                                             }
@@ -72,9 +72,9 @@
                                                 </button>
                                             } @else {
                                                 <button type="button" class="msg-file" (click)="openViewer(row.message, a)">
-                                                    <i class="ph-duotone {{ fileIcon(a) }}" aria-hidden="true"></i>
+                                                    <app-icon [icon]="fileIcon(a)" [size]="20" />
                                                     <span class="msg-file-name">{{ a.fileName }}</span>
-                                                    <span class="muted">{{ formatFileSize(a.sizeBytes) }}</span>
+                                                    <span class="form-hint">{{ formatFileSize(a.sizeBytes) }}</span>
                                                 </button>
                                             }
                                         }
@@ -92,14 +92,14 @@
                         @if (!row.message.deleted) {
                             @for (link of row.message.links; track link.kind + link.entityId) {
                                 <button type="button" class="msg-link" [class.locked]="!link.accessible" [disabled]="!link.accessible" (click)="openLink(link)">
-                                    <i [class]="link.accessible ? linkIcon(link.kind) : 'ph ph-lock-simple'" aria-hidden="true"></i>
+                                    <app-icon [icon]="link.accessible ? linkIcon(link.kind) : icons.Lock" [size]="18" />
                                     <span class="msg-link-text">
                                         @if (link.accessible) {
                                             <span class="msg-link-title">{{ link.title }}</span>
-                                            <span class="muted">{{ link.subtitle }}</span>
+                                            <span class="form-hint">{{ link.subtitle }}</span>
                                         } @else {
                                             <span class="msg-link-title">Нет доступа</span>
-                                            <span class="muted">Автор не открыл вам эту запись</span>
+                                            <span class="form-hint">Автор не открыл вам эту запись</span>
                                         }
                                     </span>
                                 </button>
@@ -127,7 +127,7 @@
                                             <button type="button" class="reaction" (click)="toggleReaction(row.message, emoji)">{{ emoji }}</button>
                                         }
                                         <button type="button" class="btn btn-ghost btn-sm" (click)="reactionPickerFor.set(null)" aria-label="Закрыть">
-                                            <i class="ph ph-x" aria-hidden="true"></i>
+                                            <app-icon [icon]="icons.X" [size]="18" />
                                         </button>
                                     </span>
                                 }
@@ -148,21 +148,21 @@
     <form class="composer" (submit)="$event.preventDefault(); submit()">
         @if (replyTo(); as reply) {
             <div class="composer-context">
-                <i class="ph ph-arrow-bend-up-left" aria-hidden="true"></i>
+                <app-icon [icon]="icons.Reply" [size]="18" />
                 <span class="composer-context-text">
-                    Ответ {{ authorName(reply.author) }}: <span class="muted">{{ reply.text || 'вложение' }}</span>
+                    Ответ {{ authorName(reply.author) }}: <span class="form-hint">{{ reply.text || 'вложение' }}</span>
                 </span>
                 <button type="button" class="btn btn-ghost btn-sm" (click)="cancelContext()" aria-label="Отменить ответ">
-                    <i class="ph ph-x" aria-hidden="true"></i>
+                    <app-icon [icon]="icons.X" [size]="18" />
                 </button>
             </div>
         }
         @if (editing()) {
             <div class="composer-context">
-                <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+                <app-icon [icon]="icons.Pencil" [size]="18" />
                 <span class="composer-context-text">Редактирование сообщения</span>
                 <button type="button" class="btn btn-ghost btn-sm" (click)="cancelContext()" aria-label="Отменить редактирование">
-                    <i class="ph ph-x" aria-hidden="true"></i>
+                    <app-icon [icon]="icons.X" [size]="18" />
                 </button>
             </div>
         }
@@ -171,16 +171,16 @@
             <div class="composer-chips">
                 @for (f of files(); track $index) {
                     <span class="chip">
-                        <i class="ph ph-paperclip" aria-hidden="true"></i>
+                        <app-icon [icon]="icons.Paperclip" [size]="18" />
                         <span class="chip-text">{{ f.name }}</span>
-                        <button type="button" (click)="removeFile($index)" [attr.aria-label]="'Убрать ' + f.name"><i class="ph ph-x" aria-hidden="true"></i></button>
+                        <button type="button" (click)="removeFile($index)" [attr.aria-label]="'Убрать ' + f.name"><app-icon [icon]="icons.X" [size]="18" /></button>
                     </span>
                 }
                 @for (l of links(); track l.kind + l.entityId; let i = $index) {
                     <span class="chip">
-                        <i [class]="linkIcon(l.kind)" aria-hidden="true"></i>
+                        <app-icon [icon]="linkIcon(l.kind)" [size]="18" />
                         <span class="chip-text">{{ l.title }}</span>
-                        <button type="button" (click)="removeLink(i)" [attr.aria-label]="'Убрать ссылку ' + l.title"><i class="ph ph-x" aria-hidden="true"></i></button>
+                        <button type="button" (click)="removeLink(i)" [attr.aria-label]="'Убрать ссылку ' + l.title"><app-icon [icon]="icons.X" [size]="18" /></button>
                     </span>
                 }
             </div>
@@ -212,20 +212,20 @@
 
 <app-bottom-sheet title="Поделиться записью" [open]="linkPickerOpen()" (closed)="linkPickerOpen.set(false)">
     @if (linkCandidates() === null) {
-        <p class="muted">Загрузка…</p>
+        <p class="form-hint">Загрузка…</p>
     } @else if (linkCandidates()!.length === 0) {
-        <p class="muted">Пока нечем поделиться: нет своих записей, курсов приёма и аптечек семьи.</p>
+        <p class="form-hint">Пока нечем поделиться: нет своих записей, курсов приёма и аптечек семьи.</p>
     } @else {
-        <p class="muted picker-hint">Получатели увидят карточку, только если у них уже есть доступ к записи.</p>
+        <p class="form-hint picker-hint">Получатели увидят карточку, только если у них уже есть доступ к записи.</p>
         @for (group of linkCandidates(); track group.title) {
             <div class="card-kicker">{{ group.title }}</div>
             <div class="picker-list mb-3">
                 @for (item of group.items; track item.kind + item.entityId) {
                     <button type="button" class="picker-item" (click)="addLink(item)">
-                        <i [class]="linkIcon(item.kind)" aria-hidden="true"></i>
+                        <app-icon [icon]="linkIcon(item.kind)" [size]="18" />
                         <span class="msg-link-text">
                             <span class="msg-link-title">{{ item.title }}</span>
-                            <span class="muted">{{ item.subtitle }}</span>
+                            <span class="form-hint">{{ item.subtitle }}</span>
                         </span>
                     </button>
                 }

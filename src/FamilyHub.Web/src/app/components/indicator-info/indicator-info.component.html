@@ -77,7 +77,7 @@
         @if (matchedRange(); as mr) {
           <!-- Строка, подходящая полу и возрасту пациента, подсвечена; остальные — под раскрытием. -->
           <div class="kb-norm-row kb-norm-row-match">
-            <i [class]="normGroupIcon(mr)" aria-hidden="true"></i>
+            <app-icon [icon]="normGroupIcon(mr)" [size]="16" />
             <span class="kb-norm-label">{{ normGroupLabel(mr) }}</span>
             <strong class="kb-norm-value">{{ normValueLabel(mr) }}</strong>
           </div>
@@ -88,7 +88,7 @@
             <app-expandable title="Нормы для других возрастов" [count]="otherRanges().length">
               @for (r of otherRanges(); track $index) {
                 <div class="kb-norm-row">
-                  <i [class]="normGroupIcon(r)" aria-hidden="true"></i>
+                  <app-icon [icon]="normGroupIcon(r)" [size]="16" />
                   <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
                   <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
                 </div>
@@ -98,7 +98,7 @@
         } @else {
           @for (r of a.refRanges; track $index) {
             <div class="kb-norm-row">
-              <i [class]="normGroupIcon(r)" aria-hidden="true"></i>
+              <app-icon [icon]="normGroupIcon(r)" [size]="16" />
               <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
               <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
             </div>

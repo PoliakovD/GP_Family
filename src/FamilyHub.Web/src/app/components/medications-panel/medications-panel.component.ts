@@ -8,7 +8,7 @@ import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { formatDayMonthYear } from '../../shared/util/date-format';
 import { compressImage } from '../../shared/util/image-compression';
 import { expiryBadge, expiryClass, expiryLabel } from '../../shared/util/expiry';
-import { BookOpen, BriefcaseMedical, Pill, Plus } from 'lucide';
+import { BookOpen, BriefcaseMedical, Camera, Check, Pill, Plus, X } from 'lucide';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
@@ -272,7 +272,7 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
       item.enrichmentQueueAhead, 'Справочник пока не знает этот препарат — идёт фоновый поиск');
   }
 
-  protected readonly icons = { BookOpen, BriefcaseMedical, Pill, Plus };
+  protected readonly icons = { BookOpen, BriefcaseMedical, Camera, Check, Pill, Plus, X };
   protected readonly expiryBadge = expiryBadge;
 
   /** «кол-во: 10 шт. · до 1 ноября 2026 · таблетки · 200 мг» — всё, что известно, одной строкой. */

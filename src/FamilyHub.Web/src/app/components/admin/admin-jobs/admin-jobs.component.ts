@@ -15,6 +15,9 @@ import { AdminJobPanelComponent } from '../admin-job-panel/admin-job-panel.compo
 import { FAILURE_REASON_OPTIONS, JOB_STATUS_OPTIONS, failureReasonLabel } from '../shared/admin-labels';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
 import { WebSearchBannerComponent } from '../shared/web-search-banner.component';
+import { RefreshCw, Trash2 } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const JOB_POLL_INTERVAL_MS = 3000;
 const PAGE_SIZE = 25;
@@ -39,11 +42,13 @@ const JOB_TYPES: { value: PipelineJobType; label: string }[] = [
  */
 @Component({
     selector: 'app-admin-jobs',
-    imports: [FormsModule, DatePipe, SidePanelComponent, AdminJobPanelComponent, AdminStatusPipe, WebSearchBannerComponent],
+    imports: [FormsModule, DatePipe, SidePanelComponent, AdminJobPanelComponent, AdminStatusPipe, WebSearchBannerComponent, IconComponent, LoadingSpinnerComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-jobs.component.html'
 })
 export class AdminJobsComponent implements OnInit, OnDestroy {
+  protected readonly icons = { RefreshCw, Trash2 };
+
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);

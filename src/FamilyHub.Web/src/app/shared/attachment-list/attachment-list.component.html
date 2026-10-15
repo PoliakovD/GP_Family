@@ -19,11 +19,11 @@
           @if (thumbnailByAttachment[a.id]; as thumb) {
             <img [src]="thumb" alt="" />
           } @else {
-            <i class="ph {{ fileInfo(a).icon }}" aria-hidden="true"></i>
+            <app-icon [icon]="fileInfo(a).icon" [size]="18" />
             <span class="file-chip-name">{{ a.fileName }}</span>
           }
           @if (a.extractedAt) {
-            <i class="file-chip-badge ph-fill ph-check-circle" title="Распознано" aria-hidden="true"></i>
+            <app-icon [icon]="icons.CircleCheck" [size]="18" class="file-chip-badge" title="Распознано" />
           }
         </button>
       }

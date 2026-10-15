@@ -7,6 +7,8 @@ import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { ReminderSettings, WatchingEntry } from '../../models/types';
 import { fromTimeInput, toTimeInput } from '../../shared/util/intake-labels';
 import { pluralizeRu } from '../../shared/util/pluralize';
+import { Globe, Moon } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 const DEFAULT_QUIET_FROM = '23:00';
 const DEFAULT_QUIET_TO = '07:00';
@@ -19,12 +21,14 @@ const DEFAULT_QUIET_TO = '07:00';
  */
 @Component({
   selector: 'app-intake-reminders',
-  imports: [AvatarComponent],
+  imports: [AvatarComponent, IconComponent],
   templateUrl: './intake-reminders.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-reminders.component.scss',
 })
 export class IntakeRemindersComponent implements OnInit {
+  protected readonly icons = { Globe, Moon };
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);

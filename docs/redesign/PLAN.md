@@ -665,15 +665,42 @@ e2e модуля, счётчики аудита по файлам модуля.
 переключатель темы «Системная / Светлая / Тёмная» (снимает флаг из фазы 1, если к этому
 моменту все экраны переведены). E2E `12-settings-notifications`, `18-pwa-password-reset`.
 
+> **Статус: выполнено.** Меню — H1 «Профиль», блок человека, push-баннер `alert-warning`, один `list-card`
+> из пяти `nav-row`; «Выйти» — `btn-secondary`. «Аккаунт» — hero + `settings-row` в `list-card` («Данные аккаунта»,
+> «Способы входа»). «Безопасность» — пароль с чек-листом на Lucide, сессии `list-card` с бейджем «Это устройство».
+> «Уведомления» — push-переключатель в `alert-success/-warning`, матрица в `list-card` с `matrix-head`.
+> «Данные и доступ» — разделы `section`, матрица доступа в `list-card`. Подписи меню выровнены с роутами
+> («Уведомления», «Данные и доступ»). Новые глобальные классы: `page-title`, `page-sub`, `section*`, `settings-row*`,
+> `matrix-head`. Переключатель темы отложен до завершения 4.8 — не все экраны переведены.
+
 ### 4.8. Прочее
 
 1. **Вход и онбординг:** `login`, `telegram-bind`, `telegram-expired`, `join-invite`, `profile-setup`,
    `consent-gate`, `consent-text`, `privacy`, `not-found`. E2E `01`, `06`, `18`.
+   > **Статус: выполнено (4.8.1).** Общий `app-auth-card` (знак FamilyHub + H1 + пояснение) вместо шести
+   > копий «kicker + card-title»; формы на `appField` и `auth-form` без `mb-*`; вводный блок входа — плитки
+   > Lucide вместо Phosphor, на телефоне под формой. Политика и текст согласия — `doc-page` + `prose`
+   > (без inline-стилей), 404 — `empty-state`. «Загрузка…» → спиннер. Тексты, id полей и кнопки e2e
+   > не менялись. Стенд: экраны `auth-*` (`anon: true` — без сессии).
 2. **Уведомления, поиск:** `notifications-tab`, `app-search` (`.app-search-dropdown` → Popover),
    `shared/notification-bell`, `shared/background-jobs-dropdown`.
+   > **Статус: выполнено (4.8.2).** Лента — H1 + `seg` «Непрочитанные / Все» + «Прочитать все»; группы по
+   > дням (`section`) с `list-card`; плитка по смыслу (`NOTIFICATION_TYPE_TONE`: просрочено/пропущено/ошибка —
+   > danger, скоро — warning, готово — success), «новое» — `badge-accent`, пусто — `empty-state`. Поиск и фоновые
+   > задачи — общий `.popover`, строки с плитками; кнопка фоновых задач — с рамкой, как колокольчик.
 3. **Публичный отчёт** `public-report` (литералы `#2d2b2b`, `#e2e0df`, `#d97700`, аудит §5.1).
+   > **Статус: выполнено (4.8.3).** Литералы → токены, Lucide, плашка — `alert-warning`, «ссылка не работает» /
+   > «ошибка» — `empty-state`, PDF на «столе» surface-sunken. Экраны без оболочки больше не получают поля и
+   > max-width контента каркаса (`app-shell-bare`).
 4. **Админка** (26 экранов): по DESIGN §1 п.4 — плотные таблицы в карточках; `.seg-opt`-сбросы →
    `segmented`, `<button class="tag">` ×8 в `admin-catalog` → chip. Отдельный PR (или два).
+   > **Статус: выполнено (4.8.4).** Оболочка: знак + H1 + «Выйти», разделы `.seg`, страницы `.seg-sunken`.
+   > «Требует внимания» — `list-card` из `task-row` (старый `attention-card` удалён). `.table` без CAPS +
+   > `table-card`; сводки — `stat-grid`; фильтры — `toolbar`. `.tag*` → `badge-*` по смыслу во всём приложении
+   > (здоров/задано/найдено — success, ошибка — danger, метки — neutral; accent у статусов убран), кнопки
+   > «🔒 залочено — снять» → `chip` с Lucide. Phosphor, эмодзи-иконки, inline-стили и «Загрузка…» убраны;
+   > литералы в стилях → токены, `--font-mono`. Вход в админку — `app-auth-card`. Стенд: 32 экрана `admin-*`
+   > (`fixtures-admin.mjs`).
 5. **Финальная чистка (последний PR):** удалить старые токены-алиасы (`paper`, `neutral-*`,
    `accent-100…900`, `accent-2-*`, `status-*`, `kind-metric/wellbeing`), `@fontsource/source-serif-4`,
    `@phosphor-icons/web` (3 CSS из `angular.json`), неиспользуемые утилиты (аудит §1), слить
@@ -681,6 +708,13 @@ e2e модуля, счётчики аудита по файлам модуля.
    включается по системной настройке. Удалить `FamilyHub Redesign - standalone.html` из корня
    и обновить шапку-комментарий `styles.scss`, которая на него ссылается.
    `DevPanel` не трогаем (аудит §2, «Служебное»).
+   > **Статус: выполнено (4.8.5).** Phosphor → Lucide во всём приложении (меню, кнопки каркаса, статусы,
+   > типы файлов; `icon` в данных — `IconNode`), удалены `@phosphor-icons/web`, `@fontsource/source-serif-4`,
+   > их CSS/ассеты и загрузка duotone. Блок совместимости токенов удалён, употребления заменены новыми ролями;
+   > `.tag*`, `.nav-badge`, `.elev-sm/lg` и 20 неиспользуемых утилит удалены; `.muted` слит в `.form-hint`.
+   > `html { font-size: 100% }`, `--text-*` и оставшиеся литералы кегля — в rem/токенах. Тёмная тема — по системе
+   > или выбору «Профиль → Аккаунт → Оформление» (ThemeService). `sparkline` — цвета по смыслу через токены.
+   > Standalone-дэк удалён, шапка `styles.scss` обновлена. DevPanel не трогали.
 
 ---
 

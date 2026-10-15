@@ -1,62 +1,71 @@
-<div>
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Уведомления</h3>
-    @if (hasUnread) {
-      <button class="btn btn-ghost" (click)="markAllRead()">Прочитать все</button>
-    }
+<div class="nt">
+  <div class="nt-head">
+    <h1 class="page-title nt-h1">Уведомления</h1>
+    <div class="nt-toolbar">
+      <div class="seg" role="radiogroup" aria-label="Какие уведомления показать">
+        <label class="seg-opt">
+          <input type="radio" name="notifFilter" [checked]="unreadOnly" (change)="unreadOnly = true; refresh()" />
+          Непрочитанные
+        </label>
+        <label class="seg-opt">
+          <input type="radio" name="notifFilter" [checked]="!unreadOnly" (change)="unreadOnly = false; refresh()" />
+          Все
+        </label>
+      </div>
+      @if (hasUnread) {
+        <button type="button" class="btn btn-ghost" (click)="markAllRead()">
+          <app-icon [icon]="icons.CheckCheck" [size]="18" />Прочитать все
+        </button>
+      }
+    </div>
   </div>
 
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger" role="alert">{{ error }}</div>
   }
-
-  <div class="seg mb-3">
-    <label class="seg-opt">
-      <input type="radio" name="notifFilter" [checked]="unreadOnly" (change)="unreadOnly = true; refresh()" />
-      Непрочитанные
-    </label>
-    <label class="seg-opt">
-      <input type="radio" name="notifFilter" [checked]="!unreadOnly" (change)="unreadOnly = false; refresh()" />
-      Все
-    </label>
-  </div>
 
   @if (loading) {
     <app-loading-spinner />
   } @else {
     @for (group of groupedByDate; track $index) {
-      <div class="card-kicker mb-2">{{ group.kicker }}</div>
-      @for (n of group.items; track n.id) {
-        <div
-          class="card mb-2"
-          [class.card-clickable]="isClickable(n)"
-          [appClickable]="isClickable(n)"
-          (click)="isClickable(n) && openRelated(n)"
-        >
-          <div class="d-flex align-items-start gap-2">
-            <i [class]="typeIcon(n.type)" style="font-size:1.1765rem;color:var(--color-accent)" aria-hidden="true"></i>
-            <div class="flex-fill">
-              <div class="name-with-tags mb-1">
-                <strong class="card-title">{{ n.title }}</strong>
+      <section class="section" [attr.aria-label]="group.kicker">
+        <h2 class="section-title">{{ group.kicker }}</h2>
+        <div class="list-card">
+          @for (n of group.items; track n.id) {
+            <div
+              class="nt-row"
+              [class.nt-row-clickable]="isClickable(n)"
+              [class.nt-row-unread]="!n.isRead"
+              [appClickable]="isClickable(n)"
+              (click)="isClickable(n) && openRelated(n)"
+            >
+              <app-icon-tile [icon]="typeIcon(n.type)" [tone]="typeTone(n.type)" />
+              <div class="nt-text">
+                <div class="nt-title-line">
+                  <span class="nt-title">{{ n.title }}</span>
+                  @if (!n.isRead) {
+                    <span class="badge badge-accent">новое</span>
+                  }
+                </div>
+                <span class="nt-type">{{ typeLabel(n.type) }}</span>
+                <p class="nt-body">{{ n.body }}</p>
                 @if (!n.isRead) {
-                  <span class="tag tag-accent-2">новое</span>
+                  <button type="button" class="btn btn-ghost btn-sm nt-read" (click)="$event.stopPropagation(); handleMarkRead(n.id)">
+                    Отметить прочитанным
+                  </button>
                 }
               </div>
-              <p class="muted mb-1">{{ typeLabel(n.type) }}</p>
-              <p class="mb-2">{{ n.body }}</p>
-              @if (!n.isRead) {
-                <button class="btn btn-ghost btn-sm" (click)="$event.stopPropagation(); handleMarkRead(n.id)">
-                  Отметить прочитанным
-                </button>
+              @if (isClickable(n)) {
+                <app-icon class="list-row-chevron" [icon]="icons.ChevronRight" [size]="18" />
               }
             </div>
-          </div>
+          }
         </div>
-      }
+      </section>
     }
 
     @if (items.length === 0) {
-      <p class="muted">Оповещений нет.</p>
+      <app-empty-state [icon]="icons.Bell" title="Оповещений нет." text="Здесь появятся напоминания о лекарствах, прививках и событиях семьи." />
     }
   }
 </div>

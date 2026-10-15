@@ -31,7 +31,7 @@ export interface EnsureCacheRef {
   selector: 'app-review-sources',
   imports: [FormsModule, DatePipe],
   template: `
-    <div class="card-title d-flex justify-content-between" style="align-items: center; gap: 8px;">
+    <div class="card-title d-flex justify-content-between align-items-center gap-2">
       <span>Источники</span>
       @if (!readonly) {
         <button type="button" class="btn btn-secondary btn-sm" (click)="showAdd.set(!showAdd())">
@@ -41,7 +41,7 @@ export interface EnsureCacheRef {
     </div>
 
     @if (cache) {
-      <p class="text-muted" style="margin: 0 0 8px;">
+      <p class="text-muted x-m-0-0-s2">
         @if (!cache.cacheId && sources.length > 0) {
           Снимок источников черновика: {{ sources.length }} · строки кэша поиска нет
         } @else {
@@ -56,7 +56,7 @@ export interface EnsureCacheRef {
     }
 
     @if (showAdd() && !readonly) {
-      <form class="review-add card" (ngSubmit)="add()" style="padding: 10px; margin-bottom: 10px;">
+      <form class="review-add card x-p-s3-mb-s3" (ngSubmit)="add()">
         <div class="seg mb-2">
           <button type="button" class="seg-opt" [class.active]="addKind() === 'manual-quote'" (click)="addKind.set('manual-quote')">Цитата со ссылкой</button>
           <button type="button" class="seg-opt" [class.active]="addKind() === 'expert-knowledge'" (click)="addKind.set('expert-knowledge')">Знание эксперта</button>
@@ -70,7 +70,7 @@ export interface EnsureCacheRef {
         <textarea class="input mb-1" rows="4" [attr.maxlength]="textLimit"
                   [placeholder]="addKind() === 'manual-quote' ? 'Короткая цитата из источника' : 'Знание: что известно о показателе/препарате'"
                   [ngModel]="addText()" (ngModelChange)="addText.set($event)" name="text"></textarea>
-        <p class="text-muted mb-2" style="margin-top: 0;">{{ addText().length }} / {{ textLimit }} — короткая выдержка, не статья целиком.</p>
+        <p class="text-muted mb-2 mt-0">{{ addText().length }} / {{ textLimit }} — короткая выдержка, не статья целиком.</p>
         <input class="input mb-2" placeholder="Заметка (в модель не передаётся)" [ngModel]="addNote()" (ngModelChange)="addNote.set($event)" name="note" />
         <button type="submit" class="btn btn-primary btn-sm" [disabled]="busy() || !canAdd()">Добавить</button>
       </form>
@@ -79,16 +79,16 @@ export interface EnsureCacheRef {
     <ul class="review-sources">
       @for (s of sources; track s.url) {
         <li class="review-source" [class.review-source-used]="s.usedInDraft" [class.review-source-off]="!s.enabled">
-          <div class="d-flex justify-content-between" style="gap: 8px; align-items: flex-start;">
-            <div style="min-width: 0;">
+          <div class="d-flex justify-content-between gap-2 align-items-start">
+            <div class="min-w-0">
               <div class="review-source-head">
                 @if (s.domain) {
-                  <span class="tag" [class.tag-ok]="s.trustedByDomain || isExpert(s)" [class.tag-warning]="!s.trustedByDomain && !isExpert(s)">{{ s.domain }}</span>
+                  <span class="badge" [class.badge-success]="s.trustedByDomain || isExpert(s)" [class.badge-warning]="!s.trustedByDomain && !isExpert(s)">{{ s.domain }}</span>
                 }
-                @if (kindLabel(s); as label) { <span class="tag tag-accent">{{ label }}</span> }
-                @if (s.pinned) { <span class="tag tag-accent-2">закреплён</span> }
-                @if (s.usedInDraft) { <span class="tag tag-ok">использован</span> }
-                @if (s.untrustedWarning) { <span class="tag tag-warning" title="Домен вне доверенных — источник включён, но проверьте его">недоверенный домен</span> }
+                @if (kindLabel(s); as label) { <span class="badge badge-neutral">{{ label }}</span> }
+                @if (s.pinned) { <span class="badge badge-danger">закреплён</span> }
+                @if (s.usedInDraft) { <span class="badge badge-success">использован</span> }
+                @if (s.untrustedWarning) { <span class="badge badge-warning" title="Домен вне доверенных — источник включён, но проверьте его">недоверенный домен</span> }
               </div>
               @if (isExpert(s)) {
                 <strong>{{ s.title }}</strong>
@@ -110,7 +110,7 @@ export interface EnsureCacheRef {
                      [ngModel]="editTitle()" (ngModelChange)="editTitle.set($event)" name="editTitle" />
               <textarea class="input mb-1" rows="5" aria-label="Текст источника" [attr.maxlength]="editLimit(s)"
                         [ngModel]="editText()" (ngModelChange)="editText.set($event)" name="editText"></textarea>
-              <p class="text-muted mb-2" style="margin-top: 0;">
+              <p class="text-muted mb-2 mt-0">
                 {{ editText().length }} / {{ editLimit(s) }}@if (s.origin === 'Auto') { — после правки источник станет ручной цитатой и переживёт обновление кэша }
               </p>
               <input class="input mb-2" placeholder="Заметка (в модель не передаётся)" aria-label="Заметка к источнику"
@@ -125,7 +125,7 @@ export interface EnsureCacheRef {
             @if (s.note) { <p class="text-muted mb-1">Заметка: {{ s.note }}</p> }
           }
           @if (!readonly && editingUrl() !== s.url) {
-            <div class="d-flex gap-2" style="flex-wrap: wrap;">
+            <div class="d-flex gap-2 flex-wrap">
               <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="startEdit(s)">Править</button>
               <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pin(s)">{{ s.pinned ? 'Открепить' : 'Закрепить' }}</button>
               @if (s.override !== null) {
@@ -142,12 +142,15 @@ export interface EnsureCacheRef {
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
+    .x-m-0-0-s2 { margin: 0 0 var(--space-2); }
+    .x-p-s3-mb-s3 { padding: var(--space-3); margin-bottom: var(--space-3); }
+
     .review-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-    .review-source { padding: 8px 10px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-paper); }
+    .review-source { padding: 8px 10px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface); }
     .review-source-used { border-color: var(--color-accent); }
     .review-source-off { opacity: 0.6; }
     .review-source-head { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
-    .review-source-text { margin: 6px 0; font-size: 0.8235rem; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+    .review-source-text { margin: var(--space-2) 0; font: var(--text-caption); cursor: pointer; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
     .review-source-text-open { display: block; -webkit-line-clamp: unset; }
   `],
 })

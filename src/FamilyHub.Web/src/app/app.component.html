@@ -1,4 +1,4 @@
-<div class="app-shell" [class.app-shell-wide]="isWide()" [class.app-shell-fullscreen]="!isWide() && pageAction.fullscreen()">
+<div class="app-shell" [class.app-shell-wide]="isWide()" [class.app-shell-bare]="!showTabs()" [class.app-shell-fullscreen]="!isWide() && pageAction.fullscreen()">
   @if (showTabs() && isWide()) {
     <!-- Сайдбар ≥1024px (DESIGN §3 «Навигация»): лого → переключатель семьи → пункты 46px
          (подпункты раздела 38px без групповых заголовков) → пользователь внизу. -->
@@ -97,7 +97,7 @@
           @if (pageAction.secondaryAction(); as secondary) {
             <button type="button" class="btn btn-secondary text-nowrap" (click)="secondary.handler()">
               @if (secondary.icon) {
-                <i [class]="secondary.icon" aria-hidden="true"></i>
+                <app-icon [icon]="secondary.icon" [size]="18" />
               }
               {{ secondary.label }}
             </button>
@@ -105,7 +105,7 @@
           @if (pageAction.action(); as action) {
             <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
               @if (action.icon) {
-                <i [class]="action.icon" aria-hidden="true"></i>
+                <app-icon [icon]="action.icon" [size]="18" />
               }
               {{ action.label }}
             </button>
@@ -171,7 +171,7 @@
         <!-- Локальный ИИ (LM Studio) недоступен: задачи не теряются, а ждут в очереди — говорим об
              этом сразу, чтобы «в процессе» на записях не выглядело как зависание. -->
         <div class="ai-banner" role="status">
-          <i class="ph-duotone ph-moon-stars" aria-hidden="true"></i>
+          <app-icon [icon]="icons.MoonStar" [size]="18" />
           <div>
             <strong>ИИ временно недоступен.</strong>
             Новые документы, резюме и другие задачи ждут в очереди и будут обработаны автоматически,
