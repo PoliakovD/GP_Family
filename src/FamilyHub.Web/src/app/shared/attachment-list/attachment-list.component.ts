@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ToastService } from '../toast/toast.service';
 import { AttachmentPreviewStatus, type Attachment, type AttachmentLimits } from '../../models/types';
@@ -22,6 +22,7 @@ import { FileViewerComponent } from '../file-viewer/file-viewer.component';
     selector: 'app-attachment-list',
     imports: [LoadingSpinnerComponent, FileViewerComponent],
     templateUrl: './attachment-list.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './attachment-list.component.scss'
 })
 export class AttachmentListComponent implements OnChanges {

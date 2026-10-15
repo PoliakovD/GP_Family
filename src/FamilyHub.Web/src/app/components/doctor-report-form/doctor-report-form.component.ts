@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
 import {
@@ -34,6 +34,7 @@ function monthsAgo(months: number, now: Date): Date {
   selector: 'app-doctor-report-form',
   imports: [FormsModule],
   templateUrl: './doctor-report-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './doctor-report-form.component.scss',
 })
 export class DoctorReportFormComponent implements OnInit, OnDestroy {

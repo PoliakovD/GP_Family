@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { WebSearchTopic, WebSearchTopicValue } from '../../../services/admin-api.service';
 
 /**
@@ -9,6 +9,7 @@ import { WebSearchTopic, WebSearchTopicValue } from '../../../services/admin-api
 @Component({
   selector: 'app-topic-switch',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="seg">
       <button type="button" class="seg-opt" [class.active]="topic() === WebSearchTopic.Medication"

@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { formatPersonName, personNameStyleFor, type PersonNameParts, type PersonNameStyle } from '../util/person-name';
 
@@ -12,6 +12,7 @@ import { formatPersonName, personNameStyleFor, type PersonNameParts, type Person
 @Component({
   selector: 'app-person-name',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<span [title]="fullName()">{{ displayName() }}</span>`,
 })
 export class PersonNameComponent {

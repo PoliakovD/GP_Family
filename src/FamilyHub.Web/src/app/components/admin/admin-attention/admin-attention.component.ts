@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { AdminApiService, AdminAttention, PipelineJobType, ReviewQueueSummary, WebSearchTopic } from '../../../services/admin-api.service';
 import { AttentionCardComponent } from '../../../shared/attention-card/attention-card.component';
@@ -29,6 +29,7 @@ const TYPE_LABELS: Record<string, string> = {
 @Component({
     selector: 'app-admin-attention',
     imports: [DatePipe, AttentionCardComponent, WebSearchBannerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-attention.component.html'
 })
 export class AdminAttentionComponent implements OnInit {

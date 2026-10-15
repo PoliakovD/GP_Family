@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject, signal, viewChildren } from '@angular/core';
+import { Component, HostListener, OnInit, inject, signal, viewChildren, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -42,6 +42,7 @@ type CatalogTab = 'analytes' | 'medications' | 'specimens';
     templateUrl: './admin-catalog.component.html',
     styleUrl: './admin-catalog.component.scss',
     // Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
       .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
       .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }

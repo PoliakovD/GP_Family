@@ -1,4 +1,4 @@
-import { Component, HostListener, inject } from '@angular/core';
+import { Component, HostListener, inject, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { OverlayStackService } from '../../shared/util/overlay-stack.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
@@ -56,6 +56,7 @@ const FILTER_CHIPS: { value: SearchFilter; label: string }[] = [
     selector: 'app-search',
     imports: [ClickableDirective, LoadingSpinnerComponent, SearchFieldComponent],
     templateUrl: './app-search.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './app-search.component.scss'
 })
 export class AppSearchComponent {
@@ -88,7 +89,7 @@ export class AppSearchComponent {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
+  onEscape(event: Event): void {
     // Escape в открытом окне/листе — его, а не поиска (раньше заодно стирал запрос).
     if (event.defaultPrevented || this.overlays.hasOpen()) return;
     this.search.reset();

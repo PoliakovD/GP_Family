@@ -1,10 +1,11 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { AdminApiService, AdminStorageStats } from '../../../services/admin-api.service';
 
 @Component({
     selector: 'app-admin-storage',
     imports: [DatePipe, DecimalPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-storage.component.html'
 })
 export class AdminStorageComponent implements OnInit {

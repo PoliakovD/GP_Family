@@ -1,4 +1,4 @@
-import { Component, OnInit, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, WritableSignal, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
 import { ToastService } from '../../shared/toast/toast.service';
@@ -21,6 +21,7 @@ import {
   selector: 'app-health-note-form',
   imports: [FormsModule],
   templateUrl: './health-note-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-note-form.component.scss',
 })
 export class HealthNoteFormComponent implements OnInit {

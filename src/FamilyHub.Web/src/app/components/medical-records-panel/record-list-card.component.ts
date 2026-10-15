@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import type { ExtractionStatusResponse, MedicalRecord } from '../../models/types';
 import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
@@ -68,6 +68,7 @@ import { RecordRecognitionStatusComponent } from './record-recognition-status.co
       />
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: flex; flex: 1 1 auto; min-width: 0; }
 

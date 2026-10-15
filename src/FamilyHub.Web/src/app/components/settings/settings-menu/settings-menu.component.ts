@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink, Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { PushNotificationService } from '../../../services/push-notification.service';
@@ -17,6 +17,7 @@ import { formatPersonName } from '../../../shared/util/person-name';
     selector: 'app-settings-menu',
     imports: [RouterLink, AvatarComponent],
     templateUrl: './settings-menu.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-menu.component.scss'
 })
 export class SettingsMenuComponent implements OnInit {

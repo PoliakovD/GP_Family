@@ -1,7 +1,7 @@
 import { ApplicationConfig, LOCALE_ID, isDevMode, provideZoneChangeDetection } from '@angular/core';
 import { registerLocaleData } from '@angular/common';
 import localeRu from '@angular/common/locales/ru';
-import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXsrfConfiguration, withXhr } from '@angular/common/http';
 import { TitleStrategy, provideRouter, withComponentInputBinding, withRouterConfig } from '@angular/router';
 import { AppTitleStrategy } from './services/app-title.strategy';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -33,6 +33,7 @@ export const appConfig: ApplicationConfig = {
     // указаны явно, чтобы не зависеть от дефолтов Angular (сервер настроен на те же имена,
     // см. Program.cs AddAntiforgery).
     provideHttpClient(
+      withXhr(),
       withInterceptors([authInterceptor]),
       withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' }),
     ),

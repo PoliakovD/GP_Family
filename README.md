@@ -50,7 +50,7 @@ GP_Family.slnx
 ├── FamilyHub.Modules.Medical   // аптечка, анализы, вложения, OCR, справочник + AI-обогащение
 ├── FamilyHub.Modules.Birthdays // дни рождения
 ├── FamilyHub.TelegramBot       // Telegram-бот отдельным процессом, без доступа к БД (ADR-0008)
-└── FamilyHub.Web               // Angular 20 PWA — единственный фронтенд, обслуживает и браузер,
+└── FamilyHub.Web               // Angular 22 PWA — единственный фронтенд, обслуживает и браузер,
                                  //   и Telegram Mini App (тот же билд, разное поведение по контексту)
 ```
 
@@ -299,7 +299,7 @@ at-rest шифрование персональных и медицинских 
 `auth-uiux-rework-stage.md`, `navigation-redesign-and-web-push.md`, `auth-email-anchor-jwt-rework.md`,
 `settings-hub-and-account-security.md`, `identity-fio-rework.md`, `concurrency-correctness-audit-2026-08-27.md`,
 `ai-availability-and-waiting-queue.md` (недоступный ИИ), `ui-rework-v2.3.md` (Главная/запись анализа/справочник),
-`frontend-toolchain-and-e2e.md` (Angular 20, зависимости, e2e, CI). (`web-miniapp.md` помечен устаревшим —
+`frontend-toolchain-and-e2e.md` (Angular 22, зависимости, e2e, CI). (`web-miniapp.md` помечен устаревшим —
 описывает старый React-фронт, актуальная реализация — Angular, см. остальные файлы этого списка.)
 
 ### Architecture Decision Records — `docs/adr/`
@@ -356,7 +356,7 @@ at-rest шифрование персональных и медицинских 
 
 ## 📱 Frontend — Angular PWA / Telegram Mini App
 
-Один Angular 20 SPA обслуживает и браузер (PWA, service worker через `@angular/service-worker`),
+Один Angular 22 SPA обслуживает и браузер (PWA, service worker через `@angular/service-worker`),
 и Telegram Mini App — поведение переключается по контексту (`isInsideTelegram()`), не отдельными
 сборками. Собирается в статику, раздаётся `FamilyHub.Api`.
 
@@ -395,7 +395,7 @@ at-rest шифрование персональных и медицинских 
 |---|---|
 | Backend | ASP.NET Core Web API (.NET 10), модульный монолит |
 | ORM / БД | EF Core / PostgreSQL |
-| Frontend | Angular 20 (TypeScript 5.8), собственная дизайн-система (без Bootstrap), PWA (service worker), тот же SPA — Telegram Mini App |
+| Frontend | Angular 22 (TypeScript 6.0), собственная дизайн-система (без Bootstrap), PWA (service worker), тот же SPA — Telegram Mini App |
 | Аутентификация | Email + пароль → JWT + DB-backed refresh-сессии (PWA); Telegram `initData` HMAC, lookup-only (Mini App) |
 | Фоновые задачи | Hangfire на PostgreSQL (оповещения, обогащение справочника) |
 | Объектное хранилище | MinIO (S3-совместимое; образ собственной сборки, ADR-0012) |

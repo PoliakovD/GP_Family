@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnDestroy, OnInit, Output, effect, inject, input } from '@angular/core';
+import { Component, EventEmitter, OnDestroy, OnInit, Output, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import type { Medication, MedicationKbResponse } from '../../models/types';
@@ -52,6 +52,7 @@ let nextInstanceId = 0;
     selector: 'app-medications-panel',
     imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
     templateUrl: './medications-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medications-panel.component.scss'
 })
 export class MedicationsPanelComponent implements OnInit, OnDestroy {

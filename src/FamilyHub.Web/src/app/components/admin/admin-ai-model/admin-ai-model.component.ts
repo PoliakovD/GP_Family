@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   AdminApiService,
@@ -28,6 +28,7 @@ const REASONING_OPTIONS: { value: LmStudioReasoning; label: string }[] = [
 @Component({
     selector: 'app-admin-ai-model',
     imports: [FormsModule],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-ai-model.component.html'
 })
 export class AdminAiModelComponent implements OnInit, HasUnsavedChanges {

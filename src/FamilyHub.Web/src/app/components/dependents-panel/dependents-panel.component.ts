@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { todayLocal } from '../../shared/util/intake-labels';
@@ -21,6 +21,7 @@ let nextInstanceId = 0;
 @Component({
     selector: 'app-dependents-panel',
     imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './dependents-panel.component.html'
 })
 export class DependentsPanelComponent implements OnInit {

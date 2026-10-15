@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -47,6 +47,7 @@ interface ReportRow {
     FileViewerComponent, SidePanelComponent,
   ],
   templateUrl: './doctor-reports-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './doctor-reports-tab.component.scss',
 })
 export class DoctorReportsTabComponent implements OnInit {

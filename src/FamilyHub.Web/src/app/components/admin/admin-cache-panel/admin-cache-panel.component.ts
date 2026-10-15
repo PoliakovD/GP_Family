@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, KbChangeTarget, KbChangeTargetValue, WebSearchTopic, WebSearchTopicValue } from '../../../services/admin-api.service';
@@ -57,6 +57,7 @@ export interface SearchCacheRowPatch {
     selector: 'app-admin-cache-panel',
     imports: [FormsModule, DatePipe, KbHistoryComponent],
     templateUrl: './admin-cache-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-cache-panel.component.scss'
 })
 export class AdminCachePanelComponent implements OnChanges {

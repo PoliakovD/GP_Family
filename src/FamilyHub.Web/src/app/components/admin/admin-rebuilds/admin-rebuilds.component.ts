@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import {
@@ -29,6 +29,7 @@ const BATCH_POLL_INTERVAL_MS = 5000;
 @Component({
     selector: 'app-admin-rebuilds',
     imports: [DatePipe, RouterLink, AdminStatusPipe],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-rebuilds.component.html'
 })
 export class AdminRebuildsComponent implements OnInit, OnDestroy {

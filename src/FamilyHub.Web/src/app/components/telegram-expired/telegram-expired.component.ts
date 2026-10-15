@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { TelegramService } from '../../services/telegram.service';
 
 /**
@@ -9,6 +9,7 @@ import { TelegramService } from '../../services/telegram.service';
  */
 @Component({
   selector: 'app-telegram-expired',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="auth-shell">
       <div class="card auth-card elev-md">

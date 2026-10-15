@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -11,6 +11,7 @@ import { AuthService } from '../../services/auth.service';
 @Component({
     selector: 'app-consent-gate',
     imports: [FormsModule, RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './consent-gate.component.html'
 })
 export class ConsentGateComponent implements OnInit {

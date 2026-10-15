@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Meta } from '@angular/platform-browser';
 import { ApiError, ApiService } from '../../services/api.service';
 import { PublicReportMeta } from '../../models/types';
@@ -23,6 +23,7 @@ const dmy = (date: string) => date.split('-').reverse().join('.');
   selector: 'app-public-report',
   imports: [PdfPreviewComponent],
   templateUrl: './public-report.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './public-report.component.scss',
 })
 export class PublicReportComponent implements OnInit, OnDestroy {

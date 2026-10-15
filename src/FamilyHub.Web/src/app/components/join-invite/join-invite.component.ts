@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -20,6 +20,7 @@ type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 
   selector: 'app-join-invite',
   standalone: true,
   imports: [RouterLink],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './join-invite.component.html',
 })
 export class JoinInviteComponent implements OnInit {

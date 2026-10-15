@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -36,6 +36,7 @@ const JOB_KIND_TYPES: Record<string, string> = {
 @Component({
     selector: 'app-admin-search-calls',
     imports: [FormsModule, DatePipe, DecimalPipe, RouterLink, SidePanelComponent, TopicSwitchComponent, WebSearchBannerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-search-calls.component.html'
 })
 export class AdminSearchCallsComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 /** Неверный или устаревший адрес (удалённая запись, опечатка в ссылке из чата). */
@@ -6,6 +6,7 @@ import { RouterLink } from '@angular/router';
   selector: 'app-not-found',
   standalone: true,
   imports: [RouterLink],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="card" style="max-width:480px;margin:40px auto">
       <h2 class="card-title mb-1">Страница не найдена</h2>

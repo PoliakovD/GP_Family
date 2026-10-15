@@ -10,6 +10,7 @@ import {
   computed,
   inject,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -70,6 +71,7 @@ type SearchChoice = { type: 'paid' } | { type: 'own' } | { type: 'twin'; cacheId
     VerificationBadgeComponent,
   ],
   templateUrl: './review-detail.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './review-detail.component.scss',
 })
 export class ReviewDetailComponent implements OnChanges {

@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -84,6 +84,7 @@ function quantile(sorted: number[], q: number): number {
     SearchFieldComponent, SidePanelComponent, TrackDirtyDirective, TrendLineComponent,
   ],
   templateUrl: './health-notes-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-notes-tab.component.scss',
 })
 export class HealthNotesTabComponent implements OnInit {

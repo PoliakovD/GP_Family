@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiError, ApiService } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { DoctorReport, DoctorReportLinkStatus } from '../../models/types';
@@ -56,6 +56,7 @@ import { shareLink } from '../../shared/util/share-link';
       }
     </app-modal>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .link-box {
       padding: 8px 12px;

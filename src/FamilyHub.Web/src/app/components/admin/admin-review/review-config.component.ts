@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, EnrichmentReviewConfigRequest } from '../../../services/admin-api.service';
@@ -83,6 +83,7 @@ interface ConfigRow {
       </div>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .review-threshold { display: flex; align-items: center; gap: 8px; }
     .review-threshold input[type='range'] { flex: 1; min-width: 100px; accent-color: var(--color-accent); }

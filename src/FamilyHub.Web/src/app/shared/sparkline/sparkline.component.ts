@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 
 /** Одна точка спарклайна — числовое значение показателя + флаг отклонения на эту дату. */
 export interface SparklinePoint {
@@ -31,6 +31,7 @@ const PADDING = 6;
 @Component({
   selector: 'app-sparkline',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (points().length > 0) {
       <svg [attr.viewBox]="'0 0 ' + width + ' ' + height" [attr.width]="width" [attr.height]="height" role="img" [attr.aria-label]="ariaLabel()">

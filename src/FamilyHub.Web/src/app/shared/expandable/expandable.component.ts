@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * Раскрывающийся блок (UX-редизайн) — вынесен из проверенной техники `medkit-card`
@@ -14,6 +14,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
   selector: 'app-expandable',
   standalone: true,
   templateUrl: './expandable.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './expandable.component.scss',
 })
 export class ExpandableComponent {

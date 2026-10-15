@@ -1,5 +1,5 @@
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
@@ -39,6 +39,7 @@ interface StageGroup {
   selector: 'app-vaccination-person',
   imports: [ClickableDirective, AvatarComponent, BackLinkComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './vaccination-person.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-person.component.scss',
 })
 export class VaccinationPersonComponent {

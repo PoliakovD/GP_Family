@@ -144,7 +144,7 @@
                как в привычных приложениях (макет «Screen - Health hub»). -->
           <app-notification-bell />
           <a routerLink="/settings" class="text-decoration-none" title="Профиль" aria-label="Профиль и настройки">
-            <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="sm" />
+            <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: $safeNavigationMigration(auth.me()?.firstName), lastName: $safeNavigationMigration(auth.me()?.lastName)}" size="sm" />
           </a>
         </header>
       } @else {
@@ -168,7 +168,7 @@
             </button>
           } @else {
             @if (isHealthHubIndex()) {
-              <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}" size="sm" />
+              <app-avatar [person]="{key: auth.me()?.userId ?? 'me', firstName: $safeNavigationMigration(auth.me()?.firstName), lastName: $safeNavigationMigration(auth.me()?.lastName)}" size="sm" />
               <div class="app-topbar-mobile-title flex-fill">Моё здоровье</div>
             } @else {
               <div class="app-topbar-mobile-title flex-fill">{{ mobileTitle() }}</div>

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -14,6 +14,7 @@ import { runBusy } from '../settings/settings-task';
 @Component({
     selector: 'app-profile-setup',
     imports: [FormsModule],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './profile-setup.component.html'
 })
 export class ProfileSetupComponent {

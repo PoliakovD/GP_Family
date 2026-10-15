@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { VaccinationStateService } from '../../services/vaccination-state.service';
@@ -20,6 +20,7 @@ import { VaccinationSavedSheetComponent } from '../vaccination-saved-sheet/vacci
     VaccinationSavedSheetComponent,
   ],
   templateUrl: './vaccinations-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccinations-page.component.scss',
 })
 export class VaccinationsPageComponent implements OnInit {

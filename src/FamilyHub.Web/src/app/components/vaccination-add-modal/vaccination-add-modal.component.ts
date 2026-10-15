@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
 import { VaccinationStateService, type VaccinationAddRequest } from '../../services/vaccination-state.service';
@@ -48,6 +48,7 @@ interface CertRow extends VaccinationRecognizedItem {
   selector: 'app-vaccination-add-modal',
   imports: [AvatarComponent, FormsModule],
   templateUrl: './vaccination-add-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-add-modal.component.scss',
 })
 export class VaccinationAddModalComponent implements OnInit {

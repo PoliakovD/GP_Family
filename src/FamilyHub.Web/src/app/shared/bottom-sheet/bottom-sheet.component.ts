@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { HistoryDismissController } from '../util/history-dismiss';
 import { OverlayStackService } from '../util/overlay-stack.service';
 
@@ -15,6 +15,7 @@ import { OverlayStackService } from '../util/overlay-stack.service';
   selector: 'app-bottom-sheet',
   standalone: true,
   templateUrl: './bottom-sheet.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bottom-sheet.component.scss',
 })
 export class BottomSheetComponent implements OnChanges, OnDestroy {
@@ -43,7 +44,7 @@ export class BottomSheetComponent implements OnChanges, OnDestroy {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
+  onEscape(event: Event): void {
     if (this.open && this.overlays.claimEscape(this, event)) this.closed.emit();
   }
 

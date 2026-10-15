@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AdminApiService } from '../../../services/admin-api.service';
@@ -23,6 +23,7 @@ import { ReviewQueueStore } from '../shared/review-queue.store';
     selector: 'app-admin-hub',
     imports: [RouterLink, RouterLinkActive, RouterOutlet],
     templateUrl: './admin-hub.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-hub.component.scss'
 })
 export class AdminHubComponent implements OnInit {

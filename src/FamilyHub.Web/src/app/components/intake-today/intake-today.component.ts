@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { IntakeStateService } from '../../services/intake-state.service';
@@ -48,6 +48,7 @@ const REFRESH_MS = 60_000;
   selector: 'app-intake-today',
   imports: [ActionMenuComponent, AvatarComponent, RouterLink],
   templateUrl: './intake-today.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-today.component.scss',
 })
 export class IntakeTodayComponent implements OnInit, OnDestroy {

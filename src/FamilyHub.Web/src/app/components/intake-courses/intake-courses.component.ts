@@ -1,5 +1,5 @@
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
@@ -26,6 +26,7 @@ interface CourseGroup {
   selector: 'app-intake-courses',
   imports: [AvatarComponent, BackLinkComponent, IntakeCourseCardComponent, RouterLink],
   templateUrl: './intake-courses.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-courses.component.scss',
 })
 export class IntakeCoursesComponent {

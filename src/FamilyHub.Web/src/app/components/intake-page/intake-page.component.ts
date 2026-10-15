@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, input, untracked, viewChild } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, input, untracked, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { IntakeStateService } from '../../services/intake-state.service';
@@ -25,6 +25,7 @@ import { IntakeRemindersComponent } from '../intake-reminders/intake-reminders.c
     RouterOutlet, SidePanelComponent, TrackDirtyDirective,
   ],
   templateUrl: './intake-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-page.component.scss',
 })
 export class IntakePageComponent implements OnInit {

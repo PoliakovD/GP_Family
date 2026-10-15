@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -22,6 +22,7 @@ import { WebSearchValveStore } from '../shared/web-search-valve.store';
 @Component({
     selector: 'app-admin-web-search',
     imports: [FormsModule, DatePipe, TopicSwitchComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-web-search.component.html'
 })
 export class AdminWebSearchComponent implements OnInit {

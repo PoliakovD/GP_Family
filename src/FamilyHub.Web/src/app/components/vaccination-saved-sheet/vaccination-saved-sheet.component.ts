@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiError, ApiService } from '../../services/api.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import { HealthNoteCatalog, HealthNoteKind, VaccinationDatePrecision, VaccinationKind } from '../../models/types';
@@ -19,6 +19,7 @@ type QuickKind = 'symptom' | 'temperature';
   selector: 'app-vaccination-saved-sheet',
   imports: [HealthNoteFormComponent],
   templateUrl: './vaccination-saved-sheet.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-saved-sheet.component.scss',
 })
 export class VaccinationSavedSheetComponent implements OnInit {

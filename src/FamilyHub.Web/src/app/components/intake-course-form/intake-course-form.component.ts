@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, input, output, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -67,6 +67,7 @@ const DEFAULT_TIMES: Record<number, string[]> = {
   selector: 'app-intake-course-form',
   imports: [FormsModule],
   templateUrl: './intake-course-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-course-form.component.scss',
 })
 export class IntakeCourseFormComponent implements OnInit {

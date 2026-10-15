@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, viewChild } from '@angular/core';
+import { Component, OnInit, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -32,6 +32,7 @@ const PAGE_SIZE = 25;
     selector: 'app-admin-search-cache',
     imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent, TopicSwitchComponent],
     templateUrl: './admin-search-cache.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-search-cache.component.scss'
 })
 export class AdminSearchCacheComponent implements OnInit {

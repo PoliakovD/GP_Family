@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { confirmDiscard } from '../../shared/util/track-dirty.directive';
@@ -46,6 +46,7 @@ let nextInstanceId = 0;
     selector: 'app-record-add',
     imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent, PersonChipComponent],
     templateUrl: './record-add.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-add.component.scss'
 })
 export class RecordAddComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -30,6 +30,7 @@ const WARMUP_POLL_INTERVAL_MS = 2000;
 @Component({
     selector: 'app-admin-warmup',
     imports: [FormsModule, DatePipe, AdminStatusPipe, TopicSwitchComponent, WebSearchBannerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-warmup.component.html'
 })
 export class AdminWarmupComponent implements OnInit, OnDestroy {

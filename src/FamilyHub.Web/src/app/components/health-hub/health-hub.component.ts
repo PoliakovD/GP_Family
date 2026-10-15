@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -25,6 +25,7 @@ import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 @Component({
     selector: 'app-health-hub',
     imports: [RouterOutlet, BackLinkComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './health-hub.component.html',
 })
 export class HealthHubComponent {
