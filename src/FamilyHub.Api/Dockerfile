@@ -10,7 +10,10 @@
 # --- Стадия 1: Angular SPA -----------------------------------------------------------------
 # Первой, не последней: слой npm ci кэшируется независимо от последующих изменений в C#
 # (тот же принцип, что COPY *.csproj + restore до COPY src/ в стадии build ниже).
-FROM node:25-alpine AS web
+# Node — только чётная LTS-линия: Angular 22 поддерживает ^22.22.3 || ^24.15 || >=26, нечётные
+# (23, 25) CLI пускает лишь с предупреждением, и они не получают LTS. Dependabot может предложить
+# нечётную версию — такие PR не мержим.
+FROM node:24-alpine AS web
 WORKDIR /src/FamilyHub.Web
 COPY src/FamilyHub.Web/package.json src/FamilyHub.Web/package-lock.json ./
 RUN npm ci
