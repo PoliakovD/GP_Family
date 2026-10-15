@@ -1,38 +1,124 @@
-.family-name {
-  word-break: break-word;
+// Семья и чат (DESIGN §3 «Чат семьи»). Карточки, строки, вкладки — из библиотеки; здесь раскладка.
+
+.fd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
-.pending-row {
-  flex-wrap: nowrap;
-}
-
-.pending-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-// Редизайн v2 — карточки участников вместо таблицы.
-.family-member-card {
-  flex-direction: row;
+.fd-head {
+  display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
-.family-invite-tile {
-  border: 1px dashed var(--color-border-dashed);
-  background: transparent;
-}
-
-.family-invite-icon {
+.fd-mark {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border: 1px dashed var(--color-border-dashed);
-  border-radius: 50%;
-  color: var(--color-neutral-600);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: var(--color-avatar-warm);
+  color: var(--color-avatar-warm-text);
+  font: var(--text-metric-mobile);
+}
+
+.fd-title-block { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+
+.fd-title {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+  overflow-wrap: anywhere;
+}
+
+.fd-sub { margin: 0; font: var(--text-body); color: var(--color-text-muted); }
+.fd-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+
+.fd-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .card-title { margin: 0; }
+}
+
+.fd-note { margin: 0; font: var(--text-body-sm); color: var(--color-text-muted); }
+
+// «Ваши анализы открыты семье · Доступ» — мягкая плашка (макет family-chat-desktop).
+.fd-access {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font: var(--text-caption);
+  color: var(--color-text-secondary);
+
+  app-icon { color: var(--color-text-muted); }
+
+  a { font-weight: 600; color: var(--color-accent); text-decoration: none; }
+}
+
+.fd-access-on app-icon { color: var(--color-success); }
+
+.fd-request-actions { display: flex; gap: var(--space-2); flex: none; }
+
+// Вкладка чата на десктопе: чат 2/3 + колонка участников и заявок 1/3.
+.fd-chat-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+
+  @media (max-width: 1023px) { display: block; }
+}
+
+.fd-side { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.fd-members-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+
+  @media (max-width: 1023px) { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+}
+
+@media (max-width: 1023px) {
+  .fd-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+  .fd-mark { width: 48px; height: 48px; font: var(--text-title); font-weight: 700; }
+  .fd-invite { display: none; } // на телефоне «Пригласить» — во вкладке «Участники» (кнопка в «Заявках»)
+}
+
+// Полноэкранный чат на телефоне (макет family-chat-mobile): шапка 44-контролов, вкладки, чат до низа экрана.
+.fd-fullscreen {
+  flex: 1;
+  min-height: 0;
+  height: 100dvh;
+  gap: 0;
+
+  .fd-head {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-1);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .fd-mark { width: 40px; height: 40px; border-radius: var(--radius-md); font: var(--text-body); font-weight: 700; }
+  .fd-title { font: var(--text-body); font-weight: 600; letter-spacing: 0; }
+  .fd-sub { font: var(--text-caption); color: var(--color-text-muted); }
+
+  .fd-tabs {
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .fd-chat-layout { flex: 1; min-height: 0; display: flex; align-items: stretch; }
+  .fd-chat { flex: 1; min-height: 0; }
 }

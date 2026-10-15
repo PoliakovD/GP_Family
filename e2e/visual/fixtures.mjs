@@ -15,6 +15,10 @@ export const SCREENS = [
   { name: 'home', path: '/home' },
   { name: 'health', path: '/health' },
   { name: 'family', path: `/families/${FAMILY_ID}` },
+  { name: 'family-members', path: `/families/${FAMILY_ID}?tab=members` },
+  { name: 'family-medkits', path: `/families/${FAMILY_ID}?tab=medkits`, only: 'desktop' },
+  { name: 'family-birthdays', path: `/families/${FAMILY_ID}?tab=birthdays`, only: 'desktop' },
+  { name: 'family-dependents', path: `/families/${FAMILY_ID}?tab=dependents`, only: 'mobile' },
   { name: 'intake', path: '/health/intake' },
   { name: 'intake-course', path: '/health/intake/courses/c-1', only: 'mobile' },
   { name: 'vaccinations', path: '/health/vaccinations' },
@@ -206,6 +210,24 @@ const DOCTOR_REPORTS = [{
   subjectKind: 0, subjectId: null, subjectName: null, subjectIsPet: false, createdByName: 'Даниил Поляков', canManage: true,
 }];
 
+const VALERIA_AUTHOR = { userId: VALERIA_ID, lastName: 'Полякова', firstName: 'Валерия', middleName: null };
+const DANIIL_AUTHOR = { userId: ME_ID, lastName: 'Поляков', firstName: 'Даниил', middleName: null };
+const chatMsg = (id, author, text, createdAt, extra = {}) => ({
+  id, familyId: FAMILY_ID, author, text, createdAt, editedAt: null, deleted: false, replyTo: null,
+  attachments: [], reactions: [], links: [], canEdit: author === DANIIL_AUTHOR, canDelete: author === DANIIL_AUTHOR, ...extra,
+});
+// Новые — первыми (как отдаёт API, компонент разворачивает).
+const CHAT_PAGE = {
+  items: [
+    chatMsg('m3', VALERIA_AUTHOR, 'Покажи врачу лейкоциты, они заметно упали.', '2026-10-14T06:31:00Z'),
+    chatMsg('m2', DANIIL_AUTHOR, 'Ещё нет, на этой неделе запишусь. Скинул свежий анализ:', '2026-10-14T06:20:00Z', {
+      links: [{ kind: 0, entityId: 'r-blood', accessible: true, title: 'Развернутый анализ крови', subtitle: '3 октября · 6 вне нормы', routeKind: 0 }],
+    }),
+    chatMsg('m1', VALERIA_AUTHOR, 'Даня, ты записался на прививку от гриппа? Нужно до конца ноября.', '2026-10-14T06:12:00Z'),
+  ],
+  nextCursor: null,
+};
+
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
   ['GET', /^\/api\/auth\/me$/, ME],
@@ -225,6 +247,17 @@ const ROUTES = [
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],
   ['GET', /^\/api\/families\/[^/]+\/dependents$/, []],
+  ['GET', /^\/api\/families\/[^/]+\/birthdays$/, [
+    { id: 'b1', familyId: FAMILY_ID, personName: 'Мама Дани (Алёна)', date: '1977-11-24', source: 0 },
+    { id: 'b2', familyId: FAMILY_ID, personName: 'Папа Дани (Олег)', date: '1975-01-03', source: 0 },
+    { id: 'b3', familyId: FAMILY_ID, personName: 'Валерия Полякова', date: '1998-03-14', source: 1 },
+  ]],
+  ['GET', /^\/api\/chat\/config$/, {
+    maxTextLength: 4000, maxFilesPerMessage: 5, maxFileSizeBytes: 10485760, maxLinksPerMessage: 3,
+    reactions: ['👍', '❤️', '🙏', '😊'], allowedContentTypes: ['image/jpeg', 'image/png', 'application/pdf'],
+  }],
+  ['GET', /^\/api\/families\/[^/]+\/chat\/messages$/, CHAT_PAGE],
+  ['POST', /^\/api\/families\/[^/]+\/chat\/read$/, { status: 204, body: {} }],
   ['GET', /^\/api\/medication-courses\/today$/, INTAKE_TODAY],
   ['GET', /^\/api\/medication-courses$/, [COURSE]],
   ['GET', /^\/api\/medication-courses\/c-1$/, {

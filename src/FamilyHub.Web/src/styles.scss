@@ -1541,6 +1541,13 @@ button.tag,
   padding: var(--space-4) var(--space-4) calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
+.app-shell-fullscreen .app-content {
+  // Полноэкранный экран (чат на мобайле) сам раскладывает высоту — без полей и запаса под таб-бар.
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-shell-wide .app-content {
   max-width: calc(1200px + var(--space-10) * 2);
   margin: 0 auto;

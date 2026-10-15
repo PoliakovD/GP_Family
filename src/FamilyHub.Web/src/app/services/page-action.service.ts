@@ -37,6 +37,9 @@ export class PageActionService {
      * означало «показать общий <app-search>» (app.component.html), нужен отдельный флаг именно
      * для «топбара нет вовсе». */
     readonly immersive = signal(false);
+    /** Полноэкранный экран на мобайле (чат семьи, DESIGN §3 «Чат семьи»): нет ни шапки каркаса, ни
+     * нижнего таб-бара — экран рисует свою шапку с «назад» сам. На десктопе не влияет ни на что. */
+    readonly fullscreen = signal(false);
 
     set(action: PageAction): void {
         this.action.set(action);
@@ -54,6 +57,10 @@ export class PageActionService {
         this.immersive.set(v);
     }
 
+    setFullscreen(v: boolean): void {
+        this.fullscreen.set(v);
+    }
+
     /** Сбрасывается вместе с action()/pageSearch() — иначе «протечёт» на следующий экран без
      * своего поиска или с навсегда скрытым топбаром (тот же класс бага, для которого уже
      * существует эта симметрия у action). */
@@ -62,5 +69,6 @@ export class PageActionService {
         this.secondaryAction.set(null);
         this.pageSearch.set(null);
         this.immersive.set(false);
+        this.fullscreen.set(false);
     }
 }

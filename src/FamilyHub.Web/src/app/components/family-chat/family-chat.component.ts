@@ -1,3 +1,5 @@
+import { ArrowRight, Check, MessageCircle, Paperclip, Plus } from 'lucide-angular';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import {
   Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
@@ -70,12 +72,14 @@ const COMPRESSIBLE = new Set(['image/jpeg', 'image/png', 'image/webp']);
   selector: 'app-family-chat',
   imports: [
     FormsModule, AvatarComponent, ActionMenuComponent, BottomSheetComponent, FileViewerComponent,
-    InfiniteScrollSentinelComponent,
+    InfiniteScrollSentinelComponent, IconComponent,
   ],
   templateUrl: './family-chat.component.html',
   styleUrl: './family-chat.component.scss',
 })
 export class FamilyChatComponent implements OnInit, OnDestroy {
+  protected readonly icons = { ArrowRight, Check, MessageCircle, Paperclip, Plus };
+
   readonly familyId = input.required<string>();
   /** Админ семьи может удалять чужие сообщения — права приходят с сервера (canDelete), здесь только подпись. */
   readonly isAdmin = input(false);

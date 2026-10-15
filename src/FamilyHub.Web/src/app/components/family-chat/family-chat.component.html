@@ -17,7 +17,7 @@
 
             @if (rows().length === 0) {
                 <div class="chat-empty">
-                    <i class="ph-duotone ph-chat-circle-text chat-empty-icon" aria-hidden="true"></i>
+                    <app-icon class="chat-empty-icon" [icon]="icons.MessageCircle" [size]="28" />
                     <p class="mb-1">Здесь пока тихо.</p>
                     <p class="muted mb-0">Напишите первым — сообщение увидят все участники семьи.</p>
                 </div>
@@ -85,29 +85,33 @@
                                     <div class="msg-text">{{ row.message.text }}</div>
                                 }
 
-                                @for (link of row.message.links; track link.kind + link.entityId) {
-                                    <button type="button" class="msg-link" [class.locked]="!link.accessible" [disabled]="!link.accessible" (click)="openLink(link)">
-                                        <i [class]="link.accessible ? linkIcon(link.kind) : 'ph ph-lock-simple'" aria-hidden="true"></i>
-                                        <span class="msg-link-text">
-                                            @if (link.accessible) {
-                                                <span class="msg-link-title">{{ link.title }}</span>
-                                                <span class="muted">{{ link.subtitle }}</span>
-                                            } @else {
-                                                <span class="msg-link-title">Нет доступа</span>
-                                                <span class="muted">Автор не открыл вам эту запись</span>
-                                            }
-                                        </span>
-                                    </button>
-                                }
                             }
 
-                            <span class="msg-meta">
-                                @if (row.message.editedAt && !row.message.deleted) {
-                                    <span>изменено</span>
-                                }
-                                <time [attr.datetime]="row.message.createdAt">{{ time(row.message.createdAt) }}</time>
-                            </span>
                         </div>
+                        <!-- Карточка записи — вложенная карточка под пузырём (DESIGN §3 «Карточка записи в чате»). -->
+                        @if (!row.message.deleted) {
+                            @for (link of row.message.links; track link.kind + link.entityId) {
+                                <button type="button" class="msg-link" [class.locked]="!link.accessible" [disabled]="!link.accessible" (click)="openLink(link)">
+                                    <i [class]="link.accessible ? linkIcon(link.kind) : 'ph ph-lock-simple'" aria-hidden="true"></i>
+                                    <span class="msg-link-text">
+                                        @if (link.accessible) {
+                                            <span class="msg-link-title">{{ link.title }}</span>
+                                            <span class="muted">{{ link.subtitle }}</span>
+                                        } @else {
+                                            <span class="msg-link-title">Нет доступа</span>
+                                            <span class="muted">Автор не открыл вам эту запись</span>
+                                        }
+                                    </span>
+                                </button>
+                            }
+                        }
+                        <!-- Время — 12px muted под пузырём (DESIGN §3 «Чат семьи»). -->
+                        <span class="msg-meta">
+                            @if (row.message.editedAt && !row.message.deleted) {
+                                <span>изменено</span>
+                            }
+                            <time [attr.datetime]="row.message.createdAt">{{ time(row.message.createdAt) }}</time>
+                        </span>
 
                         @if (row.message.reactions.length > 0 || reactionPickerFor() === row.message.id) {
                             <div class="msg-reactions">
@@ -184,11 +188,11 @@
 
         <div class="composer-row">
             @if (!editing()) {
-                <button type="button" class="btn btn-ghost btn-icon" (click)="pickFiles()" aria-label="Прикрепить файл" title="Прикрепить файл">
-                    <i class="ph ph-paperclip" aria-hidden="true"></i>
+                <button type="button" class="btn-icon composer-tool" (click)="pickFiles()" aria-label="Прикрепить файл" title="Прикрепить файл">
+                    <app-icon [icon]="icons.Paperclip" />
                 </button>
-                <button type="button" class="btn btn-ghost btn-icon" (click)="openLinkPicker()" aria-label="Поделиться записью" title="Поделиться записью">
-                    <i class="ph ph-link-simple" aria-hidden="true"></i>
+                <button type="button" class="btn-icon composer-tool" (click)="openLinkPicker()" aria-label="Поделиться записью" title="Поделиться записью">
+                    <app-icon [icon]="icons.Plus" />
                 </button>
                 <input #fileInput type="file" multiple hidden [accept]="accept" (change)="onFilesSelected($event)" />
             }
@@ -197,10 +201,10 @@
                       [ngModel]="text()" (ngModelChange)="text.set($event); autoGrow()"
                       (keydown)="onKeydown($event)"
                       [attr.maxlength]="config()?.maxTextLength ?? 4000"
-                      placeholder="Сообщение семье" aria-label="Текст сообщения"></textarea>
+                      placeholder="Написать семье…" aria-label="Текст сообщения"></textarea>
 
-            <button type="submit" class="btn btn-primary btn-icon" [disabled]="!canSend()" [attr.aria-label]="editing() ? 'Сохранить' : 'Отправить'">
-                <i [class]="editing() ? 'ph ph-check' : 'ph ph-paper-plane-right'" aria-hidden="true"></i>
+            <button type="submit" class="composer-send" [disabled]="!canSend()" [attr.aria-label]="editing() ? 'Сохранить' : 'Отправить'">
+                <app-icon [icon]="editing() ? icons.Check : icons.ArrowRight" />
             </button>
         </div>
     </form>

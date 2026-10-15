@@ -1,6 +1,6 @@
 <div class="action-menu">
-  <button type="button" class="btn btn-ghost btn-icon" [attr.aria-label]="label()" (click)="toggle()">
-    <i class="ph ph-dots-three-outline" aria-hidden="true"></i>
+  <button type="button" class="btn-icon action-menu-trigger" [attr.aria-label]="label()" [attr.aria-expanded]="open()" (click)="toggle()">
+    <app-icon [icon]="ellipsis" />
   </button>
 
   @if (isWide && open()) {

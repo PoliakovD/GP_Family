@@ -1,4 +1,4 @@
-<div class="app-shell" [class.app-shell-wide]="isWide()">
+<div class="app-shell" [class.app-shell-wide]="isWide()" [class.app-shell-fullscreen]="!isWide() && pageAction.fullscreen()">
   @if (showTabs() && isWide()) {
     <!-- Сайдбар ≥1024px (DESIGN §3 «Навигация»): лого → переключатель семьи → пункты 46px
          (подпункты раздела 38px без групповых заголовков) → пользователь внизу. -->
@@ -77,7 +77,7 @@
          свою собственную верхнюю строку прямо в контенте (см. shared/back-link) и не нуждаются
          ни в общем поиске, ни в кнопке действия — топбар в этом состоянии просто не нужен целиком
          (см. PageActionService.immersive). -->
-    @if (showTabs() && !pageAction.immersive()) {
+    @if (showTabs() && !pageAction.immersive() && (isWide() || !pageAction.fullscreen())) {
       @if (isWide()) {
         <header class="app-topbar">
           <!-- Редизайн v2.1 — «один поиск на экране»: страницы со своим локальным поиском (Анализы,
@@ -185,7 +185,7 @@
     </main>
   </div>
 
-  @if (showTabs() && !isWide()) {
+  @if (showTabs() && !isWide() && !pageAction.fullscreen()) {
     <!-- Таб-бар <1024px (DESIGN §3): иконка в «пилюле» 56×30 (активная — accent-soft), подпись 12px,
          точка у «Семьи» — новые сообщения; у «Здоровья» — идёт распознавание документов. -->
     <nav class="tab-bar" aria-label="Основные разделы">
