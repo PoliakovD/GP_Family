@@ -37,6 +37,12 @@ updates:
       - /deploy/wg
     schedule:
       interval: weekly
+    # Мажорную версию Postgres Dependabot не поднимает: новый мажор не стартует на томе данных старого
+    # (нужен pg_upgrade или dump/restore), а docker compose up -d в деплое просто пересоздаёт контейнер —
+    # так #96 (17 → 18) сломал деплой 2026-10-15. Переход на новый мажор — только вручную, по плану.
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker-compose
     directories:
@@ -44,3 +50,9 @@ updates:
       - /deploy
     schedule:
       interval: weekly
+    # Мажорную версию Postgres Dependabot не поднимает: новый мажор не стартует на томе данных старого
+    # (нужен pg_upgrade или dump/restore), а docker compose up -d в деплое просто пересоздаёт контейнер —
+    # так #96 (17 → 18) сломал деплой 2026-10-15. Переход на новый мажор — только вручную, по плану.
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
