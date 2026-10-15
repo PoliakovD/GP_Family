@@ -74,7 +74,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: var(--color-surface);
+  background: var(--color-surface); // чип лежит прямо на bg
   border-radius: var(--radius-md);
   font-size: var(--font-size-meta);
   color: var(--color-neutral-800);
@@ -86,7 +86,7 @@
 .home-ok-chip-empty {
   color: var(--color-accent);
   text-decoration: none;
-  border: 1px dashed var(--color-divider);
+  border: 1px dashed var(--color-border-dashed);
 }
 
 .home-ok-chip-danger {

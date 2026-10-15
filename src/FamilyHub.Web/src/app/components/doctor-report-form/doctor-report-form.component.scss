@@ -4,7 +4,7 @@
 
 .dr-form { display: flex; flex-direction: column; min-height: 100%; }
 
-.dr-body { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; }
+.dr-body { display: flex; flex-direction: column; gap: var(--space-5); flex: 1; }
 
 .dr-field { display: flex; flex-direction: column; gap: 7px; }
 
@@ -29,7 +29,7 @@
 // Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio).
 .dr-seg { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
 .dr-seg + .dr-seg { border-left: 1px solid var(--color-divider); }
-.dr-seg.active { color: var(--color-bg); background: var(--color-accent); }
+.dr-seg.active { color: var(--color-on-accent); background: var(--color-accent); }
 
 .dr-group-title { margin-top: 4px; font-size: 0.7647rem; color: var(--color-neutral-600); }
 
@@ -56,12 +56,12 @@
 .dr-footer {
   position: sticky;
   // Компенсирует внутренний отступ контейнера (side-panel-body / sheet-panel): иначе футер «зависает» выше края.
-  bottom: calc(-1 * var(--space-3));
+  bottom: calc(-1 * var(--space-4));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  margin-top: var(--space-4);
-  padding: var(--space-3) 0 var(--space-1);
+  margin-top: var(--space-5);
+  padding: var(--space-4) 0 var(--space-1);
   background: var(--dr-surface, var(--color-paper));
   border-top: 1px solid var(--color-divider);
 }

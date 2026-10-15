@@ -54,7 +54,7 @@
   .recognize-step-dot {
     background: var(--color-accent);
     border-color: var(--color-accent);
-    color: var(--color-bg);
+    color: var(--color-on-accent);
   }
 
   .recognize-step-label {
@@ -137,8 +137,8 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-scrim) 65%, transparent);
+  color: var(--color-on-scrim);
   font-size: 0.7059rem;
   line-height: 1;
   display: flex;
@@ -152,7 +152,7 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 2px dashed var(--color-divider);
+  border: 2px dashed var(--color-border-dashed);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-neutral-600);

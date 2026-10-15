@@ -51,8 +51,10 @@ export class TelegramService {
       // Шапка и фон Telegram — в цвет приложения: иначе под тёмной/цветной шапкой Telegram
       // «плавал» светлый лист без перехода.
       try {
-        this.webApp?.setHeaderColor?.('#f3f2f2');
-        this.webApp?.setBackgroundColor?.('#f3f2f2');
+        // Тот же --color-bg, что у страницы (styles.scss), — без второго литерала в коде.
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() || '#F5F5F2';
+        this.webApp?.setHeaderColor?.(bg);
+        this.webApp?.setBackgroundColor?.(bg);
       } catch {
         // старые клиенты Telegram без этих методов — не критично
       }

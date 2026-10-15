@@ -86,7 +86,7 @@
   padding: 10px 12px;
   font-size: 0.8235rem;
   color: var(--color-accent);
-  border: 1px dashed var(--color-neutral-400);
+  border: 1px dashed var(--color-border-dashed);
   cursor: pointer;
 }
 .va-file-input-lg { justify-content: center; padding: 24px; font-size: 0.9412rem; }
@@ -137,7 +137,7 @@
   border: 2px solid var(--color-neutral-400);
   cursor: pointer;
 
-  &.checked { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+  &.checked { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
   &:disabled { cursor: default; }
 }
 

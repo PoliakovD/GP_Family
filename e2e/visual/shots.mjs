@@ -9,7 +9,7 @@
 //     метка  — подпапка результата: .artifacts/shots/<метка>/<экран>-<desktop|mobile>.png
 //     фильтр — подстрока имени экрана (необязательно)
 //
-// Переменные: SPA_DIR — каталог сборки; CHROMIUM — путь к браузеру, если версия Playwright
+// Переменные: SPA_DIR — каталог сборки; THEME=dark — тёмная тема; CHROMIUM — путь к браузеру, если версия Playwright
 // не совпадает со скачанными браузерами (в облачном окружении — /opt/pw-browsers/chromium).
 import { chromium } from '@playwright/test';
 import { createServer } from 'node:http';
@@ -70,6 +70,14 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
     await context.addInitScript(() => {
       localStorage.setItem('familyhub:cookieConsent', 'accepted');
     });
+    // THEME=dark — снимок в тёмной теме (styles.scss, :root[data-theme="dark"]).
+    if (process.env.THEME) {
+      await context.addInitScript((theme) => {
+        const apply = () => document.documentElement?.setAttribute('data-theme', theme);
+        apply();
+        addEventListener('DOMContentLoaded', apply);
+      }, process.env.THEME);
+    }
     // Dev-сборка показывает DevPanel (кнопка в углу) — на снимках она не нужна.
     await context.addInitScript(() => {
       addEventListener('DOMContentLoaded', () => {

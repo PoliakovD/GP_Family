@@ -1,11 +1,11 @@
 // Страница «Прививки»: шапка с заголовком и кнопкой «Добавить прививку».
 
-.vp-page { display: flex; flex-direction: column; gap: var(--space-4); }
+.vp-page { display: flex; flex-direction: column; gap: var(--space-5); }
 
 .vp-head {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 

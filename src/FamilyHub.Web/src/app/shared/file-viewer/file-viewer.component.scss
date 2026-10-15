@@ -63,7 +63,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  color: #fff;
+  color: var(--color-on-scrim);
   background: color-mix(in srgb, #000 35%, transparent);
   flex-shrink: 0;
 
@@ -72,10 +72,10 @@
   // Без ::ng-deep — кнопки прямо в разметке ЭТОГО компонента, не в дочерних, обычная вложенность
   // видит их и так.
   .btn-icon {
-    color: #fff;
+    color: var(--color-on-scrim);
 
-    &:hover { background: color-mix(in srgb, #fff 15%, transparent); }
-    &:active { background: color-mix(in srgb, #fff 25%, transparent); }
+    &:hover { background: color-mix(in srgb, var(--color-on-scrim) 15%, transparent); }
+    &:active { background: color-mix(in srgb, var(--color-on-scrim) 25%, transparent); }
   }
 }
 
@@ -129,7 +129,7 @@
   border-radius: 50%;
   border: none;
   background: color-mix(in srgb, #000 45%, transparent);
-  color: #fff;
+  color: var(--color-on-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,9 +158,9 @@
   border-radius: 50%;
   border: none;
   padding: 0;
-  background: color-mix(in srgb, #fff 30%, transparent);
+  background: color-mix(in srgb, var(--color-on-scrim) 30%, transparent);
 
   &.viewer-dot-active {
-    background: #fff;
+    background: var(--color-on-scrim);
   }
 }

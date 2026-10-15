@@ -11,7 +11,7 @@
 .dn-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   flex: 1;
 }
 
@@ -19,11 +19,11 @@
 .dn-footer {
   position: sticky;
   // Компенсирует внутренний отступ контейнера (side-panel-body / sheet-panel): иначе футер «зависает» выше края.
-  bottom: calc(-1 * var(--space-3));
+  bottom: calc(-1 * var(--space-4));
   display: flex;
   gap: var(--space-2);
-  margin-top: var(--space-4);
-  padding: var(--space-3) 0 var(--space-1);
+  margin-top: var(--space-5);
+  padding: var(--space-4) 0 var(--space-1);
   // Фон липкого футера совпадает с контейнером: бумага в боковой панели, --color-bg в нижнем листе.
   background: var(--dn-surface, var(--color-paper));
   border-top: 1px solid var(--color-divider);
@@ -135,7 +135,7 @@
   font: inherit;
   font-size: 0.7941rem;
   color: var(--color-neutral-800);
-  background: var(--color-surface);
+  background: var(--color-surface-sunken);
   border: 0;
   cursor: pointer;
 
@@ -160,7 +160,7 @@
   cursor: pointer;
 
   &.active {
-    color: #fff;
+    color: var(--color-on-accent);
     background: var(--color-kind-symptom);
     border-color: var(--color-kind-symptom);
   }
@@ -198,7 +198,7 @@
 
   &.active {
     font-weight: 600;
-    color: var(--color-bg);
+    color: var(--color-on-accent);
     background: var(--color-accent);
     border-color: var(--color-accent);
   }
@@ -303,7 +303,7 @@
 }
 
 .dn-seg.active {
-  color: #fff;
+  color: var(--color-on-accent);
   background: var(--color-kind-sleep);
   font-weight: 600;
 }
@@ -318,7 +318,7 @@
   padding: 11px 14px;
   font-size: 0.8529rem;
   color: var(--color-neutral-800);
-  background: var(--color-surface);
+  background: var(--color-surface-sunken);
   cursor: pointer;
 
   i { font-size: 1.15rem; color: var(--color-neutral-700); }
