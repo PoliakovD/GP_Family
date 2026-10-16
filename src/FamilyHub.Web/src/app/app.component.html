@@ -146,6 +146,13 @@
             } @else {
               <div class="app-topbar-mobile-title flex-fill">{{ mobileTitle() }}</div>
             }
+            <!-- Второстепенное действие экрана («Загрузить несколько» в «Анализах») — иконкой в шапке;
+                 основное — плавающей кнопкой ниже (на десктопе оба — кнопками в верхней строке). -->
+            @if (pageAction.secondaryAction(); as secondary) {
+              <button type="button" class="btn-icon btn-round" [attr.aria-label]="secondary.label" [title]="secondary.label" (click)="secondary.handler()">
+                <app-icon [icon]="secondary.icon ?? icons.Plus" />
+              </button>
+            }
             <button type="button" class="btn-icon btn-round" (click)="mobileSearchOpen.set(true)" aria-label="Поиск">
               <app-icon [icon]="icons.Search" />
             </button>
@@ -183,6 +190,13 @@
       <router-outlet></router-outlet>
     </main>
   </div>
+
+  <!-- Основное действие экрана на телефоне («Добавить анализ / приём») — FAB над таб-баром. -->
+  @if (showTabs() && !isWide() && !pageAction.fullscreen() && !pageAction.immersive()) {
+    @if (pageAction.action(); as action) {
+      <app-fab [label]="action.label" [icon]="action.icon ?? icons.Plus" (activated)="action.handler()" />
+    }
+  }
 
   @if (showTabs() && !isWide() && !pageAction.fullscreen()) {
     <!-- Таб-бар <1024px (DESIGN §3): иконка в «пилюле» 56×30 (активная — accent-soft), подпись 12px,
