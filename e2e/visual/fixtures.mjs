@@ -75,6 +75,22 @@ export const SCREENS = [
   { name: 'settings-security', path: '/settings/security', only: 'desktop' },
   { name: 'settings-notifications', path: '/settings/notifications' },
   { name: 'settings-data', path: '/settings/data' },
+  // Открытые справки: препарат и показатель из «Справочника», «Справка» в аптечке.
+  { name: 'kb-med-open', path: '/health/kb/medications', prepare: async (page) => {
+    await page.getByRole('button', { name: /Нурофен/ }).first().click();
+  } },
+  { name: 'kb-indicator-open', path: '/health/kb/indicators', prepare: async (page) => {
+    await page.getByRole('button', { name: /Лейкоциты/ }).first().click();
+  } },
+  { name: 'medkit-kb', path: '/health/medications/mk1', prepare: async (page, vp) => {
+    // Телефон: «Справка» в меню «⋯» строки (кнопка в строке скрыта, чтобы не сжимать текст).
+    if (vp === 'mobile') {
+      await page.getByRole('button', { name: 'Действия: Нурофен' }).click();
+      await page.getByRole('button', { name: 'Справка о препарате' }).last().click();
+    } else {
+      await page.getByRole('button', { name: 'Справка о препарате' }).nth(1).click();
+    }
+  } },
   // Уведомления, поиск, фоновые задачи (4.8.2).
   { name: 'notifications', path: '/notifications' },
   { name: 'search', path: '/home', only: 'desktop', prepare: async (page) => {
@@ -397,6 +413,32 @@ const SEARCH = [
   { type: 2, id: 's3', title: 'Развернутый анализ крови', snippet: '3 октября · 6 вне нормы', score: 0.5, birthday: null, medication: null },
 ];
 
+const NUROFEN_CARD = {
+  id: 'kb-nurofen', displayName: 'Нурофен', internationalName: 'Ибупрофен', tradeNames: ['Нурофен', 'МИГ 400', 'Ибуклин', 'Фаспик'],
+  form: 'Таблетки, покрытые оболочкой, 200 и 400 мг; суспензия для детей.',
+  purpose: 'Нестероидный противовоспалительный препарат: обезболивающее, жаропонижающее и противовоспалительное действие.',
+  simplePurpose: 'Снимает боль и сбивает температуру.',
+  usage: 'Взрослым по 200–400 мг до 3–4 раз в сутки после еды, не более 1200 мг в сутки без назначения врача. Курс без консультации — не дольше 5 дней при боли и 3 дней при температуре.',
+  storage: 'При температуре не выше 25 °C, в недоступном для детей месте.',
+  driving: 'Обычно не влияет. При головокружении или сонливости от вождения лучше отказаться.',
+  specialNotes: 'Нельзя при язве желудка, тяжёлой почечной недостаточности и в третьем триместре беременности. Осторожно при астме и вместе с другими НПВС.',
+  source: 'brave: vidal.ru, rlsnet.ru', updatedAt: '2026-09-12T00:00:00Z',
+};
+const WBC_KB = {
+  id: 'wbc', displayName: 'Лейкоциты', specimenKbId: 'blood', specimenDisplayName: 'Кровь', loincCode: '6690-2',
+  defaultUnit: '×10⁹/л', plainExplanation: 'Белые клетки крови, защищают организм от инфекций.',
+  whyMeasured: 'Показывают, есть ли воспаление или инфекция, и как работает иммунитет.',
+  highMeans: 'Бывает при инфекциях, воспалениях, после нагрузки или стресса.',
+  lowMeans: 'Бывает после вирусных инфекций и при приёме некоторых лекарств.',
+  refRanges: [
+    { ageFrom: 18, ageTo: null, sex: null, low: 4, high: 9, unit: '×10⁹/л', normKind: 0, population: 0, populationDetail: null, sourceDomain: 'invitro.ru' },
+    { ageFrom: 6, ageTo: 18, sex: null, low: 4.5, high: 13.5, unit: '×10⁹/л', normKind: 0, population: 0, populationDetail: null, sourceDomain: 'helix.ru' },
+    { ageFrom: 0, ageTo: 1, sex: null, low: 6, high: 17.5, unit: '×10⁹/л', normKind: 0, population: 1, populationDetail: null, sourceDomain: 'helix.ru' },
+  ],
+  related: [{ id: 'neut', displayName: 'Нейтрофилы' }, { id: 'lymph', displayName: 'Лимфоциты' }, { id: null, displayName: 'Лейкоцитарная формула' }],
+  source: 'Справочник FamilyHub', updatedAt: '2026-09-01T00:00:00Z',
+};
+
 /** [метод, регулярка пути, ответ | (match, query, body) => ответ] */
 const ROUTES = [
   ...ADMIN_ROUTES,
@@ -451,6 +493,9 @@ const ROUTES = [
     { id: 'kb-d3', displayName: 'Витамин D3', purpose: 'Восполняет дефицит витамина D.' },
     { id: 'kb-mg', displayName: 'Магний B6', purpose: null },
   ] }],
+  ['GET', /^\/api\/kb\/medications\/[^/]+$/, NUROFEN_CARD],
+  ['GET', /^\/api\/kb\/analytes\/[^/]+$/, WBC_KB],
+  ['GET', /^\/api\/medications\/[^/]+\/kb$/, { status: 4, card: NUROFEN_CARD, candidate: null }],
   ['GET', /^\/api\/kb\/analytes$/, { hasMore: false, items: [
     { id: 'wbc', displayName: 'Лейкоциты', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: 'Белые клетки крови, защищают организм от инфекций.' },
     { id: 'esr', displayName: 'СОЭ', specimenKbId: 'blood', specimenDisplayName: 'Кровь', plainExplanation: 'Скорость оседания эритроцитов — маркер воспаления.' },

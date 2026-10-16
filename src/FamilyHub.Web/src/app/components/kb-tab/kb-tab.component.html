@@ -40,7 +40,8 @@
     </div>
   }
 
-  <app-bottom-sheet [title]="selectedCard?.displayName ?? 'Препарат'" [open]="cardOpen" (closed)="closeCard()">
+  <!-- Справка о препарате: десктоп — боковая панель справочника (как у показателя), телефон — нижний лист. -->
+  <ng-template #cardBody>
     @if (cardLoading) {
       <app-loading-spinner />
     } @else if (cardError) {
@@ -48,5 +49,14 @@
     } @else if (selectedCard) {
       <app-kb-card [card]="selectedCard" />
     }
-  </app-bottom-sheet>
+  </ng-template>
+  @if (cardOpen && isWide) {
+    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Препарат'" [icon]="icons.Pill" tone="medication" (closed)="closeCard()">
+      <ng-container *ngTemplateOutlet="cardBody" />
+    </app-indicator-info-panel>
+  } @else {
+    <app-bottom-sheet [title]="selectedCard?.displayName ?? 'Препарат'" [open]="cardOpen" (closed)="closeCard()">
+      <ng-container *ngTemplateOutlet="cardBody" />
+    </app-bottom-sheet>
+  }
 </div>

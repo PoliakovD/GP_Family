@@ -1,4 +1,5 @@
-import { ChevronRight } from 'lucide';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChevronRight, Pill } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -8,6 +9,8 @@ import { SearchFieldComponent } from '../../shared/search-field/search-field.com
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
+import { BreakpointService } from '../../services/breakpoint.service';
+import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 
 /**
  * Page (таксономия — patterns/frontend_web.md): общий обезличенный справочник препаратов
@@ -19,7 +22,7 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
 @Component({
     changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-kb-tab',
-    imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
+    imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent, IndicatorInfoPanelComponent, NgTemplateOutlet],
     templateUrl: './kb-tab.component.html',
   styles: [`
     .kb-tab { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -31,8 +34,15 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
   `],
 })
 export class KbTabComponent implements OnInit {
+  protected readonly icons = { Pill };
+
   protected readonly chevron = ChevronRight;
   private readonly api = inject(ApiService);
+  private readonly breakpoints = inject(BreakpointService);
+
+  get isWide(): boolean {
+    return this.breakpoints.tier() === 'wide';
+  }
 
   loading = true;
   error: string | null = null;

@@ -1,6 +1,6 @@
 import { Component, computed, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ArrowDown, ArrowUp, ChartLine, Pencil, Trash2 } from 'lucide';
+import { ArrowDown, ArrowUp, ChartLine, Info, Pencil, Trash2 } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import type {
   IndicatorHistoryPoint, KbAnalyteCard, KbRefRangeDto, PatientContextDto, UpdateIndicatorRequest,
@@ -75,11 +75,6 @@ export class IndicatorInfoComponent {
    * справочнике/на статье по чипу). */
   readonly openInCatalog = output<void>();
 
-  /** Источник показан только когда он известен (ключ справочника — (показатель, источник), см.
-   * GlobalLabAnalyteKb.SpecimenKbId) — сервер уже отдаёт готовую подпись, ссылку локально не
-   * разбираем (пересборка enrich-пайплайна, никакой фиксированной классификации на фронте). */
-  readonly specimenLabel = computed(() => this.article()?.specimenDisplayName ?? null);
-
   readonly matchedRange = computed<KbRefRangeDto | null>(() => {
     const a = this.article();
     const idx = this.reading()?.matchedRefRangeIndex;
@@ -129,7 +124,7 @@ export class IndicatorInfoComponent {
   );
 
   readonly IndicatorFlag = IndicatorFlag;
-  protected readonly icons = { ArrowDown, ArrowUp, ChartLine, Pencil, Trash2 };
+  protected readonly icons = { ArrowDown, ArrowUp, ChartLine, Info, Pencil, Trash2 };
   readonly normGroupIcon = normGroupIcon;
   readonly normGroupLabel = normGroupLabel;
   readonly normValueLabel = normValueLabel;

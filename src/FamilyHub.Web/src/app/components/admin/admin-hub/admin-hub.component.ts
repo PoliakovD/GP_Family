@@ -5,6 +5,7 @@ import { AdminApiService } from '../../../services/admin-api.service';
 import { ReviewQueueStore } from '../shared/review-queue.store';
 import { LogOut, ShieldCheck } from 'lucide';
 import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { ThemeSwitchComponent } from '../../../shared/ui/theme-switch/theme-switch.component';
 
 /**
  * Хаб админ-панели (ADR-0009): шесть разделов верхнего уровня, внутри каждого (кроме «Требует
@@ -23,7 +24,7 @@ import { IconComponent } from '../../../shared/ui/icon/icon.component';
  */
 @Component({
     selector: 'app-admin-hub',
-    imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent],
+    imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent, ThemeSwitchComponent],
     templateUrl: './admin-hub.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-hub.component.scss'

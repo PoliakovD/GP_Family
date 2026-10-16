@@ -2,9 +2,12 @@
   <header class="admin-head">
     <span class="app-brand-mark" aria-hidden="true"><app-icon [icon]="icons.ShieldCheck" [size]="20" [strokeWidth]="2" /></span>
     <h1 class="admin-title">Админ-панель</h1>
-    <button type="button" class="btn btn-secondary admin-logout" (click)="logout()">
-      <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
-    </button>
+    <div class="admin-head-actions">
+      <app-theme-switch [compact]="true" label="Тема админ-панели" />
+      <button type="button" class="btn btn-secondary" (click)="logout()">
+        <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
+      </button>
+    </div>
   </header>
 
   <nav class="seg admin-nav" aria-label="Разделы админки">

@@ -175,7 +175,8 @@
     }
   }
 
-  <app-bottom-sheet title="Справка о препарате" [open]="kbOpen" (closed)="closeKb()">
+  <!-- Справка о препарате: десктоп — боковая панель справочника (как у показателя), телефон — нижний лист. -->
+  <ng-template #kbBody>
     @if (kbLoading) {
       <app-loading-spinner />
     } @else if (kbError) {
@@ -201,8 +202,17 @@
           </p>
         }
 
-        <button class="btn btn-secondary" (click)="refreshKb()">Уточнить в справочнике</button>
+        <button class="btn btn-secondary kb-refresh" (click)="refreshKb()">Уточнить в справочнике</button>
       }
     }
-  </app-bottom-sheet>
+  </ng-template>
+  @if (kbOpen && isWide) {
+    <app-indicator-info-panel [title]="kbTitle" [icon]="icons.Pill" tone="medication" (closed)="closeKb()">
+      <ng-container *ngTemplateOutlet="kbBody" />
+    </app-indicator-info-panel>
+  } @else {
+    <app-bottom-sheet [title]="kbTitle" [open]="kbOpen" (closed)="closeKb()">
+      <ng-container *ngTemplateOutlet="kbBody" />
+    </app-bottom-sheet>
+  }
 </div>

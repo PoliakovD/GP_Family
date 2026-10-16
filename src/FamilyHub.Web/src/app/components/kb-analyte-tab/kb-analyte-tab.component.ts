@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide';
+import { ChevronRight, FlaskConical } from 'lucide';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -39,6 +39,8 @@ import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-pa
   `],
 })
 export class KbAnalyteTabComponent implements OnInit, OnDestroy {
+  protected readonly icons = { FlaskConical };
+
   protected readonly chevron = ChevronRight;
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
