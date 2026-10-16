@@ -28,8 +28,9 @@ import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdo
 import { NotificationBellComponent } from './shared/notification-bell/notification-bell.component';
 import { IconComponent } from './shared/ui/icon/icon.component';
 import { FamilySwitcherComponent } from './shared/ui/family-switcher/family-switcher.component';
-import { Heart, House, MoonStar, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
+import { Heart, House, MoonStar, Plus, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
 import { FamilyRole } from './models/types';
+import { FabComponent } from './shared/ui/fab/fab.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
@@ -71,22 +72,7 @@ interface SidebarItem {
 
 @Component({
     selector: 'app-root',
-    imports: [
-        RouterOutlet,
-        RouterLink,
-        DevPanelComponent,
-        ToastContainerComponent,
-        ConfirmDialogComponent,
-        CookieBannerComponent,
-        AppNoticesComponent,
-        AvatarComponent,
-        AppSearchComponent,
-        SearchFieldComponent,
-        BackgroundJobsDropdownComponent,
-        NotificationBellComponent,
-        IconComponent,
-        FamilySwitcherComponent,
-    ],
+    imports: [RouterOutlet, RouterLink, DevPanelComponent, ToastContainerComponent, ConfirmDialogComponent, CookieBannerComponent, AppNoticesComponent, AvatarComponent, AppSearchComponent, SearchFieldComponent, BackgroundJobsDropdownComponent, NotificationBellComponent, IconComponent, FamilySwitcherComponent, FabComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './app.component.html'
 })
@@ -115,7 +101,7 @@ export class AppComponent implements OnInit {
   readonly isWide = computed(() => this.breakpoints.tier() === 'wide');
 
   /** Иконки каркаса (Lucide, DESIGN §2.7). */
-  readonly icons = { Heart, House, MoonStar, Search, User, Users, X };
+  protected readonly icons = { Heart, House, MoonStar, Plus, Search, User, Users, X };
   /** Мобильная шапка (макет «Screen - Health hub»): по умолчанию заголовок + иконка поиска +
    * колокольчик; клик по лупе разворачивает поле поиска на всю ширину строки вместо заголовка. */
   readonly mobileSearchOpen = signal(false);
