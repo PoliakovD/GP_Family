@@ -41,7 +41,7 @@
   }
 
   @if (cardOpen && isWide) {
-    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Показатель'" (closed)="closeCard()">
+    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Показатель'" [icon]="icons.FlaskConical" (closed)="closeCard()">
       @if (cardLoading) {
         <app-loading-spinner />
       } @else if (cardError) {

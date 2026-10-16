@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, EventEmitter, OnDestroy, OnInit, Output, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -19,6 +20,8 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
+import { BreakpointService } from '../../services/breakpoint.service';
+import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 
 /** Модель иногда отдаёт названия полей по-английски/в snake_case — показываем по-русски. */
 const FIELD_NAMES: Record<string, string> = {
@@ -55,7 +58,7 @@ let nextInstanceId = 0;
 
 @Component({
     selector: 'app-medications-panel',
-    imports: [ActionMenuComponent, EmptyStateComponent, FormsModule, IconComponent, IconTileComponent, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent],
+    imports: [ActionMenuComponent, EmptyStateComponent, FormsModule, IconComponent, IconTileComponent, LoadingSpinnerComponent, SearchFieldComponent, BottomSheetComponent, KbCardComponent, IndicatorInfoPanelComponent, NgTemplateOutlet],
     templateUrl: './medications-panel.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medications-panel.component.scss'
@@ -68,6 +71,7 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   @Output() readonly countChanged = new EventEmitter<number>();
 
   private readonly api = inject(ApiService);
+  private readonly breakpoints = inject(BreakpointService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
@@ -120,10 +124,21 @@ export class MedicationsPanelComponent implements OnInit, OnDestroy {
   kbError: string | null = null;
   kbResponse: MedicationKbResponse | null = null;
   private kbMedicationId: string | null = null;
+  /** Заголовок справки: название из справочника, пока не загрузилось — имя медикамента в аптечке. */
+  private kbItemName = '';
+
+  get kbTitle(): string {
+    return this.kbResponse?.card?.displayName ?? (this.kbItemName || 'Справка о препарате');
+  }
+
+  get isWide(): boolean {
+    return this.breakpoints.tier() === 'wide';
+  }
 
   async openKb(item: Medication): Promise<void> {
     this.kbOpen = true;
     this.kbMedicationId = item.id;
+    this.kbItemName = item.name;
     await this.loadKb();
   }
 

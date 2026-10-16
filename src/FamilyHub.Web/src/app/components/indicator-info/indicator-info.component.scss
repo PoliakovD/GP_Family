@@ -1,18 +1,5 @@
-// Справка по показателю (DESIGN §3 «Анализ»): контейнер (боковая панель / полноэкранный вид на телефоне)
-// даёт название; статья — вертикальный стек блоков. Статус несут бейдж и маркер шкалы, не цвет числа.
+// Справка по показателю: общие блоки статьи (kb-article, kb-section, kb-meta…) — в styles.scss.
 
-.kb-article {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-.kb-specimen {
-  margin-bottom: calc(var(--space-2) * -1);
-  font: var(--text-caption);
-  color: var(--color-text-muted);
-}
 
 // --- Текущее значение: утопленная плашка со шкалой ---
 
@@ -57,36 +44,26 @@
 .kb-edit-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .kb-edit-row { display: flex; gap: var(--space-2); > .input { flex: 1; min-width: 0; } }
 
-// --- Секции: заголовок 16/600 без CAPS (DESIGN §2.3) ---
-
-.kb-section { display: flex; flex-direction: column; gap: var(--space-2); }
-
-.kb-section-title {
-  margin: 0;
-  font: var(--text-body);
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.kb-text,
-.kb-effect {
-  margin: 0;
-  font: var(--text-body-sm);
-  color: var(--color-text-secondary);
-  text-wrap: pretty;
-}
-
-.kb-note { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
 
 // --- Нормы: иконка группы + подпись + диапазон ---
+
+// Нормы — список в рамке, строки через divider; строка «для этого человека» — подсвечена.
+.kb-norms {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+
+  > .kb-norm-row + .kb-norm-row { border-top: 1px solid var(--color-divider); }
+}
 
 .kb-norm-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-4);
   font: var(--text-body-sm);
 
   app-icon {
@@ -113,6 +90,10 @@
 // --- «На что влияет»: «ниже/выше нормы» со стрелкой ---
 
 .kb-effect {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
   display: flex;
   gap: var(--space-2);
 
@@ -163,4 +144,3 @@
 .kb-actions { display: flex; flex-direction: column; gap: var(--space-2); }
 .kb-dynamics { padding-top: var(--space-1); }
 
-.kb-disclaimer { margin: 0; font: var(--text-caption); color: var(--color-text-muted); text-wrap: pretty; }

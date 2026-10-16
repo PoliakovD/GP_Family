@@ -769,6 +769,68 @@ select.input {
   > .input[type="search"], > .input-grow { flex: 1 1 280px; }
 }
 
+// ============================================================================
+// Статья справочника (DESIGN §3 «Справка»): показатель (indicator-info) и препарат (kb-card) в одном стиле.
+// Название даёт контейнер (боковая панель / нижний лист); статья — стек блоков с отступом 20.
+// ============================================================================
+.kb-article { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+
+// Мета-строка под шапкой: «Кровь», «LOINC 6690-2», «МНН: Ибупрофен» — нейтральные бейджи.
+.kb-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+// «Простыми словами» — главное в одной фразе: утопленная плашка, текст 17.
+.kb-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+.kb-lead-label { font: var(--text-caption); font-weight: 600; color: var(--color-text-muted); }
+.kb-lead-text { margin: 0; font: var(--text-body-lg); color: var(--color-text); text-wrap: pretty; }
+
+.kb-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.kb-section-title { margin: 0; font: var(--text-body); font-weight: 600; color: var(--color-text); }
+.kb-text { margin: 0; font: var(--text-body-sm); color: var(--color-text-secondary); text-wrap: pretty; }
+.kb-note { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
+
+// Факты списком в рамке: иконка 20 muted → подпись 14/600 muted над текстом 15.
+.kb-facts {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.kb-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+
+  & + & { border-top: 1px solid var(--color-divider); }
+  > app-icon { flex: none; margin-top: 2px; color: var(--color-text-muted); }
+}
+.kb-fact-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kb-fact-label { font: var(--text-caption); font-weight: 600; color: var(--color-text-muted); }
+.kb-fact-value { font: var(--text-body-sm); color: var(--color-text); text-wrap: pretty; }
+
+// Предупреждение в статье: alert-warning с заголовком.
+.kb-warning-title { display: block; font-weight: 600; }
+
+// Подвал: дисклеймер + источник, мелко, с иконкой.
+.kb-disclaimer {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+
+  > app-icon { flex: none; margin-top: 1px; }
+}
+
 // Горизонтальная прокрутка для широких таблиц внутри узкой карточки.
 .table-responsive {
   max-width: 100%;
@@ -1008,6 +1070,7 @@ select.input {
 }
 
 .table-card {
+  position: relative; // визуально скрытые подписи колонок (position: absolute) — внутри прокрутки, не за краем страницы
   padding: 0;
   overflow-x: auto;
 

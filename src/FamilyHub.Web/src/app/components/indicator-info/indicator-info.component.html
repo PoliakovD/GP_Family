@@ -1,8 +1,12 @@
 <div class="kb-article">
   <!-- Название показателя показывает контейнер (шапка боковой панели / bottom-sheet / back-link
        на мобильном) — здесь оно больше не дублируется, только источник мелкой строкой. -->
-  @if (specimenLabel(); as sl) {
-    <div class="kb-specimen">Биоматериал: {{ sl }}</div>
+  @if (article(); as a) {
+    <div class="kb-meta">
+      @if (a.specimenDisplayName) { <span class="badge badge-neutral">{{ a.specimenDisplayName }}</span> }
+      @if (a.defaultUnit) { <span class="badge badge-neutral">{{ a.defaultUnit }}</span> }
+      @if (a.loincCode) { <span class="badge badge-neutral">LOINC {{ a.loincCode }}</span> }
+    </div>
   }
 
   @if (reading(); as r) {
@@ -65,10 +69,10 @@
 
   @if (article(); as a) {
     @if (a.plainExplanation) {
-      <section class="kb-section">
-        <h3 class="kb-section-title">Что это</h3>
-        <p class="kb-text">{{ a.plainExplanation }}</p>
-      </section>
+      <div class="kb-lead">
+        <span class="kb-lead-label">Что это</span>
+        <p class="kb-lead-text">{{ a.plainExplanation }}</p>
+      </div>
     }
 
     @if (a.refRanges.length > 0) {
@@ -76,33 +80,39 @@
         <h3 class="kb-section-title">Нормы</h3>
         @if (matchedRange(); as mr) {
           <!-- Строка, подходящая полу и возрасту пациента, подсвечена; остальные — под раскрытием. -->
-          <div class="kb-norm-row kb-norm-row-match">
-            <app-icon [icon]="normGroupIcon(mr)" [size]="16" />
-            <span class="kb-norm-label">{{ normGroupLabel(mr) }}</span>
-            <strong class="kb-norm-value">{{ normValueLabel(mr) }}</strong>
+          <div class="kb-norms">
+            <div class="kb-norm-row kb-norm-row-match">
+              <app-icon [icon]="normGroupIcon(mr)" [size]="18" />
+              <span class="kb-norm-label">{{ normGroupLabel(mr) }}</span>
+              <strong class="kb-norm-value">{{ normValueLabel(mr) }}</strong>
+            </div>
           </div>
           @if (sourceLabel(mr); as sd) {
             <div class="kb-norm-source">Источник норм: {{ sd }}</div>
           }
           @if (otherRanges().length > 0) {
             <app-expandable title="Нормы для других возрастов" [count]="otherRanges().length">
-              @for (r of otherRanges(); track $index) {
-                <div class="kb-norm-row">
-                  <app-icon [icon]="normGroupIcon(r)" [size]="16" />
-                  <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
-                  <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
-                </div>
-              }
+              <div class="kb-norms">
+                @for (r of otherRanges(); track $index) {
+                  <div class="kb-norm-row">
+                    <app-icon [icon]="normGroupIcon(r)" [size]="18" />
+                    <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
+                    <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
+                  </div>
+                }
+              </div>
             </app-expandable>
           }
         } @else {
-          @for (r of a.refRanges; track $index) {
-            <div class="kb-norm-row">
-              <app-icon [icon]="normGroupIcon(r)" [size]="16" />
-              <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
-              <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
-            </div>
-          }
+          <div class="kb-norms">
+            @for (r of a.refRanges; track $index) {
+              <div class="kb-norm-row">
+                <app-icon [icon]="normGroupIcon(r)" [size]="18" />
+                <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
+                <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
+              </div>
+            }
+          </div>
         }
       </section>
     }
@@ -172,8 +182,9 @@
 
   @if (article(); as a) {
     <p class="kb-disclaimer">
-      Статья из общего справочника FamilyHub, обновлена {{ updatedText(a.updatedAt) }}.
-      Не диагноз — трактовку даёт врач.
+      <app-icon [icon]="icons.Info" [size]="16" />
+      <span>Статья из общего справочника FamilyHub, обновлена {{ updatedText(a.updatedAt) }}.
+      Не диагноз — трактовку даёт врач.</span>
     </p>
   }
 </div>

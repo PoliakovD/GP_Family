@@ -18,6 +18,7 @@
 
 .admin-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
 }
@@ -30,6 +31,14 @@
   @media (max-width: 639px) { font: var(--text-title); font-weight: 700; }
 }
 
-.admin-logout { margin-left: auto; }
+// Тема и «Выйти» справа; на телефоне — отдельной строкой под заголовком.
+.admin-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+
+  @media (max-width: 639px) { flex-basis: 100%; justify-content: space-between; margin-left: 0; }
+}
 
 .admin-nav { align-self: flex-start; max-width: 100%; }

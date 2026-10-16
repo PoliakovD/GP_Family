@@ -52,7 +52,23 @@ export class ActionMenuComponent {
 
   select(item: ActionMenuItem): void {
     this.open.set(false);
-    item.handler();
+    if (this.isWide || !history.state?.overlayDismiss) {
+      item.handler();
+      return;
+    }
+    // Мобильная шторка при закрытии снимает свою запись истории через history.back() — асинхронно.
+    // Если действие сразу откроет свой лист («Справка», «Изменить»), его pushState окажется верхним,
+    // и запоздавший popstate закроет уже новый лист. Поэтому действие — после этого popstate
+    // (с запасным таймером, если браузер его не прислал).
+    let done = false;
+    const run = (): void => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('popstate', run);
+      item.handler();
+    };
+    window.addEventListener('popstate', run);
+    setTimeout(run, 400);
   }
 
   @HostListener('document:click', ['$event'])
