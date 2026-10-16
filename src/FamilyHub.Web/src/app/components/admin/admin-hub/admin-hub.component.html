@@ -1,25 +1,31 @@
-<div class="admin-shell" [class.admin-shell-wide]="wide()">
-  <header class="admin-head">
-    <span class="app-brand-mark" aria-hidden="true"><app-icon [icon]="icons.ShieldCheck" [size]="20" [strokeWidth]="2" /></span>
-    <h1 class="admin-title">Админ-панель</h1>
-    <div class="admin-head-actions">
-      <app-theme-switch [compact]="true" label="Тема админ-панели" />
-      <button type="button" class="btn btn-secondary" (click)="logout()">
-        <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
-      </button>
-    </div>
-  </header>
+<div class="admin-shell">
+  <div class="admin-bar">
+    <header class="admin-head">
+      <span class="app-brand-mark" aria-hidden="true"><app-icon [icon]="icons.ShieldCheck" [size]="20" [strokeWidth]="2" /></span>
+      <h1 class="admin-title">Админ-панель</h1>
+      <div class="admin-head-actions">
+        <app-theme-switch [compact]="true" label="Тема админ-панели" />
+        <button type="button" class="btn btn-secondary" (click)="logout()">
+          <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
+        </button>
+      </div>
+    </header>
 
-  <nav class="seg admin-nav" aria-label="Разделы админки">
-    @for (s of sections; track s.path) {
-      <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active" ariaCurrentWhenActive="page">
-        {{ s.label }}
-        @if (s.path === 'review' && reviewQueue.total() > 0) {
-          <span class="count-badge" [attr.aria-label]="reviewQueue.total() + ' ждут решения'">{{ reviewQueue.total() }}</span>
-        }
-      </a>
-    }
-  </nav>
+    <nav class="seg admin-nav" aria-label="Разделы админки">
+      @for (s of sections; track s.path) {
+        <a class="seg-opt" [routerLink]="[s.path]" routerLinkActive="active" ariaCurrentWhenActive="page">
+          {{ s.label }}
+          @if (s.path === 'review' && reviewQueue.total() > 0) {
+            <span class="count-badge" [attr.aria-label]="reviewQueue.total() + ' ждут решения'">{{ reviewQueue.total() }}</span>
+          }
+        </a>
+      }
+    </nav>
+  </div>
 
-  <router-outlet></router-outlet>
+  <!-- Шапка и разделы всегда в одной колонке 1200px — на «Одобрении» шире становится только содержимое,
+       иначе навигация съезжала относительно остальных разделов. -->
+  <div class="admin-body" [class.admin-body-wide]="wide()">
+    <router-outlet></router-outlet>
+  </div>
 </div>
