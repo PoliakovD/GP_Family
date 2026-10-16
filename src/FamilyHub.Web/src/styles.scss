@@ -1368,6 +1368,19 @@ select.input {
   min-height: 100dvh;
 }
 
+// Десктоп: сайдбар и контент — один блок по центру (сайдбар 248 + контент до 1200 + поля 2×40).
+// На экранах шире блока свободное место уходит в поля слева от навигации и справа от контента,
+// а не в пустую полосу между ними. Экраны без оболочки (вход, админка) — на всю ширину.
+.app-shell-wide:not(.app-shell-bare) {
+  --shell-max: calc(248px + 1200px + var(--space-10) * 2);
+  max-width: var(--shell-max);
+  margin: 0 auto;
+
+  @media (min-width: 1529px) {
+    .app-sidebar { border-left: 1px solid var(--color-divider); }
+  }
+}
+
 // ----------------------------------------------------------------------------
 // Сайдбар: лого → переключатель семьи → пункты → пользователь внизу.
 // ----------------------------------------------------------------------------
@@ -1599,8 +1612,6 @@ select.input {
 }
 
 .app-shell-wide .app-content {
-  max-width: calc(1200px + var(--space-10) * 2);
-  margin: 0 auto;
   padding: var(--space-6) var(--space-10) var(--space-10);
 
   @media (max-width: 1279px) { padding-inline: var(--space-7); }
