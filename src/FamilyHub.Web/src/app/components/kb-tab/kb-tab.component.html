@@ -51,7 +51,7 @@
     }
   </ng-template>
   @if (cardOpen && isWide) {
-    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Препарат'" [icon]="icons.Pill" tone="medication" (closed)="closeCard()">
+    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Препарат'" [icon]="icons.Pill" tone="medication" backLabel="Справочник" (closed)="closeCard()">
       <ng-container *ngTemplateOutlet="cardBody" />
     </app-indicator-info-panel>
   } @else {

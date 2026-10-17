@@ -31,6 +31,8 @@ import { FamilySwitcherComponent } from './shared/ui/family-switcher/family-swit
 import { Heart, House, MoonStar, Plus, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
 import { FamilyRole } from './models/types';
 import { FabComponent } from './shared/ui/fab/fab.component';
+import { ContentPageService } from './services/content-page.service';
+import { ContentPageHostComponent } from './shared/ui/content-page/content-page-host.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
@@ -72,7 +74,7 @@ interface SidebarItem {
 
 @Component({
     selector: 'app-root',
-    imports: [RouterOutlet, RouterLink, DevPanelComponent, ToastContainerComponent, ConfirmDialogComponent, CookieBannerComponent, AppNoticesComponent, AvatarComponent, AppSearchComponent, SearchFieldComponent, BackgroundJobsDropdownComponent, NotificationBellComponent, IconComponent, FamilySwitcherComponent, FabComponent],
+    imports: [RouterOutlet, RouterLink, DevPanelComponent, ToastContainerComponent, ConfirmDialogComponent, CookieBannerComponent, AppNoticesComponent, AvatarComponent, AppSearchComponent, SearchFieldComponent, BackgroundJobsDropdownComponent, NotificationBellComponent, IconComponent, FamilySwitcherComponent, FabComponent, ContentPageHostComponent],
     changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './app.component.html'
 })
@@ -87,6 +89,7 @@ export class AppComponent implements OnInit {
   readonly ai = inject(AiStatusService);
   readonly chat = inject(ChatRealtimeService);
   readonly pageAction = inject(PageActionService);
+  readonly contentPages = inject(ContentPageService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly tg = inject(TelegramService);
   private readonly router = inject(Router);

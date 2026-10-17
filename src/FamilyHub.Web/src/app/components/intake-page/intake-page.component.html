@@ -21,7 +21,7 @@
 </div>
 
 @if (isWide()) {
-  <app-side-panel [open]="intake.form() !== null" [title]="formTitle()" width="min(600px, 100vw)" (closed)="requestCloseForm()">
+  <app-side-panel [page]="true" backLabel="Приём лекарств" [open]="intake.form() !== null" [title]="formTitle()" (closed)="requestCloseForm()">
     @if (intake.form(); as request) {
       <div appTrackDirty>
         <app-intake-course-form [request]="request" (saved)="onFormSaved()" (cancelled)="requestCloseForm()" />
@@ -29,7 +29,7 @@
     }
   </app-side-panel>
 
-  <app-side-panel [open]="intake.remindersOpen()" title="Напоминания о приёме" width="min(480px, 100vw)" (closed)="intake.remindersOpen.set(false)">
+  <app-side-panel [page]="true" backLabel="Приём лекарств" [open]="intake.remindersOpen()" title="Напоминания о приёме" (closed)="intake.remindersOpen.set(false)">
     @if (intake.remindersOpen()) {
       <app-intake-reminders (closed)="intake.remindersOpen.set(false)" />
     }

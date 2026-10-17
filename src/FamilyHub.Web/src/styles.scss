@@ -1607,6 +1607,11 @@ select.input {
   padding: var(--space-4) var(--space-4) calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
+// Обёртка раздела в .app-content — прозрачна для раскладки (display: contents); пока открыта страница
+// формы/справки (ContentPageService), раздел скрыт, но не уничтожается.
+.app-route { display: contents; }
+.app-route.app-route-hidden { display: none; }
+
 .app-shell-fullscreen .app-content {
   // Полноэкранный экран (чат на мобайле) сам раскладывает высоту — без полей и запаса под таб-бар.
   padding: 0;
@@ -1946,6 +1951,26 @@ select.input {
   background: var(--color-surface);
 
   .btn-primary { flex: 1; }
+}
+
+// Та же форма страницей на десктопе (app-content-page): карточка уже даёт поля — у тела и низа свои убираем.
+app-content-page {
+  .side-sheet-body { padding: 0; overflow: visible; }
+
+  // Липкий низ форм (дневник, курс, отчёт) рассчитан на прокрутку внутри панели — на странице он
+  // прилипает к низу окна: без отрицательного смещения и с запасом снизу, чтобы кнопки были видны целиком.
+  .cp-body .dn-footer,
+  .cp-body .cf-foot,
+  .cp-body .dr-footer {
+    bottom: 0;
+    padding-bottom: var(--space-4);
+  }
+  .side-sheet-foot {
+    padding: var(--space-5) 0 0;
+    background: none;
+
+    .btn-primary { flex: 0 1 auto; min-width: 240px; }
+  }
 }
 
 @media (max-width: 639px) {

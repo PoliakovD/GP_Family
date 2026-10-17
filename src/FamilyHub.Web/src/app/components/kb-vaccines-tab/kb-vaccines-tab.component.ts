@@ -1,4 +1,4 @@
-import { NotebookPen } from 'lucide';
+import { NotebookPen, Syringe } from 'lucide';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { Component, OnDestroy, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
@@ -26,6 +26,8 @@ import { GROUP_LABEL } from '../../shared/util/vaccination-labels';
   styleUrl: './kb-vaccines-tab.component.scss',
 })
 export class KbVaccinesTabComponent implements OnInit, OnDestroy {
+  protected readonly icons = { Syringe };
+
   protected readonly noteIcon = NotebookPen;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

@@ -74,7 +74,7 @@
 </div>
 
 @if (isWide()) {
-  <app-side-panel [open]="formOpen()" title="Сформировать отчёт для врача" width="min(600px, 100vw)" (closed)="closeForm()">
+  <app-side-panel [page]="true" backLabel="Отчёты для врача" [open]="formOpen()" title="Сформировать отчёт для врача" (closed)="closeForm()">
     @if (formOpen()) {
       <app-doctor-report-form [fromDiary]="formFromDiary()" (created)="onCreated($event)" (cancelled)="closeForm()" />
     }

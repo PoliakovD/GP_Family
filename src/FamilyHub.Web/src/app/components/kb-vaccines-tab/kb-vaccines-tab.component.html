@@ -20,7 +20,7 @@
 }
 
 @if (isWide()) {
-  <app-side-panel [open]="selected() !== null" [title]="selected()?.name ?? ''" width="min(480px, 100vw)" (closed)="close()">
+  <app-side-panel [page]="true" kicker="Справочник FamilyHub" backLabel="Справочник" [icon]="icons.Syringe" [open]="selected() !== null" [title]="selected()?.name ?? ''" (closed)="close()">
     @if (selected(); as s) {
       <ng-container *ngTemplateOutlet="detail; context: { s: s }" />
     }

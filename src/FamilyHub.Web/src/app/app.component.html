@@ -94,7 +94,7 @@
             <app-search />
           }
           <app-background-jobs-dropdown />
-          @if (pageAction.secondaryAction(); as secondary) {
+          @if (contentPages.current() === null && pageAction.secondaryAction(); as secondary) {
             <button type="button" class="btn btn-secondary text-nowrap" (click)="secondary.handler()">
               @if (secondary.icon) {
                 <app-icon [icon]="secondary.icon" [size]="18" />
@@ -102,7 +102,7 @@
               {{ secondary.label }}
             </button>
           }
-          @if (pageAction.action(); as action) {
+          @if (contentPages.current() === null && pageAction.action(); as action) {
             <button type="button" class="btn btn-primary text-nowrap" (click)="action.handler()">
               @if (action.icon) {
                 <app-icon [icon]="action.icon" [size]="18" />
@@ -187,7 +187,12 @@
         </div>
       }
 
-      <router-outlet></router-outlet>
+      <!-- Форма или статья справочника, открытая на десктопе (ContentPageService), занимает колонку
+           контента; раздел под ней только прячется — состояние и прокрутка сохраняются. -->
+      <app-content-page-host />
+      <div class="app-route" [class.app-route-hidden]="contentPages.current() !== null">
+        <router-outlet></router-outlet>
+      </div>
     </main>
   </div>
 
