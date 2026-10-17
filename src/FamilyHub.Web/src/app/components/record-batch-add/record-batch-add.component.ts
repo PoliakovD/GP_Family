@@ -15,6 +15,7 @@ import { Check, CircleMinus, FileText, LoaderCircle, TriangleAlert, Upload, X } 
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { PageActionService } from '../../services/page-action.service';
+import { ContentPageComponent } from '../../shared/ui/content-page/content-page.component';
 
 type BatchItemStatus = 'pending' | 'creating' | 'uploading' | 'queued' | 'failed' | 'skipped';
 
@@ -47,7 +48,7 @@ let nextInstanceId = 0;
  */
 @Component({
     selector: 'app-record-batch-add',
-    imports: [NgTemplateOutlet, AvatarComponent, FileViewerComponent, IconComponent],
+    imports: [NgTemplateOutlet, AvatarComponent, FileViewerComponent, IconComponent, ContentPageComponent],
     templateUrl: './record-batch-add.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-batch-add.component.scss'

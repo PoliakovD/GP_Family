@@ -207,7 +207,7 @@
     }
   </ng-template>
   @if (kbOpen && isWide) {
-    <app-indicator-info-panel [title]="kbTitle" [icon]="icons.Pill" tone="medication" (closed)="closeKb()">
+    <app-indicator-info-panel [title]="kbTitle" [icon]="icons.Pill" tone="medication" backLabel="Аптечка" (closed)="closeKb()">
       <ng-container *ngTemplateOutlet="kbBody" />
     </app-indicator-info-panel>
   } @else {

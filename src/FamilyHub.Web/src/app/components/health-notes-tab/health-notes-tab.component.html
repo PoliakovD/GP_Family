@@ -135,7 +135,7 @@
 </div>
 
 @if (isWide()) {
-  <app-side-panel [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'"
+  <app-side-panel [page]="true" backLabel="Дневник" [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'"
                   width="min(560px, 100vw)" (closed)="requestCloseForm()">
     @if (formOpen()) {
       <div appTrackDirty>

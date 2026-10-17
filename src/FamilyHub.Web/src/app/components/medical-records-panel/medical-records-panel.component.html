@@ -310,7 +310,7 @@
        narrow теперь есть отдельный полноэкранный блок прямо в @if (recordId()) выше — второй
        рендер тут был бы дублирующим нижним листом поверх уже полноэкранного показателя. -->
   @if (indicatorInfo.open && isWide) {
-    <app-indicator-info-panel [title]="indicatorInfo.displayName || 'Показатель'" [icon]="icons.FlaskConical" (closed)="indicatorInfo.close()">
+    <app-indicator-info-panel [title]="indicatorInfo.displayName || 'Показатель'" [icon]="icons.FlaskConical" backLabel="К анализу" (closed)="indicatorInfo.close()">
       <ng-container *ngTemplateOutlet="indicatorInfoBody" />
     </app-indicator-info-panel>
   }

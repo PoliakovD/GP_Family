@@ -9,6 +9,10 @@
     </button>
   </div>
 
+  <ng-container *ngTemplateOutlet="formMain" />
+</ng-template>
+
+<ng-template #formMain>
   <div class="side-sheet-body">
     @if (!running() && !done()) {
       <p class="form-hint">
@@ -136,12 +140,12 @@
   </div>
 </ng-template>
 
+<!-- Десктоп: страница в колонке контента («‹ Назад к разделу» → заголовок → форма), как открытая
+     запись; телефон — на весь экран со своей шапкой. -->
 @if (isWide) {
-  <div class="overlay-backdrop side-sheet-backdrop" (click)="!running() && cancel()">
-    <aside class="side-sheet" (click)="$event.stopPropagation()">
-      <ng-container *ngTemplateOutlet="formContent" />
-    </aside>
-  </div>
+  <app-content-page kicker="Несколько документов" [title]="'Загрузить несколько документов'" [backLabel]="labels.title" (back)="!running() && cancel()">
+    <ng-container *ngTemplateOutlet="formMain" />
+  </app-content-page>
 } @else {
   <div class="side-sheet-fullscreen">
     <ng-container *ngTemplateOutlet="formContent" />

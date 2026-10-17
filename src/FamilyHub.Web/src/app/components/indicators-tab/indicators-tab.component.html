@@ -57,11 +57,8 @@
     </div>
   }
 
-  <app-bottom-sheet
-    [title]="selected ? selected.displayName + ' (' + specimenLabel(selected) + ') — ' + selected.patientName : 'Показатель'"
-    [open]="detailOpen"
-    (closed)="closeDetail()"
-  >
+  <!-- История показателя: десктоп — страница в колонке контента, телефон — нижний лист. -->
+  <ng-template #detailBody>
     @if (detailLoading) {
       <app-loading-spinner />
     } @else if (detailError) {
@@ -87,5 +84,19 @@
         </tbody>
       </table>
     }
-  </app-bottom-sheet>
+  </ng-template>
+  @if (isWide) {
+    <app-side-panel [page]="true" [open]="detailOpen" kicker="Динамика показателя" backLabel="Показатели" [icon]="icons.FlaskConical"
+                    [title]="selected ? selected.displayName + ' — ' + selected.patientName : 'Показатель'" (closed)="closeDetail()">
+      <ng-container *ngTemplateOutlet="detailBody" />
+    </app-side-panel>
+  } @else {
+    <app-bottom-sheet
+      [title]="selected ? selected.displayName + ' (' + specimenLabel(selected) + ') — ' + selected.patientName : 'Показатель'"
+      [open]="detailOpen"
+      (closed)="closeDetail()"
+    >
+      <ng-container *ngTemplateOutlet="detailBody" />
+    </app-bottom-sheet>
+  }
 </div>

@@ -20,6 +20,7 @@ import { FileText, Upload, X } from 'lucide';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { PageActionService } from '../../services/page-action.service';
+import { ContentPageComponent } from '../../shared/ui/content-page/content-page.component';
 
 /** Файл, ожидающий загрузки — ещё не отправленный (запись создастся только по «Сохранить»).
  * previewUrl — только для картинок (см. medications-panel.photos). */
@@ -47,7 +48,7 @@ let nextInstanceId = 0;
  */
 @Component({
     selector: 'app-record-add',
-    imports: [FormsModule, NgTemplateOutlet, AvatarComponent, ExpandableComponent, FileViewerComponent, IconComponent],
+    imports: [FormsModule, NgTemplateOutlet, AvatarComponent, ExpandableComponent, FileViewerComponent, IconComponent, ContentPageComponent],
     templateUrl: './record-add.component.html',
     changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-add.component.scss'

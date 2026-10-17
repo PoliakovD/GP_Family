@@ -91,6 +91,18 @@ export const SCREENS = [
       await page.getByRole('button', { name: 'Справка о препарате' }).nth(1).click();
     }
   } },
+  // Формы и справки страницей в колонке контента (десктоп).
+  { name: 'report-form', path: '/health/reports', prepare: async (page, vp) => {
+    if (vp === 'mobile') await page.getByRole('button', { name: 'Сформировать отчёт' }).last().click();
+    else await page.locator('.dr-create').click();
+    await page.waitForTimeout(400);
+  } },
+  { name: 'indicators-open', path: '/health/indicators', prepare: async (page) => {
+    await page.locator('.ix-row').first().click(); await page.waitForTimeout(400);
+  } },
+  { name: 'kb-vaccine-open', path: '/health/kb/vaccines', prepare: async (page) => {
+    await page.locator('.kv-card').first().click(); await page.waitForTimeout(400);
+  } },
   // Уведомления, поиск, фоновые задачи (4.8.2).
   { name: 'notifications', path: '/notifications' },
   { name: 'search', path: '/home', only: 'desktop', prepare: async (page) => {
