@@ -42,6 +42,8 @@
                             <div class="msg-author">{{ authorName(row.message.author) }}</div>
                         }
 
+                        <!-- Сообщение только с карточкой записи — без пустого пузыря над ней. -->
+                        @if (row.message.deleted || row.message.text || row.message.attachments.length > 0 || row.message.replyTo) {
                         <div class="bubble" [class.deleted]="row.message.deleted">
                             @if (row.message.deleted) {
                                 <span class="form-hint"><app-icon [icon]="icons.Ban" [size]="18" /> Сообщение удалено</span>
@@ -88,6 +90,7 @@
                             }
 
                         </div>
+                        }
                         <!-- Карточка записи — вложенная карточка под пузырём (DESIGN §3 «Карточка записи в чате»). -->
                         @if (!row.message.deleted) {
                             @for (link of row.message.links; track link.kind + link.entityId) {

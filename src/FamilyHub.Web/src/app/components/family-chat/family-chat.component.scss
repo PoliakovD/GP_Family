@@ -121,6 +121,8 @@
   border-radius: 18px 18px 18px 6px;
   padding: 10px var(--space-4);
   min-width: 48px;
+  // Не шире колонки сообщения: длинное имя файла обрезается многоточием, а не раздвигает ленту и страницу.
+  max-width: 100%;
   font: var(--text-body);
 
   .mine & {
@@ -184,6 +186,8 @@
   flex-wrap: wrap;
   gap: var(--space-1);
   margin-bottom: var(--space-1);
+
+  &:last-child { margin-bottom: 0; }
 }
 
 .msg-image {
@@ -244,6 +248,10 @@
       color: var(--color-text-muted);
     }
   }
+}
+
+.msg-file {
+  min-width: 0;
 }
 
 .msg-file-name,

@@ -324,6 +324,14 @@ const chatMsg = (id, author, text, createdAt, extra = {}) => ({
 // Новые — первыми (как отдаёт API, компонент разворачивает).
 const CHAT_PAGE = {
   items: [
+    // Только вложение с длинным именем и только карточка записи — без текста (раньше раздвигали ленту).
+    chatMsg('m5', DANIIL_AUTHOR, '', '2026-10-14T06:40:00Z', {
+      attachments: [{ id: 'a-long', fileName: 'Учетная политика 2026 года для налогового учета (редакция от 01.10).pdf',
+        contentType: 'application/pdf', sizeBytes: 964608, previewStatus: 0 }],
+    }),
+    chatMsg('m4', DANIIL_AUTHOR, '', '2026-10-14T06:39:00Z', {
+      links: [{ kind: 0, entityId: 'r-blood', accessible: true, title: 'Развернутый анализ крови', subtitle: 'Анализ · 03.10.2026', routeKind: 0 }],
+    }),
     chatMsg('m3', VALERIA_AUTHOR, 'Покажи врачу лейкоциты, они заметно упали.', '2026-10-14T06:31:00Z'),
     chatMsg('m2', DANIIL_AUTHOR, 'Ещё нет, на этой неделе запишусь. Скинул свежий анализ:', '2026-10-14T06:20:00Z', {
       links: [{ kind: 0, entityId: 'r-blood', accessible: true, title: 'Развернутый анализ крови', subtitle: '3 октября · 6 вне нормы', routeKind: 0 }],
