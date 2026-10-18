@@ -42,8 +42,8 @@ test('анализ из формы: файл без распознавания �
   await expect(page.getByText('Плановый осмотр')).toBeVisible();
   await expect(page.getByRole('main')).toContainText('Сидорова А.П.');
   await expect(page.getByRole('main')).toContainText('20 мая 2026');
-  // Файл бланка — за кнопкой «Файлы (1)» в шапке записи.
-  await page.getByRole('button', { name: 'Файлы' }).click();
+  // Файл бланка — за кнопкой «Бланк» в шапке записи (у приёма врача — «Файлы»).
+  await page.getByRole('main').getByRole('button', { name: 'Бланк', exact: true }).click();
   await expect(page.getByText('blank.pdf').first()).toBeVisible();
 
   // Распознавание выключено — фоновых задач нет.

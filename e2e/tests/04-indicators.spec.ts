@@ -18,9 +18,10 @@ test('показатель: добавление вручную → плитка
   await expect(page.locator('.record-status-tile-bad')).toContainText('1');
   await expect(page.locator('.record-status-tile-bad')).toContainText('вне нормы');
 
-  // Клик по показателю открывает справку: значение в рамке, название — ровно один раз (в шапке панели).
+  // Клик по показателю открывает справку страницей в колонке контента: значение в рамке, название —
+  // ровно один раз (в заголовке страницы).
   await page.getByText('Гемоглобин').first().click();
-  const panel = page.locator('.indicator-info-panel');
+  const panel = page.locator('app-content-page');
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Справочник FamilyHub');
   await expect(panel.locator('.kb-value')).toHaveText('90');
