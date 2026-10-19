@@ -1,6 +1,6 @@
 import { isDevMode } from '@angular/core';
 import { Routes } from '@angular/router';
-import { authGuard, consentGuard, profileGuard, guestGuard } from './services/auth.guards';
+import { authGuard, consentGuard, profileGuard, guestGuard, landingGuard } from './services/auth.guards';
 import { adminGuard } from './services/admin.guards';
 import { pendingCodeGuard } from './services/pending-code.guard';
 
@@ -152,7 +152,15 @@ export const routes: Routes = [
   },
 
   // Данные: требуют входа (PWA) и принятого согласия ПДн (задачи 2.3/2.4).
-  { path: '', redirectTo: 'home', pathMatch: 'full' },
+  {
+    // Лендинг для гостя; вошедшего landingGuard сразу уводит на Главную.
+    path: '',
+    pathMatch: 'full',
+    title: 'FamilyHub — здоровье всей семьи в одном месте',
+    canActivate: [landingGuard],
+    loadComponent: () =>
+      import('./components/landing/landing.component').then((m) => m.LandingComponent),
+  },
   {
     // Главная (редизайн навигации): глобальный поиск + вход в «Семьи» + виджет дней рождения.
     path: 'home',
