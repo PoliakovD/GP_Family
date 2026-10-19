@@ -138,23 +138,10 @@
             <a class="home-card-link" [routerLink]="birthdaysHref()" [queryParams]="{ tab: 'birthdays' }">Все</a>
           </div>
           @for (b of summary.birthdays; track b.personName + b.date; let first = $first) {
-            <div class="home-bd-row">
-              <!-- Ближайший — акцентная плитка (макет home-desktop), остальные — нейтральные. -->
-              <span class="home-bd-date" [class.home-bd-soon]="first">
-                <span class="home-bd-day">{{ dayOfMonth(b.date) }}</span>
-                <span class="home-bd-month">{{ monthShort(b.date) }}</span>
-              </span>
-              <span class="home-bd-text">
-                <span class="home-bd-name">{{ b.personName }}</span>
-                <span class="home-bd-sub">
-                  @if (b.daysUntil === 0) {
-                    Сегодня · {{ ageLabel(b.turningAge) }}
-                  } @else {
-                    Исполнится {{ b.turningAge }}
-                  }
-                </span>
-              </span>
-            </div>
+            <!-- Ближайший — акцентная плитка (макет home-desktop), остальные — нейтральные. -->
+            <app-birthday-row class="home-bd-row" [soon]="first" [day]="dayOfMonth(b.date)" [month]="monthShort(b.date)"
+                              [name]="b.personName"
+                              [subtitle]="b.daysUntil === 0 ? 'Сегодня · ' + ageLabel(b.turningAge) : 'Исполнится ' + b.turningAge" />
           }
         </section>
       }

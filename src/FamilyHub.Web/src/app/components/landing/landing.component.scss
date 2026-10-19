@@ -105,16 +105,17 @@
 // Превью: карточка «Требует внимания» + плашка дня рождения поверх угла.
 .ld-preview {
   position: relative;
-  padding-bottom: var(--space-6);
+  // Карточка дня рождения заходит на «Требует внимания» снизу лишь краем.
+  padding-bottom: calc(var(--space-12) + var(--space-8));
 }
 
 .ld-preview-card {
-  // Снизу запас под плашку дня рождения — она не закрывает последнюю строку.
-  padding: var(--space-5) 0 var(--space-10);
+  // Снизу запас под карточку дня рождения — она не закрывает последнюю строку.
+  padding: var(--space-5) 0 var(--space-12);
   gap: var(--space-2);
   box-shadow: var(--shadow-overlay);
 
-  @media (max-width: 639px) { padding: var(--space-4) 0 var(--space-10); }
+  @media (max-width: 639px) { padding: var(--space-4) 0 var(--space-12); }
 }
 
 .ld-preview-head {
@@ -134,14 +135,15 @@
   position: absolute;
   left: calc(-1 * var(--space-6));
   bottom: 0;
-  flex-direction: row;
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  font: var(--text-body-sm);
+  gap: var(--space-3);
+  min-width: 260px;
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-overlay);
 
   @media (max-width: 1023px) { left: auto; right: var(--space-4); }
 }
+
+.ld-preview-float-title { font: var(--text-title); }
 
 // --- Секции ---
 .ld-section {
@@ -278,3 +280,5 @@
   align-items: center;
   min-height: var(--tap-min);
 }
+
+.ld-demo { display: block; }

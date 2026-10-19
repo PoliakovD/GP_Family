@@ -1,0 +1,35 @@
+<section class="ldd" [attr.aria-labelledby]="headingId">
+  <header class="ldd-head">
+    <p class="ldd-kicker">{{ kicker() }}</p>
+    <h2 class="ldd-title" [id]="headingId">{{ heading() }}</h2>
+    @if (lead()) { <p class="ldd-lead">{{ lead() }}</p> }
+  </header>
+
+  <div class="ldd-body">
+    <ol class="ldd-steps">
+      @for (s of steps(); track s.title; let i = $index) {
+        <li class="ldd-step" #stepEl [attr.data-step]="i" [class.active]="i === step()">
+          <button type="button" class="ldd-step-btn" [attr.aria-pressed]="i === step()" (click)="select(i)">
+            <span class="ldd-step-num" aria-hidden="true">{{ i + 1 }}</span>
+            <span class="ldd-step-title">{{ s.title }}</span>
+          </button>
+          <p class="ldd-step-text">{{ s.text }}</p>
+        </li>
+      }
+    </ol>
+
+    <div class="ldd-stage">
+      <!-- Макет экрана — иллюстрация к шагам (тексты слева), поэтому скрыт от скринридера и не фокусируется. -->
+      <div class="ldd-phone" #frame aria-hidden="true" inert>
+        <div class="ldd-screen" [class.done]="done()" [attr.data-step]="step()">
+          <ng-container *ngTemplateOutlet="mock(); context: { $implicit: step(), done: done() }" />
+        </div>
+        @if (cursor(); as c) {
+          <span class="ldd-cursor" [class.ldd-cursor-hidden]="!cursorVisible()" [style.transform]="'translate(' + c.x + 'px, ' + c.y + 'px)'">
+            @if (press() > 0) { @for (p of [press()]; track p) { <span class="ldd-ripple"></span> } }
+          </span>
+        }
+      </div>
+    </div>
+  </div>
+</section>

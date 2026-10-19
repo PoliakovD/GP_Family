@@ -40,15 +40,35 @@
             <app-task-row [icon]="icons.CalendarClock" tone="danger" title="Нурофен: срок годности истёк" subtitle="Домашняя аптечка" />
           </div>
         </div>
+        <!-- Как блок «Дни рождения» на Главной: та же строка с плиткой даты. -->
         <div class="card ld-preview-float">
-          <app-icon-tile [icon]="icons.Cake" tone="warm" size="sm" />
-          <span><strong>Бабушке 70</strong> · через 5 дней</span>
+          <span class="ld-preview-float-title">Дни рождения</span>
+          <app-birthday-row [soon]="true" day="24" month="окт" name="Бабушка Валя" subtitle="Исполнится 70" />
         </div>
       </div>
     </section>
 
+    <!-- Три главные фичи — демо по прокрутке (app-landing-demo); макеты экранов — app-landing-mock. -->
+    <app-landing-demo class="ld-demo" kicker="Расшифровка анализов" heading="Сфотографировали бланк — ИИ разобрал его за вас"
+                      lead="Показатели, нормы и короткое резюме для врача — без ручного ввода."
+                      [steps]="aiSteps">
+      <ng-template #mock let-s let-d="done"><app-landing-mock kind="ai" [step]="s" [done]="d" /></ng-template>
+    </app-landing-demo>
+
+    <app-landing-demo class="ld-demo" [reverse]="true" kicker="Страница «Здоровье»" heading="Вся медкарта семьи — на одном экране"
+                      lead="Лекарства по расписанию, дневник, анализы, приёмы врача и прививки — для себя, детей и родителей."
+                      [steps]="healthSteps">
+      <ng-template #mock let-s let-d="done"><app-landing-mock kind="health" [step]="s" [done]="d" /></ng-template>
+    </app-landing-demo>
+
+    <app-landing-demo class="ld-demo" kicker="Отчёт для врача" heading="Всё важное для врача — в одном PDF"
+                      lead="Анализы вне нормы, динамика, лекарства и дневник за нужный период. Врач откроет по ссылке без регистрации."
+                      [steps]="reportSteps">
+      <ng-template #mock let-s let-d="done"><app-landing-mock kind="report" [step]="s" [done]="d" /></ng-template>
+    </app-landing-demo>
+
     <section class="ld-section" aria-labelledby="ld-features-title">
-      <h2 class="ld-h2" id="ld-features-title">Всё, что обычно теряется в папках и чатах</h2>
+      <h2 class="ld-h2" id="ld-features-title">А ещё</h2>
       <ul class="ld-features">
         @for (f of features; track f.title) {
           <li class="card ld-feature">
