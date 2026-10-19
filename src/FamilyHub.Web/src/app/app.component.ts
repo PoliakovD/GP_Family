@@ -37,8 +37,10 @@ import { ContentPageHostComponent } from './shared/ui/content-page/content-page-
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
  * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения.
+ * /profile-setup, /telegram-expired — анкета профиля и устаревшая сессия Mini App: карточка без оболочки
+ *   (DESIGN §4), иначе таб-бар закрывал кнопку «Сохранить» анкеты.
  * /dev/ui — витрина компонентов редизайна (только dev-сборка). */
-const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin', '/r/', '/dev/ui'];
+const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/telegram-expired', '/profile-setup', '/admin', '/r/', '/dev/ui'];
 
 /** Один пункт саб-меню (дочерний путь + подпись + опциональный бейдж) — общая форма для группы
  * «Здоровье» и плоского списка «Профиль». */

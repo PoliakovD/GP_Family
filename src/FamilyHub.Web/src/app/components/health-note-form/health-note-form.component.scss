@@ -115,6 +115,9 @@
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: var(--space-1);
+
+  // На узком экране 10 в ряд — по 32px; две строки по 5 дают кнопки ≥ 44px.
+  @media (max-width: 479px) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 .dn-scale-btn {

@@ -544,7 +544,7 @@ select.input {
   background: transparent;
   border: 0;
 
-  @media (pointer: coarse) { min-height: 40px; }
+  @media (pointer: coarse) { min-height: var(--tap-min); min-width: var(--tap-min); } // тап-зона 44 (DESIGN §1 п.5)
 
   @media (hover: hover) {
     &:not(.active):not([aria-pressed="true"]):not([aria-selected="true"]):not(:has(input:checked)):hover {

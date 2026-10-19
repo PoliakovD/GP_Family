@@ -13,10 +13,11 @@
 // не совпадает со скачанными браузерами (в облачном окружении — /opt/pw-browsers/chromium).
 import { chromium } from '@playwright/test';
 import { createServer } from 'node:http';
-import { readFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi, SCREENS } from './fixtures.mjs';
+import { auditPage } from './audit.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const spaDir = path.resolve(process.env.SPA_DIR ?? path.join(here, '../../src/FamilyHub.Api/wwwroot'));
@@ -56,6 +57,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 await mkdir(outDir, { recursive: true });
 const unmatched = new Set();
+// AUDIT=1 — автопроверки правил UI (visual/audit.mjs) на каждом экране, итог в <label>/audit.json.
+const audit = process.env.AUDIT ? {} : null;
 
 for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
   for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
@@ -124,6 +127,10 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(400);
     const file = path.join(outDir, `${screen.name}-${vpName}.png`);
+    if (audit) {
+      const issues = await auditPage(page);
+      if (issues.length) audit[`${screen.name}-${vpName}`] = issues;
+    }
     await page.screenshot({ path: file, fullPage: true });
     console.log(path.relative(process.cwd(), file));
     await context.close();
@@ -132,6 +139,12 @@ for (const screen of SCREENS.filter((s) => s.name.includes(filter))) {
 
 await browser.close();
 server.close();
+if (audit) {
+  await writeFile(path.join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
+  const byRule = {};
+  for (const issues of Object.values(audit)) for (const i of issues) byRule[i.rule] = (byRule[i.rule] ?? 0) + 1;
+  console.log(`\nАудит: ${Object.keys(audit).length} экранов с замечаниями`, byRule);
+}
 if (unmatched.size) {
   console.warn('\nЗапросы без фикстуры (ответ 404):');
   for (const u of [...unmatched].sort()) console.warn('  ' + u);

@@ -62,8 +62,8 @@
               <tr [class.text-muted]="!d.isEnabled">
                 <td>{{ d.domain }}</td>
                 <td>
-                  <button type="button" class="btn-link" [attr.aria-label]="'Поднять ' + d.domain + ' выше'" [disabled]="i === 0 || domainsBusy()" (click)="moveDomain(i, -1)">↑</button>
-                  <button type="button" class="btn-link" [attr.aria-label]="'Опустить ' + d.domain + ' ниже'" [disabled]="i === domains().length - 1 || domainsBusy()" (click)="moveDomain(i, 1)">↓</button>
+                  <button type="button" class="btn-icon" [attr.aria-label]="'Поднять ' + d.domain + ' выше'" [disabled]="i === 0 || domainsBusy()" (click)="moveDomain(i, -1)">↑</button>
+                  <button type="button" class="btn-icon" [attr.aria-label]="'Опустить ' + d.domain + ' ниже'" [disabled]="i === domains().length - 1 || domainsBusy()" (click)="moveDomain(i, 1)">↓</button>
                 </td>
                 <td>
                   <label class="switch">

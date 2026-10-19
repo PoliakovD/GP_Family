@@ -14,6 +14,9 @@
 .dr-hint-warn { color: var(--color-danger); }
 
 .dr-dates { display: flex; align-items: center; gap: var(--space-3); }
+// Поля дат делят ширину поровну: у date-input большая собственная ширина, без min-width: 0 второе
+// поле вылезало за карточку на 390px.
+.dr-dates .input { flex: 1; min-width: 0; }
 .dr-dash { color: var(--color-text-muted); }
 
 .dr-group-title { margin-top: var(--space-1); font: var(--text-caption); font-weight: 600; color: var(--color-text-secondary); }

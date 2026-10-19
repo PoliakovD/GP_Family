@@ -87,7 +87,8 @@
           @for (row of nationalRows(); track rowKey(row)) {
             <div class="va-cal-row">
               <button type="button" class="va-cal-check" [class.checked]="row.alreadyDone || choiceOf(row) === 'done'"
-                      [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')">
+                      [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')"
+                      [attr.aria-pressed]="row.alreadyDone || choiceOf(row) === 'done'" [attr.aria-label]="'Сделана: ' + row.seriesName + ' · ' + row.label">
                 @if (row.alreadyDone || choiceOf(row) === 'done') { <app-icon [icon]="icons.Check" [size]="18" /> }
               </button>
               <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
@@ -112,7 +113,8 @@
           @for (row of adultRows(); track rowKey(row)) {
             <div class="va-cal-row">
               <button type="button" class="va-cal-check" [class.checked]="row.alreadyDone || choiceOf(row) === 'done'"
-                      [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')">
+                      [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')"
+                      [attr.aria-pressed]="row.alreadyDone || choiceOf(row) === 'done'" [attr.aria-label]="'Сделана: ' + row.seriesName + ' · ' + row.label">
                 @if (row.alreadyDone || choiceOf(row) === 'done') { <app-icon [icon]="icons.Check" [size]="18" /> }
               </button>
               <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>

@@ -20,6 +20,14 @@ node visual/compare.mjs .artifacts/shots/before .artifacts/shots/after .artifact
 node visual/compare.mjs ../docs/redesign/screens/png .artifacts/shots/after .artifacts/shots/vs-mockup макет после
 ```
 
+Автопроверки правил UI из CLAUDE.md (`audit.mjs`) — на каждом экране, итог в `<label>/audit.json`:
+страница шире экрана, текст < 12px, контраст < 4,5:1, иконочная кнопка без имени, тап-зона < 44px
+(только на 390, где экран сенсорный; ссылки внутри строки текста — исключение).
+
+```bash
+AUDIT=1 node visual/shots.mjs audit                      # → «Аудит: N экранов с замечаниями {…}»
+```
+
 Если браузеры Playwright не скачаны под установленную версию, укажите готовый Chromium:
 `CHROMIUM=/opt/pw-browsers/chromium node visual/shots.mjs …` (так в облачном окружении Claude Code).
 
@@ -30,6 +38,7 @@ node visual/compare.mjs ../docs/redesign/screens/png .artifacts/shots/after .art
 | `shots.mjs` | статический сервер + подмена API + снимки экранов из `SCREENS` (full-page) |
 | `fixtures.mjs` | `SCREENS` (имя, маршрут, `only: 'desktop' \| 'mobile'`) и ответы API |
 | `fixtures-admin.mjs` | экраны и ответы API админки (`admin-*`), подключены в `fixtures.mjs` |
+| `audit.mjs` | автопроверки правил UI на открытом экране (`AUDIT=1`) |
 | `compare.mjs` | склейки «A \| B» одноимённых PNG из двух папок |
 
 ## Новый экран

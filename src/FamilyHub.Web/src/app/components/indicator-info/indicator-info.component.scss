@@ -122,6 +122,8 @@
   display: inline-flex;
   align-items: center;
   min-height: 36px;
+
+  @media (pointer: coarse) { min-height: var(--tap-min); }
   padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);

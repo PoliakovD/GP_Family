@@ -94,6 +94,12 @@
 }
 
 .home-card-link {
+  // Тап-зона 44 при коротком тексте («Все»).
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
   font: var(--text-body-sm);
   font-weight: 600;
   color: var(--color-accent);

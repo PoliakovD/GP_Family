@@ -6,6 +6,7 @@
   background: transparent;
   padding: 0;
   min-height: var(--tap-min); // главный путь «назад» на мобиле
+  min-width: var(--tap-min);  // и при коротком тексте («‹ Я»)
   cursor: pointer;
   font: var(--text-button);
   color: var(--color-accent);
