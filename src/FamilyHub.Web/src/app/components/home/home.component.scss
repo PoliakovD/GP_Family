@@ -125,30 +125,6 @@
 
 // Дни рождения: плитка даты (ближайший — акцентная) → имя + «Исполнится N».
 .home-bd-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-
   // На мобайле — только ближайший (макет home-mobile).
   @media (max-width: 1023px) { &:not(:nth-child(2)) { display: none; } }
 }
-
-.home-bd-date {
-  display: inline-flex;
-  flex: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-sunken);
-  color: var(--color-text);
-}
-
-.home-bd-soon { background: var(--color-accent-soft); color: var(--color-accent-hover); }
-.home-bd-day { font: var(--text-title); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-.home-bd-month { font: var(--text-micro); }
-.home-bd-text { display: flex; flex-direction: column; min-width: 0; }
-.home-bd-name { font: var(--text-body); font-weight: 600; }
-.home-bd-sub { font: var(--text-caption); color: var(--color-text-muted); }

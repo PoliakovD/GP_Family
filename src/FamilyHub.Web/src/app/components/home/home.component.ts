@@ -16,6 +16,7 @@ import { windowToText } from '../../shared/util/vaccination-labels';
 import { formatPersonName } from '../../shared/util/person-name';
 import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { MetricCardComponent } from '../../shared/ui/metric-card/metric-card.component';
+import { BirthdayRowComponent } from '../../shared/ui/birthday-row/birthday-row.component';
 import { TaskRowComponent } from '../../shared/ui/task-row/task-row.component';
 import { PersonRowComponent } from '../../shared/ui/person-row/person-row.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
@@ -75,7 +76,7 @@ interface HomeTask {
     selector: 'app-home',
     imports: [
       RouterLink, LoadingSpinnerComponent, InviteModalComponent, IconComponent, MetricCardComponent, TaskRowComponent,
-      PersonRowComponent, EmptyStateComponent,
+      PersonRowComponent, EmptyStateComponent, BirthdayRowComponent,
     ],
     templateUrl: './home.component.html',
     styleUrl: './home.component.scss'
