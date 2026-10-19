@@ -283,6 +283,10 @@ public class ChatApiTests(FamilyHubWebFactory factory) : IntegrationTestBase(fac
             if (e.FamilyId == familyId) received.TrySetResult(e);
         });
         await connection.StartAsync();
+        // StartAsync возвращается после рукопожатия, а подписка на группы семей — в OnConnectedAsync сервера,
+        // уже после него (с запросом в БД). Вызовы хаба сервер обрабатывает только после OnConnectedAsync,
+        // поэтому холостой StopViewing — барьер: дальше соединение точно в группе, событие не потеряется.
+        await connection.InvokeAsync(nameof(ChatHub.StopViewing));
 
         var sent = await SendAsync(member, familyId, Form("realtime"));
 

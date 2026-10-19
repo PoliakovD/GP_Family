@@ -3,7 +3,9 @@ using FamilyHub.Domain.Entities;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.TestUtils;
 using FluentAssertions;
+using Hangfire;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Xunit;
 
 namespace FamilyHub.UnitTests.Features.Admin;
@@ -17,6 +19,14 @@ public class AdminBatchStatusServiceTests : SqliteTestBase
             Id = Guid.NewGuid(), NormalizedName = name, SpecimenKbId = Guid.NewGuid(), SearchGroupKey = "g:" + name,
             Provider = "brave", LastUpdatedAt = DateTime.UtcNow, CanBeUpdatedAfter = DateTime.UtcNow, SnippetsJson = snippets, Units = units,
         });
+
+    /// <summary>Хранилище Hangfire недоступно — как в юнит-тестах без сервера.</summary>
+    private static JobStorage UnavailableStorage()
+    {
+        var storage = Substitute.For<JobStorage>();
+        storage.GetMonitoringApi().Returns(_ => throw new InvalidOperationException("Hangfire недоступен"));
+        return storage;
+    }
 
     private void AddKb(string name, int version) => Db.GlobalLabAnalytesKb.Add(new GlobalLabAnalyteKb
     {
@@ -34,7 +44,7 @@ public class AdminBatchStatusServiceTests : SqliteTestBase
         AddKb("y", LabAnalyteSummarySchema.CurrentVersion);
         await Db.SaveChangesAsync();
 
-        var status = await new AdminBatchStatusService(Db, NullLogger<AdminBatchStatusService>.Instance).GetAsync();
+        var status = await new AdminBatchStatusService(Db, UnavailableStorage(), NullLogger<AdminBatchStatusService>.Instance).GetAsync();
 
         var units = status.Jobs.Single(j => j.Key == AdminBatchStatusService.CacheUnits);
         units.Remaining.Should().Be(1);
