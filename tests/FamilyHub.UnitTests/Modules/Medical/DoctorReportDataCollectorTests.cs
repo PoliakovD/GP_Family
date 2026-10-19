@@ -24,9 +24,9 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
     {
         _sut = new DoctorReportDataCollector(Db);
         _me = Db.AddUser();
-        _me.LastName = "Поляков";
-        _me.FirstName = "Даниил";
-        _me.MiddleName = "Александрович";
+        _me.LastName = "Иванов";
+        _me.FirstName = "Иван";
+        _me.MiddleName = "Петрович";
         _me.BirthDate = new DateOnly(1998, 5, 4);
         _me.Gender = Gender.Male;
         Db.SaveChanges();
@@ -100,8 +100,8 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
     {
         var model = await _sut.CollectAsync(_me.Id, From, To, All, null);
 
-        model.Patient.FullName.Should().Be("Поляков Даниил Александрович");
-        model.Patient.ShortName.Should().Be("Поляков Д.А.");
+        model.Patient.FullName.Should().Be("Иванов Иван Петрович");
+        model.Patient.ShortName.Should().Be("Иванов И.П.");
         model.Patient.Sex.Should().Be("м");
         model.Patient.BirthDate.Should().Be(new DateOnly(1998, 5, 4));
     }
@@ -376,7 +376,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         Db.FamilyMembers.Add(TestData.NewMember(family.Id, _me.Id, FamilyRole.Admin, MemberStatus.Active));
         Db.SaveChanges();
         var other = Db.AddMember(family.Id);
-        other.LastName = "Полякова";
+        other.LastName = "Иванова";
         other.FirstName = "Анна";
         other.Gender = Gender.Female;
         Db.SaveChanges();
@@ -387,7 +387,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
     {
         var d = new FamilyDependent
         {
-            Id = Guid.NewGuid(), FamilyId = familyId, FirstName = firstName, LastName = isPet ? null : "Поляков",
+            Id = Guid.NewGuid(), FamilyId = familyId, FirstName = firstName, LastName = isPet ? null : "Иванов",
             Gender = Gender.Male, BirthDate = new DateOnly(2020, 1, 2), IsPet = isPet, PetSpecies = species,
             CreatedByUserId = _me.Id, CreatedAt = DateTime.UtcNow,
         };
@@ -430,7 +430,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         var model = await _sut.CollectAsync(subject, From, To, All, null);
         var counts = await _sut.CountAsync(subject, From, To);
 
-        model.Patient.FullName.Should().Be("Поляков Миша");
+        model.Patient.FullName.Should().Be("Иванов Миша");
         model.Patient.IsPet.Should().BeFalse();
         model.Visits.Should().BeEmpty();
         model.Summaries.Should().BeEmpty();
@@ -464,7 +464,7 @@ public class DoctorReportDataCollectorTests : SqliteTestBase
         var noGrant = new ReportSubject(_me.Id, other.Id, null, false, false);
         (await _sut.CountAsync(noGrant, From, To)).Should().Be(new ReportCounts(1, 0, 0, 0));
         var model = await _sut.CollectAsync(noGrant, From, To, All, null);
-        model.Patient.FullName.Should().StartWith("Полякова Анна");
+        model.Patient.FullName.Should().StartWith("Иванова Анна");
         model.FlaggedNotes.Should().BeEmpty();
 
         Db.FamilyMedicalShares.Add(new FamilyMedicalShare { Id = Guid.NewGuid(), OwnerUserId = other.Id, FamilyId = family.Id, SharedAt = DateTime.UtcNow });

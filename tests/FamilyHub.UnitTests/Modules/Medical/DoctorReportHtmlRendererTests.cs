@@ -16,7 +16,7 @@ public class DoctorReportHtmlRendererTests
         IReadOnlyList<ReportMedication>? meds = null, IReadOnlyList<ReportVisit>? visits = null,
         IReadOnlyList<ReportMetric>? metrics = null, IReadOnlyList<ReportSymptom>? symptoms = null,
         IReadOnlyList<ReportNote>? notes = null, int skipped = 0) =>
-        new(new ReportPatient("Поляков Даниил Александрович", "Поляков Д.А.", "м", new DateOnly(1998, 5, 4)),
+        new(new ReportPatient("Иванов Иван Петрович", "Иванов И.П.", "м", new DateOnly(1998, 5, 4)),
             new DateOnly(2026, 3, 26), new DateOnly(2026, 9, 26), new DateTime(2026, 9, 26, 12, 0, 0, DateTimeKind.Utc),
             blocks ?? All, comment, flagged ?? [], labs, summaries, skipped, meds, visits, metrics, null, null, symptoms, notes, null);
 
@@ -26,7 +26,7 @@ public class DoctorReportHtmlRendererTests
         var html = DoctorReportHtmlRenderer.Render(Model());
 
         html.Should().Contain("Отчёт для врача")
-            .And.Contain("Поляков Даниил Александрович")
+            .And.Contain("Иванов Иван Петрович")
             .And.Contain("26.03.2026 — 26.09.2026")
             .And.Contain("28 лет")
             .And.Contain("04.05.1998")
@@ -172,6 +172,6 @@ public class DoctorReportHtmlRendererTests
     {
         var footer = DoctorReportHtmlRenderer.RenderFooter(Model());
 
-        footer.Should().Contain("class=\"pageNumber\"").And.Contain("class=\"totalPages\"").And.Contain("Поляков Д.А.");
+        footer.Should().Contain("class=\"pageNumber\"").And.Contain("class=\"totalPages\"").And.Contain("Иванов И.П.");
     }
 }

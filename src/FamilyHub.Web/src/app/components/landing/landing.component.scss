@@ -102,20 +102,18 @@
   color: var(--color-text-muted);
 }
 
-// Превью: карточка «Требует внимания» + плашка дня рождения поверх угла.
+// Превью: «Требует внимания» и под ним — «Дни рождения», заходит на него краем (смещена влево).
 .ld-preview {
-  position: relative;
-  // Карточка дня рождения заходит на «Требует внимания» снизу лишь краем.
-  padding-bottom: calc(var(--space-12) + var(--space-8));
+  display: flex;
+  flex-direction: column;
 }
 
 .ld-preview-card {
-  // Снизу запас под карточку дня рождения — она не закрывает последнюю строку.
-  padding: var(--space-5) 0 var(--space-12);
+  padding: var(--space-5) 0 var(--space-8);
   gap: var(--space-2);
   box-shadow: var(--shadow-overlay);
 
-  @media (max-width: 639px) { padding: var(--space-4) 0 var(--space-12); }
+  @media (max-width: 639px) { padding: var(--space-4) 0 var(--space-8); }
 }
 
 .ld-preview-head {
@@ -127,23 +125,42 @@
   @media (max-width: 1023px) { padding: 0 var(--space-4); }
 }
 
-.ld-preview-title {
-  font: var(--text-title);
-}
+.ld-preview-head-bare { padding: 0; }
+.ld-preview-title { font: var(--text-title); }
+.ld-preview-count { font: var(--text-body-sm); color: var(--color-text-muted); }
+.ld-preview-link { font: var(--text-body-sm); font-weight: 600; color: var(--color-accent); }
 
 .ld-preview-float {
-  position: absolute;
-  left: calc(-1 * var(--space-6));
-  bottom: 0;
+  align-self: flex-start;
+  width: 300px;
+  max-width: calc(100% - var(--space-6));
+  margin: calc(-1 * var(--space-6)) 0 0 calc(-1 * var(--space-6));
   gap: var(--space-3);
-  min-width: 260px;
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-overlay);
 
-  @media (max-width: 1023px) { left: auto; right: var(--space-4); }
+  @media (max-width: 1023px) { align-self: flex-end; margin: calc(-1 * var(--space-6)) var(--space-4) 0 0; }
 }
 
 .ld-preview-float-title { font: var(--text-title); }
+
+// Мини-версия отчёта: подпись слева, страница справа.
+.ld-report {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-12);
+  align-items: center;
+
+  @media (max-width: 1023px) { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+}
+
+.ld-report-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-5);
+}
 
 // --- Секции ---
 .ld-section {

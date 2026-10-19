@@ -200,7 +200,7 @@ export class FamilyDetailsComponent implements OnInit, OnDestroy {
         return `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || formatPersonName(m, 'full');
     }
 
-    /** «@valeria · с 13 сентября» / «Вы · админ · с 25 августа» (макет family-chat-desktop). */
+    /** «@maria · с 13 сентября» / «Вы · админ · с 25 августа» (макет family-chat-desktop). */
     memberMeta(m: {id: string; role: number; username: string | null; joinedAt: string}): string {
         const since = `с ${new Date(m.joinedAt).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'})}`;
         if (m.id === this.auth.me()?.userId) {

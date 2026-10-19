@@ -10,12 +10,12 @@ import { ToastService } from '../../shared/toast/toast.service';
 import { HomeComponent } from './home.component';
 
 const record = (id: string, extra: Partial<MedicalRecord>) => ({
-  id, ownerUserId: 'me', kind: 0, personName: 'Поляков Даниил Сергеевич', recordDate: '2026-10-03', title: 'ОАК',
+  id, ownerUserId: 'me', kind: 0, personName: 'Иванов Иван Сергеевич', recordDate: '2026-10-03', title: 'ОАК',
   familyDependentId: null, targetUserId: null, abnormalIndicatorCount: 0, ...extra,
 }) as unknown as MedicalRecord;
 
 const summary = {
-  greetingName: 'Даниил', today: '2026-10-14', attentionTotal: 0, primaryFamilyId: null, primaryFamilyName: null,
+  greetingName: 'Иван', today: '2026-10-14', attentionTotal: 0, primaryFamilyId: null, primaryFamilyName: null,
   medications: [], joinRequests: [], birthdays: [], ok: { medicationsTotal: 3, pushEnabled: true }, unreadNotifications: 0,
 };
 const health = {
@@ -59,9 +59,9 @@ describe('HomeComponent — подписи членов семьи в «Треб
   it('анализ близкого и прививка подопечного — с именем; мои строки — «Вы»; по одному последнему анализу на человека', async () => {
     api['getMedicalRecords'].mockResolvedValue({ items: [
       record('r-me', { abnormalIndicatorCount: 6 }),
-      record('r-val-old', { ownerUserId: 'val', personName: 'Полякова Валерия Сергеевна', recordDate: '2026-09-01', abnormalIndicatorCount: 5 }),
-      record('r-val', { ownerUserId: 'val', personName: 'Полякова Валерия Сергеевна', recordDate: '2026-10-08', abnormalIndicatorCount: 2, title: 'Биохимия' }),
-      record('r-dep', { familyDependentId: 'dep', personName: 'Мама Дани', abnormalIndicatorCount: 0 }),
+      record('r-val-old', { ownerUserId: 'val', personName: 'Иванова Мария Петровна', recordDate: '2026-09-01', abnormalIndicatorCount: 5 }),
+      record('r-val', { ownerUserId: 'val', personName: 'Иванова Мария Петровна', recordDate: '2026-10-08', abnormalIndicatorCount: 2, title: 'Биохимия' }),
+      record('r-dep', { familyDependentId: 'dep', personName: 'Бабушка Нина', abnormalIndicatorCount: 0 }),
     ] });
     api['getVaccinationsOverview'].mockResolvedValue({
       attention: [
@@ -74,7 +74,7 @@ describe('HomeComponent — подписи членов семьи в «Треб
 
     expect(await tasks()).toEqual([
       'Вы · ОАК · 3 октября',
-      'Валерия · Биохимия · 8 октября',
+      'Мария · Биохимия · 8 октября',
       'Вы · Рекомендуется до 30 ноября 2026',
       'Маша · Рекомендуется сейчас',
     ]);
