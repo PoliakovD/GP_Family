@@ -59,6 +59,20 @@ export const guestGuard: CanActivateFn = (route) => {
   return router.parseUrl(safeReturnUrl(route.queryParamMap.get('returnUrl')) ?? '/home');
 };
 
+/**
+ * «/» — лендинг только для гостя. Вошедший (PWA с сессией) и Telegram Mini App (вход неявный) — сразу на
+ * Главную. Транзиентный сбой /me (429/сеть) — тоже на Главную: там authGuard разберётся сам, а показать
+ * лендинг человеку с живой сессией хуже, чем лишний редирект на /login.
+ */
+export const landingGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (auth.mode === 'telegram' || auth.me() !== null) return router.parseUrl('/home');
+  const me = await loadMeWithRetry(auth);
+  if (me !== null || auth.meLoadError() === 'transient') return router.parseUrl('/home');
+  return true;
+};
+
 /** Данные обрабатываются только после принятия актуального согласия ПДн (задача 2.3). */
 export const consentGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);

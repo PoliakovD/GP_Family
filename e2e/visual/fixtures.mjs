@@ -115,6 +115,7 @@ export const SCREENS = [
   { name: 'public-report', path: '/r/visual-token', anon: true },
   { name: 'public-report-gone', path: '/r/gone-token', anon: true, only: 'mobile' },
   // Вход и онбординг (4.8.1). anon — /api/auth/me отвечает 401, как у человека без сессии.
+  { name: 'landing', path: '/', anon: true },
   { name: 'auth-login', path: '/login', anon: true },
   { name: 'auth-register', path: '/login', anon: true, prepare: async (page) => {
     await page.getByRole('button', { name: 'Создать аккаунт' }).click();
