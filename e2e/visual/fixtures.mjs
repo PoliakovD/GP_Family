@@ -15,6 +15,14 @@ const VALERIA_ID = 'u-valeria';
  *  spinner — на экране есть постоянный спиннер (не ждать, пока исчезнет). */
 export const SCREENS = [
   { name: 'home', path: '/home' },
+  // «Требует внимания» с подписями членов семьи: свежий анализ Валерии вне нормы и её прививка.
+  { name: 'home-family', path: '/home', overrides: () => [
+    ['GET', /^\/api\/medical-records$/, { items: [...RECORDS, RECORD('r-val', 'Общий анализ крови', '2026-10-08', {
+      ownerUserId: VALERIA_ID, personName: 'Полякова Валерия Сергеевна', abnormalIndicatorCount: 2, normalIndicatorCount: 16 })],
+      totalCount: 4, page: 1, pageSize: 50 }],
+    ['GET', /^\/api\/vaccinations\/overview$/, { ...VACC_OVERVIEW, attention: [...VACC_OVERVIEW.attention,
+      { subject: { ...VALERIA_VACC, name: 'Валерия' }, item: vaccItem('influenza', 'Грипп', 'Сезон 2026/27', 3, { windowFrom: '2026-09-01', windowTo: '2026-11-30', isRepeat: true }) }] }],
+  ] },
   { name: 'health', path: '/health' },
   { name: 'family', path: `/families/${FAMILY_ID}` },
   { name: 'family-members', path: `/families/${FAMILY_ID}?tab=members` },

@@ -5,7 +5,9 @@ import { FamilyStateService } from '../../services/family-state.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import { FamilyRole, MemberStatus } from '../../models/types';
-import type { HealthSummary, HomeJoinRequest, HomeMedicationAlert, HomeSummaryResponse } from '../../models/types';
+import type {
+  HealthSummary, HomeJoinRequest, HomeMedicationAlert, HomeSummaryResponse, MedicalRecord, VaccinationOverview,
+} from '../../models/types';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { formatDayMonth, formatDayMonthYear } from '../../shared/util/date-format';
 import { InviteModalComponent } from '../../shared/invite-modal/invite-modal.component';
@@ -34,6 +36,11 @@ const MONTHS_GEN = [
  * справа показывает ближайшие даты вне зависимости от расстояния (см. HomeSummaryService). */
 const BIRTHDAY_ATTENTION_WINDOW_DAYS = 30;
 const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+/** Анализы близких попадают в «Требует внимания», только если свежие — старый анализ мамы годичной
+ * давности не «требует внимания» каждый день. Свой последний анализ — как раньше, без окна. */
+const FAMILY_ANALYSIS_WINDOW_DAYS = 60;
+/** Не больше строк про близких на тему — чтобы блок не превращался в ленту. */
+const MAX_FAMILY_ROWS = 3;
 const WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 
 /** Аггрегированная карточка «Требует внимания» по лекарствам — редизайн v2. Одна карточка на
@@ -54,6 +61,14 @@ interface BirthdayAttentionSummary {
 
 /** Строка «Требует внимания» (DESIGN §3 «task-row») — данные для одного <app-task-row>. Заявки на
  * вступление рисуются отдельно: у них два действия («Принять» / «Отклонить»). */
+/** Строка «Требует внимания» про конкретного человека: self — моя (подпись «Вы» только если в блоке
+ * есть строки и про близких), иначе подпись — имя близкого. */
+interface PersonTask {
+  task: HomeTask;
+  self: boolean;
+  person: string;
+}
+
 interface HomeTask {
   key: string;
   icon: LucideIconData;
@@ -95,6 +110,11 @@ export class HomeComponent implements OnInit {
    * существующий запрос, что у хаба «Здоровье»; его сбой не ломает Главную — метрики просто
    * скрываются. */
   health: HealthSummary | null = null;
+  /** Подписи членов семьи в «Требует внимания»: анализы вне нормы и прививки близких, к которым у меня
+   * есть доступ (видимость решает сервер — те же запросы, что у разделов «Анализы» и «Прививки»).
+   * Считаются один раз после загрузки; сбой любого запроса просто убирает строки про близких. */
+  private familyAnalysisTasks: PersonTask[] = [];
+  private vaccinationTasks: PersonTask[] = [];
   loading = true;
   error: string | null = null;
 
@@ -126,12 +146,17 @@ export class HomeComponent implements OnInit {
   async refresh(): Promise<void> {
     this.loading = true;
     try {
-      const [summary, health] = await Promise.all([
+      const [summary, health, analyses, vaccinations] = await Promise.all([
         this.api.getHomeSummary(),
         this.api.getHealthSummary().catch(() => null),
+        this.api.getMedicalRecords({ kind: 'analysis', from: daysAgoIso(FAMILY_ANALYSIS_WINDOW_DAYS), pageSize: 50 })
+          .then((r) => r.items).catch(() => [] as MedicalRecord[]),
+        this.api.getVaccinationsOverview().catch(() => null),
       ]);
       this.summary = summary;
       this.health = health;
+      this.familyAnalysisTasks = this.buildFamilyAnalysisTasks(analyses);
+      this.vaccinationTasks = this.buildVaccinationTasks(vaccinations);
       this.error = null;
     } catch (err) {
       this.error = err instanceof ApiError ? err.message : 'Не удалось загрузить Главную.';
@@ -175,25 +200,26 @@ export class HomeComponent implements OnInit {
         link: ['/health/medications'], queryParams: { familyId: med.first.familyId, medkitId: med.first.medkitId },
       });
     }
+    // Анализы и прививки — по человеку: сначала мои, затем близких. Подпись «Имя · …» — только когда
+    // в блоке есть кто-то кроме меня (иначе «Вы ·» в каждой строке — шум).
+    const personRows: PersonTask[] = [];
     const latest = this.health?.analyses?.latest;
     if (latest && latest.abnormalIndicatorCount > 0) {
       const n = latest.abnormalIndicatorCount;
-      list.push({
+      personRows.push({ self: true, person: 'Вы', task: {
         key: 'analysis', icon: FlaskConical, tone: 'danger',
         title: `${n} ${pluralizeRu(n, 'показатель', 'показателя', 'показателей')} вне нормы`,
         subtitle: [latest.title, formatDayMonth(latest.recordDate)].filter(Boolean).join(' · '),
         actionLabel: 'Открыть', link: ['/health/records', latest.id],
-      });
+      } });
     }
-    const due = this.health?.vaccinations?.nextDue;
-    if (due) {
-      const until = windowToText(due.windowTo);
-      list.push({
-        key: 'vaccination', icon: Syringe, tone: 'warning',
-        title: `Прививка: ${due.seriesName}`,
-        subtitle: until ? `Рекомендуется ${until}` : 'Рекомендуется сейчас',
-        actionLabel: 'Отметить', link: this.vaccinationHref(),
-      });
+    personRows.push(...this.familyAnalysisTasks);
+    const myVaccination = this.myNextDueTask();
+    if (myVaccination) personRows.push(myVaccination);
+    personRows.push(...this.vaccinationTasks);
+    const labelled = personRows.some((r) => !r.self);
+    for (const r of personRows) {
+      list.push(labelled ? { ...r.task, subtitle: `${r.person} · ${r.task.subtitle}` } : r.task);
     }
     const birthday = this.birthdaySummary;
     if (birthday) {
@@ -255,6 +281,76 @@ export class HomeComponent implements OnInit {
   birthdaysHref(): string[] {
     const fam = this.state.selectedFamily();
     return fam ? ['/families', fam.id] : ['/birthdays'];
+  }
+
+  /** Свежие анализы близких с показателями вне нормы — по одной строке на человека (последний анализ). */
+  private buildFamilyAnalysisTasks(records: MedicalRecord[]): PersonTask[] {
+    const me = this.auth.me()?.userId;
+    const latestByPerson = new Map<string, MedicalRecord>();
+    for (const r of records) {
+      const isMine = r.targetUserId === me || (!r.targetUserId && !r.familyDependentId && r.ownerUserId === me);
+      if (isMine) continue;
+      const key = r.familyDependentId ?? r.targetUserId ?? r.ownerUserId;
+      const prev = latestByPerson.get(key);
+      if (!prev || r.recordDate > prev.recordDate) latestByPerson.set(key, r);
+    }
+    return [...latestByPerson.values()]
+      .filter((r) => r.abnormalIndicatorCount > 0)
+      .sort((a, b) => b.recordDate.localeCompare(a.recordDate))
+      .slice(0, MAX_FAMILY_ROWS)
+      .map((r) => {
+        const n = r.abnormalIndicatorCount;
+        return {
+          self: false,
+          // Подопечный — отображаемое имя как есть («Мама Дани»), участник семьи — имя из «Фамилия Имя
+          // Отчество», как подпись в обзоре прививок (VaccinationSubjects отдаёт FirstName).
+          person: r.familyDependentId ? r.personName : firstNameOf(r.personName),
+          task: {
+            key: `analysis-${r.id}`, icon: FlaskConical, tone: 'danger',
+            title: `${n} ${pluralizeRu(n, 'показатель', 'показателя', 'показателей')} вне нормы`,
+            subtitle: [r.title, formatDayMonth(r.recordDate)].filter(Boolean).join(' · '),
+            actionLabel: 'Открыть', link: ['/health/records', r.id],
+          },
+        };
+      });
+  }
+
+  /** Прививки близких «стоит запланировать» — первая по каждому человеку, как в обзоре прививок. Своя —
+   * из сводки «Моё здоровье» (myNextDueTask), как и раньше. */
+  private buildVaccinationTasks(overview: VaccinationOverview | null): PersonTask[] {
+    const seen = new Set<string>();
+    const rows: PersonTask[] = [];
+    for (const card of overview?.attention ?? []) {
+      const key = `${card.subject.kind}:${card.subject.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (card.subject.isSelf || rows.length >= MAX_FAMILY_ROWS) continue;
+      const until = windowToText(card.item.windowTo);
+      rows.push({
+        self: false,
+        person: card.subject.name,
+        task: {
+          key: `vaccination-${key}`, icon: Syringe, tone: 'warning',
+          title: `Прививка: ${card.item.seriesName}`,
+          subtitle: until ? `Рекомендуется ${until}` : 'Рекомендуется сейчас',
+          actionLabel: 'Отметить', link: ['/health/vaccinations/people', card.subject.kind, card.subject.id],
+        },
+      });
+    }
+    return rows;
+  }
+
+  /** Моя ближайшая прививка — из сводки «Моё здоровье». */
+  private myNextDueTask(): PersonTask | null {
+    const due = this.health?.vaccinations?.nextDue;
+    if (!due) return null;
+    const until = windowToText(due.windowTo);
+    return { self: true, person: 'Вы', task: {
+      key: 'vaccination', icon: Syringe, tone: 'warning',
+      title: `Прививка: ${due.seriesName}`,
+      subtitle: until ? `Рекомендуется ${until}` : 'Рекомендуется сейчас',
+      actionLabel: 'Отметить', link: this.vaccinationHref(),
+    } };
   }
 
   private vaccinationHref(): string[] {
@@ -375,4 +471,17 @@ export class HomeComponent implements OnInit {
     const familyId = this.state.selectedFamily()?.id;
     return this.summary?.joinRequests.some((r) => r.userId === memberId && r.familyId === familyId) ?? false;
   }
+}
+
+/** Дата N дней назад, «yyyy-MM-dd» (фильтр from списка записей). */
+function daysAgoIso(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Имя из «Фамилия Имя Отчество» (так сервер отдаёт personName участника семьи); одно слово — как есть. */
+function firstNameOf(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return parts.length >= 2 ? parts[1] : fullName.trim();
 }
