@@ -109,7 +109,7 @@
 
 .ldm-alert { margin-top: var(--space-2); }
 
-.ldm-counters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2); }
+.ldm-counters { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin-top: var(--space-2); }
 
 .ldm-counter {
   display: flex;
@@ -272,7 +272,7 @@
   app-icon { color: var(--color-text-muted); }
 }
 
-// Готовый отчёт: миниатюра PDF «печатается» строками.
+// Готовый отчёт — карточка из списка «Отчёты для врача».
 .ldm-report {
   display: flex;
   flex-direction: column;
@@ -284,29 +284,21 @@
   .badge { align-self: flex-start; }
 }
 
-.ldm-pdf {
+.ldm-report-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+
+// Строка списка (запись дневника, анализ): плитка-иконка → текст.
+.ldm-entry {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  height: 150px;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-divider);
+
+  &:first-child { border-top: 0; }
+  .badge { margin-top: var(--space-1); }
 }
 
-.ldm-pdf-line {
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-border);
-  transform-origin: left;
-  animation: ldm-grow 0.4s ease both;
-  animation-delay: calc(var(--i, 0) * 0.12s);
-
-  &:first-child { width: 60%; background: var(--color-text-muted); }
-  &:nth-child(3) { width: 80%; }
-  &:nth-child(5) { width: 70%; }
-}
+.ldm-self-start { align-self: flex-start; }
 
 .ldm-actions { display: flex; gap: var(--space-2); }
 
@@ -317,12 +309,12 @@
   to { opacity: 1; transform: none; }
 }
 
-@keyframes ldm-grow {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
 
 @media (prefers-reduced-motion: reduce) {
-  .ldm-in, .ldm-ind, .ldm-pdf-line { animation: none; }
+  .ldm-in, .ldm-ind { animation: none; }
   .ldm-scroll, .ldm-switch, .ldm-switch::after, .ldm-sq, .ldm-ai, .ldm-counter { transition: none; }
 }
+
+// Кнопка в узкой строке не переносится — переносится/обрезается текст рядом.
+.ldm-btn-sm { flex: none; white-space: nowrap; }
+.ldm-next > .flex-fill { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

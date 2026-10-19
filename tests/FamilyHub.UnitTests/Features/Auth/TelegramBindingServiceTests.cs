@@ -105,20 +105,20 @@ public class TelegramBindingServiceTests : SqliteTestBase
     [Fact]
     public async Task BindAsync_EmailMatchesExistingPwaAccount_AttachesTelegramIdToSameUser_DoesNotTouchExistingPassword_AndSendsNoExtraEmail()
     {
-        var pwaUser = AddUser(email: "danil@example.com");
+        var pwaUser = AddUser(email: "ivan@example.com");
         var originalPasswordHash = pwaUser.PasswordHash;
-        SetupValidInitData(200, "Danil TG", "danil_tg");
-        await _sut.SendCodeAsync("danil@example.com", ValidInitData);
-        var code = LastCode("danil@example.com");
+        SetupValidInitData(200, "Ivan TG", "ivan_tg");
+        await _sut.SendCodeAsync("ivan@example.com", ValidInitData);
+        var code = LastCode("ivan@example.com");
         _sent.Clear(); // письмо с OTP-кодом больше не интересно — проверяем именно ОТСУТСТВИЕ следующего
 
-        var (result, _) = await _sut.ConfirmBindAsync("danil@example.com", code, ValidInitData);
+        var (result, _) = await _sut.ConfirmBindAsync("ivan@example.com", code, ValidInitData);
 
         result.Should().Be(TelegramBindResult.Success);
         Db.Users.Count().Should().Be(1, "должен привязаться к существующему аккаунту, а не создать новый");
         var updated = Db.Users.Single(u => u.Id == pwaUser.Id);
         updated.TelegramId.Should().Be(200);
-        updated.TgUsername.Should().Be("danil_tg");
+        updated.TgUsername.Should().Be("ivan_tg");
         updated.PasswordHash.Should().Be(originalPasswordHash, "пароль уже существующего PWA-аккаунта не должен меняться при привязке Telegram");
         _sent.Should().BeEmpty("у аккаунта уже есть пароль — привязка не должна слать ничего дополнительно");
     }

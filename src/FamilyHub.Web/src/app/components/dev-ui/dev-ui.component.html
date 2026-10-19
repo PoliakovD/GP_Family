@@ -142,18 +142,18 @@
 
     <div class="card">
       <h2 class="card-title">Участники</h2>
-      <app-person-row [person]="{ key: 'valeria', firstName: 'Валерия', lastName: 'Полякова' }" name="Валерия Полякова"
-                      role="@valeria · с 13 сентября" [online]="true">
+      <app-person-row [person]="{ key: 'maria', firstName: 'Мария', lastName: 'Иванова' }" name="Мария Иванова"
+                      role="@maria · с 13 сентября" [online]="true">
         <button type="button" class="btn-icon" aria-label="Действия с участником">⋯</button>
       </app-person-row>
-      <app-person-row [person]="{ key: 'daniil', firstName: 'Даниил', lastName: 'Поляков' }" name="Даниил Поляков"
+      <app-person-row [person]="{ key: 'ivan', firstName: 'Иван', lastName: 'Иванов' }" name="Иван Иванов"
                       role="Вы · админ · с 25 августа" [self]="true" />
       <div class="ui-row">
-        <app-avatar [person]="{ key: 'a', firstName: 'Валерия', lastName: 'Полякова' }" size="xs" />
-        <app-avatar [person]="{ key: 'b', firstName: 'Олег', lastName: 'Поляков' }" size="sm" />
+        <app-avatar [person]="{ key: 'a', firstName: 'Мария', lastName: 'Иванова' }" size="xs" />
+        <app-avatar [person]="{ key: 'b', firstName: 'Олег', lastName: 'Иванов' }" size="sm" />
         <app-avatar [person]="{ key: 'c', firstName: 'Инна', lastName: 'Иванова' }" size="md" />
-        <app-avatar [person]="{ key: 'd', firstName: 'Алёна', lastName: 'Полякова' }" size="lg" />
-        <app-avatar [person]="{ key: 'me', firstName: 'Даниил', lastName: 'Поляков' }" size="xl" [self]="true" />
+        <app-avatar [person]="{ key: 'd', firstName: 'Нина', lastName: 'Иванова' }" size="lg" />
+        <app-avatar [person]="{ key: 'me', firstName: 'Иван', lastName: 'Иванов' }" size="xl" [self]="true" />
       </div>
     </div>
 
@@ -198,10 +198,10 @@
   <section class="ui-section" aria-labelledby="s-chat">
     <h2 class="ui-h2" id="s-chat">Чат семьи</h2>
     <div class="card ui-chat">
-      <app-chat-system>Валерия присоединилась к семье · 13 сентября</app-chat-system>
+      <app-chat-system>Мария присоединилась к семье · 13 сентября</app-chat-system>
       <app-chat-day>Сегодня</app-chat-day>
-      <app-chat-bubble [author]="{ key: 'valeria', firstName: 'Валерия', lastName: 'Полякова' }" authorName="Валерия" time="09:12">
-        Даня, ты записался на прививку от гриппа? Нужно до конца ноября.
+      <app-chat-bubble [author]="{ key: 'maria', firstName: 'Мария', lastName: 'Иванова' }" authorName="Мария" time="09:12">
+        Ваня, ты записался на прививку от гриппа? Нужно до конца ноября.
       </app-chat-bubble>
       <app-chat-bubble [mine]="true" time="09:20" [read]="true">Ещё нет, на этой неделе запишусь. Скинул свежий анализ:</app-chat-bubble>
       <div class="ui-chat-card">

@@ -149,13 +149,13 @@ public class TelegramLinkServiceTests : SqliteTestBase
     [Fact]
     public async Task PeekAsync_ValidCode_ReturnsMaskedEmail()
     {
-        var user = AddWebUser("danil@example.com");
+        var user = AddWebUser("ivan@example.com");
         var (_, code, _) = await _sut.StartAsync(user.Id);
 
         var peek = await _sut.PeekAsync(code!);
 
         peek.Should().NotBeNull();
-        peek!.MaskedEmail.Should().Be("d***@example.com");
+        peek!.MaskedEmail.Should().Be("i***@example.com");
     }
 
     [Fact]

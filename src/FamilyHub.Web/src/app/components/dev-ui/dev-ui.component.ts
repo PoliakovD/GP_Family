@@ -69,7 +69,7 @@ export class DevUiComponent implements OnDestroy {
   protected readonly filterOut = signal(true);
   protected readonly filterIn = signal(false);
   protected readonly filterNone = signal(false);
-  protected readonly email = signal('daniil@');
+  protected readonly email = signal('ivan@');
   protected readonly toggled = signal(false);
 
   constructor() {

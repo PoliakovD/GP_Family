@@ -55,8 +55,8 @@ public class DoctorReportServiceTests : SqliteTestBase
             new MedicalAuditWriter(Db), NullLogger<DoctorReportService>.Instance);
 
         _me = Db.AddUser();
-        _me.LastName = "Поляков";
-        _me.FirstName = "Даниил";
+        _me.LastName = "Иванов";
+        _me.FirstName = "Иван";
         _me.BirthDate = new DateOnly(1998, 5, 4);
         _me.Gender = Gender.Male;
         Db.SaveChanges();
@@ -145,7 +145,7 @@ public class DoctorReportServiceTests : SqliteTestBase
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT PatientComment || '|' || Recipient || '|' || PatientSnapshotJson FROM DoctorReports";
         var raw = (string)(await cmd.ExecuteScalarAsync())!;
-        raw.Should().NotContain("Секретная").And.NotContain("Смирнова").And.NotContain("Поляков");
+        raw.Should().NotContain("Секретная").And.NotContain("Смирнова").And.NotContain("Иванов");
     }
 
     [Theory]
@@ -287,7 +287,7 @@ public class DoctorReportServiceTests : SqliteTestBase
 
         var meta = await _sut.GetPublicMetaAsync(dto!.Link.Token!);
 
-        meta!.PatientName.Should().Be("Поляков Даниил");
+        meta!.PatientName.Should().Be("Иванов Иван");
         meta.Sex.Should().Be("м");
         meta.Age.Should().BeGreaterThan(20);
         meta.BirthDate.Should().Be(new DateOnly(1998, 5, 4));
@@ -423,7 +423,7 @@ public class DoctorReportServiceTests : SqliteTestBase
         Db.FamilyMembers.Add(TestData.NewMember(family.Id, _me.Id, FamilyRole.Admin, MemberStatus.Active));
         Db.SaveChanges();
         var other = Db.AddMember(family.Id);
-        other.LastName = "Полякова";
+        other.LastName = "Иванова";
         other.FirstName = "Анна";
         Db.SaveChanges();
         return (family, other);
@@ -433,7 +433,7 @@ public class DoctorReportServiceTests : SqliteTestBase
     {
         var d = new FamilyDependent
         {
-            Id = Guid.NewGuid(), FamilyId = familyId, FirstName = isPet ? "Барсик" : "Миша", LastName = isPet ? null : "Поляков",
+            Id = Guid.NewGuid(), FamilyId = familyId, FirstName = isPet ? "Барсик" : "Миша", LastName = isPet ? null : "Иванов",
             Gender = Gender.Male, IsPet = isPet, PetSpecies = isPet ? "кот" : null, CreatedByUserId = _me.Id, CreatedAt = DateTime.UtcNow,
         };
         Db.FamilyDependents.Add(d);
@@ -467,7 +467,7 @@ public class DoctorReportServiceTests : SqliteTestBase
         result.Should().Be(DoctorReportResult.Success, error);
         item!.SubjectKind.Should().Be(DoctorReportSubjectKind.Dependent);
         item.SubjectId.Should().Be(child.Id);
-        item.SubjectName.Should().Be("Поляков Миша");
+        item.SubjectName.Should().Be("Иванов Миша");
         item.CanManage.Should().BeTrue();
         Row(item.Id).SubjectFamilyDependentId.Should().Be(child.Id);
         Db.Notifications.AsNoTracking().Should().BeEmpty("у подопечного нет аккаунта — уведомлять некого");
@@ -567,7 +567,7 @@ public class DoctorReportServiceTests : SqliteTestBase
         list.Select(s => s.Kind).Should().Equal(
             DoctorReportSubjectKind.Self, DoctorReportSubjectKind.User, DoctorReportSubjectKind.Dependent, DoctorReportSubjectKind.Dependent);
         list[1].Should().BeEquivalentTo(new { Id = (Guid?)other.Id, DiaryAvailable = true, VaccinationsAvailable = false });
-        list[2].Should().BeEquivalentTo(new { Name = "Поляков Миша", IsPet = false, DiaryAvailable = false, VaccinationsAvailable = true });
+        list[2].Should().BeEquivalentTo(new { Name = "Иванов Миша", IsPet = false, DiaryAvailable = false, VaccinationsAvailable = true });
         list[3].Should().BeEquivalentTo(new { Name = "Барсик (кот)", IsPet = true, VaccinationsAvailable = false });
     }
 }

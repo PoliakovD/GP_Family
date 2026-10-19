@@ -1,5 +1,5 @@
 // Фикстуры API для visual/shots.mjs. Данные повторяют макеты docs/redesign/screens/png/:
-// семья «Поляковы» (Даниил — админ, Валерия — участник), просроченное лекарство, анализ крови
+// семья «Ивановы» (Иван — админ, Мария — участник), просроченное лекарство, анализ крови
 // с 6 показателями вне нормы, прививка от гриппа, дни рождения. «Сегодня» — 14.10.2026 (shots.mjs).
 //
 // Неизвестный запрос → undefined → shots.mjs отвечает 404 и печатает его в конце прогона:
@@ -7,21 +7,21 @@
 
 import { ADMIN_SCREENS, ADMIN_ROUTES } from './fixtures-admin.mjs';
 
-const FAMILY_ID = 'f-polyakov';
-const ME_ID = 'u-daniil';
-const VALERIA_ID = 'u-valeria';
+const FAMILY_ID = 'f-ivanov';
+const ME_ID = 'u-ivan';
+const MARIA_ID = 'u-maria';
 
 /** Экраны: name — имя файла, path — маршрут, only — только 'desktop' | 'mobile',
  *  spinner — на экране есть постоянный спиннер (не ждать, пока исчезнет). */
 export const SCREENS = [
   { name: 'home', path: '/home' },
-  // «Требует внимания» с подписями членов семьи: свежий анализ Валерии вне нормы и её прививка.
+  // «Требует внимания» с подписями членов семьи: свежий анализ Марии вне нормы и её прививка.
   { name: 'home-family', path: '/home', overrides: () => [
     ['GET', /^\/api\/medical-records$/, { items: [...RECORDS, RECORD('r-val', 'Общий анализ крови', '2026-10-08', {
-      ownerUserId: VALERIA_ID, personName: 'Полякова Валерия Сергеевна', abnormalIndicatorCount: 2, normalIndicatorCount: 16 })],
+      ownerUserId: MARIA_ID, personName: 'Иванова Мария Петровна', abnormalIndicatorCount: 2, normalIndicatorCount: 16 })],
       totalCount: 4, page: 1, pageSize: 50 }],
     ['GET', /^\/api\/vaccinations\/overview$/, { ...VACC_OVERVIEW, attention: [...VACC_OVERVIEW.attention,
-      { subject: { ...VALERIA_VACC, name: 'Валерия' }, item: vaccItem('influenza', 'Грипп', 'Сезон 2026/27', 3, { windowFrom: '2026-09-01', windowTo: '2026-11-30', isRepeat: true }) }] }],
+      { subject: { ...MARIA_VACC, name: 'Мария' }, item: vaccItem('influenza', 'Грипп', 'Сезон 2026/27', 3, { windowFrom: '2026-09-01', windowTo: '2026-11-30', isRepeat: true }) }] }],
   ] },
   { name: 'health', path: '/health' },
   { name: 'family', path: `/families/${FAMILY_ID}` },
@@ -145,39 +145,39 @@ export const SCREENS = [
 ];
 
 const ME = {
-  userId: ME_ID, lastName: 'Поляков', firstName: 'Даниил', middleName: null, birthDate: '1995-08-25',
-  gender: 0, profileComplete: true, provider: 'email', email: 'daniil@example.com', username: 'daniil',
+  userId: ME_ID, lastName: 'Иванов', firstName: 'Иван', middleName: null, birthDate: '1990-05-10',
+  gender: 0, profileComplete: true, provider: 'email', email: 'ivan.ivanov@example.com', username: 'ivan',
   tgUsername: null, hasTelegram: false, hasPassword: true, timeZoneId: 'Europe/Moscow',
 };
 
 const MEMBERS = [
-  { id: VALERIA_ID, lastName: 'Полякова', firstName: 'Валерия', middleName: null, username: 'valeria', role: 0, joinedAt: '2026-09-13T10:00:00Z' },
-  { id: ME_ID, lastName: 'Поляков', firstName: 'Даниил', middleName: null, username: 'daniil', role: 1, joinedAt: '2026-08-25T10:00:00Z' },
+  { id: MARIA_ID, lastName: 'Иванова', firstName: 'Мария', middleName: null, username: 'maria', role: 0, joinedAt: '2026-09-13T10:00:00Z' },
+  { id: ME_ID, lastName: 'Иванов', firstName: 'Иван', middleName: null, username: 'ivan', role: 1, joinedAt: '2026-08-25T10:00:00Z' },
 ];
 
 const FAMILIES = [
-  { id: FAMILY_ID, name: 'Поляковы', myRole: 1, myStatus: 1, currentMembers: MEMBERS, dependents: [] },
+  { id: FAMILY_ID, name: 'Ивановы', myRole: 1, myStatus: 1, currentMembers: MEMBERS, dependents: [] },
 ];
 
 const emptyJobs = { total: 0, items: [] };
 
 const HOME_SUMMARY = {
-  greetingName: 'Даниил',
+  greetingName: 'Иван',
   today: '2026-10-14',
   attentionTotal: 3,
   primaryFamilyId: FAMILY_ID,
-  primaryFamilyName: 'Поляковы',
+  primaryFamilyName: 'Ивановы',
   medications: [
-    { medicationId: 'm1', medkitId: 'mk1', medkitName: 'Тестовая', familyId: FAMILY_ID, familyName: 'Поляковы',
+    { medicationId: 'm1', medkitId: 'mk1', medkitName: 'Тестовая', familyId: FAMILY_ID, familyName: 'Ивановы',
       name: 'Суматриптан', expiryDate: '2023-02-01', daysLeft: -1351, severity: 'expired' },
-    { medicationId: 'm2', medkitId: 'mk1', medkitName: 'Тестовая', familyId: FAMILY_ID, familyName: 'Поляковы',
+    { medicationId: 'm2', medkitId: 'mk1', medkitName: 'Тестовая', familyId: FAMILY_ID, familyName: 'Ивановы',
       name: 'Нурофен', expiryDate: '2026-11-01', daysLeft: 18, severity: 'expiring' },
   ],
   joinRequests: [],
   birthdays: [
-    { familyId: FAMILY_ID, familyName: 'Поляковы', personName: 'Мама Дани (Алёна)', date: '2026-11-24', daysUntil: 41, turningAge: 49, source: 0 },
-    { familyId: FAMILY_ID, familyName: 'Поляковы', personName: 'Папа Дани (Олег)', date: '2027-01-03', daysUntil: 81, turningAge: 52, source: 0 },
-    { familyId: FAMILY_ID, familyName: 'Поляковы', personName: 'Мама Лерочки (Инна)', date: '2027-01-22', daysUntil: 100, turningAge: 52, source: 0 },
+    { familyId: FAMILY_ID, familyName: 'Ивановы', personName: 'Бабушка Нина', date: '2026-11-24', daysUntil: 41, turningAge: 49, source: 0 },
+    { familyId: FAMILY_ID, familyName: 'Ивановы', personName: 'Дедушка Пётр', date: '2027-01-03', daysUntil: 81, turningAge: 52, source: 0 },
+    { familyId: FAMILY_ID, familyName: 'Ивановы', personName: 'Тётя Оля', date: '2027-01-22', daysUntil: 100, turningAge: 52, source: 0 },
   ],
   ok: {
     medicationsInDate: 5, medicationsTotal: 7, medicationsExpired: 1, medicationsExpiring: 1,
@@ -215,8 +215,8 @@ const HEALTH_SUMMARY = {
   reports: { activeLinks: 1 },
 };
 
-const SELF_SUBJECT = { kind: 'user', id: ME_ID, name: 'Даниил Поляков', isSelf: true };
-const VALERIA_SUBJECT = { kind: 'user', id: VALERIA_ID, name: 'Валерия Полякова', isSelf: false };
+const SELF_SUBJECT = { kind: 'user', id: ME_ID, name: 'Иван Иванов', isSelf: true };
+const MARIA_SUBJECT = { kind: 'user', id: MARIA_ID, name: 'Мария Иванова', isSelf: false };
 
 const dose = (courseId, time, drugName, outcome, extra = {}) => ({
   courseId, doseId: `${courseId}-${time}`, scheduledAt: `2026-10-14T${time}:00+03:00`, localTime: time,
@@ -228,7 +228,7 @@ const dose = (courseId, time, drugName, outcome, extra = {}) => ({
 const INTAKE_TODAY = {
   date: '2026-10-14', timeZoneId: 'Europe/Moscow',
   counters: { taken: 1, missed: 0, upcoming: 2, skipped: 0, total: 3, nextAt: '2026-10-14T09:00:00+03:00' },
-  subjects: [SELF_SUBJECT, VALERIA_SUBJECT],
+  subjects: [SELF_SUBJECT, MARIA_SUBJECT],
   items: [
     dose('c-2', '08:00', 'Омепразол', 2),
     dose('c-1', '09:00', 'Витамин D3', 1),
@@ -256,7 +256,7 @@ const vaccItem = (seriesCode, seriesName, label, status, extra = {}) => ({
   status, windowFrom: null, windowTo: null, recordId: null, date: null, isRepeat: false, ...extra,
 });
 const ME_VACC = { ...SELF_SUBJECT, canEdit: true };
-const VALERIA_VACC = { ...VALERIA_SUBJECT, canEdit: false };
+const MARIA_VACC = { ...MARIA_SUBJECT, canEdit: false };
 
 const VACC_OVERVIEW = {
   attention: [
@@ -265,7 +265,7 @@ const VACC_OVERVIEW = {
   ],
   people: [
     { subject: ME_VACC, done: 6, dueSoon: 1, canDo: 1, noData: 3, total: 11, hint: null },
-    { subject: VALERIA_VACC, done: 8, dueSoon: 0, canDo: 0, noData: 2, total: 10, hint: 'Нет даты рождения у части записей' },
+    { subject: MARIA_VACC, done: 8, dueSoon: 0, canDo: 0, noData: 2, total: 10, hint: 'Нет даты рождения у части записей' },
   ],
 };
 
@@ -321,31 +321,31 @@ const DOCTOR_REPORTS = [{
   id: 'dr-1', periodFrom: '2026-07-01', periodTo: '2026-10-01', createdAt: '2026-10-02T12:00:00Z', pageCount: 4, blockCount: 5,
   recipient: 'Терапевт', blocks: { labs: true, aiSummaries: true, medications: true, visits: true, measurements: true, symptomsNotes: false, vaccinations: false },
   link: { status: 1, token: 'tok', expiresAt: '2026-10-20T12:00:00Z', revokedAt: null, viewCount: 2, lastViewedAt: '2026-10-05T09:00:00Z' },
-  subjectKind: 0, subjectId: null, subjectName: null, subjectIsPet: false, createdByName: 'Даниил Поляков', canManage: true,
+  subjectKind: 0, subjectId: null, subjectName: null, subjectIsPet: false, createdByName: 'Иван Иванов', canManage: true,
 }];
 
-const VALERIA_AUTHOR = { userId: VALERIA_ID, lastName: 'Полякова', firstName: 'Валерия', middleName: null };
-const DANIIL_AUTHOR = { userId: ME_ID, lastName: 'Поляков', firstName: 'Даниил', middleName: null };
+const MARIA_AUTHOR = { userId: MARIA_ID, lastName: 'Иванова', firstName: 'Мария', middleName: null };
+const IVAN_AUTHOR = { userId: ME_ID, lastName: 'Иванов', firstName: 'Иван', middleName: null };
 const chatMsg = (id, author, text, createdAt, extra = {}) => ({
   id, familyId: FAMILY_ID, author, text, createdAt, editedAt: null, deleted: false, replyTo: null,
-  attachments: [], reactions: [], links: [], canEdit: author === DANIIL_AUTHOR, canDelete: author === DANIIL_AUTHOR, ...extra,
+  attachments: [], reactions: [], links: [], canEdit: author === IVAN_AUTHOR, canDelete: author === IVAN_AUTHOR, ...extra,
 });
 // Новые — первыми (как отдаёт API, компонент разворачивает).
 const CHAT_PAGE = {
   items: [
     // Только вложение с длинным именем и только карточка записи — без текста (раньше раздвигали ленту).
-    chatMsg('m5', DANIIL_AUTHOR, '', '2026-10-14T06:40:00Z', {
+    chatMsg('m5', IVAN_AUTHOR, '', '2026-10-14T06:40:00Z', {
       attachments: [{ id: 'a-long', fileName: 'Учетная политика 2026 года для налогового учета (редакция от 01.10).pdf',
         contentType: 'application/pdf', sizeBytes: 964608, previewStatus: 0 }],
     }),
-    chatMsg('m4', DANIIL_AUTHOR, '', '2026-10-14T06:39:00Z', {
+    chatMsg('m4', IVAN_AUTHOR, '', '2026-10-14T06:39:00Z', {
       links: [{ kind: 0, entityId: 'r-blood', accessible: true, title: 'Развернутый анализ крови', subtitle: 'Анализ · 03.10.2026', routeKind: 0 }],
     }),
-    chatMsg('m3', VALERIA_AUTHOR, 'Покажи врачу лейкоциты, они заметно упали.', '2026-10-14T06:31:00Z'),
-    chatMsg('m2', DANIIL_AUTHOR, 'Ещё нет, на этой неделе запишусь. Скинул свежий анализ:', '2026-10-14T06:20:00Z', {
+    chatMsg('m3', MARIA_AUTHOR, 'Покажи врачу лейкоциты, они заметно упали.', '2026-10-14T06:31:00Z'),
+    chatMsg('m2', IVAN_AUTHOR, 'Ещё нет, на этой неделе запишусь. Скинул свежий анализ:', '2026-10-14T06:20:00Z', {
       links: [{ kind: 0, entityId: 'r-blood', accessible: true, title: 'Развернутый анализ крови', subtitle: '3 октября · 6 вне нормы', routeKind: 0 }],
     }),
-    chatMsg('m1', VALERIA_AUTHOR, 'Даня, ты записался на прививку от гриппа? Нужно до конца ноября.', '2026-10-14T06:12:00Z'),
+    chatMsg('m1', MARIA_AUTHOR, 'Ваня, ты записался на прививку от гриппа? Нужно до конца ноября.', '2026-10-14T06:12:00Z'),
   ],
   nextCursor: null,
 };
@@ -382,7 +382,7 @@ const INDICATORS = [
   IND('band', 20, 'Палочкоядерные', '3', '%', '1', '6', 2),
 ];
 const RECORD = (id, title, date, extra = {}) => ({
-  id, ownerUserId: ME_ID, kind: 0, personName: 'Поляков Даниил', recordDate: date, doctor: null, title,
+  id, ownerUserId: ME_ID, kind: 0, personName: 'Иванов Иван', recordDate: date, doctor: null, title,
   description: null, extractionStatus: 2, createdAt: `${date}T09:00:00Z`, hiddenFamilyIds: [],
   familyDependentId: null, targetUserId: null, attachmentCount: 1, unrecognizedAttachmentCount: 0,
   indicatorCount: 20, abnormalIndicatorCount: 6, normalIndicatorCount: 13, specimenKbId: 'blood',
@@ -402,7 +402,7 @@ const VISITS = [
 
 // Минимальный одностраничный PDF (A4) для просмотрщика публичного отчёта: латиница Helvetica + полосы-«таблица».
 function samplePdf() {
-  const lines = ['BT /F1 20 Tf 56 770 Td (Doctor report) Tj ET', 'BT /F1 11 Tf 56 748 Td (Polyakov D. S. - 01.04.2026 - 14.10.2026) Tj ET'];
+  const lines = ['BT /F1 20 Tf 56 770 Td (Doctor report) Tj ET', 'BT /F1 11 Tf 56 748 Td (Ivanov I. S. - 01.04.2026 - 14.10.2026) Tj ET'];
   for (let i = 0; i < 14; i++) {
     const y = 700 - i * 34;
     lines.push(`0.94 0.94 0.92 rg 56 ${y} 483 26 re f`, `0.2 0.2 0.2 rg BT /F1 10 Tf 64 ${y + 9} Td (Indicator ${i + 1}) Tj ET`);
@@ -431,13 +431,13 @@ const NOTE = (id, type, title, body, createdAt, isRead, kind = null, related = '
 const NOTIFICATIONS = [
   NOTE('n1', 11, 'Пропущен приём: Аторвастатин', 'Вечерний приём в 21:00 не отмечен.', '2026-10-14T08:10:00+03:00', false, 3, 'dose-1'),
   NOTE('n2', 7, 'Анализ крови распознан', 'Развернутый анализ крови — 20 показателей, 6 вне нормы.', '2026-10-14T07:45:00+03:00', false, 0),
-  NOTE('n3', 17, 'Валерия: «Купила витамин D»', 'Сообщение в чате семьи «Поляковы».', '2026-10-13T19:20:00+03:00', true, 8, 'fam'),
+  NOTE('n3', 17, 'Мария: «Купила витамин D»', 'Сообщение в чате семьи «Ивановы».', '2026-10-13T19:20:00+03:00', true, 8, 'fam'),
   NOTE('n4', 0, 'Ибупрофен: срок годности истекает', 'Аптечка «Дом» — годен до 31 октября.', '2026-10-13T09:00:00+03:00', true),
   NOTE('n5', 13, 'Скоро прививка: грипп', 'Ежегодная вакцинация — рекомендуем до конца октября.', '2026-10-10T09:00:00+03:00', true),
 ];
 const SEARCH = [
   { type: 0, id: 's1', title: 'Ибупрофен 200 мг', snippet: null, score: 1, birthday: null,
-    medication: { familyId: 'fam', familyName: 'Поляковы', medkitId: 'mk', medkitName: 'Дом', expiryDate: '2026-10-31' } },
+    medication: { familyId: 'fam', familyName: 'Ивановы', medkitId: 'mk', medkitName: 'Дом', expiryDate: '2026-10-31' } },
   { type: 1, id: 's2', title: 'Ибупрофен', snippet: 'НПВС: обезболивающее, жаропонижающее', score: 0.8, birthday: null, medication: null },
   { type: 2, id: 's3', title: 'Развернутый анализ крови', snippet: '3 октября · 6 вне нормы', score: 0.5, birthday: null, medication: null },
 ];
@@ -475,13 +475,13 @@ const ROUTES = [
   ['GET', /^\/api\/consents\/status$/, { accepted: true, version: '1' }],
   ['GET', /^\/api\/consents\/current$/, { version: '2026-03', text: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>' }],
   ['GET', /^\/api\/legal\/privacy-policy$/, { rawText: '<h2>Согласие на обработку персональных данных</h2><p>Я, субъект персональных данных, даю согласие ООО «Фэмили Хаб» на обработку моих персональных данных: фамилии, имени, отчества, даты рождения, пола, адреса электронной почты.</p><h3>Цели обработки</h3><ul><li>предоставление доступа к сервису;</li><li>напоминания о приёме лекарств и прививках;</li><li>хранение медицинских записей семьи.</li></ul><p>Согласие действует до его отзыва в разделе «Данные и доступ».</p>'.replace('Согласие на обработку персональных данных', 'Политика конфиденциальности') }],
-  ['GET', /^\/api\/public\/doctor-reports\/visual-token$/, { patientName: 'Поляков Даниил Сергеевич', sex: 'М', age: 31,
-    birthDate: '1995-08-25', periodFrom: '2026-04-01', periodTo: '2026-10-14', createdAt: '2026-10-14T09:00:00+03:00',
+  ['GET', /^\/api\/public\/doctor-reports\/visual-token$/, { patientName: 'Иванов Иван Сергеевич', sex: 'М', age: 31,
+    birthDate: '1990-05-10', periodFrom: '2026-04-01', periodTo: '2026-10-14', createdAt: '2026-10-14T09:00:00+03:00',
     expiresAt: '2026-10-21T09:00:00+03:00', pageCount: 4, isPet: false,
     sections: ['Анализы вне нормы', 'Динамика показателей', 'Приём лекарств', 'Дневник самочувствия'] }],
   ['GET', /^\/api\/public\/doctor-reports\/visual-token\/pdf$/, () => ({ rawText: samplePdf(), contentType: 'application/pdf' })],
   ['GET', /^\/api\/public\/doctor-reports\/gone-token$/, { status: 404, body: { code: 'not_found' } }],
-  ['GET', /^\/api\/invites\/visual-code\/preview$/, { familyName: 'Поляковы', inviterName: 'Валерия Полякова' }],
+  ['GET', /^\/api\/invites\/visual-code\/preview$/, { familyName: 'Ивановы', inviterName: 'Мария Иванова' }],
   ['GET', /^\/api\/invites\/bad-code\/preview$/, { status: 409, body: { code: 'expired' } }],
   ['GET', /^\/api\/ai\/status$/, { available: true }],
   ['GET', /^\/api\/families$/, FAMILIES],
@@ -534,11 +534,11 @@ const ROUTES = [
     ...INDICATORS.slice(0, 12).map((i) => ({
       analyteKey: i.analyteKey, displayName: i.displayName, specimenKbId: 'blood', specimenDisplayName: 'Кровь',
       valueRaw: i.valueRaw, unit: i.unit, flag: i.flag, lastRecordDate: '2026-10-03', familyDependentId: null,
-      targetUserId: null, patientName: 'Поляков Даниил',
+      targetUserId: null, patientName: 'Иванов Иван',
     })),
     { analyteKey: 'glu', displayName: 'Глюкоза', specimenKbId: 'blood', specimenDisplayName: 'Кровь', valueRaw: '5,1',
-      unit: 'ммоль/л', flag: 2, lastRecordDate: '2026-08-12', familyDependentId: null, targetUserId: VALERIA_ID,
-      patientName: 'Полякова Валерия' },
+      unit: 'ммоль/л', flag: 2, lastRecordDate: '2026-08-12', familyDependentId: null, targetUserId: MARIA_ID,
+      patientName: 'Иванова Мария' },
   ]],
   ['GET', /^\/api\/indicators\/([^/]+)\/article$/, (m) => ({
     indicator: INDICATORS.find((i) => i.id === m[1]) ?? INDICATORS[1],
@@ -569,16 +569,16 @@ const ROUTES = [
     { id: 's1', lastSeenAt: '2026-10-14T08:40:00Z', expiresAt: '2026-11-13T08:40:00Z', ipAddress: '85.140.1.10', device: 'Chrome · macOS', isCurrent: true },
     { id: 's2', lastSeenAt: '2026-10-12T19:05:00Z', expiresAt: '2026-11-11T19:05:00Z', ipAddress: '85.140.1.22', device: 'Safari · iPhone', isCurrent: false },
   ]],
-  ['GET', /^\/api\/health-shares\/mine$/, [{ viewerUserId: VALERIA_ID, name: 'Валерия', categories: 1 }]],
+  ['GET', /^\/api\/health-shares\/mine$/, [{ viewerUserId: MARIA_ID, name: 'Мария', categories: 1 }]],
   ['GET', /^\/api\/notifications\/preferences$/, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((type) => ({ type, pushEnabled: type % 3 !== 2, telegramEnabled: false }))],
-  ['GET', /^\/api\/health-shares\/shared-with-me$/, [{ ownerUserId: VALERIA_ID, name: 'Валерия', categories: 4 }]],
+  ['GET', /^\/api\/health-shares\/shared-with-me$/, [{ ownerUserId: MARIA_ID, name: 'Мария', categories: 4 }]],
   ['GET', /^\/api\/families\/[^/]+\/current$/, MEMBERS],
   ['GET', /^\/api\/families\/[^/]+\/pending$/, []],
   ['GET', /^\/api\/families\/[^/]+\/dependents$/, []],
   ['GET', /^\/api\/families\/[^/]+\/birthdays$/, [
-    { id: 'b1', familyId: FAMILY_ID, personName: 'Мама Дани (Алёна)', date: '1977-11-24', source: 0 },
-    { id: 'b2', familyId: FAMILY_ID, personName: 'Папа Дани (Олег)', date: '1975-01-03', source: 0 },
-    { id: 'b3', familyId: FAMILY_ID, personName: 'Валерия Полякова', date: '1998-03-14', source: 1 },
+    { id: 'b1', familyId: FAMILY_ID, personName: 'Бабушка Нина', date: '1977-11-24', source: 0 },
+    { id: 'b2', familyId: FAMILY_ID, personName: 'Дедушка Пётр', date: '1975-01-03', source: 0 },
+    { id: 'b3', familyId: FAMILY_ID, personName: 'Мария Иванова', date: '1998-03-14', source: 1 },
   ]],
   ['GET', /^\/api\/chat\/config$/, {
     maxTextLength: 4000, maxFilesPerMessage: 5, maxFileSizeBytes: 10485760, maxLinksPerMessage: 3,

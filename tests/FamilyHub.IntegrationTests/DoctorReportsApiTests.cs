@@ -286,7 +286,7 @@ public class DoctorReportsApiTests(FamilyHubWebFactory factory) : IntegrationTes
     {
         var (familyId, admin, _) = await FamilyWithMemberAsync();
         var depResponse = await admin.PostAsJsonAsync($"/api/families/{familyId}/dependents",
-            new CreateFamilyDependentRequest("Миша", "Поляков", null, Gender.Male, null, false, null));
+            new CreateFamilyDependentRequest("Миша", "Иванов", null, Gender.Male, null, false, null));
         var dependentId = (await depResponse.Content.ReadFromJsonAsync<FamilyDependentDto>(JsonOpts))!.Id;
         (await admin.PostAsJsonAsync("/api/medical-records",
                 new CreateMedicalRecordRequest(DateOnly.FromDateTime(DateTime.UtcNow), "Педиатр", "Осмотр", null,
@@ -295,7 +295,7 @@ public class DoctorReportsApiTests(FamilyHubWebFactory factory) : IntegrationTes
 
         var created = await admin.PostAsJsonAsync("/api/doctor-reports", BodyFor(DoctorReportSubjectKind.Dependent, dependentId));
         created.StatusCode.Should().Be(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
-        (await created.Content.ReadFromJsonAsync<DoctorReportDto>(JsonOpts))!.SubjectName.Should().Be("Поляков Миша");
+        (await created.Content.ReadFromJsonAsync<DoctorReportDto>(JsonOpts))!.SubjectName.Should().Be("Иванов Миша");
 
         var stranger = ClientAs(FreshTelegramId());
         (await stranger.PostAsJsonAsync("/api/doctor-reports", BodyFor(DoctorReportSubjectKind.Dependent, dependentId)))

@@ -98,7 +98,7 @@ export class IndicatorInfoComponent {
     return formatDeviation(r.valueNumeric, this.scaleLow(), this.scaleHigh());
   });
 
-  /** «Норма подобрана для Валерии: 28 лет, жен.» — рядом с текущим значением, только когда есть
+  /** «Норма подобрана для Марии: 28 лет, жен.» — рядом с текущим значением, только когда есть
    * и возраст/пол пациента, и подобранный диапазон (иначе непонятно, к чему относится подпись). */
   readonly patientContextLabel = computed(() => {
     const p = this.patient();

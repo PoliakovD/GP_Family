@@ -26,24 +26,29 @@
         <p class="ld-note">Работает в браузере на телефоне и компьютере, можно установить как приложение.</p>
       </div>
 
-      <!-- Превью Главной — декоративное: то же «Требует внимания», что увидит пользователь. -->
+      <!-- Превью Главной — декоративное: «Требует внимания» и «Дни рождения» в том же виде, что в
+           продукте (строки близких подписаны именем, у каждой — своя кнопка). -->
       <div class="ld-preview" aria-hidden="true" inert>
         <div class="card card-lg ld-preview-card">
           <div class="ld-preview-head">
-            <span class="ld-preview-title">Требует внимания</span>
-            <span class="badge badge-danger">3</span>
+            <span class="ld-preview-title flex-fill">Требует внимания</span>
+            <span class="ld-preview-count">4</span>
           </div>
           <div class="ld-preview-list">
-            <app-task-row [icon]="icons.FlaskConical" tone="danger" title="Анализ крови: 2 показателя вне нормы" subtitle="Мама · 3 октября" />
-            <app-task-row [icon]="icons.Pill" tone="medication" title="Витамин D — приём в 21:00" subtitle="Маша · курс до 20 ноября" />
-            <app-task-row [icon]="icons.Syringe" tone="warning" title="Прививка от гриппа" subtitle="Папа · до конца ноября" />
-            <app-task-row [icon]="icons.CalendarClock" tone="danger" title="Нурофен: срок годности истёк" subtitle="Домашняя аптечка" />
+            @for (row of attention; track row.title; let first = $first) {
+              <app-task-row [icon]="row.icon" [tone]="row.tone" [title]="row.title" [subtitle]="row.subtitle"
+                            [actionLabel]="row.action" [primary]="first" />
+            }
           </div>
         </div>
-        <!-- Как блок «Дни рождения» на Главной: та же строка с плиткой даты. -->
         <div class="card ld-preview-float">
-          <span class="ld-preview-float-title">Дни рождения</span>
-          <app-birthday-row [soon]="true" day="24" month="окт" name="Бабушка Валя" subtitle="Исполнится 70" />
+          <div class="ld-preview-head ld-preview-head-bare">
+            <span class="ld-preview-float-title flex-fill">Дни рождения</span>
+            <span class="ld-preview-link">Все</span>
+          </div>
+          @for (b of birthdays; track b.name; let first = $first) {
+            <app-birthday-row [soon]="first" [day]="b.day" [month]="b.month" [name]="b.name" [subtitle]="b.subtitle" />
+          }
         </div>
       </div>
     </section>
@@ -55,17 +60,28 @@
       <ng-template #mock let-s let-d="done"><app-landing-mock kind="ai" [step]="s" [done]="d" /></ng-template>
     </app-landing-demo>
 
-    <app-landing-demo class="ld-demo" [reverse]="true" kicker="Страница «Здоровье»" heading="Вся медкарта семьи — на одном экране"
-                      lead="Лекарства по расписанию, дневник, анализы, приёмы врача и прививки — для себя, детей и родителей."
+    <app-landing-demo class="ld-demo" [reverse]="true" kicker="Страница «Здоровье»" heading="Вся медкарта — на одном экране"
+                      lead="Лекарства по расписанию, дневник, анализы, приёмы врача и прививки. Данные детей и родителей — в тех же разделах."
                       [steps]="healthSteps">
       <ng-template #mock let-s let-d="done"><app-landing-mock kind="health" [step]="s" [done]="d" /></ng-template>
     </app-landing-demo>
 
     <app-landing-demo class="ld-demo" kicker="Отчёт для врача" heading="Всё важное для врача — в одном PDF"
-                      lead="Анализы вне нормы, динамика, лекарства и дневник за нужный период. Врач откроет по ссылке без регистрации."
+                      lead="Динамика анализов, препараты и записи дневника за нужный период. Врач откроет по ссылке без регистрации."
                       [steps]="reportSteps">
       <ng-template #mock let-s let-d="done"><app-landing-mock kind="report" [step]="s" [done]="d" /></ng-template>
     </app-landing-demo>
+
+    <!-- Мини-версия самого отчёта — как его увидит врач. -->
+    <section class="ld-section ld-report" aria-labelledby="ld-report-title">
+      <div class="ld-report-text">
+        <h2 class="ld-h2" id="ld-report-title">Так отчёт видит врач</h2>
+        <ul class="ld-report-points">
+          @for (p of reportPoints; track p) { <li class="ld-text">{{ p }}</li> }
+        </ul>
+      </div>
+      <app-landing-report-preview class="ld-report-page" />
+    </section>
 
     <section class="ld-section" aria-labelledby="ld-features-title">
       <h2 class="ld-h2" id="ld-features-title">А ещё</h2>

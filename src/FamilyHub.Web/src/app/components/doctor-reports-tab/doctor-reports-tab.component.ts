@@ -24,7 +24,7 @@ import { DoctorReportLinkDialogComponent } from '../doctor-report-link-dialog/do
 
 import { saveBlob } from '../../shared/util/save-blob';
 import { Copy, Eye, History, Link, Trash2, Unlink } from 'lucide';
-/** «Миша Поляков», «Барсик (кот) — питомец», «обо мне»; null — мой отчёт о себе. */
+/** «Миша Иванов», «Барсик (кот) — питомец», «обо мне»; null — мой отчёт о себе. */
 function subjectLine(r: DoctorReport): string | null {
   if (!r.canManage) return 'обо мне';
   if (r.subjectKind === DoctorReportSubjectKind.Self || !r.subjectName) return null;
