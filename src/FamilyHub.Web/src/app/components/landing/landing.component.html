@@ -48,188 +48,23 @@
       </div>
     </section>
 
-    <!-- Три главные фичи — демо по прокрутке (app-landing-demo). Макеты собраны из тех же классов, что
-         приложение; data-tap="N" — куда «нажимает» курсор на шаге N. -->
+    <!-- Три главные фичи — демо по прокрутке (app-landing-demo); макеты экранов — app-landing-mock. -->
     <app-landing-demo class="ld-demo" kicker="Расшифровка анализов" heading="Сфотографировали бланк — ИИ разобрал его за вас"
                       lead="Показатели, нормы и короткое резюме для врача — без ручного ввода."
                       [steps]="aiSteps">
-      <ng-template #mock let-s let-d="done">
-        <div class="ldm-bar">
-          <span class="ldm-back"><app-icon [icon]="icons.ChevronLeft" [size]="16" />Анализы</span>
-        </div>
-        @if (s === 0 || (s === 1 && !d)) {
-          <div class="ldm-body">
-            <div class="ldm-h1">Добавить анализ</div>
-            <div class="ldm-label">Чей анализ</div>
-            <div class="seg ldm-seg"><span class="seg-opt">Я</span><span class="seg-opt active">Мама</span></div>
-            <div class="ldm-label">Файлы</div>
-            <div class="ldm-files">
-              <span class="ldm-upload" data-tap="0"><app-icon [icon]="icons.Upload" [size]="18" />Добавить</span>
-              @if (s === 1 || d) {
-                <span class="ldm-file ldm-in"><app-icon [icon]="icons.FileText" [size]="18" />Бланк ОАК.jpg</span>
-              }
-            </div>
-            <div class="ldm-ai" [class.ldm-ai-on]="s === 1 || d">
-              <div class="flex-fill">
-                <div class="ldm-strong">Распознать бланк</div>
-                <div class="ldm-muted">Показатели заполнятся сами за 1–3 минуты</div>
-              </div>
-              <span class="ldm-switch"></span>
-            </div>
-            <span class="btn btn-primary ldm-cta" [class.ldm-disabled]="s === 0 && !d" data-tap="1">Добавить анализ</span>
-          </div>
-        } @else {
-          <div class="ldm-body">
-            <div class="ldm-h1">Общий анализ крови</div>
-            <div class="ldm-muted">Мама · сегодня · Кровь</div>
-            @if (s === 1) {
-              <div class="alert-info ldm-alert ldm-in"><span class="pipeline-step-spinner"></span>ИИ распознаёт бланк…</div>
-            } @else {
-              <div class="ldm-counters ldm-in">
-                <span class="ldm-counter tone-danger" [class.ldm-pressed]="d" data-tap="2"><b>2</b>вне нормы</span>
-                <span class="ldm-counter tone-success"><b>18</b>в норме</span>
-              </div>
-            }
-            <div class="ldm-list">
-              @for (row of aiRows; track row.name; let i = $index) {
-                <!-- Нажали «2 вне нормы» — остаются только отклонения, как фильтр в приложении. -->
-                @if ((s === 2 || i < 4) && !(s === 2 && d && !row.out)) {
-                  <div class="ldm-ind" [style.--i]="i">
-                    <div class="ldm-ind-head">
-                      <span class="ldm-strong">{{ row.name }}</span>
-                      <span class="ldm-value">{{ row.value }} <small>{{ row.unit }}</small></span>
-                    </div>
-                    <div class="ldm-range"><span class="ldm-range-norm"></span><span class="ldm-range-dot" [class.ldm-range-out]="row.out" [style.left.%]="row.pos"></span></div>
-                    @if (row.out) { <span class="badge badge-danger">{{ row.out }}</span> }
-                  </div>
-                }
-              }
-            </div>
-            @if (s === 2 && d) {
-              <div class="ldm-summary ldm-in">
-                <div class="ldm-summary-head"><app-icon [icon]="icons.Sparkles" [size]="16" />Резюме для врача</div>
-                <p>Повышены СОЭ и лимфоциты, снижены лейкоциты — так бывает после вирусной инфекции.</p>
-                <p class="ldm-muted">Составлено ИИ — не диагноз, обсудите с врачом.</p>
-              </div>
-            }
-          </div>
-        }
-      </ng-template>
+      <ng-template #mock let-s let-d="done"><app-landing-mock kind="ai" [step]="s" [done]="d" /></ng-template>
     </app-landing-demo>
 
     <app-landing-demo class="ld-demo" [reverse]="true" kicker="Страница «Здоровье»" heading="Вся медкарта семьи — на одном экране"
                       lead="Лекарства по расписанию, дневник, анализы, приёмы врача и прививки — для себя, детей и родителей."
                       [steps]="healthSteps">
-      <ng-template #mock let-s let-d="done">
-        <div class="ldm-bar ldm-bar-row">
-          <span class="ldm-h2">Здоровье</span>
-          <div class="seg ldm-seg ldm-seg-sm">
-            <span class="seg-opt" [class.active]="!(s === 2 && d)">Я</span>
-            <span class="seg-opt" [class.active]="s === 2 && d" data-tap="2">Мама</span>
-          </div>
-        </div>
-        <div class="ldm-scroll" [style.--shift]="s">
-          <div class="ldm-group">Каждый день</div>
-          <div class="ldm-tile">
-            <div class="ldm-tile-head"><app-icon-tile [icon]="icons.Pill" tone="medication" size="sm" /><span class="ldm-strong">Приём лекарств</span></div>
-            <div class="ldm-row">
-              <div><div class="ldm-big">{{ s === 0 && !d ? 1 : 2 }} из 3</div><div class="ldm-muted">принято сегодня</div></div>
-              <div class="ldm-squares">
-                <span class="ldm-sq ldm-sq-done"></span>
-                <span class="ldm-sq" [class.ldm-sq-done]="!(s === 0 && !d)"></span>
-                <span class="ldm-sq"></span>
-              </div>
-            </div>
-            <div class="ldm-next">
-              @if (s === 0 && !d) {
-                <b>14:00</b><span class="flex-fill">Омепразол</span>
-                <span class="btn btn-primary ldm-btn-sm" data-tap="0">Отметить приём</span>
-              } @else {
-                <span class="ldm-ok ldm-in"><app-icon [icon]="icons.Check" [size]="16" />Принято в 14:00</span>
-                <span class="flex-fill"></span><span class="ldm-muted">дальше 21:00</span>
-              }
-            </div>
-          </div>
-          <div class="ldm-tile">
-            <div class="ldm-tile-head"><app-icon-tile [icon]="icons.NotebookPen" tone="measure" size="sm" /><span class="ldm-strong">Дневник</span></div>
-            <div class="ldm-row">
-              <div>
-                <div class="ldm-big">{{ s === 1 && d || s === 2 ? '135/90' : '118/76' }}</div>
-                <div class="ldm-muted">давление · сегодня</div>
-              </div>
-              <app-trend-line class="ldm-trend" [values]="s === 1 && d || s === 2 ? bpTrendNew : bpTrend" label="Давление" />
-            </div>
-            @if (s === 1 && d || s === 2) { <span class="badge badge-warning ldm-in">выше рекомендуемого</span> }
-            <div class="ldm-chips">
-              <span class="chip" data-tap="1">+ Давление</span><span class="chip">Симптом</span><span class="chip">Сон</span>
-            </div>
-          </div>
-          <div class="ldm-group">Медкарта{{ s === 2 && d ? ' · Мама' : '' }}</div>
-          <div class="ldm-grid">
-            @for (t of (s === 2 && d ? medcardMom : medcardMe); track t.title) {
-              <div class="ldm-tile ldm-tile-sm ldm-in">
-                <div class="ldm-tile-head"><app-icon-tile [icon]="t.icon" [tone]="t.tone" size="sm" /></div>
-                <span class="ldm-strong">{{ t.title }}</span>
-                <span class="ldm-muted">{{ t.text }}</span>
-                @if (t.badge) { <span [class]="'badge badge-' + t.badgeTone">{{ t.badge }}</span> }
-              </div>
-            }
-          </div>
-        </div>
-      </ng-template>
+      <ng-template #mock let-s let-d="done"><app-landing-mock kind="health" [step]="s" [done]="d" /></ng-template>
     </app-landing-demo>
 
     <app-landing-demo class="ld-demo" kicker="Отчёт для врача" heading="Всё важное для врача — в одном PDF"
                       lead="Анализы вне нормы, динамика, лекарства и дневник за нужный период. Врач откроет по ссылке без регистрации."
                       [steps]="reportSteps">
-      <ng-template #mock let-s let-d="done">
-        <div class="ldm-bar">
-          <span class="ldm-back"><app-icon [icon]="icons.ChevronLeft" [size]="16" />Отчёты для врача</span>
-        </div>
-        @if (s < 2 || !d) {
-          <div class="ldm-body">
-            <div class="ldm-h1">Новый отчёт</div>
-            <div class="ldm-label">Период</div>
-            <div class="seg ldm-seg">
-              <span class="seg-opt">1 мес</span>
-              <span class="seg-opt" [class.active]="s === 0 && !d">3 мес</span>
-              <span class="seg-opt" [class.active]="!(s === 0 && !d)" data-tap="0">6 мес</span>
-              <span class="seg-opt">1 год</span>
-            </div>
-            <div class="ldm-muted ldm-count">
-              За период: {{ s === 0 && !d ? '2 анализа, 1 приём, 14 записей дневника' : '4 анализа, 2 приёма, 38 записей дневника' }}
-            </div>
-            <div class="ldm-label">Что включить</div>
-            <div class="ldm-toggles">
-              @for (o of reportOptions; track o.title; let i = $index) {
-                <div class="ldm-toggle">
-                  <app-icon [icon]="o.icon" [size]="18" />
-                  <span class="flex-fill">{{ o.title }}</span>
-                  <span class="ldm-switch" [class.ldm-switch-on]="o.on || (i === 1 && (s > 1 || (s === 1 && d)))"
-                        [attr.data-tap]="i === 1 ? 1 : null"></span>
-                </div>
-              }
-            </div>
-            <span class="btn btn-primary ldm-cta" data-tap="2"><app-icon [icon]="icons.FileText" [size]="18" />Сформировать PDF</span>
-          </div>
-        } @else {
-          <div class="ldm-body">
-            <div class="ldm-h1">Отчёты для врача</div>
-            <div class="ldm-report ldm-in">
-              <div class="ldm-pdf">
-                @for (l of [1, 2, 3, 4, 5, 6]; track l) { <span class="ldm-pdf-line" [style.--i]="l"></span> }
-              </div>
-              <div class="ldm-strong">Апрель — октябрь 2026</div>
-              <div class="ldm-muted">Мама · для терапевта · 5 страниц</div>
-              <span class="badge badge-success">Ссылка активна до 28 октября</span>
-              <div class="ldm-actions">
-                <span class="btn btn-primary ldm-btn-sm"><app-icon [icon]="icons.Share2" [size]="16" />Поделиться</span>
-                <span class="btn btn-secondary ldm-btn-sm"><app-icon [icon]="icons.Download" [size]="16" />PDF</span>
-              </div>
-            </div>
-          </div>
-        }
-      </ng-template>
+      <ng-template #mock let-s let-d="done"><app-landing-mock kind="report" [step]="s" [done]="d" /></ng-template>
     </app-landing-demo>
 
     <section class="ld-section" aria-labelledby="ld-features-title">
