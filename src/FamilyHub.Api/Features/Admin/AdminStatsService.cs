@@ -26,7 +26,8 @@ public class AdminStatsService(
     IOptions<JwtOptions> jwtOptions,
     IOptions<ConsentOptions> consentOptions,
     IOptions<AttachmentDownloadOptions> attachmentOptions,
-    HealthCheckService healthChecks)
+    HealthCheckService healthChecks,
+    JobStorage jobStorage)
 {
     public async Task<AdminOverviewDto> GetOverviewAsync(CancellationToken ct = default)
     {
@@ -189,15 +190,18 @@ public class AdminStatsService(
     /// end of the stream", TECH_DEBT.md #9). Повторный вызов почти всегда проходит: он получает НОВЫЙ
     /// <see cref="IMonitoringApi"/> (а не переиспользует сорвавшийся), так что второе соединение из
     /// пула обычно уже рабочее. Только этот флейк — HealthChecks/db-запросы выше по методу такого не
-    /// показывали, отдельного ретрая для них не заводим.</summary>
-    private static (List<HangfireQueueDto> Queues, long FailedTotal) GetHangfireStatsWithRetry()
+    /// показывали, отдельного ретрая для них не заводим.
+    /// Хранилище — из DI (своё у каждого хоста), а не статический JobStorage.Current: тот общий на процесс,
+    /// и в интеграционных тестах указывал на Postgres уже остановленного хоста другого класса тестов
+    /// («Connection refused», ретрай не спасал).</summary>
+    private (List<HangfireQueueDto> Queues, long FailedTotal) GetHangfireStatsWithRetry()
     {
         const int maxAttempts = 3;
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                var monitoring = JobStorage.Current.GetMonitoringApi();
+                var monitoring = jobStorage.GetMonitoringApi();
                 var queues = monitoring.Queues().Select(q => new HangfireQueueDto(q.Name, q.Length)).ToList();
                 var failedTotal = monitoring.FailedCount();
                 return (queues, failedTotal);
