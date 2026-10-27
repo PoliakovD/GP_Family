@@ -1,14 +1,17 @@
-import { Component, ElementRef, HostListener, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { OverlayStackService } from '../util/overlay-stack.service';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { BottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
+import type { IconNode as LucideIconData } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
+import { Ellipsis } from 'lucide';
 
 /** Один пункт меню «…» — редизайн v2. Не более того, что уже умеют существующие
  * `.btn`/иконки Phosphor — специально не вводится отдельная "опасное действие" разметка сверх
  * `danger`, чтобы не плодить третий визуальный язык кнопок. */
 export interface ActionMenuItem {
   label: string;
-  icon?: string; // класс Phosphor-иконки
+  icon?: LucideIconData;
   danger?: boolean;
   handler: () => void;
 }
@@ -22,11 +25,13 @@ export interface ActionMenuItem {
  */
 @Component({
     selector: 'app-action-menu',
-    imports: [BottomSheetComponent],
+    imports: [BottomSheetComponent, IconComponent],
     templateUrl: './action-menu.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './action-menu.component.scss'
 })
 export class ActionMenuComponent {
+  protected readonly ellipsis = Ellipsis;
   private readonly overlays = inject(OverlayStackService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -47,7 +52,23 @@ export class ActionMenuComponent {
 
   select(item: ActionMenuItem): void {
     this.open.set(false);
-    item.handler();
+    if (this.isWide || !history.state?.overlayDismiss) {
+      item.handler();
+      return;
+    }
+    // Мобильная шторка при закрытии снимает свою запись истории через history.back() — асинхронно.
+    // Если действие сразу откроет свой лист («Справка», «Изменить»), его pushState окажется верхним,
+    // и запоздавший popstate закроет уже новый лист. Поэтому действие — после этого popstate
+    // (с запасным таймером, если браузер его не прислал).
+    let done = false;
+    const run = (): void => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('popstate', run);
+      item.handler();
+    };
+    window.addEventListener('popstate', run);
+    setTimeout(run, 400);
   }
 
   @HostListener('document:click', ['$event'])
@@ -58,8 +79,7 @@ export class ActionMenuComponent {
 
   @HostListener('document:keydown.escape', ['$event'])
   onEscape(event: Event): void {
-      const kbEvent = event as KeyboardEvent
-    if (kbEvent.defaultPrevented || this.overlays.hasOpen()) return;
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.open() && this.isWide) this.open.set(false);
   }
 }

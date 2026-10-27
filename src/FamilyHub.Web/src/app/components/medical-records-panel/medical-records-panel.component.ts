@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -28,7 +28,9 @@ import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.com
 import type { PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
 import { AvatarComponent } from '../../shared/avatar/avatar.component';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { Camera, Eye, FlaskConical, Info, Layers, Pencil, Plus, Share2, SlidersHorizontal, Trash2, WandSparkles, X } from 'lucide';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 import { BackLinkComponent } from '../../shared/back-link/back-link.component';
 import type { ActionMenuItem } from '../../shared/action-menu/action-menu.component';
 import { InfiniteScrollSentinelComponent } from '../../shared/infinite-scroll-sentinel/infinite-scroll-sentinel.component';
@@ -42,6 +44,7 @@ import { buildPatientOptions, type PatientOption } from '../../shared/util/patie
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { enrichmentFollowupStep, nextPipelineSteps } from './extraction-pipeline';
 import { ExtractionPoller } from './extraction-poller';
+import type { IndicatorStatusFilter } from './indicator-display';
 import { accessSummary } from './record-access';
 import { RecordAccessSheetComponent } from './record-access-sheet.component';
 import { RecordEditSheetComponent } from './record-edit-sheet.component';
@@ -103,15 +106,17 @@ let nextInstanceId = 0;
     imports: [
         NgTemplateOutlet,
         FormsModule, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent,
-        AvatarComponent, PersonChipComponent, BackLinkComponent, InfiniteScrollSentinelComponent,
+        AvatarComponent, BackLinkComponent, EmptyStateComponent, IconComponent, InfiniteScrollSentinelComponent,
         IndicatorInfoComponent, IndicatorInfoPanelComponent,
         RecordAccessSheetComponent, RecordEditSheetComponent, RecordDetailBodyComponent, RecordDetailHeaderComponent,
         RecordListCardComponent,
     ],
     templateUrl: './medical-records-panel.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './medical-records-panel.component.scss'
 })
 export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
+  protected readonly icons = { Camera, Eye, FlaskConical, Info, Plus, SlidersHorizontal, WandSparkles, X };
   readonly kind = input.required<MedicalRecordKind>();
 
   /** Редизайн v3 — «одиночный режим» (PR6 плана): мобильный экран открытой записи
@@ -165,6 +170,8 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   // конструкторе, ветка recordId).
   filesOpen = false;
   summaryOpen = false;
+  /** Нажатый счётчик-фильтр «вне нормы / в норме / без нормы» в шапке записи. */
+  statusFilter: IndicatorStatusFilter | null = null;
 
   // --- Пагинация → бесконечная прокрутка (редизайн v2, PR3b) — группировка по человеку
   // несовместима с нумерованными страницами (у одного человека может быть занята вся страница,
@@ -318,6 +325,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
         this.pageAction.setImmersive(true);
         this.filesOpen = false;
         this.summaryOpen = false;
+        this.statusFilter = null;
         void this.refresh();
         return;
       }
@@ -332,7 +340,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // (было — createOpen, см. PR7 плана).
       this.pageAction.set({
         label: this.labels.addButtonLabel,
-        icon: 'ph-bold ph-plus',
+        icon: Plus,
         handler: () => this.openCreate(),
       });
       // Батч-загрузка (несколько документов одного пациента, каждый — своя запись/свой прогон
@@ -340,7 +348,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
       // остаётся отдельным. См. class doc RecordBatchAddComponent.
       this.pageAction.setSecondaryAction({
         label: 'Загрузить несколько',
-        icon: 'ph-bold ph-stack',
+        icon: Layers,
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
       // Редизайн v2.1 — своё поле поиска отдаётся топбару целиком (было — рисовалось инлайн под
@@ -369,12 +377,12 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
     if (!this.recordId()) {
       this.pageAction.set({
         label: this.labels.addButtonLabel,
-        icon: 'ph-bold ph-plus',
+        icon: Plus,
         handler: () => this.openCreate(),
       });
       this.pageAction.setSecondaryAction({
         label: 'Загрузить несколько',
-        icon: 'ph-bold ph-stack',
+        icon: Layers,
         handler: () => { void this.router.navigate([this.kindBasePath(), 'batch']); },
       });
       this.pageAction.setPageSearch({
@@ -532,11 +540,11 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   recordMenuActions(item: MedicalRecord): ActionMenuItem[] {
     const actions: ActionMenuItem[] = [];
     if (this.canDelete(item)) {
-      actions.push({ label: 'Редактировать', icon: 'ph ph-pencil-simple', handler: () => this.openEditSheet(item) });
+      actions.push({ label: 'Редактировать', icon: Pencil, handler: () => this.openEditSheet(item) });
     }
-    actions.push({ label: 'Доступ', icon: 'ph ph-share-network', handler: () => this.openAccessSheet(item) });
+    actions.push({ label: 'Доступ', icon: Share2, handler: () => this.openAccessSheet(item) });
     if (this.canDelete(item)) {
-      actions.push({ label: 'Удалить', icon: 'ph ph-trash', danger: true, handler: () => void this.handleDelete(item) });
+      actions.push({ label: 'Удалить', icon: Trash2, danger: true, handler: () => void this.handleDelete(item) });
     }
     return actions;
   }
@@ -633,8 +641,7 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeForFilters(event: Event): void {
-      const kbEvent = event as KeyboardEvent;
-    if (kbEvent.defaultPrevented || this.overlays.hasOpen()) return;
+    if (event.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }
 
