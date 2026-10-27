@@ -110,7 +110,7 @@ services:
   # (docker-compose.yml). Ни у одного сервиса, кроме caddy, нет наружу смотрящих портов (см.
   # шапку файла) — api ходит по имени сервиса внутри docker-сети.
   gotenberg:
-    image: gotenberg/gotenberg:8.37.0
+    image: gotenberg/gotenberg:8.38.1
     restart: unless-stopped
     # Только изолированная сеть previews (internal: true) — аудит security-audit-2026-10, H1:
     # LibreOffice разбирает недоверенные DOC/DOCX/RTF пользователей и может подтягивать внешние
