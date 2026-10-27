@@ -31,20 +31,7 @@ const SESSION_LESS_AUTH_PATHS = [
   '/api/auth/me',
 ];
 
-/** Общий in-flight refresh — параллельные 401 не должны бить по /api/auth/refresh каждый отдельно. */
-let refreshInFlight: Promise<boolean> | null = null;
 
-function ensureRefreshed(http: HttpClient): Promise<boolean> {
-  if (!refreshInFlight) {
-    refreshInFlight = firstValueFrom(http.post('/api/auth/refresh', {}, { withCredentials: true }))
-      .then(() => true)
-      .catch(() => false)
-      .finally(() => {
-        refreshInFlight = null;
-      });
-  }
-  return refreshInFlight;
-}
 
 /**
  * Запрос уже повторён после перевыпуска CSRF-токена — второй 400 csrf_token_invalid не ретраим
@@ -131,7 +118,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       if (error.status === 401 && isPwaMode && !isSessionLessPath && !isAdminPath) {
-        return from(ensureRefreshed(http)).pipe(
+        return from(auth.refresh()).pipe(
           switchMap((refreshed) =>
             refreshed ? next(req.clone({ headers, withCredentials: true })) : throwError(() => error)),
           catchError(() => {

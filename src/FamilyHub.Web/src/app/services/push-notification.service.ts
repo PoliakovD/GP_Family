@@ -224,7 +224,7 @@ export class PushNotificationService {
     const registration = await this.getManualRegistration();
     return registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: this.urlBase64ToUint8Array(serverPublicKey),
+      applicationServerKey: this.urlBase64ToUint8Array(serverPublicKey) as BufferSource,
     });
   }
 

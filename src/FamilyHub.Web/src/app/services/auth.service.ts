@@ -97,6 +97,21 @@ export class AuthService {
   /** Общий in-flight запрос — см. loadMe(). */
   private pendingLoadMe: Promise<Me | null> | null = null;
   private pendingTelegramInit: Promise<boolean> | null = null;
+  /** Общий in-flight refresh — параллельные 401 не должны бить по /api/auth/refresh каждый отдельно. */
+  private pendingRefresh: Promise<boolean> | null = null;
+  ensureRefreshed(http: HttpClient): Promise<boolean> {
+      if (!this.pendingRefresh) {
+          this.pendingRefresh = firstValueFrom(http.post('/api/auth/refresh', {}, { withCredentials: true }))
+              .then(() => true)
+              .catch(() => false)
+              .finally(() => {
+                  this.pendingRefresh = null;
+              });
+      }
+      return this.pendingRefresh;
+  }
+
+
 
   /** telegram/dev — вход неявный (заголовки интерцептора); pwa — нужна cookie-сессия. */
   get mode(): 'telegram' | 'pwa' {
@@ -133,14 +148,14 @@ export class AuthService {
         // хотя пользователь всё ещё полноценно аутентифицирован (особенно заметно в
         // Telegram-режиме, где сессия per-request и в принципе не может "потеряться").
         const status = e instanceof HttpErrorResponse ? e.status : 0;
-        if (status === 401) {
-          this.me.set(null);
-          this.meLoadError.set('unauthorized');
-        } else {
-          this.meLoadError.set('transient');
+        if (status === 401 && (await this.refresh())) {
+            try {
+                return await this.fetchMe();
+            } catch (e2) {
+                return this.handleLoadMeError(e2);
+            }
         }
-        this.log.log('auth', 'error', `GET /api/auth/me ✗ ${status} ${this.describeError(e)}`);
-        return this.me();
+        return this.handleLoadMeError(e);
       } finally {
         this.pendingLoadMe = null;
       }
@@ -148,6 +163,25 @@ export class AuthService {
 
     return this.pendingLoadMe;
   }
+    private async fetchMe(): Promise<Me> {
+        const me = await firstValueFrom(this.http.get<Me>('/api/auth/me'));
+        this.me.set(me);
+        this.meLoadError.set(null);
+        this.log.log('auth', 'info', `GET /api/auth/me ✓ provider=${me.provider}`);
+        return me;
+    }
+
+    private handleLoadMeError(e: unknown): Me | null {
+        const status = e instanceof HttpErrorResponse ? e.status : 0;
+        if (status === 401) {
+            this.me.set(null);
+            this.meLoadError.set('unauthorized');
+        } else {
+            this.meLoadError.set('transient');
+        }
+        this.log.log('auth', 'error', `GET /api/auth/me ✗ ${status} ${this.describeError(e)}`);
+        return this.me();
+    }
 
   registerStart(email: string): Promise<void> {
     return firstValueFrom(this.http.post<void>('/api/auth/register/start', { email }));
@@ -212,12 +246,18 @@ export class AuthService {
    * освежить сессию явно, вне контекста конкретного проваленного запроса.
    */
   async refresh(): Promise<boolean> {
-    try {
-      await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
-      return true;
-    } catch {
-      return false;
-    }
+      if (this.pendingRefresh) return this.pendingRefresh;
+      this.pendingRefresh = (async () => {
+          try {
+              await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
+              return true;
+          } catch {
+              return false;
+          } finally {
+              this.pendingRefresh = null;
+          }
+      })();
+      return this.pendingRefresh;
   }
 
   /**
