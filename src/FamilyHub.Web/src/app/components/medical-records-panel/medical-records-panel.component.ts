@@ -632,8 +632,9 @@ export class MedicalRecordsPanelComponent implements OnInit, OnDestroy {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscapeForFilters(event: KeyboardEvent): void {
-    if (event.defaultPrevented || this.overlays.hasOpen()) return;
+  onEscapeForFilters(event: Event): void {
+      const kbEvent = event as KeyboardEvent;
+    if (kbEvent.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.filtersOpen && this.isWide) this.filtersOpen = false;
   }
 

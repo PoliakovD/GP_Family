@@ -57,8 +57,9 @@ export class ActionMenuComponent {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
-    if (event.defaultPrevented || this.overlays.hasOpen()) return;
+  onEscape(event: Event): void {
+      const kbEvent = event as KeyboardEvent
+    if (kbEvent.defaultPrevented || this.overlays.hasOpen()) return;
     if (this.open() && this.isWide) this.open.set(false);
   }
 }

@@ -88,9 +88,10 @@ export class AppSearchComponent {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
+  onEscape(event: Event): void {
+      const kbEvent = event as KeyboardEvent;
     // Escape в открытом окне/листе — его, а не поиска (раньше заодно стирал запрос).
-    if (event.defaultPrevented || this.overlays.hasOpen()) return;
+    if (kbEvent.defaultPrevented || this.overlays.hasOpen()) return;
     this.search.reset();
   }
 

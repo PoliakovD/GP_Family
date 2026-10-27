@@ -37,8 +37,9 @@ export class ConfirmDialogComponent {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
-    if (this.confirm.request() && this.overlays.claimEscape(this, event)) this.confirm.resolve(false);
+  onEscape(event: Event): void {
+      const kbEvent = event as KeyboardEvent;
+    if (this.confirm.request() && this.overlays.claimEscape(this, kbEvent)) this.confirm.resolve(false);
   }
 
   onKeydown(event: KeyboardEvent): void {

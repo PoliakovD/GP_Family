@@ -43,8 +43,9 @@ export class BottomSheetComponent implements OnChanges, OnDestroy {
   }
 
   @HostListener('document:keydown.escape', ['$event'])
-  onEscape(event: KeyboardEvent): void {
-    if (this.open && this.overlays.claimEscape(this, event)) this.closed.emit();
+  onEscape(event: Event): void {
+      const kbEvent = event as KeyboardEvent
+    if (this.open && this.overlays.claimEscape(this, kbEvent)) this.closed.emit();
   }
 
   requestClose(): void {

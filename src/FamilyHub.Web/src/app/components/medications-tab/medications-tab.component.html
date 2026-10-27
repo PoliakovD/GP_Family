@@ -18,7 +18,7 @@
             <p class="muted mb-1">{{ item.medication.familyName }} · {{ item.medication.medkitName }}</p>
           }
           @if (item.medication?.expiryDate) {
-            <p class="muted mb-0">Срок годности: {{ item.medication?.expiryDate }}</p>
+            <p class="muted mb-0">Срок годности: {{ item.medication.expiryDate }}</p>
           } @else {
             <p class="muted mb-0">Срок годности не указан</p>
           }
