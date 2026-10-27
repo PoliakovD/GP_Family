@@ -100,15 +100,15 @@ export class AuthService {
   /** Общий in-flight refresh — параллельные 401 не должны бить по /api/auth/refresh каждый отдельно. */
   private pendingRefresh: Promise<boolean> | null = null;
   ensureRefreshed(http: HttpClient): Promise<boolean> {
-      if (!pendingRefresh) {
-          pendingRefresh = firstValueFrom(http.post('/api/auth/refresh', {}, { withCredentials: true }))
+      if (!this.pendingRefresh) {
+          this.pendingRefresh = firstValueFrom(http.post('/api/auth/refresh', {}, { withCredentials: true }))
               .then(() => true)
               .catch(() => false)
               .finally(() => {
-                  pendingRefresh = null;
+                  this.pendingRefresh = null;
               });
       }
-      return pendingRefresh;
+      return this.pendingRefresh;
   }
 
 
@@ -163,6 +163,13 @@ export class AuthService {
 
     return this.pendingLoadMe;
   }
+    private async fetchMe(): Promise<Me> {
+        const me = await firstValueFrom(this.http.get<Me>('/api/auth/me'));
+        this.me.set(me);
+        this.meLoadError.set(null);
+        this.log.log('auth', 'info', `GET /api/auth/me ✓ provider=${me.provider}`);
+        return me;
+    }
 
     private handleLoadMeError(e: unknown): Me | null {
         const status = e instanceof HttpErrorResponse ? e.status : 0;
@@ -252,7 +259,6 @@ export class AuthService {
       })();
       return this.pendingRefresh;
   }
-
 
   /**
    * Проверяет, привязан ли текущий TelegramId к аккаунту — POST /api/auth/telegram/init.
