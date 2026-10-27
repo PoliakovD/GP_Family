@@ -3,11 +3,11 @@
 :host { display: block; }
 
 .rd-head {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .rd-title {
-  font-size: 1.1rem;
+  font: var(--text-title);
   font-weight: 600;
   text-align: left;
   padding: 0;
@@ -17,14 +17,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .rd-grid {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.5fr) minmax(240px, 0.8fr);
-  gap: 12px;
+  gap: var(--space-3);
   align-items: start;
 }
 
@@ -34,60 +34,60 @@
 
 .rd-col {
   min-width: 0;
-  padding: 10px;
+  padding: var(--space-3);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
-  background: var(--color-paper);
+  background: var(--color-surface);
 }
 
 .rd-hint {
-  margin: 0 0 8px;
-  padding: 6px 10px;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-paper));
-  font-size: 0.8235rem;
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  font: var(--text-caption);
 }
 
 .rd-warn {
-  margin: 0 0 6px;
-  color: var(--color-status-danger-text);
-  font-size: 0.8235rem;
+  margin: 0 0 var(--space-2);
+  color: var(--color-danger);
+  font: var(--text-caption);
 }
 
 .rd-reason {
-  margin: 0 0 8px;
-  font-size: 0.8235rem;
+  margin: 0 0 var(--space-2);
+  font: var(--text-caption);
 }
 
 .rd-confidence {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-status-ok) 14%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
 }
 
 .rd-confidence-low {
-  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
 }
 
 .rd-confidence-value {
-  font-size: 1.4rem;
+  font: var(--text-metric-mobile);
   font-weight: 700;
 }
 
 .rd-choices {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .rd-choice {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-start;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -99,7 +99,7 @@
   text-align: left;
   font: inherit;
   color: inherit;
-  background: var(--color-paper);
+  background: var(--color-surface);
   border-style: dashed;
 
   &:hover:not(:disabled) {
@@ -108,55 +108,59 @@
 }
 
 .rd-from-cache {
-  margin-top: 10px;
+  margin-top: var(--space-3);
 }
 
 .rd-choice-active {
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-paper));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 }
 
 .rd-diff {
-  margin-bottom: 10px;
-  padding: 8px 10px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-status-warning);
-  background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-paper));
+  border: 1px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
 }
 
 .rd-diff-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
   align-items: baseline;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
-.rd-diff-before { color: var(--color-status-danger-text); }
-.rd-diff-after { color: var(--color-status-ok-text); }
+.rd-diff-before { color: var(--color-danger); }
+.rd-diff-after { color: var(--color-success); }
 
 .rd-provenance {
   display: grid;
-  gap: 4px;
-  margin-bottom: 10px;
-  font-size: 0.8235rem;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font: var(--text-caption);
 }
 
 .rd-editor {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .rd-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 kbd {
-  margin-left: 6px;
-  padding: 0 5px;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-1);
   border: 1px solid currentColor;
-  border-radius: 4px;
-  font-size: 0.7rem;
+  border-radius: var(--radius-xs);
+  font: var(--text-micro);
   opacity: 0.75;
 }
+
+// Бывшие inline-стили шаблона.
+.x-mt-s2 { margin-top: var(--space-2); }
+.x-mt-s3-p-s3 { margin-top: var(--space-3); padding: var(--space-3); }

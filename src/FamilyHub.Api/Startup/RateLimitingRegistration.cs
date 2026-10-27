@@ -122,6 +122,17 @@ public static class RateLimitingRegistration
                     Window = TimeSpan.FromSeconds(extractionRateLimits.MedicalWriteWindowSeconds),
                     QueueLimit = 0,
                 }));
+
+            // Чат семьи (ADR-0019): отправка/правка/реакции — живой разговор допускает частые запросы, но не
+            // флуд (каждое сообщение — запись в БД, рассылка по хабу и задача уведомления).
+            limiterOptions.AddPolicy("chat-write", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+                UserOrIpPartitionKey(httpContext),
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 60,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
         });
 
         return builder;

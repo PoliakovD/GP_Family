@@ -1,20 +1,26 @@
 // Ключ кэша — служебная подпись под редактируемым названием: моноширинный, чтобы не путать с названием для людей.
 .cache-key,
 .cache-hint {
-  font-size: 0.8235rem;
+  font: var(--text-caption);
 
   code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    background: var(--color-neutral-100);
-    border-radius: var(--radius-sm, 4px);
-    padding: 0 4px;
+    font-family: var(--font-mono);
+    background: var(--color-surface-muted);
+    border-radius: var(--radius-xs);
+    padding: 0 var(--space-1);
   }
 }
 
 .cache-subtitle {
-  font-size: 0.8235rem;
+  font: var(--text-caption);
 }
 
 .cache-override {
   min-width: 120px;
 }
+
+// Бывшие inline-стили шаблона.
+.x-maxw-200px { max-width: 200px; }
+.x-minw-160px { min-width: 160px; }
+.x-minw-220px { min-width: 220px; }
+.x-minw-260px { min-width: 260px; }

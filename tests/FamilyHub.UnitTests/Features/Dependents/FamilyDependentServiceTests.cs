@@ -153,7 +153,7 @@ public class FamilyDependentServiceTests : SqliteTestBase
     {
         var (family, admin) = Db.SeedFamilyWithAdmin();
         var (_, dependent) = await _sut.CreateAsync(
-            family.Id, admin.Id, new CreateFamilyDependentRequest("Миша", "Поляков", null, Gender.Male, null, false, null));
+            family.Id, admin.Id, new CreateFamilyDependentRequest("Миша", "Иванов", null, Gender.Male, null, false, null));
         var report = new DoctorReport
         {
             Id = Guid.NewGuid(), OwnerUserId = admin.Id, SubjectFamilyDependentId = dependent!.Id,

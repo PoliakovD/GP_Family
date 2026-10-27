@@ -27,7 +27,7 @@
   <div class="card-title">Платный поиск {{ fromDate() || toDate() ? 'за выбранный период' : 'за 30 дней' }}</div>
   <div class="card-body">
     @if (statsLoading() && !stats()) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (statsError()) {
       <div class="alert-danger">{{ statsError() }}</div>
     } @else {
@@ -86,7 +86,7 @@
       платные, но видны здесь же — так можно проверить, что кэш реально работает).
     </p>
 
-    <form class="d-flex gap-2 mb-3 flex-wrap" (ngSubmit)="load(1)">
+    <form class="toolbar mb-3" (ngSubmit)="load(1)">
       <input class="input" placeholder="поиск по названию…"
              [ngModel]="query()" (ngModelChange)="query.set($event)" name="callQuery" />
       <select class="input" [ngModel]="outcomeFilter()" (ngModelChange)="setOutcomeFilter($event)" name="callOutcome">
@@ -99,7 +99,7 @@
     </form>
 
     @if (loading() && rows().length === 0) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
@@ -145,7 +145,7 @@
 
 <app-side-panel [open]="!!openCallId()" title="Вызов поиска" width="min(760px, 100vw)" (closed)="closeDetail()">
   @if (detailLoading()) {
-    <p class="text-muted">Загрузка…</p>
+    <app-loading-spinner />
   } @else {
     @let d = detail();
     @if (d) {
@@ -178,7 +178,7 @@
         </table>
       </div>
       <div class="card-title">Текст запроса</div>
-      <pre style="white-space: pre-wrap; word-break: break-word;">{{ d.queryText || '—' }}</pre>
+      <pre class="text-pre-wrap x-wb-break-word">{{ d.queryText || '—' }}</pre>
       @if (d.resultUrls.length > 0) {
         <div class="card-title">Использованные источники</div>
         <ul>

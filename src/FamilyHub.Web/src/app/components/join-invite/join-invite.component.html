@@ -1,68 +1,58 @@
-<div class="auth-shell">
-  <div class="card auth-card elev-md">
-    <div class="auth-brand">
-      <div class="card-kicker">FamilyHub</div>
-      <h2 class="card-title mb-0">Приглашение в семью</h2>
-    </div>
+<app-auth-card title="Приглашение в семью">
+  @switch (state()) {
+    @case ('loading') {
+      <app-loading-spinner />
+    }
+    @case ('not_found') {
+      <div class="alert-danger" role="alert">Ссылка недействительна — проверьте, что скопировали её целиком.</div>
+    }
+    @case ('revoked') {
+      <div class="alert-danger" role="alert">Эта ссылка отозвана тем, кто её создал.</div>
+    }
+    @case ('expired') {
+      <div class="alert-danger" role="alert">Срок действия ссылки истёк — попросите новую.</div>
+    }
+    @case ('exhausted') {
+      <div class="alert-danger" role="alert">Эта ссылка уже использована максимальное число раз.</div>
+    }
+    @case ('rate_limited') {
+      <div class="alert-danger" role="alert">Слишком много попыток — попробуйте открыть ссылку через минуту.</div>
+    }
+    @case ('network') {
+      <div class="alert-danger" role="alert">Не удалось связаться с сервером. Проверьте интернет.</div>
+      <button type="button" class="btn btn-primary btn-block" (click)="retry()">Повторить</button>
+    }
+    @case ('valid') {
+      <p class="auth-text">
+        Вас зовут в семью «{{ preview()?.familyName }}» в FamilyHub{{ preview()?.inviterName ? ' — пригласил(а) ' + preview()?.inviterName : '' }}.
+      </p>
+      <p class="auth-text">
+        Иногда администратор семьи должен подтвердить заявку — тогда доступ появится после его одобрения.
+      </p>
 
-    @switch (state()) {
-      @case ('loading') {
-        <p class="text-muted mb-0">Загрузка…</p>
-      }
-      @case ('not_found') {
-        <div class="alert-danger">Ссылка недействительна — проверьте, что скопировали её целиком.</div>
-      }
-      @case ('revoked') {
-        <div class="alert-danger">Эта ссылка отозвана тем, кто её создал.</div>
-      }
-      @case ('expired') {
-        <div class="alert-danger">Срок действия ссылки истёк — попросите новую.</div>
-      }
-      @case ('exhausted') {
-        <div class="alert-danger">Эта ссылка уже использована максимальное число раз.</div>
-      }
-      @case ('rate_limited') {
-        <div class="alert-danger">Слишком много попыток — попробуйте открыть ссылку через минуту.</div>
-      }
-      @case ('network') {
-        <div class="alert-danger">Не удалось связаться с сервером. Проверьте интернет.</div>
-        <button type="button" class="btn btn-primary btn-block mt-2" (click)="retry()">Повторить</button>
-      }
-      @case ('valid') {
-        <p class="text-muted mb-2">
-          Вас зовут в семью «{{ preview()?.familyName }}» в FamilyHub
-          @if (preview()?.inviterName) {
-            — пригласил(а) {{ preview()?.inviterName }}
-          }.
-        </p>
-        <p class="text-muted mb-3">
-          Иногда администратор семьи должен подтвердить заявку — тогда доступ появится после его одобрения.
-        </p>
-
-        @if (!authChecked()) {
-          <p class="text-muted mb-0">Загрузка…</p>
-        } @else if (auth.me() !== null) {
-          <button type="button" class="btn btn-primary btn-block" [disabled]="busy()" (click)="joinNow()">
-            {{ busy() ? 'Присоединяемся…' : 'Присоединиться' }}
-          </button>
-        } @else {
-          <p class="text-muted mb-3">
-            Чтобы принять приглашение, войдите в FamilyHub или создайте аккаунт.
-          </p>
-          <button type="button" class="btn btn-primary btn-block mb-2" (click)="goToRegister()">
+      @if (!authChecked()) {
+        <app-loading-spinner />
+      } @else if (auth.me() !== null) {
+        <button type="button" class="btn btn-primary btn-block" [disabled]="busy()" (click)="joinNow()">
+          {{ busy() ? 'Присоединяемся…' : 'Присоединиться' }}
+        </button>
+      } @else {
+        <p class="auth-text">Чтобы принять приглашение, войдите в FamilyHub или создайте аккаунт.</p>
+        <div class="auth-actions">
+          <button type="button" class="btn btn-primary btn-block" (click)="goToRegister()">
             Создать аккаунт
           </button>
           <button type="button" class="btn btn-secondary btn-block" (click)="goToLogin()">
             Войти
           </button>
-        }
+        </div>
       }
     }
+  }
 
-    <!-- Любая «плохая» ссылка раньше была тупиком — теперь всегда есть куда идти дальше. -->
-    @if (isDeadEnd()) {
-      <p class="text-muted mt-3 mb-2">Попросите у близких новую ссылку — или создайте свою семью.</p>
-      <a class="btn btn-secondary btn-block" routerLink="/">Открыть FamilyHub</a>
-    }
-  </div>
-</div>
+  <!-- Любая «плохая» ссылка раньше была тупиком — теперь всегда есть куда идти дальше. -->
+  @if (isDeadEnd()) {
+    <p class="auth-text">Попросите у близких новую ссылку — или создайте свою семью.</p>
+    <a class="btn btn-secondary btn-block" routerLink="/">Открыть FamilyHub</a>
+  }
+</app-auth-card>

@@ -2,71 +2,53 @@
   <div class="background-jobs-dropdown">
     <button
       type="button"
-      class="btn btn-ghost btn-icon background-jobs-trigger"
+      class="btn btn-icon background-jobs-trigger"
       aria-label="Фоновые процессы"
       title="Идёт распознавание/обогащение в фоне"
+      [attr.aria-expanded]="open()"
       (click)="toggle()"
     >
-      <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
-      <span class="background-jobs-trigger-badge">{{ jobs.totalActive() }}</span>
+      <app-icon [icon]="icons.RefreshCw" />
+      <span class="count-badge count-badge-accent background-jobs-trigger-badge">{{ jobs.totalActive() }}</span>
     </button>
 
     @if (isWide && open()) {
-      <div class="background-jobs-popover elev-md">
-        @for (section of sections(); track section.title) {
-          <div class="background-jobs-section">
-            <div class="background-jobs-section-title">
-              <i [class]="'ph ' + section.icon" aria-hidden="true"></i>
-              {{ section.title }} · {{ section.group.total }}
-            </div>
-            @for (item of section.group.items; track item.jobId) {
-              <button
-                type="button"
-                class="background-jobs-item"
-                [class.non-interactive]="item.recordId === null"
-                (click)="select(item)"
-              >
-                <span class="background-jobs-item-label">{{ item.label }}</span>
-                @if (itemStatusText(item); as statusText) {
-                  <span class="background-jobs-item-status" [title]="statusText">{{ statusText }}</span>
-                }
-              </button>
-            }
-            @if (section.group.total > section.group.items.length) {
-              <div class="background-jobs-more">и ещё {{ section.group.total - section.group.items.length }}</div>
-            }
-          </div>
-        }
+      <div class="popover background-jobs-popover" role="region" aria-label="Фоновые процессы">
+        <ng-container *ngTemplateOutlet="list" />
       </div>
     }
   </div>
 
   @if (!isWide) {
     <app-bottom-sheet title="Фоновые процессы" [open]="open()" (closed)="open.set(false)">
-      @for (section of sections(); track section.title) {
-        <div class="background-jobs-section">
-          <div class="background-jobs-section-title">
-            <i [class]="'ph ' + section.icon" aria-hidden="true"></i>
-            {{ section.title }} · {{ section.group.total }}
-          </div>
-          @for (item of section.group.items; track item.jobId) {
-            <button
-              type="button"
-              class="background-jobs-item background-jobs-item-sheet"
-              [class.non-interactive]="item.recordId === null"
-              (click)="select(item)"
-            >
-              <span class="background-jobs-item-label">{{ item.label }}</span>
-              @if (itemStatusText(item); as statusText) {
-                <span class="background-jobs-item-status" [title]="statusText">{{ statusText }}</span>
-              }
-            </button>
-          }
-          @if (section.group.total > section.group.items.length) {
-            <div class="background-jobs-more">и ещё {{ section.group.total - section.group.items.length }}</div>
-          }
-        </div>
-      }
+      <ng-container *ngTemplateOutlet="list" />
     </app-bottom-sheet>
   }
 }
+
+<ng-template #list>
+  @for (section of sections(); track section.title) {
+    <section class="background-jobs-section">
+      <h3 class="background-jobs-section-title">
+        <app-icon-tile [icon]="section.icon" size="sm" />
+        {{ section.title }} · {{ section.group.total }}
+      </h3>
+      @for (item of section.group.items; track item.jobId) {
+        <button
+          type="button"
+          class="background-jobs-item"
+          [class.non-interactive]="item.recordId === null"
+          (click)="select(item)"
+        >
+          <span class="background-jobs-item-label">{{ item.label }}</span>
+          @if (itemStatusText(item); as statusText) {
+            <span class="background-jobs-item-status" [title]="statusText">{{ statusText }}</span>
+          }
+        </button>
+      }
+      @if (section.group.total > section.group.items.length) {
+        <div class="background-jobs-more">и ещё {{ section.group.total - section.group.items.length }}</div>
+      }
+    </section>
+  }
+</ng-template>

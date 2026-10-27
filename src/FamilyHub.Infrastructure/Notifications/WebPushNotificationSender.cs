@@ -56,6 +56,17 @@ public class WebPushNotificationSender(
 
         foreach (var subscription in subscriptions)
         {
+            // Подписки, сохранённые до валидации в /api/push/subscribe (аудит security-audit-2026-10,
+            // M1): на недопустимый адрес не стучимся и удаляем строку.
+            if (!PushEndpointPolicy.IsAllowedEndpoint(subscription.Endpoint))
+            {
+                logger.LogWarning(
+                    "Push-подписка {SubscriptionId} указывает не на push-релей браузера — удаляем без отправки.",
+                    subscription.Id);
+                expired.Add(subscription);
+                continue;
+            }
+
             try
             {
                 var pushSubscription = new WebPush.PushSubscription(
@@ -68,6 +79,19 @@ public class WebPushNotificationSender(
                 // сбросило хранилище) — чистим, иначе будем биться в неё при каждом уведомлении.
                 logger.LogDebug(
                     "Push-подписка {SubscriptionId} протухла ({Status}) — удаляем.",
+                    subscription.Id, ex.StatusCode);
+                expired.Add(subscription);
+            }
+            catch (WebPushException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                // VAPID-ключи сменили (WebPush__* в env), а подписка браузера привязана к СТАРОМУ публичному
+                // ключу — релей отвечает 403 «the VAPID credentials … do not correspond to the credentials used to
+                // create the subscriptions» (FCM; Mozilla — 401). Серверу её не починить: нужна новая подписка
+                // браузера под новый ключ. Клиент переподписывается сам при следующем входе
+                // (PushNotificationService.healAfterKeyRotation), а мёртвую строку удаляем — иначе каждое
+                // уведомление снова билось бы в неё и писало ошибку в лог.
+                logger.LogInformation(
+                    "Push-подписка {SubscriptionId} не принимает текущий VAPID-ключ ({Status}) — удаляем, браузер переподпишется.",
                     subscription.Id, ex.StatusCode);
                 expired.Add(subscription);
             }

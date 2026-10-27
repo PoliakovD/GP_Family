@@ -1,5 +1,7 @@
 using FamilyHub.Api.Features.Admin;
+using FamilyHub.Api.Security;
 using FamilyHub.Infrastructure.Security.Credentials;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FamilyHub.Api.Startup;
 
@@ -13,6 +15,11 @@ public static class AdminServicesRegistration
 {
     public static WebApplicationBuilder AddFamilyHubAdminServices(this WebApplicationBuilder builder)
     {
+        // Защита входа и отзыв сессий панели (аудит security-audit-2026-10, M3) — состояние на процесс.
+        builder.Services.TryAddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<AdminLoginThrottle>();
+        builder.Services.AddSingleton<AdminSessionRevocations>();
+
         builder.Services.AddScoped<AdminStatsService>();
         builder.Services.AddScoped<AdminKeysService>();
         builder.Services.AddScoped<AdminConfigService>();

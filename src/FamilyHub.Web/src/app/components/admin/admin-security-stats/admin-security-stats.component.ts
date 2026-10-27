@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * «Безопасность → Статистика»: распределение данных по ключам шифрования и сводка безопасности
@@ -10,11 +11,12 @@ import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api
  */
 @Component({
   selector: 'app-admin-security-stats',
-  imports: [DatePipe],
+  imports: [DatePipe, LoadingSpinnerComponent],
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (loading()) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
@@ -24,15 +26,15 @@ import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api
           <div class="card-title">Распределение по ключам шифрования</div>
           <div class="card-body">
             <p class="mb-1 text-muted">Поля БД:</p>
-            <div class="d-flex gap-2 mb-2" style="flex-wrap: wrap;">
+            <div class="d-flex gap-2 mb-2 flex-wrap">
               @for (kv of s.encryptionDistribution.fieldValues; track kv.keyId) {
-                <span class="tag tag-neutral">{{ kv.keyId }}: {{ kv.count }}</span>
+                <span class="badge badge-neutral">{{ kv.keyId }}: {{ kv.count }}</span>
               }
             </div>
             <p class="mb-1 text-muted">Вложения (блобы MinIO):</p>
-            <div class="d-flex gap-2" style="flex-wrap: wrap;">
+            <div class="d-flex gap-2 flex-wrap">
               @for (kv of s.encryptionDistribution.attachmentBlobs; track kv.keyId) {
-                <span class="tag tag-neutral">{{ kv.keyId }}: {{ kv.count }}</span>
+                <span class="badge badge-neutral">{{ kv.keyId }}: {{ kv.count }}</span>
               }
             </div>
           </div>
@@ -41,14 +43,14 @@ import { AdminApiService, AdminSecurityStats } from '../../../services/admin-api
         <div class="card">
           <div class="card-title">Безопасность</div>
           <div class="card-body">
-            <div class="d-flex gap-3" style="flex-wrap: wrap;">
-              <div><strong>{{ s.crossUserMedicalAccessLast30Days }}</strong><div class="text-muted">обращений к чужим медданным за 30д</div></div>
-              <div><strong>{{ s.usersWithoutCurrentConsent }}</strong><div class="text-muted">без актуального согласия</div></div>
-              <div><strong>{{ s.activeSessions }}</strong><div class="text-muted">активных сессий PWA</div></div>
-              <div>
-                <strong>{{ s.dataProtectionKeyCount }}</strong><div class="text-muted">ключей защиты сессий (DataProtection)</div>
+            <div class="stat-grid">
+              <div class="stat"><span class="stat-value">{{ s.crossUserMedicalAccessLast30Days }}</span><span class="stat-label">обращений к чужим медданным за 30д</span></div>
+              <div class="stat"><span class="stat-value">{{ s.usersWithoutCurrentConsent }}</span><span class="stat-label">без актуального согласия</span></div>
+              <div class="stat"><span class="stat-value">{{ s.activeSessions }}</span><span class="stat-label">активных сессий PWA</span></div>
+              <div class="stat">
+                <span class="stat-value">{{ s.dataProtectionKeyCount }}</span><span class="stat-label">ключей защиты сессий (DataProtection)</span>
                 @if (s.oldestDataProtectionKeyCreatedAt) {
-                  <div class="text-muted">самый старый — с {{ s.oldestDataProtectionKeyCreatedAt | date: 'dd.MM.yyyy' }}</div>
+                  <span class="stat-label">самый старый — с {{ s.oldestDataProtectionKeyCreatedAt | date: 'dd.MM.yyyy' }}</span>
                 }
               </div>
             </div>

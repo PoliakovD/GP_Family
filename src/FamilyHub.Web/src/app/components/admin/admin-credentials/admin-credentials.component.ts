@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, CredentialKind, CredentialsStatus } from '../../../services/admin-api.service';
 import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
@@ -7,6 +7,7 @@ import { SidePanelComponent } from '../../../shared/side-panel/side-panel.compon
 import { ToastService } from '../../../shared/toast/toast.service';
 import { apiErrorCode } from '../shared/admin-errors';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /** Секрет, показанный один раз после «Сгенерировать». Живёт ТОЛЬКО в сигнале этого компонента. */
 interface RevealedSecret {
@@ -41,8 +42,10 @@ const ERROR_MESSAGES: Record<string, string> = {
  */
 @Component({
     selector: 'app-admin-credentials',
-    imports: [DatePipe, SidePanelComponent, AdminStatusPipe],
-    templateUrl: './admin-credentials.component.html'
+    imports: [DatePipe, SidePanelComponent, AdminStatusPipe, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    templateUrl: './admin-credentials.component.html',
+    styleUrl: './admin-credentials.component.scss',
 })
 export class AdminCredentialsComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);

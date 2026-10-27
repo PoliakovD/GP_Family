@@ -192,6 +192,31 @@ public class AttachmentsApiTests(FamilyHubWebFactory factory) : IntegrationTestB
         response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
     }
 
+    // Регрессия на находку M2 (docs/security/security-audit-2026-10.md): HTML-вложение по подписанной
+    // ссылке не должно отрисовываться браузером как страница на origin приложения.
+    [Fact]
+    public async Task HtmlAttachment_ServedInlineAsPlainText_InSandbox()
+    {
+        var owner = ClientAs(FreshTelegramId());
+        var record = await CreateRecordAsync(owner);
+        var created = await (await owner.PostAsync($"/api/medical-records/{record.Id}/attachments",
+                BuildUpload("<html><body><form action=\"/api/auth/login\"></form></body></html>", "page.html", "text/html")))
+            .Content.ReadFromJsonAsync<AttachmentDto>(JsonOpts);
+
+        var tokens = Factory.Services.GetRequiredService<DownloadTokenService>();
+        var anonymous = Factory.CreateClient();
+
+        var inline = await anonymous.GetAsync(tokens.CreateUrl(created!.Id, DownloadScope.Inline));
+        inline.StatusCode.Should().Be(HttpStatusCode.OK);
+        inline.Content.Headers.ContentType!.MediaType.Should().Be("text/plain");
+        inline.Headers.GetValues("Content-Security-Policy").Single().Should().Contain("sandbox").And.Contain("default-src 'none'");
+        (await inline.Content.ReadAsStringAsync()).Should().Contain("<form");
+
+        var file = await anonymous.GetAsync(tokens.CreateUrl(created.Id, DownloadScope.File));
+        file.StatusCode.Should().Be(HttpStatusCode.OK);
+        file.Headers.GetValues("Content-Security-Policy").Single().Should().Contain("sandbox");
+    }
+
     [Fact]
     public async Task Upload_OverSizeLimit_Returns413()
     {

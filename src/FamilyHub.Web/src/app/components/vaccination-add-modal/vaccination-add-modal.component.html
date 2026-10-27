@@ -1,6 +1,6 @@
 <div class="va">
   <div class="va-row">
-    <span class="muted va-label">Кому</span>
+    <span class="form-hint va-label">Кому</span>
     <div class="va-chips">
       @for (s of subjects(); track s.kind + s.id) {
         <button type="button" class="va-chip" [class.va-chip-selected]="s.kind === subjectKind() && s.id === subjectId()" (click)="selectSubject(s)">
@@ -13,16 +13,16 @@
 
   <div class="va-modes">
     <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'one'" (click)="setMode('one')">
-      <i class="ph ph-syringe" aria-hidden="true"></i>
-      <div><div class="va-mode-title">Одна прививка</div><div class="muted va-mode-sub">сделали недавно</div></div>
+      <app-icon [icon]="icons.Syringe" [size]="18" />
+      <div><div class="va-mode-title">Одна прививка</div><div class="form-hint va-mode-sub">сделали недавно</div></div>
     </button>
     <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'bulk'" (click)="setMode('bulk')">
-      <i class="ph-fill ph-list-checks" aria-hidden="true"></i>
-      <div><div class="va-mode-title">Отметить по календарю</div><div class="muted va-mode-sub">прошлые, сразу много</div></div>
+      <app-icon [icon]="icons.ListChecks" [size]="18" />
+      <div><div class="va-mode-title">Отметить по календарю</div><div class="form-hint va-mode-sub">прошлые, сразу много</div></div>
     </button>
     <button type="button" class="va-mode" [class.va-mode-selected]="mode() === 'certificate'" (click)="setMode('certificate')">
-      <i class="ph ph-camera" aria-hidden="true"></i>
-      <div><div class="va-mode-title">Фото сертификата</div><div class="muted va-mode-sub">распознаем сами</div></div>
+      <app-icon [icon]="icons.Camera" [size]="18" />
+      <div><div class="va-mode-title">Фото сертификата</div><div class="form-hint va-mode-sub">распознаем сами</div></div>
     </button>
   </div>
 
@@ -38,7 +38,7 @@
             @for (m of matches(); track m.code) {
               <button type="button" class="va-suggestion" (click)="pickSeries(m)">
                 <div class="va-suggestion-name">{{ m.name }}</div>
-                <div class="muted va-suggestion-sub">{{ m.group === Group.Epidemic ? 'по эпидпоказаниям' : m.diseases.join(', ') }}</div>
+                <div class="form-hint va-suggestion-sub">{{ m.group === Group.Epidemic ? 'по эпидпоказаниям' : m.diseases.join(', ') }}</div>
               </button>
             }
           </div>
@@ -51,19 +51,19 @@
           <input class="input" type="date" [ngModel]="date()" (ngModelChange)="date.set($event)" />
         </div>
         <div class="flex-fill" style="flex:1.3">
-          <div class="form-label">Вакцина <span class="muted">— необязательно</span></div>
+          <div class="form-label">Вакцина <span class="form-hint">— необязательно</span></div>
           <input class="input" [ngModel]="vaccineName()" (ngModelChange)="vaccineName.set($event)" placeholder="Название препарата" />
         </div>
       </div>
 
       <label class="va-file-input">
-        <i class="ph ph-paperclip" aria-hidden="true"></i>
+        <app-icon [icon]="icons.Paperclip" [size]="18" />
         {{ file() ? file()!.name : 'Прикрепить фото или файл' }}
         <input type="file" class="visually-hidden-input" accept="image/*,application/pdf" (change)="onFileSelected($any($event.target).files)" />
       </label>
 
       @if (hasMoreDoses()) {
-        <div class="va-hint"><i class="ph-fill ph-calendar-check" aria-hidden="true"></i> Есть следующая доза — напомним, когда подойдёт срок.</div>
+        <div class="va-hint"><app-icon [icon]="icons.CalendarCheck" [size]="18" /> Есть следующая доза — напомним, когда подойдёт срок.</div>
       }
 
       <div class="va-footer">
@@ -76,7 +76,7 @@
 
   @if (mode() === 'bulk') {
     <div class="va-body">
-      <p class="muted va-bulk-hint">
+      <p class="form-hint va-bulk-hint">
         Отметьте, что точно было. Дату можно не указывать — достаточно «было». Если не помните — оставьте
         пустым, это не станет «просрочкой».
       </p>
@@ -88,11 +88,11 @@
             <div class="va-cal-row">
               <button type="button" class="va-cal-check" [class.checked]="row.alreadyDone || choiceOf(row) === 'done'"
                       [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')">
-                @if (row.alreadyDone || choiceOf(row) === 'done') { <i class="ph-bold ph-check" aria-hidden="true"></i> }
+                @if (row.alreadyDone || choiceOf(row) === 'done') { <app-icon [icon]="icons.Check" [size]="18" /> }
               </button>
               <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
               @if (row.alreadyDone) {
-                <span class="muted va-cal-value">—</span>
+                <span class="form-hint va-cal-value">—</span>
               } @else {
                 <div class="va-cal-actions">
                   <button type="button" class="va-cal-tag" [class.va-cal-tag-selected]="choiceOf(row) === 'unknown'" (click)="setChoice(row, 'unknown')">не помню</button>
@@ -113,11 +113,11 @@
             <div class="va-cal-row">
               <button type="button" class="va-cal-check" [class.checked]="row.alreadyDone || choiceOf(row) === 'done'"
                       [disabled]="row.alreadyDone" (click)="setChoice(row, 'done')">
-                @if (row.alreadyDone || choiceOf(row) === 'done') { <i class="ph-bold ph-check" aria-hidden="true"></i> }
+                @if (row.alreadyDone || choiceOf(row) === 'done') { <app-icon [icon]="icons.Check" [size]="18" /> }
               </button>
               <span class="flex-fill va-cal-name">{{ row.seriesName }}@if (row.label !== 'Вакцинация') { · {{ row.label }} }</span>
               @if (row.alreadyDone) {
-                <span class="muted va-cal-value">{{ row.doneDate ? row.doneDate.slice(0, 4) : '—' }}</span>
+                <span class="form-hint va-cal-value">{{ row.doneDate ? row.doneDate.slice(0, 4) : '—' }}</span>
               } @else if (choiceOf(row) === 'done') {
                 <input class="input va-cal-year" type="text" inputmode="numeric" maxlength="4" placeholder="год"
                        [ngModel]="yearOf(row)" (ngModelChange)="setYear(row, $event)" />
@@ -130,7 +130,7 @@
       }
 
       <div class="va-footer">
-        <span class="muted flex-fill">Отмечено {{ bulkCount() }}</span>
+        <span class="form-hint flex-fill">Отмечено {{ bulkCount() }}</span>
         <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
         <button type="button" class="btn btn-primary" [disabled]="busy() || bulkCount() === 0" (click)="submitBulk()">
           Сохранить {{ bulkCount() }}
@@ -145,14 +145,14 @@
 
       @if (certStage() === 'pick') {
         <label class="va-file-input va-file-input-lg">
-          <i class="ph ph-camera" aria-hidden="true"></i>
+          <app-icon [icon]="icons.Camera" [size]="18" />
           Выбрать фото страниц сертификата
           <input type="file" class="visually-hidden-input" accept="image/*" multiple (change)="onCertFilesSelected($any($event.target).files)" />
         </label>
         @if (certFiles().length > 0) {
           <div class="va-cert-files">
             @for (f of certFiles(); track f.name + $index) {
-              <span class="va-cert-file">{{ f.name }} <button type="button" (click)="removeCertFile($index)"><i class="ph ph-x" aria-hidden="true"></i></button></span>
+              <span class="va-cert-file">{{ f.name }} <button type="button" (click)="removeCertFile($index)"><app-icon [icon]="icons.X" [size]="18" /></button></span>
             }
           </div>
           <button type="button" class="btn btn-primary btn-block" (click)="recognizeCertificate()">Распознать</button>
@@ -160,10 +160,10 @@
       } @else if (certStage() === 'recognizing') {
         <div class="va-progress">
           <div class="va-progress-bar"><span [style.width.%]="certProgress()"></span></div>
-          <p class="muted">Загружаем и распознаём фото…</p>
+          <p class="form-hint">Загружаем и распознаём фото…</p>
         </div>
       } @else if (certStage() === 'review' || certStage() === 'saving') {
-        <p class="muted">
+        <p class="form-hint">
           Нашли {{ certItems().length }} записей. Распознано автоматически — сверьте с сертификатом,
           особенно строки с пометкой «проверьте».
         </p>
@@ -172,14 +172,14 @@
             <div class="va-cert-row" [class.va-cert-row-review]="item.needsReview">
               <button type="button" class="va-cal-check" [class.checked]="item.checked" (click)="toggleCertItem($index)"
                       [attr.aria-pressed]="item.checked" [attr.aria-label]="'Добавить: ' + item.rawName">
-                @if (item.checked) { <i class="ph-bold ph-check" aria-hidden="true"></i> }
+                @if (item.checked) { <app-icon [icon]="icons.Check" [size]="18" /> }
               </button>
               <div class="flex-fill min-width-0">
                 <div class="va-cert-name">{{ item.rawName }}</div>
                 <!-- Раньше «проверьте жёлтые» — только цветом, незаметно при плохом цветовосприятии. -->
                 @if (item.needsReview) {
                   <div class="va-cert-review-note">
-                    <i class="ph-fill ph-warning" aria-hidden="true"></i> проверьте серию и дату
+                    <app-icon [icon]="icons.TriangleAlert" [size]="18" /> проверьте серию и дату
                   </div>
                 }
                 <select class="input va-cert-select" [ngModel]="item.seriesCodeEdit" (ngModelChange)="setCertSeries($index, $event)">
@@ -193,9 +193,9 @@
             </div>
           }
         </div>
-        <p class="muted va-bulk-hint">Фото сохранится как файл у каждой найденной прививки.</p>
+        <p class="form-hint va-bulk-hint">Фото сохранится как файл у каждой найденной прививки.</p>
         <div class="va-footer">
-          <span class="muted flex-fill">Отмечено {{ certChecked() }}</span>
+          <span class="form-hint flex-fill">Отмечено {{ certChecked() }}</span>
           <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Отмена</button>
           <button type="button" class="btn btn-primary" [disabled]="certStage() === 'saving' || certChecked() === 0" (click)="confirmCertificate()">
             Сохранить {{ certChecked() }}

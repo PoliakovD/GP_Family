@@ -1,310 +1,102 @@
-// Хаб «Здоровье» (редизайн навигации, макет «Screen - Health hub») — три группы плиток. Единый
-// стиль карточки на все девять плиток; размер группы (крупная/средняя/строка) — компоновкой
-// контейнера (grid/flex), не отдельной вёрсткой каждой плитки.
+// Хаб «Здоровье» (DESIGN §4 «Обзор Здоровье»): шапка → «Каждый день» (две крупные карточки с действием) →
+// «Медкарта» (четыре карточки) → «Инструменты» (list-card из nav-row). Карточки — surface без рамки.
 
-.hh-page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
+.hh-page { display: flex; flex-direction: column; gap: var(--space-6); }
 
-.hh-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
+.hh-header { display: flex; align-items: center; gap: var(--space-4); }
 
 .hh-title {
   margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
 }
 
-.hh-subtitle {
-  color: var(--color-neutral-700);
-  font-size: var(--font-size-meta);
-}
+.hh-subtitle { font: var(--text-body); color: var(--color-text-muted); }
 
-.hh-group {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-}
+.hh-group { display: flex; flex-direction: column; gap: var(--space-3); }
+.hh-group-label { margin: 0; font: var(--text-title); color: var(--color-text); }
 
-.hh-group-label {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7647rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-}
-
-// ── Плитка (общий стиль для «Каждый день» и «Медкарты») ────────────────────
+// ── Карточки ──
+.hh-everyday { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.hh-medcard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
 
 .hh-tile {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 20px 22px;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
   color: var(--color-text);
   text-decoration: none;
-  min-height: var(--tap-min);
+  transition: background-color 0.15s ease;
 
-  &:hover {
-    border-color: var(--color-accent-400);
-  }
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
 }
+
+.hh-tile-big { gap: var(--space-3); padding: var(--space-6); }
 
 .hh-tile-head {
   display: flex;
   align-items: center;
-  gap: 11px;
-
-  > i:first-child {
-    font-size: 1.5294rem;
-    color: var(--color-accent);
-    flex: none;
-  }
-
-  > i:last-child {
-    color: var(--color-neutral-500);
-    flex: none;
-  }
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
 }
 
-.hh-tile-title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.1765rem;
-}
+.hh-tile-title { font: var(--text-title-mobile); }
+.hh-arrow { color: var(--color-text-muted); }
 
-.hh-tile-empty {
-  color: var(--color-neutral-600);
-  font-size: 0.8824rem;
-}
-
-// ── «Каждый день» — две крупные плитки ──────────────────────────────────────
-
-.hh-everyday {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-
-@media (max-width: 640px) {
-  .hh-everyday {
-    gap: 10px;
-  }
-
-  .hh-tile-big {
-    padding: 14px;
-  }
-}
-
-.hh-tile-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 14px;
-}
+.hh-tile-row { display: flex; align-items: center; gap: var(--space-4); }
 
 .hh-tile-value {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.7647rem;
-  line-height: 1;
+  font: var(--text-metric);
+  letter-spacing: var(--letter-spacing-display);
+  font-variant-numeric: tabular-nums;
 }
 
-.hh-tile-value-sm {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.9412rem;
-  line-height: 1.3;
-}
+.hh-tile-value-sm { font: var(--text-body); font-weight: 600; }
+.hh-tile-meta { font: var(--text-caption); color: var(--color-text-muted); }
+.hh-tile-total { margin-top: auto; padding-top: var(--space-2); font: var(--text-caption); color: var(--color-text-muted); }
+.hh-tile-empty { font: var(--text-body-sm); color: var(--color-text-secondary); }
+.hh-tile-cta { font-weight: 600; color: var(--color-accent-hover); }
 
-.hh-tile-meta {
-  font-size: 0.8235rem;
-  color: var(--color-neutral-700);
-  margin-top: 4px;
-}
-
-.hh-tile-total {
-  font-size: 0.7647rem;
-  color: var(--color-neutral-500);
-}
-
-.hh-dose-squares {
-  display: flex;
-  gap: 4px;
-  align-items: flex-end;
-}
+// Ряд доз сегодня: принято / пропущено / следующая / впереди.
+.hh-dose-squares { display: flex; align-items: flex-end; gap: var(--space-1); }
 
 .hh-dose-square {
   width: 16px;
   height: 16px;
-  border-radius: var(--radius-sm);
-}
-
-.hh-dose-square-taken {
-  background: var(--color-status-ok);
-}
-
-.hh-dose-square-missed {
-  background: var(--color-status-danger);
-}
-
-.hh-dose-square-next {
-  border: 2px solid var(--color-accent);
   box-sizing: border-box;
+  border-radius: var(--radius-xs);
 }
 
-.hh-dose-square-upcoming {
-  border: 2px solid var(--color-divider);
-  box-sizing: border-box;
-}
+.hh-dose-square-taken { background: var(--color-success); }
+.hh-dose-square-missed { background: var(--color-danger); }
+.hh-dose-square-next { border: 2px solid var(--color-accent); }
+.hh-dose-square-upcoming { border: 2px solid var(--color-border); }
 
+// «Следующая доза» / последний симптом — утопленная плашка внутри карточки.
 .hh-tile-next {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--color-accent-100);
-  color: var(--color-accent-800);
-  font-size: 0.8824rem;
-  border-radius: var(--radius-sm);
-
-  i {
-    color: var(--color-accent-2);
-    flex: none;
-  }
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+  font: var(--text-body-sm);
 }
 
-.hh-tile-next-time {
-  font-weight: 600;
-  flex: none;
-}
+.hh-tile-next-time { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hh-symptom-icon { color: var(--color-kind-symptom); }
+.hh-take { flex: none; }
 
-.hh-take {
-  padding: 6px 12px;
-  background: var(--color-status-ok);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font: 600 0.7941rem var(--font-heading);
-  cursor: pointer;
-  min-height: 32px;
-  flex: none;
+.hh-trend { flex: 1; min-width: 0; --trend-color: var(--color-kind-measure); }
+.hh-trend-sm { max-width: 120px; }
 
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-}
-
-.hh-trend {
-  flex: 1;
-  min-width: 0;
-}
-
-.hh-trend-sm {
-  max-width: 120px;
-}
-
-// ── «Медкарта» — четыре средние плитки на десктопе, список на узких экранах ─
-
-.hh-medcard {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-@media (max-width: 1023px) {
-  .hh-medcard {
-    grid-template-columns: 1fr;
-  }
-}
-
-.hh-badge {
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 0.7647rem;
-  color: #fff;
-  flex: none;
-}
-
-.hh-badge-danger {
-  background: var(--color-status-danger);
-}
-
-// ── «Инструменты» — три узкие строки, три колонки на десктопе ───────────────
-
-.hh-tools {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-@media (min-width: 1024px) {
-  .hh-tools {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-}
-
-.hh-tool-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 17px;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  text-decoration: none;
-  min-height: var(--tap-min);
-
-  &:hover {
-    border-color: var(--color-accent-400);
-  }
-
-  > i:first-child {
-    font-size: 1.3529rem;
-    color: var(--color-accent);
-    flex: none;
-  }
-
-  > i:last-child {
-    color: var(--color-neutral-500);
-    flex: none;
-  }
-}
-
-.hh-tool-title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.9706rem;
-}
-
-.hh-tool-sub {
-  font-size: 0.7941rem;
-  color: var(--color-neutral-600);
-}
-
-.hh-tool-sub-warn {
-  color: var(--color-status-warning-text);
-}
-
-// Пустая плитка — не тупик: короткое «что здесь будет» и действие (вся плитка — ссылка в раздел).
-.hh-tile-cta {
-  color: var(--color-accent);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-// Плитка с растянутой ссылкой: вся площадь кликабельна, а кнопки внутри — поверх ссылки.
+// Карточка «Приём лекарств»: ссылка растянута на всю карточку, кнопка «Отметить приём» — поверх.
 .hh-tile-linked {
   position: relative;
   cursor: pointer;
@@ -312,8 +104,17 @@
   button { position: relative; z-index: 1; }
 }
 
-.hh-tile-stretch {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
+.hh-tile-stretch { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
+
+@media (max-width: 1199px) {
+  .hh-medcard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 639px) {
+  .hh-page { gap: var(--space-5); }
+  .hh-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+  .hh-subtitle { font: var(--text-body-sm); }
+  .hh-everyday, .hh-medcard { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .hh-tile, .hh-tile-big { padding: var(--space-4); }
+  .hh-tile-value { font: var(--text-metric-mobile); }
 }

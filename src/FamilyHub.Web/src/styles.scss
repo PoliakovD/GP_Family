@@ -1,120 +1,125 @@
 // ============================================================================
-// Дизайн-токены — порт из «FamilyHub Redesign - standalone.html» (дизайн-дэк).
-// Бумажная печатная эстетика: Source Serif 4, спокойная бумажная палитра, cyan-акцент,
-// острые углы. Тема фиксированная (дэк свето-only) — --tg-theme-* больше не используется.
+// Дизайн-токены — редизайн «Гибрид A+B». Источник правды: docs/redesign/DESIGN.md §2,
+// план перехода: docs/redesign/PLAN.md (фаза 1). Литералы цвета, кегля, отступов, радиусов и теней
+// в компонентах запрещены — только эти токены.
+//
+// Тёмная тема — те же роли (mixin dark-tokens): по prefers-color-scheme либо data-theme на <html>
+// (выбор в «Профиль → Аккаунт → Оформление», ThemeService). Кегли — rem от html{font-size:100%}.
 // ============================================================================
 :root {
   color-scheme: light;
 
-  --color-bg: #f3f2f2;
-  --color-surface: #eae9e9;
-  --color-text: #201e1d;
-  // Было #0088b0 — контраст 3.4–3.9:1 (ссылки, текст .btn-primary, активный таб). #006f94 — тот же
-  // оттенок, ≥4.5:1 на всех фонах (bg/paper/surface) и для светлого текста на акцентной кнопке.
-  --color-accent: #006f94;
-  --color-accent-2: #d6006c;
-  --color-process-yellow: #edbb00;
-  --color-divider: color-mix(in srgb, #201e1d 16%, transparent);
-  // Рамка интерактивных элементов (поля, вторичные кнопки, сегменты) — заметнее декоративных
-  // разделителей: при 16% поле почти сливалось с фоном (≈1.4:1), а пожилому пользователю нужно видеть, куда нажимать.
-  --color-control-border: color-mix(in srgb, #201e1d 38%, transparent);
+  // --- Цвет: поверхности (DESIGN §2.1) ---
+  --color-bg: #F5F5F2;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #FAFAF8;
+  --color-surface-sunken: #F5F5F2;
+  --color-bubble-in: #F2F3EF;
+  // Рамка контролов (поля, вторичные кнопки, вкладки) — ≥ 2:1 к bg и surface: пожилому пользователю
+  // нужно видеть, куда нажимать (решение по PLAN.md, фаза 3; в DESIGN было #E6E7E3 ≈ 1,2:1).
+  --color-border: #AEB0AA;
+  --color-divider: #EEEFEB; // декоративные линии: разделители строк, края сайдбара/таб-бара
+  --color-border-dashed: #9A9C96; // пунктир «добавить» и рамка при наведении — темнее обычной
 
-  // Тональные рампы — единая шкала светлоты для каждой роли.
-  --color-neutral-100: #f8f4f4;
-  --color-neutral-200: #eae7e7;
-  --color-neutral-300: #d7d3d3;
-  --color-neutral-400: #bab6b6;
-  --color-neutral-500: #9b9797;
-  --color-neutral-600: #666262; // было #7d7979 (3.6–3.9:1) — muted-текст и подписи теперь ≥4.9:1
-  --color-neutral-700: #605d5d;
-  --color-neutral-800: #444141;
-  --color-neutral-900: #2d2b2b;
+  // --- Текст ---
+  --color-text: #17191C;
+  --color-text-secondary: #3D4147;
+  --color-text-muted: #5F646B; // ≥ 4,5:1 на bg и surface
 
-  --color-accent-100: #e9f8ff;
-  --color-accent-200: #cbeeff;
-  --color-accent-300: #99e0ff;
-  --color-accent-400: #62c5ee;
-  --color-accent-500: #38a6cf;
-  --color-accent-600: #1186ac;
-  --color-accent-700: #006786;
-  --color-accent-800: #004961;
-  --color-accent-900: #0a303e;
+  // --- Акцент — только действия и навигация, никогда не статус ---
+  --color-accent: #2456C8;
+  --color-accent-hover: #1C46A6;
+  --color-accent-soft: #E8EEFB;
+  --color-on-accent: #FFFFFF; // текст/иконки на accent, danger, inverse
+  --color-inverse: #17191C;
 
-  --color-accent-2-100: #fff1f4;
-  --color-accent-2-200: #ffdee6;
-  --color-accent-2-300: #ffc0d0;
-  --color-accent-2-400: #ff90b1;
-  --color-accent-2-500: #ff458e;
-  --color-accent-2-600: #d82071;
-  --color-accent-2-700: #aa0b56;
-  --color-accent-2-800: #790e3d;
-  --color-accent-2-900: #4b1528;
+  // --- Статусы: один смысл — один цвет ---
+  --color-danger: #B42318;
+  --color-danger-soft: #FDECEA;
+  --color-warning: #8A5300;
+  --color-warning-soft: #FDF1DC;
+  --color-success: #1E7A45;
+  --color-success-soft: #E5F3EA;
+  --color-range-ok: #BFE3CC;
+  --color-range-track: #EEEFEB;
 
-  --font-heading: "Source Serif 4", Georgia, serif;
+  // --- Дневник: цвет по виду записи, не по тяжести ---
+  --color-kind-measure: #1C46A6;
+  --color-kind-measure-soft: #E8EEFB;
+  --color-kind-mood: #8A5300;
+  --color-kind-mood-soft: #FDF1DC;
+  --color-kind-sleep: #5B3FB8;
+  --color-kind-sleep-soft: #EEEAFB;
+  --color-kind-note: #3D4147;
+  --color-kind-note-soft: #F0F1EE;
+  --color-kind-symptom: #9C2A6B; // не красный: красный в анализах значит «вне нормы»
+  --color-kind-symptom-soft: #F8E8F1;
+  --color-kind-medication: #0F6B66;
+  --color-kind-medication-soft: #E2F2F0;
+  --color-avatar-warm: #FDF1DC;
+  --color-avatar-warm-text: #7A4300;
+
+  // --- Затемнение под медиа (просмотр файла, кнопка «убрать фото») — одинаково в обеих темах ---
+  --color-scrim: #17191C;
+  --color-on-scrim: #FFFFFF;
+
+  // --- Типографика (DESIGN §2.3). Кегли в rem от html{font-size: 100%} — масштабируются системной настройкой ---
+  --font-body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; // ключи, коды, промпты
+  --font-heading: var(--font-body);
   --font-heading-weight: 600;
-  --font-body: "Source Serif 4", Georgia, serif;
 
-  --space-1: 5px;
-  --space-2: 10px;
-  --space-3: 15px;
-  --space-4: 20px;
-  --space-6: 30px;
-  --space-8: 40px;
+  --text-hero: 700 3.25rem/1.08 var(--font-body);        // заголовок лендинга (/)
+  --text-hero-mobile: 700 2.25rem/1.1 var(--font-body);
+  --text-display: 700 2.125rem/1.15 var(--font-body);
+  --text-display-mobile: 700 1.75rem/1.15 var(--font-body);
+  --text-metric-xl: 700 2.5rem/1.05 var(--font-body);
+  --text-metric: 700 2.125rem/1.1 var(--font-body);
+  --text-metric-mobile: 700 1.75rem/1.1 var(--font-body);
+  --text-title: 600 1.1875rem/1.3 var(--font-body);
+  --text-title-mobile: 600 1.0625rem/1.3 var(--font-body);
+  --text-body-lg: 400 1.0625rem/1.5 var(--font-body);
+  --text-body: 400 1rem/1.45 var(--font-body);
+  --text-body-sm: 400 0.9375rem/1.45 var(--font-body);
+  --text-caption: 400 0.875rem/1.4 var(--font-body);
+  --text-micro: 600 0.75rem/1.3 var(--font-body);
+  --letter-spacing-display: -0.02em;
+  // Производные (DESIGN §3): кнопки/вкладки — body-sm 600, бейджи — 13px 600.
+  --text-button: 600 0.9375rem/1.2 var(--font-body);
+  --text-badge: 600 0.8125rem/1.3 var(--font-body);
+  --control-height: 46px; // кнопки и поля; в тулбарах — --tap-min (44)
+  --icon-size: 20px;      // DESIGN §2.7: 20 (в плитках 20–22)
+  --icon-size-sm: 18px;   // в кнопках и строках действий
 
-  --radius-sm: 1px;
-  --radius-md: 2px;
-  --radius-lg: 4px;
+  // --- Отступы: шкала кратна 4 (DESIGN §2.4) ---
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
 
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+  // --- Радиусы (DESIGN §2.5) ---
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 22px;
+  --radius-pill: 999px;
 
-  // Редизайн v2 — «бумажная» карточка поверх серого фона (--color-surface остаётся для «хрома»:
-  // таб-бар, .seg, инпуты). Контур карточки на --color-bg почти не читался при --color-surface.
-  --color-paper: #fbfaf9;
+  // --- Тени (DESIGN §2.6): карточки на bg — без тени и рамки ---
+  --shadow-segment: 0 1px 2px rgba(23, 25, 28, 0.08);
+  --shadow-fab: 0 8px 24px rgba(36, 86, 200, 0.35);
+  --shadow-overlay: 0 12px 32px rgba(23, 25, 28, 0.18);
 
-  // Статусные цвета (норма/отклонение/нет данных) — канонизированы из уже существующей аптечной
-  // палитры сроков годности (см. shared/util/expiry.ts, medications-panel.component.scss), не
-  // новые смыслы. Единый источник вместо 4 разошедшихся копий (см. commit message/риск Р6).
-  --color-status-ok: #2f9e44;
-  --color-status-warning: #f08c00;
-  --color-status-danger: #e03131;
-  --color-status-none: #9c36b5;
-  // Тёмные текстовые варианты — контраст текста на светлой цветной подложке (плитки-сводки,
-  // карточки «Требует внимания» и т.п.), где сам --color-status-* слишком ярок для текста.
-  --color-status-ok-text: #1f6b2f;
-  --color-status-danger-text: #a01c1c;
-  --color-status-warning-text: #8a5200;
-
-  // Дневник самочувствия — цвет по ТИПУ записи, не по тяжести (макет «Screen - Diary»). Красный
-  // намеренно не используется: в анализах он значит «вне нормы», и в дневнике создавал бы ложную
-  // тревогу. Первые три — из палитры приложения, amber/indigo — новые акценты дневника.
-  --color-kind-symptom: var(--color-accent-2);
-  --color-kind-symptom-text: var(--color-accent-2-700);
-  --color-kind-metric: var(--color-accent);
-  --color-kind-wellbeing: #d97700;
-  --color-kind-wellbeing-text: #8a4c00;
-  --color-kind-medication: var(--color-status-ok);
-  --color-kind-sleep: #5b5bd6;
-  --color-kind-note: var(--color-neutral-700);
-
-  // Редизайн v2 — базовый кегль поднят под аудиторию, включающую пожилых родителей (17px вместо
-  // 16), плюс отдельные размеры для заголовков записей и минимальная высота интерактивных
-  // элементов. Применяются точечно к существующим селекторам — см. риск Р1 в плане редизайна.
-  //
-  // Редизайн v2.1 — токены переведены в rem (1rem = 17px, прежний --font-size-body, теперь
-  // относительно html{font-size} ниже) и вместе с ним стали fluid: на узких экранах (390px)
-  // html{font-size} даёт ровно 17px — рендер идентичен тому, что было, — на широких плавно растёт
-  // до потолка 18.5px, чтобы не мельчить на большом экране, но и не разрастись сверх меры. Все
-  // ~150 точечных font-size в компонентах в этом же коммите переведены с px на rem той же
-  // формулой (N/17), поэтому масштабируются вместе с этими токенами.
-  --font-size-body: 1rem;
-  --font-size-meta: 0.8824rem;
-  --font-size-record-title: 1.1176rem;
   --tap-min: 44px; // физическая величина (минимальная тач-цель) — не текст, не масштабируется.
 
-  // Слои — один порядок для всего приложения (раньше 1…9999 вразнобой, и confirm из окна просмотра
-  // файла оказывался ПОД ним). Локальные 0/1/5/10 внутри компонентов — не слои страницы.
+  // Слои — один порядок для всего приложения. Локальные 0/1/5/10 внутри компонентов — не слои страницы.
   --z-dropdown: 20;   // выпадающие меню, фильтры
   --z-popover: 50;    // поиск, плавающие панели
   --z-fab: 90;        // плавающая кнопка «Добавить»
@@ -124,14 +129,77 @@
   --z-viewer: 550;    // просмотр файла
   --z-dialog: 600;    // подтверждение — всегда над любым окном
   --z-toast: 1000;    // уведомления
+
 }
+
+// Тёмная тема (DESIGN §2.2): по системной настройке (prefers-color-scheme) либо явно выбранная в профиле
+// (data-theme на <html>, см. ThemeService). data-theme="light" принудительно оставляет светлую.
+@mixin dark-tokens {
+  color-scheme: dark;
+
+  --color-bg: #111315;
+  --color-surface: #1A1D20;
+  --color-surface-muted: #202327;
+  --color-surface-sunken: #16181B;
+  --color-bubble-in: #24282C;
+  --color-border: #50555C;
+  --color-divider: #262A2E;
+  --color-border-dashed: #5E646B;
+
+  --color-text: #ECEDEE;
+  --color-text-secondary: #C4C7CC;
+  --color-text-muted: #9AA0A8;
+
+  --color-accent: #6E95F0;
+  --color-accent-hover: #8DACF4;
+  --color-accent-soft: #1E2A45;
+  --color-on-accent: #0E1116;
+  --color-inverse: #ECEDEE;
+
+  --color-danger: #FF8A80;
+  --color-danger-soft: #3A1E1C;
+  --color-warning: #F2B35C;
+  --color-warning-soft: #3A2C14;
+  --color-success: #6FCF97;
+  --color-success-soft: #16301F;
+  --color-range-ok: #2B5A3C;
+  --color-range-track: #262A2E;
+
+  --color-kind-measure: #8DACF4;
+  --color-kind-measure-soft: #1E2A45;
+  --color-kind-mood: #F2B35C;
+  --color-kind-mood-soft: #3A2C14;
+  --color-kind-sleep: #B3A2F0;
+  --color-kind-sleep-soft: #2A2340;
+  --color-kind-note: #C4C7CC;
+  --color-kind-note-soft: #24282C;
+  --color-kind-symptom: #F28DC0;
+  --color-kind-symptom-soft: #3A1E2E;
+  --color-kind-medication: #6FD0C8;
+  --color-kind-medication-soft: #14302E;
+  --color-avatar-warm: #3A2C14;
+  --color-avatar-warm-text: #F2B35C;
+
+  --shadow-segment: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-fab: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { @include dark-tokens; }
+}
+
+:root[data-theme="dark"] { @include dark-tokens; }
 
 // Редизайн v2.1 — единственный источник fluid-масштабирования: 17px на ≤390px (мобильный кегль
 // не мельчает и не двигается с места), дальше растёт вместе с шириной вьюпорта и останавливается
 // на потолке 18.5px уже к ~1070px (то есть на любом обычном десктопе — не «разрастается» сверх
 // этого и на 2560px). clamp() не даёт уйти ниже 17px и на экранах уже 390px.
 html {
-  font-size: clamp(17px, 16.15px + 0.22vw, 18.5px);
+  font-size: 100%; // базовый кегль — системная настройка (16px по умолчанию), --text-* в rem
+  // Место под вертикальную полосу прокрутки — всегда: иначе на длинных страницах (Windows, полоса не
+  // поверх контента) центр смещается на её ширину и навигация «прыгает» между разделами.
+  scrollbar-gutter: stable;
 }
 
 * {
@@ -142,9 +210,9 @@ body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
+  font: var(--text-body);
   font-family: var(--font-body);
-  font-size: var(--font-size-body);
-  line-height: 1.55;
+  line-height: 1.45;
   font-weight: 400;
 }
 
@@ -159,15 +227,15 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0 0 var(--space-2);
 }
 
-h1 { font-size: 2.4706rem; }
-h2 { font-size: 1.8824rem; }
-h3 { font-size: 1.4706rem; }
-h4 { font-size: 1.1765rem; }
-h5 { font-size: 1rem; }
-h6 { font-size: 1rem; } // редизайн v2: было 15px
-
+h1 { font: var(--text-display); }
+h2 { font: var(--text-display-mobile); }
+h3 { font: var(--text-title); }
+h4 { font: var(--text-title-mobile); }
+h5 { font: var(--text-body); }
+h6 { font: var(--text-body); }
+h5, h6 { font-weight: 600; }
 p {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
 }
 
 a {
@@ -184,35 +252,28 @@ a {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
-.hr {
-  height: 1px;
-  border: 0;
-  margin: var(--space-4) 0;
-  background: var(--color-divider);
-}
 
 // ============================================================================
-// Кнопки
+// Кнопки (DESIGN §3 «Кнопки»). Одна primary на странице, редкие действия — в меню «⋯».
 // ============================================================================
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   cursor: pointer;
   text-decoration: none;
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 0.8824rem; // редизайн v2: было 14px
-  line-height: 1.2;
+  font: var(--text-button);
   color: var(--color-text);
   background: transparent;
   border: 1px solid transparent;
-  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  padding: 0 var(--space-5);
   border-radius: var(--radius-md);
-  min-height: var(--tap-min); // редизайн v2 — цель по высоте интерактивных элементов
+  min-height: var(--control-height);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
-  &:disabled {
+&:disabled,
+  &[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;
   }
@@ -220,89 +281,126 @@ a {
 
 .btn-primary {
   background: var(--color-accent);
-  color: var(--color-bg);
+  color: var(--color-on-accent);
 
-  &:hover { background: var(--color-accent-600); }
-  &:active { background: var(--color-accent-700); }
+  &:hover:not(:disabled) { background: var(--color-accent-hover); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent-hover) 88%, var(--color-text)); }
+}
+
+// Главное действие в строке задачи («Разобрать»): тёмная кнопка, не путается с primary страницы.
+.btn-inverse {
+  background: var(--color-inverse);
+  color: var(--color-on-accent);
+
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-inverse) 88%, var(--color-surface)); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-inverse) 78%, var(--color-surface)); }
 }
 
 .btn-secondary {
-  border-color: var(--color-control-border); // было divider (≈1.4:1) — кнопка не читалась как кнопка
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
 
-  &:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
-}
-
-.btn-danger {
-  border-color: var(--color-accent-2);
-  color: var(--color-accent-2);
-
-  &:hover { background: color-mix(in srgb, var(--color-accent-2) 10%, transparent); }
+  &:hover:not(:disabled) { background: var(--color-surface-muted); border-color: var(--color-border-dashed); }
+  &:active:not(:disabled) { background: var(--color-divider); }
 }
 
 .btn-ghost {
-  color: var(--color-accent);
-  padding-inline: var(--space-1);
+  color: var(--color-text-secondary);
+  padding-inline: var(--space-3);
 
-  &:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
-  &:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: var(--color-text); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-text) 12%, transparent); }
 }
 
-// Сброс нативного вида — .btn-icon часто ставят БЕЗ .btn (шапка, панели), и тогда браузер рисовал
-// свою серую кнопку с рамкой.
+// «Пригласить», «Создать ссылку» — добавление чего-то нового в список.
+.btn-dashed {
+  background: transparent;
+  border: 1px dashed var(--color-border-dashed);
+  color: var(--color-accent-hover);
+
+  &:hover:not(:disabled) { background: var(--color-accent-soft); border-color: var(--color-accent); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); }
+}
+
+// Только необратимые действия в подтверждении и в меню «⋯».
+.btn-danger {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-danger);
+
+  &:hover:not(:disabled) { background: var(--color-danger-soft); border-color: var(--color-danger); }
+  &:active:not(:disabled) { background: color-mix(in srgb, var(--color-danger) 18%, var(--color-surface)); }
+}
+
+// Переключатель-кнопка (toggle): aria-pressed вместо локальных .active.
+.btn[aria-pressed="true"],
+.btn.active {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent-hover);
+}
+
+// Иконочная кнопка: квадрат 44–46, обязателен aria-label. Сброс нативного вида — .btn-icon часто
+// ставят без .btn (шапка, панели), и тогда браузер рисовал свою серую кнопку с рамкой.
 .btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--tap-min); // редизайн v2: было 36px
+  width: var(--tap-min);
   height: var(--tap-min);
+  min-height: var(--tap-min);
   padding: 0;
+  border-radius: var(--radius-md);
 
   // Только без .btn — иначе сброс перебил бы фон .btn-danger/.btn-secondary у «btn btn-icon …».
   &:not(.btn) {
     font: inherit;
-    color: inherit;
+    color: var(--color-text-secondary);
     background: transparent;
     border: 0;
-    border-radius: var(--radius-md);
     cursor: pointer;
   }
 
   @media (hover: hover) {
-    &:not(.btn):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+    &:not(.btn):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); }
+  }
+
+  // Шапка на мобайле: круглая кнопка на surface.
+  &.btn-round {
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
   }
 }
 
-// Текстовая ссылка-кнопка (вторичное действие форм: "Назад", "Отмена" и т.п.) — без фона и
-// рамки, в отличие от .btn-ghost не имеет hover-подложки, только подчёркивание. В отличие от
-// .btn/.btn-secondary/… используется САМА ПО СЕБЕ, без базового класса .btn — поэтому в отличие
-// от них ей нужен собственный сброс нативного вида <button> (фон/рамка/курсор/шрифт), иначе
-// поверх подчёркивания остаётся системная рамка кнопки браузера.
+// Иконочная кнопка на тёмной подложке (просмотр файла).
+
+// Текстовая ссылка-кнопка (вторичное действие форм: «Отмена», «Повторить»). Используется сама
+// по себе, без .btn — поэтому свой сброс нативного вида <button>.
 .btn-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-1);
   background: none;
   border: none;
   cursor: pointer;
-  font-family: var(--font-heading);
-  font-size: 0.8824rem; // было 13px — «Назад», «Отмена», «Повторить» читались с трудом
+  font: var(--text-button);
   color: var(--color-accent);
   padding: var(--space-1) 0;
-  min-height: var(--tap-min); // было ≈25px по высоте — промахи пальцем
+  min-height: var(--tap-min);
   text-decoration: underline;
   text-underline-offset: 3px;
 
-  &:hover { color: var(--color-accent-700); }
+  &:hover { color: var(--color-accent-hover); }
   &:disabled { text-decoration: none; cursor: not-allowed; opacity: 0.6; }
 }
 
-// Кнопка, визуально неотличимая от обычной инлайновой ссылки ВНУТРИ фразы (в отличие от
-// .btn-link это не отдельный элемент действия, а слово в предложении — наследует размер/шрифт
-// окружающего текста). Нужна там, где раньше стояла <a routerLink target="_blank">, но переход
-// на отдельный роут рискует потерять состояние текущей формы (см. LoginComponent.showLegalText —
-// в PWA standalone-режиме на части браузеров target="_blank" для ссылки на тот же origin
-// открывает не новую вкладку, а навигацию в том же окне).
+// Кнопка, визуально неотличимая от инлайновой ссылки ВНУТРИ фразы (наследует шрифт текста).
+// Нужна там, где переход на отдельный роут потерял бы состояние формы (LoginComponent.showLegalText).
 .link-inline {
+  display: inline; // внутри строки текста (согласия) переносится как текст, а не блоком
+  text-align: inherit;
   background: none;
   border: none;
   padding: 0;
@@ -313,7 +411,7 @@ a {
   text-underline-offset: 2px;
   cursor: pointer;
 
-  &:hover { color: var(--color-accent-700); }
+  &:hover { color: var(--color-accent-hover); }
 }
 
 .btn-block {
@@ -321,117 +419,158 @@ a {
   margin-top: var(--space-2);
 }
 
-// Компактный размер кнопки — как маленькие кнопки в карточках дэка (padding 5/10, 12px).
-// Редизайн v2: намеренно НЕ наследует --tap-min — используется в плотных строках таблиц/
-// инлайн-редакторов, где 44px разорвал бы вёрстку (см. риск Р1 плана редизайна).
+// Компактная кнопка — только плотные строки таблиц/инлайн-редакторов (на тач-экране всё равно 44).
 .btn-sm {
-  padding: 5px 10px;
-  font-size: 0.7647rem;
+  padding: 0 var(--space-3);
+  font: var(--text-caption);
+  font-weight: 600;
   min-height: 36px;
 
-  // На телефоне плотность важна меньше, чем попадание пальцем (36px — частые промахи).
+  &.btn-icon { width: 36px; height: 36px; }
+
   @media (pointer: coarse) {
     min-height: var(--tap-min);
+    &.btn-icon { width: var(--tap-min); height: var(--tap-min); }
   }
 }
 
-// Укрупнённый размер — для одиночного акцентного CTA шага (например, "Открыть Telegram").
-.btn-lg {
-  padding: 12px 20px;
-  font-size: 0.9412rem;
-}
 
 // ============================================================================
-// Поля ввода
+// Поля ввода (DESIGN §3 «Поля»). Ошибка — рамка и подсказка danger; поле связывается с подсказкой
+// через aria-describedby (директива appField, shared/ui/field).
 // ============================================================================
 .input {
   width: 100%;
-  min-height: var(--tap-min); // редизайн v2: было 36px
-  padding: 6px 10px;
-  font: inherit;
-  // Не меньше 16px: iOS Safari/PWA при фокусе на поле с шрифтом < 16px увеличивает страницу и не
-  // возвращает масштаб (было 0.8824rem = 15px).
-  font-size: max(16px, 0.9412rem);
+  min-height: var(--control-height);
+  padding: var(--space-2) var(--space-4);
+  // Не меньше 16px: iOS Safari/PWA при фокусе на поле с шрифтом < 16px увеличивает страницу.
+  font: var(--text-body);
   color: var(--color-text);
   caret-color: var(--color-accent);
   background: var(--color-surface);
-  border: 1px solid var(--color-control-border);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  transition: border-color 0.15s ease;
+
+  &:hover:not(:disabled) { border-color: var(--color-border-dashed); }
 
   &:focus-visible {
     border-color: var(--color-accent);
     outline-offset: 0;
   }
 
-  &::placeholder {
-    color: #7d7979; // было neutral-500 (≈2.4:1) — плейсхолдер читается, но светлее введённого текста
+  &::placeholder { color: var(--color-text-muted); }
+
+  &:disabled {
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+
+  &[aria-invalid="true"],
+  &.is-invalid {
+    border-color: var(--color-danger);
   }
 }
 
 textarea.input {
-  min-height: 90px;
+  min-height: 96px;
+  padding-block: var(--space-3);
   resize: vertical;
 }
 
 select.input {
   cursor: pointer;
-  // Нативная стрелка/раскрывающийся список остаются — сбрасываем только то, что конфликтует
-  // с общей рамкой/фоном .input, не трогаем appearance (нет темово-независимого способа
-  // нарисовать свою стрелку без хардкода цвета, а нативная и так согласуется с --color-surface).
   color: var(--color-text);
 }
 
+// Поиск: иконка 18px слева внутри поля (обёртка .search-input > иконка + input.input).
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  > app-icon {
+    position: absolute;
+    left: var(--space-4);
+    color: var(--color-text-muted);
+    pointer-events: none;
+  }
+
+  > .input { padding-left: calc(var(--space-4) + var(--icon-size-sm) + var(--space-2)); }
+}
+
 // ============================================================================
-// Сегмент-контрол (радио-переключатель в виде группы кнопок)
+// Сегмент-контрол (DESIGN §3 «segmented»): контейнер surface + рамка (на bg) или surface-sunken
+// (.seg-sunken — внутри карточки), сегменты 36px, активный — surface + тень (на sunken) / accent-soft. Работает и на <label>+radio, и на <button>/<a> (.active или aria-pressed/-selected).
+// Длинные ярлыки — горизонтальная прокрутка внутри контрола.
 // ============================================================================
-// Редизайн v2 — горизонтальная прокрутка вместо overflow:hidden, консолидировано из 4 разных
-// копий одного и того же фикса (health-hub/family-details/settings/admin-hub.component.scss) —
-// длинные русские ярлыки в 3-5 вкладок не гарантированно влезают в узкий экран (360px), см.
-// .claude/patterns/frontend_web.md «Хаб-паттерн». Один источник вместо пятого дубля.
 .seg {
   display: inline-flex;
+  gap: 2px;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--color-control-border);
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+}
+
+// Сегмент с мини-аватаром («чьи записи»): аватар 24 ближе к краю.
+.seg-opt > app-avatar:first-child { margin-left: calc(var(--space-2) * -1); }
+
+// Внутри карточки (surface): контейнер «утоплен», без рамки — как сортировка в макете анализа.
+.seg-sunken {
+  background: var(--color-surface-sunken);
+  border-color: transparent;
 }
 
 .seg-opt {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  font-size: 0.7647rem;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  min-height: 36px;
+  font: var(--text-button);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-decoration: none;
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
-  min-height: var(--tap-min); // редизайн v2 — только высота тач-цели; кегль/перенос — в PR2
+  border-radius: var(--radius-sm);
 
-  & + .seg-opt {
-    border-left: 1px solid var(--color-divider);
-  }
+  // <button>/<a> в роли сегмента — сброс нативного вида (раньше копировался в 5 компонентах).
+  background: transparent;
+  border: 0;
 
-  &:has(input:checked) {
-    background: var(--color-accent);
-    color: var(--color-bg);
-  }
+  @media (pointer: coarse) { min-height: 40px; }
 
-  // :not(.active) — иначе hover перебивает фон активной кнопки-сегмента (у неё нет input:checked),
-  // а светлый текст .active остаётся и становится нечитаемым.
-  // (hover: hover) — на тач-экранах hover «залипает» после тапа. Второе правило
-  // `&:not(.active):hover` (без проверки input:checked) убрано: оно перебивало фон выбранного
-  // radio-сегмента, и светлый текст пропадал на светлом фоне.
   @media (hover: hover) {
-    &:not(:has(input:checked)):not(.active):hover {
-      background: color-mix(in srgb, var(--color-text) 7%, transparent);
+    &:not(.active):not([aria-pressed="true"]):not([aria-selected="true"]):not(:has(input:checked)):hover {
+      color: var(--color-text);
+      background: color-mix(in srgb, var(--color-text) 5%, transparent);
     }
+  }
+
+  &:has(input:checked),
+  &.active,
+  &[aria-pressed="true"],
+  &[aria-selected="true"] {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+    font-weight: 600;
+    box-shadow: var(--shadow-segment);
   }
 
   &:has(input:focus-visible) {
     outline: 2px solid var(--color-accent);
     outline-offset: -2px;
   }
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 
   input {
     position: absolute;
@@ -440,12 +579,27 @@ select.input {
     height: 0;
     pointer-events: none;
   }
+}
 
-  // Ссылочный вариант (routerLink/routerLinkActive, а не radio) — хаб «Здоровье» и подобные
-  // роутинговые сегмент-контролы: та же визуальная схема, что и у input:checked выше.
-  &.active {
-    background: var(--color-accent);
-    color: var(--color-bg);
+// На утопленном контейнере активный сегмент — белый «поднятый».
+.seg-sunken .seg-opt {
+  &:has(input:checked),
+  &.active,
+  &[aria-pressed="true"],
+  &[aria-selected="true"] {
+    background: var(--color-surface);
+  }
+}
+
+// «Чьи данные» (Я / Близкие): активный — inverse.
+.seg-inverse .seg-opt {
+  &:has(input:checked),
+  &.active,
+  &[aria-pressed="true"],
+  &[aria-selected="true"] {
+    background: var(--color-inverse);
+    color: var(--color-on-accent);
+    box-shadow: none;
   }
 }
 
@@ -477,6 +631,8 @@ select.input {
     height: 0;
     pointer-events: none;
 
+    &:disabled + .switch-knob { opacity: 0.5; cursor: not-allowed; }
+
     &:checked + .switch-knob {
       background: var(--color-accent);
 
@@ -496,7 +652,7 @@ select.input {
   position: absolute;
   inset: 0;
   border-radius: 11px;
-  background: var(--color-neutral-300);
+  background: var(--color-border-dashed);
   transition: background 0.15s ease;
 
   &::after {
@@ -507,141 +663,327 @@ select.input {
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    background: #fff;
-    box-shadow: var(--shadow-sm);
+    background: var(--color-on-scrim); // ручка переключателя — белая в обеих темах
+    box-shadow: none;
     transition: transform 0.15s ease;
   }
 }
 
 // ============================================================================
-// Карточки
+// Карточки (DESIGN §3 «Карточки»): surface, radius-xl, без рамки и тени.
 // ============================================================================
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  // Редизайн v2: было --color-surface — совпадало с фоном страницы, контур карточки почти не
-  // читался. --color-paper белее фона, --color-surface остаётся для «хрома» (таб-бар/.seg/инпуты).
-  background: var(--color-paper);
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+
+  @media (max-width: 639px) { padding: var(--space-4); }
 }
 
-// Горизонтальная прокрутка для широких таблиц внутри узкой .card (UX-редизайн) — использовался в
-// разметке медицинского модуля и раньше, но класс нигде не был определён: таблица показателей
-// просто распирала viewport на узких экранах вместо прокрутки внутри себя.
+// Крупная карточка-секция.
+.card-lg {
+  padding: var(--space-6);
+  border-radius: var(--radius-2xl);
+
+  @media (max-width: 639px) { padding: var(--space-4); }
+}
+
+// Вложенная карточка внутри surface (карточка анализа в чате) — единственный случай рамки.
+
+// Список в карточке: заголовок секции + строки через divider с отступами 24 по бокам.
+.list-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.list-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-2);
+
+  h2, h3, .card-title { margin: 0; }
+
+  @media (max-width: 639px) { padding: var(--space-4) var(--space-4) var(--space-1); }
+}
+
+
+// Строка-кнопка в list-card (справочник и т.п.): заголовок 16/600 + подпись 14 muted → шеврон; ≥ 56px.
+.list-row-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
+  &:focus-visible { outline-offset: -2px; }
+}
+
+.list-row-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.list-row-title { font: var(--text-body); font-weight: 600; }
+.list-row-sub { font: var(--text-caption); color: var(--color-text-muted); }
+.list-row-chevron { flex: none; color: var(--color-text-muted); }
+
+// Поповер (DESIGN §3): всплывающая панель у поля/кнопки — поиск, фоновые задачи. Позиция — у компонента.
+.popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  z-index: var(--z-popover);
+}
+
+// Сводка чисел в карточке (админка: пользователи, хранилище): число 28/700 tabular → подпись 14 muted.
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: var(--space-5) var(--space-4);
+}
+
+.stat { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.stat-value { font: var(--text-metric-mobile); font-variant-numeric: tabular-nums; color: var(--color-text); }
+.stat-label { font: var(--text-caption); color: var(--color-text-muted); }
+
+// Панель фильтров над списком/таблицей: сегменты, селекты, поиск и кнопки в одну строку с переносом.
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+
+  > .input { width: auto; flex: 0 1 240px; min-width: 160px; }
+  > .input[type="search"], > .input-grow { flex: 1 1 280px; }
+}
+
+// ============================================================================
+// Статья справочника (DESIGN §3 «Справка»): показатель (indicator-info) и препарат (kb-card) в одном стиле.
+// Название даёт контейнер (боковая панель / нижний лист); статья — стек блоков с отступом 20.
+// ============================================================================
+.kb-article { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+
+// Мета-строка под шапкой: «Кровь», «LOINC 6690-2», «МНН: Ибупрофен» — нейтральные бейджи.
+.kb-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+// «Простыми словами» — главное в одной фразе: утопленная плашка, текст 17.
+.kb-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+.kb-lead-label { font: var(--text-caption); font-weight: 600; color: var(--color-text-muted); }
+.kb-lead-text { margin: 0; font: var(--text-body-lg); color: var(--color-text); text-wrap: pretty; }
+
+.kb-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.kb-section-title { margin: 0; font: var(--text-body); font-weight: 600; color: var(--color-text); }
+.kb-text { margin: 0; font: var(--text-body-sm); color: var(--color-text-secondary); text-wrap: pretty; }
+.kb-note { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
+
+// Факты списком в рамке: иконка 20 muted → подпись 14/600 muted над текстом 15.
+.kb-facts {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.kb-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+
+  & + & { border-top: 1px solid var(--color-divider); }
+  > app-icon { flex: none; margin-top: 2px; color: var(--color-text-muted); }
+}
+.kb-fact-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kb-fact-label { font: var(--text-caption); font-weight: 600; color: var(--color-text-muted); }
+.kb-fact-value { font: var(--text-body-sm); color: var(--color-text); text-wrap: pretty; }
+
+// Предупреждение в статье: alert-warning с заголовком.
+.kb-warning-title { display: block; font-weight: 600; }
+
+// Подвал: дисклеймер + источник, мелко, с иконкой.
+.kb-disclaimer {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  font: var(--text-caption);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+
+  > app-icon { flex: none; margin-top: 1px; }
+}
+
+// Горизонтальная прокрутка для широких таблиц внутри узкой карточки.
 .table-responsive {
   max-width: 100%;
   overflow-x: auto;
 }
 
-// Карточка-результат поиска, ведущая на экран раздела (этап 3) — визуальный намёк на клик.
+// Карточка-ссылка целиком.
 .card-clickable {
   cursor: pointer;
+  transition: background-color 0.15s ease;
 
-  &:active {
-    opacity: 0.85;
-  }
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
+  &:active { background: var(--color-surface-muted); }
 }
 
+// Подпись над заголовком. CAPS с разрядкой по DESIGN §2.3 не используются.
 .card-kicker {
-  font-family: var(--font-heading);
-  font-size: 0.7647rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-accent);
+  font: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .card-title {
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: var(--font-size-record-title); // редизайн v2: было 17px
-  line-height: 1.2;
+  font: var(--text-title);
+  color: var(--color-text);
+
+  @media (max-width: 639px) { font: var(--text-title-mobile); }
 }
 
 .card-body {
   margin: 0;
-  font-size: 0.8824rem; // редизайн v2: было 13px
-  opacity: 0.8;
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
   flex: 1;
 }
 
 .card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.7647rem; // редизайн v2: было 11px
-  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  gap: var(--space-2);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
 }
 
-.elev-sm { box-shadow: var(--shadow-sm); }
-.elev-md { box-shadow: var(--shadow-md); }
-.elev-lg { box-shadow: var(--shadow-lg); }
+// Тени у карточек по DESIGN не используются; классы оставлены для совместимости (фаза 4 уберёт).
+.elev-md { box-shadow: var(--shadow-overlay); }
 
 // ============================================================================
-// Теги / пилюли
+// Бейджи (DESIGN §3 «Бейдж»): пилюля 13/600, фон *-soft, текст — основной цвет статуса.
 // ============================================================================
-.tag {
+.badge {
   display: inline-flex;
   align-items: center;
-  font-size: 0.7647rem; // редизайн v2: было 11px
-  letter-spacing: 0.02em;
-  padding: 3px 10px;
-  border-radius: calc(var(--radius-md) * 0.75);
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-800);
+  gap: var(--space-1);
+  font: var(--text-badge);
+  padding: var(--space-1) 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-kind-note-soft);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+
+  @media (max-width: 639px) { padding: 3px var(--space-2); }
 }
 
-.tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
-.tag-accent-2 { background: var(--color-accent-2-100); color: var(--color-accent-2-800); }
-.tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
-.tag-outline { background: transparent; border: 1px solid var(--color-accent); color: var(--color-accent); }
+.badge-neutral { background: var(--color-kind-note-soft); color: var(--color-text-secondary); }
+.badge-accent { background: var(--color-accent-soft); color: var(--color-accent-hover); }
+.badge-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge-success { background: var(--color-success-soft); color: var(--color-success); }
 
-// Очередь «Одобрение» (ADR-0018): уверенность модели ниже порога — красный, достаточная — зелёный.
-// Фон — смесь статусного цвета с --color-paper, текст — тёмный вариант токена (читается в обеих темах).
-.tag-danger {
-  background: color-mix(in srgb, var(--color-status-danger) 16%, var(--color-paper));
-  color: var(--color-status-danger-text);
+// Чип-действие (DESIGN §3 «Чип»): пилюля 32px (на тач — 44) surface-muted + рамка, иконка 16 → текст
+// → опц. «×». Снимаемое состояние: «🔒 залочено — снять» в справочнике админки.
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  font: var(--text-badge);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  @media (pointer: coarse) { min-height: var(--tap-min); }
+  @media (hover: hover) { &:hover:not(:disabled) { background: var(--color-surface-sunken); color: var(--color-text); } }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
-.tag-ok {
-  background: color-mix(in srgb, var(--color-status-ok) 16%, var(--color-paper));
-  color: var(--color-status-ok-text);
+
+// Счётчик (DESIGN §3 «count-badge»): круг ≥ 20px, 12/600, danger (требует внимания) или accent
+// (непрочитанное), текст on-accent.
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  background: var(--color-danger);
+  color: var(--color-on-accent);
 }
-.tag-warning {
-  background: color-mix(in srgb, var(--color-status-warning) 18%, var(--color-paper));
-  color: var(--color-status-warning-text);
+
+.count-badge-accent { background: var(--color-accent); }
+
+// Точка-индикатор (новые сообщения у «Семьи» в таб-баре).
+.dot-badge {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
 }
+
+// Тоны (shared/ui/tone.ts): пара --tone-fg / --tone-bg для icon-tile, строк и фильтров.
+.tone-neutral { --tone-fg: var(--color-text-secondary); --tone-bg: var(--color-kind-note-soft); }
+.tone-accent { --tone-fg: var(--color-accent-hover); --tone-bg: var(--color-accent-soft); }
+.tone-danger { --tone-fg: var(--color-danger); --tone-bg: var(--color-danger-soft); }
+.tone-warning { --tone-fg: var(--color-warning); --tone-bg: var(--color-warning-soft); }
+.tone-success { --tone-fg: var(--color-success); --tone-bg: var(--color-success-soft); }
+.tone-measure { --tone-fg: var(--color-kind-measure); --tone-bg: var(--color-kind-measure-soft); }
+.tone-mood { --tone-fg: var(--color-kind-mood); --tone-bg: var(--color-kind-mood-soft); }
+.tone-sleep { --tone-fg: var(--color-kind-sleep); --tone-bg: var(--color-kind-sleep-soft); }
+.tone-note { --tone-fg: var(--color-kind-note); --tone-bg: var(--color-kind-note-soft); }
+.tone-symptom { --tone-fg: var(--color-kind-symptom); --tone-bg: var(--color-kind-symptom-soft); }
+.tone-medication { --tone-fg: var(--color-kind-medication); --tone-bg: var(--color-kind-medication-soft); }
+.tone-warm { --tone-fg: var(--color-avatar-warm-text); --tone-bg: var(--color-avatar-warm); }
 
 // Строка таблицы очереди: ниже порога — красноватый фон, курсор клавиатурной навигации — рамка слева.
-.table tbody tr.row-danger { background: color-mix(in srgb, var(--color-status-danger) 8%, transparent); }
+.table tbody tr.row-danger { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
 .table tbody tr.row-cursor { box-shadow: inset 3px 0 0 var(--color-accent); }
 
 // Поле, отличающееся от текущей записи справочника (редактор payload в очереди «Одобрение»).
 .input-diff {
-  border-color: var(--color-status-warning);
-  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-surface));
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
 }
 
 // Поле без источника (модель не указала, откуда значение) — жёлтая подсветка, заметнее, чем .input-diff.
 .input-warn {
-  border-color: var(--color-status-warning);
-  background: color-mix(in srgb, var(--color-status-warning) 22%, var(--color-surface));
-  box-shadow: 0 0 0 1px var(--color-status-warning);
-}
-
-// Бейдж-счётчик в пункте меню (админ-хаб).
-.nav-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 0.7059rem;
-  font-weight: 600;
-  background: var(--color-status-danger);
-  color: var(--color-bg);
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 22%, var(--color-surface));
+  box-shadow: 0 0 0 1px var(--color-warning);
 }
 
 // §5 плана «живой конвейер» — глобальная копия shared/pipeline-progress/pipeline-progress.
@@ -664,6 +1006,27 @@ select.input {
   to { transform: rotate(360deg); }
 }
 
+// Чип мета-данных записи (DESIGN §3 «Бейдж»): человек, дата, биоматериал — пилюля surface 15px на bg;
+// .meta-chip-accent — состояние «видна семье» (accent-soft). Первый элемент может быть мини-аватаром.
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font: var(--text-body-sm);
+  color: var(--color-text);
+
+  &:has(> app-avatar:first-child) { padding-left: var(--space-1); }
+}
+
+.meta-chip-accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+}
+
 // Редизайн v2.1 — interactive-обёртка вокруг <app-person-chip> там, где чип служит
 // фильтром/пикером (кнопка нужна ради семантики/клавиатуры, все стили — на самом чипе внутри).
 .person-chip-btn {
@@ -680,28 +1043,48 @@ select.input {
 // ============================================================================
 // Таблицы
 // ============================================================================
+// Плотная таблица данных (DESIGN §1 п.4): шапка 14/600 muted без CAPS, ячейки 15, строки через divider.
+// В карточке — `.table-card`: card без паддинга, крайние колонки с отступом карточки, горизонтальный скролл.
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8235rem;
+  font: var(--text-body-sm);
+  font-variant-numeric: tabular-nums;
 
   th {
     text-align: left;
-    font-size: 0.7647rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: color-mix(in srgb, var(--color-text) 60%, transparent);
-    padding: var(--space-2);
+    font: var(--text-caption);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    padding: var(--space-3);
     border-bottom: 1px solid var(--color-divider);
+    white-space: nowrap;
   }
 
   td {
-    padding: var(--space-2);
-    border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-divider);
+    vertical-align: top;
   }
 
-  tbody tr:hover {
-    background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  tbody tr:last-child td { border-bottom: 0; }
+
+  @media (hover: hover) {
+    tbody tr:hover { background: var(--color-surface-muted); }
+  }
+}
+
+.table-card {
+  position: relative; // визуально скрытые подписи колонок (position: absolute) — внутри прокрутки, не за краем страницы
+  padding: 0;
+  overflow-x: auto;
+
+  .table th:first-child, .table td:first-child { padding-left: var(--space-6); }
+  .table th:last-child, .table td:last-child { padding-right: var(--space-6); }
+
+  @media (max-width: 639px) {
+    .table th:first-child, .table td:first-child { padding-left: var(--space-4); }
+    .table th:last-child, .table td:last-child { padding-right: var(--space-4); }
   }
 }
 
@@ -709,62 +1092,51 @@ select.input {
 // Утилиты — компактная замена Bootstrap-утилит, использующихся в шаблонах.
 // ============================================================================
 .d-flex { display: flex; }
-.d-block { display: block; }
 .d-inline-flex { display: inline-flex; }
 .flex-column { flex-direction: column; }
 .flex-fill { flex: 1 1 auto; }
 .flex-wrap { flex-wrap: wrap; }
-.flex-shrink-0 { flex-shrink: 0; }
 .align-items-center { align-items: center; }
 .align-items-start { align-items: flex-start; }
 .align-self-start { align-self: flex-start; }
 .justify-content-between { justify-content: space-between; }
 .justify-content-end { justify-content: flex-end; }
-.justify-content-center { justify-content: center; }
 
 .gap-1 { gap: var(--space-1); }
 .gap-2 { gap: var(--space-2); }
-.gap-3 { gap: var(--space-3); }
+.gap-3 { gap: var(--space-4); }
 
 .mb-0 { margin-bottom: 0; }
 .mb-1 { margin-bottom: var(--space-1); }
 .mb-2 { margin-bottom: var(--space-2); }
-.mb-3 { margin-bottom: var(--space-3); }
+.mb-3 { margin-bottom: var(--space-4); }
 .mt-1 { margin-top: var(--space-1); }
 .mt-2 { margin-top: var(--space-2); }
-.mt-3 { margin-top: var(--space-3); }
-.me-2 { margin-right: var(--space-2); }
-.ms-2 { margin-left: var(--space-2); }
 // Ниже — классы, которые шаблоны уже использовали (Настройки, нижний лист, админка), но которых
 // здесь не было: отступы/обрезка тихо не применялись.
-.gap-4 { gap: var(--space-4); }
-.mb-4 { margin-bottom: var(--space-4); }
-.mt-4 { margin-top: var(--space-4); }
-.ms-auto { margin-left: auto; }
+.mb-4 { margin-bottom: var(--space-5); }
 .mx-auto { margin-left: auto; margin-right: auto; }
 .flex-grow-1 { flex-grow: 1; }
 
-.p-3 { padding: var(--space-3); }
-.py-2 { padding-top: var(--space-2); padding-bottom: var(--space-2); }
 
 .w-100 { width: 100%; }
+.text-pre-wrap { white-space: pre-wrap; }
+.font-mono { font-family: var(--font-mono); }
+.position-relative { position: relative; }
+.min-w-0 { min-width: 0; }
+.mt-0 { margin-top: 0; }
+.overflow-x-auto { overflow-x: auto; }
 .text-nowrap { white-space: nowrap; }
 .text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.text-decoration-none { text-decoration: none; }
-.text-danger { color: var(--color-status-danger-text); }
+.text-danger { color: var(--color-danger); }
 .text-center { text-align: center; }
-.text-end { text-align: right; }
-.text-muted { color: var(--color-neutral-600); }
-.text-primary { color: var(--color-accent); }
+.text-muted { color: var(--color-text-muted); }
 .fw-semibold { font-weight: 600; }
-.fw-normal { font-weight: 400; }
-.align-middle { vertical-align: middle; }
-.list-unstyled { list-style: none; margin: 0; padding: 0; }
 
 .form-label {
   display: block;
-  font-size: 0.8235rem; // было 12px
-  color: var(--color-neutral-700);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
   margin-bottom: var(--space-1);
 }
 
@@ -784,48 +1156,25 @@ select.input {
 // ============================================================================
 // Совместимость с общими элементами шаблонов (мелкий хинт-текст, строка "имя + теги").
 // ============================================================================
-.muted {
-  color: var(--color-neutral-600);
-  font-size: 0.8235rem; // было 12px — основной вспомогательный текст приложения
-  margin: 0;
-}
-
 // Строка "название + теги" (списки семей и т.п.) — длинное название обрезается многоточием,
 // теги никогда не сжимаются и не уезжают за край экрана на узких мобильных вьюпортах.
-.name-with-tags {
+
+.alert-danger,
+.alert-info,
+.alert-warning,
+.alert-success {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-
-  strong {
-    font-family: var(--font-heading);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  > span:last-child {
-    flex-shrink: 0;
-  }
-}
-
-.alert-danger {
-  background: var(--color-accent-2-100);
-  color: var(--color-accent-2-800);
+  align-items: flex-start;
+  gap: var(--space-3);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-size: 0.8824rem; // ошибки — не мельче 15px
+  padding: var(--space-3) var(--space-4);
+  font: var(--text-body-sm); // ошибки — не мельче 15px
 }
 
-.alert-info {
-  background: var(--color-accent-100);
-  color: var(--color-accent-800);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  font-size: 0.8824rem;
-}
+.alert-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.alert-info { background: var(--color-accent-soft); color: var(--color-accent-hover); }
+.alert-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.alert-success { background: var(--color-success-soft); color: var(--color-success); }
 
 // ============================================================================
 // Форма с чекбоксом (согласие на регистрации, cookie-баннер) — чекбокс сверху строки
@@ -835,7 +1184,7 @@ select.input {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  font-size: 0.8235rem;
+  font: var(--text-body-sm);
   cursor: pointer;
 
   input[type="checkbox"] {
@@ -849,14 +1198,16 @@ select.input {
 }
 
 .field-hint {
-  display: block;
-  font-size: 0.8235rem; // было 11px — а это в том числе ошибки валидации
-  margin-top: 3px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  font: var(--text-caption);
+  margin-top: var(--space-1);
 }
 
-.field-hint-error { color: var(--color-accent-2-700); font-weight: 600; }
-.field-hint-ok { color: var(--color-accent-700); }
-.field-hint-muted { color: var(--color-neutral-600); }
+.field-hint-error { color: var(--color-danger); font-weight: 600; }
+.field-hint-ok { color: var(--color-success); }
+.field-hint-muted { color: var(--color-text-muted); }
 
 // ============================================================================
 // Общий оверлей для модалок и диалогов подтверждения (shared/modal, shared/confirm).
@@ -864,7 +1215,7 @@ select.input {
 .overlay-backdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent);
+  background: color-mix(in srgb, var(--color-scrim) 55%, transparent);
   z-index: var(--z-overlay);
   display: flex;
   align-items: center;
@@ -873,16 +1224,18 @@ select.input {
 }
 
 .overlay-card {
-  background: var(--color-bg);
+  background: var(--color-surface);
   color: var(--color-text);
-  border-radius: var(--radius-lg);
-  padding: 16px;
+  border-radius: var(--radius-2xl);
+  padding: var(--space-6);
   width: 100%;
   max-width: 400px;
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
+
+  @media (max-width: 639px) { padding: var(--space-5); }
 
   // Карточка получает фокус программно (OverlayA11y) — рамка вокруг всего окна не нужна.
   &:focus { outline: none; }
@@ -926,16 +1279,15 @@ select.input {
     object-fit: cover;
   }
 
-  i {
-    font-size: 1.2941rem;
-    color: var(--color-neutral-600);
+  app-icon {
+    color: var(--color-text-muted);
   }
 }
 
 .file-chip-name {
-  font-size: 0.7647rem;
+  font: var(--text-badge);
   line-height: 1.2;
-  color: var(--color-neutral-700);
+  color: var(--color-text-muted);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -960,9 +1312,9 @@ select.input {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
-  color: #fff;
-  font-size: 0.7059rem;
+  background: color-mix(in srgb, var(--color-scrim) 65%, transparent);
+  color: var(--color-on-scrim);
+  font: var(--text-micro);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -977,7 +1329,7 @@ select.input {
   position: absolute;
   bottom: 3px;
   right: 3px;
-  font-size: 0.8235rem;
+  font: var(--text-caption);
   color: var(--color-accent);
   background: var(--color-bg);
   border-radius: 50%;
@@ -991,16 +1343,14 @@ select.input {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 2px dashed var(--color-divider);
+  border: 2px dashed var(--color-border-dashed);
   background: transparent;
-  color: var(--color-neutral-600);
+  color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 0.7647rem;
+  font: var(--text-micro);
   transition: border-color 0.15s ease, color 0.15s ease;
 
-  i { font-size: 1.2941rem; }
-
-  &:active {
+&:active {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
@@ -1013,11 +1363,9 @@ select.input {
 }
 
 // ============================================================================
-// Оболочка приложения — редизайн v2 (каркас навигации, PR2), таб-бар обновлён редизайном хаба
-// «Здоровье» (макет «Screen - Health hub»). Десктоп (≥1024px, BreakpointService.tier()==='wide') —
-// боковое меню с группами «Здоровья», колокольчик+аватар в топбаре. Узкие экраны — таб-бар ровно
-// из 4 пунктов (Главная/Здоровье/Семья/Профиль, без листа «Ещё» — он упразднён) и своя мобильная
-// шапка (.app-topbar-mobile) вместо всегда развёрнутого поля поиска.
+// Каркас приложения (DESIGN §3 «Навигация», §4). Десктоп ≥1024px (BreakpointService 'wide') —
+// сайдбар 248px + верхняя строка (поиск, колокольчик, действия страницы). Узкие экраны — мобильная
+// шапка (контролы 44px) и нижний таб-бар из 4 пунктов.
 // ============================================================================
 .app-shell {
   display: flex;
@@ -1025,19 +1373,34 @@ select.input {
   min-height: 100dvh;
 }
 
+// Десктоп: сайдбар и контент — один блок по центру (сайдбар 248 + контент до 1200 + поля 2×40).
+// На экранах шире блока свободное место уходит в поля слева от навигации и справа от контента,
+// а не в пустую полосу между ними. Экраны без оболочки (вход, админка) — на всю ширину.
+.app-shell-wide:not(.app-shell-bare) {
+  --shell-max: calc(248px + 1200px + var(--space-10) * 2);
+  max-width: var(--shell-max);
+  margin: 0 auto;
+
+  @media (min-width: 1529px) {
+    .app-sidebar { border-left: 1px solid var(--color-divider); }
+  }
+}
+
 // ----------------------------------------------------------------------------
-// Боковое меню (десктоп)
+// Сайдбар: лого → переключатель семьи → пункты → пользователь внизу.
 // ----------------------------------------------------------------------------
 .app-sidebar {
-  --sidebar-w: 256px;
+  --sidebar-w: 248px;
   flex: none;
   width: var(--sidebar-w);
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
   height: 100vh;
   height: 100dvh;
   position: sticky;
   top: 0;
+  padding: var(--space-6) var(--space-4) var(--space-4);
   background: var(--color-surface);
   border-right: 1px solid var(--color-divider);
   overflow-y: auto;
@@ -1046,215 +1409,118 @@ select.input {
 .app-sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid var(--color-divider);
-  font-family: var(--font-heading);
-  font-weight: var(--font-heading-weight);
-  font-size: 1.2353rem;
-  letter-spacing: -0.02em;
+  gap: var(--space-3);
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+  font: var(--text-title);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-display);
+}
 
-  i {
-    font-size: 1.3529rem;
-    color: var(--color-accent);
-    flex: none;
-  }
+.app-brand-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .app-sidebar-nav {
-  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-1);
 }
 
 .app-sidebar-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-left: 3px solid transparent;
-  color: var(--color-text);
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: var(--font-size-body);
-  min-height: var(--tap-min);
+  font: var(--text-body);
+  transition: background-color 0.15s ease;
 
-  i {
-    font-size: 1.2941rem;
-    color: var(--color-neutral-600);
-    flex: none;
-  }
+  app-icon { color: var(--color-text-secondary); }
 
-  &:hover {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  }
+  &:hover { background: var(--color-surface-muted); color: var(--color-text); }
 
   &.active {
-    background: var(--color-accent-100);
-    border-left-color: var(--color-accent);
-    color: var(--color-accent-800);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-hover);
     font-weight: 600;
 
-    i {
-      color: var(--color-accent);
-    }
+    app-icon { color: var(--color-accent-hover); }
   }
-}
-
-.app-sidebar-badge {
-  min-width: 20px;
-  padding: 1px 6px;
-  background: var(--color-accent-2);
-  color: #fff;
-  font: 700 12px/1.5 var(--font-heading);
-  text-align: center;
-  border-radius: var(--radius-sm);
 }
 
 .app-sidebar-children {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 2px 0 6px 26px;
-}
-
-// Редизайн хаба «Здоровье» — подзаголовок группы подпунктов («Каждый день»/«Медкарта»/
-// «Инструменты», см. app.component.ts healthGroups) — те же токены, что у .app-sidebar-kicker,
-// но без отступа сверху (первая группа сразу под пунктом «Здоровье», не под футером).
-.app-sidebar-group-label {
-  padding: 10px 12px 2px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7647rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-neutral-500);
-
-  &:first-child {
-    padding-top: 4px;
-  }
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 .app-sidebar-child {
-  padding: 7px 12px;
-  font-size: 0.8824rem;
-  color: var(--color-text);
-  text-decoration: none;
-  border-radius: var(--radius-md);
-  min-height: var(--tap-min);
   display: flex;
   align-items: center;
+  min-height: 38px;
+  padding: 0 var(--space-3) 0 46px;
+  border-radius: var(--radius-md);
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
 
-  &:hover {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  }
+  &:hover { background: var(--color-surface-muted); color: var(--color-text); }
 
   &.active {
-    color: var(--color-accent);
+    color: var(--color-accent-hover);
     font-weight: 600;
-    background: var(--color-paper);
   }
 }
 
-.app-sidebar-footer {
-  margin-top: auto;
-  padding: 16px;
-  border-top: 1px solid var(--color-divider);
+.app-sidebar-user {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  position: relative;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+
+  &:hover { background: var(--color-surface-muted); }
 }
 
-// Глобальная плашка «ИИ временно недоступен» (AiStatusService) — под топбаром, над контентом.
+.app-sidebar-user-text { display: flex; flex-direction: column; min-width: 0; }
+.app-sidebar-user-name { font: var(--text-body-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-sidebar-user-role { font: var(--text-caption); color: var(--color-text-muted); }
+
+// Глобальная плашка «ИИ временно недоступен» (AiStatusService) — над контентом страницы.
 .ai-banner {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 12px 16px;
-  background: color-mix(in srgb, var(--color-status-warning) 12%, var(--color-paper));
-  border: 1px solid color-mix(in srgb, var(--color-status-warning) 30%, var(--color-paper));
-  border-left: 4px solid var(--color-status-warning);
-  color: var(--color-status-warning-text);
-  font-size: var(--font-size-meta);
-  line-height: 1.45;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border-radius: var(--radius-lg);
+  font: var(--text-body-sm);
 
-  > i {
-    flex: none;
-    font-size: 1.4118rem;
-  }
-
-  strong {
-    font-weight: 600;
-  }
-}
-
-.app-sidebar-kicker {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.7647rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-}
-
-.app-family-switch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  text-decoration: none;
-  cursor: pointer;
-  min-height: var(--tap-min);
-
-  i {
-    color: var(--color-neutral-600);
-    flex: none;
-  }
-}
-
-.app-family-switch-list {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(100% + 4px);
-  display: flex;
-  flex-direction: column;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-  z-index: var(--z-dropdown);
-}
-
-.app-family-switch-item {
-  padding: 10px 14px;
-  text-align: left;
-  background: none;
-  border: none;
-  color: var(--color-text);
-  text-decoration: none;
-  cursor: pointer;
-  font: inherit;
-  min-height: var(--tap-min);
-
-  & + .app-family-switch-item {
-    border-top: 1px solid var(--color-divider);
-  }
-
-  &:hover {
-    background: color-mix(in srgb, var(--color-text) 6%, transparent);
-  }
+  > app-icon { flex: none; }
+  strong { font-weight: 600; }
 }
 
 // ----------------------------------------------------------------------------
-// Основная колонка + верхняя строка (поиск + контекстное действие страницы)
+// Основная колонка + верхняя строка (десктоп): поиск, задачи в фоне, действия страницы, колокольчик.
 // ----------------------------------------------------------------------------
 .app-main {
   flex: 1;
@@ -1266,81 +1532,114 @@ select.input {
 .app-topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-divider);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: calc(1200px + var(--space-10) * 2);
+  padding: var(--space-6) var(--space-10) 0;
+  margin: 0 auto;
 
-  // Поле поиска уступает место кнопкам действия: без min-width: 0 flex-элемент не сжимается меньше ширины
-  // своего input'а, и на телефоне (412px) шапка с двумя кнопками шире экрана — страница получает
-  // горизонтальный скролл, а мобильный Chrome раздувает layout-viewport.
+  // Поле поиска — до ~550px, остальное место отдаётся действиям. min-width: 0 — иначе flex-элемент
+  // не сжимается меньше ширины своего input'а.
   > app-search-field,
   > app-search {
-    flex: 1 1 0;
+    flex: 0 1 560px;
     min-width: 0;
+    margin-right: auto;
   }
 
   input { min-width: 0; }
+
+  // Колокольчик и фоновые задачи — иконочные кнопки на surface с рамкой (макет home-desktop).
+  app-notification-bell .btn-icon,
+  app-background-jobs-dropdown .btn-icon {
+    width: var(--control-height);
+    height: var(--control-height);
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
 }
 
 // ----------------------------------------------------------------------------
-// Мобильная шапка (редизайн хаба «Здоровье», макет «Screen - Health hub») — заголовок раздела +
-// иконка поиска + колокольчик, вместо поля поиска на всю ширину. Лупа временно подменяет заголовок
-// развёрнутым полем (app.component.ts mobileSearchOpen) — та же verstка-строка, что и десктопный
-// .app-topbar, просто другое содержимое.
+// Мобильная шапка: заголовок (или переключатель семьи на главной) + круглые кнопки поиска и
+// колокольчика. Лупа временно подменяет заголовок полем поиска (app.component.ts mobileSearchOpen).
 // ----------------------------------------------------------------------------
 .app-topbar-mobile {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+  min-height: calc(var(--tap-min) + var(--space-4));
+  padding: var(--space-2) var(--space-4);
   background: var(--color-bg);
-  border-bottom: 1px solid var(--color-divider);
   position: sticky;
   top: 0;
   z-index: 10;
-  min-height: calc(var(--tap-min) + 8px);
 
-  app-avatar {
-    flex: none;
-  }
+  app-avatar { flex: none; }
 
   > app-search-field,
   > app-search {
+    flex: 1;
     min-width: 0;
+  }
+
+  .btn-icon.btn-round,
+  app-notification-bell .btn-icon,
+  app-background-jobs-dropdown .btn-icon {
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
   }
 }
 
 .app-topbar-mobile-title {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.2353rem;
-  letter-spacing: -0.015em;
+  font: var(--text-title);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-display);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+// Контент: десктоп — до 1200px, поля 40 (28 на узком десктопе); мобайл — 16 и ≥100px снизу под таб-бар.
 .app-content {
   flex: 1;
-  // 88px — высота таб-бара с запасом; плюс home indicator iPhone, иначе таб-бар (у которого свой
-  // safe-area padding) перекрывает последний блок контента.
-  padding: var(--space-3) var(--space-4) calc(88px + env(safe-area-inset-bottom, 0px));
-  overflow-y: auto;
+  width: 100%;
+  padding: var(--space-4) var(--space-4) calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
-// На десктопе нет нижнего таб-бара — резервировать под него 88px незачем.
+// Обёртка раздела в .app-content — прозрачна для раскладки (display: contents); пока открыта страница
+// формы/справки (ContentPageService), раздел скрыт, но не уничтожается.
+.app-route { display: contents; }
+.app-route.app-route-hidden { display: none; }
+
+.app-shell-fullscreen .app-content {
+  // Полноэкранный экран (чат на мобайле) сам раскладывает высоту — без полей и запаса под таб-бар.
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-shell-wide .app-content {
-  padding-bottom: var(--space-3);
+  padding: var(--space-6) var(--space-10) var(--space-10);
+
+  @media (max-width: 1279px) { padding-inline: var(--space-7); }
+}
+
+// Экран без оболочки (вход, публичный отчёт, админка): раскладку и поля задаёт сам экран.
+.app-shell.app-shell-bare .app-content {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-shell-wide .app-topbar {
+  @media (max-width: 1279px) { padding-inline: var(--space-7); }
 }
 
 // ----------------------------------------------------------------------------
-// Нижний таб-бар (узкие экраны) — редизайн хаба «Здоровье»: Главная/Здоровье/Семья/Профиль вместо
-// Главная/Здоровье/Семья/Ещё — «Профиль» ведёт прямо в /settings, лист «Ещё» упразднён,
-// «Уведомления» — колокольчик в мобильной шапке (.app-topbar-mobile), не пятый пункт.
+// Нижний таб-бар (<1024px): 4 пункта, 84px с safe-area, иконка в «пилюле» 56×30.
 // ----------------------------------------------------------------------------
 .tab-bar {
   position: fixed;
@@ -1348,29 +1647,59 @@ select.input {
   left: 0;
   right: 0;
   display: flex;
+  min-height: 84px;
+  padding: var(--space-2) var(--space-2) max(var(--space-3), env(safe-area-inset-bottom, 0px));
   background: var(--color-surface);
   border-top: 1px solid var(--color-divider);
   z-index: var(--z-tabbar);
-  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-.tab-bar-more-icon {
+.tab-bar button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-1);
+  min-height: var(--tap-min);
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+
+  &.active { color: var(--color-accent-hover); }
+  &.active .tab-bar-icon { background: var(--color-accent-soft); }
+  &.active .tab-bar-label { font-weight: 600; }
+}
+
+.tab-bar-icon {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease;
 }
+
+.tab-bar-label { font: var(--text-micro); font-weight: 500; }
 
 .tab-bar-dot {
   position: absolute;
-  top: -1px;
-  right: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-accent-2);
+  top: 1px;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 // ============================================================================
-// Экран входа/регистрации — без хедера и таб-бара приложения (см. authGuard/showTabs).
+// Экраны без оболочки (DESIGN §4): вход, регистрация, привязка Telegram, приглашение, согласие —
+// shared/ui/auth-card. Карточка 440px по центру; на шаге входа слева — .login-intro.
 // ============================================================================
 .auth-shell {
   min-height: 100vh;
@@ -1378,108 +1707,140 @@ select.input {
   display: flex;
   align-items: center;
   justify-content: center;
-  // gap/wrap не влияют на страницы с одним ребёнком (telegram-bind, consent-gate — им
-  // всё ещё центрируют одну карточку): нужны только LoginComponent на шаге 'login', где
-  // рядом с карточкой появляется .login-intro. wrap вместо media-query — на узких экранах
-  // .login-intro не помещается в строку с карточкой (min-width ниже) и сама переносится
-  // выше неё, ровно то расположение «текст над формой», которое нужно на мобильных.
-  gap: var(--space-6);
-  flex-wrap: wrap;
-  padding: var(--space-4);
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-5);
+
+  // Телефон: карточка сверху (форма — главное действие), вводный текст под ней.
+  @media (max-width: 899px) {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--space-8);
+    padding: var(--space-6) var(--space-4) var(--space-10);
+  }
 }
 
 .auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
+  box-shadow: var(--shadow-overlay);
+
+  .auth-shell-wide & { max-width: 720px; }
+
+  // Телефон: карточка на фоне без «парящей» тени.
+  @media (max-width: 639px) { box-shadow: none; }
 }
 
 .auth-brand {
-  text-align: center;
-  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--text-title);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-display);
+  color: var(--color-text);
 }
 
-// Вводный блок слева от формы входа (только шаг 'login' — на шагах регистрации/кода
-// отвлекающий текст не нужен, там и так самое важное действие — форма).
+.auth-title {
+  margin: var(--space-2) 0 0;
+  font: var(--text-display-mobile);
+  letter-spacing: var(--letter-spacing-display);
+  color: var(--color-text);
+}
+
+.auth-lead {
+  margin: 0;
+  font: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+// Форма внутри карточки: поля (appField) и кнопки — одним вертикальным ритмом, без mb-* утилит.
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.auth-text {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--color-text-muted);
+}
+
+// Вводный блок рядом с формой входа (только шаг 'login').
 .login-intro {
-  flex: 1 1 340px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
   max-width: 420px;
-  padding: var(--space-2) 0;
+
+  @media (max-width: 899px) {
+    order: 1;
+    width: 100%;
+    max-width: 440px;
+    gap: var(--space-4);
+  }
 }
 
 .login-intro-title {
-  margin: var(--space-1) 0 var(--space-4);
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.4706rem;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
   color: var(--color-text);
+
+  @media (max-width: 899px) { font: var(--text-title); }
 }
 
 .login-intro-features {
   list-style: none;
-  margin: 0 0 var(--space-4);
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .login-intro-features li {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: 0.8235rem;
-  line-height: 1.4;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--text-body);
   color: var(--color-text);
-}
 
-.login-intro-features i {
-  flex: none;
-  font-size: 1.1765rem;
-  color: var(--color-accent);
-  margin-top: 1px;
+  @media (max-width: 899px) { font: var(--text-body-sm); }
 }
 
 .login-intro-note {
   margin: 0;
-  font-size: 0.7647rem;
-  line-height: 1.5;
-  color: var(--color-neutral-600);
+  font: var(--text-body-sm);
+  color: var(--color-text-muted);
 }
 
-// Мобильный список: несёт ту же информацию компактнее, вместо .login-intro-features
-// с описанием каждого пункта фразой — иначе на узком экране блок выше формы слишком
-// длинный (см. итоговый совет: не перегружать страницу входа).
-@media (max-width: 640px) {
-  .login-intro {
-    max-width: none;
-    text-align: center;
-  }
+// Полный текст документа (политика, согласие) — HTML с бэкенда через [innerHTML].
+.doc-page {
+  width: calc(100% - var(--space-4) * 2);
+  max-width: 720px;
+  margin: var(--space-6) auto;
+}
 
-  .login-intro-title {
-    font-size: 1.2353rem;
-  }
+.prose {
+  font: var(--text-body);
+  color: var(--color-text);
 
-  .login-intro-features {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--space-3) var(--space-4);
-  }
-
-  .login-intro-features li {
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.7647rem;
-    max-width: 88px;
-    text-align: center;
-  }
-
-  .login-intro-features i {
-    margin-top: 0;
-  }
+  h1, h2 { margin: 0 0 var(--space-4); font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+  h3 { margin: var(--space-6) 0 var(--space-2); font: var(--text-title); }
+  p, ul, ol { margin: 0 0 var(--space-3); }
+  ul, ol { padding-left: var(--space-6); }
+  li + li { margin-top: var(--space-1); }
+  > :last-child { margin-bottom: 0; }
 }
 
 // ============================================================================
@@ -1489,14 +1850,14 @@ select.input {
 // у нового пользователя он закрывал нижнюю навигацию, пока тот не нажмёт кнопку.
 .cookie-banner {
   position: fixed;
-  left: var(--space-3);
-  right: var(--space-3);
-  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-banner);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
 
   @media (min-width: 1024px) {
-    bottom: var(--space-3);
+    bottom: var(--space-4);
   }
 }
 
@@ -1506,38 +1867,11 @@ select.input {
   justify-content: flex-end;
 }
 
-.tab-bar button {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 8px 2px;
-  min-height: var(--tap-min); // редизайн v2
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--color-neutral-600);
-
-  i {
-    font-size: 1.2941rem; // редизайн v2: было 21px
-  }
-
-  span {
-    font-family: var(--font-heading);
-    font-size: 0.7647rem; // было 11px — подписи вкладок должны читаться без очков
-  }
-
-  &.active {
-    color: var(--color-accent);
-  }
-}
-
 // «Показать пароль» под полем — крупная тач-цель, не мелкая иконка внутри поля.
 .password-toggle {
-  min-height: 36px;
-  font-size: 0.8235rem;
+  align-self: flex-start;
+  min-height: var(--tap-min);
+  font: var(--text-caption);
 }
 
 // ============================================================================
@@ -1555,3 +1889,176 @@ select.input {
     scroll-behavior: auto !important;
   }
 }
+
+// ============================================================================
+// Боковая панель формы (DESIGN §3 «Боковая панель»): десктоп — оверлей справа 560px, телефон — весь экран
+// без шапки каркаса и таб-бара. Шапка (подпись + заголовок + «×») → прокручиваемое тело → низ с кнопками.
+// ============================================================================
+.side-sheet-backdrop {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+.side-sheet,
+.side-sheet-fullscreen {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--color-surface);
+}
+
+.side-sheet {
+  width: min(560px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  box-shadow: var(--shadow-overlay);
+}
+
+.side-sheet-fullscreen {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.side-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-divider);
+
+  > :first-child { flex: 1; min-width: 0; }
+}
+
+.side-sheet-kicker { font: var(--text-caption); font-weight: 600; color: var(--color-text-muted); }
+
+.side-sheet-title {
+  margin: 0;
+  font: var(--text-title);
+  overflow-wrap: anywhere;
+}
+
+.side-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+.side-sheet-foot {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-6) max(var(--space-4), env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-surface);
+
+  .btn-primary { flex: 1; }
+}
+
+// Та же форма страницей на десктопе (app-content-page): карточка уже даёт поля — у тела и низа свои убираем.
+app-content-page {
+  .side-sheet-body { padding: 0; overflow: visible; }
+
+  // Липкий низ форм (дневник, курс, отчёт) рассчитан на прокрутку внутри панели — на странице он
+  // прилипает к низу окна: без отрицательного смещения и с запасом снизу, чтобы кнопки были видны целиком.
+  .cp-body .dn-footer,
+  .cp-body .cf-foot,
+  .cp-body .dr-footer {
+    bottom: 0;
+    padding-bottom: var(--space-4);
+  }
+  .side-sheet-foot {
+    padding: var(--space-5) 0 0;
+    background: none;
+
+    .btn-primary { flex: 0 1 auto; min-width: 240px; }
+  }
+}
+
+@media (max-width: 639px) {
+  .side-sheet-head { padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4); }
+  .side-sheet-body { padding: var(--space-4); }
+  .side-sheet-foot { padding-inline: var(--space-4); }
+}
+
+// Поле формы с подписью сверху и подсказкой снизу.
+// Поле формы (shared/ui/field, appField): подпись → контрол → подсказки, ритм 4px.
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.field > .form-label { margin: 0; }
+.field > .field-hint { margin-top: 0; }
+
+.form-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.form-section > .form-label { margin: 0; }
+.form-section > .seg { align-self: flex-start; }
+// Вспомогательный текст 14 muted (подсказка под полем, подпись блока); бывший .muted.
+.form-hint { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
+
+// Карточка-переключатель («Распознать бланк»): текст + switch, фон accent-soft.
+.toggle-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-soft);
+}
+
+.toggle-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.toggle-card-title { font: var(--text-body); font-weight: 600; color: var(--color-text); }
+.toggle-card-sub { font: var(--text-caption); color: var(--color-text-secondary); }
+
+// ============================================================================
+// Шапка страницы и секции (DESIGN §4): H1 34/28 + подзаголовок; секция — заголовок 19/600 + содержимое.
+// ============================================================================
+.page-title {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 1023px) { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+}
+
+.page-sub { margin: 0; font: var(--text-body); color: var(--color-text-muted); }
+
+.section { display: flex; flex-direction: column; gap: var(--space-3); }
+.section-title { margin: 0; font: var(--text-title); color: var(--color-text); }
+.section-text { margin: 0; font: var(--text-body-sm); color: var(--color-text-secondary); }
+
+// Строка настроек внутри list-card: [плитка] → подпись/текст → значение/действие; разделитель 24 по бокам.
+.settings-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-6);
+
+  & + .settings-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--space-6);
+    right: var(--space-6);
+    border-top: 1px solid var(--color-divider);
+  }
+
+  @media (max-width: 639px) {
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    & + .settings-row::before { left: var(--space-4); right: var(--space-4); }
+  }
+}
+
+.settings-row-label { flex: none; width: 180px; font: var(--text-body-sm); color: var(--color-text-muted); }
+.settings-row-value { flex: 1; min-width: 0; font: var(--text-body); color: var(--color-text); overflow-wrap: anywhere; }
+.settings-row-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.settings-row-title { font: var(--text-body); font-weight: 600; }
+.settings-row-sub { font: var(--text-caption); color: var(--color-text-muted); }
+
+// Шапка колонок матрицы переключателей («Устройство / Telegram», «Приём лекарств / Прививки / Дневник»).
+.matrix-head { font: var(--text-badge); color: var(--color-text-muted); }
+
+@media (max-width: 639px) {
+  .settings-row-label { width: 112px; }
+}
+

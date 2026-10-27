@@ -3,15 +3,15 @@
     <p class="text-muted mb-0">
       Только чтение. Эти настройки задаются в env (PROD_ENV) и меняются правкой конфигурации сервера
       с передеплоем — не из админки. Секреты показаны только как «задан / не задан». Метка справа —
-      откуда значение взято: <span class="tag tag-accent">env</span> переменная окружения,
-      <span class="tag tag-neutral">appsettings</span> файл настроек,
-      <span class="tag tag-outline">по умолчанию</span> не задано нигде — действует значение из кода.
+      откуда значение взято: <span class="badge badge-neutral">env</span> переменная окружения,
+      <span class="badge badge-neutral">appsettings</span> файл настроек,
+      <span class="badge badge-neutral">по умолчанию</span> не задано нигде — действует значение из кода.
     </p>
   </div>
 </div>
 
 @if (loading() && !config()) {
-  <p class="text-muted">Загрузка…</p>
+  <app-loading-spinner />
 } @else if (error()) {
   <div class="alert-danger">{{ error() }}</div>
 } @else {
@@ -30,14 +30,14 @@
                     <td><code>{{ envName(item) }}</code></td>
                     <td>
                       @if (item.isSecret) {
-                        <span class="tag" [class.tag-accent]="item.isSet" [class.tag-neutral]="!item.isSet">
+                        <span class="badge" [class.badge-success]="item.isSet" [class.badge-neutral]="!item.isSet">
                           {{ item.isSet ? 'задан' : 'не задан' }}
                         </span>
                       } @else {
                         {{ item.value === null || item.value === '' ? '—' : item.value }}
                       }
                     </td>
-                    <td><span class="tag" [class]="'tag ' + sourceTag(item.source)">{{ sourceLabel(item.source) }}</span></td>
+                    <td><span [class]="'badge ' + sourceTag(item.source)">{{ sourceLabel(item.source) }}</span></td>
                   </tr>
                 }
               </tbody>

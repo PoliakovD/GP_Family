@@ -1,5 +1,6 @@
 using FamilyHub.Domain.Entities;
 using FamilyHub.Infrastructure.Persistence;
+using FamilyHub.Infrastructure.Search;
 using FamilyHub.Modules.Medical.Extraction;
 using FamilyHub.Modules.Medical.Kb;
 using FluentAssertions;
@@ -97,6 +98,73 @@ public class LabAnalyteKbLookupTests(FamilyHubWebFactory factory) : IntegrationT
 
             result.Kind.Should().Be(KbLookupKind.Miss,
                 "запись под другой источник (кровь) не должна закрывать промах для мочи без явного Unresolved-фолбэка");
+        }
+    }
+
+    private const string Serum = "молярная концентрация в сыворотке или плазме крови";
+
+    /// <summary>Ключ в том виде, в каком он лежит в справочнике и приходит в lookup (свёрнутый, см. NormalizeAnalyteKey).</summary>
+    private static string K(string name) => LabAnalyteNormalizer.NormalizeAnalyteKey(name);
+
+    /// <summary>Живой случай (протокол ГБУЗ РК, биохимия): общий LOINC-хвост давал нечёткую автопривязку к чужой
+    /// статье — альбумин показывался «Белком общим», мочевина/креатинин/билирубин общий — «Билирубином прямым»,
+    /// глюкоза — «Калием», АСТ — «АЛТ».</summary>
+    [Theory]
+    [InlineData("альбумин массовая концентрация в сыворотке или плазме крови")]
+    [InlineData("мочевина " + Serum)]
+    [InlineData("креатинин " + Serum)]
+    [InlineData("билирубин общий " + Serum)]
+    [InlineData("билирубин непрямой " + Serum)]
+    [InlineData("глюкоза молярная концентрация в венозной крови")]
+    [InlineData("аспартатаминотрансфераза каталитическая концентрация в сыворотке или плазме крови")]
+    public async Task LoincNames_OfDifferentAnalytes_DoNotFuzzyLinkThroughSharedTail(string query)
+    {
+        var specimen = Guid.NewGuid();
+        await SeedKbAsync(K("белок общий массовая концентрация в сыворотке или плазме крови"), specimen, "Белок общий");
+        await SeedKbAsync(K("билирубин прямой " + Serum), specimen, "Билирубин прямой");
+        await SeedKbAsync(K("калий молярная концентрация в венозной крови"), specimen, "Калий");
+        await SeedKbAsync(K("аланинаминотрансфераза каталитическая концентрация в сыворотке или плазме крови"), specimen, "АЛТ");
+
+        var sut = CreateSut(out var scope);
+        using (scope)
+        {
+            var result = await sut.LookupAsync(K(query), specimen);
+
+            result.Kind.Should().NotBe(KbLookupKind.Hit,
+                "общий хвост «… концентрация в …» не делает разные аналиты одним показателем");
+        }
+    }
+
+    [Fact]
+    public async Task LoincName_MatchesShortArticleOfSameAnalyteByHead()
+    {
+        var specimen = Guid.NewGuid();
+        await SeedKbAsync(K("глюкоза"), specimen, "Глюкоза");
+        await SeedKbAsync(K("калий молярная концентрация в венозной крови"), specimen, "Калий");
+
+        var sut = CreateSut(out var scope);
+        using (scope)
+        {
+            var result = await sut.LookupAsync(K("глюкоза молярная концентрация в венозной крови"), specimen);
+
+            result.Kind.Should().Be(KbLookupKind.Hit);
+            result.DisplayName.Should().Be("Глюкоза");
+        }
+    }
+
+    [Fact]
+    public async Task LoincName_SameAnalyteDifferentSystemTail_StillFuzzyLinks()
+    {
+        var specimen = Guid.NewGuid();
+        await SeedKbAsync(K("калий молярная концентрация в венозной крови"), specimen, "Калий");
+
+        var sut = CreateSut(out var scope);
+        using (scope)
+        {
+            var result = await sut.LookupAsync(K("калий молярная концентрация в сыворотке или плазме крови"), specimen);
+
+            result.Kind.Should().NotBe(KbLookupKind.Miss, "голова совпала — это тот же аналит, гард не должен его отсекать");
+            result.DisplayName.Should().Be("Калий");
         }
     }
 }

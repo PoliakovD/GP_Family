@@ -1,10 +1,13 @@
 import {
   AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy,
   Output, SimpleChanges, ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { ZoomPanTransform } from '../zoom-pan';
 import { LoadingSpinnerComponent } from '../../loading-spinner/loading-spinner.component';
+import { ChevronLeft, ChevronRight, CircleAlert } from 'lucide';
+import { IconComponent } from '../../ui/icon/icon.component';
 
 let workerConfigured = false;
 
@@ -24,11 +27,14 @@ let workerConfigured = false;
  */
 @Component({
     selector: 'app-pdf-preview',
-    imports: [LoadingSpinnerComponent],
+    imports: [LoadingSpinnerComponent, IconComponent],
     templateUrl: './pdf-preview.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './pdf-preview.component.scss'
 })
 export class PdfPreviewComponent implements OnChanges, AfterViewInit, OnDestroy {
+  protected readonly icons = { ChevronLeft, ChevronRight, CircleAlert };
+
   @Input({ required: true }) url!: string;
   @Input({ required: true }) transform!: ZoomPanTransform;
   @Output() pageCountDetected = new EventEmitter<number>();

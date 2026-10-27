@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
 namespace FamilyHub.IntegrationTests;
@@ -65,6 +66,27 @@ public class AdminSessionApiTests(AdminWebFactory factory)
         (await client.DeleteAsync("/api/admin/session")).StatusCode.Should().Be(HttpStatusCode.OK);
 
         (await client.GetAsync("/api/admin/session")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // Регрессия на находку M3 (docs/security/security-audit-2026-10.md): «Выйти» раньше лишь стирал
+    // cookie в браузере — скопированный до выхода токен продолжал открывать панель до конца срока.
+    [Fact]
+    public async Task Logout_RevokesSessionServerSide_CopiedCookieNoLongerWorks()
+    {
+        var client = AnonymousClient();
+        var login = await client.PostAsJsonAsync("/api/admin/session",
+            new { user = AdminWebFactory.TestUser, password = AdminWebFactory.TestPassword });
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var stolenCookie = login.Headers.GetValues("Set-Cookie")
+            .Single(h => h.StartsWith("familyhub.admin=", StringComparison.Ordinal))
+            .Split(';')[0];
+
+        (await client.DeleteAsync("/api/admin/session")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var attacker = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var replay = new HttpRequestMessage(HttpMethod.Get, "/api/admin/session");
+        replay.Headers.Add("Cookie", stolenCookie);
+        (await attacker.SendAsync(replay)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

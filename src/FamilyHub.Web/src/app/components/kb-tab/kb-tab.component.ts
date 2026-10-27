@@ -1,12 +1,16 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChevronRight, Pill } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import type { KbListItem, KbMedicationCard } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
 import { SearchFieldComponent } from '../../shared/search-field/search-field.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { BottomSheetComponent } from '../../shared/bottom-sheet/bottom-sheet.component';
 import { KbCardComponent } from '../kb-card/kb-card.component';
+import { BreakpointService } from '../../services/breakpoint.service';
+import { IndicatorInfoPanelComponent } from '../indicator-info/indicator-info-panel.component';
 
 /**
  * Page (таксономия — patterns/frontend_web.md): общий обезличенный справочник препаратов
@@ -16,12 +20,29 @@ import { KbCardComponent } from '../kb-card/kb-card.component';
  * см. SearchService).
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-kb-tab',
-    imports: [ClickableDirective, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent],
-    templateUrl: './kb-tab.component.html'
+    imports: [IconComponent, SearchFieldComponent, LoadingSpinnerComponent, BottomSheetComponent, KbCardComponent, IndicatorInfoPanelComponent, NgTemplateOutlet],
+    templateUrl: './kb-tab.component.html',
+  styles: [`
+    .kb-tab { display: flex; flex-direction: column; gap: var(--space-4); }
+    .kb-note { margin: 0; font: var(--text-body-sm); color: var(--color-text-muted); }
+    .kb-specimen { font-weight: 400; color: var(--color-text-muted); }
+    .kb-row { padding: var(--space-3) var(--space-6); }
+    .kb-row + .kb-row { border-top: 1px solid var(--color-divider); }
+    @media (max-width: 639px) { .kb-row { padding: var(--space-3) var(--space-4); } }
+  `],
 })
 export class KbTabComponent implements OnInit {
+  protected readonly icons = { Pill };
+
+  protected readonly chevron = ChevronRight;
   private readonly api = inject(ApiService);
+  private readonly breakpoints = inject(BreakpointService);
+
+  get isWide(): boolean {
+    return this.breakpoints.tier() === 'wide';
+  }
 
   loading = true;
   error: string | null = null;

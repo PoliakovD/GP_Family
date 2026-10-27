@@ -3,7 +3,7 @@
 <div class="card">
   <div class="card-title">Задачи конвейеров</div>
   <div class="card-body">
-    <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+    <div class="toolbar mb-2">
       <div class="seg">
         @for (t of jobTypes; track t.value) {
           <button type="button" class="seg-opt" [class.active]="jobType() === t.value" (click)="selectJobType(t.value)">
@@ -24,7 +24,7 @@
         }
       </select>
       <button type="button" class="btn btn-secondary btn-sm" [disabled]="jobsLoading()" (click)="loadJobs()">
-        <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Обновить
+        <app-icon [icon]="icons.RefreshCw" [size]="18" />Обновить
       </button>
       @if (selectedJobIds().size > 0) {
         <button type="button" class="btn btn-primary btn-sm" [disabled]="jobsBusy()" (click)="bulkRetrySelected()">
@@ -37,7 +37,7 @@
     </div>
 
     @if (jobsLoading() && jobs().length === 0) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (jobsError()) {
       <div class="alert-danger">{{ jobsError() }}</div>
     } @else {
@@ -78,7 +78,7 @@
                       Повторить
                     </button>
                     <button type="button" class="btn-icon" aria-label="Удалить задачу" [disabled]="jobsBusy()" (click)="deleteJob(j)">
-                      <i class="ph ph-trash" aria-hidden="true"></i>
+                      <app-icon [icon]="icons.Trash2" [size]="18" />
                     </button>
                   </div>
                 }

@@ -2,6 +2,7 @@ using FamilyHub.Api.Configuration;
 using FamilyHub.Api.Security;
 using FamilyHub.Infrastructure.Auth;
 using FamilyHub.Infrastructure.Auth.Jwt;
+using FamilyHub.Infrastructure.Authorization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -47,6 +48,7 @@ public static class AuthenticationRegistration
         // (дубли keyId, некорректный base64) валит старт хоста сразу, см. JwtSigningKeyRing.
         var jwtSigningKeys = JwtSigningKeyRing.Build(jwtOptions);
         builder.Services.AddScoped<ITokenService, TokenService>();
+        builder.Services.AddScoped<SessionValidityChecker>();
 
         // --- CSRF: double-submit антифорджери-токен поверх SameSite=Lax для PWA-cookie сессии (аудит
         // --- module-review-2026-08-02/01-auth-identity.md, находка 4). Только PWA — Telegram Mini App
@@ -71,6 +73,7 @@ public static class AuthenticationRegistration
         // --- плюс Dev-заглушка (DevTools:DevAuthEnabled, НЕ привязана к ASPNETCORE_ENVIRONMENT —---
         // --- см. DevToolsOptions). Селектор "Smart" во всех средах:                           ---
         // --- tma-заголовок → Telegram; X-Dev-TelegramId (dev) → Dev; иначе → JWT.             ---
+        // --- /hubs/* — всегда HubTicket (ADR-0019).                                            ---
         var authBuilder = builder.Services.AddAuthentication(options =>
         {
             options.DefaultScheme = AuthSchemes.Smart;
@@ -79,6 +82,10 @@ public static class AuthenticationRegistration
         });
 
         authBuilder.AddScheme<AuthenticationSchemeOptions, TelegramMiniAppAuthenticationHandler>(AuthSchemes.TelegramMiniApp, null);
+
+        // Вход в SignalR-хаб чата по короткоживущему тикету (ADR-0019 п. 3) — см. селектор ниже.
+        builder.Services.AddSingleton<HubTicketService>();
+        authBuilder.AddScheme<AuthenticationSchemeOptions, HubTicketAuthenticationHandler>(AuthSchemes.HubTicket, null);
 
         authBuilder.AddJwtBearer(AuthSchemes.PwaCookie, jwtBearerOptions =>
         {
@@ -116,6 +123,22 @@ public static class AuthenticationRegistration
                         ctx.Token = accessToken;
                     return Task.CompletedTask;
                 },
+                // Подпись и срок проверены — но сессия, на которую ссылается токен, могла быть
+                // отозвана (выход, «завершить сеанс», смена/сброс пароля, удаление аккаунта). Без этой
+                // проверки access-токен жил до конца AccessTokenLifetime (аудит security-audit-2026-10, M5).
+                OnTokenValidated = async ctx =>
+                {
+                    var sessionClaim = ctx.Principal?.FindFirst(FamilyHubClaimTypes.SessionId)?.Value;
+                    if (!Guid.TryParse(sessionClaim, out var sessionId))
+                    {
+                        ctx.Fail("Access-токен без идентификатора сессии.");
+                        return;
+                    }
+
+                    var checker = ctx.HttpContext.RequestServices.GetRequiredService<SessionValidityChecker>();
+                    if (!await checker.IsActiveAsync(sessionId, ctx.HttpContext.RequestAborted))
+                        ctx.Fail("Сессия отозвана.");
+                },
                 // SPA-API: вместо WWW-Authenticate-челленджа отдаём голый 401, как и раньше у cookie-схемы.
                 OnChallenge = ctx =>
                 {
@@ -144,6 +167,8 @@ public static class AuthenticationRegistration
             policyOptions.ForwardDefaultSelector = httpContext =>
             {
                 var request = httpContext.Request;
+                // Хабы (ADR-0019) принимают только тикет — ни cookie, ни initData, ни dev-заголовок.
+                if (request.Path.StartsWithSegments("/hubs")) return AuthSchemes.HubTicket;
                 var hasInitData = request.Headers.Authorization.ToString().StartsWith("tma ", StringComparison.Ordinal)
                     || request.Headers.ContainsKey("X-Telegram-Init-Data");
                 if (hasInitData) return AuthSchemes.TelegramMiniApp;

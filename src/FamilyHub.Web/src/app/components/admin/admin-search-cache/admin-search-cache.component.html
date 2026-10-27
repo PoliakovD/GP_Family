@@ -10,7 +10,7 @@
       список доменов или точечно включить/выключить отдельный URL без нового платного запроса.
     </p>
 
-    <form class="d-flex gap-2 mb-3 flex-wrap" (ngSubmit)="load(true)">
+    <form class="toolbar mb-3" (ngSubmit)="load(true)">
       <input class="input" placeholder="название или ключ…" aria-label="Поиск по названию или ключу"
              [ngModel]="query()" (ngModelChange)="query.set($event)" name="cacheQuery" />
       <button type="submit" class="btn btn-secondary btn-sm" [disabled]="loading()">Найти</button>
@@ -27,7 +27,7 @@
     </form>
 
     @if (loading() && rows().length === 0) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
@@ -50,7 +50,7 @@
                 @if (row.displayName) {
                   <div>{{ row.displayName }}</div>
                 } @else {
-                  <span class="tag tag-warning">нет названия</span>
+                  <span class="badge badge-warning">нет названия</span>
                 }
                 <code class="cache-key" title="Ключ кэша — по нему задачи находят строку">{{ row.normalizedName }}</code>
               </td>
@@ -58,7 +58,7 @@
                 <td>{{ row.specimen }}</td>
                 <td>
                   @if (row.units === null) {
-                    <span class="tag tag-neutral text-nowrap">не определены</span>
+                    <span class="badge badge-neutral text-nowrap">не определены</span>
                   } @else if (row.units === '') {
                     <span class="text-muted">нет</span>
                   } @else {
@@ -70,7 +70,7 @@
               <td>
                 {{ row.lastUpdatedAt | date: 'dd.MM.yyyy HH:mm' }}
                 @if (isStale(row)) {
-                  <span class="tag tag-neutral text-nowrap" title="Срок свежести вышел — следующая задача может оплатить новый поиск">устарел</span>
+                  <span class="badge badge-neutral text-nowrap" title="Срок свежести вышел — следующая задача может оплатить новый поиск">устарел</span>
                 }
               </td>
               <td>{{ row.snippetCount }}</td>

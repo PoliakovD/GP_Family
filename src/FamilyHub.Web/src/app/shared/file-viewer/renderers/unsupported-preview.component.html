@@ -1,5 +1,5 @@
 <div class="unsupported-card">
-  <i class="ph ph-duotone {{ info.icon }}" aria-hidden="true"></i>
+  <app-icon [icon]="info.icon" [size]="40" />
   <div class="unsupported-name text-truncate">{{ fileName }}</div>
   <div class="unsupported-meta">{{ info.label }} · {{ sizeLabel }}</div>
 
@@ -13,7 +13,7 @@
     }
     @if (canDownload) {
       <button type="button" class="btn btn-primary" (click)="download.emit()">
-        <i class="ph ph-download-simple" aria-hidden="true"></i> Скачать
+        <app-icon [icon]="icons.Download" [size]="18" /> Скачать
       </button>
     }
   }

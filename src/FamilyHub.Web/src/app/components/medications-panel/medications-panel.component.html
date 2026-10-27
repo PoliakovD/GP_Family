@@ -1,35 +1,35 @@
-<div>
+<div class="med">
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger" role="alert">{{ error }}</div>
   }
 
-  <div class="seg mb-3">
+  <div class="seg med-tabs">
     <label class="seg-opt">
       <input type="radio" name="{{ photoInputId }}-tab" [checked]="activeTab === 'list'" (change)="activeTab = 'list'" />
       Список{{ items.length ? ' (' + items.length + ')' : '' }}
     </label>
     <label class="seg-opt">
       <input type="radio" name="{{ photoInputId }}-tab" [checked]="activeTab === 'add'" (change)="openAddTab()" />
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить
+      <app-icon [icon]="icons.Plus" [size]="18" />Добавить
     </label>
   </div>
 
   @if (activeTab === 'add') {
-    <div class="card mb-3">
-      <label class="form-label fw-semibold mb-0">Фото упаковки/этикетки (до 5) — для распознавания</label>
+    <div class="card">
+      <label class="form-label">Фото упаковки/этикетки (до 5) — для распознавания</label>
 
       <div class="photo-grid">
         @for (photo of photos; track photo.previewUrl; let i = $index) {
           <div class="photo-tile">
             <img [src]="photo.previewUrl" alt="" />
             <button type="button" class="photo-remove" aria-label="Удалить фото" (click)="removePhoto(i)">
-              <i class="ph-bold ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </div>
         }
         @if (photos.length < 5 && !recognizing) {
           <label class="photo-tile photo-add" [attr.for]="photoInputId">
-            <i class="ph ph-camera" aria-hidden="true"></i>
+            <app-icon [icon]="icons.Camera" [size]="18" />
             <span>Фото</span>
           </label>
         }
@@ -59,7 +59,7 @@
             <div class="recognize-step flex-fill text-center" [class]="'step-' + stepState(step.id)">
               <div class="recognize-step-dot mx-auto mb-1">
                 @if (stepState(step.id) === 'done') {
-                  <i class="ph-bold ph-check" aria-hidden="true"></i>
+                  <app-icon [icon]="icons.Check" [size]="18" />
                 } @else if (stepState(step.id) === 'active') {
                   <span class="step-spinner"></span>
                 }
@@ -76,10 +76,9 @@
       }
     </div>
 
-    <div class="card mb-3">
+    <div class="card">
       @if (aiFilled) {
         <div class="alert-info" role="status">
-          <i class="ph ph-sparkle" aria-hidden="true"></i>
           Поля заполнены автоматически по фото — сверьте название и срок годности с упаковкой.
         </div>
       }
@@ -110,21 +109,21 @@
             <input class="input" [(ngModel)]="row.key" placeholder="Поле" />
             <input class="input" [(ngModel)]="row.value" placeholder="Значение" />
             <button type="button" class="btn btn-icon btn-danger" (click)="removeExtraRow(i)" aria-label="Удалить поле">
-              <i class="ph-bold ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </div>
         }
       }
-      <button class="btn btn-secondary btn-sm align-self-start" (click)="addExtraRow()">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Доп. поле
+      <button class="btn btn-ghost align-self-start" (click)="addExtraRow()">
+        <app-icon [icon]="icons.Plus" [size]="18" />Доп. поле
       </button>
 
       <div class="d-flex gap-2 mt-1">
-        <button class="btn btn-primary btn-sm" (click)="handleSubmit()" [disabled]="saving">
+        <button class="btn btn-primary" (click)="handleSubmit()" [disabled]="saving">
           {{ saving ? 'Сохраняем…' : editingId ? 'Сохранить' : 'Добавить' }}
         </button>
         @if (editingId) {
-          <button class="btn btn-secondary btn-sm" (click)="cancelEdit()">Отмена</button>
+          <button class="btn btn-secondary" (click)="cancelEdit()">Отмена</button>
         }
       </div>
     </div>
@@ -135,113 +134,85 @@
       <app-search-field placeholder="Поиск в аптечке…" [value]="searchQuery" (valueChange)="searchQuery = $event" />
     }
 
-    @for (item of filteredItems; track item.id) {
-      <div class="card mb-2 medication-card" [class]="expiryClassFor(item)">
-        <div class="name-with-tags mb-1">
-          <strong class="card-title">{{ item.name }}</strong>
-          @if (quantityOf(item)) {
-            <span class="muted text-nowrap">кол-во: {{ quantityOf(item) }}</span>
-          }
-          @if (item.enrichmentPending) {
-            <span
-              class="tag tag-neutral"
-              [title]="medicationEnrichmentTitle(item)"
-            >
-              <span class="pipeline-step-spinner" aria-hidden="true"></span> ищем описание препарата…
-            </span>
-          }
-        </div>
-        @if (instructionsOf(item)) {
-          <p class="muted mb-1">{{ instructionsOf(item) }}</p>
-        }
-        @if (item.expiryDate) {
-          <p class="muted mb-2">
-            Срок годности: {{ formatDayMonthYear(item.expiryDate) }}
-            @if (expiryLabel(item.expiryDate); as label) {
-              <span class="expiry-label" [class]="expiryClassFor(item)">
-                <i class="ph-fill ph-warning" aria-hidden="true"></i> {{ label }}
-              </span>
-            }
-          </p>
-        } @else {
-          <p class="muted mb-2">Срок годности не указан</p>
-        }
-        @if (dataEntries(item).length > 0) {
-          <div class="data-table-wrap mb-2">
-            <table class="data-table">
-              <tbody>
-                @for (row of dataEntries(item); track row.key) {
-                  <tr>
-                    <td class="data-table-key">{{ row.key }}</td>
-                    <td class="data-table-value">{{ row.value }}</td>
-                  </tr>
+    @if (filteredItems.length > 0) {
+      <!-- Лекарства — строки list-card: плитка → название + «кол-во · срок · форма · доза» → бейдж срока
+           (DESIGN §1: danger — просрочено, warning — скоро истекает, success — в порядке) → «Справка» → «⋯». -->
+      <div class="list-card med-list">
+        @for (item of filteredItems; track item.id) {
+          <div class="med-row">
+            <app-icon-tile [icon]="icons.Pill" tone="medication" size="sm" />
+            <div class="med-text">
+              <div class="med-name">
+                {{ item.name }}
+                @if (item.enrichmentPending) {
+                  <span class="badge badge-neutral" [title]="medicationEnrichmentTitle(item)">
+                    <span class="pipeline-step-spinner" aria-hidden="true"></span> ищем описание…
+                  </span>
                 }
-              </tbody>
-            </table>
+              </div>
+              <div class="med-sub">{{ medSubtitle(item) }}</div>
+              @if (instructionsOf(item)) {
+                <div class="med-sub">{{ instructionsOf(item) }}</div>
+              }
+            </div>
+            @if (expiryBadge(item.expiryDate); as b) {
+              <span class="badge med-badge" [class]="'badge-' + b.tone">{{ b.label }}</span>
+            }
+            <button type="button" class="btn btn-secondary med-kb" aria-label="Справка о препарате" (click)="openKb(item)">
+              <app-icon [icon]="icons.BookOpen" [size]="18" /><span class="med-kb-label">Справка</span>
+            </button>
+            <app-action-menu [actions]="medActions(item)" [label]="'Действия: ' + item.name" />
           </div>
         }
-        <!-- «Удалить» — отдельно справа и ghost-стилем: раньше красная кнопка стояла вплотную к
-             «Изменить» и на телефоне легко нажималась по ошибке (теперь ещё и с подтверждением). -->
-        <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-secondary btn-sm" (click)="startEdit(item)">Изменить</button>
-          <button class="btn btn-secondary btn-sm" (click)="openKb(item)">
-            <i class="ph ph-book-open-text" aria-hidden="true"></i> Справка
-          </button>
-          <button class="btn btn-ghost btn-sm text-danger ms-auto" (click)="handleDelete(item)">Удалить</button>
-        </div>
       </div>
     }
 
     @if (items.length === 0) {
-      <p class="muted">Аптечка пуста.</p>
+      <app-empty-state [icon]="icons.BriefcaseMedical" title="Аптечка пуста"
+        text="Добавьте лекарства — по фото упаковки или вручную. Напомним, когда истечёт срок." [inline]="true" />
     } @else if (filteredItems.length === 0) {
-      <p class="muted">Ничего не найдено.</p>
-    } @else {
-      <div class="expiry-legend d-flex flex-wrap gap-3 mt-2">
-        <span class="expiry-legend-item">
-          <span class="expiry-legend-dot expiry-ok"></span>Годен ещё &gt; 4 мес.
-        </span>
-        <span class="expiry-legend-item">
-          <span class="expiry-legend-dot expiry-warning"></span>Истекает через 1–4 мес.
-        </span>
-        <span class="expiry-legend-item">
-          <span class="expiry-legend-dot expiry-danger"></span>Истекает&nbsp;&lt;&nbsp;1 мес.
-        </span>
-        <span class="expiry-legend-item">
-          <span class="expiry-legend-dot expiry-none"></span>Срок не указан
-        </span>
-      </div>
+      <p class="med-note">Ничего не найдено.</p>
     }
   }
 
-  <app-bottom-sheet title="Справка о препарате" [open]="kbOpen" (closed)="closeKb()">
+  <!-- Справка о препарате: десктоп — боковая панель справочника (как у показателя), телефон — нижний лист. -->
+  <ng-template #kbBody>
     @if (kbLoading) {
       <app-loading-spinner />
     } @else if (kbError) {
-      <div class="alert-danger mb-0">{{ kbError }}</div>
+      <div class="alert-danger" role="alert">{{ kbError }}</div>
     } @else if (kbResponse) {
       @if (kbResponse.status === MedicationKbStatus.Ready && kbResponse.card) {
         <app-kb-card [card]="kbResponse.card" />
       } @else {
         @if (kbResponse.status === MedicationKbStatus.Pending || kbResponse.status === MedicationKbStatus.Running) {
-          <p class="muted">Справочник уточняется — обычно это занимает до минуты. Загляните сюда чуть позже.</p>
+          <p class="form-hint">Справочник уточняется — обычно это занимает до минуты. Загляните сюда чуть позже.</p>
         } @else if (kbResponse.status === MedicationKbStatus.UnderReview) {
-          <p class="muted">Информация об этом препарате на проверке у администратора — она появится здесь после одобрения.</p>
+          <p class="form-hint">Информация об этом препарате на проверке у администратора — она появится здесь после одобрения.</p>
         } @else if (kbResponse.status === MedicationKbStatus.Failed) {
-          <p class="muted">Не удалось найти информацию об этом препарате в открытых источниках.</p>
+          <p class="form-hint">Не удалось найти информацию об этом препарате в открытых источниках.</p>
         } @else {
-          <p class="muted">Информации об этом препарате в справочнике пока нет.</p>
+          <p class="form-hint">Информации об этом препарате в справочнике пока нет.</p>
         }
 
         @if (kbResponse.candidate) {
-          <p class="muted mb-2">
+          <p class="form-hint mb-2">
             Похоже на «{{ kbResponse.candidate.displayName }}» из справочника — но мы не уверены
             достаточно, чтобы показать это автоматически.
           </p>
         }
 
-        <button class="btn btn-secondary btn-sm" (click)="refreshKb()">Уточнить в справочнике</button>
+        <button class="btn btn-secondary kb-refresh" (click)="refreshKb()">Уточнить в справочнике</button>
       }
     }
-  </app-bottom-sheet>
+  </ng-template>
+  @if (kbOpen && isWide) {
+    <app-indicator-info-panel [title]="kbTitle" [icon]="icons.Pill" tone="medication" backLabel="Аптечка" (closed)="closeKb()">
+      <ng-container *ngTemplateOutlet="kbBody" />
+    </app-indicator-info-panel>
+  } @else {
+    <app-bottom-sheet [title]="kbTitle" [open]="kbOpen" (closed)="closeKb()">
+      <ng-container *ngTemplateOutlet="kbBody" />
+    </app-bottom-sheet>
+  }
 </div>

@@ -1,13 +1,10 @@
-<div>
-  <h3 class="mb-3">Справочник</h3>
+<!-- Справочник: H1 → разделы (segmented) → вкладка. -->
+<div class="kb">
+  <h1 class="kb-title">Справочник</h1>
 
-  <div class="seg mb-3">
+  <div class="seg kb-sections" role="tablist" aria-label="Разделы справочника">
     @for (s of sections; track s.path) {
-      <a
-        class="seg-opt"
-        [routerLink]="[s.path]"
-        routerLinkActive="active"
-      >{{ s.label }}</a>
+      <a class="seg-opt" role="tab" [routerLink]="[s.path]" routerLinkActive="active">{{ s.label }}</a>
     }
   </div>
 

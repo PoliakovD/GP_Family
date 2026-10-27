@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
@@ -12,15 +12,20 @@ import {
   birthdayUrgencyLabel,
   parseLocalBirthDate,
 } from '../../shared/util/birthday-date';
+import { Cake } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 let nextInstanceId = 0;
 
 @Component({
     selector: 'app-birthdays-panel',
-    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent],
+    imports: [FormsModule, LoadingSpinnerComponent, SearchFieldComponent, IconComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './birthdays-panel.component.html'
 })
 export class BirthdaysPanelComponent implements OnInit {
+  protected readonly icons = { Cake };
+
   readonly familyId = input.required<string>();
 
   private readonly api = inject(ApiService);

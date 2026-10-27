@@ -1,5 +1,12 @@
-import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import {
+  BellRing, Check, Minus, Moon, Package, Pill, Sun, Sunrise, X, type IconNode as LucideIconData,
+} from 'lucide';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { ApiError, ApiService } from '../../services/api.service';
 import { IntakeStateService } from '../../services/intake-state.service';
 import { ActionMenuComponent, ActionMenuItem } from '../../shared/action-menu/action-menu.component';
@@ -25,15 +32,15 @@ interface Row {
 interface Group {
   period: DayPeriod;
   title: string;
-  icon: string;
+  icon: LucideIconData;
   isNow: boolean;
   rows: Row[];
 }
 
-const PERIODS: { period: DayPeriod; title: string; icon: string }[] = [
-  { period: DayPeriod.Morning, title: 'Утро', icon: 'ph-duotone ph-sun-horizon' },
-  { period: DayPeriod.Day, title: 'День', icon: 'ph-duotone ph-sun' },
-  { period: DayPeriod.Evening, title: 'Вечер', icon: 'ph-duotone ph-moon' },
+const PERIODS: { period: DayPeriod; title: string; icon: LucideIconData }[] = [
+  { period: DayPeriod.Morning, title: 'Утро', icon: Sunrise },
+  { period: DayPeriod.Day, title: 'День', icon: Sun },
+  { period: DayPeriod.Evening, title: 'Вечер', icon: Moon },
 ];
 
 const REFRESH_MS = 60_000;
@@ -46,11 +53,13 @@ const REFRESH_MS = 60_000;
  */
 @Component({
   selector: 'app-intake-today',
-  imports: [ActionMenuComponent, AvatarComponent, RouterLink],
+  imports: [ActionMenuComponent, AvatarComponent, EmptyStateComponent, IconComponent, IconTileComponent, LoadingSpinnerComponent, RouterLink],
   templateUrl: './intake-today.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-today.component.scss',
 })
 export class IntakeTodayComponent implements OnInit, OnDestroy {
+  protected readonly icons = { BellRing, Check, Minus, Package, Pill, X };
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -278,14 +287,14 @@ export class IntakeTodayComponent implements OnInit, OnDestroy {
     const menu: ActionMenuItem[] = [];
     if (item.canAct) {
       if (item.outcome === DoseOutcome.Due || item.outcome === DoseOutcome.Upcoming) {
-        menu.push({ label: 'Отложить на 30 минут', icon: 'ph ph-clock-clockwise', handler: () => void this.act(item, DoseAction.Snooze30) });
-        menu.push({ label: 'Пропустить', icon: 'ph ph-x', handler: () => void this.act(item, DoseAction.Skip) });
+        menu.push({ label: 'Отложить на 30 минут', handler: () => void this.act(item, DoseAction.Snooze30) });
+        menu.push({ label: 'Пропустить', handler: () => void this.act(item, DoseAction.Skip) });
       }
       if (item.outcome === DoseOutcome.Missed) {
-        menu.push({ label: 'Пропустить', icon: 'ph ph-x', handler: () => void this.act(item, DoseAction.Skip) });
+        menu.push({ label: 'Пропустить', handler: () => void this.act(item, DoseAction.Skip) });
       }
       if ((item.outcome === DoseOutcome.OnTime || item.outcome === DoseOutcome.Late || item.outcome === DoseOutcome.Skipped) && item.doseId) {
-        menu.push({ label: 'Отменить отметку', icon: 'ph ph-arrow-counter-clockwise', handler: () => void this.undo(item) });
+        menu.push({ label: 'Отменить отметку', handler: () => void this.undo(item) });
       }
     }
     return {

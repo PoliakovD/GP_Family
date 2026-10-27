@@ -46,7 +46,7 @@ test('доступ к дневнику: выдача из настроек → �
 
   // Зритель: дневник теперь показывает чип «Вера Орлов» (owner) рядом с «Я».
   await openAs(page, viewer.tgId, '/health/notes');
-  const ownerChip = page.locator('.person-chip-btn', { hasText: 'Олег' }); // grant.name — только имя
+  const ownerChip = page.getByRole('group', { name: 'Чей дневник' }).getByRole('button', { name: /Олег/ }); // grant.name — только имя
   await expect(ownerChip).toBeVisible();
   await ownerChip.click();
 

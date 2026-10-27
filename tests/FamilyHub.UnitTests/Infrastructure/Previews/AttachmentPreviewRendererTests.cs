@@ -4,9 +4,7 @@ using FamilyHub.Infrastructure.Previews;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Tiff;
-using SixLabors.ImageSharp.PixelFormats;
+using FamilyHub.UnitTests.Infrastructure.Documents;
 using SkiaSharp;
 using Xunit;
 
@@ -55,7 +53,7 @@ public class AttachmentPreviewRendererTests
     public async Task RenderAsync_Tiff_ProducesThumbnailAndNormalizedPage()
     {
         // TIFF — браузер сам не отрисует, нужна нормализованная JPEG-страница (см. ImageDownscaler
-        // фолбэк на ImageSharp) в дополнение к миниатюре.
+        // фолбэк на LibTiff.Net) в дополнение к миниатюре.
         var sut = CreateSut();
         var tiff = CreateTiff(600, 400);
 
@@ -105,10 +103,39 @@ public class AttachmentPreviewRendererTests
         result.Artifacts.Should().BeEmpty();
     }
 
+    // Регрессия на находку H1 (docs/security/security-audit-2026-10.md): HTML не должен уходить в
+    // LibreOffice — тот подтягивает внешние ресурсы документа (SSRF через PDF-превью).
+    [Fact]
+    public async Task RenderAsync_Html_DoesNotCallGotenberg()
+    {
+        var gotenberg = new FakeGotenbergConverter(CreateOnePagePdf());
+        var sut = CreateSut(gotenberg);
+
+        var result = await sut.RenderAsync(
+            "<html><body><img src=\"http://169.254.169.254/latest/meta-data/\"></body></html>"u8.ToArray(),
+            DocumentContentTypes.Html);
+
+        result.Artifacts.Should().BeEmpty();
+        gotenberg.CallCount.Should().Be(0);
+    }
+
+    // Регрессия к M7 (docs/security/security-audit-2026-10.md): второй декодер вызывается только для TIFF —
+    // испорченная «картинка» другого формата (PoC GHSA-gwg2-r3hj-4w44 — PNG с ICC) до него не доходит.
+    [Fact]
+    public async Task RenderAsync_UndecodablePngBytes_DoesNotReachTiffFallback_ReturnsUnsupported()
+    {
+        var sut = CreateSut();
+        byte[] brokenPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D];
+
+        var result = await sut.RenderAsync(brokenPng, DocumentContentTypes.Png);
+
+        result.Outcome.Should().Be(PreviewRenderOutcome.Unsupported);
+    }
+
     [Fact]
     public async Task RenderAsync_Heic_NoDecoderAvailable_ReturnsUnsupported()
     {
-        // Ни SkiaSharp (на Linux), ни ImageSharp не декодируют HEIC — тестовые "HEIC-байты" здесь
+        // Ни SkiaSharp (на Linux), ни TIFF-фолбэк не декодируют HEIC — тестовые "HEIC-байты" здесь
         // это вообще не валидное изображение, что и воспроизводит тот же NotSupportedException.
         var sut = CreateSut();
 
@@ -155,13 +182,8 @@ public class AttachmentPreviewRendererTests
         return data.ToArray();
     }
 
-    private static byte[] CreateTiff(int width, int height)
-    {
-        using var image = new Image<Rgba32>(width, height);
-        using var stream = new MemoryStream();
-        image.Save(stream, new TiffEncoder());
-        return stream.ToArray();
-    }
+    private static byte[] CreateTiff(int width, int height) =>
+        TiffTestFactory.CreateRgb(width, height, left: (0, 0, 0), right: (0, 0, 0));
 
     private static byte[] CreateOnePagePdf()
     {
@@ -169,8 +191,9 @@ public class AttachmentPreviewRendererTests
         using (var document = SKDocument.CreatePdf(stream))
         {
             using var canvas = document.BeginPage(400, 300);
-            using var paint = new SKPaint { Color = SKColors.Black, TextSize = 18 };
-            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, paint);
+            using var paint = new SKPaint { Color = SKColors.Black };
+            using var font = new SKFont { Size = 18 };
+            canvas.DrawText("Гемоглобин 118 г/л (норма 130-160)", 20, 40, SKTextAlign.Left, font, paint);
             document.EndPage();
             document.Close();
         }

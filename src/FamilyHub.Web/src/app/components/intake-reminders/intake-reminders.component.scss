@@ -1,28 +1,58 @@
-// Настройки напоминаний о приёме (макет «Screen - Medication schedule», «Настройки напоминаний»).
+// Настройки напоминаний о приёме. Секции 16/600 без CAPS, списки — radius-lg на surface-sunken.
 
 :host { display: block; }
 
-.ir { display: flex; flex-direction: column; gap: 20px; }
-.ir-intro { margin: 0; font-size: 0.8529rem; color: var(--color-neutral-700); }
-.ir-note { margin: 8px 0 0; font-size: 0.7941rem; display: flex; gap: 8px; align-items: flex-start; }
+.ir { display: flex; flex-direction: column; gap: var(--space-5); }
+.ir-intro { margin: 0; font: var(--text-body-sm); color: var(--color-text-secondary); }
+.ir-note { display: flex; align-items: flex-start; gap: var(--space-2); margin: var(--space-2) 0 0; font: var(--text-caption); color: var(--color-text-muted); }
 
-.ir-kicker {
-  margin-bottom: 8px;
-  font-size: 0.7647rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
+.ir-kicker { margin-bottom: var(--space-2); font: var(--text-body); font-weight: 600; color: var(--color-text); }
+
+.ir-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
 }
 
-.ir-list { margin: 0; padding: 0; list-style: none; background: var(--color-paper); border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); }
-.ir-row { display: flex; align-items: center; gap: 11px; padding: 10px 14px; & + .ir-row { border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); } }
-.ir-row-col { flex-direction: column; align-items: stretch; gap: 8px; }
-.ir-line { display: flex; align-items: center; gap: 11px; > i { font-size: 1.15rem; color: var(--color-neutral-700); } }
-.ir-name { flex: 1; min-width: 0; font-size: 0.9412rem; small { display: block; font-size: 0.7647rem; color: var(--color-neutral-600); } }
-.ir-sub { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-left: 43px; font-size: 0.8529rem; color: var(--color-neutral-700); cursor: pointer; }
+.ir-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding: var(--space-3) var(--space-4);
 
-.ir-quiet { padding: 12px 14px; background: var(--color-paper); border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); }
-.ir-times { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; label { display: flex; align-items: center; gap: 8px; font-size: 0.8824rem; } .input { width: 120px; } }
+  & + .ir-row { border-top: 1px solid var(--color-divider); }
+}
+
+.ir-row-col { flex-direction: column; align-items: stretch; gap: var(--space-2); }
+.ir-line { display: flex; align-items: center; gap: var(--space-3); > app-icon { color: var(--color-text-secondary); } }
+.ir-name { flex: 1; min-width: 0; font: var(--text-body-sm); small { display: block; font: var(--text-caption); color: var(--color-text-muted); } }
+
+.ir-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding-left: calc(var(--icon-size) + var(--space-3));
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.ir-quiet { padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-sunken); }
+
+.ir-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+
+  label { display: flex; align-items: center; gap: var(--space-2); font: var(--text-body-sm); }
+  .input { width: 120px; }
+}
 
 .ir-done { align-self: stretch; }

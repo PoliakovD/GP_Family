@@ -1,78 +1,79 @@
-import { Component, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
+import { ArrowDown, ArrowUp, TriangleAlert, type IconNode as LucideIconData } from 'lucide';
 import { IndicatorFlag } from '../../models/types';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
- * Чип статуса показателя (норма/выше/ниже/критично) — редизайн v2. Извлечён из
- * `MedicalRecordsPanelComponent.flagClass()`/`flagLabel()` (см. `.claude/plans/...` PR1) как
- * первый переиспользуемый потребитель наравне с таблицей показателей десктопа/карточками
- * мобайла/панелью справки (PR4). Цвета — исключительно из канонических `--color-status-*`
- * (styles.scss), которые сами канонизированы из аптечной палитры сроков годности
- * (medications-panel.component.scss) — не новые смыслы.
+ * Бейдж статуса показателя (DESIGN §3 «Бейдж», «Анализ»): вне нормы — danger со стрелкой,
+ * норма — success, без нормы — neutral. Цвет — только по смыслу (DESIGN §1 п.2: warning у анализов
+ * не используется).
  *
- * `Unknown` (нет референса/значения) рендерится пустым — так же вело себя старое `flagLabel()`
- * (пустая строка): такие показатели в UI сворачиваются в отдельную "N без нормы"-строку, а не
- * показываются построчно с пустым чипом.
+ * `amount` — насколько значение вышло за границу («4», «2,26»): бейдж читается «↑ выше на 4», как в
+ * макете analysis-desktop; без него — «↑ выше нормы». `Unknown` по умолчанию не рисуется (так ведут
+ * себя списки и справка), а с `showUnknown` — нейтральный «без нормы» (строка таблицы показателей).
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-status-chip',
   standalone: true,
+  imports: [IconComponent],
   template: `
     @if (label(); as text) {
-      <span class="status-chip" [class]="chipClass()">
+      <span class="badge status-chip" [class]="chipClass()">
         @if (icon(); as ic) {
-          <i [class]="ic" aria-hidden="true"></i>
+          <app-icon [icon]="ic" [size]="14" [strokeWidth]="2.5" />
         }
         {{ text }}
       </span>
     }
   `,
-  styleUrl: './status-chip.component.scss',
 })
 export class StatusChipComponent {
   /** IndicatorFlag — см. FamilyHub.Domain.Enums.IndicatorFlag. */
   readonly flag = input.required<number>();
+  /** Величина отклонения от границы нормы, уже отформатированная («0,59»). */
+  readonly amount = input<string | null>(null);
+  readonly showUnknown = input(false);
 
-  chipClass(): string {
+  readonly chipClass = computed(() => {
     switch (this.flag()) {
       case IndicatorFlag.Low:
       case IndicatorFlag.High:
-        return 'status-chip-warning';
       case IndicatorFlag.Critical:
-        return 'status-chip-danger';
+        return 'badge-danger';
       case IndicatorFlag.Normal:
-        return 'status-chip-ok';
+        return 'badge-success';
       default:
-        return 'status-chip-unknown';
+        return 'badge-neutral';
     }
-  }
+  });
 
-  icon(): string | null {
+  readonly icon = computed<LucideIconData | null>(() => {
     switch (this.flag()) {
       case IndicatorFlag.Low:
-        return 'ph-fill ph-arrow-down';
+        return ArrowDown;
       case IndicatorFlag.High:
-        return 'ph-fill ph-arrow-up';
+        return ArrowUp;
       case IndicatorFlag.Critical:
-        return 'ph-fill ph-warning';
-      case IndicatorFlag.Normal:
-        return 'ph-fill ph-check';
+        return TriangleAlert;
       default:
         return null;
     }
-  }
+  });
 
-  label(): string {
+  readonly label = computed(() => {
+    const amount = this.amount();
     switch (this.flag()) {
       case IndicatorFlag.Low:
-        return 'ниже нормы';
+        return amount ? `ниже на ${amount}` : 'ниже нормы';
       case IndicatorFlag.High:
-        return 'выше нормы';
+        return amount ? `выше на ${amount}` : 'выше нормы';
       case IndicatorFlag.Critical:
         return 'критично';
       case IndicatorFlag.Normal:
         return 'норма';
       default:
-        return '';
+        return this.showUnknown() ? 'без нормы' : '';
     }
-  }
+  });
 }

@@ -37,6 +37,8 @@ export const NotificationType = {
     VaccinationOverdue: 14,
     VaccinationWellbeingCheck: 15,
     DoctorReportAboutYou: 16,
+    /** Новое сообщение в чате семьи (ADR-0019) — relatedEntityId = id семьи. */
+    FamilyChatMessage: 17,
 } as const;
 
 export interface FamilySummary {
@@ -460,6 +462,8 @@ export const NotificationRelatedKind = {
     VaccinationPersonDependent: 6,
     /** Отчёт для врача, составленный о пользователе членом семьи → /health/reports. */
     DoctorReport: 7,
+    /** Чат семьи (ADR-0019): relatedEntityId — id семьи → /families/:id?tab=chat. */
+    FamilyChat: 8,
 } as const;
 export type NotificationRelatedKind = typeof NotificationRelatedKind[keyof typeof NotificationRelatedKind];
 
@@ -1718,4 +1722,108 @@ export interface HealthSummary {
     vaccinations: HealthSummaryVaccinations | null;
     medkits: HealthSummaryMedkits | null;
     reports: HealthSummaryReports | null;
+}
+// ─── Чат семьи (ADR-0019) — зеркало FamilyHub.Modules.Chat.Chat.ChatDtos ───────────────────────
+
+/** Зеркалит FamilyHub.Domain.Enums.ChatLinkKind. */
+export const ChatLinkKind = { MedicalRecord: 0, MedicationCourse: 1, Medkit: 2 } as const;
+export type ChatLinkKind = typeof ChatLinkKind[keyof typeof ChatLinkKind];
+
+export interface ChatAuthor {
+    userId: string;
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
+}
+
+export interface ChatAttachment {
+    id: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    previewStatus: AttachmentPreviewStatus;
+}
+
+export interface ChatReaction {
+    emoji: string;
+    count: number;
+    mine: boolean;
+    userIds: string[];
+}
+
+/** Карточка ссылки — уже под текущего зрителя: accessible=false — нет доступа, заголовка нет. */
+export interface ChatLink {
+    kind: ChatLinkKind;
+    entityId: string;
+    accessible: boolean;
+    title: string | null;
+    subtitle: string | null;
+    routeKind: NotificationRelatedKind | null;
+}
+
+export interface ChatReplyPreview {
+    id: string;
+    author: ChatAuthor;
+    snippet: string;
+    deleted: boolean;
+    attachmentCount: number;
+}
+
+export interface ChatMessage {
+    id: string;
+    familyId: string;
+    author: ChatAuthor;
+    text: string;
+    createdAt: string;
+    editedAt: string | null;
+    deleted: boolean;
+    replyTo: ChatReplyPreview | null;
+    attachments: ChatAttachment[];
+    reactions: ChatReaction[];
+    links: ChatLink[];
+    canEdit: boolean;
+    canDelete: boolean;
+}
+
+/** Страница ленты от новых к старым; nextCursor — передать как before за более старой. */
+export interface ChatPage {
+    items: ChatMessage[];
+    nextCursor: string | null;
+}
+
+export interface ChatLinkRequest {
+    kind: ChatLinkKind;
+    entityId: string;
+}
+
+export interface SendChatMessageRequest {
+    text: string;
+    replyToMessageId: string | null;
+    links: ChatLinkRequest[];
+    files: File[];
+}
+
+export interface ChatUnread {
+    familyId: string;
+    count: number;
+}
+
+export interface ChatConfig {
+    maxTextLength: number;
+    maxFilesPerMessage: number;
+    maxFileSizeBytes: number;
+    maxLinksPerMessage: number;
+    reactions: string[];
+    allowedContentTypes: string[];
+}
+
+/** Событие хаба — только идентификаторы (ADR-0019 п. 4); клиент перечитывает сообщение сам.
+ * change — зеркало ChatChange: 0 Created, 1 Edited, 2 Deleted, 3 Reactions. */
+export const ChatChange = { Created: 0, Edited: 1, Deleted: 2, Reactions: 3 } as const;
+export type ChatChange = typeof ChatChange[keyof typeof ChatChange];
+
+export interface ChatMessageChangedEvent {
+    familyId: string;
+    messageId: string;
+    change: ChatChange;
 }

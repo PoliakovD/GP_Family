@@ -1,5 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import {
+  BookOpen, BriefcaseMedical, ChartLine, ChevronRight, FileText, FlaskConical, NotebookPen, Pill, Stethoscope, Syringe, Zap,
+} from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
+import { NavRowComponent } from '../../shared/ui/nav-row/nav-row.component';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { IntakeStateService } from '../../services/intake-state.service';
@@ -11,7 +17,7 @@ import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-sp
 import { DoseAction, HealthSummary, HealthSummaryIntake, HealthSummaryNextDose, VaccinationStatus } from '../../models/types';
 import { ageParts } from '../../shared/util/age';
 import { pluralizeRu } from '../../shared/util/pluralize';
-import { statusColor, statusLabel, windowToText } from '../../shared/util/vaccination-labels';
+import { type StatusTone, statusLabel, statusTone, windowToText } from '../../shared/util/vaccination-labels';
 import { formatDayMonth, formatDayMonthYear } from '../../shared/util/date-format';
 import { MONTHS_GEN } from '../../shared/util/birthday-date';
 
@@ -30,11 +36,26 @@ type DoseSquare = 'taken' | 'missed' | 'next' | 'upcoming';
  */
 @Component({
   selector: 'app-health-home',
-  imports: [RouterLink, AvatarComponent, TrendLineComponent, LoadingSpinnerComponent],
+  imports: [RouterLink, AvatarComponent, IconComponent, IconTileComponent, NavRowComponent, TrendLineComponent, LoadingSpinnerComponent],
   templateUrl: './health-home.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './health-home.component.scss',
 })
 export class HealthHomeComponent implements OnInit {
+  protected readonly icons = {
+    BookOpen, BriefcaseMedical, ChartLine, ChevronRight, FileText, FlaskConical, NotebookPen, Pill, Stethoscope, Syringe, Zap,
+  };
+
+  /** Бейдж статуса прививки (тоны — vaccination-labels, DESIGN §1). */
+  protected badgeClass(tone: StatusTone): string {
+    return tone === 'ok' ? 'badge-success' : tone === 'warning' ? 'badge-warning' : 'badge-neutral';
+  }
+
+  protected readonly reportsSubtitle = computed(() => {
+    const n = this.summary()?.reports?.activeLinks ?? 0;
+    return n > 0 ? `${n} ${pluralizeRu(n, 'ссылка активна', 'ссылки активны', 'ссылок активно')}` : 'Нет активных ссылок';
+  });
+
   private readonly api = inject(ApiService);
   protected readonly auth = inject(AuthService);
   protected readonly intake = inject(IntakeStateService);
@@ -48,7 +69,7 @@ export class HealthHomeComponent implements OnInit {
 
   protected readonly VaccinationStatus = VaccinationStatus;
   protected readonly statusLabel = statusLabel;
-  protected readonly statusColor = statusColor;
+  protected readonly statusTone = statusTone;
   protected readonly windowToText = windowToText;
   protected readonly formatDayMonth = formatDayMonth;
   protected readonly formatDayMonthYear = formatDayMonthYear;

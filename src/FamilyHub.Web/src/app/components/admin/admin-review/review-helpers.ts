@@ -32,6 +32,18 @@ export function reviewOriginLabel(origin: ReviewOrigin): string {
   return ORIGIN_LABELS[origin] ?? origin;
 }
 
+/** Синонимы справочника в поле ввода — по одному на строку, НЕ через запятую: в названиях показателей запятая
+ * встречается («Ненасыщенная железосвязывающая способность, молярная концентрация в сыворотке…») — разрез по ней
+ * сохранял обрывок «молярная концентрация в …» мусорным синонимом, а голова совпадала с именем статьи и
+ * выбрасывалась (LabAnalyteKbRekeyJob), т.е. добавленный синоним «пропадал». */
+export function splitAliasLines(raw: string): string[] {
+  return raw.split(/\r?\n/).map((a) => a.trim()).filter((a) => a.length > 0);
+}
+
+export function joinAliasLines(aliases: readonly string[]): string {
+  return aliases.join('\n');
+}
+
 /** «85%» либо «нет оценки» — отсутствие оценки модели тоже считается «ниже порога» (безопасный
  * дефолт на бэкенде), поэтому пустое значение показываем явно, а не прочерком. */
 export function confidenceLabel(confidence: number | null | undefined): string {
@@ -156,9 +168,9 @@ export function verificationLabel(status: KbVerificationStatusValue, stale = fal
 
 /** Класс тега под статус: непроверенное и устаревшее — предупреждение, проверенное — зелёное. */
 export function verificationTagClass(status: KbVerificationStatusValue, stale = false): string {
-  if (status === KbVerificationStatus.AiUnverified) return 'tag-warning';
-  if (stale) return 'tag-warning';
-  return status === KbVerificationStatus.ManualKnowledge ? 'tag-accent' : 'tag-ok';
+  if (status === KbVerificationStatus.AiUnverified) return 'badge-warning';
+  if (stale) return 'badge-warning';
+  return status === KbVerificationStatus.ManualKnowledge ? 'badge-neutral' : 'badge-success';
 }
 
 const HISTORY_ACTION_LABELS: Record<string, string> = {

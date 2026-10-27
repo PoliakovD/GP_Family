@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, input } from '@angular/core';
+import { Component, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, ApiError } from '../../services/api.service';
 import { todayLocal } from '../../shared/util/intake-labels';
@@ -9,6 +9,8 @@ import { FamilyRole, Gender } from '../../models/types';
 import type { FamilyDependent } from '../../models/types';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { PersonNameComponent } from '../../shared/person-name/person-name.component';
+import { PawPrint, User } from 'lucide';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 
 /**
  * Panel «Близкие и питомцы» — семейный ресурс (дети/питомцы/пожилые родственники без своего
@@ -20,10 +22,13 @@ let nextInstanceId = 0;
 
 @Component({
     selector: 'app-dependents-panel',
-    imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent],
+    imports: [FormsModule, LoadingSpinnerComponent, PersonNameComponent, IconTileComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './dependents-panel.component.html'
 })
 export class DependentsPanelComponent implements OnInit {
+  protected readonly icons = { PawPrint, User };
+
   readonly familyId = input.required<string>();
   readonly Gender = Gender;
 

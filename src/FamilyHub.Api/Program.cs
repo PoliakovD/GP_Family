@@ -17,6 +17,7 @@ using FamilyHub.Api.Features.Push;
 using FamilyHub.Api.Startup;
 using FamilyHub.Infrastructure.Consents;
 using FamilyHub.Modules.Birthdays;
+using FamilyHub.Modules.Chat;
 using FamilyHub.Modules.Medical;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -63,6 +64,8 @@ try
     // же перекрывает её реальной; порядок ВНУТРИ этого вызова важен (ASP.NET Core DI резолвит
     // последнюю регистрацию для одиночного сервиса) и сохранён внутри самого метода.
     builder.AddFamilyHubMedicalAndBirthdays();
+    // Чат семьи (ADR-0019) — модуль + SignalR-хаб; медицинские карточки ссылок регистрирует Medical.
+    builder.Services.AddChatModule(builder.Configuration);
     builder.AddFamilyHubSwagger();
     builder.AddFamilyHubHealthChecks();
     builder.AddFamilyHubKestrelLimits();
@@ -75,6 +78,7 @@ try
 
     // --- Pipeline (порядок критичен, сохранён ровно тем же, каким он был в исходном Program.cs) ---
     app.UseFamilyHubProxyHeaders();
+    app.UseFamilyHubAdminHostGuard(adminOptions);
     app.UseFamilyHubRequestLogging();
     app.MapFamilyHubHealthChecks();
     app.UseFamilyHubSwagger(devTools);
@@ -106,6 +110,7 @@ try
     app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapFamilyDependentEndpoints();
     app.MapMedicalModule();
     app.MapBirthdayModule();
+    app.MapChatModule();
     // Агрегат Главной содержит медданные (статус анализов) — та же консент-гарантия (редизайн v2).
     app.MapGroup("").AddEndpointFilter<ConsentRequiredFilter>().MapHomeEndpoints();
     // Глобальный индикатор фоновых процессов содержит медданные (названия записей/показателей/

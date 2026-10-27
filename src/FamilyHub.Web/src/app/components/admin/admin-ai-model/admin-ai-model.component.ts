@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   AdminApiService,
@@ -7,6 +7,7 @@ import {
 } from '../../../services/admin-api.service';
 import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const REASONING_OPTIONS: { value: LmStudioReasoning; label: string }[] = [
   { value: LmStudioReasoning.None, label: 'Без рассуждений (быстрее)' },
@@ -27,8 +28,10 @@ const REASONING_OPTIONS: { value: LmStudioReasoning; label: string }[] = [
  */
 @Component({
     selector: 'app-admin-ai-model',
-    imports: [FormsModule],
-    templateUrl: './admin-ai-model.component.html'
+    imports: [FormsModule, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    templateUrl: './admin-ai-model.component.html',
+    styleUrl: './admin-ai-model.component.scss',
 })
 export class AdminAiModelComponent implements OnInit, HasUnsavedChanges {
   private readonly api = inject(AdminApiService);

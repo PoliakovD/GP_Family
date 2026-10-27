@@ -1,6 +1,9 @@
 # Модель угроз FamilyHub (этап 2, задача 2.4)
 
 Два окружения входа: **Telegram Mini App** (initData) и **PWA** (email + пароль, cookie).
+
+> Актуальный аудит безопасности и план устранения находок — [security-audit-2026-10.md](security-audit-2026-10.md).
+
 Ниже — угрозы по STRIDE и реализованные контрмеры.
 
 ## Аутентификация: Telegram Mini App
@@ -8,7 +11,7 @@
 | Угроза | Контрмера |
 |--------|-----------|
 | Подделка initData (spoofing) | HMAC-SHA256 по официальному алгоритму (`TelegramInitDataValidator`), constant-time сравнение; отказ при незаданном BotToken (fail closed) |
-| Replay устаревшего initData | TTL по `auth_date` (`Telegram:MaxInitDataAge`, 24 ч). Остаточный риск: окно велико для украденного initData — компенсируется тем, что initData передаётся только в заголовке к нашему API по TLS |
+| Replay устаревшего initData | TTL по `auth_date` (`Telegram:MaxInitDataAge`, 1 ч; было 24 ч до аудита 2026-10, M6). `auth_date` обязателен, дата из будущего > 5 мин отклоняется. На просрочку API отвечает `401 init_data_expired`, фронт просит перезапустить Mini App. Остаточный риск: часовое окно для перехваченных initData; передаются они только в заголовке к нашему API по TLS |
 | Утечка BotToken | токен только в env прода; в dev бот не поднимается вовсе |
 
 ## Аутентификация: PWA (email + пароль)
@@ -21,14 +24,16 @@
 
 | Угроза | Контрмера |
 |--------|-----------|
-| Брутфорс пароля | lockout: 15 мин после 5 неудач (`PwaAuthService`); rate limiting по IP (10/мин на /api/auth/*); PBKDF2-210k для хеша; политика пароля (8+ симв., смешанный регистр + цифра) поднимает энтропию по сравнению со старым numeric PIN |
+| Брутфорс пароля | lockout: 15 мин после 5 неудач (`PwaAuthService`), общий для входа и смены пароля из настроек (аудит 2026-10, L6); rate limiting по IP (10/мин на /api/auth/*); PBKDF2-210k для хеша; политика пароля (8+ симв., смешанный регистр + цифра) поднимает энтропию по сравнению со старым numeric PIN |
 | Брутфорс кода из письма | 6 цифр, TTL 10 мин, максимум 5 попыток на код, одноразовость (ConsumedAt) |
 | Спам кодами / истощение email-лимитов | троттлинг: 3 активных кода в час на адрес + IP-лимит 3/час на выдачу |
 | Перечисление аккаунтов (enumeration) | register/start всегда 200; login с выравниванием времени (фиктивный PBKDF2-verify для несуществующих) |
 | Кража cookie (XSS) | HttpOnly + SameSite=Lax; SPA не имеет доступа к cookie из JS |
-| CSRF | SameSite=Lax (базовый слой) + double-submit антифорджери-токен (`IAntiforgery`): публичная cookie `XSRF-TOKEN` + заголовок `X-XSRF-TOKEN` на каждый мутирующий `/api`-запрос PWA-сессии (Angular `withXsrfConfiguration` подставляет сама, см. `app.config.ts`/`Program.cs` CSRF-гейт). Telegram Mini App — initData в заголовке, ambient-cookie CSRF неприменим по конструкции. Вне модели: login CSRF (принуждение залогиниться под чужим аккаунтом) — отдельный, более редкий класс, не покрыт |
+| CSRF | SameSite=Lax (базовый слой) + double-submit антифорджери-токен (`IAntiforgery`): публичная cookie `XSRF-TOKEN` + заголовок `X-XSRF-TOKEN` на каждый мутирующий `/api`-запрос PWA-сессии (Angular `withXsrfConfiguration` подставляет сама, см. `app.config.ts`/`Program.cs` CSRF-гейт). Гейт fail-closed: проверка идёт и без cookie `XSRF-TOKEN` (аудит 2026-10, M4); обе половины токена — сессионные cookie, выдаются `GET /api/auth/me`, фронт перевыпускает их на `400 csrf_token_invalid`. Telegram Mini App — initData в заголовке, ambient-cookie CSRF неприменим по конструкции. Вне модели: login CSRF (принуждение залогиниться под чужим аккаунтом) — отдельный, более редкий класс, не покрыт |
 | Захват привязки email к чужому аккаунту | код LinkEmail связан с UserId инициатора; подтверждение с чужой сессии отвергается |
 | Session fixation | cookie выпускается только после успешной проверки, самим сервером |
+| Украденная сессия после выхода/смены пароля | отзыв сессии действует на уже выданный access-JWT сразу: `OnTokenValidated` проверяет claim `SessionId` (`SessionValidityChecker`, кэш 30 с, сбрасывается при отзыве); сброс пароля отзывает все сессии (аудит 2026-10, H2/M5) |
+| Подделка IP клиента (`X-Forwarded-For`) | в проде заголовки принимаются только от Caddy (`ReverseProxy:KnownProxies` = фиксированный `172.31.250.2` в сети `edge`); сети docker разделены: Caddy не видит postgres/kafka, kafka и gotenberg — в internal-сетях (аудит 2026-10, L3–L5) |
 
 ## Временный пароль при первой привязке Telegram (`TelegramBindingService`)
 
@@ -95,7 +100,7 @@
 | Проверка отложенного биоматериала — та же валидация, что онлайн | sweep идёт через `UserSpecimenService.CreateAsync` (рамки длины/символов + LLM-гейт + детерминированное вето), отказ превращается в `SpecimenHint`, а не в принятие «на веру» |
 | Физический доступ/кража ноутбука с LM Studio — через него проходят изображения и тексты медицинских документов (ADR-0001 разрешает только локальный контур) | **Остаточный риск, не закрыт кодом.** Рекомендация: шифрование диска ноутбука, блокировка экрана, проверить настройки LM Studio (не сохранять историю чатов и логи запросов на диск — в коде проекта это не контролируется); фото упаковок не сохраняются (`MedicationOcrService`) |
 | «Молчащий» туннель держит единственный воркер очереди (`LmStudio:TimeoutSeconds`=1000) | Частично: проба доступности перед джобой резюме и кэш 10 с; сам таймаут не менялся (см. `TECH_DEBT.md`) |
-| Служебные эндпоинты на публичном домене | `deploy/Caddyfile` блокирует `/dev/*`, `/hangfire*`, `/swagger*`, `/internal/*`, `/admin*`, `/api/admin/*` и **точечно** `/health/live|ready|llm` (не `/health/*`: под ним лежат маршруты SPA раздела «Здоровье»); тест `CaddyfileTests` |
+| Служебные эндпоинты на публичном домене | `deploy/Caddyfile` блокирует `/dev/*`, `/hangfire*`, `/swagger*`, `/internal/*`, `/admin*`, `/api/admin/*` и **точечно** `/health/live|ready|llm` (не `/health/*`: под ним лежат маршруты SPA раздела «Здоровье»); тест `CaddyfileTests`. Вторым рубежом само приложение обслуживает админку только на `Admin:AllowedHosts` (аудит 2026-10, M3) |
 | Уязвимости зависимостей | Закрыты 2026-09-25: Angular ≤19.2.25 (9 advisory; миграция на 20), Newtonsoft.Json/SQLitePCLRaw/SSH.NET — транзитивные пины (`Directory.Packages.props`); `dotnet list package --vulnerable` и `npm audit --omit=dev` чистые. Проверять регулярно |
 | Внутренний API бота (`/internal/bot/*`) | `X-Internal-Token` (постоянное время, отказ при не заданном секрете) + блок на Caddy + порт `api:8080` не публикуется — ADR-0008 |
 

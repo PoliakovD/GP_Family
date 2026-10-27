@@ -1,6 +1,6 @@
-<div>
+<div class="kb-tab">
   @if (error) {
-    <div class="alert-danger mb-2">{{ error }}</div>
+    <div class="alert-danger" role="alert">{{ error }}</div>
   }
 
   <app-search-field
@@ -14,38 +14,38 @@
   } @else if (showingSearch && search.loading) {
     <app-loading-spinner text="Ищем…" />
   } @else if (search.error) {
-    <div class="alert-danger mb-2">{{ search.error }}</div>
+    <div class="alert-danger" role="alert">{{ search.error }}</div>
   } @else if (items.length === 0) {
     @if (showingSearch) {
-      <p class="muted">Ничего не найдено.</p>
+      <p class="kb-note">Ничего не найдено.</p>
     } @else {
-      <p class="muted">
+      <p class="kb-note">
         Справочник наполняется автоматически: как только распознанный показатель анализа найдёт
         совпадение, мы добавим сюда статью о нём.
       </p>
     }
   } @else {
-    @for (item of items; track item.id) {
-      <div class="card mb-2 card-clickable" appClickable (click)="openCard(item.id)">
-        <strong class="card-title">
-          {{ item.displayName }}
-          @if (specimenSubtitle(item); as sl) {
-            <span class="muted" style="font-weight:400">&nbsp;· {{ sl }}</span>
-          }
-        </strong>
-        @if (item.plainExplanation) {
-          <p class="card-body mb-0">{{ item.plainExplanation }}</p>
-        }
-      </div>
-    }
+    <div class="list-card kb-list">
+      @for (item of items; track item.id) {
+        <button type="button" class="list-row-btn kb-row" (click)="openCard(item.id)">
+          <span class="list-row-text">
+            <span class="list-row-title">{{ item.displayName }}@if (specimenSubtitle(item); as sl) {<span class="kb-specimen"> · {{ sl }}</span>}</span>
+            @if (item.plainExplanation; as sub) {
+              <span class="list-row-sub">{{ sub }}</span>
+            }
+          </span>
+          <app-icon class="list-row-chevron" [icon]="chevron" [size]="18" />
+        </button>
+      }
+    </div>
   }
 
   @if (cardOpen && isWide) {
-    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Показатель'" (closed)="closeCard()">
+    <app-indicator-info-panel [title]="selectedCard?.displayName ?? 'Показатель'" [icon]="icons.FlaskConical" backLabel="Справочник" (closed)="closeCard()">
       @if (cardLoading) {
         <app-loading-spinner />
       } @else if (cardError) {
-        <div class="alert-danger mb-0">{{ cardError }}</div>
+        <div class="alert-danger" role="alert">{{ cardError }}</div>
       } @else if (selectedCard) {
         <app-indicator-info [article]="selectedCard" (openRelated)="openCard($event)" />
       }
@@ -55,7 +55,7 @@
       @if (cardLoading) {
         <app-loading-spinner />
       } @else if (cardError) {
-        <div class="alert-danger mb-0">{{ cardError }}</div>
+        <div class="alert-danger" role="alert">{{ cardError }}</div>
       } @else if (selectedCard) {
         <app-indicator-info [article]="selectedCard" (openRelated)="openCard($event)" />
       }

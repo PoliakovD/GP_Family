@@ -1,7 +1,7 @@
 <form class="cf" (ngSubmit)="save()">
   <div class="cf-body">
     @if (loading()) {
-      <p class="muted">Загружаем курс…</p>
+      <p class="form-hint">Загружаем курс…</p>
     }
 
     @if (!isEdit() && subjectOptions().length > 1) {
@@ -20,12 +20,12 @@
       <div class="cf-source" role="radiogroup" aria-label="Откуда взять курс">
         <button type="button" class="cf-source-tile" role="radio" [class.active]="source() === 'prescription'"
                 [attr.aria-checked]="source() === 'prescription'" (click)="setSource('prescription')">
-          <i [class]="(source() === 'prescription' ? 'ph-fill' : 'ph') + ' ph-stethoscope'" aria-hidden="true"></i>
+          <app-icon [icon]="icons.Stethoscope" [size]="18" />
           <span><strong>Из назначения</strong><small>приём врача</small></span>
         </button>
         <button type="button" class="cf-source-tile" role="radio" [class.active]="source() === 'manual'"
                 [attr.aria-checked]="source() === 'manual'" (click)="setSource('manual')">
-          <i class="ph ph-pencil-simple" aria-hidden="true"></i>
+          <app-icon [icon]="icons.Pencil" [size]="18" />
           <span><strong>Вручную</strong><small>без приёма</small></span>
         </button>
       </div>
@@ -33,9 +33,9 @@
 
     @if (source() === 'prescription' && !isEdit()) {
       @if (prescriptionsLoading()) {
-        <p class="muted">Ищем назначения…</p>
+        <p class="form-hint">Ищем назначения…</p>
       } @else if (visiblePrescriptions().length === 0) {
-        <p class="muted cf-hint">В приёмах врача за последние полгода нет назначений с лекарствами. Загрузите документ приёма или создайте курс вручную.</p>
+        <p class="form-hint cf-hint">В приёмах врача за последние полгода нет назначений с лекарствами. Загрузите документ приёма или создайте курс вручную.</p>
       } @else {
         <div class="cf-prescriptions">
           @for (v of visiblePrescriptions(); track v.recordId) {
@@ -44,10 +44,10 @@
               @for (it of v.items; track it.index) {
                 <button type="button" class="cf-rx" [class.active]="selectedPrescription()?.recordId === v.recordId && selectedPrescription()?.index === it.index"
                         (click)="pickPrescription(v, it)">
-                  <i class="ph-duotone ph-pill" aria-hidden="true"></i>
+                  <app-icon [icon]="icons.Pill" [size]="18" />
                   <span class="cf-rx-text"><strong>{{ it.name }}</strong>@if (it.dosageInstructions) { — {{ it.dosageInstructions }}}</span>
                   @if (selectedPrescription()?.recordId === v.recordId && selectedPrescription()?.index === it.index) {
-                    <i class="ph-fill ph-check-circle cf-rx-check" aria-hidden="true"></i>
+                    <app-icon [icon]="icons.CircleCheck" [size]="18" class="cf-rx-check" />
                   }
                 </button>
               }
@@ -140,12 +140,12 @@
               <input class="input cf-time" type="time" [ngModel]="t.at" (ngModelChange)="setTime($index, $event)" [name]="'time' + $index" aria-label="Время приёма" />
               <input class="input cf-units" type="number" min="0.25" step="0.25" [ngModel]="t.units" (ngModelChange)="setUnits($index, $event)" [name]="'units' + $index" aria-label="Доза" />
               @if (times().length > 1) {
-                <button type="button" class="btn-icon" (click)="removeTime($index)" aria-label="Убрать время"><i class="ph ph-x" aria-hidden="true"></i></button>
+                <button type="button" class="btn-icon" (click)="removeTime($index)" aria-label="Убрать время"><app-icon [icon]="icons.X" [size]="18" /></button>
               }
             </div>
           }
           @if (times().length < 12) {
-            <button type="button" class="btn-link cf-add" (click)="addTime()"><i class="ph ph-plus" aria-hidden="true"></i> Ещё время</button>
+            <button type="button" class="btn-link cf-add" (click)="addTime()"><app-icon [icon]="icons.Plus" [size]="18" /> Ещё время</button>
           }
         </div>
       </div>
@@ -192,7 +192,7 @@
 
     <div class="cf-card">
       <div class="cf-card-row">
-        <i class="ph-duotone ph-first-aid-kit" aria-hidden="true"></i>
+        <app-icon [icon]="icons.BriefcaseMedical" [size]="18" />
         <div class="cf-card-text">
           <div class="cf-card-title">Списывать из аптечки</div>
           <div class="cf-card-sub">Каждый отмеченный приём уменьшит остаток</div>
@@ -215,7 +215,7 @@
         @if (preview(); as p) {
           @if (p.quantity !== null) {
             <div class="cf-warn" [class.ok]="!p.shortfall">
-              <i [class]="p.shortfall ? 'ph-fill ph-warning' : 'ph-fill ph-check-circle'" aria-hidden="true"></i>
+              <app-icon [icon]="p.shortfall ? icons.TriangleAlert : icons.CircleCheck" [size]="18" />
               <span>
                 @if (p.neededForCourse !== null) {
                   На курс нужно {{ formatNumber(p.neededForCourse) }}, в аптечке {{ p.quantityText }}@if (p.daysCovered !== null) { — {{ coversText(p.daysCovered) }}}
@@ -242,7 +242,7 @@
     @if ((showAdvanced() || isEdit()) && freq() !== Mode.AsNeeded) {
       <div class="cf-card">
         <div class="cf-card-row">
-          <i class="ph ph-users" aria-hidden="true"></i>
+          <app-icon [icon]="icons.Users" [size]="18" />
           <div class="cf-card-text">
             <div class="cf-card-title">Напоминания и пропуски</div>
             <div class="cf-card-sub">Уведомление в момент приёма; о пропуске узнают близкие, которых вы выбрали</div>
@@ -285,7 +285,7 @@
     <p class="field-hint field-hint-muted cf-missing" role="status">{{ hint }}</p>
   }
   <div class="cf-foot">
-    <div class="cf-summary"><i class="ph-fill ph-calendar-check" aria-hidden="true"></i> {{ summary() }}</div>
+    <div class="cf-summary"><app-icon [icon]="icons.CalendarCheck" [size]="18" /> {{ summary() }}</div>
     <div class="cf-actions">
       <button type="submit" class="btn btn-primary cf-save" [disabled]="!canSave() || busy()">
         {{ busy() ? 'Сохраняем…' : isEdit() ? 'Сохранить' : 'Начать курс' }}

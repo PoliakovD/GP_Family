@@ -209,4 +209,33 @@ public class LabAnalyteNormalizerTests
 
         LabAnalyteNormalizer.RenormalizeKey(key).Should().Be(key);
     }
+    [Theory]
+    [InlineData("Белок общий, массовая концентрация в сыворотке или плазме крови", "белок общий")]
+    [InlineData("Альбумин, массовая концентрация в сыворотке или плазме крови", "альбумин")]
+    [InlineData("Мочевина, молярная концентрация в сыворотке или плазме крови", "мочевина")]
+    [InlineData("Билирубин общий, молярная концентрация в сыворотке или плазме крови", "билирубин общий")]
+    [InlineData("Билирубин прямой, молярная концентрация в сыворотке или плазме крови", "билирубин прямой")]
+    [InlineData("Глюкоза, молярная концентрация в венозной крови", "глюкоза")]
+    [InlineData("Аланинаминотрансфераза, каталитическая концентрация в сыворотке или плазме крови", "аланинаминотрансфераза")]
+    [InlineData("Бактериальный микроорганизм, концентрация в условных единицах в кале культуральным методом", "бактериальный микроорганизм")]
+    public void AnalyteHead_StripsLoincPropertyAndSystemDescriptor(string raw, string expected)
+    {
+        var key = LabAnalyteNormalizer.NormalizeAnalyteKey(raw);
+
+        LabAnalyteNormalizer.HasLoincDescriptor(key).Should().BeTrue();
+        LabAnalyteNormalizer.AnalyteHead(key).Should().Be(LabAnalyteNormalizer.NormalizeAnalyteKey(expected));
+    }
+
+    [Theory]
+    [InlineData("Гемоглобин (HGB), г/л")]
+    [InlineData("Средняя концентрация гемоглобина в эритроците")]
+    [InlineData("Концентрация в моче")]
+    [InlineData("Витамин B12")]
+    public void AnalyteHead_WithoutDescriptor_ReturnsKeyAsIs(string raw)
+    {
+        var key = LabAnalyteNormalizer.NormalizeAnalyteKey(raw);
+
+        LabAnalyteNormalizer.HasLoincDescriptor(key).Should().BeFalse();
+        LabAnalyteNormalizer.AnalyteHead(key).Should().Be(key);
+    }
 }

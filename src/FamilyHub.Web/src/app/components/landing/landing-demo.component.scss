@@ -1,0 +1,209 @@
+// Демо фичи на лендинге (DESIGN §4 «Лендинг»): шаги + «телефон» с макетом экрана.
+:host { display: block; }
+
+.ldd { margin: 0 0 var(--space-12); }
+
+.ldd-head {
+  max-width: 720px;
+  margin-bottom: var(--space-8);
+
+  @media (max-width: 1023px) { margin-bottom: var(--space-6); }
+}
+
+.ldd-kicker {
+  margin: 0 0 var(--space-2);
+  font: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.ldd-title {
+  margin: 0 0 var(--space-3);
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 639px) { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+}
+
+.ldd-lead {
+  margin: 0;
+  font: var(--text-body-lg);
+  color: var(--color-text-secondary);
+}
+
+// Десктоп: шаги слева (каждый — на высоту полэкрана, чтобы прокрутка «вела» сценарий), телефон справа
+// прилипает к середине экрана.
+.ldd-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--space-12);
+  align-items: start;
+
+  :host(.ld-demo-reverse) & {
+    grid-template-columns: 380px minmax(0, 1fr);
+
+    .ldd-steps { order: 2; }
+  }
+
+  @media (max-width: 1023px) {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--space-5);
+  }
+}
+
+.ldd-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ldd-step {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 60vh;
+  opacity: 0.45;
+  transition: opacity 0.3s ease;
+
+  &.active { opacity: 1; }
+
+  &:first-child { min-height: 40vh; justify-content: flex-start; padding-top: var(--space-10); }
+  &:last-child { min-height: 50vh; }
+
+  @media (max-width: 1023px) {
+    min-height: 0;
+    opacity: 1;
+
+    &:first-child, &:last-child { min-height: 0; padding-top: 0; }
+  }
+}
+
+.ldd-step-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--text-title);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ldd-step-num {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: var(--text-title);
+  transition: background-color 0.3s ease, color 0.3s ease;
+
+  .active & {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+}
+
+.ldd-step-text {
+  margin: var(--space-2) 0 0 calc(var(--tap-min) + var(--space-3));
+  max-width: 440px;
+  font: var(--text-body-lg);
+  color: var(--color-text-secondary);
+}
+
+// Телефон: на узком экране шаги — компактный список, текст только у активного.
+@media (max-width: 1023px) {
+  .ldd-steps { display: flex; flex-direction: column; gap: var(--space-1); }
+  .ldd-step-btn { font: var(--text-title-mobile); }
+  .ldd-step:not(.active) .ldd-step-text { display: none; }
+  .ldd-step-num { width: 36px; height: 36px; font: var(--text-body); font-weight: 600; }
+  .ldd-step-text { margin-left: calc(36px + var(--space-3)); font: var(--text-body); }
+}
+
+.ldd-stage {
+  position: sticky;
+  top: calc(50vh - 320px);
+
+  @media (max-width: 1023px) { position: static; display: flex; justify-content: center; }
+}
+
+// «Телефон»: экран фиксированного размера — раскладка макета не зависит от ширины окна, курсор
+// попадает в те же места.
+.ldd-phone {
+  position: relative;
+  width: 340px;
+  height: 640px;
+  max-width: 100%;
+  margin-inline: auto;
+  overflow: hidden;
+  border: var(--space-2) solid var(--color-surface);
+  border-radius: var(--radius-2xl);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-overlay);
+
+  @media (max-width: 639px) { height: 560px; }
+}
+
+.ldd-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  font: var(--text-body);
+  color: var(--color-text);
+}
+
+// Курсор — «палец»: полупрозрачный круг; нажатие — расходящаяся волна.
+.ldd-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+
+  &.ldd-cursor-hidden { opacity: 0; }
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: -14px;
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--color-surface);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--color-text) 45%, transparent);
+    box-shadow: var(--shadow-segment);
+  }
+}
+
+.ldd-ripple {
+  position: absolute;
+  left: -22px;
+  top: -22px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-text) 25%, transparent);
+  animation: ldd-ripple 0.5s ease-out forwards;
+}
+
+@keyframes ldd-ripple {
+  from { transform: scale(0.4); opacity: 1; }
+  to { transform: scale(1.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ldd-step, .ldd-step-num, .ldd-cursor { transition: none; }
+}

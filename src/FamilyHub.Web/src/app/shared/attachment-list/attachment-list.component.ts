@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ToastService } from '../toast/toast.service';
 import { AttachmentPreviewStatus, type Attachment, type AttachmentLimits } from '../../models/types';
@@ -6,6 +6,8 @@ import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '.
 import { describeFile } from '../util/file-type';
 import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.component';
 import { FileViewerComponent } from '../file-viewer/file-viewer.component';
+import { IconComponent } from '../ui/icon/icon.component';
+import { CircleCheck, Paperclip } from 'lucide';
 
 /**
  * Секция «Файлы» прямо в раскрытой карточке записи (редизайн — раньше список вложений жил в
@@ -20,11 +22,13 @@ import { FileViewerComponent } from '../file-viewer/file-viewer.component';
  */
 @Component({
     selector: 'app-attachment-list',
-    imports: [LoadingSpinnerComponent, FileViewerComponent],
+    imports: [LoadingSpinnerComponent, FileViewerComponent, IconComponent],
     templateUrl: './attachment-list.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './attachment-list.component.scss'
 })
 export class AttachmentListComponent implements OnChanges {
+  protected readonly icons = { CircleCheck, Paperclip };
   @Input({ required: true }) recordId!: string;
   /** Emitted после успешной/частичной загрузки — счётчики на MedicalRecord (attachmentCount и
    * т.п.) устарели, родитель должен перечитать запись (см. medical-records-panel.refresh()). */

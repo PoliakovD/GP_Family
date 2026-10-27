@@ -37,7 +37,7 @@ services:
       retries: 10
 
   seq:
-    image: datalust/seq:latest
+    image: datalust/seq:2026.1.17182
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
@@ -55,7 +55,7 @@ services:
   # выполнять их JS незачем и небезопасно (Gotenberg использует Chromium только для HTML/route
   # конвертации; для LibreOffice-маршрута сам флаг не задействован, но безвреден оставить всегда).
   gotenberg:
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8.37.0
     restart: unless-stopped
     command: ["gotenberg", "--api-port=3000", "--chromium-disable-javascript=true"]
     healthcheck:
@@ -74,7 +74,7 @@ services:
   # broker+controller — этого достаточно для dev/single-instance; продовый кластер потребовал
   # бы отдельных controller-узлов и внешнего KAFKA_ADVERTISED_LISTENERS для каждого брокера.
   kafka:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:4.3.1
     restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1

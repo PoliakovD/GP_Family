@@ -1,53 +1,49 @@
-<div class="auth-shell">
-  <div class="card auth-card elev-md">
-    <div class="auth-brand">
-      <div class="card-kicker">FamilyHub</div>
-      <h2 class="card-title mb-0">Подтверждение почты</h2>
-    </div>
+<app-auth-card
+  title="Подтверждение почты"
+  lead="Для защиты медицинских данных подтвердите email. Если он совпадает с вашим существующим аккаунтом FamilyHub — вся история семей, анализов и аптечки станет доступна прямо здесь. Если этого email ещё нет в FamilyHub, мы создадим аккаунт и пришлём пароль для входа с сайта.">
 
-    <p class="text-muted mb-3">
-      Для защиты медицинских данных подтвердите email. Если он совпадает с вашим существующим
-      аккаунтом FamilyHub — вся история семей, анализов и аптечки станет доступна прямо здесь.
-      Если этого email ещё нет в FamilyHub, мы создадим аккаунт и пришлём пароль для входа с сайта.
-    </p>
+  @if (error()) {
+    <div class="alert-danger" role="alert">{{ error() }}</div>
+  }
 
-    @if (error()) {
-      <div class="alert-danger" role="alert">{{ error() }}</div>
-    }
-
-    @switch (step()) {
-      @case ('email') {
-        <form (ngSubmit)="sendCode()">
+  @switch (step()) {
+    @case ('email') {
+      <form class="auth-form" (ngSubmit)="sendCode()">
+        <div appField>
           <label class="form-label" for="tg-bind-email">Email</label>
           <input
-            id="tg-bind-email" class="input mb-3" type="email" name="email"
+            id="tg-bind-email" class="input" type="email" name="email"
             [(ngModel)]="email" required autocomplete="email" />
+        </div>
 
-          <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Получить код</button>
-        </form>
-      }
-      @case ('code') {
-        <form (ngSubmit)="confirmBind()">
-          <p class="text-muted mb-2">Код отправлен на {{ email }}. Он действует 10 минут.</p>
+        <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">Получить код</button>
+      </form>
+    }
+    @case ('code') {
+      <form class="auth-form" (ngSubmit)="confirmBind()">
+        <p class="auth-text">Код отправлен на {{ email }}. Он действует 10 минут.</p>
+        <div appField>
           <label class="form-label" for="tg-bind-code">Код из письма</label>
           <input
-            id="tg-bind-code" class="input mb-3" type="text" name="code"
+            id="tg-bind-code" class="input" type="text" name="code"
             [value]="code" (input)="onCodeInput($any($event.target))" required inputmode="numeric"
             autocomplete="one-time-code" placeholder="6 цифр" />
+        </div>
 
+        <div class="auth-actions">
           <button type="submit" class="btn btn-primary btn-block" [disabled]="busy()">
             {{ busy() ? 'Проверяем…' : 'Подтвердить' }}
           </button>
           @if (info()) {
-            <div class="alert-info mt-2" role="status">{{ info() }}</div>
+            <div class="alert-info" role="status">{{ info() }}</div>
           }
-          <p class="field-hint field-hint-muted mt-2 mb-1">Письма нет? Проверьте папку «Спам».</p>
+          <p class="form-hint">Письма нет? Проверьте папку «Спам».</p>
           <button type="button" class="btn btn-secondary btn-block" [disabled]="!resend.ready() || busy()" (click)="resendCode()">
             @if (resend.ready()) { Отправить код ещё раз } @else { Отправить ещё раз через {{ resend.label() }} }
           </button>
-          <button type="button" class="btn-link" (click)="backToEmail()">Изменить email</button>
-        </form>
-      }
+          <button type="button" class="btn btn-ghost btn-block" (click)="backToEmail()">Изменить email</button>
+        </div>
+      </form>
     }
-  </div>
-</div>
+  }
+</app-auth-card>

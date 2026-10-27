@@ -1,86 +1,96 @@
-// Обзор «Прививки»: «Стоит запланировать» + «Семья» (макет «Screen - Vaccination»).
+// Обзор «Прививки»: «Стоит запланировать» (карточки с бейджем статуса) + «Семья» (list-card с прогрессом).
+// DESIGN §1: «скоро» — warning, «можно сделать» — neutral; без цветных полос, без CAPS.
 
 :host { display: block; }
 
-.vo { display: flex; flex-direction: column; gap: var(--space-5); }
-
-.vo-kicker {
-  font: 600 0.6471rem/1 var(--font-heading);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-  margin-bottom: 10px;
-}
+.vo { display: flex; flex-direction: column; gap: var(--space-6); }
+.vo-section { display: flex; flex-direction: column; gap: var(--space-3); }
+.vo-kicker { margin: 0; font: var(--text-title); color: var(--color-text); }
 
 .vo-attention-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: var(--space-4);
 }
 
 .vo-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-top: 3px solid var(--color-neutral-400);
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+
+  > .btn { align-self: flex-start; }
 }
-.vo-card-duesoon { border-top-color: var(--color-accent); }
-.vo-card-cando { border-top-color: var(--color-status-warning); }
 
-.vo-card-top { display: flex; align-items: center; gap: 10px; }
-.vo-card-person { font-size: 0.7941rem; color: var(--color-neutral-600); }
-.vo-card-when { font: 600 0.7647rem var(--font-heading); flex: none; }
-.vo-card-when-soon { color: var(--color-accent-800); }
-.vo-card-when-can { color: var(--color-status-warning-text); }
-
-.vo-card-title { font-family: var(--font-heading); font-weight: 600; font-size: 1.0588rem; line-height: 1.25; }
-.vo-card-sub { font-size: 0.7941rem; }
-
-.vo-card-hint { font-size: 0.7941rem; color: var(--color-status-warning-text); }
-
-.vo-people {
-  display: flex;
-  flex-direction: column;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-}
+.vo-card-top { display: flex; align-items: center; gap: var(--space-2); }
+.vo-card-person { font: var(--text-caption); color: var(--color-text-muted); }
+.vo-card-title { font: var(--text-title-mobile); }
+.vo-card-sub { font: var(--text-caption); color: var(--color-text-muted); }
+.vo-card-hint { font: var(--text-body-sm); color: var(--color-text-secondary); a { font-weight: 600; color: var(--color-accent-hover); } }
 
 .vo-person {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  gap: var(--space-3);
+  min-height: 72px;
+  padding: var(--space-3) var(--space-6);
   color: inherit;
   text-decoration: none;
-  border-top: 1px solid var(--color-divider);
+  transition: background-color 0.15s ease;
 
-  &:first-child { border-top: none; }
-  &:hover { background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
-  > i { color: var(--color-neutral-500); flex: none; }
+  & + .vo-person::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: var(--space-6);
+    right: var(--space-6);
+    border-top: 1px solid var(--color-divider);
+  }
+
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
 }
 
+.vo-chevron { flex: none; color: var(--color-text-muted); }
 .vo-person-body { flex: 1; min-width: 0; }
-.vo-person-name { font-family: var(--font-heading); font-weight: 600; font-size: 1rem; }
+.vo-person-name { font: var(--text-body); font-weight: 600; }
 
-.vo-bar { height: 8px; display: flex; gap: 2px; margin-top: 6px; background: var(--color-neutral-200); }
-.vo-bar-done { background: var(--color-status-ok); }
-.vo-bar-duesoon { background: var(--color-accent); }
-.vo-bar-cando { background: var(--color-status-warning); }
-.vo-bar-nodata { background: repeating-linear-gradient(45deg, var(--color-neutral-200) 0 4px, var(--color-neutral-100) 4px 8px); }
+// Прогресс по календарю: сделано / скоро / можно сделать / нет данных.
+.vo-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-range-track);
+}
 
-.vo-person-meta { font-size: 0.7647rem; margin-top: 5px; }
+.vo-bar-done { background: var(--color-success); }
+.vo-bar-duesoon { background: var(--color-warning); }
+.vo-bar-cando { background: var(--color-text-muted); }
+.vo-bar-nodata { background: var(--color-range-track); }
+
+.vo-person-meta { margin-top: var(--space-1); font: var(--text-caption); color: var(--color-text-muted); }
 
 .vo-footer-hint {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--color-neutral-100);
-  font-size: 0.8235rem;
-  color: var(--color-neutral-800);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
 
-  > i { color: var(--color-neutral-600); flex: none; }
+  > app-icon { flex: none; color: var(--color-text-muted); }
+}
+
+.vo-empty { margin: 0; font: var(--text-caption); color: var(--color-text-muted); }
+
+@media (max-width: 639px) {
+  .vo-card { padding: var(--space-4); }
+  .vo-person { padding: var(--space-3) var(--space-4); & + .vo-person::before { left: var(--space-4); right: var(--space-4); } }
 }

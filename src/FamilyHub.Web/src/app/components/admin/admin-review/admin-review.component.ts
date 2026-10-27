@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -22,6 +22,7 @@ import {
   reviewOriginLabel,
   reviewStageLabel,
 } from './review-helpers';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 type StageFilter = 'all' | ReviewStage;
 
@@ -42,8 +43,9 @@ const INBOX_MAX_TAKE = 500;
  */
 @Component({
   selector: 'app-admin-review',
-  imports: [FormsModule, DatePipe, ReviewDetailComponent, ReviewConfigComponent],
+  imports: [FormsModule, DatePipe, ReviewDetailComponent, ReviewConfigComponent, LoadingSpinnerComponent],
   templateUrl: './admin-review.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-review.component.scss',
 })
 export class AdminReviewComponent implements OnInit {

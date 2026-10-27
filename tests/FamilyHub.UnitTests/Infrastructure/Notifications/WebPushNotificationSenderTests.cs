@@ -110,6 +110,28 @@ public class WebPushNotificationSenderTests : SqliteTestBase
             Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
     }
 
+    // Регрессия на находку M1 (docs/security/security-audit-2026-10.md): подписка, сохранённая до
+    // валидации endpoint, не должна порождать запрос во внутреннюю сеть.
+    [Fact]
+    public async Task SendAsync_NonPushRelayEndpoint_IsNotCalled_AndRemoved()
+    {
+        var owner = Db.AddUser();
+        var internalHost = AddSubscription(owner.Id, "http://seq/api/events/raw");
+        AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/device-1");
+        await Db.SaveChangesAsync();
+
+        _client.SendNotificationAsync(Arg.Any<WebPush.PushSubscription>(), Arg.Any<string>(),
+                Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        await _sut.SendAsync(NewNotification(owner.Id));
+
+        await _client.Received(1).SendNotificationAsync(
+            Arg.Is<WebPush.PushSubscription>(s => s.Endpoint == "https://fcm.googleapis.com/fcm/send/device-1"),
+            Arg.Any<string>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
+        (await Db.PushSubscriptions.AnyAsync(s => s.Id == internalHost.Id)).Should().BeFalse();
+    }
+
     [Fact]
     public async Task SendAsync_ExpiredSubscription_Gone410_IsRemoved_OthersUnaffected()
     {
@@ -137,6 +159,39 @@ public class WebPushNotificationSenderTests : SqliteTestBase
         var remaining = await NewContext().PushSubscriptions.AsNoTracking().ToListAsync();
         remaining.Should().ContainSingle(s => s.Id == healthy.Id);
         remaining.Should().NotContain(s => s.Id == expired.Id);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    public async Task SendAsync_SubscriptionCreatedWithOldVapidKey_IsRemoved_OthersUnaffected(HttpStatusCode status)
+    {
+        var owner = Db.AddUser();
+        var stale = AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/old-vapid");
+        var healthy = AddSubscription(owner.Id, "https://fcm.googleapis.com/fcm/send/healthy");
+        await Db.SaveChangesAsync();
+
+        _client.SendNotificationAsync(Arg.Any<WebPush.PushSubscription>(), Arg.Any<string>(),
+                Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var subscription = callInfo.Arg<WebPush.PushSubscription>();
+                if (subscription.Endpoint == stale.Endpoint)
+                {
+                    var response = new HttpResponseMessage(status);
+                    throw new WebPushException(
+                        "the VAPID credentials in the authorization header do not correspond to the credentials used to create the subscriptions",
+                        subscription, response);
+                }
+
+                return Task.CompletedTask;
+            });
+
+        await _sut.SendAsync(NewNotification(owner.Id));
+
+        var remaining = await NewContext().PushSubscriptions.AsNoTracking().ToListAsync();
+        remaining.Should().ContainSingle(s => s.Id == healthy.Id,
+            "подписка под старый VAPID-ключ мертва — браузер переподпишется под новый при следующем входе");
     }
 
     [Fact]

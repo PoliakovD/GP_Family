@@ -5,7 +5,7 @@
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--color-neutral-900) 55%, transparent);
+  background: color-mix(in srgb, var(--color-scrim) 55%, transparent);
   z-index: var(--z-overlay);
   display: flex;
   align-items: flex-end;
@@ -18,19 +18,19 @@
   max-height: calc(100vh - 48px);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
-  background: var(--color-bg);
+  background: var(--color-surface);
   color: var(--color-text);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-2) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0));
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0));
   animation: sheet-slide-up 0.22s ease-out;
 }
 
 .sheet-grip {
   width: 36px;
   height: 4px;
-  border-radius: 2px;
-  background: var(--color-divider);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-dashed);
   margin: 0 auto var(--space-2);
 }
 

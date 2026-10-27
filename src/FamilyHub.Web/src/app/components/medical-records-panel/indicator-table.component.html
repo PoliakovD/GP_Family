@@ -1,186 +1,162 @@
-@if (sorted().length > 0) {
-  <!-- Сортировка (было — только исходный порядок из бланка). Все показатели видны всегда. -->
-  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-    <button type="button" class="tag" [class.tag-accent]="sortMode() === 'abnormal'" style="cursor:pointer;border:none;font:inherit" (click)="sortMode.set('abnormal')">Сначала отклонения</button>
-    <button type="button" class="tag" [class.tag-accent]="sortMode() === 'form'" style="cursor:pointer;border:none;font:inherit" (click)="sortMode.set('form')">Как в бланке</button>
-    <button type="button" class="tag" [class.tag-accent]="sortMode() === 'alpha'" style="cursor:pointer;border:none;font:inherit" (click)="sortMode.set('alpha')">По алфавиту</button>
+<!-- Показатели записи (DESIGN §3 «Анализ», макеты analysis-desktop / analysis-mobile): карточка с заголовком
+     и сортировкой (segmented), на десктопе — таблица «Показатель / Результат / Где относительно нормы /
+     Статус», на узком экране — строки-карточки (название + значение, шкала, бейдж). Статус несут маркер
+     шкалы и бейдж — строки не заливаются. Клик по показателю — справка (там же правка и удаление). -->
+<section class="list-card it" aria-labelledby="it-title">
+  <div class="list-card-head it-head">
+    <h2 class="card-title" id="it-title">Показатели</h2>
+    @if (sorted().length > 1) {
+      <div class="seg seg-sunken" role="group" aria-label="Порядок показателей">
+        @for (opt of sortOptions; track opt.value) {
+          <button type="button" class="seg-opt" [class.active]="sortMode() === opt.value"
+                  [attr.aria-pressed]="sortMode() === opt.value" [attr.aria-label]="wide() ? null : opt.label" (click)="sortMode.set(opt.value)">{{ wide() ? opt.label : opt.short }}</button>
+        }
+      </div>
+    }
   </div>
 
-  @if (wide()) {
-    <div class="table-responsive">
-      <table class="indicators-table">
-        <thead>
-          <tr>
-            <th>Показатель</th>
-            <th>Значение</th>
-            <th>Где в норме</th>
-            <th>Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (group of groups(); track $index) {
-          <!-- Подзаголовок раздела бланка («Лейкоцитарная формула») — только в режиме «Как в бланке»
-               и только если у записи есть разделы (см. groupIndicatorsByPanel). -->
-          @if (group.label) {
-            <tr class="indicator-panel-row">
-              <td colspan="4">{{ group.label }}</td>
+  @if (sorted().length > 0) {
+    @if (wide()) {
+      <div class="table-responsive">
+        <table class="indicators-table">
+          <thead>
+            <tr>
+              <th scope="col">Показатель</th>
+              <th scope="col">Результат</th>
+              <th scope="col">Где относительно нормы</th>
+              <th scope="col">Статус</th>
             </tr>
+          </thead>
+          <tbody>
+            @for (group of groups(); track $index) {
+              <!-- Подзаголовок раздела бланка («Лейкоцитарная формула») — только «Как в бланке». -->
+              @if (group.label) {
+                <tr class="indicator-panel-row"><td colspan="4">{{ group.label }}</td></tr>
+              }
+              @for (ind of group.items; track ind.id) {
+                <tr class="indicator-row" appClickable (click)="open.emit(ind)">
+                  <td>
+                    <span class="it-name">{{ indicatorLabel(ind) }}</span>
+                    <ng-container *ngTemplateOutlet="nameNotes; context: { $implicit: ind }" />
+                  </td>
+                  <td class="indicator-value-cell">
+                    <ng-container *ngTemplateOutlet="value; context: { $implicit: ind }" />
+                  </td>
+                  <td><ng-container *ngTemplateOutlet="scale; context: { $implicit: ind }" /></td>
+                  <td class="indicator-flag-cell">
+                    <app-status-chip [flag]="ind.flag" [amount]="deviationAmount(ind)" [showUnknown]="true" />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="it-cards">
+        @for (group of groups(); track $index) {
+          @if (group.label) {
+            <div class="indicator-panel-heading">{{ group.label }}</div>
           }
           @for (ind of group.items; track ind.id) {
-            <!-- 4 колонки (Показатель+норма / Значение / шкала / статус); клик по строке — панель
-                 справки, где и правка/удаление. Строка подсвечена по статусу. -->
-            <tr class="indicator-row" [class]="rowStatusClass(ind)" appClickable (click)="open.emit(ind)">
-              <td>
-                {{ indicatorLabel(ind) }}
-                @if (indicatorReference(ind); as ref) {
-                  <div class="muted" style="font-size:0.7647rem">
-                    {{ ref }}
-                    @if (isCalculatedRef(ind)) {
-                      <span class="badge-ai" title="Норма рассчитана ИИ по возрасту/полу">ИИ</span>
-                    }
-                    @if (isInferredRef(ind)) {
-                      <span class="badge-ai" title="Норма предположена ИИ по общемедицинским знаниям — в бланке референс не был указан">ИИ</span>
-                    }
-                  </div>
-                } @else if (isInferredRef(ind)) {
-                  <!-- Качественная догадка ИИ («не обнаружено» и т.п.) — нормы для отображения нет,
-                       но бейдж всё равно должен быть виден. -->
-                  <div class="muted" style="font-size:0.7647rem">
-                    <span class="badge-ai" title="Норма предположена ИИ по общемедицинским знаниям — в бланке референс не был указан">ИИ</span>
-                  </div>
-                }
-                @if (ind.enrichmentPending) {
-                  <span class="tag tag-neutral" [title]="enrichmentTitle(ind)">
-                    @if (ind.enrichmentWaitingForAi) {
-                      <i class="ph ph-hourglass" aria-hidden="true"></i> ждём ИИ…
-                    } @else {
-                      <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
-                    }
-                  </span>
-                }
-              </td>
-              <td class="indicator-value-cell" [class]="flagClass(ind.flag)">
-                {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
-              </td>
-              <td>
-                @if (scaleBounds(ind); as b) {
-                  <app-reference-scale
-                    [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-                    [unit]="ind.unit" [flag]="ind.flag" variant="mini" [labels]="true"
-                  />
-                  @if (deviationFor(ind, b); as d) {
-                    <div class="muted" style="font-size:0.7647rem">{{ d }}</div>
-                  }
-                } @else {
-                  <span class="muted" style="font-size:0.7647rem">—</span>
-                }
-              </td>
-              <td class="indicator-flag-cell"><app-status-chip [flag]="ind.flag" /></td>
-            </tr>
+            <button type="button" class="indicator-card" (click)="open.emit(ind)">
+              <span class="indicator-card-head">
+                <span class="it-name">{{ indicatorLabel(ind) }}</span>
+                <span class="it-value-wrap"><ng-container *ngTemplateOutlet="value; context: { $implicit: ind }" /></span>
+              </span>
+              <ng-container *ngTemplateOutlet="nameNotes; context: { $implicit: ind, mobile: true }" />
+              <ng-container *ngTemplateOutlet="scale; context: { $implicit: ind }" />
+              <app-status-chip [flag]="ind.flag" [amount]="deviationAmount(ind)" [showUnknown]="true" />
+            </button>
           }
-          }
-          @if (creating) {
-            <tr class="indicator-edit-row">
-              <td colspan="4">
-                <ng-container *ngTemplateOutlet="newIndicatorForm" />
-              </td>
-            </tr>
-          } @else {
-            <tr>
-              <td colspan="4">
-                <button type="button" class="btn btn-secondary btn-sm" (click)="startCreate()">
-                  <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  } @else {
-    <!-- Узкий экран: компактные карточки вместо таблицы (4 колонки на 390px нечитаемы). Клик
-         открывает тот же показатель — на этой ширине полноэкранно. -->
-    <div class="d-flex flex-column gap-2 mb-2">
-      @for (group of groups(); track $index) {
-      @if (group.label) {
-        <div class="indicator-panel-heading">{{ group.label }}</div>
-      }
-      @for (ind of group.items; track ind.id) {
-        <button type="button" class="indicator-card" [class]="rowStatusClass(ind)" (click)="open.emit(ind)">
-          <div class="indicator-card-head">
-            <div class="flex-fill" style="min-width:0">
-              <div class="card-title" style="font-size:0.8824rem">{{ indicatorLabel(ind) }}</div>
-              @if (indicatorReference(ind); as ref) {
-                <div class="muted" style="font-size:0.7647rem">{{ ref }}</div>
-              }
-              <!-- На мобиле — словами, без hover-подсказки: придуманная моделью норма не должна
-                   выглядеть как напечатанная в бланке. -->
-              @if (isCalculatedRef(ind) || isInferredRef(ind)) {
-                <div class="indicator-ai-ref">
-                  <span class="badge-ai" aria-hidden="true">ИИ</span>
-                  {{ isInferredRef(ind) ? 'норму предположил ИИ — сверьте с бланком' : 'норма рассчитана ИИ по возрасту и полу' }}
-                </div>
-              }
-              @if (ind.enrichmentPending) {
-                <span class="tag tag-neutral" [title]="enrichmentTitle(ind)">
-                  @if (ind.enrichmentWaitingForAi) {
-                    <i class="ph ph-hourglass" aria-hidden="true"></i> ждём ИИ…
-                  } @else {
-                    <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
-                  }
-                </span>
-              }
-            </div>
-            <div [class]="flagClass(ind.flag)" style="flex:none;text-align:right;white-space:nowrap">
-              {{ ind.valueRaw }}{{ ind.unit ? ' ' + ind.unit : '' }}
-            </div>
-          </div>
-          @if (scaleBounds(ind); as b) {
-            <app-reference-scale
-              [value]="scaleValue(ind)" [low]="b.low" [high]="b.high"
-              [unit]="ind.unit" [flag]="ind.flag" variant="mini" [labels]="true"
-            />
-            @if (deviationFor(ind, b); as d) {
-              <div class="muted" style="font-size:0.7647rem">{{ d }}</div>
-            }
-          }
-          <app-status-chip [flag]="ind.flag" />
-        </button>
-      }
-      }
-    </div>
-    <ng-container *ngTemplateOutlet="addIndicator" />
+        }
+      </div>
+    }
+    @if (filteredOut() > 0) {
+      <p class="it-filtered">Показаны не все: ещё {{ filteredOut() }} скрыто фильтром.</p>
+    }
+  } @else if (indicators().length > 0) {
+    <p class="it-filtered">В этой группе показателей нет.</p>
   }
-} @else {
-  <!-- Запись без единого показателя — только добавление. -->
-  <ng-container *ngTemplateOutlet="addIndicator" />
-}
+
+  <div class="it-foot">
+    <ng-container *ngTemplateOutlet="addIndicator" />
+  </div>
+</section>
+
+<!-- Значение: число 18/700 tabular + единица 13 muted. -->
+<ng-template #value let-ind>
+  <span class="it-value">{{ ind.valueRaw }}</span>@if (ind.unit) {<span class="it-unit">{{ ind.unit }}</span>}
+</ng-template>
+
+<!-- Под названием: как в бланке / норма текстом, пометки «норма от ИИ» и «уточняем норму…». -->
+<ng-template #nameNotes let-ind let-mobile="mobile">
+  @if (indicatorSubtitle(ind); as sub) {
+    <span class="it-sub">{{ sub }}</span>
+  }
+  @if (isCalculatedRef(ind) || isInferredRef(ind)) {
+    @if (mobile) {
+      <!-- На телефоне — словами: hover-подсказки нет, а придуманная моделью норма не должна выглядеть
+           как напечатанная в бланке. -->
+      <span class="indicator-ai-ref">
+        <span class="badge-ai" aria-hidden="true">ИИ</span>
+        {{ isInferredRef(ind) ? 'норму предположил ИИ — сверьте с бланком' : 'норма рассчитана ИИ по возрасту и полу' }}
+      </span>
+    } @else {
+      <span class="it-sub">
+        <span class="badge-ai" [title]="isInferredRef(ind) ? 'Норма предположена ИИ по общемедицинским знаниям — в бланке референс не был указан' : 'Норма рассчитана ИИ по возрасту/полу'">ИИ</span>
+        {{ isInferredRef(ind) ? 'норма от ИИ' : 'норма по возрасту' }}
+      </span>
+    }
+  }
+  @if (ind.enrichmentPending) {
+    <span class="badge badge-neutral it-enrich" [title]="enrichmentTitle(ind)">
+      @if (ind.enrichmentWaitingForAi) {
+        ждём ИИ…
+      } @else {
+        <span class="pipeline-step-spinner" aria-hidden="true"></span> уточняем норму…
+      }
+    </span>
+  }
+</ng-template>
+
+<!-- Шкала нормы; без двух числовых границ — норма текстом или «Норма в бланке не указана». -->
+<ng-template #scale let-ind>
+  @if (scaleBounds(ind); as b) {
+    <app-reference-scale [value]="scaleValue(ind)" [low]="b.low" [high]="b.high" [unit]="ind.unit" [flag]="ind.flag"
+                         variant="row" [labels]="true" [valueLabel]="false" />
+  } @else if (indicatorReference(ind); as ref) {
+    <span class="it-noscale">Норма: {{ ref }}</span>
+  } @else {
+    <span class="it-noscale">Норма в бланке не указана</span>
+  }
+</ng-template>
 
 <ng-template #addIndicator>
   @if (creating) {
     <ng-container *ngTemplateOutlet="newIndicatorForm" />
   } @else {
-    <button type="button" class="btn btn-secondary btn-sm" (click)="startCreate()">
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить показатель
+    <button type="button" class="btn btn-dashed it-add" (click)="startCreate()">
+      <app-icon [icon]="icons.Plus" [size]="18" />Добавить показатель
     </button>
   }
 </ng-template>
 
 <ng-template #newIndicatorForm>
-  <div class="d-flex flex-column gap-1 mb-2">
+  <div class="it-form">
     <input class="input" [(ngModel)]="form.displayName" placeholder="Название показателя" aria-label="Название показателя (обязательно)" />
-    <div class="d-flex gap-1">
-      <input class="input" [(ngModel)]="form.valueRaw" placeholder="Значение" aria-label="Значение" style="flex:1" />
-      <input class="input" [ngModel]="form.unit" (ngModelChange)="form.unit = $event" placeholder="Единица" aria-label="Единица измерения" style="flex:1" />
+    <div class="it-form-row">
+      <input class="input" [(ngModel)]="form.valueRaw" placeholder="Значение" aria-label="Значение" />
+      <input class="input" [ngModel]="form.unit" (ngModelChange)="form.unit = $event" placeholder="Единица" aria-label="Единица измерения" />
     </div>
-    <div class="d-flex gap-1">
-      <input class="input" [ngModel]="form.refLowText" (ngModelChange)="form.refLowText = $event" placeholder="Норма от" aria-label="Норма от" style="flex:1" />
-      <input class="input" [ngModel]="form.refHighText" (ngModelChange)="form.refHighText = $event" placeholder="Норма до" aria-label="Норма до" style="flex:1" />
+    <div class="it-form-row">
+      <input class="input" [ngModel]="form.refLowText" (ngModelChange)="form.refLowText = $event" placeholder="Норма от" aria-label="Норма от" />
+      <input class="input" [ngModel]="form.refHighText" (ngModelChange)="form.refHighText = $event" placeholder="Норма до" aria-label="Норма до" />
     </div>
     <input class="input" [ngModel]="form.refText" (ngModelChange)="form.refText = $event" placeholder="Норма текстом (если не число)" aria-label="Норма текстом, если не число" />
-    <div class="d-flex gap-2">
-      <button class="btn btn-primary btn-sm" [disabled]="saving" (click)="saveNew()">Добавить</button>
-      <button class="btn btn-ghost btn-sm" [disabled]="saving" (click)="cancelCreate()">Отмена</button>
+    <div class="it-form-actions">
+      <button class="btn btn-primary" [disabled]="saving" (click)="saveNew()">Добавить</button>
+      <button class="btn btn-ghost" [disabled]="saving" (click)="cancelCreate()">Отмена</button>
     </div>
   </div>
 </ng-template>

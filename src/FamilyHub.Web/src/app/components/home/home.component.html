@@ -1,208 +1,150 @@
-<div>
+<!-- Главная (DESIGN §4, макеты home-desktop / home-mobile). Десктоп: приветствие → метрики →
+     «Требует внимания» (2/3) | семья + дни рождения (1/3). Мобайл: приветствие → «Требует внимания» →
+     метрики → ближайший день рождения (порядок — CSS-области .home-layout). -->
+<div class="home">
   @if (error) {
-    <div class="alert-danger mb-2" role="alert">
+    <div class="alert-danger" role="alert">
       {{ error }}
       <button type="button" class="btn-link" (click)="refresh()">Повторить</button>
     </div>
   }
+
   @if (loading) {
     <app-loading-spinner />
   } @else if (summary) {
-    <div class="home-header mb-3">
-      <h2 class="mb-1">Здравствуйте{{ summary.greetingName ? ', ' + summary.greetingName : '' }}</h2>
-      <div class="muted">{{ dateLine }}</div>
-    </div>
+    <header class="home-head">
+      <h1 class="home-title">Здравствуйте{{ summary.greetingName ? ', ' + summary.greetingName : '' }}</h1>
+      <p class="home-sub">{{ dateLine }}</p>
+    </header>
 
     @if (!state.loading() && state.activeFamilies().length === 0) {
-      <!-- Первый вход: без семьи Главной нечего показать — даём понятный первый шаг вместо пустоты. -->
-      <div class="card mb-3">
+      <!-- Первый вход: без семьи Главной нечего показать — понятный первый шаг вместо пустоты. -->
+      <section class="card card-lg home-first">
         @if (state.families().length > 0) {
-          <h3 class="card-title mb-1">Заявка ждёт подтверждения</h3>
-          <p class="muted mb-0">
-            Администратор семьи ещё не подтвердил вашу заявку. Как только подтвердит — здесь появятся
-            аптечка, дни рождения и всё остальное.
-          </p>
+          <app-empty-state title="Заявка ждёт подтверждения"
+            text="Администратор семьи ещё не подтвердил вашу заявку. Как только подтвердит — здесь появятся аптечка, дни рождения и всё остальное." />
         } @else {
-          <h3 class="card-title mb-1">Начните с семьи</h3>
-          <p class="muted mb-2">
-            Создайте семью и пригласите близких по ссылке — или присоединитесь к семье, если вам уже
-            прислали приглашение.
-          </p>
-          <div class="d-flex flex-wrap gap-2">
-            <a class="btn btn-primary" routerLink="/families" [queryParams]="{ create: 1 }">Создать семью</a>
-            <a class="btn btn-secondary" routerLink="/families">У меня есть приглашение</a>
-          </div>
+          <app-empty-state title="Начните с семьи"
+            text="Создайте семью и пригласите близких по ссылке — или присоединитесь к семье, если вам уже прислали приглашение.">
+            <div class="home-first-actions">
+              <a class="btn btn-primary" routerLink="/families" [queryParams]="{ create: 1 }">Создать семью</a>
+              <a class="btn btn-secondary" routerLink="/families">У меня есть приглашение</a>
+            </div>
+          </app-empty-state>
         }
-      </div>
+      </section>
     }
 
-    <div class="home-grid">
-      <!-- ЛЕВАЯ КОЛОНКА -->
-      <div class="d-flex flex-column gap-3">
-        @if (visibleCardCount > 0) {
-          <div class="home-section-kicker">
-            <span>Требует внимания</span>
-            <span class="home-section-line"></span>
-          </div>
-
-          @if (medicationSummary; as m) {
-            <app-attention-card
-              icon="ph-duotone ph-pill"
-              [color]="m.severity === 'expired' ? 'var(--color-status-danger)' : 'var(--color-status-warning)'"
-              [title]="m.title"
-              [subtitle]="m.subtitle"
-            >
-              <div actions>
-                <button class="btn btn-primary" (click)="goToMedkit(m.first)">Разобрать аптечку</button>
-              </div>
-            </app-attention-card>
-          }
-
-          @for (req of summary.joinRequests; track req.userId + req.familyId) {
-            <app-attention-card
-              icon="ph-duotone ph-user-plus"
-              color="var(--color-accent)"
-              [title]="req.firstName ? req.firstName + ' просит вступить в семью «' + req.familyName + '»' : 'Заявка на вступление в семью «' + req.familyName + '»'"
-              [subtitle]="requestSubtitle(req)"
-            >
-              <div actions>
-                <button class="btn btn-primary" [disabled]="isBusy(req)" (click)="approve(req)">Принять</button>
-                <button class="btn btn-secondary" [disabled]="isBusy(req)" (click)="reject(req)">Отклонить</button>
-              </div>
-            </app-attention-card>
-          }
-
-          @if (birthdaySummary; as b) {
-            <app-attention-card
-              icon="ph-duotone ph-cake"
-              color="var(--color-accent-2)"
-              [title]="b.title"
-              [subtitle]="b.subtitle"
-            >
-              <div actions>
-                <a class="btn btn-secondary" routerLink="/birthdays">Все дни рождения</a>
-              </div>
-            </app-attention-card>
-          }
+    <div class="home-layout">
+      <!-- Метрики -->
+      <section class="home-metrics" aria-label="Сводка">
+        @if (pressure; as bp) {
+          <app-metric-card label="Давление" [value]="bp.value" link="/health/notes"
+                           [caption]="bp.warning ? null : 'замер ' + bp.caption">
+            @if (bp.warning) { <span badge class="badge badge-warning">{{ bp.warning }}</span> }
+          </app-metric-card>
+        } @else {
+          <app-metric-card label="Давление" value="—" caption="Добавьте замер в дневник" link="/health/notes" />
         }
 
-        <div class="home-section-kicker" [class.mt-2]="visibleCardCount > 0">
-          <span>В порядке</span>
-          <span class="home-section-line"></span>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-          <!-- Нулевые счётчики — нейтральный чип со ссылкой «добавить», а не зелёная галочка: у нового
-               пользователя «Анализы: 0 записей ✓» выглядело как «всё в порядке». -->
-          @if (summary.ok.medicationsTotal === 0) {
-            <a class="home-ok-chip home-ok-chip-empty" routerLink="/health/medications">
-              <i class="ph ph-first-aid-kit" aria-hidden="true"></i>
-              Аптечка пуста — добавить лекарства
-            </a>
-          } @else {
-            <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.medicationsExpired > 0">
-              <i [class]="summary.ok.medicationsExpired > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
-                 [style.color]="summary.ok.medicationsExpired > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
-                 aria-hidden="true"></i>
-              {{ medicationsOkLabel }}
-            </span>
-          }
-          @if (summary.ok.analysesTotal === 0) {
-            <a class="home-ok-chip home-ok-chip-empty" routerLink="/health/records/new">
-              <i class="ph ph-test-tube" aria-hidden="true"></i>
-              Анализов пока нет — добавить по фото бланка
-            </a>
-          } @else {
-            <span class="home-ok-chip" [class.home-ok-chip-danger]="summary.ok.analysesAbnormal > 0">
-              <i [class]="summary.ok.analysesAbnormal > 0 ? 'ph-fill ph-warning-circle' : 'ph ph-check-circle'"
-                 [style.color]="summary.ok.analysesAbnormal > 0 ? 'var(--color-status-danger-text)' : 'var(--color-status-ok)'"
-                 aria-hidden="true"></i>
-              Анализы: {{ summary.ok.analysesTotal }} {{ pluralizeRu(summary.ok.analysesTotal, 'запись', 'записи', 'записей') }}
-              @if (summary.ok.analysesAbnormal > 0) {
-                , {{ summary.ok.analysesAbnormal }} с отклонениями
-              }
-            </span>
-          }
-          @if (summary.ok.visitsTotal > 0) {
-            <span class="home-ok-chip">
-              <i class="ph ph-stethoscope" style="color:var(--color-status-ok)" aria-hidden="true"></i>
-              Приёмы врача: {{ summary.ok.visitsTotal }}
-              @if (summary.ok.visitsLastDate) {
-                · последний {{ formatDayMonthYear(summary.ok.visitsLastDate) }}
-              }
-            </span>
-          }
-          <span class="home-ok-chip">
-            <i [class]="summary.ok.pushEnabled ? 'ph ph-bell' : 'ph ph-bell-slash'"
-               [style.color]="summary.ok.pushEnabled ? 'var(--color-status-ok)' : 'var(--color-neutral-600)'"
-               aria-hidden="true"></i>
-            @if (summary.ok.pushEnabled) {
-              Уведомления включены
+        @if (latestAnalysis; as a) {
+          <app-metric-card class="home-metric-analysis" label="Последний анализ" [value]="a.abnormalIndicatorCount"
+                           [unit]="'из ' + a.indicatorCount" [link]="['/health/records', a.id]">
+            @if (a.abnormalIndicatorCount > 0) {
+              <span badge class="badge badge-danger">вне нормы</span>
             } @else {
-              Уведомления выключены — <a routerLink="/settings/notifications">включить</a>
+              <span badge class="badge badge-success">в норме</span>
             }
-          </span>
+          </app-metric-card>
+        } @else if (summary.ok.analysesTotal === 0) {
+          <app-metric-card class="home-metric-analysis" label="Анализы" value="—"
+                           caption="Добавьте по фото бланка" link="/health/records/new" />
+        }
+
+        <app-metric-card label="Приёмы врача" [value]="summary.ok.visitsTotal" link="/health/visits"
+                         [caption]="summary.ok.visitsLastDate ? 'последний ' + formatDayMonth(summary.ok.visitsLastDate) : 'пока нет записей'" />
+      </section>
+
+      <!-- Требует внимания -->
+      <section class="list-card home-attention" aria-labelledby="home-attention-title">
+        <div class="list-card-head">
+          <h2 class="card-title" id="home-attention-title">Требует внимания</h2>
+          @if (visibleCardCount > 0) { <span class="card-meta">{{ visibleCardCount }}</span> }
         </div>
-      </div>
 
-      <!-- ПРАВАЯ КОЛОНКА -->
-      <div class="d-flex flex-column gap-3 home-right-col">
-        @if (state.selectedFamily(); as fam) {
-          <div class="card">
-            <div class="d-flex align-items-baseline justify-content-between mb-2">
-              <div class="home-section-kicker" style="margin:0"><span>Кто в семье</span></div>
-              <a [routerLink]="['/families', fam.id]" style="font-size:0.8235rem">Открыть семью</a>
+        @for (req of summary.joinRequests; track req.userId + req.familyId) {
+          <app-task-row [icon]="icons.UserPlus" tone="accent"
+                        [title]="req.firstName ? req.firstName + ' просит вступить в семью «' + req.familyName + '»' : 'Заявка на вступление в семью «' + req.familyName + '»'"
+                        [subtitle]="requestSubtitle(req)">
+            <div actions>
+              <button type="button" class="btn btn-inverse" [disabled]="isBusy(req)" (click)="approve(req)">Принять</button>
+              <button type="button" class="btn btn-secondary" [disabled]="isBusy(req)" (click)="reject(req)">Отклонить</button>
             </div>
-            @for (m of fam.currentMembers ?? []; track m.id) {
-              <div class="d-flex align-items-center gap-2 mb-2">
-                <app-avatar [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}" />
-                <div class="flex-fill" style="min-width:0">
-                  <div class="card-title" style="font-size:0.9412rem"><app-person-name [person]="m" /></div>
-                  @if (isPending(m.id)) {
-                    <div style="font-size:0.7647rem;color:var(--color-accent-2)">ждёт подтверждения</div>
-                  } @else if (m.id === auth.me()?.userId) {
-                    <div class="muted" style="font-size:0.7647rem">вы{{ m.role === 1 ? ' · админ' : '' }}</div>
-                  } @else {
-                    <div class="muted" style="font-size:0.7647rem">{{ m.role === 1 ? 'админ' : 'участник' }}</div>
-                  }
-                </div>
-              </div>
-            }
-            @if (canInvite) {
-              <button type="button" class="home-invite-link" (click)="showInviteModal = true">
-                <i class="ph ph-link-simple" aria-hidden="true"></i>
-                <span>Пригласить по ссылке</span>
-              </button>
-              <app-invite-modal [familyId]="fam.id" [open]="showInviteModal" (closed)="showInviteModal = false" />
-            }
-          </div>
+          </app-task-row>
         }
 
-        @if (summary.birthdays.length > 0) {
-          <div class="card">
-            <div class="home-section-kicker" style="margin-bottom:12px"><span>Ближайшие дни рождения</span></div>
-            @for (b of summary.birthdays; track b.personName + b.date) {
-              <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="home-birthday-date">
-                  <div class="home-birthday-day">{{ dayOfMonth(b.date) }}</div>
-                  <div class="home-birthday-month">{{ monthShort(b.date) }}</div>
-                </div>
-                <div class="flex-fill">
-                  <div class="card-title" style="font-size:0.9412rem">{{ b.personName }}</div>
-                  <div class="muted" style="font-size:0.7647rem">
-                    @if (b.daysUntil === 0) {
-                      сегодня · {{ ageLabel(b.turningAge) }}
-                    } @else if (b.daysUntil <= birthdayAttentionWindowDays) {
-                      через {{ b.daysUntil }} {{ pluralizeRu(b.daysUntil, 'день', 'дня', 'дней') }} · {{ ageLabel(b.turningAge) }}
-                    } @else {
-                      {{ ageLabel(b.turningAge) }}
-                    }
-                  </div>
-                </div>
-              </div>
-            }
+        @for (task of tasks; track task.key; let first = $first) {
+          <app-task-row [icon]="task.icon" [tone]="task.tone" [title]="task.title" [subtitle]="task.subtitle"
+                        [actionLabel]="task.actionLabel" [primary]="first && summary.joinRequests.length === 0"
+                        [link]="task.link" [queryParams]="task.queryParams ?? null" />
+        }
+
+        @if (visibleCardCount === 0) {
+          <div class="home-all-clear">
+            <app-icon [icon]="icons.CircleCheck" />
+            <span>Всё в порядке — срочных дел нет.</span>
           </div>
         }
-      </div>
+      </section>
+
+      <!-- Семья (десктоп) -->
+      @if (state.selectedFamily(); as fam) {
+        <section class="card home-family" aria-labelledby="home-family-title">
+          <div class="home-card-head">
+            <h2 class="card-title" id="home-family-title">Семья</h2>
+            <a class="home-card-link" [routerLink]="['/families', fam.id]">Открыть</a>
+          </div>
+          @for (m of fam.currentMembers ?? []; track m.id) {
+            <app-person-row [person]="{key: m.id, firstName: m.firstName, lastName: m.lastName}"
+                            [name]="memberName(m)" [role]="memberRole(m)" [self]="m.id === auth.me()?.userId" />
+          }
+          <a class="home-chat" [routerLink]="['/families', fam.id]" [queryParams]="{ tab: 'chat' }">
+            <app-icon [icon]="icons.MessageCircle" />
+            <span class="home-chat-text">
+              <span class="home-chat-title">Чат семьи</span>
+              <span class="home-chat-sub">
+                @if (familyUnread(fam.id) > 0) {
+                  {{ familyUnread(fam.id) }} {{ pluralizeRu(familyUnread(fam.id), 'новое сообщение', 'новых сообщения', 'новых сообщений') }}
+                } @else {
+                  Написать семье
+                }
+              </span>
+            </span>
+          </a>
+          @if (canInvite) {
+            <button type="button" class="btn btn-dashed" (click)="showInviteModal = true">
+              <app-icon [icon]="icons.Link" [size]="18" />Пригласить по ссылке
+            </button>
+            <app-invite-modal [familyId]="fam.id" [open]="showInviteModal" (closed)="showInviteModal = false" />
+          }
+        </section>
+      }
+
+      <!-- Дни рождения -->
+      @if (summary.birthdays.length > 0) {
+        <section class="card home-birthdays" aria-labelledby="home-bd-title">
+          <div class="home-card-head">
+            <h2 class="card-title" id="home-bd-title">Дни рождения</h2>
+            <a class="home-card-link" [routerLink]="birthdaysHref()" [queryParams]="{ tab: 'birthdays' }">Все</a>
+          </div>
+          @for (b of summary.birthdays; track b.personName + b.date; let first = $first) {
+            <!-- Ближайший — акцентная плитка (макет home-desktop), остальные — нейтральные. -->
+            <app-birthday-row class="home-bd-row" [soon]="first" [day]="dayOfMonth(b.date)" [month]="monthShort(b.date)"
+                              [name]="b.personName"
+                              [subtitle]="b.daysUntil === 0 ? 'Сегодня · ' + ageLabel(b.turningAge) : 'Исполнится ' + b.turningAge" />
+          }
+        </section>
+      }
     </div>
   }
 </div>

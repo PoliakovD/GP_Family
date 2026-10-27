@@ -42,6 +42,7 @@ test('удаление записи убирает её задачу распо�
   expect((await (await api.get('/api/jobs/active-summary')).json()).extraction.total).toBe(1);
 
   await openAs(page, tgId, `/health/records/${recordId}`);
+  await page.getByRole('button', { name: 'Действия с записью' }).click();
   await page.getByRole('button', { name: 'Удалить' }).click();
   await page.locator('.overlay-card').getByRole('button', { name: 'Удалить' }).click();
   await expect(page).toHaveURL(/\/health\/records$/);

@@ -2,17 +2,9 @@
   position: relative;
 }
 
+// Вид — глобальный .count-badge (styles.scss); здесь только позиция на иконке.
 .notification-bell-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--color-accent-2);
-  color: #fff;
-  font-size: 0.7059rem;
-  line-height: 16px;
-  text-align: center;
+  top: -4px;
+  right: -4px;
 }

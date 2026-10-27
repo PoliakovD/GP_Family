@@ -3,9 +3,9 @@
     <div class="pipeline-step" [class]="'step-' + step.state">
       <span class="pipeline-step-icon" aria-hidden="true">
         @if (step.state === 'done') {
-          <i class="ph-bold ph-check"></i>
+          <app-icon [icon]="icons.Check" [size]="18" />
         } @else if (step.state === 'error') {
-          <i class="ph-bold ph-x"></i>
+          <app-icon [icon]="icons.X" [size]="18" />
         } @else {
           <span class="pipeline-step-spinner"></span>
         }

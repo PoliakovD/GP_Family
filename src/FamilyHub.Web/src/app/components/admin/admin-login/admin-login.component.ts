@@ -1,14 +1,17 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AdminApiService } from '../../../services/admin-api.service';
+import { AuthCardComponent } from '../../../shared/ui/auth-card/auth-card.component';
+import { FieldDirective } from '../../../shared/ui/field/field.directive';
 
 /** Форма входа в админ-панель (ADR-0009) — отдельный логин/пароль из Admin:User/Password (.env),
  * не связан с обычным PWA-аккаунтом. Живёт на admin.{PUBLIC_DOMAIN} за периметром WireGuard. */
 @Component({
     selector: 'app-admin-login',
-    imports: [FormsModule],
+    imports: [FormsModule, AuthCardComponent, FieldDirective],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-login.component.html'
 })
 export class AdminLoginComponent {
@@ -28,13 +31,17 @@ export class AdminLoginComponent {
       await this.api.login(this.user, this.password);
       await this.router.navigate(['/admin']);
     } catch (e) {
-      this.error.set(
-        e instanceof HttpErrorResponse && e.status === 401
-          ? 'Неверный логин или пароль.'
-          : 'Что-то пошло не так. Попробуйте ещё раз.',
-      );
+      this.error.set(this.describeError(e));
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private describeError(e: unknown): string {
+    if (!(e instanceof HttpErrorResponse)) return 'Что-то пошло не так. Попробуйте ещё раз.';
+    if (e.status === 401) return 'Неверный логин или пароль.';
+    // Блокировка после серии неудачных входов (сервер: AdminLoginThrottle) или общий rate-limit "auth".
+    if (e.status === 429) return 'Слишком много попыток входа. Попробуйте через 15 минут.';
+    return 'Что-то пошло не так. Попробуйте ещё раз.';
   }
 }

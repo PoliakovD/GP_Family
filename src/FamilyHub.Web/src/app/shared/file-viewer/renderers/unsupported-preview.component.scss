@@ -16,13 +16,12 @@
   max-width: 320px;
   padding: 32px;
   text-align: center;
-  background: var(--color-paper);
+  background: var(--color-surface);
   color: var(--color-text);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
 
-  > i {
-    font-size: 3.2941rem;
+  > app-icon {
     color: var(--color-accent);
     margin-bottom: 4px;
   }
@@ -34,12 +33,12 @@
 }
 
 .unsupported-meta {
-  color: var(--color-neutral-600);
-  font-size: 0.7647rem;
+  color: var(--color-text-muted);
+  font: var(--text-badge);
 }
 
 .unsupported-reason {
-  color: var(--color-neutral-600);
-  font-size: 0.7647rem;
+  color: var(--color-text-muted);
+  font: var(--text-badge);
   margin-bottom: 4px;
 }

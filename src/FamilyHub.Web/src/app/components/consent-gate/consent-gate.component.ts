@@ -1,8 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from '../../services/auth.service';
+import { AuthCardComponent } from '../../shared/ui/auth-card/auth-card.component';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * Гейт согласия ПДн (задача 2.3): текст актуальной версии + чекбокс. Без принятия
@@ -10,7 +12,8 @@ import { AuthService } from '../../services/auth.service';
  */
 @Component({
     selector: 'app-consent-gate',
-    imports: [FormsModule, RouterLink],
+    imports: [AuthCardComponent, LoadingSpinnerComponent, FormsModule, RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './consent-gate.component.html'
 })
 export class ConsentGateComponent implements OnInit {

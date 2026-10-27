@@ -1,4 +1,7 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Globe, Send } from 'lucide';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
+import { IconTileComponent } from '../../../shared/ui/icon-tile/icon-tile.component';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -8,6 +11,7 @@ import { formatDayMonthYear } from '../../../shared/util/date-format';
 import { runBusy } from '../settings-task';
 import { PersonNameComponent } from '../../../shared/person-name/person-name.component';
 import { AvatarComponent } from '../../../shared/avatar/avatar.component';
+import { ThemeSwitchComponent } from '../../../shared/ui/theme-switch/theme-switch.component';
 
 const LINK_POLL_INTERVAL_MS = 4000;
 
@@ -17,11 +21,13 @@ const LINK_POLL_INTERVAL_MS = 4000;
  */
 @Component({
     selector: 'app-settings-profile',
-    imports: [FormsModule, DatePipe, PersonNameComponent, AvatarComponent],
+    imports: [IconTileComponent, LoadingSpinnerComponent, FormsModule, DatePipe, PersonNameComponent, AvatarComponent, ThemeSwitchComponent],
     templateUrl: './settings-profile.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-profile.component.scss'
 })
 export class SettingsProfileComponent implements OnInit, OnDestroy {
+  protected readonly icons = { Globe, Send };
   protected readonly formatDayMonthYear = formatDayMonthYear;
   readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);

@@ -19,7 +19,7 @@ public record BatchJobsStatusResponse(List<BatchJobStatusDto> Jobs, DateTime Che
 /// Прогресс ручных пакетных операций из «Пересборок» — раньше после «поставлено в очередь» админ не видел,
 /// идёт ли работа и сколько осталось.
 /// </summary>
-public class AdminBatchStatusService(AppDbContext db, ILogger<AdminBatchStatusService> logger)
+public class AdminBatchStatusService(AppDbContext db, JobStorage jobStorage, ILogger<AdminBatchStatusService> logger)
 {
     public const string CacheUnits = "cache-units";
     public const string IndicatorFlags = "indicator-flags";
@@ -55,13 +55,14 @@ public class AdminBatchStatusService(AppDbContext db, ILogger<AdminBatchStatusSe
     }
 
     /// <summary>Имена типов задач, которые сейчас стоят в очередях, выполняются или ждут повтора. Сбой
-    /// хранилища Hangfire не роняет страницу — просто «неизвестно, идёт ли» (Active = false).</summary>
+    /// хранилища Hangfire не роняет страницу — просто «неизвестно, идёт ли» (Active = false). Хранилище —
+    /// из DI своего хоста, не общий на процесс JobStorage.Current (см. AdminStatsService.GetHangfireStatsWithRetry).</summary>
     private HashSet<string> ActiveJobTypes()
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         try
         {
-            var monitoring = JobStorage.Current.GetMonitoringApi();
+            var monitoring = jobStorage.GetMonitoringApi();
             foreach (var queue in monitoring.Queues())
                 foreach (var job in monitoring.EnqueuedJobs(queue.Name, 0, MaxJobsToScan))
                     Add(job.Value?.Job);

@@ -1,46 +1,44 @@
+<!-- Дневник самочувствия (DESIGN §3–4, макеты diary-desktop / diary-mobile): шапка (H1, «видите только вы»,
+     «Я / чей дневник», «В отчёт для врача», «+ Запись») → метрики (metric-card) → фильтры-пилюли → поиск →
+     группы по дням: list-card со строками entry-row. Телефон: «+ Запись» — FAB. -->
 <div class="dn-page">
-  <div class="dn-head">
+  <header class="dn-head">
     <div class="dn-head-text">
-      <h4 class="mb-1">Дневник самочувствия</h4>
-      <div class="dn-privacy">
-        <i class="ph-fill ph-lock-simple" aria-hidden="true"></i>
+      <h1 class="dn-title">Дневник самочувствия</h1>
+      <p class="dn-privacy">
+        <app-icon [icon]="icons.Lock" [size]="16" />
         @if (isReadOnly()) {
           Доступ дал(а) {{ ownerName() }} · только чтение · {{ countLabel() }}
         } @else {
           Видите только вы · {{ countLabel() }}
         }
-      </div>
+      </p>
     </div>
-    @if (!isReadOnly()) {
-      <a class="btn btn-secondary dn-report" routerLink="/health/reports" [queryParams]="{ new: 1, diary: 1 }">
-        <i class="ph ph-file-text" aria-hidden="true"></i> В отчёт для врача
-      </a>
-      <button type="button" class="btn btn-primary dn-add" (click)="openForm()">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
-      </button>
-    }
-  </div>
-
-  <!-- ADR-0017 — чипы «Я» / те, кто дал доступ к своему дневнику; появляются, только если такой
-       доступ вообще есть (у большинства пользователей — никогда), чтобы не занимать место зря. -->
-  @if (diarySharedWithMe().length > 0) {
-    <div class="d-flex gap-2 flex-wrap mb-2">
-      <button type="button" class="person-chip-btn" (click)="selectOwner(null)">
-        <app-person-chip
-          [avatarPerson]="{key: auth.me()?.userId ?? 'me', firstName: auth.me()?.firstName, lastName: auth.me()?.lastName}"
-          shortLabel="Я" fullLabel="Мой дневник" [selected]="!isReadOnly()"
-        />
-      </button>
-      @for (s of diarySharedWithMe(); track s.ownerUserId) {
-        <button type="button" class="person-chip-btn" (click)="selectOwner(s.ownerUserId)">
-          <app-person-chip
-            [avatarPerson]="{key: s.ownerUserId, firstName: s.name}"
-            [shortLabel]="s.name" [fullLabel]="s.name" [selected]="ownerUserId() === s.ownerUserId"
-          />
-        </button>
+    <div class="dn-actions">
+      <!-- ADR-0017 — «Я» / те, кто дал доступ к своему дневнику; только если такой доступ вообще есть. -->
+      @if (diarySharedWithMe().length > 0) {
+        <div class="seg seg-inverse" role="group" aria-label="Чей дневник">
+          <button type="button" class="seg-opt" [class.active]="!isReadOnly()" [attr.aria-pressed]="!isReadOnly()"
+                  title="Мой дневник" (click)="selectOwner(null)">Я</button>
+          @for (s of diarySharedWithMe(); track s.ownerUserId) {
+            <button type="button" class="seg-opt" [class.active]="ownerUserId() === s.ownerUserId"
+                    [attr.aria-pressed]="ownerUserId() === s.ownerUserId" (click)="selectOwner(s.ownerUserId)">{{ s.name }}</button>
+          }
+        </div>
+      }
+      @if (!isReadOnly()) {
+        <a class="btn btn-secondary dn-report" routerLink="/health/reports" [queryParams]="{ new: 1, diary: 1 }"
+           aria-label="В отчёт для врача">
+          <app-icon [icon]="icons.FileText" [size]="18" /><span class="dn-report-label">В отчёт для врача</span>
+        </a>
+        @if (isWide()) {
+          <button type="button" class="btn btn-primary" aria-label="Добавить запись" (click)="openForm()">
+            <app-icon [icon]="icons.Plus" [size]="18" />Запись
+          </button>
+        }
       }
     </div>
-  }
+  </header>
 
   @if (loadError(); as err) {
     <div class="alert-danger" role="alert">
@@ -50,116 +48,78 @@
   }
 
   @if (tiles().length > 0 || wellbeingTile()) {
-    <div class="dn-tiles">
+    <section class="dn-tiles" aria-label="Последние замеры">
       @for (t of tiles(); track t.code) {
-        <div class="dn-tile">
-          <div class="dn-tile-head">
-            <i class="ph-duotone" [class]="'ph-' + t.icon" aria-hidden="true"></i>
-            <span class="dn-tile-name">{{ t.name }}</span>
-            <span class="dn-tile-stamp">{{ t.stamp }}</span>
-          </div>
-          <div class="dn-tile-value"><strong>{{ t.value }}</strong><span>{{ t.unit }}</span></div>
+        <!-- Телефон (макет diary-mobile): название, число и бейдж; без бейджа — «единица · дата». -->
+        <app-metric-card class="dn-metric" [label]="isWide() ? t.name + ' · ' + t.stamp : t.name" [value]="t.value"
+                         [unit]="isWide() ? t.unit : null"
+                         [caption]="isWide() ? t.caption : (t.badge ? null : t.unit + ' · ' + t.stamp)">
+          @if (t.badge) { <span badge class="badge badge-warning">{{ t.badge }}</span> }
           @if (t.values.length > 1) {
-            <app-trend-line [values]="t.values" [band]="t.band" [label]="'Динамика: ' + t.name" />
+            <app-trend-line class="dn-trend" [values]="t.values" [band]="t.band" [label]="'Динамика: ' + t.name" />
           }
-          <div class="dn-tile-caption" [class.dn-tile-caption-warn]="t.warn">
-            @if (t.warn) {
-              <i class="ph-fill ph-warning-circle" aria-hidden="true"></i>
-            }
-            {{ t.caption }}
-          </div>
-        </div>
+        </app-metric-card>
       }
       @if (wellbeingTile(); as w) {
-        <div class="dn-tile">
-          <div class="dn-tile-head">
-            <i class="ph-duotone ph-smiley" aria-hidden="true" style="color: var(--color-kind-wellbeing)"></i>
-            <span class="dn-tile-name">Самочувствие</span>
-            <span class="dn-tile-stamp">7 дней</span>
-          </div>
-          <div class="dn-tile-value"><strong>{{ w.value }}</strong></div>
+        <app-metric-card class="dn-metric" [label]="isWide() ? 'Самочувствие · 7 дней' : 'Самочувствие'" [value]="w.value"
+                         [caption]="isWide() ? w.caption : null">
           <div class="dn-bars" aria-hidden="true">
             @for (b of w.bars; track $index) {
               <span class="dn-bar" [style.height.%]="b.height || 8" [class.empty]="b.height === 0"
                     [style.opacity]="b.height === 0 ? 0.25 : 0.35 + b.score * 0.13"></span>
             }
           </div>
-          <div class="dn-tile-caption">{{ w.caption }}</div>
-        </div>
+        </app-metric-card>
       }
-    </div>
+    </section>
   }
 
-  <div class="dn-tools">
-    <div class="seg" role="radiogroup" aria-label="Фильтр по типу">
-      <button type="button" class="seg-opt" role="radio" [class.active]="filter() === null"
-              [attr.aria-checked]="filter() === null" (click)="setFilter(null)">Все</button>
-      @for (k of kinds; track k.kind) {
-        <button type="button" class="seg-opt" role="radio" [class.active]="filter() === k.kind"
-                [attr.aria-checked]="filter() === k.kind" (click)="setFilter(k.kind)">{{ k.filterLabel }}</button>
-      }
-    </div>
-    <app-search-field class="dn-search" placeholder="Поиск по дневнику…" [compact]="true"
-                      [value]="query()" (valueChange)="query.set($event)" />
-  </div>
+  <app-pill-tabs class="dn-filters" [tabs]="filterTabs" [value]="filterId()" (valueChange)="setFilterId($event)"
+                 label="Фильтр по типу записи" />
+  <app-search-field class="dn-search" placeholder="Поиск по дневнику" [compact]="true"
+                    [value]="query()" (valueChange)="query.set($event)" />
 
   @if (loading() && notes().length === 0) {
-    <p class="muted">Загружаем…</p>
+    <app-loading-spinner />
   } @else if (groups().length === 0) {
-    <div class="dn-empty">
+    <section class="card card-lg">
       @if (notes().length === 0) {
-        <i class="ph-duotone ph-notebook" aria-hidden="true"></i>
-        <h5>Пока нет записей</h5>
-        <p class="muted">Записывайте давление, самочувствие, симптомы и приём лекарств — врачу будет проще увидеть картину за период.</p>
-        @if (!isReadOnly()) {
-          <button type="button" class="btn btn-primary" (click)="openForm()">Добавить первую запись</button>
-        }
+        <app-empty-state [icon]="icons.NotebookPen" title="Пока нет записей"
+          text="Записывайте давление, самочувствие, симптомы и приём лекарств — врачу будет проще увидеть картину за период.">
+          @if (!isReadOnly()) {
+            <button type="button" class="btn btn-primary" (click)="openForm()">Добавить первую запись</button>
+          }
+        </app-empty-state>
       } @else {
-        <h5>Ничего не найдено</h5>
-        <p class="muted">Измените фильтр или поисковый запрос.</p>
+        <app-empty-state title="Ничего не найдено" text="Измените фильтр или поисковый запрос." />
       }
-    </div>
+    </section>
   } @else {
     <div class="dn-feed">
       @for (g of groups(); track g.key) {
-        <section>
-          <div class="dn-day">
-            <h5>{{ g.title }}</h5>
-            <span class="dn-day-sub">{{ g.subtitle }}</span>
-            <span class="dn-day-rule"></span>
-          </div>
-          <ul class="dn-list">
+        <section class="dn-day-group" [attr.aria-label]="g.title + ', ' + g.subtitle">
+          <h2 class="dn-day"><strong>{{ g.title }}</strong> {{ g.subtitle }}</h2>
+          <div class="list-card">
             @for (it of g.items; track it.note.id) {
-              <li class="dn-row" [style.--kind-color]="it.color">
-                <span class="dn-time">{{ it.time }}</span>
-                <i class="ph-duotone dn-icon" [class]="'ph-' + it.icon" aria-hidden="true"></i>
-                <!-- Чужой дневник — только чтение: строка не притворяется кнопкой «Изменить». -->
-                <button type="button" class="dn-row-main" (click)="openForm(it.note)"
-                        [attr.tabindex]="isReadOnly() ? -1 : null"
-                        [attr.aria-label]="isReadOnly() ? it.desc.title : 'Изменить запись: ' + it.desc.title">
-                  <span class="dn-row-title">{{ it.desc.title }}</span>
-                  @if (it.desc.subtitle) {
-                    <span class="dn-row-sub dn-sub-inline"> · {{ it.desc.subtitle }}</span>
-                  }
-                  @if (it.flagged) {
-                    <i class="ph ph-file-text dn-flag dn-flag-inline" title="Будет в вопросах к врачу" aria-label="Будет в вопросах к врачу"></i>
-                  }
-                  <span class="dn-row-sub dn-sub-stacked">{{ it.time }}@if (it.desc.subtitle) { · {{ it.desc.subtitle }}}@if (it.flagged) { · <i class="ph ph-file-text dn-flag" aria-hidden="true"></i> в вопросы к врачу}</span>
-                </button>
+              <!-- Чужой дневник — только чтение: строка не открывает форму и без «⋯». -->
+              <app-entry-row [time]="it.time" [icon]="it.icon" [tone]="it.tone" [title]="it.desc.title"
+                             [subtitle]="it.subtitle"
+                             [actionLabel]="isReadOnly() ? null : 'Изменить запись: ' + it.desc.title"
+                             (activated)="openForm(it.note)">
                 @if (it.desc.badge) {
-                  <span class="dn-badge">{{ it.desc.badge }}</span>
+                  <span class="badge badge-neutral">{{ it.desc.badge }}</span>
                 }
                 @if (!isReadOnly()) {
                   <app-action-menu [actions]="it.actions" label="Действия с записью" />
                 }
-              </li>
+              </app-entry-row>
             }
-          </ul>
+          </div>
         </section>
       }
       @if (!query() && filter() === null) {
         @if (noMoreOlder()) {
-          <p class="muted dn-older">Более ранних записей нет.</p>
+          <p class="dn-older-note">Более ранних записей нет.</p>
         } @else {
           <button type="button" class="btn btn-secondary dn-older" [disabled]="loading()" (click)="showOlder()">
             Показать ещё 30 дней
@@ -170,14 +130,12 @@
   }
 
   @if (!isWide() && !isReadOnly()) {
-    <button type="button" class="btn btn-primary dn-fab" (click)="openForm()">
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить запись
-    </button>
+    <app-fab label="Добавить запись" (activated)="openForm()" />
   }
 </div>
 
 @if (isWide()) {
-  <app-side-panel [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'"
+  <app-side-panel [page]="true" backLabel="Дневник" [open]="formOpen()" [title]="editing() ? 'Изменить запись' : 'Новая запись'"
                   width="min(560px, 100vw)" (closed)="requestCloseForm()">
     @if (formOpen()) {
       <div appTrackDirty>

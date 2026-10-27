@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, NavigationStart, NavigationEnd, NavigationError } from '@angular/router';
 import { TelegramService } from './services/telegram.service';
 import { FamilyStateService } from './services/family-state.service';
@@ -7,12 +7,14 @@ import { IntakeStateService } from './services/intake-state.service';
 import { VaccinationStateService } from './services/vaccination-state.service';
 import { BackgroundJobsStateService } from './services/background-jobs-state.service';
 import { AiStatusService } from './services/ai-status.service';
+import { ChatRealtimeService } from './services/chat-realtime.service';
 import { PageActionService } from './services/page-action.service';
 import { BreakpointService } from './services/breakpoint.service';
 import { AuthService } from './services/auth.service';
 import { DevLoggerService } from './services/dev-logger.service';
 import { ApiError, ApiService } from './services/api.service';
 import { PendingInviteService } from './services/pending-invite.service';
+import { PushNotificationService } from './services/push-notification.service';
 import { ToastService } from './shared/toast/toast.service';
 import { DevPanelComponent } from './components/dev-panel/dev-panel.component';
 import { ToastContainerComponent } from './shared/toast/toast-container.component';
@@ -24,11 +26,19 @@ import { AppSearchComponent } from './components/app-search/app-search.component
 import { SearchFieldComponent } from './shared/search-field/search-field.component';
 import { BackgroundJobsDropdownComponent } from './shared/background-jobs-dropdown/background-jobs-dropdown.component';
 import { NotificationBellComponent } from './shared/notification-bell/notification-bell.component';
+import { IconComponent } from './shared/ui/icon/icon.component';
+import { FamilySwitcherComponent } from './shared/ui/family-switcher/family-switcher.component';
+import { Heart, House, MoonStar, Plus, Search, User, Users, X, type IconNode as LucideIconData } from 'lucide';
+import { FamilyRole } from './models/types';
+import { FabComponent } from './shared/ui/fab/fab.component';
+import { ContentPageService } from './services/content-page.service';
+import { ContentPageHostComponent } from './shared/ui/content-page/content-page-host.component';
 
 /** Маршруты без хедера/навигации приложения — вход и согласие ПДн показываются как отдельный экран.
  * /r/:token — публичная страница врача по ссылке на отчёт (смотрит человек без аккаунта).
- * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения. */
-const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin', '/r/'];
+ * /admin — отдельная поверхность (ADR-0009), никогда не показывает обычный таб-бар приложения.
+ * /dev/ui — витрина компонентов редизайна (только dev-сборка). */
+const AUTH_ROUTE_PREFIXES = ['/login', '/consent', '/telegram-bind', '/admin', '/r/', '/dev/ui'];
 
 /** Один пункт саб-меню (дочерний путь + подпись + опциональный бейдж) — общая форма для группы
  * «Здоровье» и плоского списка «Профиль». */
@@ -53,7 +63,7 @@ interface SidebarGroup {
 interface SidebarItem {
   id: string;
   label: string;
-  icon: string;
+  icon: LucideIconData;
   /** Абсолютный путь; для «Семьи» вычисляется динамически (см. familyHref()). */
   path?: string;
   /** Плоский список — «Профиль». */
@@ -64,23 +74,12 @@ interface SidebarItem {
 
 @Component({
     selector: 'app-root',
-    imports: [
-        RouterOutlet,
-        RouterLink,
-        DevPanelComponent,
-        ToastContainerComponent,
-        ConfirmDialogComponent,
-        CookieBannerComponent,
-        AppNoticesComponent,
-        AvatarComponent,
-        AppSearchComponent,
-        SearchFieldComponent,
-        BackgroundJobsDropdownComponent,
-        NotificationBellComponent,
-    ],
+    imports: [RouterOutlet, RouterLink, DevPanelComponent, ToastContainerComponent, ConfirmDialogComponent, CookieBannerComponent, AppNoticesComponent, AvatarComponent, AppSearchComponent, SearchFieldComponent, BackgroundJobsDropdownComponent, NotificationBellComponent, IconComponent, FamilySwitcherComponent, FabComponent, ContentPageHostComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
+
   readonly state = inject(FamilyStateService);
   readonly auth = inject(AuthService);
   readonly notifications = inject(NotificationStateService);
@@ -88,7 +87,9 @@ export class AppComponent implements OnInit {
   readonly vaccinations = inject(VaccinationStateService);
   readonly backgroundJobs = inject(BackgroundJobsStateService);
   readonly ai = inject(AiStatusService);
+  readonly chat = inject(ChatRealtimeService);
   readonly pageAction = inject(PageActionService);
+  readonly contentPages = inject(ContentPageService);
   private readonly breakpoints = inject(BreakpointService);
   private readonly tg = inject(TelegramService);
   private readonly router = inject(Router);
@@ -96,12 +97,14 @@ export class AppComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly pendingInvite = inject(PendingInviteService);
   private readonly toast = inject(ToastService);
+  private readonly push = inject(PushNotificationService);
 
   /** Признак десктопа — существующий BreakpointService (первая брейкпойнт-абстракция в
    * проекте), второй параллельный механизм не заводим (см. .claude/patterns/frontend_web.md). */
   readonly isWide = computed(() => this.breakpoints.tier() === 'wide');
 
-  readonly familySwitcherOpen = signal(false);
+  /** Иконки каркаса (Lucide, DESIGN §2.7). */
+  protected readonly icons = { Heart, House, MoonStar, Plus, Search, User, Users, X };
   /** Мобильная шапка (макет «Screen - Health hub»): по умолчанию заголовок + иконка поиска +
    * колокольчик; клик по лупе разворачивает поле поиска на всю ширину строки вместо заголовка. */
   readonly mobileSearchOpen = signal(false);
@@ -123,12 +126,6 @@ export class AppComponent implements OnInit {
   readonly isHealthHubIndex = computed(() => this.currentUrl() === '/health');
   // Дни рождения — семейный раздел (ссылка из карточки на Главной и из поиска).
   readonly isFamilyActive = computed(() => this.currentUrl().startsWith('/families') || this.currentUrl().startsWith('/birthdays'));
-  /** Активный подпункт «Семьи» в сайдбаре — раньше текущая вкладка семьи не подсвечивалась. */
-  isFamilySubActive(tab: string): boolean {
-    const url = this.currentUrl();
-    const current = new URLSearchParams(url.split('?')[1] ?? '').get('tab') ?? this.familySubItems[0]?.tab;
-    return url.startsWith('/families/') && current === tab;
-  }
   readonly isSettingsActive = computed(() => this.currentUrl().startsWith('/settings'));
 
   /** Группы подпунктов «Здоровье» (редизайн хаба, макет «Screen - Health hub») — те же названия и
@@ -167,30 +164,35 @@ export class AppComponent implements OnInit {
    * см. PR2). «Уведомления» ушли из сайдбара в колокольчик топбара (app-notification-bell) —
    * пятого таба/пункта не заводим (см. .claude/uirework .../handoff-prompt.md). */
   readonly sidebarItems: SidebarItem[] = [
-    { id: 'home', label: 'Главная', icon: 'ph-house', path: '/home' },
-    { id: 'health', label: 'Здоровье', icon: 'ph-heartbeat', path: '/health', groups: this.healthGroups },
-    { id: 'family', label: 'Семья', icon: 'ph-users-three' }, // path вычисляется — см. familyHref()
+    { id: 'home', label: 'Главная', icon: House, path: '/home' },
+    { id: 'health', label: 'Здоровье', icon: Heart, path: '/health', groups: this.healthGroups },
+    { id: 'family', label: 'Семья', icon: Users }, // path вычисляется — см. familyHref()
     {
       id: 'settings',
       label: 'Профиль',
-      icon: 'ph-user',
+      icon: User,
       path: '/settings',
       children: [
         { path: '/settings/profile', label: 'Аккаунт' },
         { path: '/settings/security', label: 'Безопасность' },
-        { path: '/settings/notifications', label: 'Оповещения' },
-        { path: '/settings/data', label: 'Данные и приватность' },
+        { path: '/settings/notifications', label: 'Уведомления' },
+        { path: '/settings/data', label: 'Данные и доступ' },
       ],
     },
   ];
 
-  /** Семейные саб-пункты — фиксированные ярлыки, роут всегда на текущую выбранную семью с ?tab=. */
-  readonly familySubItems: { tab: string; label: string }[] = [
-    { tab: 'members', label: 'Участники' },
-    { tab: 'medkits', label: 'Аптечки' },
-    { tab: 'birthdays', label: 'Дни рождения' },
-    { tab: 'dependents', label: 'Близкие и питомцы' },
-  ];
+  /** Счётчик «Здоровья» в свёрнутом сайдбаре — то, что требует действия (приёмы + прививки), danger. */
+  readonly healthAttention = computed(() => this.intake.attention() + this.vaccinations.attention());
+
+  /** Главная (сам экран, не /notifications) — в мобильной шапке вместо заголовка переключатель семьи. */
+  readonly isHomeIndex = computed(() => this.currentUrl().split('?')[0] === '/home');
+
+  /** Подпись под именем пользователя внизу сайдбара — роль в выбранной семье. */
+  readonly userRoleLabel = computed(() => {
+    const family = this.state.selectedFamily();
+    if (!family) return 'Без семьи';
+    return family.myRole === FamilyRole.Admin ? 'Админ семьи' : 'Участник семьи';
+  });
 
   /** Куда ведёт пункт «Семья» — решённый вопрос №1 плана редизайна: сразу в текущую выбранную
    * семью, а не на список. У нового пользователя без семей активных семей ещё нет — тогда
@@ -230,15 +232,6 @@ export class AppComponent implements OnInit {
     }
     return 'FamilyHub';
   });
-
-  toggleFamilySwitcher(): void {
-    this.familySwitcherOpen.update((v) => !v);
-  }
-
-  selectFamilyAndClose(id: string): void {
-    this.state.selectFamily(id);
-    this.familySwitcherOpen.set(false);
-  }
 
   /** Консервативный дефолт — скрыто, пока первая навигация не подтвердит обратное (без мигания). */
   private readonly onAuthRoute = signal(this.isAuthRoute(this.router.url));
@@ -284,9 +277,17 @@ export class AppComponent implements OnInit {
         void this.vaccinations.refresh();
         this.intake.startPolling();
         this.ai.start();
+        void this.chat.start();
         void this.tryRedeemPendingInvite();
+        // Push-подписка под старый VAPID-ключ (после ротации WebPush__*) — тихо переподписываемся.
+        void this.push.healAfterKeyRotation();
       }
     }, { allowSignalWrites: true });
+
+    // Выход из PWA-сессии: соединение с хабом чата несёт прежнюю личность — закрываем (ADR-0019).
+    effect(() => {
+      if (this.auth.mode === 'pwa' && this.auth.me() === null) void untracked(() => this.chat.stop());
+    });
 
     // Часовой пояс браузера → сервер (время приёма лекарств и «сегодня» считаются в нём): на каждом появлении me.
     effect(() => {
@@ -311,6 +312,7 @@ export class AppComponent implements OnInit {
         void this.vaccinations.refresh();
         this.intake.startPolling();
         this.ai.start();
+        void this.chat.start();
         void this.auth.loadMe();
         void this.tryRedeemPendingInvite();
       }
@@ -380,6 +382,7 @@ export class AppComponent implements OnInit {
       void this.vaccinations.refresh();
       this.intake.startPolling();
       this.ai.start();
+      void this.chat.start();
       return;
     }
 
@@ -402,7 +405,6 @@ export class AppComponent implements OnInit {
         this.onAuthRoute.set(this.isAuthRoute(e.urlAfterRedirects));
         this.currentUrl.set(e.urlAfterRedirects);
         this.mobileSearchOpen.set(false);
-        this.familySwitcherOpen.set(false);
         // Редизайн v2 — бейдж уведомлений: обновляем счётчик на каждой навигации (дёшево, один
         // COUNT-запрос), пока показан таб-бар/сайдбар — покрывает и "прочитано на другом
         // устройстве", не только markNotificationRead в этой же вкладке.

@@ -1,4 +1,10 @@
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Archive, ChevronDown, ChevronUp, Eye, Pill } from 'lucide';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
+import { BackLinkComponent } from '../../shared/back-link/back-link.component';
+import { Component, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { BreakpointService } from '../../services/breakpoint.service';
@@ -23,11 +29,13 @@ interface CourseGroup {
  */
 @Component({
   selector: 'app-intake-courses',
-  imports: [AvatarComponent, IntakeCourseCardComponent, RouterLink],
+  imports: [EmptyStateComponent, IconComponent, IconTileComponent, LoadingSpinnerComponent, AvatarComponent, BackLinkComponent, IntakeCourseCardComponent, RouterLink],
   templateUrl: './intake-courses.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './intake-courses.component.scss',
 })
 export class IntakeCoursesComponent {
+  protected readonly icons = { Archive, ChevronDown, ChevronUp, Eye, Pill };
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly breakpoints = inject(BreakpointService);

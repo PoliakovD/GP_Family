@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiError, ApiService } from '../../services/api.service';
 import { VaccinationStateService, type VaccinationAddRequest } from '../../services/vaccination-state.service';
@@ -11,6 +11,8 @@ import {
 } from '../../models/types';
 import { todayLocal } from '../../shared/util/intake-labels';
 import type { VaccinationSavedInfo } from '../../services/vaccination-state.service';
+import { CalendarCheck, Camera, Check, ListChecks, Paperclip, Syringe, TriangleAlert, X } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 export interface VaccinationSavedEvent {
   /** Заполнено только для «одной прививки»/быстрой отметки — показывает шторку «Сохранено».
@@ -46,11 +48,14 @@ interface CertRow extends VaccinationRecognizedItem {
  */
 @Component({
   selector: 'app-vaccination-add-modal',
-  imports: [AvatarComponent, FormsModule],
+  imports: [AvatarComponent, FormsModule, IconComponent],
   templateUrl: './vaccination-add-modal.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-add-modal.component.scss',
 })
 export class VaccinationAddModalComponent implements OnInit {
+  protected readonly icons = { CalendarCheck, Camera, Check, ListChecks, Paperclip, Syringe, TriangleAlert, X };
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   protected readonly vaccinations = inject(VaccinationStateService);

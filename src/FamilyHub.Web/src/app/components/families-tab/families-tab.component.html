@@ -7,12 +7,12 @@
       [title]="atFamilyLimit() ? 'Достигнут лимит в ' + MAX_FAMILIES_PER_USER + ' созданных семей' : ''"
       (click)="openCreateModal()"
     >
-      <i class="ph-bold ph-plus" aria-hidden="true"></i> Создать
+      <app-icon [icon]="icons.Plus" [size]="18" /> Создать
     </button>
   </div>
 
   @if (atFamilyLimit()) {
-    <p class="muted mb-3">
+    <p class="form-hint mb-3">
       Вы создали {{ createdFamiliesCount() }} из {{ MAX_FAMILIES_PER_USER }} семей — лимит достигнут.
       Удалите одну из существующих, чтобы создать новую.
     </p>
@@ -28,7 +28,7 @@
         placeholder="Например, Ивановы"
         (keydown.enter)="handleCreateFamily()"
       />
-      <p class="muted mb-0">После создания вы сможете пригласить близких по ссылке.</p>
+      <p class="form-hint mb-0">После создания вы сможете пригласить близких по ссылке.</p>
       <div class="d-flex justify-content-end gap-2">
         <button class="btn btn-secondary btn-sm" (click)="closeCreateModal()">Отмена</button>
         <button class="btn btn-primary btn-sm" [disabled]="busy" (click)="handleCreateFamily()">
@@ -42,16 +42,16 @@
     <!-- Первый вход: объясняем, зачем семья, и даём оба пути — создать свою или войти по приглашению. -->
     <div class="card mb-3">
       <h4 class="card-title mb-1">Начните с семьи</h4>
-      <p class="muted mb-2">
+      <p class="form-hint mb-2">
         Семья — это закрытое пространство для близких: общая аптечка, дни рождения и доступ к
         анализам только тем, кому вы разрешите.
       </p>
-      <ul class="muted mb-2">
+      <ul class="form-hint mb-2">
         <li>Создайте семью и пригласите родных по ссылке.</li>
         <li>Или вставьте ниже ссылку-приглашение, которую вам прислали.</li>
       </ul>
       <button class="btn btn-primary align-self-start" [disabled]="atFamilyLimit()" (click)="openCreateModal()">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Создать семью
+        <app-icon [icon]="icons.Plus" [size]="18" /> Создать семью
       </button>
     </div>
   }
@@ -81,16 +81,16 @@
     }
 
     @for (family of state.families(); track family.id) {
-      <a class="card elev-sm mb-2" style="text-decoration:none;color:inherit" [routerLink]="['/families', family.id]">
+      <a class="card mb-2" style="text-decoration:none;color:inherit" [routerLink]="['/families', family.id]">
         <div class="d-flex align-items-center justify-content-between gap-2">
           <strong class="card-title">{{ family.name }}</strong>
-          <i class="ph ph-caret-right" style="color:var(--color-neutral-500)" aria-hidden="true"></i>
+          <app-icon [icon]="icons.ChevronRight" [size]="18" style="color:var(--color-text-muted)" />
         </div>
         <div class="d-flex align-items-center gap-2">
-          <span class="tag" [class.tag-accent]="family.myRole === FamilyRole.Admin" [class.tag-neutral]="family.myRole !== FamilyRole.Admin">
+          <span class="badge badge-neutral">
             {{ roleLabel(family.myRole) }}
           </span>
-          <span class="tag tag-neutral">{{ statusLabel(family.myStatus) }}</span>
+          <span class="badge badge-neutral">{{ statusLabel(family.myStatus) }}</span>
         </div>
       </a>
     }

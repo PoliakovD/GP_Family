@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiError, ApiService } from '../../services/api.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import { HealthNoteCatalog, HealthNoteKind, VaccinationDatePrecision, VaccinationKind } from '../../models/types';
@@ -6,6 +6,8 @@ import { HealthNoteFormComponent } from '../health-note-form/health-note-form.co
 import { VaccinationStateService, type VaccinationSavedInfo } from '../../services/vaccination-state.service';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { formatDayMonthYear } from '../../shared/util/date-format';
+import { Bell, Check, ChevronRight, Thermometer, Zap } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 type QuickKind = 'symptom' | 'temperature';
 
@@ -17,11 +19,14 @@ type QuickKind = 'symptom' | 'temperature';
  */
 @Component({
   selector: 'app-vaccination-saved-sheet',
-  imports: [HealthNoteFormComponent],
+  imports: [HealthNoteFormComponent, IconComponent],
   templateUrl: './vaccination-saved-sheet.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-saved-sheet.component.scss',
 })
 export class VaccinationSavedSheetComponent implements OnInit {
+  protected readonly icons = { Bell, Check, ChevronRight, Thermometer, Zap };
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly vaccinations = inject(VaccinationStateService);

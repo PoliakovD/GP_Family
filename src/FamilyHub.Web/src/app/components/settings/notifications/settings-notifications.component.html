@@ -1,20 +1,22 @@
 @if (auth.me(); as me) {
-  <h2 class="mb-4">Уведомления</h2>
+  <div class="sn">
+  <h1 class="page-title sn-h1">Уведомления</h1>
 
   <!-- Редизайн v3, PR8 — главный push-выключатель в отдельном акцентном блоке-баннере сверху
      (было — обычной строкой внутри списка ниже). -->
   @if (push.isSupported) {
-    <div class="settings-push-banner mb-4" [class.off]="!push.isSubscribed()">
-      <i [class]="push.isSubscribed() ? 'ph-duotone ph-bell' : 'ph-duotone ph-bell-slash'" aria-hidden="true"></i>
-      <div class="flex-fill">
-        <div style="font-weight:600">Уведомления на этом устройстве {{ push.isSubscribed() ? 'включены' : 'выключены' }}</div>
-        <div class="muted" style="font-size:0.8235rem">
+    <!-- Главный выключатель — плашка alert: включено — success, выключено — warning (DESIGN §1). -->
+    <div class="sn-push" [class]="push.isSubscribed() ? 'sn-push alert-success' : 'sn-push alert-warning'">
+      <app-icon [icon]="push.isSubscribed() ? icons.Bell : icons.BellOff" />
+      <div class="sn-push-text">
+        <strong>Уведомления на этом устройстве {{ push.isSubscribed() ? 'включены' : 'выключены' }}</strong>
+        <span>
           @if (push.isSubscribed()) {
             Уведомления о просроченных лекарствах и напоминаниях прямо в браузере/на телефоне.
           } @else {
             Пока выключены, напоминания приходить не будут — даже если типы ниже включены.
           }
-        </div>
+        </span>
       </div>
       <label class="switch">
         <input type="checkbox" [checked]="push.isSubscribed()" [disabled]="pushBusy()" (change)="togglePush()"
@@ -23,41 +25,41 @@
       </label>
     </div>
     @if (permissionDenied && !push.isSubscribed()) {
-      <div class="alert-info mb-4">
+      <div class="alert-info">
         Уведомления запрещены в настройках браузера, и сам он больше не спросит. Нажмите на значок
         замка слева от адреса сайта → «Уведомления» → «Разрешить», затем включите переключатель выше.
       </div>
     }
   } @else if (tg.isInsideTelegram()) {
-    <p class="muted mb-4">Внутри Telegram уведомления приходят от бота. Чтобы получать их и на телефон напрямую, откройте FamilyHub в браузере.</p>
+    <p class="section-text">Внутри Telegram уведомления приходят от бота. Чтобы получать их и на телефон напрямую, откройте FamilyHub в браузере.</p>
   } @else if (iosNeedsInstall) {
-    <div class="alert-info mb-4">
+    <div class="alert-info">
       <strong>На iPhone уведомления работают только из приложения на экране «Домой».</strong><br />
-      В Safari нажмите «Поделиться» <i class="ph ph-export" aria-hidden="true"></i> → «На экран «Домой»»,
+      В Safari нажмите «Поделиться» → «На экран «Домой»»,
       откройте FamilyHub с появившегося значка и вернитесь сюда.
     </div>
   } @else {
-    <p class="muted mb-4">Этот браузер не умеет показывать уведомления. Попробуйте Chrome, Edge или Firefox.</p>
+    <p class="section-text">Этот браузер не умеет показывать уведомления. Попробуйте Chrome, Edge или Firefox.</p>
   }
 
   <!-- Редизайн v3, PR8 — строки сгруппированы по разделу (было — плоская таблица всех типов). -->
   @if (!push.isSupported && !me.hasTelegram) {
-    <p class="muted mb-0">
+    <p class="section-text">
       Нет доступного канала доставки — включите уведомления на устройстве или привяжите Telegram
       на вкладке «Аккаунт», чтобы настроить оповещения по отдельным типам.
     </p>
   } @else if (preferences()) {
-    <div class="settings-notification-header">
+    <div class="settings-notification-header matrix-head">
       <span>Тип уведомления</span>
       @if (push.isSupported) { <span class="text-center">Устройство</span> }
       @if (me.hasTelegram) { <span class="text-center">Telegram</span> }
     </div>
 
-    <div class="d-flex flex-column gap-4">
+    <div class="sn-sections">
       @for (section of sections; track section.name) {
-        <section>
-          <div class="card-kicker mb-2">{{ section.name }}</div>
-          <div class="card" style="padding:0">
+        <section class="section">
+          <h2 class="section-title">{{ section.name }}</h2>
+          <div class="list-card">
             @for (row of section.rows; track row.type) {
               <div class="settings-notification-row">
                 <span>{{ label(row.type) }}</span>
@@ -97,8 +99,9 @@
       <button type="button" class="btn-link" (click)="loadPreferences()">Повторить</button>
     </div>
   } @else {
-    <p class="muted mb-0">Загрузка…</p>
+    <app-loading-spinner />
   }
+  </div>
 } @else {
-  <p>Загрузка…</p>
+  <app-loading-spinner />
 }

@@ -4,6 +4,7 @@ using FamilyHub.Infrastructure.Authorization;
 using FamilyHub.Infrastructure.CurrentUser;
 using FamilyHub.Infrastructure.Telegram;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -28,6 +29,11 @@ public class TelegramMiniAppAuthenticationHandler(
     IUserProvisioningService userProvisioning)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
+    /// <summary>Флаг в HttpContext.Items: initData отклонена именно по сроку — challenge отдаёт
+    /// код init_data_expired, по которому фронт показывает «перезапустите приложение»
+    /// вместо ухода на повторную привязку (аудит security-audit-2026-10, M6).</summary>
+    private const string ExpiredItemKey = "FamilyHub.Telegram.InitDataExpired";
+
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var initData = ExtractInitData();
@@ -37,7 +43,14 @@ public class TelegramMiniAppAuthenticationHandler(
             return AuthenticateResult.Fail("Отсутствует Telegram initData.");
         }
 
-        var result = validator.Validate(initData);
+        var check = validator.Check(initData);
+        if (check.Failure == TelegramInitDataFailure.Expired)
+        {
+            Context.Items[ExpiredItemKey] = true;
+            return AuthenticateResult.Fail("Telegram initData просрочена.");
+        }
+
+        var result = check.Result;
         if (result is null)
         {
             Logger.LogWarning("Telegram Mini App аутентификация отклонена: initData не прошла валидацию ({Path})", Request.Path);
@@ -64,6 +77,13 @@ public class TelegramMiniAppAuthenticationHandler(
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
 
         return AuthenticateResult.Success(ticket);
+    }
+
+    protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
+    {
+        Response.StatusCode = StatusCodes.Status401Unauthorized;
+        if (Context.Items.ContainsKey(ExpiredItemKey))
+            await Response.WriteAsJsonAsync(new { code = "init_data_expired" });
     }
 
     private string? ExtractInitData()

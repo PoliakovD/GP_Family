@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -7,6 +7,8 @@ import { FamilyRole, MemberStatus, MAX_FAMILIES_PER_USER } from '../../models/ty
 import { ToastService } from '../../shared/toast/toast.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { ChevronRight, Plus } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 /** Людям приходит ссылка вида https://…/join/CODE, а не голый код — принимаем и то и другое. */
 export function extractInviteCode(raw: string): string {
@@ -17,10 +19,13 @@ export function extractInviteCode(raw: string): string {
 
 @Component({
     selector: 'app-families-tab',
-    imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent],
+    imports: [FormsModule, RouterLink, ModalComponent, LoadingSpinnerComponent, IconComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './families-tab.component.html'
 })
 export class FamiliesTabComponent {
+  protected readonly icons = { ChevronRight, Plus };
+
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);

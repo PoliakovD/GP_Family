@@ -1,102 +1,101 @@
 @if (auth.me(); as me) {
-  <h2 class="mb-1">Безопасность</h2>
-  <p class="muted mb-4">Пароль и активные сессии. Медицинские данные доступны только с этих устройств.</p>
+  <div class="ss">
+  <header class="ss-head">
+    <h1 class="page-title ss-h1">Безопасность</h1>
+    <p class="page-sub">Пароль и активные сессии. Медицинские данные доступны только с этих устройств.</p>
+  </header>
 
   <!-- Редизайн v3, PR8 — двухколоночная раскладка (Пароль/Устройства) на широких экранах вместо
      трёх последовательных секций во всю ширину; на узких те же блоки стеком (см. .scss). -->
   <div class="settings-security-columns">
-    <section class="settings-security-col-password">
-      <div class="card-kicker mb-2">Пароль</div>
+    <section class="section settings-security-col-password" aria-labelledby="ss-pass">
+      <h2 class="section-title" id="ss-pass">Пароль</h2>
       @if (me.hasPassword) {
         <div class="card">
-          <form (ngSubmit)="changePassword()">
+          <form class="ss-form" (ngSubmit)="changePassword()">
             <label class="form-label" for="current-password">Текущий пароль</label>
             <input
-              id="current-password" class="input mb-2" type="password" name="currentPassword"
+              id="current-password" class="input" type="password" name="currentPassword"
               [(ngModel)]="currentPassword" required autocomplete="current-password" />
 
             <label class="form-label" for="new-password">Новый пароль</label>
             <input
-              id="new-password" class="input mb-2" type="password" name="newPassword"
+              id="new-password" class="input" type="password" name="newPassword"
               [(ngModel)]="newPassword" required minlength="8" maxlength="100"
               autocomplete="new-password" />
 
             <!-- Живой чек-лист (редизайн v3, PR8) — кнопка активна, когда все требования
                выполнены; раньше была просто выцветшей без объяснения, почему не нажимается. -->
-            <ul class="settings-password-checklist mb-2">
+            <ul class="settings-password-checklist">
               <li [class.done]="passwordChecks.length">
-                <i [class]="passwordChecks.length ? 'ph-fill ph-check-circle' : 'ph ph-circle'" aria-hidden="true"></i>
+                <app-icon [icon]="passwordChecks.length ? icons.CircleCheck : icons.Circle" [size]="16" />
                 от 8 символов
               </li>
               <li [class.done]="passwordChecks.mixedCase">
-                <i [class]="passwordChecks.mixedCase ? 'ph-fill ph-check-circle' : 'ph ph-circle'" aria-hidden="true"></i>
+                <app-icon [icon]="passwordChecks.mixedCase ? icons.CircleCheck : icons.Circle" [size]="16" />
                 строчная и заглавная буквы
               </li>
               <li [class.done]="passwordChecks.digit">
-                <i [class]="passwordChecks.digit ? 'ph-fill ph-check-circle' : 'ph ph-circle'" aria-hidden="true"></i>
+                <app-icon [icon]="passwordChecks.digit ? icons.CircleCheck : icons.Circle" [size]="16" />
                 цифра
               </li>
             </ul>
 
             <label class="form-label" for="new-password-repeat">Повторите новый пароль</label>
             <input
-              id="new-password-repeat" class="input mb-2" type="password" name="newPasswordRepeat"
+              id="new-password-repeat" class="input" type="password" name="newPasswordRepeat"
               [(ngModel)]="newPasswordRepeat" required autocomplete="new-password" />
             @if (newPasswordRepeat && newPassword !== newPasswordRepeat) {
-              <p class="field-hint field-hint-error mb-2">Пароли не совпадают.</p>
+              <p class="field-hint field-hint-error">Пароли не совпадают.</p>
             }
 
             <button type="submit" class="btn btn-primary" [disabled]="busy() || !passwordFormValid">Сменить пароль</button>
           </form>
         </div>
       } @else {
-        <p class="muted mb-0">
+        <p class="section-text">
           У аккаунта ещё нет пароля — сначала привяжите email на вкладке
           <a routerLink="/settings/profile">«Аккаунт»</a>.
         </p>
       }
     </section>
 
-    <section class="settings-security-col-devices">
+    <section class="section settings-security-col-devices" aria-labelledby="ss-dev">
       @if (auth.mode === 'pwa') {
-        <div class="card-kicker mb-2">Устройства @if (sessions(); as list) { <span class="muted">· {{ list.length }}</span> }</div>
+        <h2 class="section-title" id="ss-dev">Устройства @if (sessions(); as list) { <span class="ss-count">{{ list.length }}</span> }</h2>
         @if (sessions(); as list) {
           @if (list.length === 0) {
-            <p class="muted mb-0">Активных сессий не найдено.</p>
+            <p class="section-text">Активных сессий не найдено.</p>
           } @else {
-            <ul class="list-unstyled mb-2">
+            <ul class="list-card ss-sessions">
               @for (s of list; track s.id) {
-                <li class="card mb-2">
-                  <div class="d-flex align-items-center justify-content-between gap-2">
-                    <div>
-                      <p class="mb-0">
-                        <i class="ph ph-device-mobile" aria-hidden="true"></i>
-                        {{ s.device }}
-                        @if (s.isCurrent) { <span class="tag tag-accent">Это устройство</span> }
-                      </p>
-                      <p class="muted mb-0">
-                        {{ s.ipAddress ?? '—' }} · последняя активность {{ s.lastSeenAt | date: 'd MMM, HH:mm' }}
-                      </p>
+                <li class="settings-row">
+                  <app-icon-tile [icon]="icons.Smartphone" tone="neutral" size="sm" />
+                  <div class="settings-row-text">
+                    <div class="settings-row-title">
+                      {{ s.device }}
+                      @if (s.isCurrent) { <span class="badge badge-accent">Это устройство</span> }
                     </div>
-                    @if (!s.isCurrent) {
-                      <button
-                        type="button" class="btn btn-secondary btn-sm" [disabled]="sessionsBusy()"
-                        (click)="revokeSession(s.id)">
-                        Завершить
-                      </button>
-                    }
+                    <div class="settings-row-sub">
+                      {{ s.ipAddress ?? '—' }} · последняя активность {{ s.lastSeenAt | date: 'd MMM, HH:mm' }}
+                    </div>
                   </div>
+                  @if (!s.isCurrent) {
+                    <button type="button" class="btn btn-secondary" [disabled]="sessionsBusy()" (click)="revokeSession(s.id)">
+                      Завершить
+                    </button>
+                  }
                 </li>
               }
             </ul>
           }
-          <button type="button" class="btn btn-danger btn-sm" (click)="logoutAll()">Выйти со всех устройств</button>
+          <button type="button" class="btn btn-danger ss-left" (click)="logoutAll()">Выйти со всех устройств</button>
         } @else {
-          <p class="muted mb-0">Загрузка…</p>
+          <app-loading-spinner />
         }
       } @else {
-        <div class="card-kicker mb-2">Устройства</div>
-        <p class="muted mb-0">
+        <h2 class="section-title">Устройства</h2>
+        <p class="section-text">
           В Telegram Mini App нет отдельных сессий — доступ проверяется на каждый запрос. Список
           устройств доступен только при входе через браузер (PWA).
         </p>
@@ -105,30 +104,35 @@
   </div>
 
   @if (me.hasTelegram && me.hasPassword) {
-    <section class="mb-2 mt-4">
-      <div class="card-kicker mb-2">Telegram</div>
-      <p class="muted mb-2">
+    <section class="section" aria-labelledby="ss-tg">
+      <h2 class="section-title" id="ss-tg">Telegram</h2>
+      <p class="section-text">
         Отвяжите Telegram, если аккаунт мог быть скомпрометирован — доступ из Telegram
         пропадёт сразу, войти можно будет по email и паролю.
       </p>
       @if (!revokeTelegramConfirmVisible()) {
-        <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="revokeTelegramConfirmVisible.set(true)">
+        <button type="button" class="btn btn-secondary ss-left" [disabled]="busy()" (click)="revokeTelegramConfirmVisible.set(true)">
           Отвязать Telegram…
         </button>
       } @else {
-        <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="revokeTelegram()">
+        <div class="ss-confirm">
+        <button type="button" class="btn btn-danger" [disabled]="busy()" (click)="revokeTelegram()">
           Точно отвязать
         </button>
-        <button type="button" class="btn-link" (click)="revokeTelegramConfirmVisible.set(false)">Отмена</button>
+        <button type="button" class="btn btn-ghost" (click)="revokeTelegramConfirmVisible.set(false)">Отмена</button>
+        </div>
       }
     </section>
   }
 
   @if (me.provider === 'email') {
-    <section class="mt-4">
-      <button class="btn btn-secondary" (click)="logout()">Выйти</button>
+    <section>
+      <button class="btn btn-secondary" (click)="logout()">
+        <app-icon [icon]="icons.LogOut" [size]="18" />Выйти
+      </button>
     </section>
   }
+  </div>
 } @else {
-  <p>Загрузка…</p>
+  <app-loading-spinner />
 }

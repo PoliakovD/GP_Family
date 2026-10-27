@@ -1,4 +1,4 @@
-import { Component, inject, input, output } from '@angular/core';
+import { Component, inject, input, output, ChangeDetectionStrategy } from '@angular/core';
 import type { MedicalRecord } from '../../models/types';
 import { ApiError, ApiService } from '../../services/api.service';
 import { FamilyStateService } from '../../services/family-state.service';
@@ -7,6 +7,9 @@ import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import { formatDayMonthYear } from '../../shared/util/date-format';
 import { isOnlyMe, isVisibleToFamily } from './record-access';
+import { House, Lock, UsersRound } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 
 /**
  * Шторка «Настройки доступа» одной медзаписи (вынесена из MedicalRecordsPanelComponent).
@@ -16,10 +19,14 @@ import { isOnlyMe, isVisibleToFamily } from './record-access';
 @Component({
   selector: 'app-record-access-sheet',
   standalone: true,
-  imports: [BottomSheetComponent],
+  imports: [BottomSheetComponent, IconComponent, IconTileComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './record-access-sheet.component.html',
+  styleUrl: './record-access-sheet.component.scss',
 })
 export class RecordAccessSheetComponent {
+  protected readonly icons = { House, Lock, UsersRound };
+
   readonly record = input.required<MedicalRecord>();
   /** Семьи с общим шарингом (L1). */
   readonly shares = input.required<readonly string[]>();

@@ -1,22 +1,26 @@
 <div class="kb-article">
   <!-- Название показателя показывает контейнер (шапка боковой панели / bottom-sheet / back-link
        на мобильном) — здесь оно больше не дублируется, только источник мелкой строкой. -->
-  @if (specimenLabel(); as sl) {
-    <div class="kb-specimen">Биоматериал: {{ sl }}</div>
+  @if (article(); as a) {
+    <div class="kb-meta">
+      @if (a.specimenDisplayName) { <span class="badge badge-neutral">{{ a.specimenDisplayName }}</span> }
+      @if (a.defaultUnit) { <span class="badge badge-neutral">{{ a.defaultUnit }}</span> }
+      @if (a.loincCode) { <span class="badge badge-neutral">LOINC {{ a.loincCode }}</span> }
+    </div>
   }
 
   @if (reading(); as r) {
     <!-- Отдельная рамка: крупное значение + статус, шкала с границами нормы, отклонение. -->
     <div class="kb-value-frame">
       <div class="kb-value-row">
-        <span class="kb-value" [class.kb-value-bad]="r.flag !== IndicatorFlag.Normal && r.flag !== IndicatorFlag.Unknown">{{ r.valueRaw }}</span>
+        <span class="kb-value">{{ r.valueRaw }}</span>
         @if (r.unit) {
           <span class="kb-value-unit">{{ r.unit }}</span>
         }
-        <span class="kb-value-chip"><app-status-chip [flag]="r.flag" /></span>
+        <span class="kb-value-chip"><app-status-chip [flag]="r.flag" [showUnknown]="true" /></span>
       </div>
       @if (scaleLow() !== null && scaleHigh() !== null) {
-        <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" [labels]="true" />
+        <app-reference-scale [value]="r.valueNumeric" [low]="scaleLow()" [high]="scaleHigh()" [unit]="r.unit" [flag]="r.flag" [labels]="true" [valueLabel]="false" />
         <!-- Это справочная норма; в таблице записи — норма из бланка лаборатории. Подписываем, чтобы
              расхождение не выглядело ошибкой. -->
         <div class="kb-value-norm">справочная норма {{ normText() }} · в бланке лаборатории может отличаться</div>
@@ -35,94 +39,100 @@
        записи (canEdit) — у безличной статьи справочника (чип "что смотрят вместе", каталог)
        редактировать нечего. -->
   @if (canEdit() && !editing()) {
-    <div class="d-flex gap-1">
-      <button type="button" class="btn btn-ghost btn-sm" title="Исправить" (click)="startEdit.emit()">
-        <i class="ph ph-pencil-simple" aria-hidden="true"></i> Исправить
+    <div class="kb-edit-actions">
+      <button type="button" class="btn btn-ghost" (click)="startEdit.emit()">
+        <app-icon [icon]="icons.Pencil" [size]="18" />Исправить
       </button>
-      <button type="button" class="btn btn-ghost btn-sm" title="Удалить" (click)="requestDelete.emit()">
-        <i class="ph ph-trash" aria-hidden="true"></i> Удалить
+      <button type="button" class="btn btn-ghost" (click)="requestDelete.emit()">
+        <app-icon [icon]="icons.Trash2" [size]="18" />Удалить
       </button>
     </div>
   }
   @if (editing() && editForm(); as f) {
-    <div class="d-flex flex-column gap-1">
+    <div class="kb-edit-form">
       <input class="input" [(ngModel)]="f.displayName" placeholder="Название показателя" aria-label="Название показателя (обязательно)" />
-      <div class="d-flex gap-1">
-        <input class="input" [ngModel]="f.valueRaw" (ngModelChange)="f.valueRaw = $event" placeholder="Значение" aria-label="Значение" style="flex:1" />
-        <input class="input" [ngModel]="f.unit" (ngModelChange)="f.unit = $event" placeholder="Единица" aria-label="Единица измерения" style="flex:1" />
+      <div class="kb-edit-row">
+        <input class="input" [ngModel]="f.valueRaw" (ngModelChange)="f.valueRaw = $event" placeholder="Значение" aria-label="Значение" />
+        <input class="input" [ngModel]="f.unit" (ngModelChange)="f.unit = $event" placeholder="Единица" aria-label="Единица измерения" />
       </div>
-      <div class="d-flex gap-1">
-        <input class="input" [ngModel]="f.refLowText" (ngModelChange)="f.refLowText = $event" placeholder="Норма от" aria-label="Норма от" style="flex:1" />
-        <input class="input" [ngModel]="f.refHighText" (ngModelChange)="f.refHighText = $event" placeholder="Норма до" aria-label="Норма до" style="flex:1" />
+      <div class="kb-edit-row">
+        <input class="input" [ngModel]="f.refLowText" (ngModelChange)="f.refLowText = $event" placeholder="Норма от" aria-label="Норма от" />
+        <input class="input" [ngModel]="f.refHighText" (ngModelChange)="f.refHighText = $event" placeholder="Норма до" aria-label="Норма до" />
       </div>
       <input class="input" [ngModel]="f.refText" (ngModelChange)="f.refText = $event" placeholder="Норма текстом (если не число)" aria-label="Норма текстом, если не число" />
-      <div class="d-flex gap-2">
-        <button type="button" class="btn btn-primary btn-sm" [disabled]="saving()" (click)="saveEdit.emit()">Сохранить</button>
-        <button type="button" class="btn btn-ghost btn-sm" [disabled]="saving()" (click)="cancelEdit.emit()">Отмена</button>
+      <div class="kb-edit-row">
+        <button type="button" class="btn btn-primary" [disabled]="saving()" (click)="saveEdit.emit()">Сохранить</button>
+        <button type="button" class="btn btn-ghost" [disabled]="saving()" (click)="cancelEdit.emit()">Отмена</button>
       </div>
     </div>
   }
 
   @if (article(); as a) {
     @if (a.plainExplanation) {
-      <section class="kb-section">
-        <h6 class="kb-section-title">Что это</h6>
-        <p class="kb-text">{{ a.plainExplanation }}</p>
-      </section>
+      <div class="kb-lead">
+        <span class="kb-lead-label">Что это</span>
+        <p class="kb-lead-text">{{ a.plainExplanation }}</p>
+      </div>
     }
 
     @if (a.refRanges.length > 0) {
       <section class="kb-section">
-        <h6 class="kb-section-title">Нормы</h6>
+        <h3 class="kb-section-title">Нормы</h3>
         @if (matchedRange(); as mr) {
           <!-- Строка, подходящая полу и возрасту пациента, подсвечена; остальные — под раскрытием. -->
-          <div class="kb-norm-row kb-norm-row-match">
-            <i [class]="normGroupIcon(mr)" aria-hidden="true"></i>
-            <span class="kb-norm-label">{{ normGroupLabel(mr) }}</span>
-            <strong class="kb-norm-value">{{ normValueLabel(mr) }}</strong>
+          <div class="kb-norms">
+            <div class="kb-norm-row kb-norm-row-match">
+              <app-icon [icon]="normGroupIcon(mr)" [size]="18" />
+              <span class="kb-norm-label">{{ normGroupLabel(mr) }}</span>
+              <strong class="kb-norm-value">{{ normValueLabel(mr) }}</strong>
+            </div>
           </div>
           @if (sourceLabel(mr); as sd) {
             <div class="kb-norm-source">Источник норм: {{ sd }}</div>
           }
           @if (otherRanges().length > 0) {
             <app-expandable title="Нормы для других возрастов" [count]="otherRanges().length">
-              @for (r of otherRanges(); track $index) {
-                <div class="kb-norm-row">
-                  <i [class]="normGroupIcon(r)" aria-hidden="true"></i>
-                  <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
-                  <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
-                </div>
-              }
+              <div class="kb-norms">
+                @for (r of otherRanges(); track $index) {
+                  <div class="kb-norm-row">
+                    <app-icon [icon]="normGroupIcon(r)" [size]="18" />
+                    <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
+                    <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
+                  </div>
+                }
+              </div>
             </app-expandable>
           }
         } @else {
-          @for (r of a.refRanges; track $index) {
-            <div class="kb-norm-row">
-              <i [class]="normGroupIcon(r)" aria-hidden="true"></i>
-              <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
-              <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
-            </div>
-          }
+          <div class="kb-norms">
+            @for (r of a.refRanges; track $index) {
+              <div class="kb-norm-row">
+                <app-icon [icon]="normGroupIcon(r)" [size]="18" />
+                <span class="kb-norm-label">{{ normGroupLabel(r) }}</span>
+                <strong class="kb-norm-value">{{ normValueLabel(r) }}</strong>
+              </div>
+            }
+          </div>
         }
       </section>
     }
 
     @if (a.whyMeasured || a.lowMeans || a.highMeans) {
       <section class="kb-section">
-        <h6 class="kb-section-title">На что влияет</h6>
+        <h3 class="kb-section-title">На что влияет</h3>
         @if (a.whyMeasured) {
           <p class="kb-text">{{ a.whyMeasured }}</p>
         }
         <!-- Ниже/выше нормы — отдельными абзацами со стрелкой, а не одной строкой через двоеточие. -->
         @if (a.lowMeans) {
           <p class="kb-effect">
-            <i class="ph-fill ph-arrow-down" aria-hidden="true"></i>
+            <app-icon [icon]="icons.ArrowDown" [size]="18" [strokeWidth]="2.5" />
             <span><strong>Ниже нормы</strong> — {{ a.lowMeans }}</span>
           </p>
         }
         @if (a.highMeans) {
           <p class="kb-effect">
-            <i class="ph-fill ph-arrow-up" aria-hidden="true"></i>
+            <app-icon [icon]="icons.ArrowUp" [size]="18" [strokeWidth]="2.5" />
             <span><strong>Выше нормы</strong> — {{ a.highMeans }}</span>
           </p>
         }
@@ -131,7 +141,7 @@
 
     @if (a.related.length > 0) {
       <section class="kb-related">
-        <h6 class="kb-related-title">Что смотрят вместе</h6>
+        <h3 class="kb-related-title">Что смотрят вместе</h3>
         <div class="kb-related-chips">
           @for (rel of a.related; track rel.displayName) {
             @if (rel.id) {
@@ -139,14 +149,14 @@
                 {{ rel.displayName }}
               </button>
             } @else {
-              <span class="kb-related-chip" style="opacity:0.6">{{ rel.displayName }}</span>
+              <span class="kb-related-chip kb-related-chip-off">{{ rel.displayName }}</span>
             }
           }
         </div>
       </section>
     }
   } @else {
-    <p class="muted kb-section">Справка по этому показателю пока не заполнена.</p>
+    <p class="kb-note">Справка по этому показателю пока не заполнена.</p>
   }
 
   @if (hasEnoughHistory() || (reading() && article())) {
@@ -155,8 +165,8 @@
            уже строго по этому же пациенту, кнопка только показывает/прячет её. Кнопки — на всю
            ширину компонента. -->
       @if (hasEnoughHistory()) {
-        <button type="button" class="btn btn-primary w-100" [class.active]="dynamicsOpen()" (click)="dynamicsOpen.set(!dynamicsOpen())">
-          <i class="ph ph-chart-line" aria-hidden="true"></i> Динамика по времени
+        <button type="button" class="btn btn-primary w-100" [attr.aria-expanded]="dynamicsOpen()" (click)="dynamicsOpen.set(!dynamicsOpen())">
+          <app-icon [icon]="icons.ChartLine" [size]="18" />Динамика по времени
         </button>
         @if (dynamicsOpen()) {
           <div class="kb-dynamics">
@@ -172,8 +182,9 @@
 
   @if (article(); as a) {
     <p class="kb-disclaimer">
-      Статья из общего справочника FamilyHub, обновлена {{ updatedText(a.updatedAt) }}.
-      Не диагноз — трактовку даёт врач.
+      <app-icon [icon]="icons.Info" [size]="16" />
+      <span>Статья из общего справочника FamilyHub, обновлена {{ updatedText(a.updatedAt) }}.
+      Не диагноз — трактовку даёт врач.</span>
     </p>
   }
 </div>

@@ -1,9 +1,9 @@
 <div class="vp-page">
   @if (!pageAction.immersive()) {
     <div class="vp-head">
-      <h2 class="mb-0">Прививки</h2>
+      <h1 class="vp-title">Прививки</h1>
       <button type="button" class="btn btn-primary vp-new" (click)="newVaccination()">
-        <i class="ph-bold ph-plus" aria-hidden="true"></i> Добавить прививку
+        <app-icon [icon]="plusIcon" [size]="18" />Добавить прививку
       </button>
     </div>
   }
@@ -12,13 +12,13 @@
 </div>
 
 @if (isWide()) {
-  <app-side-panel [open]="vaccinations.addRequest() !== null" title="Добавить прививки" width="min(880px, 100vw)" (closed)="vaccinations.closeAdd()">
+  <app-side-panel [page]="true" backLabel="Прививки" pageWidth="960px" [open]="vaccinations.addRequest() !== null" title="Добавить прививки" (closed)="vaccinations.closeAdd()">
     @if (vaccinations.addRequest(); as request) {
       <app-vaccination-add-modal [request]="request" (saved)="onAdded($event)" (cancelled)="vaccinations.closeAdd()" />
     }
   </app-side-panel>
 
-  <app-side-panel [open]="vaccinations.savedInfo() !== null" title="Прививка сохранена" width="min(420px, 100vw)" (closed)="vaccinations.closeSaved()">
+  <app-side-panel [page]="true" backLabel="Прививки" [open]="vaccinations.savedInfo() !== null" title="Прививка сохранена" (closed)="vaccinations.closeSaved()">
     @if (vaccinations.savedInfo(); as info) {
       <app-vaccination-saved-sheet [info]="info" (closed)="vaccinations.closeSaved()" />
     }

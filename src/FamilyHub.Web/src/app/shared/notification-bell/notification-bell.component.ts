@@ -1,5 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Bell } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 import { NotificationStateService } from '../../services/notification-state.service';
 
 /**
@@ -11,17 +13,19 @@ import { NotificationStateService } from '../../services/notification-state.serv
 @Component({
   selector: 'app-notification-bell',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, IconComponent],
   template: `
-    <a routerLink="/notifications" class="btn btn-ghost btn-icon notification-bell" aria-label="Уведомления" title="Уведомления">
-      <i class="ph ph-bell" aria-hidden="true"></i>
+    <a routerLink="/notifications" class="btn btn-icon notification-bell" aria-label="Уведомления" title="Уведомления">
+      <app-icon [icon]="bell" />
       @if (notifications.unread() > 0) {
-        <span class="notification-bell-badge">{{ notifications.unread() }}</span>
+        <span class="count-badge notification-bell-badge">{{ notifications.unread() }}</span>
       }
     </a>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-bell.component.scss',
 })
 export class NotificationBellComponent {
   readonly notifications = inject(NotificationStateService);
+  protected readonly bell = Bell;
 }

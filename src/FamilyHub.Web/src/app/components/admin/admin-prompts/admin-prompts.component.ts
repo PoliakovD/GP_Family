@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, PromptSlot, PromptVersion } from '../../../services/admin-api.service';
@@ -6,6 +6,7 @@ import { TextDiffLine, diffLines } from '../shared/text-diff';
 import { HasUnsavedChanges } from '../../../services/unsaved-changes.guard';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * «Настройки → Промпты»: версии промптов конвейера (создание/откат — ничего не удаляется) и
@@ -18,13 +19,16 @@ import { ToastService } from '../../../shared/toast/toast.service';
  */
 @Component({
     selector: 'app-admin-prompts',
-    imports: [FormsModule, DatePipe, JsonPipe],
+    imports: [FormsModule, DatePipe, JsonPipe, LoadingSpinnerComponent],
     templateUrl: './admin-prompts.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
-      .prompt-diff { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8235rem;
+    .x-text-caption { font: var(--text-caption); }
+
+      .prompt-diff { font: var(--text-caption); font-family: var(--font-mono);
         white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; margin: 0; }
-      .prompt-diff-added { background: color-mix(in srgb, var(--color-status-ok-text) 14%, transparent); }
-      .prompt-diff-removed { background: color-mix(in srgb, var(--color-status-danger-text) 14%, transparent);
+      .prompt-diff-added { background: color-mix(in srgb, var(--color-success) 14%, transparent); }
+      .prompt-diff-removed { background: color-mix(in srgb, var(--color-danger) 14%, transparent);
         text-decoration: line-through; }
     `]
 })

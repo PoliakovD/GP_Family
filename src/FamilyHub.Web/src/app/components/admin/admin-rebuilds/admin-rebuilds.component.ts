@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import {
@@ -11,6 +11,7 @@ import {
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const REBUILD_POLL_INTERVAL_MS = 2000;
 /** Пакетные операции идут минутами — опрашиваем реже, только пока какая-то активна. */
@@ -28,7 +29,8 @@ const BATCH_POLL_INTERVAL_MS = 5000;
  */
 @Component({
     selector: 'app-admin-rebuilds',
-    imports: [DatePipe, RouterLink, AdminStatusPipe],
+    imports: [DatePipe, RouterLink, AdminStatusPipe, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-rebuilds.component.html'
 })
 export class AdminRebuildsComponent implements OnInit, OnDestroy {

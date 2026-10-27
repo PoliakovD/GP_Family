@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ApiError, ApiService } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
 import { DoctorReport, DoctorReportLinkStatus } from '../../models/types';
@@ -9,6 +9,8 @@ import {
   DEFAULT_SHARE_DAYS, SHARE_DAY_OPTIONS, dayMonthFromIso, expiryPreview, reportUrl,
 } from '../../shared/util/report-labels';
 import { shareLink } from '../../shared/util/share-link';
+import { Copy } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 /**
  * Диалог ссылки для врача. Два состояния: «выбрать срок» (создать / продлить / выпустить новую) и
@@ -18,32 +20,32 @@ import { shareLink } from '../../shared/util/share-link';
  */
 @Component({
   selector: 'app-doctor-report-link-dialog',
-  imports: [ModalComponent],
+  imports: [ModalComponent, IconComponent],
   template: `
     <app-modal [title]="title()" [open]="report() !== null" (closed)="closed.emit()">
       @if (ready(); as r) {
-        <p class="muted mb-2">
+        <p class="form-hint mb-2">
           Ссылка работает до {{ expires(r) }}. Врач откроет отчёт без регистрации; отозвать доступ можно в любой момент.
         </p>
         <div class="link-box mb-2">{{ url(r) }}</div>
         <div class="d-flex gap-2 mb-2">
           <button type="button" class="btn btn-primary flex-grow-1" (click)="share(r)">Поделиться</button>
           <button type="button" class="btn btn-secondary btn-icon" title="Скопировать ссылку" aria-label="Скопировать ссылку" (click)="copy(r)">
-            <i class="ph ph-copy" aria-hidden="true"></i>
+            <app-icon [icon]="icons.Copy" [size]="18" />
           </button>
         </div>
         <div class="d-flex justify-content-end">
           <button type="button" class="btn btn-secondary btn-sm" (click)="closed.emit()">Готово</button>
         </div>
       } @else {
-        <p class="muted mb-2">{{ intro() }}</p>
+        <p class="form-hint mb-2">{{ intro() }}</p>
         <div class="seg mb-1" role="radiogroup" aria-label="Срок ссылки">
           @for (d of options; track d) {
             <button type="button" class="seg-opt dr-seg" role="radio" [class.active]="days() === d"
                     [attr.aria-checked]="days() === d" (click)="days.set(d)">{{ d }} дней</button>
           }
         </div>
-        <p class="muted mb-3">Ссылка будет работать до {{ preview() }}.</p>
+        <p class="form-hint mb-3">Ссылка будет работать до {{ preview() }}.</p>
         @if (error(); as e) {
           <div class="alert-danger mb-2" role="alert">{{ e }}</div>
         }
@@ -56,23 +58,23 @@ import { shareLink } from '../../shared/util/share-link';
       }
     </app-modal>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .link-box {
       padding: 8px 12px;
-      background: var(--color-paper);
+      background: var(--color-surface);
       border: 1px solid var(--color-divider);
       border-radius: var(--radius-md);
-      font-family: monospace;
-      font-size: var(--font-size-meta);
+      font: var(--text-body-sm);
+      font-family: var(--font-mono);
       word-break: break-all;
       user-select: all;
     }
-    .dr-seg { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-    .dr-seg + .dr-seg { border-left: 1px solid var(--color-divider); }
-    .dr-seg.active { color: var(--color-bg); background: var(--color-accent); }
   `,
 })
 export class DoctorReportLinkDialogComponent {
+  protected readonly icons = { Copy };
+
   private readonly api = inject(ApiService);
   private readonly tg = inject(TelegramService);
   private readonly toast = inject(ToastService);

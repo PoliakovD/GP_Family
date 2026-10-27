@@ -1,13 +1,19 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { NotificationStateService } from '../../services/notification-state.service';
 import { type AppNotification } from '../../models/types';
-import { relatedEntityRoute } from '../../shared/util/related-kind-route';
+import { relatedEntityQueryParams, relatedEntityRoute } from '../../shared/util/related-kind-route';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
-import { notificationTypeIcon, notificationTypeLabel } from '../../shared/util/notification-type-labels';
+import { notificationTypeIcon, notificationTypeLabel, notificationTypeTone } from '../../shared/util/notification-type-labels';
+import { Bell, CheckCheck, ChevronRight } from 'lucide';
+import type { IconNode as LucideIconData } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
+import { EmptyStateComponent } from '../../shared/ui/empty-state/empty-state.component';
+import type { Tone } from '../../shared/ui/tone';
 
 const MONTHS_GEN = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -16,13 +22,17 @@ const MONTHS_GEN = [
 
 @Component({
     selector: 'app-notifications-tab',
-    imports: [ClickableDirective, FormsModule, LoadingSpinnerComponent],
-    templateUrl: './notifications-tab.component.html'
+    imports: [ClickableDirective, FormsModule, LoadingSpinnerComponent, IconComponent, IconTileComponent, EmptyStateComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    templateUrl: './notifications-tab.component.html',
+    styleUrl: './notifications-tab.component.scss',
 })
 export class NotificationsTabComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly notificationState = inject(NotificationStateService);
   private readonly router = inject(Router);
+
+  protected readonly icons = { Bell, CheckCheck, ChevronRight };
 
   items: AppNotification[] = [];
   unreadOnly = false;
@@ -78,8 +88,12 @@ export class NotificationsTabComponent implements OnInit {
     return notificationTypeLabel(type);
   }
 
-  typeIcon(type: number): string {
+  typeIcon(type: number): LucideIconData {
     return notificationTypeIcon(type);
+  }
+
+  typeTone(type: number): Tone {
+    return notificationTypeTone(type);
   }
 
   /** RelatedEntityKind===null — тип оповещения без устоявшегося целевого экрана (напр.
@@ -93,7 +107,9 @@ export class NotificationsTabComponent implements OnInit {
   async openRelated(n: AppNotification): Promise<void> {
     if (n.relatedEntityKind === null) return;
     if (!n.isRead) await this.handleMarkRead(n.id);
-    void this.router.navigate(relatedEntityRoute(n.relatedEntityKind, n.relatedEntityId));
+    void this.router.navigate(relatedEntityRoute(n.relatedEntityKind, n.relatedEntityId), {
+      queryParams: relatedEntityQueryParams(n.relatedEntityKind),
+    });
   }
 
   /** "Сегодня" / "Вчера" / "18 июля" — кикер группы даты (см. дизайн-дэк). */

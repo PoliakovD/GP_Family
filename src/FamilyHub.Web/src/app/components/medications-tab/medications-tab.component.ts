@@ -1,22 +1,38 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { ChevronRight } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { formatDayMonthYear } from '../../shared/util/date-format';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, ApiError } from '../../services/api.service';
-import { ClickableDirective } from '../../shared/util/clickable.directive';
 import { FamilyStateService } from '../../services/family-state.service';
 import { PageActionService } from '../../services/page-action.service';
 import { SearchResultItem } from '../../models/types';
 import { DebouncedSearch } from '../../shared/util/debounced-search';
-import { expiryClass } from '../../shared/util/expiry';
+import { expiryBadge } from '../../shared/util/expiry';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 import { MedkitsPanelComponent } from '../medkits-panel/medkits-panel.component';
 
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-medications-tab',
-    imports: [ClickableDirective, MedkitsPanelComponent, LoadingSpinnerComponent, RouterLink],
-    templateUrl: './medications-tab.component.html'
+    imports: [IconComponent, MedkitsPanelComponent, LoadingSpinnerComponent, RouterLink],
+    templateUrl: './medications-tab.component.html',
+  styles: [`
+    .mt { display: flex; flex-direction: column; gap: var(--space-5); }
+    .mt-title { margin: 0; font: var(--text-display); letter-spacing: var(--letter-spacing-display); }
+    .mt-family { display: flex; flex-direction: column; gap: var(--space-3); }
+    .mt-family-title { margin: 0; font: var(--text-title); }
+    .mt-note { margin: 0; font: var(--text-body-sm); color: var(--color-text-muted); }
+    .mt-row { padding: var(--space-3) var(--space-6); }
+    .mt-row + .mt-row { border-top: 1px solid var(--color-divider); }
+    @media (max-width: 1023px) { .mt-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); } }
+    @media (max-width: 639px) { .mt-row { padding: var(--space-3) var(--space-4); } }
+  `],
 })
 export class MedicationsTabComponent implements OnInit, OnDestroy {
+  protected readonly chevron = ChevronRight;
+  protected readonly formatDayMonthYear = formatDayMonthYear;
   readonly state = inject(FamilyStateService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
@@ -29,7 +45,7 @@ export class MedicationsTabComponent implements OnInit, OnDestroy {
     (err) => (err instanceof ApiError ? err.message : 'Не удалось выполнить поиск.'),
   );
 
-  readonly expiryClass = expiryClass;
+  readonly expiryBadge = expiryBadge;
 
   private paramsSub?: Subscription;
 

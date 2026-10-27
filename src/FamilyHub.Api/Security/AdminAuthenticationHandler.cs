@@ -19,7 +19,8 @@ public class AdminAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IDataProtectionProvider dataProtection)
+    IDataProtectionProvider dataProtection,
+    AdminSessionRevocations revocations)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -27,7 +28,8 @@ public class AdminAuthenticationHandler(
         if (!Request.Cookies.TryGetValue(AdminCookieNames.Session, out var token) || string.IsNullOrEmpty(token))
             return Task.FromResult(AuthenticateResult.Fail("Отсутствует cookie сессии админ-панели."));
 
-        if (!AdminSessionCookie.Validate(dataProtection, token))
+        var session = AdminSessionCookie.Validate(dataProtection, token);
+        if (session is null || revocations.IsRevoked(session.Id))
         {
             Logger.LogWarning("Аутентификация админ-панели отклонена: cookie недействительна/просрочена ({Path})", Request.Path);
             return Task.FromResult(AuthenticateResult.Fail("Сессия админ-панели недействительна или истекла."));

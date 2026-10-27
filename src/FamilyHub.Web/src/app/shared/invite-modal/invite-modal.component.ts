@@ -1,4 +1,4 @@
-import { Component, effect, inject, input, output, signal } from '@angular/core';
+import { Component, effect, inject, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { formatDayMonthYear } from '../util/date-format';
 import { ApiService, ApiError } from '../../services/api.service';
 import { TelegramService } from '../../services/telegram.service';
@@ -6,6 +6,8 @@ import type { InviteCreated } from '../../models/types';
 import { ToastService } from '../toast/toast.service';
 import { ModalComponent } from '../modal/modal.component';
 import { copyToClipboard } from '../util/clipboard';
+import { Copy, Send } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Модалка «Пригласить в семью» — создание одноразовой ссылки-приглашения и её шаринг. Вынесена из
@@ -15,11 +17,11 @@ import { copyToClipboard } from '../util/clipboard';
  */
 @Component({
     selector: 'app-invite-modal',
-    imports: [ModalComponent],
+    imports: [ModalComponent, IconComponent],
     template: `
     <app-modal title="Пригласить в семью" [open]="open()" (closed)="closed.emit()">
       @if (created(); as invite) {
-        <p class="muted mb-2">
+        <p class="form-hint mb-2">
           Ссылка готова. Отправьте её одному человеку
           @if (invite.maxUses > 1) { (сработает {{ invite.maxUses }} раз) } @else { — она сработает один раз }
           @if (invite.expiresAt) {, действует до {{ formatDate(invite.expiresAt) }}}.
@@ -34,7 +36,7 @@ import { copyToClipboard } from '../util/clipboard';
             aria-label="Скопировать ссылку"
             (click)="copy(invite.webLink)"
           >
-            <i class="ph ph-copy" aria-hidden="true"></i>
+            <app-icon [icon]="icons.Copy" [size]="18" />
           </button>
           @if (invite.telegramLink) {
             <button
@@ -44,7 +46,7 @@ import { copyToClipboard } from '../util/clipboard';
               aria-label="Отправить в Telegram"
               (click)="openTelegram(invite.telegramLink)"
             >
-              <i class="ph-fill ph-telegram-logo" aria-hidden="true"></i>
+              <app-icon [icon]="icons.Send" [size]="18" />
             </button>
           }
         </div>
@@ -53,7 +55,7 @@ import { copyToClipboard } from '../util/clipboard';
           <button class="btn btn-secondary btn-sm" [disabled]="creating()" (click)="create()">Создать ещё одну</button>
         </div>
       } @else {
-        <p class="muted mb-3">
+        <p class="form-hint mb-3">
           Ссылка-приглашение будет действовать одноразово. Отправьте её тому, кого хотите позвать — после
           перехода по ней человек попадёт в список заявок на вступление.
         </p>
@@ -64,22 +66,25 @@ import { copyToClipboard } from '../util/clipboard';
       }
     </app-modal>
   `,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: `
     // Саму ссылку показываем текстом: на десктопе с navigator.share пользователь иначе никогда
     // не получил бы её для копирования вручную.
     .invite-link {
       padding: 8px 12px;
-      background: var(--color-paper);
+      background: var(--color-surface);
       border: 1px solid var(--color-divider);
       border-radius: var(--radius-md);
-      font-family: monospace;
-      font-size: var(--font-size-meta);
+      font: var(--text-body-sm);
+      font-family: var(--font-mono);
       word-break: break-all;
       user-select: all;
     }
   `
 })
 export class InviteModalComponent {
+  protected readonly icons = { Copy, Send };
+
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly tg = inject(TelegramService);

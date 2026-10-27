@@ -16,7 +16,7 @@ public enum LinkEmailResult { Success, InvalidCode, EmailTaken, WeakPassword }
 
 public enum ResetPasswordResult { Success, InvalidCode, WeakPassword }
 
-public enum ChangePasswordResult { Success, NoPassword, InvalidCurrentPassword, WeakPassword }
+public enum ChangePasswordResult { Success, NoPassword, InvalidCurrentPassword, WeakPassword, LockedOut }
 
 /// <summary>
 /// PWA-вход (этап 2 п.2.4): регистрация email → код на почту → пароль; вход email+пароль.
@@ -154,15 +154,7 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
         // формат хранения не менялся.
         if (!PasswordHasher.Verify(password, user.PasswordHash!))
         {
-            user.FailedLoginAttempts++;
-            DateTime? lockout = null;
-            if (user.FailedLoginAttempts >= MaxFailedLogins)
-            {
-                lockout = DateTime.UtcNow.Add(LockoutDuration);
-                user.LockedUntil = lockout;
-                user.FailedLoginAttempts = 0;
-                logger.LogWarning("PWA-вход: пользователь {UserId} заблокирован до {LockedUntil}", user.Id, lockout);
-            }
+            var lockout = RegisterFailedPasswordAttempt(user);
             await db.SaveChangesAsync(ct);
             return lockout is null
                 ? (LoginResult.InvalidCredentials, null, null)
@@ -173,6 +165,20 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
         user.LockedUntil = null;
         await db.SaveChangesAsync(ct);
         return (LoginResult.Success, user, null);
+    }
+
+    /// <summary>Неверный пароль — при входе или при смене пароля из настроек: общий счётчик и та же
+    /// блокировка. Возвращает момент окончания блокировки, если эта попытка её включила.</summary>
+    private DateTime? RegisterFailedPasswordAttempt(User user)
+    {
+        user.FailedLoginAttempts++;
+        if (user.FailedLoginAttempts < MaxFailedLogins) return null;
+
+        var lockout = DateTime.UtcNow.Add(LockoutDuration);
+        user.LockedUntil = lockout;
+        user.FailedLoginAttempts = 0;
+        logger.LogWarning("PWA: пользователь {UserId} заблокирован до {LockedUntil} после серии неверных паролей", user.Id, lockout);
+        return lockout;
     }
 
     public async Task<LinkEmailResult> ConfirmLinkEmailAsync(
@@ -240,11 +246,20 @@ public class PwaAuthService(AppDbContext db, EmailOtpService otp, ILogger<PwaAut
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         if (user.PasswordHash is null) return ChangePasswordResult.NoPassword;
 
+        // Тот же lockout, что у входа (аудит security-audit-2026-10, L6): иначе обладатель угнанной
+        // сессии подбирал бы текущий пароль здесь, сдерживаемый только rate-limit'ом "auth-session".
+        if (user.LockedUntil is { } lockedUntil && lockedUntil > DateTime.UtcNow)
+            return ChangePasswordResult.LockedOut;
+
         // Намеренно НЕТ проверки формата текущего пароля через PasswordRules — та же причина,
         // что в LoginAsync: старый хеш (в том числе ещё PIN-формата) должен продолжать
         // верифицироваться, даже если сам ввод больше не проходит текущие правила формата.
         if (!PasswordHasher.Verify(currentPassword, user.PasswordHash))
-            return ChangePasswordResult.InvalidCurrentPassword;
+        {
+            var lockout = RegisterFailedPasswordAttempt(user);
+            await db.SaveChangesAsync(ct);
+            return lockout is null ? ChangePasswordResult.InvalidCurrentPassword : ChangePasswordResult.LockedOut;
+        }
 
         user.PasswordHash = PasswordHasher.Hash(newPassword);
         user.FailedLoginAttempts = 0;

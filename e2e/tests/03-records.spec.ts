@@ -8,15 +8,18 @@ test('запись анализа: список → открытая запис�
   await openAs(page, tgId, '/health/records');
   await expect(page.getByText('Общий анализ крови').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Открыть' }).first().click();
+  await page.getByRole('button', { name: /Общий анализ крови/ }).first().click();
   await expect(page).toHaveURL(/\/health\/records\/[0-9a-f-]{36}/);
 
   // Открытая запись: заголовок, ссылка назад, действия и мета-строка с врачом «Фамилия И.О.».
   await expect(page.getByRole('heading', { name: 'Общий анализ крови' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Анализы' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Редактировать' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Доступ' })).toBeVisible();
   await expect(page.locator('.record-detail-meta')).toContainText('Иванов И.И.');
+
+  // Редкие действия — в «⋯» (DESIGN §3 «Кнопки»).
+  await page.getByRole('button', { name: 'Действия с записью' }).click();
+  await expect(page.getByRole('button', { name: 'Редактировать' })).toBeVisible();
 
   // Удаление: подтверждение → возврат к списку, записи больше нет.
   await page.getByRole('button', { name: 'Удалить' }).click();

@@ -31,19 +31,13 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              },
-              {
-                "glob": "{style.css,*.woff2,*.woff,*.ttf}",
-                "input": "node_modules/@phosphor-icons/web/src/duotone",
-                "output": "/phosphor-duotone"
               }
             ],
             "styles": [
-              "node_modules/@fontsource/source-serif-4/400.css",
-              "node_modules/@fontsource/source-serif-4/600.css",
-              "node_modules/@phosphor-icons/web/src/regular/style.css",
-              "node_modules/@phosphor-icons/web/src/bold/style.css",
-              "node_modules/@phosphor-icons/web/src/fill/style.css",
+              "node_modules/@fontsource/onest/400.css",
+              "node_modules/@fontsource/onest/500.css",
+              "node_modules/@fontsource/onest/600.css",
+              "node_modules/@fontsource/onest/700.css",
               "src/styles.scss"
             ],
             "scripts": []

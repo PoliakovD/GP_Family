@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, viewChild } from '@angular/core';
+import { Component, OnInit, inject, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -14,6 +14,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminCachePanelComponent, SearchCacheRowPatch } from '../admin-cache-panel/admin-cache-panel.component';
 import { AdminTopicState } from '../shared/admin-topic-state';
 import { TopicSwitchComponent } from '../shared/topic-switch.component';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const PAGE_SIZE = 25;
 
@@ -30,8 +31,9 @@ const PAGE_SIZE = 25;
  */
 @Component({
     selector: 'app-admin-search-cache',
-    imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent, TopicSwitchComponent],
+    imports: [FormsModule, DatePipe, SidePanelComponent, AdminCachePanelComponent, TopicSwitchComponent, LoadingSpinnerComponent],
     templateUrl: './admin-search-cache.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-search-cache.component.scss'
 })
 export class AdminSearchCacheComponent implements OnInit {

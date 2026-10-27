@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import type { KbVerificationStatusValue } from '../../../services/admin-api.service';
 import { verificationLabel, verificationTagClass } from '../admin-review/review-helpers';
 
@@ -9,6 +9,7 @@ import { verificationLabel, verificationTagClass } from '../admin-review/review-
  */
 @Component({
   selector: 'app-verification-badge',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<span [class]="tagClass" [title]="title">{{ label }}</span>`,
 })
 export class VerificationBadgeComponent {

@@ -1,10 +1,13 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, ChangeDetectionStrategy } from '@angular/core';
 import { IndicatorFlag } from '../../models/types';
 
 const SIZE = {
-  full: { width: 300, height: 40, padding: 12, trackHeight: 10 },
-  mini: { width: 170, height: 20, padding: 8, trackHeight: 6 },
+  // DESIGN §3 «Анализ»: трек 8px, маркер 6×18 (в мини-варианте пропорционально меньше).
+  full: { width: 300, height: 40, padding: 12, trackHeight: 8, stickWidth: 6, stickHeight: 18 },
+  mini: { width: 170, height: 20, padding: 8, trackHeight: 6, stickWidth: 4, stickHeight: 14 },
+  // Строка таблицы показателей и мобильная карточка (макет analysis-desktop): трек 8, маркер 6×18.
+  row: { width: 300, height: 22, padding: 4, trackHeight: 8, stickWidth: 6, stickHeight: 18 },
 };
 
 /**
@@ -13,12 +16,12 @@ const SIZE = {
  * (строка "Текущее значение") и таблицей показателей без необходимости монтировать SVG.
  */
 export function formatDeviation(value: number, low: number | null, high: number | null): string | null {
-  if (low !== null && value < low) return `ниже нормы на ${formatNumber(low - value)}`;
-  if (high !== null && value > high) return `выше нормы на ${formatNumber(value - high)}`;
+  if (low !== null && value < low) return `ниже нормы на ${formatScaleNumber(low - value)}`;
+  if (high !== null && value > high) return `выше нормы на ${formatScaleNumber(value - high)}`;
   return null;
 }
 
-function formatNumber(n: number): string {
+export function formatScaleNumber(n: number): string {
   // До двух знаков, без хвостовых нулей — "0,8", не "0,80"; запятая — русская локаль отображения.
   return (Math.round(n * 100) / 100).toString().replace('.', ',');
 }
@@ -36,6 +39,10 @@ function formatNumber(n: number): string {
  * пределы домена больше не рисует отдельную стрелку — палочка у края читается как «за пределами»
  * без специального случая (см. geometry() — просто clamp позиции).
  *
+ * Редизайн «Гибрид A+B» (DESIGN §3 «Анализ»): трек 8px, зона нормы — центральные 50% ширины
+ * (домен low−span/2…high+span/2), маркер 6×18 цвета статуса с обводкой, положение ограничено 3–97%;
+ * «норма не указана» — нейтральный маркер.
+ *
  * Подписи (labels=true) — границы нормы под краями зелёной зоны и значение над засечкой: без них
  * на шкале не видно, какие именно числа она изображает.
  *
@@ -51,8 +58,10 @@ function formatNumber(n: number): string {
       @if (labels()) {
         <!-- Подписи — HTML-оверлей с left в % поверх SVG: текст внутри SVG не масштабируется
              как надо и хуже читается на маленьких размерах. -->
-        <div class="rs-wrap" [style.width.px]="g.width" style="max-width:100%">
+        <div class="rs-wrap" [class.rs-wrap-novalue]="!valueLabel()" [style.width.px]="g.width" style="max-width:100%">
+          @if (valueLabel()) {
           <div class="rs-value" [class.rs-value-bad]="isBad()" [style.left.%]="g.valueLabelPct">{{ valueText() }}</div>
+          }
           <ng-container *ngTemplateOutlet="chart; context: { g: g }" />
           <div class="rs-bounds">
             <span [style.left.%]="g.normX1 / g.width * 100">{{ lowText() }}</span>
@@ -77,30 +86,37 @@ function formatNumber(n: number): string {
         <rect [attr.x]="g.normX1" [attr.y]="g.trackY" [attr.width]="g.normWidth" [attr.height]="g.trackHeight"
               [attr.rx]="g.trackHeight / 2" class="rs-norm" />
         <rect [attr.x]="g.stickX" [attr.y]="g.stickY" [attr.width]="g.stickWidth" [attr.height]="g.stickHeight"
-              rx="1.5" [class]="stickClass()" />
+              [attr.rx]="g.stickWidth / 2" [class]="stickClass()" />
       </svg>
     </ng-template>
   `,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
-    .rs-track { fill: var(--color-neutral-200); }
-    .rs-norm { fill: color-mix(in srgb, var(--color-status-ok) 32%, var(--color-neutral-200)); }
-    .rs-stick-ok { fill: var(--color-status-ok-text); }
-    .rs-stick-bad { fill: var(--color-status-danger-text); }
+    .rs-track { fill: var(--color-range-track); }
+    .rs-norm { fill: var(--color-range-ok); }
+    /* Маркер — цвет статуса с обводкой цветом поверхности (отделяет его от зелёной зоны). */
+    .rs-stick-ok, .rs-stick-bad, .rs-stick-unknown { stroke: var(--color-surface); stroke-width: 2; paint-order: stroke; }
+    .rs-stick-ok { fill: var(--color-success); }
+    .rs-stick-bad { fill: var(--color-danger); }
+    .rs-stick-unknown { fill: var(--color-text-muted); }
 
     // Подписи: мелко, но читаемо (12px) — границы нормы приглушённые, значение — цветом статуса.
     .rs-wrap { position: relative; padding: 15px 0; }
+    .rs-wrap-novalue { padding-top: 0; }
     .rs-wrap svg { display: block; width: 100%; height: auto; }
     .rs-value, .rs-bounds span {
       position: absolute;
       transform: translateX(-50%);
-      font-size: 0.7059rem;
+      font: var(--text-micro);
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
       line-height: 1;
       white-space: nowrap;
     }
-    .rs-value { top: 0; font-weight: 600; color: var(--color-status-ok-text); }
-    .rs-value-bad { color: var(--color-status-danger-text); }
+    .rs-value { top: 0; font-weight: 600; color: var(--color-success); }
+    .rs-value-bad { color: var(--color-danger); }
     .rs-bounds { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; }
-    .rs-bounds span { color: var(--color-neutral-600); }
+    .rs-bounds span { color: var(--color-text-muted); }
   `]
 })
 export class ReferenceScaleComponent {
@@ -108,9 +124,11 @@ export class ReferenceScaleComponent {
   readonly low = input.required<number | null>();
   readonly high = input.required<number | null>();
   readonly unit = input<string | null>(null);
-  readonly variant = input<'full' | 'mini'>('full');
+  readonly variant = input<'full' | 'mini' | 'row'>('full');
   /** Подписи: границы нормы слева/справа под зоной и само значение над засечкой. */
   readonly labels = input(false);
+  /** Подпись значения над маркером (при labels) — в таблице показателей значение уже в своей колонке. */
+  readonly valueLabel = input(true);
 
   /** IndicatorFlag — только для цвета палочки; сама зона нормы всегда зелёная (это она задаёт
    * "что такое норма", а не текущий статус значения). Ровно два состояния — см. докстринг класса. */
@@ -119,19 +137,20 @@ export class ReferenceScaleComponent {
   // Unknown («нет нормы») — не отклонение: раньше рисовался красной палочкой и пугал зря.
   readonly isBad = computed(() => this.flag() !== IndicatorFlag.Normal && this.flag() !== IndicatorFlag.Unknown);
 
-  readonly stickClass = computed(() => (this.isBad() ? 'rs-stick-bad' : 'rs-stick-ok'));
+  readonly stickClass = computed(() =>
+    this.isBad() ? 'rs-stick-bad' : this.flag() === IndicatorFlag.Unknown ? 'rs-stick-unknown' : 'rs-stick-ok');
 
   readonly valueText = computed(() => {
     const v = this.value();
-    return v === null ? '' : formatNumber(v);
+    return v === null ? '' : formatScaleNumber(v);
   });
   readonly lowText = computed(() => {
     const low = this.low();
-    return low === null ? '' : formatNumber(low);
+    return low === null ? '' : formatScaleNumber(low);
   });
   readonly highText = computed(() => {
     const high = this.high();
-    return high === null ? '' : formatNumber(high);
+    return high === null ? '' : formatScaleNumber(high);
   });
 
   readonly deviationLabel = computed(() => {
@@ -146,11 +165,9 @@ export class ReferenceScaleComponent {
     const value = this.value();
     if (low === null || high === null) return null;
 
-    const { width, height, padding, trackHeight } = SIZE[this.variant()];
+    const { width, height, padding, trackHeight, stickWidth, stickHeight } = SIZE[this.variant()];
     const mid = height / 2;
     const innerWidth = width - padding * 2;
-    const stickWidth = 3;
-    const stickHeight = trackHeight + 6; // нависает по 3px над/под треком с обеих сторон
 
     const span = high - low || Math.abs(high) || 1; // low===high — вырожденный случай, не деление на 0
     const domainLow = low - span * 0.5;
@@ -163,8 +180,11 @@ export class ReferenceScaleComponent {
     const normX2 = toX(high);
 
     const v = value ?? low; // нет значения (не должно случиться на практике) — палочка на границе, не крах
-    // Клип за пределы домена — просто прижимаем к краю трека (без отдельной стрелки, см. докстринг).
-    const stickCenterX = Math.min(Math.max(toX(v), padding + stickWidth / 2), width - padding - stickWidth / 2);
+    // Клип за пределы домена — прижимаем к краю трека: положение маркера ограничено 3–97% ширины
+    // трека (DESIGN §3), чтобы он не «прилипал» к скруглению.
+    const minX = padding + innerWidth * 0.03;
+    const maxX = padding + innerWidth * 0.97;
+    const stickCenterX = Math.min(Math.max(toX(v), minX), maxX);
 
     return {
       width, height, pad: padding,

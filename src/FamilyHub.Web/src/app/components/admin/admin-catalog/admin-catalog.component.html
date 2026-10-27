@@ -2,8 +2,8 @@
   <div class="card mb-3">
     <div class="card-title">Показатели</div>
     <div class="card-body">
-      <form class="d-flex gap-2 mb-2" (ngSubmit)="searchAnalytes()">
-        <input class="input" placeholder="поиск по названию…"
+      <form class="toolbar mb-2" (ngSubmit)="searchAnalytes()">
+        <input class="input input-grow" placeholder="поиск по названию…"
                [ngModel]="analyteQuery()" (ngModelChange)="analyteQuery.set($event)" name="analyteQuery" />
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="analytesLoading()">Найти</button>
       </form>
@@ -23,7 +23,7 @@
       }
 
       @if (analytesLoading() && analytes().length === 0) {
-        <p class="text-muted">Загрузка…</p>
+        <app-loading-spinner />
       } @else if (analytesError()) {
         <div class="alert-danger">{{ analytesError() }}</div>
       } @else {
@@ -35,7 +35,7 @@
               <tr [class.text-muted]="analyteMergeSourceId() === a.id">
                 <td>
                   {{ a.displayName }}
-                  @if (analyteMergeSourceId() === a.id) { <span class="tag tag-neutral">проигравший</span> }
+                  @if (analyteMergeSourceId() === a.id) { <span class="badge badge-neutral">проигравший</span> }
                 </td>
                 <td>{{ a.specimenDisplayName }}</td>
                 <td><app-verification-badge [status]="a.verificationStatus" [stale]="a.verificationStale" /></td>
@@ -109,7 +109,7 @@
           <label class="d-flex justify-content-between align-items-center">
             <span>Название</span>
             @if (d.lockedFields.includes('displayName')) {
-              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('displayName')">🔒 залочено — снять</button>
+              <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('displayName')"><app-icon [icon]="icons.Lock" [size]="14" />залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
@@ -120,13 +120,13 @@
 
         <div class="mb-3">
           <label class="d-flex justify-content-between align-items-center">
-            <span>Синонимы (через запятую)</span>
+            <span>Синонимы (по одному на строку)</span>
             @if (d.lockedFields.includes('aliases')) {
-              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('aliases')">🔒 залочено — снять</button>
+              <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('aliases')"><app-icon [icon]="icons.Lock" [size]="14" />залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
-            <input class="input flex-fill" [ngModel]="analyteEditorAliases()" (ngModelChange)="analyteEditorAliases.set($event)" />
+            <textarea class="input flex-fill" rows="3" [ngModel]="analyteEditorAliases()" (ngModelChange)="analyteEditorAliases.set($event)"></textarea>
             <button type="button" class="btn btn-primary btn-sm" [disabled]="analyteBusy()" (click)="saveAnalyteField('aliases')">Сохранить</button>
           </div>
         </div>
@@ -135,7 +135,7 @@
           <label class="d-flex justify-content-between mb-1 align-items-center">
             <span>Данные справочника</span>
             @if (d.lockedFields.includes('payload')) {
-              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('payload')">🔒 залочен целиком — снять</button>
+              <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('payload')"><app-icon [icon]="icons.Lock" [size]="14" />залочен целиком — снять</button>
             }
           </label>
           @if (partialPayloadLocks(d.lockedFields); as partial) {
@@ -143,7 +143,7 @@
               <p class="text-muted mb-2">
                 Залочены отдельные поля:
                 @for (key of partial; track key) {
-                  <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('payload.' + key)">🔒 {{ key }} — снять</button>
+                  <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockAnalyteField('payload.' + key)"><app-icon [icon]="icons.Lock" [size]="14" />{{ key }} — снять</button>
                 }
               </p>
             }
@@ -170,8 +170,8 @@
   <div class="card mb-3">
     <div class="card-title">Медикаменты</div>
     <div class="card-body">
-      <form class="d-flex gap-2 mb-2" (ngSubmit)="searchMedications()">
-        <input class="input" placeholder="поиск по названию…"
+      <form class="toolbar mb-2" (ngSubmit)="searchMedications()">
+        <input class="input input-grow" placeholder="поиск по названию…"
                [ngModel]="medicationQuery()" (ngModelChange)="medicationQuery.set($event)" name="medicationQuery" />
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="medicationsLoading()">Найти</button>
       </form>
@@ -191,7 +191,7 @@
       }
 
       @if (medicationsLoading() && medications().length === 0) {
-        <p class="text-muted">Загрузка…</p>
+        <app-loading-spinner />
       } @else if (medicationsError()) {
         <div class="alert-danger">{{ medicationsError() }}</div>
       } @else {
@@ -203,7 +203,7 @@
               <tr [class.text-muted]="medicationMergeSourceId() === m.id">
                 <td>
                   {{ m.displayName }}
-                  @if (medicationMergeSourceId() === m.id) { <span class="tag tag-neutral">проигравший</span> }
+                  @if (medicationMergeSourceId() === m.id) { <span class="badge badge-neutral">проигравший</span> }
                 </td>
                 <td><app-verification-badge [status]="m.verificationStatus" [stale]="m.verificationStale" /></td>
                 <td><button type="button" class="btn btn-secondary btn-sm" (click)="selectMedication(m)">Открыть</button></td>
@@ -257,7 +257,7 @@
           <label class="d-flex justify-content-between align-items-center">
             <span>Название</span>
             @if (d.lockedFields.includes('displayName')) {
-              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('displayName')">🔒 залочено — снять</button>
+              <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('displayName')"><app-icon [icon]="icons.Lock" [size]="14" />залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
@@ -268,13 +268,13 @@
 
         <div class="mb-3">
           <label class="d-flex justify-content-between align-items-center">
-            <span>Синонимы/торговые названия (через запятую)</span>
+            <span>Синонимы/торговые названия (по одному на строку)</span>
             @if (d.lockedFields.includes('aliases')) {
-              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('aliases')">🔒 залочено — снять</button>
+              <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('aliases')"><app-icon [icon]="icons.Lock" [size]="14" />залочено — снять</button>
             }
           </label>
           <div class="d-flex gap-2">
-            <input class="input flex-fill" [ngModel]="medicationEditorAliases()" (ngModelChange)="medicationEditorAliases.set($event)" />
+            <textarea class="input flex-fill" rows="3" [ngModel]="medicationEditorAliases()" (ngModelChange)="medicationEditorAliases.set($event)"></textarea>
             <button type="button" class="btn btn-primary btn-sm" [disabled]="medicationBusy()" (click)="saveMedicationField('aliases')">Сохранить</button>
           </div>
         </div>
@@ -283,7 +283,7 @@
           <label class="d-flex justify-content-between mb-1 align-items-center">
             <span>Данные справочника</span>
             @if (d.lockedFields.includes('payload')) {
-              <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('payload')">🔒 залочен целиком — снять</button>
+              <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('payload')"><app-icon [icon]="icons.Lock" [size]="14" />залочен целиком — снять</button>
             }
           </label>
           @if (partialPayloadLocks(d.lockedFields); as partial) {
@@ -291,7 +291,7 @@
               <p class="text-muted mb-2">
                 Залочены отдельные поля:
                 @for (key of partial; track key) {
-                  <button type="button" class="tag tag-neutral tag-button" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('payload.' + key)">🔒 {{ key }} — снять</button>
+                  <button type="button" class="chip" title="Снять замок — поле снова сможет переписать ИИ" (click)="unlockMedicationField('payload.' + key)"><app-icon [icon]="icons.Lock" [size]="14" />{{ key }} — снять</button>
                 }
               </p>
             }
@@ -326,8 +326,8 @@
         биоматериала. Пусто — биоматериал сам по себе.
       </p>
 
-      <form class="d-flex gap-2 mb-3" (ngSubmit)="searchSpecimens()">
-        <input class="input" placeholder="поиск по названию…"
+      <form class="toolbar mb-3" (ngSubmit)="searchSpecimens()">
+        <input class="input input-grow" placeholder="поиск по названию…"
                [ngModel]="specimenQuery()" (ngModelChange)="specimenQuery.set($event)" name="specimenQuery" />
         <button type="submit" class="btn btn-secondary btn-sm" [disabled]="specimensLoading()">Найти</button>
       </form>
@@ -340,7 +340,7 @@
       }
 
       @if (specimensLoading()) {
-        <p class="text-muted">Загрузка…</p>
+        <app-loading-spinner />
       } @else {
         <div class="table-responsive">
         <table class="table">
@@ -351,7 +351,7 @@
                 <td>
                   <input class="input" [attr.aria-label]="'Название источника: ' + s.displayName"
                          [ngModel]="specimenDraft(s)" (ngModelChange)="setSpecimenDraft(s.id, $event)" />
-                  @if (specimenMergeSourceId() === s.id) { <span class="tag tag-neutral">проигравший</span> }
+                  @if (specimenMergeSourceId() === s.id) { <span class="badge badge-neutral">проигравший</span> }
                   <div class="text-muted specimen-meta">
                     ключ <code>{{ s.normalizedName }}</code> · {{ s.source || '—' }} · с {{ s.createdAt | date: 'dd.MM.yyyy' }}
                     @if (specimenGroups()[s.id]; as g) { · строк кэша: {{ g.cacheRows }} }
@@ -359,7 +359,7 @@
                 </td>
                 <td>
                   <div class="d-flex gap-1 align-items-center">
-                    <input class="input" style="min-width: 160px;" placeholder="через запятую"
+                    <input class="input x-minw-160px" placeholder="через запятую"
                            title="Другие написания, по которым распознавание находит этот источник"
                            [attr.aria-label]="'Синонимы источника: ' + s.displayName"
                            [ngModel]="specimenAliases(s)" (ngModelChange)="setSpecimenAliasesDraft(s.id, $event)" />
@@ -370,7 +370,7 @@
                 </td>
                 <td>
                   <div class="d-flex gap-1 align-items-center">
-                    <input class="input" style="min-width: 110px;" placeholder="без группы" [attr.aria-label]="'Группа поиска: ' + s.displayName"
+                    <input class="input x-minw-110px" placeholder="без группы" [attr.aria-label]="'Группа поиска: ' + s.displayName"
                            [ngModel]="specimenGroup(s)" (ngModelChange)="setSpecimenGroupDraft(s.id, $event)" />
                     @if (specimenGroupChanged(s)) {
                       <button type="button" class="btn btn-primary btn-sm" [disabled]="specimenBusy()" (click)="saveSpecimenGroup(s)">Сохранить</button>

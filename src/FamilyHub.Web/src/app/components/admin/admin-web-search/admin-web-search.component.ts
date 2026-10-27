@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -8,6 +8,7 @@ import { ToastService } from '../../../shared/toast/toast.service';
 import { AdminTopicState } from '../shared/admin-topic-state';
 import { TopicSwitchComponent } from '../shared/topic-switch.component';
 import { WebSearchValveStore } from '../shared/web-search-valve.store';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * «Настройки → Веб-поиск»: всё, что определяет, КУДА и ЗА ДЕНЬГИ ходит поиск — вентиль платного
@@ -21,7 +22,8 @@ import { WebSearchValveStore } from '../shared/web-search-valve.store';
  */
 @Component({
     selector: 'app-admin-web-search',
-    imports: [FormsModule, DatePipe, TopicSwitchComponent],
+    imports: [FormsModule, DatePipe, TopicSwitchComponent, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-web-search.component.html'
 })
 export class AdminWebSearchComponent implements OnInit {

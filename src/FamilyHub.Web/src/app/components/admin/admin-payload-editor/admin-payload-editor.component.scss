@@ -1,0 +1,11 @@
+// Бывшие inline-стили шаблона.
+.x-mt-neg-s1 { margin-top: calc(-1 * var(--space-1)); }
+.x-p-0-2px { padding: 0 2px; } // иконка «×» в чипе вплотную к тексту
+.x-maxh-220px-oy-auto { max-height: 220px; overflow-y: auto; }
+.x-ta-left-border-none-bg-none-p-s2-s3 { text-align: left; border: none; background: none; padding: var(--space-2) var(--space-3); }
+.x-text-caption { font: var(--text-caption); }
+.x-w-64px { width: 64px; }
+.x-w-72px { width: 72px; }
+.x-w-100px { width: 100px; }
+.x-w-56px { width: 56px; }
+.text-warning-icon { color: var(--color-warning); vertical-align: -2px; }

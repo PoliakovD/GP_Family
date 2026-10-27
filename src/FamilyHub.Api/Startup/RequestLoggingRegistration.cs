@@ -19,6 +19,16 @@ public static class RequestLoggingRegistration
         {
             options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} -> {StatusCode} за {Elapsed:0.0}мс";
 
+            // Те же свойства, что по умолчанию, но путь без секретов (токены отчётов/доз/инвайтов,
+            // аудит security-audit-2026-10, L1) — см. LogPathMasker.
+            options.GetMessageTemplateProperties = (httpContext, requestPath, elapsedMs, statusCode) =>
+            [
+                new LogEventProperty("RequestMethod", new ScalarValue(httpContext.Request.Method)),
+                new LogEventProperty("RequestPath", new ScalarValue(LogPathMasker.MaskPath(requestPath))),
+                new LogEventProperty("StatusCode", new ScalarValue(statusCode)),
+                new LogEventProperty("Elapsed", new ScalarValue(elapsedMs)),
+            ];
+
             options.GetLevel = (httpContext, elapsed, ex) => ex is not null
                 ? LogEventLevel.Error
                 : httpContext.Response.StatusCode >= 500 ? LogEventLevel.Error
@@ -31,7 +41,8 @@ public static class RequestLoggingRegistration
             {
                 diagnosticContext.Set("RemoteIp", httpContext.Connection.RemoteIpAddress?.ToString());
                 diagnosticContext.Set("UserAgent", httpContext.Request.Headers.UserAgent.ToString());
-                diagnosticContext.Set("QueryString", httpContext.Request.QueryString.Value);
+                // sig у ссылок на вложения — действующая HMAC-подпись на 5 минут, в лог ей нельзя.
+                diagnosticContext.Set("QueryString", LogPathMasker.MaskQuery(httpContext.Request.QueryString.Value));
 
                 var userId = httpContext.User.FindFirst(FamilyHubClaimTypes.UserId)?.Value;
                 if (userId is not null)

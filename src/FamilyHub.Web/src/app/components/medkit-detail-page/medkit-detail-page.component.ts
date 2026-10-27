@@ -1,4 +1,5 @@
-import { Component, OnDestroy, OnInit, effect, inject, input } from '@angular/core';
+import { ActionMenuComponent, type ActionMenuItem } from '../../shared/action-menu/action-menu.component';
+import { Component, OnDestroy, OnInit, effect, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, ApiError } from '../../services/api.service';
@@ -20,11 +21,27 @@ import { pluralizeRu } from '../../shared/util/pluralize';
  * шапка с «Изменить»/«Удалить» самой аптечки, переехавшими с уже неактуальной строки списка.
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-medkit-detail-page',
-    imports: [FormsModule, BackLinkComponent, ModalComponent, LoadingSpinnerComponent, MedicationsPanelComponent],
-    templateUrl: './medkit-detail-page.component.html'
+    imports: [ActionMenuComponent, FormsModule, BackLinkComponent, ModalComponent, LoadingSpinnerComponent, MedicationsPanelComponent],
+    templateUrl: './medkit-detail-page.component.html',
+  styles: [`
+    .mkd { display: flex; flex-direction: column; gap: var(--space-4); }
+    .mkd-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+    .mkd-head-text { display: flex; flex: 1; flex-direction: column; gap: var(--space-1); min-width: 0; }
+    .mkd-title { margin: 0; font: var(--text-display); letter-spacing: var(--letter-spacing-display); overflow-wrap: anywhere; }
+    .mkd-sub, .mkd-note { margin: 0; font: var(--text-body); color: var(--color-text-muted); }
+    .mkd-form { display: flex; flex-direction: column; gap: var(--space-3); }
+    .mkd-form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+    @media (max-width: 1023px) { .mkd-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); } }
+  `],
 })
 export class MedkitDetailPageComponent implements OnInit, OnDestroy {
+  protected readonly menu: ActionMenuItem[] = [
+    { label: 'Переименовать', handler: () => this.startEdit() },
+    { label: 'Удалить аптечку', danger: true, handler: () => void this.handleDelete() },
+  ];
+
   readonly id = input.required<string>();
 
   private readonly api = inject(ApiService);

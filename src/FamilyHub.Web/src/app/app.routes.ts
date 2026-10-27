@@ -1,5 +1,6 @@
+import { isDevMode } from '@angular/core';
 import { Routes } from '@angular/router';
-import { authGuard, consentGuard, profileGuard, guestGuard } from './services/auth.guards';
+import { authGuard, consentGuard, profileGuard, guestGuard, landingGuard } from './services/auth.guards';
 import { adminGuard } from './services/admin.guards';
 import { pendingCodeGuard } from './services/pending-code.guard';
 
@@ -39,6 +40,14 @@ export const routes: Routes = [
     canDeactivate: [pendingCodeGuard],
     loadComponent: () =>
       import('./components/telegram-bind/telegram-bind.component').then((m) => m.TelegramBindComponent),
+  },
+  {
+    // initData Mini App просрочена (аудит security-audit-2026-10, M6) — без гардов: любой запрос
+    // к API здесь всё равно получил бы тот же 401.
+    path: 'telegram-expired',
+    title: 'Сессия устарела',
+    loadComponent: () =>
+      import('./components/telegram-expired/telegram-expired.component').then((m) => m.TelegramExpiredComponent),
   },
   {
     // Публичный лендинг приглашения (веб-альтернатива Telegram-инвайту, см. FamilyDetailsComponent) —
@@ -143,7 +152,15 @@ export const routes: Routes = [
   },
 
   // Данные: требуют входа (PWA) и принятого согласия ПДн (задачи 2.3/2.4).
-  { path: '', redirectTo: 'home', pathMatch: 'full' },
+  {
+    // Лендинг для гостя; вошедшего landingGuard сразу уводит на Главную.
+    path: '',
+    pathMatch: 'full',
+    title: 'FamilyHub — здоровье всей семьи в одном месте',
+    canActivate: [landingGuard],
+    loadComponent: () =>
+      import('./components/landing/landing.component').then((m) => m.LandingComponent),
+  },
   {
     // Главная (редизайн навигации): глобальный поиск + вход в «Семьи» + виджет дней рождения.
     path: 'home',
@@ -434,6 +451,15 @@ export const routes: Routes = [
       ),
   },
   // Раньше любой неверный адрес молча уводил на Главную — человек не понимал, почему ссылка «не та».
+  // Витрина компонентов редизайна (docs/redesign/PLAN.md, фаза 2) — только в dev-сборке, без гардов
+  // и без оболочки: проверка вариантов/состояний в светлой и тёмной теме (?theme=dark).
+  ...(isDevMode()
+    ? [{
+        path: 'dev/ui',
+        title: 'Витрина UI',
+        loadComponent: () => import('./components/dev-ui/dev-ui.component').then((m) => m.DevUiComponent),
+      }]
+    : []),
   {
     path: '**',
     title: 'Страница не найдена',

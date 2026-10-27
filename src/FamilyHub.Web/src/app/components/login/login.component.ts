@@ -1,14 +1,19 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
+import { BriefcaseMedical, Cake, HeartPulse, LockKeyhole } from 'lucide';
 import { AuthService } from '../../services/auth.service';
 import { HasPendingCodeEntry } from '../../services/pending-code.guard';
 import { CookieConsentService } from '../../shared/cookie-banner/cookie-consent.service';
 import { ModalComponent } from '../../shared/modal/modal.component';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
+import { AuthCardComponent } from '../../shared/ui/auth-card/auth-card.component';
+import { FieldDirective } from '../../shared/ui/field/field.directive';
+import { IconTileComponent } from '../../shared/ui/icon-tile/icon-tile.component';
 import { ToastService } from '../../shared/toast/toast.service';
 import { PASSWORD_PATTERN } from '../settings/settings-task';
 import { todayLocal } from '../../shared/util/intake-labels';
@@ -35,7 +40,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 @Component({
     selector: 'app-login',
-    imports: [FormsModule, ModalComponent, NgTemplateOutlet],
+    imports: [FormsModule, ModalComponent, NgTemplateOutlet, AuthCardComponent, FieldDirective, IconTileComponent, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './login.component.html'
 })
 export class LoginComponent implements HasPendingCodeEntry {
@@ -47,11 +53,23 @@ export class LoginComponent implements HasPendingCodeEntry {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly cookieConsent = inject(CookieConsentService);
 
+  protected readonly icons = { BriefcaseMedical, Cake, HeartPulse, LockKeyhole };
+
   // ?intent=register — переход сюда с /join/:code кнопкой «Создать аккаунт» (JoinInviteComponent):
   // сразу открываем шаг регистрации, а не общий вход.
   readonly step = signal<Step>(
     this.route.snapshot.queryParamMap.get('intent') === 'register' ? 'register-details' : 'login',
   );
+
+  readonly stepTitle = computed(() => {
+    switch (this.step()) {
+      case 'login': return 'Вход';
+      case 'reset-password-email':
+      case 'reset-password-code': return 'Восстановление пароля';
+      default: return 'Создание аккаунта';
+    }
+  });
+
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   /** Успешный confirm ставит true ПЕРЕД навигацией — без этого pendingCodeGuard переспрашивал

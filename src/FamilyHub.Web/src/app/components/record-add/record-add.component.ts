@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { todayLocal } from '../../shared/util/intake-labels';
 import { ConfirmService } from '../../shared/confirm/confirm.service';
 import { confirmDiscard } from '../../shared/util/track-dirty.directive';
@@ -16,7 +16,11 @@ import { ACCEPTED_ATTACHMENT_TYPES, filterFilesAgainstLimits, formatMb } from '.
 import { MEDICAL_RECORD_KIND_LABELS, medicalRecordKindBasePath, type MedicalRecordKindLabels } from '../../shared/util/medical-record-labels';
 import { ExpandableComponent } from '../../shared/expandable/expandable.component';
 import { FileViewerComponent } from '../../shared/file-viewer/file-viewer.component';
-import { PersonChipComponent } from '../../shared/person-chip/person-chip.component';
+import { FileText, Upload, X } from 'lucide';
+import { AvatarComponent } from '../../shared/avatar/avatar.component';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { PageActionService } from '../../services/page-action.service';
+import { ContentPageComponent } from '../../shared/ui/content-page/content-page.component';
 
 /** Файл, ожидающий загрузки — ещё не отправленный (запись создастся только по «Сохранить»).
  * previewUrl — только для картинок (см. medications-panel.photos). */
@@ -44,11 +48,14 @@ let nextInstanceId = 0;
  */
 @Component({
     selector: 'app-record-add',
-    imports: [FormsModule, NgTemplateOutlet, ExpandableComponent, FileViewerComponent, PersonChipComponent],
+    imports: [FormsModule, NgTemplateOutlet, AvatarComponent, ExpandableComponent, FileViewerComponent, IconComponent, ContentPageComponent],
     templateUrl: './record-add.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './record-add.component.scss'
 })
 export class RecordAddComponent implements OnInit, OnDestroy {
+  protected readonly icons = { FileText, Upload, X };
+  private readonly pageAction = inject(PageActionService);
   readonly kind = input.required<MedicalRecordKind>();
 
   private readonly api = inject(ApiService);
@@ -107,11 +114,14 @@ export class RecordAddComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Телефон: форма на весь экран — без шапки каркаса и таб-бара (DESIGN §3 «side-sheet»).
+    if (!this.isWide) this.pageAction.setFullscreen(true);
     void this.api.getAttachmentLimits().then((limits) => (this.attachmentLimits = limits));
     void this.api.getDoctorSuggestions().then((doctors) => (this.doctorSuggestions = doctors));
   }
 
   ngOnDestroy(): void {
+    this.pageAction.setFullscreen(false);
     this.clearPendingFiles();
   }
 

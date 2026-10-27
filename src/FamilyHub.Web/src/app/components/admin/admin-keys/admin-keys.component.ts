@@ -1,10 +1,11 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AdminApiService, AdminKeyRings, RotationStatus } from '../../../services/admin-api.service';
 import { ApiError } from '../../../services/api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -18,7 +19,8 @@ const POLL_INTERVAL_MS = 2000;
  */
 @Component({
     selector: 'app-admin-keys',
-    imports: [DatePipe, AdminStatusPipe],
+    imports: [DatePipe, AdminStatusPipe, LoadingSpinnerComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     templateUrl: './admin-keys.component.html'
 })
 export class AdminKeysComponent implements OnInit, OnDestroy {

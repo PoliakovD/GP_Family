@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import {
   AdminApiService,
@@ -10,6 +10,7 @@ import { ApiError } from '../../../services/api.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { HistoryDiffLine, diffSnapshots, historyActionLabel, historyTargetLabel } from './review-helpers';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 /**
  * История правок записи справочника или её кэша поиска (ADR-0018): кто/когда/что изменилось («было → стало») и
@@ -18,29 +19,29 @@ import { HistoryDiffLine, diffSnapshots, historyActionLabel, historyTargetLabel 
  */
 @Component({
   selector: 'app-kb-history',
-  imports: [DatePipe],
+  imports: [DatePipe, LoadingSpinnerComponent],
   template: `
-    <div class="card-title d-flex justify-content-between" style="align-items: center;">
+    <div class="card-title d-flex justify-content-between align-items-center">
       <span>{{ title }}</span>
       <button type="button" class="btn btn-secondary btn-sm" [disabled]="loading()" (click)="load()">Обновить</button>
     </div>
     @if (loading() && items().length === 0) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
       <ul class="kb-history">
         @for (h of items(); track h.id) {
           <li class="kb-history-item">
-            <div class="d-flex justify-content-between" style="align-items: baseline; gap: 8px; flex-wrap: wrap;">
+            <div class="d-flex justify-content-between gap-2 flex-wrap x-ai-baseline">
               <div>
-                <span class="tag" [class.tag-accent]="h.actor === 'admin'" [class.tag-neutral]="h.actor !== 'admin'">
+                <span class="badge badge-neutral">
                   {{ h.actor === 'admin' ? 'админ' : 'система' }}
                 </span>
                 <strong>{{ actionLabel(h.action) }}</strong>
                 @if (showRecord) { «{{ h.targetLabel }}» }
                 <span class="text-muted"> · {{ targetLabel(h.target) }} · {{ h.at | date: 'dd.MM.yyyy HH:mm' }}</span>
-                @if (h.revertedLogId) { <span class="tag tag-neutral">откат</span> }
+                @if (h.revertedLogId) { <span class="badge badge-neutral">откат</span> }
               </div>
               <div class="d-flex gap-2">
                 <button type="button" class="btn btn-secondary btn-sm" (click)="toggle(h)">
@@ -53,10 +54,10 @@ import { HistoryDiffLine, diffSnapshots, historyActionLabel, historyTargetLabel 
                 }
               </div>
             </div>
-            @if (h.note) { <p class="text-muted mb-0" style="margin-top: 2px;">{{ h.note }}</p> }
+            @if (h.note) { <p class="text-muted mb-0 x-mt-2px">{{ h.note }}</p> }
             @if (expandedId() === h.id) {
               @if (diffLoading()) {
-                <p class="text-muted">Загрузка…</p>
+                <app-loading-spinner />
               } @else if (diff().length === 0) {
                 <p class="text-muted mb-0">Различий в сохранённых полях нет.</p>
               } @else {
@@ -84,11 +85,15 @@ import { HistoryDiffLine, diffSnapshots, historyActionLabel, historyTargetLabel 
       }
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
+    .x-ai-baseline { align-items: baseline; }
+    .x-mt-2px { margin-top: 2px; }
+
     .kb-history { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .kb-history-item { padding-bottom: 10px; border-bottom: 1px solid var(--color-divider); }
-    .kb-history-before { color: var(--color-status-danger-text); white-space: pre-wrap; word-break: break-word; }
-    .kb-history-after { color: var(--color-status-ok-text); white-space: pre-wrap; word-break: break-word; }
+    .kb-history-before { color: var(--color-danger); white-space: pre-wrap; word-break: break-word; }
+    .kb-history-after { color: var(--color-success); white-space: pre-wrap; word-break: break-word; }
   `],
 })
 export class KbHistoryComponent implements OnChanges {

@@ -1,0 +1,301 @@
+// Лендинг для гостя (DESIGN §4 «Лендинг»). Колонка до 1200px по центру, без оболочки приложения.
+:host {
+  display: block;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.ld {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-10);
+
+  @media (max-width: 1023px) { padding: 0 var(--space-4); }
+}
+
+// --- Шапка: знак + «Войти» / «Создать аккаунт» ---
+.ld-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) 0;
+
+  @media (max-width: 639px) { padding: var(--space-4) 0; }
+}
+
+.ld-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  font: var(--text-title);
+  font-weight: 700;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.ld-head-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+// На телефоне в шапке только «Войти»: «Создать аккаунт» — первая кнопка героя прямо под ней.
+.ld-head-cta {
+  @media (max-width: 639px) { display: none; }
+}
+
+// --- Герой: текст | превью Главной ---
+.ld-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) 0 var(--space-12);
+
+  @media (max-width: 1023px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+    padding: var(--space-6) 0 var(--space-10);
+  }
+}
+
+.ld-kicker {
+  margin: 0 0 var(--space-3);
+  font: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.ld-title {
+  margin: 0 0 var(--space-5);
+  font: var(--text-hero);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 639px) { font: var(--text-hero-mobile); letter-spacing: var(--letter-spacing-display); }
+}
+
+.ld-lead {
+  margin: 0;
+  max-width: 560px;
+  font: var(--text-body-lg);
+  color: var(--color-text-secondary);
+}
+
+.ld-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+
+  @media (max-width: 639px) {
+    flex-direction: column;
+    margin-top: var(--space-6);
+
+    .btn { width: 100%; }
+  }
+}
+
+.ld-note {
+  margin: var(--space-4) 0 0;
+  font: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+// Превью: «Требует внимания» и под ним — «Дни рождения», заходит на него краем (смещена влево).
+.ld-preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.ld-preview-card {
+  padding: var(--space-5) 0 var(--space-8);
+  gap: var(--space-2);
+  box-shadow: var(--shadow-overlay);
+
+  @media (max-width: 639px) { padding: var(--space-4) 0 var(--space-8); }
+}
+
+.ld-preview-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+
+  @media (max-width: 1023px) { padding: 0 var(--space-4); }
+}
+
+.ld-preview-head-bare { padding: 0; }
+.ld-preview-title { font: var(--text-title); }
+.ld-preview-count { font: var(--text-body-sm); color: var(--color-text-muted); }
+.ld-preview-link { font: var(--text-body-sm); font-weight: 600; color: var(--color-accent); }
+
+.ld-preview-float {
+  align-self: flex-start;
+  width: 300px;
+  max-width: calc(100% - var(--space-6));
+  margin: calc(-1 * var(--space-6)) 0 0 calc(-1 * var(--space-6));
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-overlay);
+
+  @media (max-width: 1023px) { align-self: flex-end; margin: calc(-1 * var(--space-6)) var(--space-4) 0 0; }
+}
+
+.ld-preview-float-title { font: var(--text-title); }
+
+// Мини-версия отчёта: подпись слева, страница справа.
+.ld-report {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-12);
+  align-items: center;
+
+  @media (max-width: 1023px) { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+}
+
+.ld-report-points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+// --- Секции ---
+.ld-section {
+  margin: 0 0 var(--space-12);
+
+  @media (max-width: 639px) { margin-bottom: var(--space-10); }
+}
+
+.ld-h2 {
+  margin: 0 0 var(--space-6);
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 639px) { margin-bottom: var(--space-4); font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+}
+
+.ld-h3 {
+  margin: 0 0 var(--space-1);
+  font: var(--text-title);
+
+  @media (max-width: 639px) { font: var(--text-title-mobile); }
+}
+
+.ld-text {
+  margin: 0;
+  font: var(--text-body-sm);
+  color: var(--color-text-secondary);
+}
+
+.ld-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (max-width: 1023px) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+  @media (max-width: 639px) { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+}
+
+.ld-feature {
+  gap: var(--space-3);
+  padding: var(--space-6);
+
+  @media (max-width: 639px) { padding: var(--space-5); }
+}
+
+.ld-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (max-width: 1023px) { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+}
+
+.ld-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.ld-step-num {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: var(--text-title);
+}
+
+.ld-trust {
+  gap: 0;
+  padding: var(--space-8);
+
+  .ld-h2 { margin-bottom: var(--space-6); }
+  .ld-link { align-self: flex-start; margin-top: var(--space-4); }
+
+  @media (max-width: 639px) { padding: var(--space-5); }
+}
+
+.ld-trust-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (max-width: 639px) { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+}
+
+.ld-trust-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.ld-final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 0 var(--space-12);
+  text-align: center;
+
+  .ld-h2 { margin-bottom: var(--space-3); }
+  .ld-cta { justify-content: center; margin-top: var(--space-6); }
+
+  @media (max-width: 639px) { align-items: stretch; }
+}
+
+.ld-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-6) 0 var(--space-8);
+  border-top: 1px solid var(--color-divider);
+  font: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+// Ссылка вне строки текста — тап-зона 44px (DESIGN §1 п.5).
+.ld-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+}
+
+.ld-demo { display: block; }

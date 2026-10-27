@@ -20,7 +20,8 @@ public class GotenbergConverter(HttpClient http, ILogger<GotenbergConverter> log
         [DocumentContentTypes.Xls] = "xls",
         [DocumentContentTypes.Doc] = "doc",
         [DocumentContentTypes.Rtf] = "rtf",
-        [DocumentContentTypes.Html] = "html",
+        // HTML намеренно не конвертируется (аудит security-audit-2026-10, H1) — см.
+        // AttachmentPreviewRenderer.IsOfficeRoute.
     };
 
     public async Task<byte[]?> ConvertToPdfAsync(byte[] content, string contentType, CancellationToken ct = default)

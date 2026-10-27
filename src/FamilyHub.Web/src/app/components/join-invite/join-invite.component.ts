@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ApiError, ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -6,6 +6,8 @@ import { TelegramService } from '../../services/telegram.service';
 import { PendingInviteService } from '../../services/pending-invite.service';
 import { ToastService } from '../../shared/toast/toast.service';
 import type { InvitePreview } from '../../models/types';
+import { AuthCardComponent } from '../../shared/ui/auth-card/auth-card.component';
+import { LoadingSpinnerComponent } from '../../shared/loading-spinner/loading-spinner.component';
 
 type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 'exhausted' | 'rate_limited' | 'network';
 
@@ -19,7 +21,8 @@ type PreviewState = 'loading' | 'valid' | 'not_found' | 'revoked' | 'expired' | 
 @Component({
   selector: 'app-join-invite',
   standalone: true,
-  imports: [RouterLink],
+  imports: [AuthCardComponent, LoadingSpinnerComponent, RouterLink],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './join-invite.component.html',
 })
 export class JoinInviteComponent implements OnInit {

@@ -21,6 +21,19 @@
 | `../.github/workflows/ci.yml`, `integration.yml` | Гейты перед деплоем (build+unit на каждый push, integration на master) |
 | `../src/FamilyHub.Api/Dockerfile` | Продовый образ (Angular + .NET в одном контейнере) |
 
+### Сети docker (аудит security-audit-2026-10, H1/L3–L5)
+
+| Сеть | Кто в ней | Зачем |
+|---|---|---|
+| `default` | api, postgres, minio, seq, backup | бэкенд; Caddy сюда не входит |
+| `edge` (`172.31.250.0/27`, динамика `.16–.31`) | caddy (**фиксированный `172.31.250.2`**), api, seq, minio, wg-client | всё, куда проксирует Caddy |
+| `messaging` (internal) | kafka, api, wg-client (и бот через его netns) | Kafka без аутентификации видят только api и бот |
+| `previews` (internal) | gotenberg, api | LibreOffice разбирает чужие документы без сети |
+
+api принимает `X-Forwarded-For/Proto` только от `172.31.250.2` (`ReverseProxy__KnownProxies__0`), поэтому
+адрес Caddy менять только вместе с этой переменной. Первая выкатка этой схемы пересоздаёт контейнеры
+(новые сети) — обычный `docker compose up -d` из деплой-workflow это делает сам.
+
 ## 1. Требования
 
 - VPS: 6 CPU / 12 GB RAM / 120 GB SSD, чистая **Ubuntu 24.04**.
@@ -211,7 +224,10 @@ curl -i -H 'X-Dev-TelegramId: 1' https://gp-family.ru/api/families   # 401, не
 - `https://admin.gp-family.ru:4059` — админ-панель (ADR-0009): своя форма входа
   (`Admin__User/Password`), НЕ тот же логин, что у `:8443/hangfire` выше. Тот же хост-лейбл
   `admin.`, что и `:8443` — Caddy различает их по порту (см. deploy/Caddyfile), путаница в
-  адресной строке возможна, если открывать оба одновременно.
+  адресной строке возможна, если открывать оба одновременно. Само приложение тоже обслуживает
+  панель только на Host `admin.${PUBLIC_DOMAIN}:4059` (`Admin__AllowedHosts__0` в compose) —
+  на `:8443` и публичном домене `/admin*` и `/api/admin/*` отвечают 404. После 10 неудачных
+  входов подряд форма блокируется на 15 минут (`Admin__MaxFailedLogins`/`Admin__LockoutDuration`).
 
 Postgres — не HTTP, поэтому без Caddy: контейнер публикует `5432` напрямую на `10.8.0.1`
 (host-IP-scoped, как и `8443`/`4059` выше). Подключение любым клиентом (DBeaver/pgAdmin/psql)

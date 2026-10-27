@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { MedicalRecordKind } from '../../models/types';
 import { RecordBatchAddComponent } from '../record-batch-add/record-batch-add.component';
 
@@ -7,6 +7,7 @@ import { RecordBatchAddComponent } from '../record-batch-add/record-batch-add.co
 @Component({
     selector: 'app-record-batch-add-page',
     imports: [RecordBatchAddComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `<app-record-batch-add [kind]="Kind.Analysis" />`
 })
 export class RecordBatchAddPageComponent {

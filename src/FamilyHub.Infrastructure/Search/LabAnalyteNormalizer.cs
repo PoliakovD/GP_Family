@@ -101,6 +101,42 @@ public static partial class LabAnalyteNormalizer
         return WhitespaceRegex().Replace(MedicalTextTransliterator.Fold(key), " ").Trim();
     }
 
+    /// <summary>
+    /// «Голова» ключа — сам аналит без LOINC-дескриптора свойства/системы: протоколы медорганизаций (ГБУЗ РК)
+    /// печатают «Мочевина, молярная концентрация в сыворотке или плазме крови», и ключ
+    /// "мочевина молярная концентрация в сыворотке или плазме крови" почти целиком состоит из общего для всей
+    /// таблицы хвоста — триграммная схожесть с "билирубин прямой молярная концентрация в …" выше порога
+    /// автопривязки (LabAnalyteKbLookupService), хотя показатели разные. Голова — то, что их различает
+    /// ("мочевина"). Ключ без дескриптора возвращается как есть; ключ хранения (<see cref="NormalizeAnalyteKey"/>)
+    /// не меняется — голова нужна только для сравнения. Вход — уже нормализованный ключ.
+    /// </summary>
+    public static string AnalyteHead(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
+        var match = LoincDescriptor.Match(key);
+        return match.Success ? key[..match.Index].Trim() : key.Trim();
+    }
+
+    /// <summary>Есть ли в ключе LOINC-дескриптор (см. <see cref="AnalyteHead"/>).</summary>
+    public static bool HasLoincDescriptor(string key) =>
+        !string.IsNullOrWhiteSpace(key) && LoincDescriptor.IsMatch(key);
+
+    /// <summary>Дескриптор «[массовая|молярная|каталитическая|…] концентрация в &lt;система&gt;» до конца ключа; перед
+    /// ним обязано остаться хотя бы одно слово (lookbehind на букву/цифру) — иначе это не хвост, а всё название.
+    /// Слова собраны через <see cref="MedicalTextTransliterator.Fold"/> — ключ уже свёрнут ("массовая" → "масовая",
+    /// "объемная" → "обемная"), литералы паттерна обязаны быть в той же форме.</summary>
+    private static readonly Regex LoincDescriptor = BuildLoincDescriptorRegex();
+
+    private static Regex BuildLoincDescriptorRegex()
+    {
+        static string F(string word) => Regex.Escape(MedicalTextTransliterator.Fold(word));
+        var properties = string.Join('|',
+            new[] { "массовая", "молярная", "каталитическая", "объемная", "числовая", "арбитражная" }.Select(F));
+        return new Regex(
+            $@"(?<=[\p{{L}}\p{{Nd}}])\s+(?:(?:{properties})\s+)?{F("концентрация")}\s+{F("в")}\s+.+$",
+            RegexOptions.Compiled);
+    }
+
     /// <summary>Слово-маркер абсолютной формы в ключе показателя.</summary>
     public const string AbsoluteKeyWord = "абс";
 

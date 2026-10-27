@@ -1,8 +1,11 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AdminApiService } from '../../../services/admin-api.service';
 import { ReviewQueueStore } from '../shared/review-queue.store';
+import { LogOut, ShieldCheck } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { ThemeSwitchComponent } from '../../../shared/ui/theme-switch/theme-switch.component';
 
 /**
  * Хаб админ-панели (ADR-0009): шесть разделов верхнего уровня, внутри каждого (кроме «Требует
@@ -21,14 +24,17 @@ import { ReviewQueueStore } from '../shared/review-queue.store';
  */
 @Component({
     selector: 'app-admin-hub',
-    imports: [RouterLink, RouterLinkActive, RouterOutlet],
+    imports: [RouterLink, RouterLinkActive, RouterOutlet, IconComponent, ThemeSwitchComponent],
     templateUrl: './admin-hub.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './admin-hub.component.scss'
 })
 export class AdminHubComponent implements OnInit {
   private readonly api = inject(AdminApiService);
   private readonly router = inject(Router);
   readonly reviewQueue = inject(ReviewQueueStore);
+
+  protected readonly icons = { LogOut, ShieldCheck };
 
   /** Страница «Одобрение» (Inbox с тремя колонками) не помещается в 960px оболочки — на ней оболочка шире. */
   readonly wide = signal(false);

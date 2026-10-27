@@ -4,7 +4,7 @@
 .inbox {
   display: grid;
   grid-template-columns: minmax(280px, 340px) 1fr;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: start;
 }
 
@@ -17,7 +17,7 @@
   max-height: calc(100vh - 220px);
   overflow-y: auto;
   position: sticky;
-  top: 8px;
+  top: var(--space-2);
 }
 
 @media (max-width: 900px) {
@@ -27,12 +27,12 @@
 .inbox-bulk {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--color-paper);
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -40,7 +40,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -53,8 +53,8 @@
 .inbox-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
   cursor: pointer;
 
@@ -62,8 +62,8 @@
 }
 
 .inbox-row-low {
-  background: color-mix(in srgb, var(--color-status-danger) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--color-status-danger);
+  background: color-mix(in srgb, var(--color-danger) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-danger);
 }
 
 .inbox-row-active {
@@ -85,13 +85,13 @@
 .inbox-row-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
   margin-top: 2px;
-  font-size: 0.7647rem;
+  font: var(--text-badge);
 }
 
 .inbox-row-query {
-  font-size: 0.7647rem;
+  font: var(--text-badge);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -101,14 +101,16 @@
 
 .inbox-detail { min-width: 0; }
 
-// Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
-.seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-.seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
-.seg-opt.active, .seg-opt.active:hover { color: var(--color-bg); background: var(--color-accent); }
 
 kbd {
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--color-divider);
-  border-radius: 4px;
-  font-size: 0.7rem;
+  border-radius: var(--radius-xs);
+  font: var(--text-micro);
 }
+
+// Бывшие inline-стили шаблона.
+.x-text-title { font: var(--text-title); }
+.x-w-auto { width: auto; }
+.x-p-s3 { padding: var(--space-3); }
+.x-mt-s4 { margin-top: var(--space-4); }

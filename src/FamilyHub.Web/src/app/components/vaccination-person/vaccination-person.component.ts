@@ -1,4 +1,5 @@
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { BackLinkComponent } from '../../shared/back-link/back-link.component';
+import { Component, computed, effect, inject, input, signal, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { pluralizeRu } from '../../shared/util/pluralize';
 import { ClickableDirective } from '../../shared/util/clickable.directive';
@@ -20,6 +21,8 @@ import { todayLocal } from '../../shared/util/intake-labels';
 
 import { saveBlob } from '../../shared/util/save-blob';
 import { TelegramService } from '../../services/telegram.service';
+import { BookOpen, ChevronDown, ChevronUp, CircleCheck, CircleDashed, FileText, Image, NotebookPen, Plus, Syringe, Trash2 } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 const STAGE_ORDER = ['0-1', '1-2', '2-6', '6-7', '14+', 'adult', 'epidemic', 'closed'];
 
 interface StageGroup {
@@ -36,11 +39,14 @@ interface StageGroup {
  */
 @Component({
   selector: 'app-vaccination-person',
-  imports: [ClickableDirective, AvatarComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink],
+  imports: [ClickableDirective, AvatarComponent, BackLinkComponent, FileViewerComponent, LoadingSpinnerComponent, RouterLink, IconComponent],
   templateUrl: './vaccination-person.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './vaccination-person.component.scss',
 })
 export class VaccinationPersonComponent {
+  protected readonly icons = { BookOpen, ChevronDown, ChevronUp, CircleCheck, CircleDashed, FileText, Image, NotebookPen, Plus, Syringe, Trash2 };
+
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);

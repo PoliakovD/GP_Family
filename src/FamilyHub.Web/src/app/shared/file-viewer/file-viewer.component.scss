@@ -11,7 +11,7 @@
   position: fixed;
   inset: 0;
   z-index: var(--z-viewer);
-  background: var(--color-neutral-900);
+  background: var(--color-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -27,7 +27,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--color-neutral-900);
+  background: var(--color-text);
   padding-top: env(safe-area-inset-top, 0);
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
@@ -50,9 +50,9 @@
   min-height: 320px;
   max-width: 96vw;
   max-height: 92vh;
-  background: var(--color-neutral-900);
+  background: var(--color-text);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
   overflow: hidden;
   resize: both;
 }
@@ -63,8 +63,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  color: #fff;
-  background: color-mix(in srgb, #000 35%, transparent);
+  color: var(--color-on-scrim);
+  background: color-mix(in srgb, var(--color-scrim) 35%, transparent);
   flex-shrink: 0;
 
   // Кнопки в тёмной шапке — .btn-ghost по умолчанию цвета акцента на светлом фоне, здесь фон
@@ -72,10 +72,10 @@
   // Без ::ng-deep — кнопки прямо в разметке ЭТОГО компонента, не в дочерних, обычная вложенность
   // видит их и так.
   .btn-icon {
-    color: #fff;
+    color: var(--color-on-scrim);
 
-    &:hover { background: color-mix(in srgb, #fff 15%, transparent); }
-    &:active { background: color-mix(in srgb, #fff 25%, transparent); }
+    &:hover { background: color-mix(in srgb, var(--color-on-scrim) 15%, transparent); }
+    &:active { background: color-mix(in srgb, var(--color-on-scrim) 25%, transparent); }
   }
 }
 
@@ -91,12 +91,12 @@
 }
 
 .viewer-header-name {
+  font: var(--text-caption);
   font-weight: 600;
-  font-size: 0.8235rem;
 }
 
 .viewer-header-count {
-  font-size: 0.7647rem;
+  font: var(--text-badge);
   opacity: 0.75;
 }
 
@@ -116,7 +116,7 @@
   justify-content: center;
   overflow: hidden;
   touch-action: none; // жесты (пинч/пан/свайп) обрабатываются вручную, см. ZoomPanController
-  color: var(--color-neutral-200);
+  color: var(--color-divider);
 }
 
 .viewer-nav-arrow {
@@ -128,15 +128,15 @@
   height: 44px;
   border-radius: 50%;
   border: none;
-  background: color-mix(in srgb, #000 45%, transparent);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-scrim) 45%, transparent);
+  color: var(--color-on-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.0588rem;
+  font: var(--text-body-lg);
 
-  &:hover { background: color-mix(in srgb, #000 60%, transparent); }
+  &:hover { background: color-mix(in srgb, var(--color-scrim) 60%, transparent); }
   &:disabled { opacity: 0.3; cursor: not-allowed; }
 }
 
@@ -158,9 +158,9 @@
   border-radius: 50%;
   border: none;
   padding: 0;
-  background: color-mix(in srgb, #fff 30%, transparent);
+  background: color-mix(in srgb, var(--color-on-scrim) 30%, transparent);
 
   &.viewer-dot-active {
-    background: #fff;
+    background: var(--color-on-scrim);
   }
 }

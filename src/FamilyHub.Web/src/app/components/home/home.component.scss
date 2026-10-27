@@ -1,116 +1,130 @@
-.home-header h2 {
-  font-size: 1.7647rem;
-}
+// Главная (DESIGN §4). Только раскладка и мелкие части экрана — карточки, строки, бейджи и метрики
+// берутся из библиотеки (styles.scss, shared/ui).
 
-// «Среда, 26 августа · в семье «X» N уведомлений» — раньше 0.8824rem (meta), в макете 16px.
-.home-header .muted {
-  font-size: 1rem;
-}
-
-// «Пригласить по ссылке» внизу «Кто в семье» — линейка сверху, как в макете.
-.home-invite-link {
+.home {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  padding: 12px 0 0;
-  border: 0;
-  border-top: 1px solid var(--color-divider);
-  background: transparent;
-  color: var(--color-accent);
-  font-family: var(--font-heading);
-  font-size: 0.8824rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  i {
-    font-size: 1.1765rem;
-  }
-
-  &:hover {
-    color: var(--color-accent-dark, var(--color-accent));
-  }
+  flex-direction: column;
+  gap: var(--space-6);
 }
 
-.home-grid {
+.home-head { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.home-title {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 1023px) { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+}
+
+.home-sub {
+  margin: 0;
+  font: var(--text-body-lg);
+  color: var(--color-text-muted);
+
+  @media (max-width: 1023px) { font: var(--text-body); color: var(--color-text-muted); }
+}
+
+.home-first-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+
+// Раскладка: десктоп — метрики во всю ширину, ниже «Требует внимания» (2/3) | семья + ДР (1/3).
+// Мобайл — одна колонка, «Требует внимания» первым (решение по PLAN.md, «Расхождения» п. 2).
+.home-layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 28px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-areas:
+    'metrics metrics'
+    'attention family'
+    'attention birthdays'
+    'attention rest';
+  grid-template-rows: auto auto auto 1fr;
+  gap: var(--space-5) var(--space-6);
   align-items: start;
-}
 
-// Редизайн v2.1 — правая колонка («Кто в семье»/«Ближайшие дни рождения») раньше была полностью
-// скрыта ниже 1024px (тот же брейкпоинт, что у сайдбара шелла), из-за чего блок «Ближайшие дни
-// рождения» не был виден ни на планшете, ни на мобильном, ни в любом некстремизированном окне
-// браузера — только на широком десктопе. Теперь колонка просто стекается под левую тем же grid,
-// вместо того чтобы пропадать целиком.
-@media (max-width: 1023px) {
-  .home-grid {
-    grid-template-columns: 1fr;
+  @media (max-width: 1023px) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'attention' 'metrics' 'birthdays' 'family';
+    grid-template-rows: none;
+    gap: var(--space-4);
   }
 }
 
-.home-section-kicker {
+.home-metrics {
+  grid-area: metrics;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+
+  @media (max-width: 1023px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+
+    // На мобайле последний анализ уже есть строкой в «Требует внимания» (макет home-mobile).
+    .home-metric-analysis { display: none; }
+  }
+}
+
+.home-attention { grid-area: attention; }
+.home-family { grid-area: family; gap: var(--space-2); }
+.home-birthdays { grid-area: birthdays; gap: var(--space-3); }
+
+// Семья на мобайле — отдельная вкладка таб-бара; на главной её карточки нет (макет home-mobile).
+.home-family {
+  @media (max-width: 1023px) { display: none; }
+}
+
+.home-all-clear {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 0.8235rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-  margin-bottom: 4px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6) var(--space-5);
+  font: var(--text-body-sm);
+  color: var(--color-text-muted);
+
+  app-icon { color: var(--color-success); }
 }
 
-.home-section-line {
-  flex: 1;
-  height: 1px;
-  background: var(--color-divider);
-}
-
-.home-ok-chip {
-  display: inline-flex;
+.home-card-head {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-meta);
-  color: var(--color-neutral-800);
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  .card-title { margin: 0; }
 }
 
-// Аптечка с просроченными — тот же приём контраста, что чипы-метаданные записи (медалист "N вне
-// нормы"): "В порядке" в заголовке блока не значит "каждый чип обязан быть зелёным".
-// Пустой раздел — ссылка-приглашение «добавить», без галочки «всё в порядке».
-.home-ok-chip-empty {
+.home-card-link {
+  font: var(--text-body-sm);
+  font-weight: 600;
   color: var(--color-accent);
   text-decoration: none;
-  border: 1px dashed var(--color-divider);
+
+  &:hover { text-decoration: underline; }
 }
 
-.home-ok-chip-danger {
-  background: color-mix(in srgb, var(--color-status-danger) 14%, var(--color-surface));
-  color: var(--color-status-danger-text);
+// Вход в чат семьи — мягкая акцентная плашка (макет home-desktop).
+.home-chat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+  text-decoration: none;
+
+  &:hover { background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); }
 }
 
-.home-birthday-date {
-  width: 44px;
-  flex: none;
-  text-align: center;
-}
+.home-chat-text { display: flex; flex-direction: column; min-width: 0; }
+.home-chat-title { font: var(--text-body-sm); font-weight: 600; }
+.home-chat-sub { font: var(--text-caption); }
 
-.home-birthday-day {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 1.0588rem;
-  line-height: 1;
-}
+.home-family .btn-dashed { margin-top: var(--space-2); }
 
-.home-birthday-month {
-  font-size: 0.7647rem;
-  color: var(--color-neutral-600);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 2px;
+// Дни рождения: плитка даты (ближайший — акцентная) → имя + «Исполнится N».
+.home-bd-row {
+  // На мобайле — только ближайший (макет home-mobile).
+  @media (max-width: 1023px) { &:not(:nth-child(2)) { display: none; } }
 }

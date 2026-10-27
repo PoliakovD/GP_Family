@@ -4,6 +4,7 @@
     <ProjectReference Include="..\FamilyHub.Domain\FamilyHub.Domain.csproj" />
     <ProjectReference Include="..\FamilyHub.Infrastructure\FamilyHub.Infrastructure.csproj" />
     <ProjectReference Include="..\FamilyHub.Modules.Birthdays\FamilyHub.Modules.Birthdays.csproj" />
+    <ProjectReference Include="..\FamilyHub.Modules.Chat\FamilyHub.Modules.Chat.csproj" />
     <ProjectReference Include="..\FamilyHub.Modules.Medical\FamilyHub.Modules.Medical.csproj" />
   </ItemGroup>
 

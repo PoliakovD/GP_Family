@@ -1,12 +1,53 @@
-// Редизайн v2 — горизонтальная прокрутка .seg теперь глобальная (styles.scss), локальный
-// дубль этого фикса убран (было 4 идентичные копии, см. риск Р1 плана редизайна).
+// Оболочка админки (экран без каркаса приложения): бренд + H1 + «Выйти» → разделы (.seg) → страница.
+// Горизонтальная прокрутка .seg — глобальная (styles.scss).
 .admin-shell {
-  max-width: 960px;
-  margin: 1rem auto;
-  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-10) var(--space-10);
+
+  @media (max-width: 1023px) { padding: var(--space-4) var(--space-4) var(--space-10); gap: var(--space-4); }
 }
 
-// Широкая оболочка для страницы «Одобрение» (Inbox: список + три колонки карточки).
-.admin-shell-wide {
+// Шапка + разделы: одна и та же колонка на всех страницах — навигация не прыгает при переходах.
+.admin-bar,
+.admin-body {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+// «Одобрение» (Inbox: список + три колонки карточки) не помещается в 1200px — шире только содержимое.
+.admin-body-wide {
   max-width: 1680px;
 }
+
+.admin-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-title {
+  margin: 0;
+  font: var(--text-display-mobile);
+  letter-spacing: var(--letter-spacing-display);
+
+  @media (max-width: 639px) { font: var(--text-title); font-weight: 700; }
+}
+
+// Тема и «Выйти» справа; на телефоне — отдельной строкой под заголовком.
+.admin-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+
+  @media (max-width: 639px) { flex-basis: 100%; justify-content: space-between; margin-left: 0; }
+}
+
+.admin-nav { align-self: flex-start; max-width: 100%; }

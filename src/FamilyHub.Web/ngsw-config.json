@@ -16,7 +16,7 @@
       "resources": {
         "files": [
           "/assets/**",
-          "/phosphor-duotone/**",
+          "/media/**",
           "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)",
           "/pdfjs/*.mjs"
         ]
@@ -48,6 +48,8 @@
     "!/api/medication-courses/**",
     "!/api/medication-doses/**",
     "!/api/medication-reminders/**",
+    "!/api/chat/**",
+    "!/hubs/**",
 
     "!/hangfire",
     "!/hangfire/**",

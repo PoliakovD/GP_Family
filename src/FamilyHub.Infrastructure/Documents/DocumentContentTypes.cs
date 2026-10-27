@@ -28,7 +28,7 @@ public static class DocumentContentTypes
 
     /// <summary>Растровые форматы — путь через vision-OCR. SkiaSharp на Linux не декодирует ни
     /// HEIC, ни TIFF: TIFF <see cref="ImageDownscaler"/> дешифрует фолбэком через
-    /// SixLabors.ImageSharp (чисто управляемый декодер, без риска нативных musl-биндингов), а
+    /// BitMiracle.LibTiff.NET (чисто управляемый декодер, без риска нативных musl-биндингов), а
     /// HEIC остаётся нераспознаваемым сервером — см. докстринг ImageDownscaler.</summary>
     public static readonly IReadOnlySet<string> Images =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Jpeg, Png, Webp, Heic, Tiff };

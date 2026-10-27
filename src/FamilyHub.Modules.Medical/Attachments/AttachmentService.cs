@@ -389,6 +389,7 @@ public class AttachmentService(
             FileOwnerType.Medication => await HasMedicationAccessAsync(attachment.OwnerId, userId, ct),
             FileOwnerType.Vaccination => await HasVaccinationAccessAsync(attachment.OwnerId, userId, ct),
             FileOwnerType.VaccinationCertificate => await HasVaccinationCertificateAccessAsync(attachment.OwnerId, userId, ct),
+            FileOwnerType.ChatMessage => await HasChatMessageAccessAsync(attachment.OwnerId, userId, ct),
             _ => false,
         };
 
@@ -396,6 +397,18 @@ public class AttachmentService(
     {
         var familyId = await db.Medications.AsNoTracking()
             .Where(m => m.Id == medicationId)
+            .Select(m => m.FamilyId)
+            .FirstOrDefaultAsync(ct);
+
+        return familyId != Guid.Empty && await familyAccess.HasRoleAsync(userId, familyId, FamilyRole.Member, ct);
+    }
+
+    /// <summary>Вложение сообщения чата семьи (ADR-0019) — видно активным членам семьи сообщения; у удалённого
+    /// сообщения вложений уже нет, но проверка всё равно отсекает его.</summary>
+    private async Task<bool> HasChatMessageAccessAsync(Guid messageId, Guid userId, CancellationToken ct)
+    {
+        var familyId = await db.ChatMessages.AsNoTracking()
+            .Where(m => m.Id == messageId && m.DeletedAt == null)
             .Select(m => m.FamilyId)
             .FirstOrDefaultAsync(ct);
 

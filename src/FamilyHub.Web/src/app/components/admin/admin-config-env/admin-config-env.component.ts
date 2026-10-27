@@ -1,12 +1,13 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AdminApiService, AdminConfig, ConfigItem, ConfigSource } from '../../../services/admin-api.service';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
 
 const SOURCE_LABELS: Record<ConfigSource, { label: string; tag: string }> = {
-  env: { label: 'env', tag: 'tag-accent' },
-  appsettings: { label: 'appsettings', tag: 'tag-neutral' },
-  cli: { label: 'командная строка', tag: 'tag-neutral' },
-  other: { label: 'другой источник', tag: 'tag-neutral' },
-  default: { label: 'по умолчанию', tag: 'tag-outline' },
+  env: { label: 'env', tag: 'badge-neutral' },
+  appsettings: { label: 'appsettings', tag: 'badge-neutral' },
+  cli: { label: 'командная строка', tag: 'badge-neutral' },
+  other: { label: 'другой источник', tag: 'badge-neutral' },
+  default: { label: 'по умолчанию', tag: 'badge-neutral' },
 };
 
 /**
@@ -19,7 +20,9 @@ const SOURCE_LABELS: Record<ConfigSource, { label: string; tag: string }> = {
  */
 @Component({
   selector: 'app-admin-config-env',
+  imports: [LoadingSpinnerComponent],
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './admin-config-env.component.html',
 })
 export class AdminConfigEnvComponent implements OnInit {
@@ -55,6 +58,6 @@ export class AdminConfigEnvComponent implements OnInit {
   }
 
   sourceTag(source: ConfigSource): string {
-    return SOURCE_LABELS[source]?.tag ?? 'tag-neutral';
+    return SOURCE_LABELS[source]?.tag ?? 'badge-neutral';
   }
 }

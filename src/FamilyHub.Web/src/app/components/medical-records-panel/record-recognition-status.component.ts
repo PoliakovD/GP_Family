@@ -1,7 +1,9 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { ExtractionJobStatus, ExtractionStatus } from '../../models/types';
 import type { ExtractionStatusResponse, MedicalRecord } from '../../models/types';
 import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipeline-progress/pipeline-progress.component';
+import { TriangleAlert, WandSparkles } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
 
 /**
  * Распознавание записи — общий блок для карточки в списке и экрана записи (вынесено из
@@ -11,7 +13,7 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
 @Component({
   selector: 'app-record-recognition-status',
   standalone: true,
-  imports: [PipelineProgressComponent],
+  imports: [PipelineProgressComponent, IconComponent],
   template: `
     @if (record().unrecognizedAttachmentCount > 0) {
       <button
@@ -22,7 +24,7 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
         @if (recognizing()) {
           <span class="recognize-spinner" aria-hidden="true"></span>
         } @else {
-          <i class="ph ph-magic-wand" aria-hidden="true"></i>
+          <app-icon [icon]="icons.WandSparkles" [size]="18" />
         }
         Распознать
       </button>
@@ -31,7 +33,7 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
     @if (steps(); as steps) {
       <app-pipeline-progress [steps]="steps" />
       @if (recognizing()) {
-        <p class="muted mb-1">
+        <p class="form-hint mb-1">
           Обычно это занимает 1–3 минуты. Страницу можно закрыть — распознавание продолжится, а
           показатели появятся в этой записи.
         </p>
@@ -40,7 +42,7 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
 
     @if (status()?.status === ExtractionJobStatus.Completed && status()?.error) {
       <div class="alert-info mt-1" role="status">
-        <i class="ph ph-warning" aria-hidden="true"></i>
+        <app-icon [icon]="icons.TriangleAlert" [size]="18" />
         Распознано не всё. Сверьте показатели с бланком и добавьте недостающие вручную.
       </div>
     }
@@ -55,6 +57,7 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host { display: contents; }
 
@@ -74,6 +77,8 @@ import { PipelineProgressComponent, type PipelineStep } from '../../shared/pipel
   `,
 })
 export class RecordRecognitionStatusComponent {
+  protected readonly icons = { TriangleAlert, WandSparkles };
+
   readonly record = input.required<MedicalRecord>();
   readonly steps = input<PipelineStep[] | undefined>(undefined);
   readonly recognizing = input(false);

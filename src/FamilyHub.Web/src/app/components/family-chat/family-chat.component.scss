@@ -1,0 +1,475 @@
+:host {
+  display: block;
+}
+
+// Чат семьи (DESIGN §3 «Чат семьи»). Десктоп — карточка с лентой и композером; мобайл (вкладка чата
+// семьи) — полноэкранно, лента на bg до композера (см. :host-context(.fd-fullscreen) ниже).
+.chat {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+}
+
+// Лента — своя прокрутка: композер остаётся на месте, история листается вверх.
+.chat-feed {
+  height: clamp(360px, 62dvh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.chat-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+}
+
+.chat-older {
+  text-align: center;
+  font: var(--text-caption);
+}
+
+// Разделитель дня — 13/600 muted по центру.
+.chat-day {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-4) 0 var(--space-2);
+
+  span {
+    font: var(--text-badge);
+    color: var(--color-text-muted);
+  }
+}
+
+.msg {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  max-width: 100%;
+
+  &.grouped {
+    margin-top: var(--space-1);
+  }
+
+  &.mine {
+    flex-direction: row-reverse;
+  }
+
+  &.flash .bubble {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  &:hover .msg-actions,
+  &:focus-within .msg-actions {
+    opacity: 1;
+  }
+}
+
+// Аватар 32 слева у входящих; выравнивается по пузырю, а не по времени под ним.
+.msg-avatar {
+  width: 32px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+}
+
+.msg-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 72%;
+
+  .mine & {
+    align-items: flex-end;
+  }
+}
+
+.msg-author {
+  font: var(--text-micro);
+  color: var(--color-text-secondary);
+  margin: 0 0 0 var(--space-1);
+}
+
+// Входящий — bubble-in, радиус 18/18/18/6; свой — accent, 18/18/6/18.
+.bubble {
+  position: relative;
+  background: var(--color-bubble-in);
+  color: var(--color-text);
+  border-radius: 18px 18px 18px 6px;
+  padding: 10px var(--space-4);
+  min-width: 48px;
+  // Не шире колонки сообщения: длинное имя файла обрезается многоточием, а не раздвигает ленту и страницу.
+  max-width: 100%;
+  font: var(--text-body);
+
+  .mine & {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    border-radius: 18px 18px 6px 18px;
+  }
+
+  &.deleted {
+    background: transparent;
+    color: var(--color-text-muted);
+    border: 1px dashed var(--color-border);
+    font-style: italic;
+  }
+}
+
+.msg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-meta {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0 var(--space-1);
+  font: var(--text-micro);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.reply-quote {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-left: 3px solid currentColor;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  padding: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-xs);
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.reply-author {
+  display: block;
+  font: var(--text-micro);
+}
+
+.reply-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font: var(--text-caption);
+}
+
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+
+  &:last-child { margin-bottom: 0; }
+}
+
+.msg-image {
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: zoom-in;
+
+  img {
+    display: block;
+    max-width: 240px;
+    max-height: 240px;
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+  }
+}
+
+.msg-file,
+.msg-link,
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  text-align: left;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+
+  // Иконка в плитке (DESIGN §3 «Карточка записи в чате»).
+  > app-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-hover);
+  }
+}
+
+.msg-link {
+  max-width: 320px;
+  min-width: min(260px, 100%);
+
+  &.locked {
+    cursor: default;
+
+    > app-icon {
+      background: var(--color-surface-sunken);
+      color: var(--color-text-muted);
+    }
+  }
+}
+
+.msg-file {
+  min-width: 0;
+}
+
+.msg-file-name,
+.msg-link-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-file-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-link-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font: var(--text-body-sm);
+  font-weight: 600;
+
+  .form-hint {
+    font: var(--text-caption);
+  }
+}
+
+.msg-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.reaction {
+  min-height: 28px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+  font: var(--text-caption);
+  cursor: pointer;
+
+  &.mine {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-hover);
+  }
+}
+
+.reaction-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-1);
+  box-shadow: var(--shadow-overlay);
+
+  .reaction {
+    border: none;
+    font: var(--text-body-lg);
+  }
+}
+
+// На широких экранах меню «…» появляется при наведении; на сенсорных — видно всегда.
+.msg-actions {
+  opacity: 0;
+  transition: opacity 0.12s;
+  align-self: center;
+
+  @media (pointer: coarse) {
+    opacity: 1;
+  }
+}
+
+.composer {
+  border-top: 1px solid var(--color-divider);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+
+// «+» / скрепка → поле surface-sunken → отправка accent; всё 44–46px.
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.composer-tool {
+  flex: none;
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
+
+.composer-input {
+  flex: 1;
+  resize: none;
+  min-height: var(--control-height);
+  max-height: 180px;
+  padding-block: 11px;
+  background: var(--color-surface-sunken);
+  border-color: transparent;
+}
+
+.composer-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: var(--color-accent-hover); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.composer-context {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--text-caption);
+  border-left: 3px solid var(--color-accent);
+  padding-left: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.composer-context-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  font: var(--text-caption);
+  border: 1px solid var(--color-border);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-hover);
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-1) 2px var(--space-2);
+
+  button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+    color: inherit;
+  }
+}
+
+.chip-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-hint {
+  font: var(--text-caption);
+}
+
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+// Полноэкранный чат на телефоне (вкладка чата семьи, .fd-fullscreen): лента на bg до композера, входящие
+// пузыри белые, макс. ширина 84%.
+:host-context(.fd-fullscreen) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  .chat {
+    flex: 1;
+    min-height: 0;
+    background: var(--color-bg);
+    border-radius: 0;
+  }
+
+  .chat-feed {
+    flex: 1;
+    height: auto;
+    padding: var(--space-4);
+  }
+
+  .msg-body { max-width: 84%; }
+  .bubble { background: var(--color-surface); }
+  .mine .bubble { background: var(--color-accent); }
+
+  .composer {
+    padding: var(--space-2) var(--space-3) max(var(--space-2), env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 1023px) {
+  .chat-feed { padding: var(--space-4); }
+  .msg-body { max-width: 84%; }
+}

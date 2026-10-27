@@ -19,31 +19,24 @@
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  font-family: var(--font-heading);
-  font-size: 0.8824rem; // было 13px
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  min-height: 52px;
+  border-radius: var(--radius-lg);
+  font: var(--text-body-sm);
   font-weight: 600;
-  color: var(--color-bg);
-  box-shadow: var(--shadow-lg);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-overlay);
   animation: toast-in 0.18s ease-out;
 
-  &.toast-success {
-    background: var(--color-accent-700);
-  }
-
-  &.toast-error {
-    background: var(--color-accent-2-700);
-  }
-
-  &.toast-info {
-    background: var(--color-neutral-800);
-  }
+  // Тона по общей семантике (DESIGN §1 п.2): успех — success, ошибка — danger, остальное — inverse.
+  &.toast-success { background: var(--color-success); }
+  &.toast-error { background: var(--color-danger); }
+  &.toast-info { background: var(--color-inverse); }
 }
 
 .toast-icon {
-  font-weight: 700;
+  font-weight: 600;
   flex-shrink: 0;
 }
 
@@ -54,9 +47,10 @@
 
 .toast-close {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  margin: -8px -8px -8px 0;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  margin: calc(var(--space-2) * -1) calc(var(--space-3) * -1) calc(var(--space-2) * -1) 0;
+  border-radius: var(--radius-md);
   border: none;
   background: transparent;
   color: inherit;
@@ -67,18 +61,18 @@
 
 .toast-action {
   flex-shrink: 0;
-  min-height: 36px;
-  padding: 4px 12px;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
   border: 1px solid currentColor;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background: color-mix(in srgb, var(--color-on-accent) 16%, transparent);
   }
 }
 

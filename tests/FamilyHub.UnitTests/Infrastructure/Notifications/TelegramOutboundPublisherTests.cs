@@ -1,4 +1,5 @@
 using FamilyHub.Contracts.Events;
+using FamilyHub.Domain.Enums;
 using FamilyHub.Infrastructure.Notifications;
 using FamilyHub.TestUtils;
 using FamilyHub.UnitTests.TestSupport;
@@ -42,7 +43,35 @@ public class TelegramOutboundPublisherTests : SqliteTestBase
                 WithMiniAppButton = true,
             });
         var published = (TelegramMessageRequestedEvent)_publisher.Published.Single();
-        published.Text.Should().Contain(notification.Title).And.Contain(notification.Body);
+        published.Text.Should().Be(TelegramOutboundPublisher.BuildGenericText(notification.Type));
+    }
+
+    [Fact]
+    public async Task SendAsync_Text_NeverContainsRealTitleOrBody()
+    {
+        // Title/Body несут имена и названия препаратов — в Telegram (серверы вне РФ) уходит только вид уведомления.
+        var user = Db.AddUser();
+        var (family, _) = Db.SeedFamilyWithAdmin();
+        var notification = TestData.NewNotification(user.Id, family.Id, "dk-pd");
+        notification.Type = NotificationType.MedicationDoseDue;
+        notification.Title = "Иванова Мария: напоминание о приёме";
+        notification.Body = "Метформин 500 мг";
+        Db.Notifications.Add(notification);
+        await Db.SaveChangesAsync();
+
+        await CreateSut().SendAsync(notification);
+
+        var text = ((TelegramMessageRequestedEvent)_publisher.Published.Single()).Text;
+        text.Should().NotContain("Иванова").And.NotContain("Метформин");
+        text.Should().Contain("напоминание о приёме");
+    }
+
+    [Fact]
+    public void BuildGenericText_EveryNotificationType_HasOwnText()
+    {
+        foreach (var type in Enum.GetValues<NotificationType>())
+            TelegramOutboundPublisher.BuildGenericText(type).Should().NotContain("новое уведомление",
+                $"у {type} должен быть свой обобщённый текст — добавьте его в TelegramOutboundPublisher.GenericTitles");
     }
 
     [Fact]

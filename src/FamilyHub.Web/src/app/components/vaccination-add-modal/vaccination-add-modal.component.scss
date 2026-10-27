@@ -1,178 +1,216 @@
-// «Добавить прививки» (макет «Screen - Vaccination»): «Кому», три способа, тело меняется по режиму.
+// «Добавить прививки»: «Кому», три способа (плитки-выбор), тело по режиму. DESIGN §2.3: текст ≥ 12px, без CAPS;
+// §3: выбор — accent-soft с рамкой accent, тап-зона ≥ 44.
 
 :host { display: block; }
 
 .min-width-0 { min-width: 0; }
 
-.va { display: flex; flex-direction: column; gap: 16px; }
+.va { display: flex; flex-direction: column; gap: var(--space-5); }
 
-.va-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.va-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
 .va-label { flex: none; }
 
-.va-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.va-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
 .va-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px 5px 5px;
-  font: inherit;
-  font-size: 0.8235rem;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4) 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font: var(--text-body-sm);
   color: inherit;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
   cursor: pointer;
 }
-.va-chip-selected { background: var(--color-accent-100); border-color: var(--color-accent); color: var(--color-accent-800); font-weight: 600; }
 
-.va-modes {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
+.va-chip-selected { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-hover); font-weight: 600; }
+
+.va-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 
 .va-mode {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
+  gap: var(--space-3);
+  min-height: 64px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   text-align: left;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
   cursor: pointer;
 
-  > i { font-size: 1.3235rem; color: var(--color-neutral-600); flex: none; }
+  > app-icon { flex: none; color: var(--color-text-secondary); }
 }
-.va-mode-selected { background: var(--color-accent-100); border-color: var(--color-accent); > i { color: var(--color-accent); } }
-.va-mode-title { font-size: 0.8824rem; }
-.va-mode-sub { font-size: 0.7647rem; }
 
-.va-body { display: flex; flex-direction: column; gap: 14px; }
+.va-mode-selected { border-color: var(--color-accent); background: var(--color-accent-soft); > app-icon { color: var(--color-accent-hover); } }
+.va-mode-title { font: var(--text-body-sm); font-weight: 600; }
+.va-mode-sub { font: var(--text-caption); color: var(--color-text-muted); }
+
+.va-body { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .va-autocomplete { position: relative; }
+
 .va-suggestions {
   position: absolute;
-  inset: 100% 0 auto 0;
+  inset: calc(100% + var(--space-1)) 0 auto 0;
   z-index: 5;
   display: flex;
   flex-direction: column;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-  border-top: none;
-  box-shadow: var(--shadow-md);
   max-height: 260px;
   overflow-y: auto;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
 }
+
 .va-suggestion {
   display: block;
   width: 100%;
-  padding: 9px 12px;
-  text-align: left;
-  font: inherit;
-  background: none;
-  border: none;
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
   border-top: 1px solid var(--color-divider);
+  background: none;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 
   &:first-child { border-top: none; }
-  &:hover { background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
 }
-.va-suggestion-name { font-size: 0.8824rem; }
-.va-suggestion-sub { font-size: 0.7647rem; }
+
+.va-suggestion-name { font: var(--text-body-sm); }
+.va-suggestion-sub { font: var(--text-caption); color: var(--color-text-muted); }
 
 .va-file-input {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  font-size: 0.8235rem;
-  color: var(--color-accent);
-  border: 1px dashed var(--color-neutral-400);
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-border-dashed);
+  border-radius: var(--radius-md);
+  font: var(--text-button);
+  color: var(--color-accent-hover);
   cursor: pointer;
 }
-.va-file-input-lg { justify-content: center; padding: 24px; font-size: 0.9412rem; }
+
+.va-file-input-lg { justify-content: center; padding: var(--space-6); font: var(--text-body); font-weight: 600; }
 
 .va-hint {
   display: flex;
-  gap: 8px;
-  font-size: 0.7941rem;
-  color: var(--color-accent-800);
+  gap: var(--space-2);
+  font: var(--text-caption);
+  color: var(--color-text-secondary);
 
-  > i { color: var(--color-accent); flex: none; margin-top: 1px; }
+  > app-icon { flex: none; margin-top: 1px; color: var(--color-accent-hover); }
 }
 
-.va-footer { display: flex; align-items: center; gap: 10px; }
+.va-footer { display: flex; align-items: center; gap: var(--space-3); }
+.va-bulk-hint { margin: 0; font: var(--text-body-sm); color: var(--color-text-secondary); }
 
-.va-bulk-hint { margin: 0; font-size: 0.8235rem; }
-
+// «Отметить по календарю»: группы этапов, строки с чекбоксом.
 .va-cal-group { display: flex; flex-direction: column; }
+
 .va-cal-group-title {
-  font: 600 0.6471rem/1 var(--font-heading);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-neutral-600);
-  padding: 8px 0 6px;
+  padding: var(--space-3) 0 var(--space-2);
   border-bottom: 1px solid var(--color-divider);
+  font: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .va-cal-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--color-divider);
 }
 
-// Видимый квадрат небольшой, но тач-зона ~44px — в длинном списке легко промахнуться.
-.va-cal-check::after { content: ''; position: absolute; inset: -11px; }
+// Видимый квадрат 28px, тап-зона 44px (в длинном списке легко промахнуться).
 .va-cal-check {
   position: relative;
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex: none;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  background: var(--color-paper);
-  border: 2px solid var(--color-neutral-400);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-on-accent);
   cursor: pointer;
 
-  &.checked { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+  &::after { content: ''; position: absolute; inset: -8px; }
+  &.checked { border-color: var(--color-accent); background: var(--color-accent); }
   &:disabled { cursor: default; }
 }
 
-.va-cal-name { font-size: 0.8824rem; }
-.va-cal-value { font-size: 0.7941rem; flex: none; }
-.va-cal-actions { display: flex; gap: 6px; flex: none; }
+.va-cal-name { font: var(--text-body-sm); }
+.va-cal-value { flex: none; font: var(--text-caption); color: var(--color-text-muted); }
+.va-cal-actions { display: flex; flex: none; gap: var(--space-1); }
+
 .va-cal-tag {
-  padding: 3px 9px;
-  font-size: 0.7647rem;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font: var(--text-caption);
   cursor: pointer;
 }
-.va-cal-tag-selected { background: var(--color-accent-100); border-color: var(--color-accent); color: var(--color-accent-800); }
-.va-cal-year { width: 90px; flex: none; padding: 6px 8px; }
 
-.va-cert-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.va-cal-tag-selected { border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-accent-hover); font-weight: 600; }
+.va-cal-year { flex: none; width: 90px; }
+
+// Сертификат: файлы, прогресс, разбор строк.
+.va-cert-files { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
 .va-cert-file {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  font-size: 0.7647rem;
-  background: var(--color-neutral-100);
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  font: var(--text-caption);
 
-  button { display: flex; background: none; border: none; padding: 0; cursor: pointer; color: var(--color-neutral-600); }
+  button { display: flex; padding: 0; border: 0; background: none; color: var(--color-text-muted); cursor: pointer; }
 }
 
-.va-progress { text-align: center; padding: 20px 0; }
-.va-progress-bar { height: 6px; background: var(--color-neutral-200); margin-bottom: 10px; span { display: block; height: 100%; background: var(--color-accent); transition: width 0.2s; } }
+.va-progress { padding: var(--space-5) 0; text-align: center; }
 
-.va-cert-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; }
-.va-cert-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px; background: var(--color-paper); border: 1px solid var(--color-divider); }
-.va-cert-review-note { font-size: 0.8235rem; font-weight: 600; color: var(--color-status-warning-text, #8a5a00); margin: 2px 0 4px; }
-.va-cert-row-review { border-color: var(--color-status-warning); background: color-mix(in srgb, var(--color-status-warning) 8%, var(--color-paper)); }
-.va-cert-name { font-size: 0.8235rem; margin-bottom: 4px; }
-.va-cert-select { font-size: max(16px, 0.7941rem); padding: 5px 8px; } // <16px → iOS зумит при фокусе
-.va-cert-date { width: 140px; flex: none; padding: 5px 8px; }
+.va-progress-bar {
+  height: 6px;
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-range-track);
+
+  span { display: block; height: 100%; background: var(--color-accent); transition: width 0.2s; }
+}
+
+.va-cert-list { display: flex; flex-direction: column; gap: var(--space-3); max-height: 50vh; overflow-y: auto; }
+
+.va-cert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+}
+
+.va-cert-row-review { background: var(--color-warning-soft); }
+.va-cert-review-note { margin: 2px 0 var(--space-1); font: var(--text-caption); font-weight: 600; color: var(--color-warning); }
+.va-cert-name { margin-bottom: var(--space-1); font: var(--text-body-sm); }
+.va-cert-date { flex: none; width: 140px; }

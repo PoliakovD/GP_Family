@@ -1,0 +1,50 @@
+<div class="rp-page" aria-hidden="true">
+  <header class="rp-head">
+    <div class="rp-title">Отчёт для врача</div>
+    <div class="rp-sub">Смирнова Валентина Петровна</div>
+  </header>
+  <table class="rp-meta">
+    <tr><td class="k">Пациент</td><td>Смирнова В. П.</td><td class="k">Период</td><td>01.04.2026 — 14.10.2026</td></tr>
+    <tr><td class="k">Пол, возраст</td><td>жен., 63 года</td><td class="k">Сформирован</td><td>14.10.2026</td></tr>
+  </table>
+  <div class="rp-notice">Сформировано пациентом в приложении FamilyHub. Не является официальным медицинским документом.</div>
+
+  <div class="rp-toc">Содержание: 1. Жалобы и вопросы пациента · 2. Препараты · 3. Динамика анализов · 4. Домашние замеры</div>
+
+  <h3 class="rp-h"><span class="rp-num">1.</span> Жалобы и вопросы пациента</h3>
+  <p class="rp-text">Последние две недели по утрам болит голова, давление выше обычного. Нужно ли менять дозу?</p>
+
+  <h3 class="rp-h"><span class="rp-num">2.</span> Препараты</h3>
+  <table class="rp-grid">
+    <thead><tr><th>Препарат</th><th>Как принимать</th><th>Назначение / приём</th></tr></thead>
+    <tbody>
+      <tr><td><b>Лозартан 50 мг</b></td><td>1 таб. утром</td><td>назначил(а) Иванова М. П., 02.10.2026</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="rp-h"><span class="rp-num">3.</span> Динамика анализов</h3>
+  <table class="rp-grid">
+    <thead><tr><th>Показатель</th><th class="num">12.08</th><th class="num">08.10</th><th>Референс</th></tr></thead>
+    <tbody>
+      @for (r of labs; track r.name) {
+        <tr>
+          <td><b>{{ r.name }}</b><span class="muted">, {{ r.unit }}</span></td>
+          <td class="num">{{ r.a }}</td>
+          <td class="num"><span [class]="r.flag">{{ r.b }}{{ r.flag === 'hi' ? ' ↑' : r.flag === 'lo' ? ' ↓' : '' }}</span></td>
+          <td class="muted">{{ r.ref }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <div class="rp-legend">↑ выше нормы · ↓ ниже нормы · ‼ критично</div>
+
+  <h3 class="rp-h"><span class="rp-num">4.</span> Домашние замеры</h3>
+  <table class="rp-grid">
+    <thead><tr><th>Замер</th><th class="num">Кол-во</th><th class="num">Мин–макс</th><th class="num">Среднее</th></tr></thead>
+    <tbody>
+      @for (m of measurements; track m.name) {
+        <tr><td><b>{{ m.name }}</b></td><td class="num">{{ m.count }}</td><td class="num">{{ m.range }}</td><td class="num">{{ m.avg }}</td></tr>
+      }
+    </tbody>
+  </table>
+</div>

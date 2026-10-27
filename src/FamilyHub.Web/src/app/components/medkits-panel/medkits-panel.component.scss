@@ -1,61 +1,55 @@
-.medkit-card {
-  border: 1px solid var(--color-divider);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+// Аптечки семьи: каждая — карточка surface (иконка → название + «N медикаментов» → «⋯» → шеврон);
+// в linkMode строка ведёт на страницу аптечки, иначе раскрывается аккордеоном со списком лекарств.
 
-  &.open {
-    border-color: var(--color-accent);
-    box-shadow: var(--shadow-sm);
-  }
+.mk { display: flex; flex-direction: column; gap: var(--space-3); }
+.mk-toolbar { display: flex; justify-content: flex-end; }
+.mk-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.mk-form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.mk-note { margin: 0; font: var(--text-body-sm); color: var(--color-text-muted); }
+
+.medkit-card {
+  border: 2px solid transparent;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  transition: border-color 0.2s ease;
+
+  &.open { border-color: var(--color-accent); }
 }
 
 .medkit-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-3);
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
+  border-radius: inherit;
   cursor: pointer;
-  flex-wrap: wrap;
-  row-gap: 8px;
 
-  // Кнопки действий поджимаются к правому краю (перед стрелкой), но переносятся на новую
-  // строку на узких экранах, если названию аптечки не хватает места.
-  > .d-flex {
-    margin-left: auto;
-    flex-shrink: 0;
-  }
+  @media (hover: hover) { &:hover { background: var(--color-surface-muted); } }
 }
 
+.medkit-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+
 .medkit-name {
-  font-family: var(--font-heading);
-  font-size: 0.9412rem;
-  flex: 1 1 auto;
-  min-width: 0;
   overflow: hidden;
+  font: var(--text-body);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.medkit-count {
-  flex-shrink: 0;
-  margin-left: 0;
-  font-weight: normal;
-}
+.medkit-count { font: var(--text-caption); color: var(--color-text-muted); }
+.medkit-actions { flex: none; }
 
 .medkit-chevron {
-  flex-shrink: 0;
-  font-size: 1.0588rem;
-  color: var(--color-neutral-500);
+  flex: none;
+  color: var(--color-text-muted);
   transition: transform 0.25s ease, color 0.25s ease;
 }
 
-.medkit-card.open .medkit-chevron {
-  transform: rotate(180deg);
-  color: var(--color-accent);
-}
+.medkit-card.open .medkit-chevron { color: var(--color-accent-hover); transform: rotate(180deg); }
 
-// Аптечка и её содержимое — единая карточка: содержимое "выезжает" плавным ростом высоты
-// grid-трека (0fr -> 1fr), а не мгновенным появлением/исчезновением через @if.
-// grid-template-columns: minmax(0, 1fr) обязателен — без него неявная колонка считается по
-// max-content вложенного содержимого и может стать шире контейнера, раздвигая viewport страницы.
+// Содержимое «выезжает» ростом grid-трека (0fr → 1fr); minmax(0, 1fr) — чтобы колонка не стала шире контейнера.
 .medkit-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -64,13 +58,13 @@
   transition: grid-template-rows 0.25s ease;
 }
 
-.medkit-card.open .medkit-body {
-  grid-template-rows: 1fr;
-}
+.medkit-card.open .medkit-body { grid-template-rows: 1fr; }
 
 .medkit-body-inner {
   overflow: hidden;
-  min-height: 0;
   min-width: 0;
-  padding-top: 12px;
+  min-height: 0;
+  padding: 0 var(--space-4);
 }
+
+.medkit-card.open .medkit-body-inner { padding-bottom: var(--space-4); }

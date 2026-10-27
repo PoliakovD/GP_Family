@@ -20,3 +20,16 @@ export function expiryLabel(expiryDate: string | null | undefined): string | nul
   if (daysLeft <= 120) return 'истекает в ближайшие месяцы';
   return null;
 }
+
+/** Бейдж срока годности по DESIGN §1: danger — просрочено, warning — скоро истекает (≤ 4 мес.),
+ * success — в порядке, neutral — срок не указан. */
+export type ExpiryTone = 'danger' | 'warning' | 'success' | 'neutral';
+
+export function expiryBadge(expiryDate: string | null | undefined): { tone: ExpiryTone; label: string } {
+  if (!expiryDate) return { tone: 'neutral', label: 'срок не указан' };
+  const daysLeft = Math.floor((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (daysLeft < 0) return { tone: 'danger', label: 'просрочено' };
+  if (daysLeft <= 30) return { tone: 'warning', label: 'истекает в течение месяца' };
+  if (daysLeft <= 120) return { tone: 'warning', label: 'истекает в ближайшие месяцы' };
+  return { tone: 'success', label: 'в порядке' };
+}

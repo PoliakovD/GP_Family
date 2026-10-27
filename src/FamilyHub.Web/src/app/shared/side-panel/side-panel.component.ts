@@ -1,10 +1,17 @@
 import {
   inject,
-  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output,
-  SimpleChanges, ViewChild,
+  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, OnInit, Output,
+  SimpleChanges, TemplateRef, ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import type { IconNode as LucideIconData } from 'lucide';
+import { ContentPageService } from '../../services/content-page.service';
+import type { Tone } from '../ui/tone';
 import { OverlayA11y } from '../util/overlay-a11y';
 import { OverlayStackService } from '../util/overlay-stack.service';
+import { X } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 /**
  * Обобщение `indicator-info-panel` (см. её docstring) на произвольную ширину — структурная
@@ -38,9 +45,13 @@ import { OverlayStackService } from '../util/overlay-stack.service';
  */
 @Component({
   selector: 'app-side-panel',
+  imports: [IconComponent, NgTemplateOutlet],
   standalone: true,
   template: `
-    @if (open) {
+    <!-- Содержимое объявлено один раз: в режиме page его рисует каркас (страница в колонке контента),
+         иначе — эта панель справа. -->
+    <ng-template #body><ng-content /></ng-template>
+    @if (open && !page) {
       <div class="overlay-backdrop side-panel-backdrop" (click)="closed.emit()">
         <aside
           #overlayRoot
@@ -52,25 +63,40 @@ import { OverlayStackService } from '../util/overlay-stack.service';
           <div class="side-panel-header">
             <h4 class="mb-0">{{ title }}</h4>
             <button type="button" class="btn-icon" aria-label="Закрыть" (click)="closed.emit()">
-              <i class="ph ph-x" aria-hidden="true"></i>
+              <app-icon [icon]="icons.X" [size]="18" />
             </button>
           </div>
           <div class="side-panel-body">
-            <ng-content />
+            <ng-container *ngTemplateOutlet="body" />
           </div>
         </aside>
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './side-panel.component.scss',
 })
-export class SidePanelComponent implements OnChanges, OnDestroy {
+export class SidePanelComponent implements OnInit, OnChanges, OnDestroy {
+  protected readonly icons = { X };
+
   @Input() open = false;
   @Input() title = '';
   /** Любое валидное CSS-значение width — карточке задачи/справочника нужно больше, чем 392px
    * индикаторной панели. */
   @Input() width = 'min(560px, 100vw)';
+  /** Десктоп-формы и справки пользователя: не панель справа, а страница в колонке контента
+   * (ContentPageService) — «‹ Назад к разделу» → заголовок → содержимое. Админка — панелью. */
+  @Input() page = false;
+  @Input() kicker: string | null = null;
+  @Input() backLabel = 'Назад';
+  @Input() icon: LucideIconData | null = null;
+  @Input() tone: Tone = 'neutral';
+  /** Ширина колонки страницы (режим page). */
+  @Input() pageWidth = '760px';
   @Output() readonly closed = new EventEmitter<void>();
+
+  @ViewChild('body', { static: true }) private body!: TemplateRef<unknown>;
+  private readonly pages = inject(ContentPageService);
 
   @ViewChild('overlayRoot') private overlayRoot?: ElementRef<HTMLElement>;
 
@@ -78,6 +104,10 @@ export class SidePanelComponent implements OnChanges, OnDestroy {
   private readonly overlays = inject(OverlayStackService);
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (this.page) {
+      this.syncPage();
+      return;
+    }
     if (!changes['open']) return;
 
     if (this.open) this.overlays.open(this); else this.overlays.close(this);
@@ -88,14 +118,32 @@ export class SidePanelComponent implements OnChanges, OnDestroy {
     }
   }
 
+  ngOnInit(): void {
+    if (this.page) this.syncPage();
+  }
+
+  private syncPage(): void {
+    if (!this.open) {
+      this.pages.close(this);
+      return;
+    }
+    const page = {
+      title: this.title, kicker: this.kicker, backLabel: this.backLabel, icon: this.icon, tone: this.tone,
+      maxWidth: this.pageWidth, template: this.body, close: () => this.closed.emit(),
+    };
+    if (this.pages.isOpen(this)) this.pages.update(this, page);
+    else this.pages.open({ owner: this, ...page });
+  }
+
   ngOnDestroy(): void {
+    this.pages.close(this);
     this.a11y.deactivate();
     this.overlays.close(this);
   }
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (!this.open) return;
+    if (!this.open || this.page) return;
     if (event.key === 'Escape') {
       if (this.overlays.claimEscape(this, event)) this.closed.emit();
     } else if (event.key === 'Tab' && this.overlayRoot) {

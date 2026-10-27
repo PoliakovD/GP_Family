@@ -1,6 +1,8 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LoadingSpinnerComponent } from '../../loading-spinner/loading-spinner.component';
+import { CircleAlert } from 'lucide';
+import { IconComponent } from '../../ui/icon/icon.component';
 
 type TextKind = 'plain' | 'csv' | 'xml';
 
@@ -9,11 +11,14 @@ type TextKind = 'plain' | 'csv' | 'xml';
  * (signed-ссылка или blob: для локального файла, см. ViewerItem) и решает, как его показать. */
 @Component({
     selector: 'app-text-preview',
-    imports: [CommonModule, LoadingSpinnerComponent],
+    imports: [CommonModule, LoadingSpinnerComponent, IconComponent],
     templateUrl: './text-preview.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './text-preview.component.scss'
 })
 export class TextPreviewComponent implements OnChanges {
+  protected readonly icons = { CircleAlert };
+
   @Input({ required: true }) url!: string;
   @Input({ required: true }) contentType!: string;
 

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import {
@@ -13,6 +13,9 @@ import { ToastService } from '../../../shared/toast/toast.service';
 import { ConfirmService } from '../../../shared/confirm/confirm.service';
 import { AdminStatusPipe } from '../shared/admin-status.pipe';
 import { failureReasonLabel } from '../shared/admin-labels';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
+import { Plus } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -37,10 +40,14 @@ const ORIGIN_LABELS: Record<string, string> = {
  */
 @Component({
     selector: 'app-admin-job-panel',
-    imports: [DatePipe, RouterLink, AdminStatusPipe],
-    templateUrl: './admin-job-panel.component.html'
+    imports: [DatePipe, RouterLink, AdminStatusPipe, LoadingSpinnerComponent, IconComponent],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    templateUrl: './admin-job-panel.component.html',
+    styleUrl: './admin-job-panel.component.scss',
 })
 export class AdminJobPanelComponent implements OnChanges, OnDestroy {
+  protected readonly icons = { Plus };
+
   @Input({ required: true }) jobId!: string;
   @Input({ required: true }) jobType!: PipelineJobType;
   /** Эмитится после успешного retry/resolve-and-retry — родитель (список задач/инбокс) обновляет

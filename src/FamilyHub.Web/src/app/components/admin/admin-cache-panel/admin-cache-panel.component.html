@@ -1,5 +1,5 @@
 @if (loading()) {
-  <p class="text-muted">Загрузка…</p>
+  <app-loading-spinner />
 } @else {
   <div class="mb-3">
     <div class="d-flex flex-column gap-1 mb-2">
@@ -17,7 +17,7 @@
     @if (isLabAnalyte) {
       <div class="d-flex flex-column gap-1 mb-2">
         <label class="form-label mb-0" for="cache-units">Единицы, для которых в выдаче есть нормы</label>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="toolbar">
           <input id="cache-units" class="input flex-fill" maxlength="200"
                  [placeholder]="unitsUndetermined() ? 'не определены' : 'единиц нет'"
                  [ngModel]="unitsText()" (ngModelChange)="onUnitsChange($event)" />
@@ -40,7 +40,7 @@
     </p>
     <div class="d-flex gap-2 align-items-center">
       <label class="form-label mb-0" for="cache-provider">Провайдер</label>
-      <input id="cache-provider" class="input" style="max-width: 200px;" [ngModel]="provider()" (ngModelChange)="onProviderChange($event)" />
+      <input id="cache-provider" class="input x-maxw-200px" [ngModel]="provider()" (ngModelChange)="onProviderChange($event)" />
     </div>
   </div>
 
@@ -69,17 +69,17 @@
                 <option value="off">нет</option>
               </select>
               <div class="d-flex gap-1 flex-wrap mt-1">
-                @if (row.originalUrl === null) { <span class="tag tag-accent-2">новый</span> }
-                @if (row.origin === 'Manual') { <span class="tag tag-accent" [title]="row.note ?? ''">ручной</span> }
-                @if (row.pinned) { <span class="tag tag-neutral">закреплён</span> }
+                @if (row.originalUrl === null) { <span class="badge badge-danger">новый</span> }
+                @if (row.origin === 'Manual') { <span class="badge badge-neutral" [title]="row.note ?? ''">ручной</span> }
+                @if (row.pinned) { <span class="badge badge-neutral">закреплён</span> }
               </div>
             </td>
-            <td><input class="input" style="min-width: 160px;" aria-label="Заголовок" [ngModel]="row.title" (ngModelChange)="updateRow($index, 'title', $event)" /></td>
-            <td><input class="input" style="min-width: 220px;" aria-label="Ссылка" [ngModel]="row.url" (ngModelChange)="updateRow($index, 'url', $event)" /></td>
-            <td><textarea class="input" rows="2" style="min-width: 260px;" aria-label="Текст" [ngModel]="row.text" (ngModelChange)="updateRow($index, 'text', $event)"></textarea></td>
+            <td><input class="input x-minw-160px" aria-label="Заголовок" [ngModel]="row.title" (ngModelChange)="updateRow($index, 'title', $event)" /></td>
+            <td><input class="input x-minw-220px" aria-label="Ссылка" [ngModel]="row.url" (ngModelChange)="updateRow($index, 'url', $event)" /></td>
+            <td><textarea class="input x-minw-260px" rows="2" aria-label="Текст" [ngModel]="row.text" (ngModelChange)="updateRow($index, 'text', $event)"></textarea></td>
             <td>
               <button type="button" class="btn-icon" aria-label="Удалить сниппет" (click)="removeRow($index)">
-                <i class="ph ph-trash" aria-hidden="true"></i>
+                <app-icon [icon]="icons.Trash2" [size]="18" />
               </button>
             </td>
           </tr>

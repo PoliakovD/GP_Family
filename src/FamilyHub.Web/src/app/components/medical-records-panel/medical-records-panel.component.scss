@@ -10,73 +10,91 @@
   right: 0;
   z-index: var(--z-dropdown);
   width: 320px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
 }
 
-// Редизайн v2 — группа = человек (аватар + имя + счётчик, шапка) и таймлайн записей внутри.
+// Список записей (DESIGN §3–4): шапка раздела, «чьи записи» + «Фильтры», группы по человеку — list-card.
+.rp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rp-hint { display: flex; align-items: center; gap: var(--space-2); }
+
+.rp-head { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.rp-title {
+  margin: 0;
+  font: var(--text-display);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.rp-sub { margin: 0; font: var(--text-body); color: var(--color-text-muted); }
+
+.rp-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rp-filter-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+
+  > div { flex: 1; min-width: 130px; }
+}
+
+.filters-popover .input { margin-bottom: var(--space-3); }
+
+// Шапка группы: аватар → имя + «N анализов · последний …» → доступ справа.
 .record-group-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-divider);
-  margin-bottom: 14px;
   flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-3);
+
+  .card-title { margin: 0; }
 }
 
-.record-timeline-row {
+.rp-group-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.rp-group-sub { font: var(--text-caption); color: var(--color-text-muted); }
+
+.rp-group-access {
   display: flex;
-  gap: 14px;
-  margin-bottom: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font: var(--text-caption);
 }
 
-.record-timeline-date {
-  flex: none;
-  width: 72px;
-  text-align: right;
-  padding-top: 14px;
-}
-
-// Редизайн v3 — двухстрочный формат даты: день+месяц крупнее/контрастнее, год мельче/приглушённо.
-.record-timeline-day {
-  font-size: 0.8824rem;
-  font-weight: 600;
-  color: var(--color-text);
-  line-height: 1.2;
-}
-
-.record-timeline-year {
-  font-size: 0.7647rem;
-  color: var(--color-neutral-600);
-}
-
-.record-timeline-rail {
-  flex: none;
-  width: 2px;
-  background: var(--color-divider);
-  position: relative;
-}
-
-.record-timeline-dot {
-  position: absolute;
-  top: 18px;
-  left: -4px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--color-accent);
-}
-
-// .file-chip*/.visually-hidden-input (модалка «Файлы») переехали в глобальный styles.scss
-// (редизайн v3, PR7) — переиспользуются и record-add.component.ts.
-
-// Пустой раздел у нового пользователя: что здесь будет и одна кнопка «начать».
-.records-empty {
-  align-items: flex-start;
+.rp-access-label {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-1);
+  color: var(--color-text-secondary);
+}
 
-  > i {
-    font-size: 2rem;
-    color: var(--color-accent);
-  }
+.record-group { padding-bottom: var(--space-2); }
+
+.rp-shown {
+  margin: 0;
+  text-align: center;
+  font: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 1023px) {
+  .rp-title { font: var(--text-display-mobile); letter-spacing: var(--letter-spacing-display); }
+  .rp-people { flex: 0 1 auto; min-width: 0; }
+  // На телефоне «Фильтры» — иконкой (подпись в aria-label), чтобы уместиться в ряд с «чьими записями».
+  .rp-filter-label { display: none; }
+  .rp-filter-btn { position: relative; width: var(--control-height); padding: 0; justify-content: center; }
+  .rp-filter-btn .count-badge { position: absolute; top: -6px; right: -6px; }
+  .record-group-header { padding: var(--space-4) var(--space-4) var(--space-2); }
+  .rp-group-access { flex-basis: 100%; padding-left: calc(40px + var(--space-3)); }
 }

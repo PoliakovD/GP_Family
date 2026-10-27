@@ -1,7 +1,9 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AdminApiService, AdminRelatedAnalyteMatch, KbAnalyteListItem } from '../../../services/admin-api.service';
 import { ToastService } from '../../../shared/toast/toast.service';
+import { Copy, Trash2, TriangleAlert, X } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
 
 const RELATED_SEARCH_DEBOUNCE_MS = 300;
 
@@ -110,17 +112,15 @@ const EMPTY_REF_RANGE = (): RefRangeRow => ({
  *   тихо теряет текст.
  */
 @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     selector: 'app-admin-payload-editor',
-    imports: [FormsModule],
+    imports: [FormsModule, IconComponent],
     templateUrl: './admin-payload-editor.component.html',
-    // Сегмент из <button>: сбрасываем нативный вид (глобальный .seg-opt рассчитан на label+radio), как .dr-seg.
-    styles: [`
-      .seg-opt { font: inherit; font-size: 0.7647rem; color: inherit; background: transparent; border: 0; }
-      .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
-      .seg-opt.active, .seg-opt.active:hover { color: var(--color-bg); background: var(--color-accent); }
-    `]
+    styleUrl: './admin-payload-editor.component.scss',
 })
 export class AdminPayloadEditorComponent implements OnChanges {
+  protected readonly icons = { Copy, Trash2, TriangleAlert, X };
+
   @Input({ required: true }) schema!: PayloadEditorSchema;
   @Input() payloadJson = '{}';
   @Input() busy = false;

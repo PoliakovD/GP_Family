@@ -1,66 +1,61 @@
-// Шторка «Прививка сохранена» (макет «Screen - Vaccination»).
+// Шторка «Прививка сохранена»: отметка → что дальше (список действий) → напоминание.
 
 :host { display: block; }
 
 .min-width-0 { min-width: 0; }
 
-.vs { display: flex; flex-direction: column; gap: 14px; }
+.vs { display: flex; flex-direction: column; gap: var(--space-4); }
 
-.vs-head { display: flex; align-items: center; gap: 12px; }
+.vs-head { display: flex; align-items: center; gap: var(--space-3); }
 
 .vs-check {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
   width: 44px;
   height: 44px;
-  flex: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-status-ok) 18%, var(--color-paper));
+  border-radius: var(--radius-lg);
+  background: var(--color-success-soft);
 
-  > i { font-size: 1.4118rem; color: var(--color-status-ok); }
+  > app-icon { color: var(--color-success); }
 }
 
-.vs-title { font-family: var(--font-heading); font-weight: 600; font-size: 1.1176rem; }
-.vs-sub { font-size: 0.8235rem; }
+.vs-title { font: var(--text-title); }
+.vs-sub { font: var(--text-caption); color: var(--color-text-muted); }
+.vs-text { margin: 0; font: var(--text-body-sm); color: var(--color-text-secondary); }
 
-.vs-text { margin: 0; font-size: 0.8824rem; line-height: 1.5; }
-
-.vs-actions {
-  display: flex;
-  flex-direction: column;
-  background: var(--color-paper);
-  border: 1px solid var(--color-divider);
-}
+.vs-actions { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-lg); background: var(--color-surface-sunken); }
 
 .vs-action {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--space-3);
   width: 100%;
   min-height: var(--tap-min);
-  padding: 12px 14px;
-  font: inherit;
-  font-size: 0.8824rem;
-  color: inherit;
-  background: none;
-  border: none;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
   border-top: 1px solid var(--color-divider);
+  background: none;
+  font: var(--text-body-sm);
+  color: inherit;
   cursor: pointer;
 
   &:first-child { border-top: none; }
-  > i:first-child { font-size: 1.1765rem; color: var(--color-accent); }
-  > i:last-child { color: var(--color-neutral-500); }
+  > app-icon:first-child { color: var(--color-accent-hover); }
+  > app-icon:last-child { color: var(--color-text-muted); }
 }
 
 .vs-reminder {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 13px;
-  background: var(--color-neutral-100);
-  font-size: 0.8235rem;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+  font: var(--text-body-sm);
   cursor: pointer;
 
-  > i { color: var(--color-neutral-600); flex: none; }
+  > app-icon { flex: none; color: var(--color-text-muted); }
 }

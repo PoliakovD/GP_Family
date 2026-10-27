@@ -1,0 +1,231 @@
+<main class="ui">
+  <header class="ui-head">
+    <h1 class="ui-h1">Витрина UI</h1>
+    <p class="ui-lead">Базовые компоненты редизайна «Гибрид A+B» (DESIGN.md §3). Тема: светлая, <code>?theme=dark</code> — тёмная.</p>
+  </header>
+
+  <!-- Кнопки -->
+  <section class="ui-section" aria-labelledby="s-buttons">
+    <h2 class="ui-h2" id="s-buttons">Кнопки</h2>
+    <div class="ui-row">
+      <button type="button" class="btn btn-primary"><app-icon [icon]="i.Plus" [size]="18" />Добавить</button>
+      <button type="button" class="btn btn-inverse">Разобрать</button>
+      <button type="button" class="btn btn-secondary">Открыть</button>
+      <button type="button" class="btn btn-ghost">Отмена</button>
+      <button type="button" class="btn btn-dashed"><app-icon [icon]="i.Link" [size]="18" />Создать ссылку-приглашение</button>
+      <button type="button" class="btn btn-danger">Удалить</button>
+    </div>
+    <div class="ui-row">
+      <button type="button" class="btn btn-primary" disabled>Disabled</button>
+      <button type="button" class="btn btn-secondary" disabled>Disabled</button>
+      <button type="button" class="btn btn-secondary" [attr.aria-pressed]="toggled()" (click)="toggled.set(!toggled())">
+        Toggle: {{ toggled() ? 'вкл' : 'выкл' }}
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm">Компактная (таблицы)</button>
+      <button type="button" class="btn-icon" aria-label="Уведомления"><app-icon [icon]="i.Bell" /></button>
+      <button type="button" class="btn-icon btn-round" aria-label="Поиск"><app-icon [icon]="i.Search" /></button>
+      <button type="button" class="btn btn-secondary btn-icon" aria-label="Ещё">⋯</button>
+      <button type="button" class="btn-link">Повторить</button>
+    </div>
+    <div class="ui-row">
+      <app-back-link label="Анализы" (activated)="noop()" />
+      <app-back-link label="Анализы" [iconOnly]="true" (activated)="noop()" />
+    </div>
+  </section>
+
+  <!-- Поля -->
+  <section class="ui-section" aria-labelledby="s-fields">
+    <h2 class="ui-h2" id="s-fields">Поля</h2>
+    <div class="ui-grid-3">
+      <div appField>
+        <label class="form-label">Название</label>
+        <input class="input" placeholder="Например, «Анализ крови»" />
+        <span class="field-hint field-hint-muted">Видно только вам</span>
+      </div>
+      <div appField [invalid]="true">
+        <label class="form-label">Почта</label>
+        <input class="input" [(ngModel)]="email" />
+        <span class="field-hint field-hint-error">Проверьте адрес почты</span>
+      </div>
+      <div appField>
+        <label class="form-label">Недоступно</label>
+        <input class="input" value="Нельзя изменить" disabled />
+      </div>
+      <div class="search-input">
+        <app-icon [icon]="i.Search" [size]="18" />
+        <label class="visually-hidden" for="ui-search">Поиск</label>
+        <input id="ui-search" class="input" placeholder="Лекарство, анализ, врач, человек…" />
+      </div>
+      <div appField>
+        <label class="form-label">Выбор</label>
+        <select class="input"><option>Кровь</option><option>Моча</option></select>
+      </div>
+      <label class="checkbox-row"><span class="switch"><input type="checkbox" checked /><span class="switch-knob"></span></span> Видно семье</label>
+    </div>
+  </section>
+
+  <!-- Бейджи и счётчики -->
+  <section class="ui-section" aria-labelledby="s-badges">
+    <h2 class="ui-h2" id="s-badges">Бейджи, счётчики, тоны</h2>
+    <div class="ui-row">
+      <span class="badge badge-danger">вне нормы</span>
+      <span class="badge badge-warning">выше рекомендуемого</span>
+      <span class="badge badge-success">норма</span>
+      <span class="badge badge-accent">видна семье</span>
+      <span class="badge badge-neutral">без нормы</span>
+      <app-status-chip [flag]="3" />
+      <app-status-chip [flag]="1" />
+      <app-status-chip [flag]="2" />
+      <span class="count-badge">2</span>
+      <span class="count-badge count-badge-accent">3</span>
+      <span class="count-badge">12</span>
+      <span class="dot-badge" aria-label="новые сообщения" role="img"></span>
+    </div>
+    <div class="ui-row">
+      @for (t of tones; track t) {
+        <span class="ui-tone"><app-icon-tile [icon]="i.Heart" [tone]="t" /><small>{{ t }}</small></span>
+      }
+    </div>
+  </section>
+
+  <!-- Вкладки и сегменты -->
+  <section class="ui-section" aria-labelledby="s-tabs">
+    <h2 class="ui-h2" id="s-tabs">Вкладки и сегменты</h2>
+    <app-pill-tabs [tabs]="familyTabs" [(value)]="familyTab" label="Разделы семьи" />
+    <div class="ui-row">
+      <div class="seg seg-sunken" role="radiogroup" aria-label="Сортировка">
+        <button type="button" class="seg-opt" role="radio" [attr.aria-checked]="sort() === 'deviations'" [class.active]="sort() === 'deviations'" (click)="sort.set('deviations')">Сначала отклонения</button>
+        <button type="button" class="seg-opt" role="radio" [attr.aria-checked]="sort() === 'blank'" [class.active]="sort() === 'blank'" (click)="sort.set('blank')">Как в бланке</button>
+        <button type="button" class="seg-opt" role="radio" [attr.aria-checked]="sort() === 'abc'" [class.active]="sort() === 'abc'" (click)="sort.set('abc')">По алфавиту</button>
+      </div>
+      <div class="seg seg-inverse" role="radiogroup" aria-label="Чьи данные">
+        <button type="button" class="seg-opt" role="radio" [attr.aria-checked]="whose() === 'me'" [class.active]="whose() === 'me'" (click)="whose.set('me')">Я</button>
+        <button type="button" class="seg-opt" role="radio" [attr.aria-checked]="whose() === 'close'" [class.active]="whose() === 'close'" (click)="whose.set('close')">Близкие</button>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="Период (radio)">
+        <label class="seg-opt"><input type="radio" name="ui-period" checked />7 дней</label>
+        <label class="seg-opt"><input type="radio" name="ui-period" />30 дней</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Карточки -->
+  <section class="ui-section" aria-labelledby="s-cards">
+    <h2 class="ui-h2" id="s-cards">Карточки метрик</h2>
+    <div class="ui-grid-3">
+      <app-metric-card label="Давление" value="122/95" link="/dev/ui">
+        <span badge class="badge badge-warning">выше рекомендуемого</span>
+      </app-metric-card>
+      <app-metric-card label="Последний анализ" value="6" unit="из 20">
+        <span badge class="badge badge-danger">вне нормы</span>
+      </app-metric-card>
+      <app-metric-card label="Приёмы врача" value="3" caption="последний 16 июня" />
+    </div>
+    <div class="ui-grid-3">
+      <app-stat-filter value="6" label="вне нормы" tone="danger" [(pressed)]="filterOut" />
+      <app-stat-filter value="14" label="в норме" tone="success" [(pressed)]="filterIn" />
+      <app-stat-filter value="0" label="без нормы в бланке" tone="neutral" [(pressed)]="filterNone" />
+    </div>
+  </section>
+
+  <!-- Строки -->
+  <section class="ui-section ui-grid-2" aria-label="Строки">
+    <div class="list-card">
+      <div class="list-card-head"><h2 class="card-title">Требует внимания</h2><span class="card-meta">3</span></div>
+      <app-task-row [icon]="i.BriefcaseMedical" tone="danger" title="Просрочено 1 лекарство, ещё 1 истекает"
+                    subtitle="Аптечка «Тестовая» · Суматриптан с 1 февраля 2023" actionLabel="Разобрать" [primary]="true" link="/dev/ui" />
+      <app-task-row [icon]="i.FlaskConical" tone="warning" title="6 показателей вне нормы"
+                    subtitle="Развернутый анализ крови · 3 октября" actionLabel="Открыть" link="/dev/ui" />
+      <app-task-row [icon]="i.Syringe" tone="warning" title="Прививка от гриппа"
+                    subtitle="Рекомендуется до 30 ноября" actionLabel="Отметить" (action)="noop()" />
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Участники</h2>
+      <app-person-row [person]="{ key: 'maria', firstName: 'Мария', lastName: 'Иванова' }" name="Мария Иванова"
+                      role="@maria · с 13 сентября" [online]="true">
+        <button type="button" class="btn-icon" aria-label="Действия с участником">⋯</button>
+      </app-person-row>
+      <app-person-row [person]="{ key: 'ivan', firstName: 'Иван', lastName: 'Иванов' }" name="Иван Иванов"
+                      role="Вы · админ · с 25 августа" [self]="true" />
+      <div class="ui-row">
+        <app-avatar [person]="{ key: 'a', firstName: 'Мария', lastName: 'Иванова' }" size="xs" />
+        <app-avatar [person]="{ key: 'b', firstName: 'Олег', lastName: 'Иванов' }" size="sm" />
+        <app-avatar [person]="{ key: 'c', firstName: 'Инна', lastName: 'Иванова' }" size="md" />
+        <app-avatar [person]="{ key: 'd', firstName: 'Нина', lastName: 'Иванова' }" size="lg" />
+        <app-avatar [person]="{ key: 'me', firstName: 'Иван', lastName: 'Иванов' }" size="xl" [self]="true" />
+      </div>
+    </div>
+
+    <div class="list-card">
+      <div class="list-card-head"><h2 class="card-title">Инструменты</h2></div>
+      <app-nav-row link="/dev/ui" [icon]="i.Pill" tone="medication" title="Аптечка" subtitle="Просрочено: 1">
+        <span class="count-badge">1</span>
+      </app-nav-row>
+      <app-nav-row link="/dev/ui" [icon]="i.FileText" tone="accent" title="Отчёты для врача" subtitle="1 ссылка активна" />
+      <app-nav-row link="/dev/ui" [icon]="i.NotebookPen" tone="note" title="Справочник" subtitle="Лекарства и показатели" />
+    </div>
+
+    <div class="list-card">
+      <div class="list-card-head"><h2 class="card-title">3 октября <span class="ui-muted">суббота</span></h2></div>
+      <app-entry-row time="23:51" [icon]="i.HeartPulse" tone="measure" title="Пульс 80" subtitle="уд/мин">
+        <button type="button" class="btn-icon" aria-label="Действия с записью">⋯</button>
+      </app-entry-row>
+      <app-entry-row time="23:50" [icon]="i.Smile" tone="mood" title="Самочувствие: хорошо" subtitle="Самочувствие">
+        <button type="button" class="btn-icon" aria-label="Действия с записью">⋯</button>
+      </app-entry-row>
+      <app-entry-row time="9:00" [icon]="i.Moon" tone="sleep" title="Сон 7 ч 30 мин" subtitle="Качество: средне">
+        <button type="button" class="btn-icon" aria-label="Действия с записью">⋯</button>
+      </app-entry-row>
+      <app-entry-row time="18:20" [icon]="i.Zap" tone="symptom" title="Головная боль" subtitle="голова · 4/10">
+        <button type="button" class="btn-icon" aria-label="Действия с записью">⋯</button>
+      </app-entry-row>
+    </div>
+  </section>
+
+  <!-- Анализ -->
+  <section class="ui-section" aria-labelledby="s-analysis">
+    <h2 class="ui-h2" id="s-analysis">Шкала нормы</h2>
+    <div class="card ui-scales">
+      <div><span class="ui-label">СОЭ · 6 мм/ч</span><app-reference-scale [value]="6" [low]="0" [high]="2" [flag]="3" [labels]="true" /></div>
+      <div><span class="ui-label">Лейкоциты · 4,24</span><app-reference-scale [value]="4.24" [low]="6.5" [high]="12.5" [flag]="1" [labels]="true" /></div>
+      <div><span class="ui-label">Гемоглобин · 140 (норма)</span><app-reference-scale [value]="140" [low]="120" [high]="160" [flag]="2" [labels]="true" /></div>
+      <div><span class="ui-label">Мини-вариант</span><app-reference-scale [value]="40" [low]="17" [high]="38" [flag]="3" variant="mini" /></div>
+    </div>
+  </section>
+
+  <!-- Чат -->
+  <section class="ui-section" aria-labelledby="s-chat">
+    <h2 class="ui-h2" id="s-chat">Чат семьи</h2>
+    <div class="card ui-chat">
+      <app-chat-system>Мария присоединилась к семье · 13 сентября</app-chat-system>
+      <app-chat-day>Сегодня</app-chat-day>
+      <app-chat-bubble [author]="{ key: 'maria', firstName: 'Мария', lastName: 'Иванова' }" authorName="Мария" time="09:12">
+        Ваня, ты записался на прививку от гриппа? Нужно до конца ноября.
+      </app-chat-bubble>
+      <app-chat-bubble [mine]="true" time="09:20" [read]="true">Ещё нет, на этой неделе запишусь. Скинул свежий анализ:</app-chat-bubble>
+      <div class="ui-chat-card">
+        <app-chat-record-card link="/dev/ui" [icon]="i.FlaskConical" title="Развернутый анализ крови" date="3 октября" status="6 вне нормы" />
+      </div>
+      <app-chat-composer (send)="noop()" (attach)="noop()" />
+    </div>
+  </section>
+
+  <!-- Состояния -->
+  <section class="ui-section ui-grid-2" aria-label="Состояния">
+    <div class="card">
+      <app-empty-state [icon]="i.Pill" title="Курсов пока нет" text="Добавьте лекарство — напомним вовремя.">
+        <button type="button" class="btn btn-primary">Добавить курс</button>
+      </app-empty-state>
+    </div>
+    <div class="card">
+      <app-loading-spinner />
+      <div class="alert-danger" role="alert">Не удалось сохранить. Проверьте соединение и повторите.</div>
+      <div class="alert-warning">ИИ временно недоступен — распознавание продолжится позже.</div>
+      <div class="alert-success">Сохранено</div>
+      <div class="alert-info">Ссылка действует 7 дней.</div>
+    </div>
+  </section>
+
+  <app-fab label="Добавить запись" (activated)="noop()" />
+</main>

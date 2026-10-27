@@ -46,7 +46,7 @@ public class OfficeDocumentReader(ILogger<OfficeDocumentReader> logger)
 
     private static string ExtractSpreadsheet(Stream stream)
     {
-        using var workbook = WorkbookFactory.Create(stream, readOnly: true);
+        using var workbook = WorkbookFactory.Create(stream);
         var sb = new StringBuilder();
         for (var sheetIndex = 0; sheetIndex < workbook.NumberOfSheets; sheetIndex++)
         {

@@ -38,6 +38,8 @@ export function describeSettingsError(e: unknown): string {
       case 'email_taken': return 'Этот email уже привязан к другому аккаунту.';
       case 'weak_password': return 'Пароль — минимум 8 символов, обязательно строчная и заглавная латинские буквы и цифра.';
       case 'invalid_credentials': return 'Текущий пароль неверен.';
+      // Общий с входом lockout после серии неверных паролей (сервер: PwaAuthService, аудит L6).
+      case 'locked_out': return 'Слишком много неверных попыток — смена пароля и вход заблокированы на 15 минут.';
       case 'no_password': return 'У аккаунта ещё нет пароля — сначала привяжите email на вкладке «Профиль».';
       case 'invalid_profile': return 'Проверьте ФИО и дату рождения.';
     }

@@ -33,14 +33,14 @@
 
     <div class="mb-2">
       <label class="form-label" for="warmup-names">Названия — по одному на строку</label>
-      <textarea id="warmup-names" class="input" rows="8" style="width: 100%; font-family: monospace;"
+      <textarea id="warmup-names" class="input w-100 font-mono" rows="8"
                 placeholder="парацетамол&#10;ибупрофен&#10;гемоглобин"
                 [ngModel]="names()" (ngModelChange)="names.set($event)" name="warmupNames"></textarea>
     </div>
 
     <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
       <label class="form-label mb-0" for="warmup-max-paid">Максимум платных вызовов за прогон</label>
-      <input id="warmup-max-paid" class="input" type="number" min="1" style="width: 120px;" placeholder="без ограничения"
+      <input id="warmup-max-paid" class="input x-w-120px" type="number" min="1" placeholder="без ограничения"
              [ngModel]="maxPaidCalls()" (ngModelChange)="maxPaidCalls.set($event === '' || $event === null ? null : +$event)"
              name="warmupMaxPaidCalls" />
     </div>
@@ -55,7 +55,7 @@
   <div class="card-title">Статус прогона</div>
   <div class="card-body">
     @if (loading() && !status()) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (error()) {
       <div class="alert-danger">{{ error() }}</div>
     } @else {
@@ -111,7 +111,7 @@
                       {{ expandedRunId() === h.runId ? 'скрыть' : (h.names?.length ?? 0) + ' шт.' }}
                     </button>
                     @if (expandedRunId() === h.runId) {
-                      <div class="text-muted" style="white-space: pre-wrap;">{{ (h.names ?? []).join('\n') }}</div>
+                      <div class="text-muted text-pre-wrap">{{ (h.names ?? []).join('\n') }}</div>
                       <button type="button" class="btn btn-secondary btn-sm mt-1" (click)="reuseNames(h)">Повторить с этим списком</button>
                     }
                   </td>

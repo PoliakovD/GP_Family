@@ -1,51 +1,44 @@
 <ng-template #formContent>
-  <div class="record-add-header">
+  <div class="side-sheet-head">
     <div>
-      <div class="record-add-kicker">Несколько документов</div>
-      <h3 class="mb-0">Загрузить несколько документов</h3>
+      <div class="side-sheet-kicker">Несколько документов</div>
+      <h2 class="side-sheet-title">Загрузить несколько документов</h2>
     </div>
     <button type="button" class="btn-icon" aria-label="Закрыть" (click)="cancel()">
-      <i class="ph ph-x" aria-hidden="true"></i>
+      <app-icon [icon]="icons.X" />
     </button>
   </div>
 
-  <div class="record-add-body">
+  <ng-container *ngTemplateOutlet="formMain" />
+</ng-template>
+
+<ng-template #formMain>
+  <div class="side-sheet-body">
     @if (!running() && !done()) {
-      <p class="muted mb-3">
+      <p class="form-hint">
         Каждый файл станет отдельной записью — анализ или приём врача определится автоматически
         по содержимому документа, для каждого свой прогон распознавания.
       </p>
 
-      <div class="mb-3">
-        <div class="form-label">Чьи это документы</div>
-        <div class="d-flex flex-wrap gap-2">
+      <div class="form-section">
+        <div class="form-label" id="rb-who">Чьи это документы</div>
+        <div class="seg" role="group" [attr.aria-labelledby]="'rb-who'">
           @for (opt of patientOptions; track opt.key) {
-            @if (opt.shortLabel) {
-              <button type="button" class="person-chip-btn" (click)="selectedPatientKey = opt.key">
-                <app-person-chip
-                  [avatarPerson]="{key: opt.key, firstName: opt.avatarFirstName, lastName: opt.avatarLastName}"
-                  [shortLabel]="opt.shortLabel"
-                  [fullLabel]="opt.label"
-                  [selected]="selectedPatientKey === opt.key"
-                />
-              </button>
-            } @else {
-              <button
-                type="button"
-                class="tag"
-                [class.tag-accent]="selectedPatientKey === opt.key"
-                style="cursor:pointer;border:none;font:inherit"
-                (click)="selectedPatientKey = opt.key"
-              >
+            <button type="button" class="seg-opt" [class.active]="selectedPatientKey === opt.key"
+                    [attr.aria-pressed]="selectedPatientKey === opt.key" [title]="opt.label" (click)="selectedPatientKey = opt.key">
+              @if (opt.shortLabel) {
+                <app-avatar size="xs" [person]="{key: opt.key, firstName: opt.avatarFirstName ?? opt.shortLabel, lastName: opt.avatarLastName ?? null}" />
+                {{ opt.shortLabel }}
+              } @else {
                 {{ opt.label }}
-              </button>
-            }
+              }
+            </button>
           }
         </div>
       </div>
     }
 
-    <div class="mb-3">
+    <div class="form-section">
       <div class="form-label">Файлы</div>
       <div class="file-chip-grid">
         @for (item of items(); track item.file.name + item.file.size; let i = $index) {
@@ -53,7 +46,7 @@
             class="file-chip"
             [class.file-chip-failed]="item.status === 'failed'"
             [class.file-chip-skipped]="item.status === 'skipped'"
-            style="cursor:pointer"
+           
             role="button"
             tabindex="0"
             [attr.title]="item.file.name"
@@ -63,7 +56,7 @@
             @if (item.previewUrl) {
               <img [src]="item.previewUrl" alt="" />
             } @else {
-              <i class="ph ph-file-text" aria-hidden="true"></i>
+              <app-icon [icon]="icons.FileText" [size]="20" />
               <span class="file-chip-name">{{ item.file.name }}</span>
             }
 
@@ -71,22 +64,22 @@
               @case ('pending') {
                 @if (!running() && !done()) {
                   <button type="button" class="file-chip-remove" aria-label="Убрать файл" (click)="$event.stopPropagation(); removeItem(i)">
-                    <i class="ph-bold ph-x" aria-hidden="true"></i>
+                    <app-icon [icon]="icons.X" [size]="14" [strokeWidth]="2.5" />
                   </button>
                 }
               }
-              @case ('creating') { <span class="file-chip-badge file-chip-badge-spin"><i class="ph ph-circle-notch" aria-hidden="true"></i></span> }
-              @case ('uploading') { <span class="file-chip-badge file-chip-badge-spin"><i class="ph ph-circle-notch" aria-hidden="true"></i></span> }
-              @case ('queued') { <span class="file-chip-badge file-chip-badge-ok"><i class="ph-bold ph-check" aria-hidden="true"></i></span> }
-              @case ('failed') { <span class="file-chip-badge file-chip-badge-error" [attr.title]="item.error"><i class="ph-bold ph-warning" aria-hidden="true"></i></span> }
-              @case ('skipped') { <span class="file-chip-badge" [attr.title]="item.error"><i class="ph-bold ph-minus-circle" aria-hidden="true"></i></span> }
+              @case ('creating') { <span class="file-chip-badge file-chip-badge-spin"><app-icon [icon]="icons.LoaderCircle" [size]="16" /></span> }
+              @case ('uploading') { <span class="file-chip-badge file-chip-badge-spin"><app-icon [icon]="icons.LoaderCircle" [size]="16" /></span> }
+              @case ('queued') { <span class="file-chip-badge file-chip-badge-ok"><app-icon [icon]="icons.Check" [size]="16" [strokeWidth]="2.5" /></span> }
+              @case ('failed') { <span class="file-chip-badge file-chip-badge-error" [attr.title]="item.error"><app-icon [icon]="icons.TriangleAlert" [size]="16" /></span> }
+              @case ('skipped') { <span class="file-chip-badge" [attr.title]="item.error"><app-icon [icon]="icons.CircleMinus" [size]="16" /></span> }
             }
           </div>
         }
         @if (!running() && !done() && remainingSlots > 0) {
           <label class="file-chip file-chip-add" [attr.for]="fileInputId">
-            <i class="ph ph-upload-simple" aria-hidden="true"></i>
-            <span>Файлы</span>
+            <app-icon [icon]="icons.Upload" [size]="20" />
+            <span>Добавить</span>
           </label>
         }
       </div>
@@ -99,17 +92,16 @@
         (change)="onFilesSelected($event)"
       />
       @if (extractionLimits; as limits) {
-        <div class="muted mb-2">
+        <p class="form-hint">
           Фото, PDF, Word или Excel — до {{ limits.maxBatchDocuments }} документов за раз. Сегодня можно ещё
           {{ limits.dailyQuota - limits.usedToday }} из {{ limits.dailyQuota }}.
-        </div>
+        </p>
       }
       @if (stoppedByLimit) {
-        <div class="alert-danger mb-2">{{ stoppedByLimit }}</div>
+        <div class="alert-danger" role="alert">{{ stoppedByLimit }}</div>
       }
       @if (waitingForAi) {
-        <div class="alert-info mb-2">
-          <i class="ph ph-hourglass" aria-hidden="true"></i>
+        <div class="alert-info">
           ИИ сейчас недоступен. Документы сохранены и будут распознаны автоматически, как только он
           вернётся — их можно не загружать повторно.
         </div>
@@ -117,7 +109,7 @@
     </div>
 
     @if (done()) {
-      <div [class]="failedCount > 0 ? 'alert-danger mb-2' : 'alert-info mb-2'" role="status">
+      <div [class]="failedCount > 0 ? 'alert-danger' : 'alert-info'" role="status">
         Загружено и поставлено в очередь: {{ succeededCount }} из {{ items().length }}.
         @if (failedCount > 0) { Не удалось: {{ failedCount }}. }
         @if (skippedCount > 0) { Пропущено из-за дневного лимита: {{ skippedCount }}. }
@@ -125,7 +117,7 @@
       <!-- Причина у каждого файла — текстом: раньше она была только во всплывающей подсказке
            (title), которой на телефоне нет. -->
       @if (failedCount > 0 || skippedCount > 0) {
-        <ul class="muted mb-2">
+        <ul class="form-hint">
           @for (item of items(); track $index) {
             @if (item.status === 'failed' || item.status === 'skipped') {
               <li><strong>{{ item.file.name }}</strong>: {{ item.error || (item.status === 'skipped' ? 'пропущен' : 'не загрузился') }}</li>
@@ -136,26 +128,26 @@
     }
   </div>
 
-  <div class="record-add-footer">
+  <div class="side-sheet-foot">
     @if (!done()) {
-      <button class="btn btn-primary flex-fill" [disabled]="running() || items().length === 0" (click)="submit()">
+      <button class="btn btn-primary" [disabled]="running() || items().length === 0" (click)="submit()">
         {{ running() ? 'Загружаем…' : 'Загрузить (' + items().length + ')' }}
       </button>
       <button type="button" class="btn btn-ghost" [disabled]="running()" (click)="cancel()">Отмена</button>
     } @else {
-      <button class="btn btn-primary flex-fill" (click)="finish()">Готово</button>
+      <button class="btn btn-primary" (click)="finish()">Готово</button>
     }
   </div>
 </ng-template>
 
+<!-- Десктоп: страница в колонке контента («‹ Назад к разделу» → заголовок → форма), как открытая
+     запись; телефон — на весь экран со своей шапкой. -->
 @if (isWide) {
-  <div class="overlay-backdrop record-add-backdrop" (click)="!running() && cancel()">
-    <aside class="record-add-panel" (click)="$event.stopPropagation()">
-      <ng-container *ngTemplateOutlet="formContent" />
-    </aside>
-  </div>
+  <app-content-page kicker="Несколько документов" [title]="'Загрузить несколько документов'" [backLabel]="labels.title" (back)="!running() && cancel()">
+    <ng-container *ngTemplateOutlet="formMain" />
+  </app-content-page>
 } @else {
-  <div class="record-add-fullscreen">
+  <div class="side-sheet-fullscreen">
     <ng-container *ngTemplateOutlet="formContent" />
   </div>
 }

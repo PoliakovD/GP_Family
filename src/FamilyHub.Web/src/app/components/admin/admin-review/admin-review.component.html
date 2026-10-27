@@ -1,6 +1,6 @@
-<div class="d-flex justify-content-between mb-3" style="align-items: center; gap: 8px; flex-wrap: wrap;">
+<div class="d-flex justify-content-between mb-3 align-items-center gap-2 flex-wrap">
   <div>
-    <h2 class="mb-0" style="font-size: 1.1rem;">Одобрение</h2>
+    <h2 class="mb-0 x-text-title">Одобрение</h2>
     <p class="text-muted mb-0">
       Платные поиски ждут «да» админа, результаты с низкой уверенностью не попадают в справочник без проверки.
       <kbd>J</kbd>/<kbd>K</kbd> — навигация, <kbd>A</kbd> — одобрить, <kbd>R</kbd> — отклонить, <kbd>E</kbd> — править.
@@ -18,7 +18,7 @@
         Результаты ({{ resultsTotal() }})
       </button>
     </div>
-    <select class="input" style="width: auto;" aria-label="Вид задач" [ngModel]="kindFilter()" (ngModelChange)="setKind($event)">
+    <select class="input x-w-auto" aria-label="Вид задач" [ngModel]="kindFilter()" (ngModelChange)="setKind($event)">
       <option value="">Все виды</option>
       <option value="lab-analyte">Показатели</option>
       <option value="medication">Препараты (аптечка)</option>
@@ -47,16 +47,16 @@
     }
 
     @if (loading() && rows().length === 0) {
-      <p class="text-muted" style="padding: 10px;">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (rows().length === 0) {
-      <p class="text-muted" style="padding: 10px;">Очередь пуста — ничего не ждёт решения.</p>
+      <p class="text-muted x-p-s3">Очередь пуста — ничего не ждёт решения.</p>
     } @else {
       <div class="inbox-head">
-        <label class="d-flex" style="align-items: center; gap: 6px;">
+        <label class="d-flex align-items-center gap-2">
           <input type="checkbox" [checked]="allSearchesChecked()" (change)="toggleAllSearches()" aria-label="Выбрать все платные поиски" />
           <span class="text-muted">все поиски</span>
         </label>
-        @if (belowCount() > 0) { <span class="tag tag-danger">ниже порога: {{ belowCount() }}</span> }
+        @if (belowCount() > 0) { <span class="badge badge-danger">ниже порога: {{ belowCount() }}</span> }
       </div>
       <ul class="inbox-rows">
         @for (r of rows(); track inboxKey(r)) {
@@ -72,18 +72,18 @@
             <div class="inbox-row-body">
               <div class="inbox-row-title">{{ r.name }}</div>
               <div class="inbox-row-meta">
-                <span class="tag" [class.tag-accent]="r.stage === 'search'" [class.tag-accent-2]="r.stage === 'result'">{{ stageLabel(r.stage) }}</span>
-                <span class="tag tag-neutral">{{ kindLabel(r.kind) }}</span>
-                @if (r.specimen) { <span class="tag tag-neutral">{{ r.specimen }}</span> }
-                @if (r.hasTwins) { <span class="tag tag-ok" title="Есть свежий кэш того же показателя у другого биоматериала">есть кэш</span> }
-                @if (r.hasNote) { <span class="tag tag-neutral" title="Есть заметка админа">заметка</span> }
+                <span class="badge badge-neutral">{{ stageLabel(r.stage) }}</span>
+                <span class="badge badge-neutral">{{ kindLabel(r.kind) }}</span>
+                @if (r.specimen) { <span class="badge badge-neutral">{{ r.specimen }}</span> }
+                @if (r.hasTwins) { <span class="badge badge-success" title="Есть свежий кэш того же показателя у другого биоматериала">есть кэш</span> }
+                @if (r.hasNote) { <span class="badge badge-neutral" title="Есть заметка админа">заметка</span> }
               </div>
               @if (r.stage === 'search' && r.queryText && r.queryText !== r.name) {
                 <div class="text-muted inbox-row-query">запрос: {{ r.queryText }}</div>
               }
               <div class="text-muted inbox-row-meta">{{ originLabel(r.origin) }} · {{ r.createdAt | date: 'dd.MM HH:mm' }}</div>
             </div>
-            <span class="tag inbox-row-confidence" [class.tag-danger]="r.belowThreshold" [class.tag-ok]="!r.belowThreshold"
+            <span class="badge inbox-row-confidence" [class.badge-danger]="r.belowThreshold" [class.badge-success]="!r.belowThreshold"
                   [title]="r.confidenceReason ?? ''">{{ confidenceLabel(r.confidence) }}</span>
           </li>
         }
@@ -117,7 +117,7 @@
   </section>
 </div>
 
-<div style="margin-top: 16px;">
+<div class="x-mt-s4">
   <button type="button" class="btn btn-secondary btn-sm mb-2" (click)="showConfig.set(!showConfig())">
     {{ showConfig() ? 'Скрыть пороги уверенности' : 'Пороги уверенности' }}
   </button>

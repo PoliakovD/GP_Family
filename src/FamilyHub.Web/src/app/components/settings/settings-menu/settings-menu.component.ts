@@ -1,10 +1,13 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink, Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { PushNotificationService } from '../../../services/push-notification.service';
 import { BreakpointService } from '../../../services/breakpoint.service';
 import { AvatarComponent } from '../../../shared/avatar/avatar.component';
 import { formatPersonName } from '../../../shared/util/person-name';
+import { Bell, BellOff, ChevronRight, Database, LogOut, Lock, Send, User } from 'lucide';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { NavRowComponent } from '../../../shared/ui/nav-row/nav-row.component';
 
 /**
  * Корневой экран `/settings` (редизайн v3, PR8). На десктопе («Профиль» в сайдбаре всегда ведёт
@@ -15,8 +18,9 @@ import { formatPersonName } from '../../../shared/util/person-name';
  */
 @Component({
     selector: 'app-settings-menu',
-    imports: [RouterLink, AvatarComponent],
+    imports: [RouterLink, AvatarComponent, IconComponent, NavRowComponent],
     templateUrl: './settings-menu.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-menu.component.scss'
 })
 export class SettingsMenuComponent implements OnInit {
@@ -27,6 +31,7 @@ export class SettingsMenuComponent implements OnInit {
   private readonly breakpoints = inject(BreakpointService);
 
   readonly formatPersonName = formatPersonName;
+  protected readonly icons = { Bell, BellOff, ChevronRight, Database, LogOut, Lock, Send, User };
 
   get isWide(): boolean {
     return this.breakpoints.tier() === 'wide';

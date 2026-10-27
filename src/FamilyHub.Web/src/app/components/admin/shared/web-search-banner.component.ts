@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input } from '@angular/core';
+import { Component, OnInit, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { WebSearchValveStore } from './web-search-valve.store';
@@ -12,11 +12,12 @@ import { WebSearchValveStore } from './web-search-valve.store';
 @Component({
     selector: 'app-web-search-banner',
     imports: [DatePipe, RouterLink],
+    changeDetection: ChangeDetectionStrategy.Eager,
     template: `
     @if (store.valve(); as valve) {
       @if (valve.isPaused) {
         <div class="card mb-3">
-          <div class="card-body d-flex justify-content-between" style="align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span class="text-muted">
               Платный поиск на паузе{{ valve.pausedAt ? ' с ' + (valve.pausedAt | date: 'dd.MM.yyyy HH:mm') : '' }}
               @if (deferredTotal() !== null) { — отложено задач: {{ deferredTotal() }} }

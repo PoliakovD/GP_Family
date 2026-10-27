@@ -1,4 +1,6 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Check, X } from 'lucide';
+import { IconComponent } from '../ui/icon/icon.component';
 
 export interface PipelineStep {
   id: string;
@@ -20,10 +22,14 @@ export interface PipelineStep {
  */
 @Component({
   selector: 'app-pipeline-progress',
+  imports: [IconComponent],
   standalone: true,
   templateUrl: './pipeline-progress.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pipeline-progress.component.scss',
 })
 export class PipelineProgressComponent {
+  protected readonly icons = { Check, X };
+
   @Input() steps: PipelineStep[] = [];
 }

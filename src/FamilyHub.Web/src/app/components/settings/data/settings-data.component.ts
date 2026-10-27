@@ -1,4 +1,7 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Download } from 'lucide';
+import { LoadingSpinnerComponent } from '../../../shared/loading-spinner/loading-spinner.component';
+import { IconComponent } from '../../../shared/ui/icon/icon.component';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -7,18 +10,21 @@ import { AuthService } from '../../../services/auth.service';
 import { ToastService } from '../../../shared/toast/toast.service';
 import { HealthShareCategory, HealthShareGrantDto } from '../../../models/types';
 import { runBusy } from '../settings-task';
-
+
+
 import { saveBlob } from '../../../shared/util/save-blob';
 import { TelegramService } from '../../../services/telegram.service';
 /** Вкладка «Данные»: политика конфиденциальности, выгрузка данных, доступ к здоровью (ADR-0017),
  * удаление аккаунта (152-ФЗ). */
 @Component({
     selector: 'app-settings-data',
-    imports: [FormsModule, RouterLink],
+    imports: [IconComponent, LoadingSpinnerComponent, FormsModule, RouterLink],
     templateUrl: './settings-data.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrl: './settings-data.component.scss',
 })
 export class SettingsDataComponent implements OnInit {
+  protected readonly icons = { Download };
   private readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);

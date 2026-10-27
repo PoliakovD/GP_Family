@@ -2,7 +2,7 @@
   <div class="card-title">Слоты промптов</div>
   <div class="card-body">
     @if (promptsLoading() && promptSlots().length === 0) {
-      <p class="text-muted">Загрузка…</p>
+      <app-loading-spinner />
     } @else if (promptsError()) {
       <div class="alert-danger">{{ promptsError() }}</div>
     } @else {
@@ -32,9 +32,9 @@
     <div class="card-title">{{ selectedPromptKey() }} — редактор</div>
     <div class="card-body">
       @if (promptVersionsLoading()) {
-        <p class="text-muted">Загрузка…</p>
+        <app-loading-spinner />
       } @else {
-        <textarea class="input mb-2" rows="14" style="width: 100%; font-family: monospace;"
+        <textarea class="input mb-2 w-100 font-mono" rows="14"
                   [ngModel]="editorBody()" (ngModelChange)="editorBody.set($event)"></textarea>
 
         <input class="input mb-2 w-100" placeholder="что изменилось (необязательно)…"
@@ -49,7 +49,7 @@
           }
         </div>
 
-        <div class="card-title" style="font-size: 0.8235rem;">История версий</div>
+        <div class="card-kicker">История версий</div>
         <div class="table-responsive mb-3">
           <table class="table">
             <thead><tr><th>Версия</th><th>Активна</th><th>Создана</th><th>Заметка</th><th></th></tr></thead>
@@ -112,7 +112,7 @@
       } @else if (dryRunResult()) {
         @let r = dryRunResult()!;
         @if (r.success) {
-          <pre style="white-space: pre-wrap;">{{ r.payload | json }}</pre>
+          <pre class="text-pre-wrap">{{ r.payload | json }}</pre>
         } @else {
           <p class="text-danger">{{ r.error }}</p>
         }

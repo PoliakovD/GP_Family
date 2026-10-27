@@ -55,13 +55,15 @@ public class AttachmentPreviewRenderer(
     }
 
     /// <summary>Office-документы, для которых у LibreOffice/Gotenberg есть конвертер в PDF — шире,
-    /// чем DocumentContentTypes.Office (тот — только то, что распознаёт NPOI): Doc/Rtf/Html можно
-    /// ПОКАЗАТЬ через LibreOffice, даже если извлечение текста для них не поддержано.</summary>
+    /// чем DocumentContentTypes.Office (тот — только то, что распознаёт NPOI): Doc/Rtf можно
+    /// ПОКАЗАТЬ через LibreOffice, даже если извлечение текста для них не поддержано.
+    /// HTML сюда НЕ входит (аудит security-audit-2026-10, H1): LibreOffice подтягивает внешние
+    /// ресурсы HTML-документа при конвертации (SSRF с чтением результата через PDF-превью), а вьюер
+    /// и так показывает HTML как текст (AttachmentRenderKind.Text для PlainTextLike).</summary>
     private static bool IsOfficeRoute(string contentType) =>
         DocumentContentTypes.Office.Contains(contentType)
         || contentType.Equals(DocumentContentTypes.Doc, StringComparison.OrdinalIgnoreCase)
-        || contentType.Equals(DocumentContentTypes.Rtf, StringComparison.OrdinalIgnoreCase)
-        || contentType.Equals(DocumentContentTypes.Html, StringComparison.OrdinalIgnoreCase);
+        || contentType.Equals(DocumentContentTypes.Rtf, StringComparison.OrdinalIgnoreCase);
 
     private PreviewRenderResult RenderPdf(byte[] pdfBytes)
     {

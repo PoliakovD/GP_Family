@@ -18,4 +18,7 @@ public enum FileOwnerType
     /// <summary>Скан сертификата прививок (VaccinationCertificate) — общий на несколько записей
     /// Vaccination, распознанных из одного и того же фото (см. Vaccination.CertificateId).</summary>
     VaccinationCertificate = 4,
+
+    /// <summary>Вложение сообщения чата семьи (ChatMessage, ADR-0019) — видно активным членам семьи сообщения.</summary>
+    ChatMessage = 5,
 }

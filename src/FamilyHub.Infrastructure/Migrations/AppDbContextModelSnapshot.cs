@@ -97,6 +97,107 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.ToTable("Birthdays", "identity");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReplyToMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorUserId");
+
+                    b.HasIndex("ReplyToMessageId");
+
+                    b.HasIndex("FamilyId", "CreatedAt", "Id");
+
+                    b.ToTable("ChatMessages", "chat");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessageLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.ToTable("ChatMessageLinks", "chat");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessageReaction", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Emoji")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("MessageId", "UserId", "Emoji");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ChatMessageReactions", "chat");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatReadState", b =>
+                {
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("LastReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("FamilyId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ChatReadStates", "chat");
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.CredentialRotation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2968,6 +3069,75 @@ namespace FamilyHub.Infrastructure.Migrations
                     b.Navigation("Family");
                 });
 
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessage", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FamilyHub.Domain.Entities.Family", "Family")
+                        .WithMany()
+                        .HasForeignKey("FamilyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FamilyHub.Domain.Entities.ChatMessage", "ReplyTo")
+                        .WithMany()
+                        .HasForeignKey("ReplyToMessageId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Family");
+
+                    b.Navigation("ReplyTo");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessageLink", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.ChatMessage", "Message")
+                        .WithMany("Links")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessageReaction", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.ChatMessage", "Message")
+                        .WithMany("Reactions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FamilyHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatReadState", b =>
+                {
+                    b.HasOne("FamilyHub.Domain.Entities.Family", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FamilyHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FamilyHub.Domain.Entities.DoseActionToken", b =>
                 {
                     b.HasOne("FamilyHub.Domain.Entities.MedicationDose", null)
@@ -3172,6 +3342,13 @@ namespace FamilyHub.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("FamilyHub.Domain.Entities.ChatMessage", b =>
+                {
+                    b.Navigation("Links");
+
+                    b.Navigation("Reactions");
                 });
 
             modelBuilder.Entity("FamilyHub.Domain.Entities.Family", b =>

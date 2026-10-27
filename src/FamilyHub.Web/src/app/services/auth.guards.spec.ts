@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { authGuard, consentGuard, guestGuard, profileGuard } from './auth.guards';
+import { authGuard, consentGuard, guestGuard, landingGuard, profileGuard } from './auth.guards';
 import { convertToParamMap } from '@angular/router';
 import { AuthService, type ConsentStatus, type Me } from './auth.service';
 import { TelegramService } from './telegram.service';
@@ -198,6 +198,37 @@ describe('auth.guards', () => {
 
       await expect(runGuard(profileGuard)).resolves.toBe(true);
       expect(toastError).toHaveBeenCalled();
+    });
+  });
+
+  describe('landingGuard', () => {
+    it('shows the landing to a guest (loadMe() → null, unauthorized)', async () => {
+      auth.loadMe.mockImplementation(() => {
+        auth.meLoadError.set('unauthorized');
+        return Promise.resolve(null);
+      });
+
+      await expect(runGuard(landingGuard)).resolves.toBe(true);
+    });
+
+    it('sends a signed-in user straight to /home without a network call', async () => {
+      auth.me.set(fakeMe());
+
+      await expect(runGuard(landingGuard)).resolves.toEqual({ __parsed: '/home' });
+      expect(auth.loadMe).not.toHaveBeenCalled();
+    });
+
+    it('sends a user with a live session (loadMe() → me) to /home', async () => {
+      auth.loadMe.mockResolvedValue(fakeMe());
+
+      await expect(runGuard(landingGuard)).resolves.toEqual({ __parsed: '/home' });
+    });
+
+    it('never shows the landing inside Telegram — sign-in is implicit there', async () => {
+      auth.mode = 'telegram';
+
+      await expect(runGuard(landingGuard)).resolves.toEqual({ __parsed: '/home' });
+      expect(auth.loadMe).not.toHaveBeenCalled();
     });
   });
 describe('guestGuard', () => {

@@ -1,4 +1,6 @@
-import { Component, OnInit, computed, effect, inject, untracked } from '@angular/core';
+import { Plus } from 'lucide';
+import { IconComponent } from '../../shared/ui/icon/icon.component';
+import { Component, OnInit, computed, effect, inject, untracked, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { BreakpointService } from '../../services/breakpoint.service';
 import { VaccinationStateService } from '../../services/vaccination-state.service';
@@ -14,8 +16,9 @@ import { VaccinationSavedSheetComponent } from '../vaccination-saved-sheet/vacci
  * разных экранов через VaccinationStateService, а рисует одно место, как IntakePageComponent.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-vaccinations-page',
-  imports: [
+  imports: [IconComponent, 
     BottomSheetComponent, RouterOutlet, SidePanelComponent, VaccinationAddModalComponent,
     VaccinationSavedSheetComponent,
   ],
@@ -23,6 +26,7 @@ import { VaccinationSavedSheetComponent } from '../vaccination-saved-sheet/vacci
   styleUrl: './vaccinations-page.component.scss',
 })
 export class VaccinationsPageComponent implements OnInit {
+  protected readonly plusIcon = Plus;
   private readonly breakpoints = inject(BreakpointService);
   protected readonly vaccinations = inject(VaccinationStateService);
   protected readonly pageAction = inject(PageActionService);
