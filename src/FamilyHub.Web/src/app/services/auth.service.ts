@@ -65,6 +65,17 @@ export interface ConsentText {
 }
 
 /**
+ * Итог попытки обновить access-токен по refresh-cookie (см. AuthService.refresh):
+ * - `'ok'` — новая пара cookie выдана, исходный запрос можно повторить;
+ * - `'unauthorized'` — refresh-сессии больше нет (истекла, отозвана, reuse-detection): ТОЛЬКО
+ *   это состояние означает «войдите снова» и даёт право уводить на /login;
+ * - `'transient'` — сеть, 429 (rate-limit "auth-session" делится с /me), 5xx, неразобранная
+ *   400 CSRF: сессия могла остаться живой, поэтому разлогинивать нельзя — показываем ошибку
+ *   запроса, а следующий 401 попробует refresh ещё раз.
+ */
+export type RefreshOutcome = 'ok' | 'unauthorized' | 'transient';
+
+/**
  * Аутентификация в двух окружениях (этап 2 п.2.4): Telegram Mini App (initData через
  * интерцептор) и PWA (email+пароль, cookie-сессия). Плюс статус согласия ПДн (задача 2.3).
  */
@@ -98,20 +109,7 @@ export class AuthService {
   private pendingLoadMe: Promise<Me | null> | null = null;
   private pendingTelegramInit: Promise<boolean> | null = null;
   /** Общий in-flight refresh — параллельные 401 не должны бить по /api/auth/refresh каждый отдельно. */
-  private pendingRefresh: Promise<boolean> | null = null;
-  ensureRefreshed(http: HttpClient): Promise<boolean> {
-      if (!this.pendingRefresh) {
-          this.pendingRefresh = firstValueFrom(http.post('/api/auth/refresh', {}, { withCredentials: true }))
-              .then(() => true)
-              .catch(() => false)
-              .finally(() => {
-                  this.pendingRefresh = null;
-              });
-      }
-      return this.pendingRefresh;
-  }
-
-
+  private pendingRefresh: Promise<RefreshOutcome> | null = null;
 
   /** telegram/dev — вход неявный (заголовки интерцептора); pwa — нужна cookie-сессия. */
   get mode(): 'telegram' | 'pwa' {
@@ -135,11 +133,7 @@ export class AuthService {
     this.log.log('auth', 'info', 'GET /api/auth/me');
     this.pendingLoadMe = (async () => {
       try {
-        const me = await firstValueFrom(this.http.get<Me>('/api/auth/me'));
-        this.me.set(me);
-        this.meLoadError.set(null);
-        this.log.log('auth', 'info', `GET /api/auth/me ✓ provider=${me.provider}`);
-        return me;
+        return await this.fetchMe();
       } catch (e) {
         // 401 — по-настоящему не аутентифицирован, обнуляем. Любая другая ошибка (429 от
         // rate-limit'а, сетевой сбой, 5xx) — транзиентная и НЕ должна затирать уже известное
@@ -148,12 +142,25 @@ export class AuthService {
         // хотя пользователь всё ещё полноценно аутентифицирован (особенно заметно в
         // Telegram-режиме, где сессия per-request и в принципе не может "потеряться").
         const status = e instanceof HttpErrorResponse ? e.status : 0;
-        if (status === 401 && (await this.refresh())) {
+        // /api/auth/me намеренно лежит в SESSION_LESS_AUTH_PATHS (аноним на публичной странице
+        // не должен улетать на /login), поэтому тихое обновление для него делает не интерцептор,
+        // а именно этот метод. В Telegram/dev PWA-cookie нет — refresh там заведомо 401.
+        if (status === 401 && this.mode === 'pwa') {
+          const outcome = await this.refresh();
+          if (outcome === 'ok') {
             try {
-                return await this.fetchMe();
+              return await this.fetchMe();
             } catch (e2) {
-                return this.handleLoadMeError(e2);
+              return this.handleLoadMeError(e2);
             }
+          }
+          if (outcome === 'transient') {
+            // Refresh не удался по временной причине — сессия, скорее всего, жива: не обнуляем
+            // me() и помечаем сбой как транзиентный (гарды не выгоняют на /login).
+            this.meLoadError.set('transient');
+            this.log.log('auth', 'error', 'GET /api/auth/me ✗ 401, refresh временно недоступен');
+            return this.me();
+          }
         }
         return this.handleLoadMeError(e);
       } finally {
@@ -163,25 +170,27 @@ export class AuthService {
 
     return this.pendingLoadMe;
   }
-    private async fetchMe(): Promise<Me> {
-        const me = await firstValueFrom(this.http.get<Me>('/api/auth/me'));
-        this.me.set(me);
-        this.meLoadError.set(null);
-        this.log.log('auth', 'info', `GET /api/auth/me ✓ provider=${me.provider}`);
-        return me;
-    }
 
-    private handleLoadMeError(e: unknown): Me | null {
-        const status = e instanceof HttpErrorResponse ? e.status : 0;
-        if (status === 401) {
-            this.me.set(null);
-            this.meLoadError.set('unauthorized');
-        } else {
-            this.meLoadError.set('transient');
-        }
-        this.log.log('auth', 'error', `GET /api/auth/me ✗ ${status} ${this.describeError(e)}`);
-        return this.me();
+  /** Успешный GET /api/auth/me — общая точка для первого вызова и повтора после refresh. */
+  private async fetchMe(): Promise<Me> {
+    const me = await firstValueFrom(this.http.get<Me>('/api/auth/me'));
+    this.me.set(me);
+    this.meLoadError.set(null);
+    this.log.log('auth', 'info', `GET /api/auth/me ✓ provider=${me.provider}`);
+    return me;
+  }
+
+  private handleLoadMeError(e: unknown): Me | null {
+    const status = e instanceof HttpErrorResponse ? e.status : 0;
+    if (status === 401) {
+      this.me.set(null);
+      this.meLoadError.set('unauthorized');
+    } else {
+      this.meLoadError.set('transient');
     }
+    this.log.log('auth', 'error', `GET /api/auth/me ✗ ${status} ${this.describeError(e)}`);
+    return this.me();
+  }
 
   registerStart(email: string): Promise<void> {
     return firstValueFrom(this.http.post<void>('/api/auth/register/start', { email }));
@@ -241,23 +250,32 @@ export class AuthService {
   }
 
   /**
-   * Ручное обновление access-токена по refresh-cookie. В обычной работе этим занимается
-   * authInterceptor (401 → refresh → повтор запроса) — этот метод для случаев, когда нужно
-   * освежить сессию явно, вне контекста конкретного проваленного запроса.
+   * Обновление access-токена по refresh-cookie. Дедуплицировано (`pendingRefresh`): параллельные
+   * 401 и `loadMe()` ждут ОДИН запрос — иначе бэкенд увидит предъявление уже ротированного
+   * refresh-токена, сочтёт это reuse-detection и отзовёт всю цепочку сессий (TokenService.RefreshAsync).
+   *
+   * Ошибка не превращается в boolean: `'unauthorized'` (только 401) — сессии действительно нет,
+   * `'transient'` (сеть/429/5xx/400 CSRF) — сессия могла быть живой, разлогинивать нельзя.
+   * Подробнее — RefreshOutcome.
    */
-  async refresh(): Promise<boolean> {
-      if (this.pendingRefresh) return this.pendingRefresh;
-      this.pendingRefresh = (async () => {
-          try {
-              await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
-              return true;
-          } catch {
-              return false;
-          } finally {
-              this.pendingRefresh = null;
-          }
-      })();
-      return this.pendingRefresh;
+  refresh(): Promise<RefreshOutcome> {
+    if (this.pendingRefresh) return this.pendingRefresh;
+
+    this.log.log('auth', 'info', 'POST /api/auth/refresh');
+    this.pendingRefresh = (async (): Promise<RefreshOutcome> => {
+      try {
+        await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
+        this.log.log('auth', 'info', 'POST /api/auth/refresh ✓');
+        return 'ok';
+      } catch (e) {
+        const status = e instanceof HttpErrorResponse ? e.status : 0;
+        this.log.log('auth', 'error', `POST /api/auth/refresh ✗ ${status} ${this.describeError(e)}`);
+        return status === 401 ? 'unauthorized' : 'transient';
+      } finally {
+        this.pendingRefresh = null;
+      }
+    })();
+    return this.pendingRefresh;
   }
 
   /**

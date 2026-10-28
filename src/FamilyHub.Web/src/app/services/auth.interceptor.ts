@@ -39,6 +39,15 @@ const SESSION_LESS_AUTH_PATHS = [
  */
 const CSRF_RETRIED = new HttpContextToken<boolean>(() => false);
 
+/**
+ * Сколько раз этот запрос уже повторяли после тихого refresh. Нужен, чтобы повторная 401 после
+ * успешного refresh не уходила в бесконечный цикл: бэкенд допускает вторую ротацию за время
+ * жизни одного access-токена (см. SessionValidityChecker), поэтому одна повторная попытка —
+ * штатная ситуация, а не разлогин. После лимита считаем сессию мёртвой.
+ */
+const REFRESH_ATTEMPTS = new HttpContextToken<number>(() => 0);
+const MAX_REFRESH_ATTEMPTS = 2;
+
 /** Общий in-flight перевыпуск CSRF-токена: GET /api/auth/me выставляет свежую пару cookie. */
 let csrfReissueInFlight: Promise<void> | null = null;
 
@@ -53,11 +62,40 @@ function reissueCsrfToken(http: HttpClient): Promise<void> {
   return csrfReissueInFlight;
 }
 
+/** Единственная точка ухода на /login по истёкшей сессии (несколько параллельных 401 — один переход). */
+function redirectToLogin(router: Router): void {
+  if (router.url.startsWith('/login')) return;
+  const returnUrl = safeReturnUrl(router.url);
+  void router.navigate(['/login'], {
+    queryParams: returnUrl ? { expired: 1, returnUrl } : { expired: 1 },
+  });
+}
+
+/**
+ * Ошибка для случая «refresh не удался по временной причине» (сеть, 429, 5xx). Отдавать наверх
+ * исходный 401 нельзя: `toApiError` превратит его в «Сессия истекла — войдите снова.», хотя
+ * сессия жива. 503 + русский `message` даёт честный текст и НЕ разлогинивает — следующий 401
+ * попробует refresh ещё раз.
+ */
+function refreshUnavailable(original: HttpErrorResponse): HttpErrorResponse {
+  return new HttpErrorResponse({
+    status: 503,
+    statusText: 'Session refresh failed',
+    url: original.url ?? undefined,
+    error: {
+      code: 'session_refresh_failed',
+      message: 'Не удалось продлить сессию — проверьте связь и попробуйте ещё раз.',
+    },
+  });
+}
+
 /**
  * Telegram/dev — заголовки; PWA — access-токен в httpOnly cookie (withCredentials).
- * 401 в PWA-режиме на защищённом эндпоинте → однократный /api/auth/refresh + повтор исходного
- * запроса (access-токен короткоживущий, это штатный сценарий, а не разлогин); неудачный refresh
- * → /login. 403 consent_required → /consent (задачи 2.3/2.4).
+ * 401 в PWA-режиме на защищённом эндпоинте → тихий `/api/auth/refresh` + повтор исходного
+ * запроса (access-токен короткоживущий, это штатный сценарий, а не разлогин). На /login уводим
+ * ТОЛЬКО когда refresh явно ответил 401; временная ошибка refresh (сеть/429/5xx) разлогином не
+ * считается — наверх уходит 503 с понятным текстом, а следующий 401 попробует ещё раз.
+ * 403 consent_required → /consent (задачи 2.3/2.4).
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const tg = inject(TelegramService);
@@ -118,20 +156,35 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       if (error.status === 401 && isPwaMode && !isSessionLessPath && !isAdminPath) {
+        const attempts = req.context.get(REFRESH_ATTEMPTS);
+        // Лимит исчерпан — сессия действительно мёртва (или бэкенд отвергает только что
+        // выданный access-токен): уводим на /login один раз и отдаём исходную 401.
+        if (attempts >= MAX_REFRESH_ATTEMPTS) {
+          redirectToLogin(router);
+          return throwError(() => error);
+        }
+
         return from(auth.refresh()).pipe(
-          switchMap((refreshed) =>
-            refreshed ? next(req.clone({ headers, withCredentials: true })) : throwError(() => error)),
-          catchError(() => {
-            // Сессия истекла: раньше — молча на /login, без объяснения и с потерей текущей страницы.
-            // Теперь /login?expired=1&returnUrl=… (после входа вернём туда же). Несколько упавших
-            // параллельных запросов не должны навигировать повторно — проверяем, где мы уже.
-            if (!router.url.startsWith('/login')) {
-              const returnUrl = safeReturnUrl(router.url);
-              void router.navigate(['/login'], {
-                queryParams: returnUrl ? { expired: 1, returnUrl } : { expired: 1 },
-              });
+          switchMap((outcome) => {
+            if (outcome === 'unauthorized') {
+              // Только явный 401 от /refresh = refresh-сессии больше нет (истекла/отозвана).
+              // /login?expired=1&returnUrl=… — с объяснением и возвратом на исходную страницу.
+              redirectToLogin(router);
+              return throwError(() => error);
             }
-            return throwError(() => error);
+            if (outcome === 'transient') {
+              // Сеть/429/5xx: сессия, скорее всего, жива. НЕ разлогиниваем и НЕ отдаём 401
+              // (иначе UI напишет «Сессия истекла — войдите снова.») — отдаём честную
+              // временную ошибку; следующий 401 попробует refresh ещё раз.
+              return throwError(() => refreshUnavailable(error));
+            }
+            // Повтор — через http.request, а не next(): он снова проходит весь пайплайн (в т.ч.
+            // CSRF-ветку выше, если пара токенов успела протухнуть) и ограничен REFRESH_ATTEMPTS.
+            // Ошибку повтора НЕ подменяем исходной 401 — иначе 409/422/500 выглядели бы как
+            // «сессия истекла» и разлогинивали только что обновлённую сессию.
+            return http.request(req.clone({
+              context: req.context.set(REFRESH_ATTEMPTS, attempts + 1),
+            }));
           }),
         );
       }
