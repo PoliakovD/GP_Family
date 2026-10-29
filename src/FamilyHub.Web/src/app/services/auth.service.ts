@@ -76,6 +76,27 @@ export interface ConsentText {
 export type RefreshOutcome = 'ok' | 'unauthorized' | 'transient';
 
 /**
+ * Блокировка Web Locks: refresh-токен одновременно ротирует только одна вкладка. Две вкладки,
+ * предъявившие один и тот же токен, для бэкенда неотличимы от кражи — reuse-detection отзывает
+ * ВСЕ сессии пользователя (см. TokenService.RefreshAsync), и обе вкладки улетают на /login.
+ */
+const REFRESH_LOCK = 'familyhub:auth-refresh';
+
+/**
+ * Когда cookie сессии обновляли последний раз (мс, общий на вкладки). Вкладка, дождавшаяся
+ * блокировки уже после чужой ротации, по этой метке понимает, что refresh ей больше не нужен.
+ */
+const REFRESHED_AT_KEY = 'familyhub.authRefreshedAt';
+
+function readRefreshedAt(): number {
+  try { return Number(localStorage.getItem(REFRESHED_AT_KEY) ?? 0) || 0; } catch { return 0; }
+}
+
+function writeRefreshedAt(at: number): void {
+  try { localStorage.setItem(REFRESHED_AT_KEY, String(at)); } catch { /* приватный режим — блокировка вкладок просто не сработает */ }
+}
+
+/**
  * Аутентификация в двух окружениях (этап 2 п.2.4): Telegram Mini App (initData через
  * интерцептор) и PWA (email+пароль, cookie-сессия). Плюс статус согласия ПДн (задача 2.3).
  */
@@ -104,6 +125,14 @@ export class AuthService {
    * (DevAuthenticationHandler по-прежнему авто-создаёт пользователя, привязка не нужна).
    */
   readonly telegramBound = signal<boolean | null>(null);
+
+  /**
+   * Идёт ли прямо сейчас POST /api/auth/refresh. Автообновление PWA (AppNoticesComponent) ждёт
+   * завершения, прежде чем перезагружать страницу: reload посреди ротации оставил бы браузер
+   * со старой refresh-cookie, и следующий refresh бэкенд счёл бы reuse-detection — с отзывом
+   * ВСЕХ сессий пользователя (см. TokenService.RefreshAsync).
+   */
+  readonly refreshInFlight = signal(false);
 
   /** Общий in-flight запрос — см. loadMe(). */
   private pendingLoadMe: Promise<Me | null> | null = null;
@@ -254,6 +283,12 @@ export class AuthService {
    * 401 и `loadMe()` ждут ОДИН запрос — иначе бэкенд увидит предъявление уже ротированного
    * refresh-токена, сочтёт это reuse-detection и отзовёт всю цепочку сессий (TokenService.RefreshAsync).
    *
+   * Дополнительно сериализовано МЕЖДУ вкладками (Web Locks): у каждой вкладки свой `pendingRefresh`,
+   * так что две вкладки, перезагрузившиеся после деплоя одновременно, уходили двумя параллельными
+   * POST'ами с одной cookie — для бэкенда это неотличимо от кражи. Вкладка, дождавшаяся блокировки
+   * уже после чужой ротации, видит свежую метку в localStorage и просто повторяет свой запрос с
+   * новой cookie, не ротируя токен второй раз.
+   *
    * Ошибка не превращается в boolean: `'unauthorized'` (только 401) — сессии действительно нет,
    * `'transient'` (сеть/429/5xx/400 CSRF) — сессия могла быть живой, разлогинивать нельзя.
    * Подробнее — RefreshOutcome.
@@ -261,21 +296,50 @@ export class AuthService {
   refresh(): Promise<RefreshOutcome> {
     if (this.pendingRefresh) return this.pendingRefresh;
 
-    this.log.log('auth', 'info', 'POST /api/auth/refresh');
-    this.pendingRefresh = (async (): Promise<RefreshOutcome> => {
-      try {
-        await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
-        this.log.log('auth', 'info', 'POST /api/auth/refresh ✓');
-        return 'ok';
-      } catch (e) {
-        const status = e instanceof HttpErrorResponse ? e.status : 0;
-        this.log.log('auth', 'error', `POST /api/auth/refresh ✗ ${status} ${this.describeError(e)}`);
-        return status === 401 ? 'unauthorized' : 'transient';
-      } finally {
-        this.pendingRefresh = null;
-      }
-    })();
+    // Момент запроса фиксируем ДО ожидания блокировки: если за это время cookie обновила другая
+    // вкладка (её refresh завершился позже нашего запроса), наш POST уже не нужен.
+    const requestedAt = Date.now();
+    this.pendingRefresh = this.withRefreshLock(() => this.postRefresh(requestedAt))
+      .finally(() => { this.pendingRefresh = null; });
     return this.pendingRefresh;
+  }
+
+  /** Ротация под Web Locks; в браузерах без поддержки (и в тестах) — как раньше, без блокировки. */
+  private async withRefreshLock(action: () => Promise<RefreshOutcome>): Promise<RefreshOutcome> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (typeof locks?.request !== 'function') return action();
+
+    try {
+      return await locks.request(REFRESH_LOCK, action);
+    } catch (e) {
+      // Блокировка — оптимизация, а не условие работоспособности: без неё просто возможна гонка.
+      this.log.log('auth', 'error', `Web Locks: ${this.describeError(e)} — refresh без блокировки`);
+      return action();
+    }
+  }
+
+  private async postRefresh(requestedAt: number): Promise<RefreshOutcome> {
+    if (readRefreshedAt() >= requestedAt) {
+      // Пока ждали блокировку, cookie уже обновила другая вкладка. Второй POST с той же (уже
+      // ротированной) cookie бэкенд счёл бы reuse-detection и отозвал все сессии.
+      this.log.log('auth', 'info', 'POST /api/auth/refresh — пропуск: cookie уже обновлена другой вкладкой');
+      return 'ok';
+    }
+
+    this.refreshInFlight.set(true);
+    this.log.log('auth', 'info', 'POST /api/auth/refresh');
+    try {
+      await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
+      writeRefreshedAt(Date.now());
+      this.log.log('auth', 'info', 'POST /api/auth/refresh ✓');
+      return 'ok';
+    } catch (e) {
+      const status = e instanceof HttpErrorResponse ? e.status : 0;
+      this.log.log('auth', 'error', `POST /api/auth/refresh ✗ ${status} ${this.describeError(e)}`);
+      return status === 401 ? 'unauthorized' : 'transient';
+    } finally {
+      this.refreshInFlight.set(false);
+    }
   }
 
   /**

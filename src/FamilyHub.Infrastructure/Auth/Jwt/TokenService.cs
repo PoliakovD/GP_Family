@@ -7,12 +7,14 @@ using FamilyHub.Infrastructure.Persistence;
 using FamilyHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FamilyHub.Infrastructure.Auth.Jwt;
 
-public class TokenService(AppDbContext db, IOptions<JwtOptions> options, IMemoryCache cache) : ITokenService
+public class TokenService(
+    AppDbContext db, IOptions<JwtOptions> options, IMemoryCache cache, ILogger<TokenService> logger) : ITokenService
 {
     public async Task<IssuedSession> IssueAsync(
         Guid userId, string email, string? createdByIp, string? deviceInfo, CancellationToken ct = default)
@@ -38,7 +40,16 @@ public class TokenService(AppDbContext db, IOptions<JwtOptions> options, IMemory
             // refresh-токена после этого возможно только при краже (клиент никогда не должен
             // реиспользовать отданный ему refresh после ротации). Реакция — убить всю цепочку.
             if (session.ReplacedByTokenId is not null)
+            {
+                // Единственный след такого события — раньше в логах не было ничего, и «сессия
+                // сама разлогинилась» было невозможно отличить от истечения срока. Пишем ДО
+                // отзыва, чтобы в логе осталась причина случившегося массового разлогина.
+                logger.LogWarning(
+                    "Reuse-detection: предъявлен уже ротированный refresh-токен. Отзываю ВСЕ сессии. " +
+                    "SessionId={SessionId} UserId={UserId} RevokedAt={RevokedAt} ReplacedBy={ReplacedByTokenId}",
+                    session.Id, session.UserId, session.RevokedAt, session.ReplacedByTokenId);
                 await RevokeAllForUserAsync(session.UserId, ct);
+            }
             return null;
         }
 

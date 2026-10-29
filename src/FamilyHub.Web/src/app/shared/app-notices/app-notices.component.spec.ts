@@ -1,8 +1,10 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { SwUpdate, type UnrecoverableStateEvent, type VersionEvent } from '@angular/service-worker';
+import { signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppNoticesComponent } from './app-notices.component';
+import { AuthService } from '../../services/auth.service';
 
 /**
  * Автообновление PWA: плашка «вышла новая версия» больше не требует клика — страница
@@ -23,6 +25,8 @@ describe('AppNoticesComponent — автообновление PWA', () => {
 
   let visibility: 'visible' | 'hidden' = 'visible';
   let fixture: ComponentFixture<AppNoticesComponent> | null = null;
+  /** Стоит ли сейчас POST /api/auth/refresh — от этого зависит отсрочка перезагрузки. */
+  let refreshInFlight: ReturnType<typeof signal<boolean>>;
 
   const versionReady = (hash: string) =>
     versions.next({ type: 'VERSION_READY', currentVersion: { hash: 'old' }, latestVersion: { hash } });
@@ -48,7 +52,13 @@ describe('AppNoticesComponent — автообновление PWA', () => {
       unrecoverable,
       activateUpdate: vi.fn(() => Promise.resolve(true)),
     };
-    TestBed.configureTestingModule({ providers: [{ provide: SwUpdate, useValue: sw }] });
+    refreshInFlight = signal(false);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: SwUpdate, useValue: sw },
+        { provide: AuthService, useValue: { refreshInFlight } },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -132,5 +142,32 @@ describe('AppNoticesComponent — автообновление PWA', () => {
     await vi.advanceTimersByTimeAsync(61_000);
     cacheBroken();
     expect(reload).toHaveBeenCalledTimes(2);
+  });
+
+  it('не перезагружается, пока идёт refresh, — иначе оборвёт ротацию токена', async () => {
+    const { reload } = create();
+    refreshInFlight.set(true);
+
+    versionReady('hash-1');
+    await vi.advanceTimersByTimeAsync(IDLE_MS);
+    expect(reload).not.toHaveBeenCalled();
+
+    // Даже после паузы — всё ещё ждём, но pendingUpdate не потерян.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(reload).not.toHaveBeenCalled();
+
+    refreshInFlight.set(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('зависший refresh не блокирует обновление навсегда', async () => {
+    const { reload } = create();
+    refreshInFlight.set(true);
+
+    versionReady('hash-1');
+    // 15 отсрочек по 2 с — после них перезагружаемся, даже если refresh так и не завершился.
+    await vi.advanceTimersByTimeAsync(IDLE_MS + 2_000 * 15);
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });
