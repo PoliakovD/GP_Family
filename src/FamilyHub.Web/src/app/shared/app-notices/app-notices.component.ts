@@ -5,6 +5,23 @@ import { IconComponent } from '../ui/icon/icon.component';
 
 const IOS_HINT_DISMISSED_KEY = 'familyhub.iosInstallHintDismissed';
 
+/**
+ * Сколько ждём тишины после последнего действия пользователя, прежде чем перезагрузиться ради
+ * новой версии. Короче — рискуем прервать чтение/ввод, дольше — обновление «зависает» надолго.
+ */
+const AUTO_RELOAD_IDLE_MS = 90_000;
+/** Хэш версии, ради которой уже перезагружались: второй раз не перезагружаемся, а показываем плашку. */
+const AUTO_RELOAD_HASH_KEY = 'familyhub.swAutoReloadHash';
+/**
+ * Сломанный кэш: если перезагрузка не помогла и состояние повторилось раньше, чем через минуту,
+ * значит мы попали бы в цикл — показываем плашку вместо ещё одной перезагрузки.
+ */
+const UNRECOVERABLE_KEY = 'familyhub.swUnrecoverableAt';
+const UNRECOVERABLE_GUARD_MS = 60_000;
+
+/** Действия, после которых отсчёт «тишины» начинается заново. */
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
+
 function isIos(): boolean {
   const ua = navigator.userAgent;
   return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -19,11 +36,36 @@ function readFlag(key: string): boolean {
   try { return localStorage.getItem(key) === '1'; } catch { return false; }
 }
 
+function readSession(key: string): string | null {
+  try { return sessionStorage.getItem(key); } catch { return null; }
+}
+
+function writeSession(key: string, value: string): void {
+  try { sessionStorage.setItem(key, value); } catch { /* приватный режим — просто не запомним */ }
+}
+
+/**
+ * Есть ли что потерять при перезагрузке: печатают в поле/контент-едитабле или в форме остались
+ * изменённые поля. В таком случае обновление не применяем молча — отдаём решение пользователю.
+ */
+function hasUnsavedWork(): boolean {
+  const active = document.activeElement as HTMLElement | null;
+  if (active) {
+    const tag = active.tagName;
+    if (active.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  }
+  return document.querySelector('form.ng-dirty') !== null;
+}
+
 /**
  * Служебные плашки каркаса PWA:
  * - нет интернета — раньше каждый запрос молча падал с непонятной ошибкой;
- * - вышла новая версия — раньше пользователь сидел на старой, пока сам не перезагрузит;
+ * - вышла новая версия — применяем сами: без клика по кнопке, но в безопасный момент;
  * - iPhone в Safari — без установки на «Домой» не будет уведомлений, а подсказки не было нигде.
+ *
+ * Автообновление: как только SW скачал новую версию, страница перезагружается сама — сразу, если
+ * вкладка скрыта, иначе после 90 секунд без действий. Плашка остаётся запасным вариантом:
+ * есть несохранённый ввод, либо перезагрузка уже не помогла (защита от цикла).
  */
 @Component({
   selector: 'app-notices',
@@ -41,6 +83,13 @@ function readFlag(key: string): boolean {
         <app-icon [icon]="icons.CircleArrowUp" [size]="18" />
         <span class="flex-fill">Вышла новая версия FamilyHub.</span>
         <button type="button" class="btn btn-primary btn-sm" (click)="reload()">Обновить</button>
+      </div>
+    }
+    @if (updateFailed()) {
+      <div class="app-notice app-notice-warn" role="status">
+        <app-icon [icon]="icons.CircleArrowUp" [size]="18" />
+        <span class="flex-fill">Не удалось применить обновление автоматически. Перезагрузите приложение.</span>
+        <button type="button" class="btn btn-primary btn-sm" (click)="reload()">Перезагрузить</button>
       </div>
     }
     @if (showIosHint()) {
@@ -81,9 +130,15 @@ export class AppNoticesComponent {
   protected readonly icons = { CircleArrowUp, Share, Smartphone, WifiOff };
 
   private readonly sw = inject(SwUpdate);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Скачанная версия ждёт безопасного момента для перезагрузки. */
+  private pendingUpdate = false;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly offline = signal(typeof navigator !== 'undefined' && navigator.onLine === false);
   readonly updateReady = signal(false);
+  readonly updateFailed = signal(false);
   readonly showIosHint = signal(isIos() && !isStandalone() && !readFlag(IOS_HINT_DISMISSED_KEY));
 
   constructor() {
@@ -91,18 +146,23 @@ export class AppNoticesComponent {
     const offline = () => this.offline.set(true);
     window.addEventListener('online', online);
     window.addEventListener('offline', offline);
-    inject(DestroyRef).onDestroy(() => {
-      window.removeEventListener('online', online);
-      window.removeEventListener('offline', offline);
-    });
+    for (const event of ACTIVITY_EVENTS) window.addEventListener(event, this.onActivity, { passive: true });
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
 
     if (this.sw.isEnabled) {
       this.sw.versionUpdates.subscribe((e) => {
-        if (e.type === 'VERSION_READY') this.updateReady.set(true);
+        if (e.type === 'VERSION_READY') this.onVersionReady(e.latestVersion.hash);
       });
-      // Кэш сломан (редко, но бывает после крупных обновлений) — без перезагрузки приложение не оживёт.
-      this.sw.unrecoverable.subscribe(() => this.updateReady.set(true));
+      this.sw.unrecoverable.subscribe(() => this.onUnrecoverable());
     }
+
+    this.destroyRef.onDestroy(() => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+      for (const event of ACTIVITY_EVENTS) window.removeEventListener(event, this.onActivity);
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
+      this.clearIdleTimer();
+    });
   }
 
   reload(): void {
@@ -113,4 +173,79 @@ export class AppNoticesComponent {
     this.showIosHint.set(false);
     try { localStorage.setItem(IOS_HINT_DISMISSED_KEY, '1'); } catch { /* приватный режим — просто не запомним */ }
   }
+
+  /** Новая версия скачана: применяем сами, без клика по кнопке. */
+  private onVersionReady(hash: string): void {
+    if (readSession(AUTO_RELOAD_HASH_KEY) === hash) {
+      // Ради этой версии уже перезагружались, но она снова «готова» — в цикл не уходим.
+      this.updateReady.set(true);
+      return;
+    }
+    writeSession(AUTO_RELOAD_HASH_KEY, hash);
+    this.pendingUpdate = true;
+
+    if (document.visibilityState === 'hidden') {
+      // Вкладка не на экране — перезагрузка никого не прервёт.
+      void this.applyPendingUpdate();
+      return;
+    }
+    this.restartIdleTimer();
+  }
+
+  /** Кэш SW сломан: без перезагрузки приложение не оживёт. */
+  private onUnrecoverable(): void {
+    const last = Number(readSession(UNRECOVERABLE_KEY) ?? 0);
+    if (Date.now() - last < UNRECOVERABLE_GUARD_MS) {
+      // Перезагрузка только что была и не помогла — дальше решает пользователь.
+      this.updateFailed.set(true);
+      return;
+    }
+    writeSession(UNRECOVERABLE_KEY, String(Date.now()));
+    this.pendingUpdate = false;
+    this.clearIdleTimer();
+    this.reload();
+  }
+
+  private async applyPendingUpdate(): Promise<void> {
+    if (!this.pendingUpdate) return;
+    this.clearIdleTimer();
+
+    if (hasUnsavedWork()) {
+      // Есть что потерять — молча не перезагружаемся, показываем привычную кнопку.
+      this.pendingUpdate = false;
+      this.updateReady.set(true);
+      return;
+    }
+
+    this.pendingUpdate = false;
+    try {
+      // activateUpdate переключает текущую страницу на новую версию, поэтому reload идёт сразу за ним:
+      // иначе ленивые чанки старой сборки могут уже не найтись.
+      await this.sw.activateUpdate();
+    } catch {
+      // Активация могла не пройти (SW перезапустился) — обычная перезагрузка всё равно подхватит новую версию.
+    }
+    this.reload();
+  }
+
+  private restartIdleTimer(): void {
+    this.clearIdleTimer();
+    this.idleTimer = setTimeout(() => void this.applyPendingUpdate(), AUTO_RELOAD_IDLE_MS);
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer === null) return;
+    clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  /** Действие пользователя — отсчитываем «тишину» заново. */
+  private readonly onActivity = (): void => {
+    if (this.idleTimer !== null) this.restartIdleTimer();
+  };
+
+  /** Вкладку свернули — самый безопасный момент: при возврате человек сразу увидит новую версию. */
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState === 'hidden' && this.idleTimer !== null) void this.applyPendingUpdate();
+  };
 }
