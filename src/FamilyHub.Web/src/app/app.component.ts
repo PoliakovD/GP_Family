@@ -285,8 +285,15 @@ export class AppComponent implements OnInit {
     }, { allowSignalWrites: true });
 
     // Выход из PWA-сессии: соединение с хабом чата несёт прежнюю личность — закрываем (ADR-0019).
+    // Заодно гасим фоновые опросы: они живут в root-сервисах и без этого продолжали бы ходить в
+    // API уже с /login, получая 401 каждые 5–20 секунд (и снова дёргая refresh).
     effect(() => {
-      if (this.auth.mode === 'pwa' && this.auth.me() === null) void untracked(() => this.chat.stop());
+      if (this.auth.mode === 'pwa' && this.auth.me() === null) {
+        void untracked(() => this.chat.stop());
+        this.ai.stop();
+        this.intake.stopPolling();
+        this.backgroundJobs.stopPolling();
+      }
     });
 
     // Часовой пояс браузера → сервер (время приёма лекарств и «сегодня» считаются в нём): на каждом появлении me.
