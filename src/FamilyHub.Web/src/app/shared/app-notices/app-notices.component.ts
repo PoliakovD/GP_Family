@@ -2,6 +2,7 @@ import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '
 import { SwUpdate } from '@angular/service-worker';
 import { CircleArrowUp, Share, Smartphone, WifiOff } from 'lucide';
 import { IconComponent } from '../ui/icon/icon.component';
+import { AuthService } from '../../services/auth.service';
 
 const IOS_HINT_DISMISSED_KEY = 'familyhub.iosInstallHintDismissed';
 
@@ -12,6 +13,14 @@ const IOS_HINT_DISMISSED_KEY = 'familyhub.iosInstallHintDismissed';
 const AUTO_RELOAD_IDLE_MS = 90_000;
 /** Хэш версии, ради которой уже перезагружались: второй раз не перезагружаемся, а показываем плашку. */
 const AUTO_RELOAD_HASH_KEY = 'familyhub.swAutoReloadHash';
+/**
+ * Пока идёт POST /api/auth/refresh, перезагружаться нельзя: reload оборвёт ротацию refresh-токена,
+ * браузер останется со старой cookie (бэкенд уже её погасил), и следующий refresh выглядит как
+ * reuse-detection — он отзывает ВСЕ сессии пользователя. Ждём короткими шагами.
+ */
+const REFRESH_SETTLE_RETRY_MS = 2_000;
+/** Предел ожидания: зависший refresh не должен навсегда блокировать обновление приложения. */
+const MAX_REFRESH_DEFERRALS = 15;
 /**
  * Сломанный кэш: если перезагрузка не помогла и состояние повторилось раньше, чем через минуту,
  * значит мы попали бы в цикл — показываем плашку вместо ещё одной перезагрузки.
@@ -64,8 +73,11 @@ function hasUnsavedWork(): boolean {
  * - iPhone в Safari — без установки на «Домой» не будет уведомлений, а подсказки не было нигде.
  *
  * Автообновление: как только SW скачал новую версию, страница перезагружается сама — сразу, если
- * вкладка скрыта, иначе после 90 секунд без действий. Плашка остаётся запасным вариантом:
- * есть несохранённый ввод, либо перезагрузка уже не помогла (защита от цикла).
+ * вкладка скрыта, иначе после 90 секунд без действий. Пока идёт ротация refresh-токена
+ * (AuthService.refreshInFlight), перезагрузка откладывается: иначе она оборвала бы refresh, и
+ * следующий запрос выглядел бы как reuse-detection с отзывом всех сессий.
+ * Плашка остаётся запасным вариантом: есть несохранённый ввод, либо перезагрузка уже не помогла
+ * (защита от цикла).
  */
 @Component({
   selector: 'app-notices',
@@ -130,6 +142,7 @@ export class AppNoticesComponent {
   protected readonly icons = { CircleArrowUp, Share, Smartphone, WifiOff };
 
   private readonly sw = inject(SwUpdate);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Скачанная версия ждёт безопасного момента для перезагрузки. */
@@ -206,9 +219,16 @@ export class AppNoticesComponent {
     this.reload();
   }
 
-  private async applyPendingUpdate(): Promise<void> {
+  private async applyPendingUpdate(refreshDeferrals = 0): Promise<void> {
     if (!this.pendingUpdate) return;
     this.clearIdleTimer();
+
+    if (this.auth.refreshInFlight() && refreshDeferrals < MAX_REFRESH_DEFERRALS) {
+      // Ротация refresh-токена в полёте — ждём её завершения, не сбрасывая pendingUpdate.
+      this.idleTimer = setTimeout(
+        () => void this.applyPendingUpdate(refreshDeferrals + 1), REFRESH_SETTLE_RETRY_MS);
+      return;
+    }
 
     if (hasUnsavedWork()) {
       // Есть что потерять — молча не перезагружаемся, показываем привычную кнопку.

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -47,6 +47,9 @@ describe('AuthService: refresh и loadMe', () => {
   let tg: TelegramStub;
 
   beforeEach(() => {
+    // Метка «cookie уже обновлена» общая для вкладок и живёт в localStorage — между тестами
+    // её нужно убирать, иначе refresh из предыдущего теста «пропускает» POST в следующем.
+    localStorage.removeItem('familyhub.authRefreshedAt');
     tg = new TelegramStub();
     TestBed.configureTestingModule({
       providers: [
@@ -123,5 +126,37 @@ describe('AuthService: refresh и loadMe', () => {
 
     await expect(first).resolves.toBe('ok');
     await expect(second).resolves.toBe('ok');
+  });
+
+  it('не ротирует токен повторно, если cookie уже обновила другая вкладка', async () => {
+    // Другая вкладка успела завершить refresh: cookie свежая, второй POST выглядел бы
+    // для бэкенда как reuse-detection и отозвал бы все сессии.
+    localStorage.setItem('familyhub.authRefreshedAt', String(Date.now()));
+
+    await expect(auth.refresh()).resolves.toBe('ok');
+    http.expectNone({ method: 'POST', url: '/api/auth/refresh' });
+    expect(auth.refreshInFlight()).toBe(false);
+  });
+
+  it('refresh сериализуется через Web Locks и пишет общую метку времени', async () => {
+    const request = vi.fn(<T>(_name: string, cb: () => Promise<T>) => cb());
+    const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request } });
+
+    try {
+      const pending = auth.refresh();
+      expect(auth.refreshInFlight()).toBe(true);
+
+      http.expectOne({ method: 'POST', url: '/api/auth/refresh' }).flush({});
+      await expect(pending).resolves.toBe('ok');
+
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request.mock.calls[0][0]).toBe('familyhub:auth-refresh');
+      expect(Number(localStorage.getItem('familyhub.authRefreshedAt'))).toBeGreaterThan(0);
+      expect(auth.refreshInFlight()).toBe(false);
+    } finally {
+      if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);
+      else delete (navigator as unknown as { locks?: unknown }).locks;
+    }
   });
 });
