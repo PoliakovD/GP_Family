@@ -84,7 +84,7 @@ services:
           memory: 1G
 
   seq:
-    image: datalust/seq:2026.1.17182
+    image: datalust/seq:2026.1.17473
     restart: unless-stopped
     # default — приём логов от api/бота; edge — веб-интерфейс через Caddy (аудит 2026-10, L5).
     networks: [default, edge]
