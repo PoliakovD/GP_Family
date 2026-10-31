@@ -47,9 +47,9 @@ describe('AuthService: refresh и loadMe', () => {
   let tg: TelegramStub;
 
   beforeEach(() => {
-    // Метка «cookie уже обновлена» общая для вкладок и живёт в localStorage — между тестами
-    // её нужно убирать, иначе refresh из предыдущего теста «пропускает» POST в следующем.
-    localStorage.removeItem('familyhub.authRefreshedAt');
+    // Маркер «cookie уже обновлена» общий для вкладок и живёт в localStorage — между тестами
+    // его нужно убирать, иначе refresh из предыдущего теста «пропускает» POST в следующем.
+    localStorage.removeItem('familyhub.authRefreshMarker');
     tg = new TelegramStub();
     TestBed.configureTestingModule({
       providers: [
@@ -129,16 +129,41 @@ describe('AuthService: refresh и loadMe', () => {
   });
 
   it('не ротирует токен повторно, если cookie уже обновила другая вкладка', async () => {
-    // Другая вкладка успела завершить refresh: cookie свежая, второй POST выглядел бы
-    // для бэкенда как reuse-detection и отозвал бы все сессии.
-    localStorage.setItem('familyhub.authRefreshedAt', String(Date.now()));
+    // Другая вкладка успела завершить refresh, пока мы ждали блокировку: она записала свой
+    // маркер, cookie свежая. Второй POST выглядел бы для бэкенда как reuse-detection и отозвал
+    // бы все сессии.
+    const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const request = vi.fn(<T>(_name: string, cb: () => Promise<T>) => {
+      localStorage.setItem('familyhub.authRefreshMarker', 'другая-вкладка');
+      return cb();
+    });
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request } });
 
-    await expect(auth.refresh()).resolves.toBe('ok');
-    http.expectNone({ method: 'POST', url: '/api/auth/refresh' });
-    expect(auth.refreshInFlight()).toBe(false);
+    try {
+      await expect(auth.refresh()).resolves.toBe('ok');
+      http.expectNone({ method: 'POST', url: '/api/auth/refresh' });
+      expect(auth.refreshInFlight()).toBe(false);
+      expect(localStorage.getItem('familyhub.authRefreshMarker')).toBe('другая-вкладка');
+    } finally {
+      if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);
+      else delete (navigator as unknown as { locks?: unknown }).locks;
+    }
   });
 
-  it('refresh сериализуется через Web Locks и пишет общую метку времени', async () => {
+  it('последовательные refresh оба уходят в API — маркер сравнивается по значению, не по времени', async () => {
+    // Регрессия: пока метка писалась временем, второй refresh в ту же миллисекунду считал,
+    // что cookie «уже обновлена», и молча пропускал POST — сессия оставалась с протухшим
+    // access-токеном, а следующая 401 уводила на /login.
+    const first = auth.refresh();
+    http.expectOne({ method: 'POST', url: '/api/auth/refresh' }).flush({});
+    await expect(first).resolves.toBe('ok');
+
+    const second = auth.refresh();
+    http.expectOne({ method: 'POST', url: '/api/auth/refresh' }).flush({});
+    await expect(second).resolves.toBe('ok');
+  });
+
+  it('refresh сериализуется через Web Locks и обновляет общий маркер', async () => {
     const request = vi.fn(<T>(_name: string, cb: () => Promise<T>) => cb());
     const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
     Object.defineProperty(navigator, 'locks', { configurable: true, value: { request } });
@@ -152,7 +177,7 @@ describe('AuthService: refresh и loadMe', () => {
 
       expect(request).toHaveBeenCalledTimes(1);
       expect(request.mock.calls[0][0]).toBe('familyhub:auth-refresh');
-      expect(Number(localStorage.getItem('familyhub.authRefreshedAt'))).toBeGreaterThan(0);
+      expect(localStorage.getItem('familyhub.authRefreshMarker')).toBeTruthy();
       expect(auth.refreshInFlight()).toBe(false);
     } finally {
       if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);

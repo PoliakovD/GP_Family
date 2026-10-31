@@ -155,7 +155,21 @@ jobs:
             chmod 600 .env
             chmod 600 wg/awg0.conf
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker compose pull
+            # DNS на VPS периодически не резолвит ghcr.io (systemd-resolved: "lookup ghcr.io ...
+            # i/o timeout") — docker compose pull падает, хотя образ на месте. 2026-10-29 так
+            # упали два деплоя подряд, оба раза при повторе всё проходило: сбой транзиентный,
+            # поэтому три попытки с паузой вместо падения всей выкладки.
+            for attempt in 1 2 3; do
+              if docker compose pull; then
+                break
+              fi
+              if [ "\$attempt" -eq 3 ]; then
+                echo "docker compose pull не удался после 3 попыток (сеть/DNS на VPS)." >&2
+                exit 1
+              fi
+              echo "docker compose pull: попытка \$attempt не удалась — повтор через 15 с." >&2
+              sleep 15
+            done
             # Токен из docker login не должен оставаться в ~/.docker/config.json на VPS (аудит M7).
             docker logout ghcr.io
             # up -d сам пересоздаёт только сервисы, у которых сменился образ/конфиг — неизменившиеся

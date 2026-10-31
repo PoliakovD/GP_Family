@@ -79,6 +79,13 @@ export class IntakeStateService {
     this.timer = setInterval(() => void this.refresh(), 5 * 60_000);
   }
 
+  /** Выход из аккаунта: опрос бейджа прекращаем — иначе он долбит API 401-ми с /login. */
+  stopPolling(): void {
+    if (this.timer === null) return;
+    clearInterval(this.timer);
+    this.timer = null;
+  }
+
   /** Часовой пояс браузера → сервер (от него «8:00» в расписании и «сегодня»). Только если отличается от
    * известного серверу; сбой не критичен — повторится при следующем входе. */
   async syncTimeZone(known: string | null | undefined): Promise<void> {
