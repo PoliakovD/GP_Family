@@ -27,6 +27,18 @@ export class AiStatusService {
     this.handle = setInterval(() => void this.refresh(), POLL_INTERVAL_MS);
   }
 
+  /**
+   * Выход из аккаунта: опрос прекращаем, статус забываем. Иначе таймер продолжает жить на
+   * /login и каждые 20 секунд получает 401 — «сессия истекла» в дев-логе и лишний refresh,
+   * который снова и снова чистит cookie.
+   */
+  stop(): void {
+    if (this.handle === null) return;
+    clearInterval(this.handle);
+    this.handle = null;
+    this.available.set(null);
+  }
+
   async refresh(): Promise<void> {
     try {
       this.available.set((await this.api.getAiStatus()).available);

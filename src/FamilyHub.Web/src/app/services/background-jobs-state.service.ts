@@ -56,7 +56,9 @@ export class BackgroundJobsStateService {
     this.pollHandle = setInterval(() => void this.refresh(), this.pollIntervalMs);
   }
 
-  private stopPolling(): void {
+  /** Остановить опрос принудительно (выход из аккаунта): иначе таймер продолжает жить на /login
+   * и каждые 5 секунд получает 401, пока в очереди были активные задачи. */
+  stopPolling(): void {
     if (this.pollHandle === null) return;
     clearInterval(this.pollHandle);
     this.pollHandle = null;
