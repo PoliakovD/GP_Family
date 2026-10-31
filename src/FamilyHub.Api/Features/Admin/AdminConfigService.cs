@@ -134,6 +134,7 @@ public partial class AdminConfigService(
                 .Value("Audience", j.Audience)
                 .Value("AccessTokenLifetime", j.AccessTokenLifetime)
                 .Value("RefreshTokenLifetime", j.RefreshTokenLifetime)
+                .Value("RefreshGraceWindow", j.RefreshGraceWindow)
                 .Value("ClockSkew", j.ClockSkew)
                 .Build(),
 

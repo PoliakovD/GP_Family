@@ -21,6 +21,10 @@ public class JwtWebFactory : FamilyHubWebFactory
         builder.UseSetting("Jwt:AccessTokenLifetime", "00:00:02");
         builder.UseSetting("Jwt:RefreshTokenLifetime", "00:00:05");
         builder.UseSetting("Jwt:ClockSkew", "00:00:00");
+        // Grace-окно выключено: сценарии reuse-detection здесь предъявляют ротированный токен
+        // сразу же (в пределах прод-окна 5 с) и проверяют именно отзыв всей цепочки. Отдельная
+        // фабрика с включённым окном — JwtGraceWebFactory/JwtRefreshGraceTests.
+        builder.UseSetting("Jwt:RefreshGraceWindow", "00:00:00");
     }
 }
 
