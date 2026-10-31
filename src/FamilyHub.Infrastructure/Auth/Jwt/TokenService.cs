@@ -16,6 +16,10 @@ namespace FamilyHub.Infrastructure.Auth.Jwt;
 public class TokenService(
     AppDbContext db, IOptions<JwtOptions> options, IMemoryCache cache, ILogger<TokenService> logger) : ITokenService
 {
+    /// <summary>Сколько звеньев цепочки замен готовы пройти в grace-окне: за одну гонку ротацию
+    /// успевают сделать считанные разы, десяток — с большим запасом и защищает от петли.</summary>
+    private const int MaxGraceHops = 10;
+
     public async Task<IssuedSession> IssueAsync(
         Guid userId, string email, string? createdByIp, string? deviceInfo, CancellationToken ct = default)
     {
@@ -36,20 +40,14 @@ public class TokenService(
 
         if (session.RevokedAt is not null)
         {
-            // Сессия уже была заменена более новой при прошлой ротации — предъявление старого
-            // refresh-токена после этого возможно только при краже (клиент никогда не должен
-            // реиспользовать отданный ему refresh после ротации). Реакция — убить всю цепочку.
-            if (session.ReplacedByTokenId is not null)
-            {
-                // Единственный след такого события — раньше в логах не было ничего, и «сессия
-                // сама разлогинилась» было невозможно отличить от истечения срока. Пишем ДО
-                // отзыва, чтобы в логе осталась причина случившегося массового разлогина.
-                logger.LogWarning(
-                    "Reuse-detection: предъявлен уже ротированный refresh-токен. Отзываю ВСЕ сессии. " +
-                    "SessionId={SessionId} UserId={UserId} RevokedAt={RevokedAt} ReplacedBy={ReplacedByTokenId}",
-                    session.Id, session.UserId, session.RevokedAt, session.ReplacedByTokenId);
-                await RevokeAllForUserAsync(session.UserId, ct);
-            }
+            // Сессия уже была заменена более новой при прошлой ротации. Обычно предъявление
+            // старого refresh-токена после этого возможно только при краже (клиент никогда не
+            // должен реиспользовать отданный ему refresh после ротации) — реакция: убить всю
+            // цепочку. Но в пределах RefreshGraceWindow это штатная гонка (см. HandleRotatedAsync).
+            if (session.ReplacedByTokenId is not null) return await HandleRotatedAsync(session, now, createdByIp, deviceInfo, ct);
+
+            // Отозвана без замены — logout / logout-all / смена или сброс пароля / удаление
+            // аккаунта. Никакого grace тут быть не может: это не ротация.
             return null;
         }
 
@@ -58,6 +56,76 @@ public class TokenService(
         var email = await db.Users.Where(u => u.Id == session.UserId).Select(u => u.Email).SingleOrDefaultAsync(ct);
         if (email is null) return null; // аккаунт удалён/аномалия — рефреш недействителен
 
+        return await RotateAsync(session, email, createdByIp, deviceInfo, now, ct);
+    }
+
+    /// <summary>
+    /// Предъявлен УЖЕ ротированный refresh-токен. Сначала проверяем grace-окно: клиент мог просто не
+    /// получить ответ первой ротации (гонка вкладок, потерянный ответ), и тогда это не кража — выдаём
+    /// новую пару от живой сессии-наследника, не трогая остальные сессии. Вне окна — reuse-detection
+    /// со отзывом ВСЕХ сессий пользователя, как раньше.
+    /// </summary>
+    private async Task<IssuedSession?> HandleRotatedAsync(
+        UserSession presented, DateTime now, string? createdByIp, string? deviceInfo, CancellationToken ct)
+    {
+        var live = await FindLiveSessionWithinGraceAsync(presented, now, ct);
+        if (live is not null)
+        {
+            var email = await db.Users.Where(u => u.Id == live.UserId).Select(u => u.Email).SingleOrDefaultAsync(ct);
+            if (email is not null)
+            {
+                logger.LogWarning(
+                    "Refresh grace: повтор предъявления ротированного refresh-токена в пределах {Grace} — " +
+                    "выдаю новую пару от живой сессии, цепочку не отзываю. " +
+                    "PresentedSessionId={SessionId} LiveSessionId={LiveSessionId} UserId={UserId} RevokedAt={RevokedAt}",
+                    options.Value.RefreshGraceWindow, presented.Id, live.Id, presented.UserId, presented.RevokedAt);
+                return await RotateAsync(live, email, createdByIp, deviceInfo, now, ct);
+            }
+        }
+
+        // Единственный след такого события раньше в логах отсутствовал, и «сессия сама
+        // разлогинилась» было невозможно отличить от истечения срока. Пишем ДО отзыва, чтобы
+        // в логе осталась причина случившегося массового разлогина.
+        logger.LogWarning(
+            "Reuse-detection: предъявлен уже ротированный refresh-токен. Отзываю ВСЕ сессии. " +
+            "SessionId={SessionId} UserId={UserId} RevokedAt={RevokedAt} ReplacedBy={ReplacedByTokenId}",
+            presented.Id, presented.UserId, presented.RevokedAt, presented.ReplacedByTokenId);
+        await RevokeAllForUserAsync(presented.UserId, ct);
+        return null;
+    }
+
+    /// <summary>
+    /// Идём по цепочке замен <c>ReplacedByTokenId</c>, пока каждая отозванная сессия укладывается в
+    /// grace-окно, и возвращаем первую живую. Цепочка (а не один шаг) — потому что за время гонки
+    /// ротацию могли успеть сделать несколько раз подряд.
+    /// </summary>
+    private async Task<UserSession?> FindLiveSessionWithinGraceAsync(
+        UserSession presented, DateTime now, CancellationToken ct)
+    {
+        var grace = options.Value.RefreshGraceWindow;
+        if (grace <= TimeSpan.Zero) return null;
+
+        var current = presented;
+        for (var hop = 0; hop < MaxGraceHops; hop++)
+        {
+            if (current.RevokedAt is null)
+                return current.ExpiresAt > now ? current : null;
+
+            if (current.ReplacedByTokenId is not { } nextId) return null;
+            if (now - current.RevokedAt.Value > grace) return null;
+
+            var next = await db.UserSessions.FirstOrDefaultAsync(s => s.Id == nextId, ct);
+            if (next is null) return null;
+            current = next;
+        }
+
+        return null;
+    }
+
+    /// <summary>Выпуск новой сессии взамен <paramref name="session"/> и её отзыв — одной транзакцией.</summary>
+    private async Task<IssuedSession> RotateAsync(
+        UserSession session, string email, string? createdByIp, string? deviceInfo, DateTime now, CancellationToken ct)
+    {
         // Выпуск новой сессии и отзыв старой — одна транзакция (аудит, находка Medium #3):
         // CreateSessionAsync коммитит собственным SaveChangesAsync, отзыв старой — отдельным
         // ниже. Без общей транзакции крах между ними оставлял бы либо две одновременно живые
