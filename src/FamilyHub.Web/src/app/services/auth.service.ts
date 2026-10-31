@@ -83,17 +83,23 @@ export type RefreshOutcome = 'ok' | 'unauthorized' | 'transient';
 const REFRESH_LOCK = 'familyhub:auth-refresh';
 
 /**
- * Когда cookie сессии обновляли последний раз (мс, общий на вкладки). Вкладка, дождавшаяся
- * блокировки уже после чужой ротации, по этой метке понимает, что refresh ей больше не нужен.
+ * Маркер последней успешной ротации cookie (общий на вкладки). Вкладка, дождавшаяся блокировки
+ * уже после чужой ротации, видит, что маркер ИЗМЕНИЛСЯ, и понимает, что refresh ей больше не
+ * нужен. Именно смена значения, а не время: `Date.now()` в двух вкладках/табах может совпасть до
+ * миллисекунды, и сравнение «метка >= момент запроса» ложно решало, что cookie уже обновлена.
  */
-const REFRESHED_AT_KEY = 'familyhub.authRefreshedAt';
+const REFRESH_MARKER_KEY = 'familyhub.authRefreshMarker';
 
-function readRefreshedAt(): number {
-  try { return Number(localStorage.getItem(REFRESHED_AT_KEY) ?? 0) || 0; } catch { return 0; }
+function readRefreshMarker(): string {
+  try { return localStorage.getItem(REFRESH_MARKER_KEY) ?? ''; } catch { return ''; }
 }
 
-function writeRefreshedAt(at: number): void {
-  try { localStorage.setItem(REFRESHED_AT_KEY, String(at)); } catch { /* приватный режим — блокировка вкладок просто не сработает */ }
+function newRefreshMarker(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function writeRefreshMarker(): void {
+  try { localStorage.setItem(REFRESH_MARKER_KEY, newRefreshMarker()); } catch { /* приватный режим — блокировка вкладок просто не сработает */ }
 }
 
 /**
@@ -286,8 +292,8 @@ export class AuthService {
    * Дополнительно сериализовано МЕЖДУ вкладками (Web Locks): у каждой вкладки свой `pendingRefresh`,
    * так что две вкладки, перезагрузившиеся после деплоя одновременно, уходили двумя параллельными
    * POST'ами с одной cookie — для бэкенда это неотличимо от кражи. Вкладка, дождавшаяся блокировки
-   * уже после чужой ротации, видит свежую метку в localStorage и просто повторяет свой запрос с
-   * новой cookie, не ротируя токен второй раз.
+   * уже после чужой ротации, видит изменённый маркер в localStorage и просто повторяет свой запрос
+   * с новой cookie, не ротируя токен второй раз.
    *
    * Ошибка не превращается в boolean: `'unauthorized'` (только 401) — сессии действительно нет,
    * `'transient'` (сеть/429/5xx/400 CSRF) — сессия могла быть живой, разлогинивать нельзя.
@@ -296,10 +302,10 @@ export class AuthService {
   refresh(): Promise<RefreshOutcome> {
     if (this.pendingRefresh) return this.pendingRefresh;
 
-    // Момент запроса фиксируем ДО ожидания блокировки: если за это время cookie обновила другая
-    // вкладка (её refresh завершился позже нашего запроса), наш POST уже не нужен.
-    const requestedAt = Date.now();
-    this.pendingRefresh = this.withRefreshLock(() => this.postRefresh(requestedAt))
+    // Маркер снимаем ДО ожидания блокировки: если за это время cookie обновила другая вкладка,
+    // он изменится, и наш POST уже не нужен.
+    const markerAtStart = readRefreshMarker();
+    this.pendingRefresh = this.withRefreshLock(() => this.postRefresh(markerAtStart))
       .finally(() => { this.pendingRefresh = null; });
     return this.pendingRefresh;
   }
@@ -318,8 +324,8 @@ export class AuthService {
     }
   }
 
-  private async postRefresh(requestedAt: number): Promise<RefreshOutcome> {
-    if (readRefreshedAt() >= requestedAt) {
+  private async postRefresh(markerAtStart: string): Promise<RefreshOutcome> {
+    if (readRefreshMarker() !== markerAtStart) {
       // Пока ждали блокировку, cookie уже обновила другая вкладка. Второй POST с той же (уже
       // ротированной) cookie бэкенд счёл бы reuse-detection и отозвал все сессии.
       this.log.log('auth', 'info', 'POST /api/auth/refresh — пропуск: cookie уже обновлена другой вкладкой');
@@ -330,7 +336,7 @@ export class AuthService {
     this.log.log('auth', 'info', 'POST /api/auth/refresh');
     try {
       await firstValueFrom(this.http.post<void>('/api/auth/refresh', {}));
-      writeRefreshedAt(Date.now());
+      writeRefreshMarker();
       this.log.log('auth', 'info', 'POST /api/auth/refresh ✓');
       return 'ok';
     } catch (e) {
