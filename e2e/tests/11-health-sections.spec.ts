@@ -17,7 +17,13 @@ test('дневник: запись из API видна в ленте, новая
 
   await page.getByRole('button', { name: /Добавить запись/ }).first().click();
   await page.getByRole('radio', { name: 'Заметка' }).click();
-  await page.locator('textarea').first().fill('Вопрос врачу про давление');
+  // Именно #dn-note, а не первый textarea: у типа «Симптом» есть свой необязательный
+  // textarea (#dn-text), который при переключении на «Заметку» удаляется из DOM. Если
+  // заполнить его до того, как Angular применит смену типа, введённый текст исчезает
+  // вместе с узлом — тест падал по таймауту на неактивной кнопке «Сохранить»
+  // (флак на CI 31.10.2026). #dn-note существует только у «Заметки», поэтому fill сам
+  // дожидается нужного состояния формы.
+  await page.locator('#dn-note').fill('Вопрос врачу про давление');
   await page.getByRole('button', { name: /Сохранить|Добавить/ }).last().click();
   await expect(page.getByText('Вопрос врачу про давление').first()).toBeVisible();
 });
