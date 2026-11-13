@@ -24,7 +24,7 @@ COPY src/FamilyHub.Web/ ./
 RUN npx ng build
 
 # --- Стадия 2: сборка .NET (та же структура, что Dockerfile.dev) --------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 
 WORKDIR /src
 
