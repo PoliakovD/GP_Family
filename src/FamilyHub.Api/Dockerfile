@@ -54,7 +54,7 @@ COPY --from=web /src/FamilyHub.Api/wwwroot ./FamilyHub.Api/wwwroot
 RUN dotnet publish FamilyHub.Api/FamilyHub.Api.csproj -c Release -o /app/publish --no-restore
 
 # --- Стадия 3: рантайм ----------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-alpine
 
 RUN apk add --no-cache krb5-libs tzdata
 
