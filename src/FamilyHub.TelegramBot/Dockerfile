@@ -22,7 +22,7 @@ COPY src/ .
 
 RUN dotnet publish FamilyHub.TelegramBot/FamilyHub.TelegramBot.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-alpine
 
 WORKDIR /app
 COPY --from=build /app/publish .
